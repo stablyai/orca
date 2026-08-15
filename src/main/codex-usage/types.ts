@@ -47,6 +47,7 @@ export type CodexUsageLocationModelBreakdown = {
 
 export type CodexUsageSession = {
   sessionId: string
+  accountId?: string | null
   firstTimestamp: string
   lastTimestamp: string
   primaryModel: string | null
@@ -69,6 +70,7 @@ export type CodexUsageSession = {
 
 export type CodexUsageDailyAggregate = {
   day: string
+  accountId?: string | null
   model: string | null
   projectKey: string
   projectLabel: string

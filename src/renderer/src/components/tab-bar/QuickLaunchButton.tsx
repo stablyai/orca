@@ -10,11 +10,13 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { ProviderAccountRef } from '../../../../shared/provider-account-ref'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { CodexLaunchAccountMenu } from './CodexLaunchAccountMenu'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -123,7 +125,7 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
+    (agent: TuiAgent, providerAccountRef?: ProviderAccountRef) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
@@ -133,7 +135,8 @@ function QuickLaunchAgentMenuItemsInner({
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
-        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
+        ...(providerAccountRef ? { providerAccountRef } : {})
       })
       if (!result) {
         toast.error(
@@ -199,6 +202,16 @@ function QuickLaunchAgentMenuItemsInner({
         const label = entry?.label ?? agent
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
+        if (agent === 'codex') {
+          return (
+            <CodexLaunchAccountMenu
+              key={agent}
+              worktreeId={worktreeId}
+              shortcut={showsDefaultAgentShortcut ? newAgentShortcut : null}
+              onLaunch={(providerAccountRef) => runLaunch(agent, providerAccountRef)}
+            />
+          )
+        }
         return (
           <DropdownMenuItem
             key={agent}

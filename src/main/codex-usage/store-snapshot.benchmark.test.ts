@@ -16,8 +16,9 @@ vi.mock('electron', () => ({
 function createStoreWithState(state: CodexUsagePersistedState): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
-  })
+    getAllWorktreeMeta: () => ({}),
+    getSettings: () => ({ codexManagedAccounts: [] })
+  } as never)
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = state
   return store

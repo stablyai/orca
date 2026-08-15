@@ -1,5 +1,9 @@
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
-import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
+import type {
+  CodexUsageAccountFilter,
+  CodexUsageBreakdownKind,
+  CodexUsageSnapshot
+} from '../../shared/codex-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageSnapshot
@@ -27,7 +31,9 @@ export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKi
   getScanState: () => Promise<Snapshot['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>
-  getSnapshot: (args: UsageQueryArgs<Snapshot> & { limit?: number }) => Promise<Snapshot>
+  getSnapshot: (
+    args: UsageQueryArgs<Snapshot> & { limit?: number; accountFilter?: CodexUsageAccountFilter }
+  ) => Promise<Snapshot>
   getSummary: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['summary']>
   getDaily: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['daily']>
   getBreakdown: (

@@ -45,6 +45,8 @@ import {
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
+import { recordCodexSessionAccount } from './codex/codex-session-account-registry'
+import { captureCodexSessionAccountAttributions } from './codex/codex-session-account-attribution'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
@@ -221,6 +223,7 @@ import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { markCodexProjectTrusted } from './agent-trust-presets'
 import {
+  getCodexSelectionLaneKey,
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './codex-accounts/runtime-selection'
@@ -1028,6 +1031,56 @@ function prepareCodexRuntimeHomeForLaunch(
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
+  const explicitAccountRef = launchContext?.providerAccountRef
+  if (explicitAccountRef) {
+    if (launchContext?.launchAgent !== 'codex' || explicitAccountRef.provider !== 'codex') {
+      throw new Error('agent_session_account_agent_mismatch')
+    }
+    const actualTarget = target ?? { runtime: 'host' as const }
+    const resolvedAccountRef =
+      explicitAccountRef.runtime === 'wsl' && !explicitAccountRef.wslDistro?.trim()
+        ? { ...explicitAccountRef, wslDistro: actualTarget.wslDistro ?? null }
+        : explicitAccountRef
+    if (
+      getCodexSelectionLaneKey(actualTarget) !==
+      getCodexSelectionLaneKey({
+        runtime: resolvedAccountRef.runtime,
+        wslDistro: resolvedAccountRef.wslDistro ?? null
+      })
+    ) {
+      throw new Error('agent_session_account_runtime_mismatch')
+    }
+    if (explicitAccountRef.accountId === null && explicitAccountRef.runtime === 'host') {
+      ensureRealHomeCodexHookState({
+        hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
+        userDataPath: app.getPath('userData')
+      })
+      if (!isRealHomeCodexHookLaneUsable()) {
+        throw new Error('agent_session_account_unavailable')
+      }
+    }
+    const runtimeHomePath = codexRuntimeHome!.prepareForCodexAccountLaunch(resolvedAccountRef, {
+      unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+    })
+    const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
+    const hookTarget =
+      resolvedAccountRef.runtime === 'wsl'
+        ? { runtime: 'wsl' as const, wslDistro: resolvedAccountRef.wslDistro ?? null }
+        : { runtime: 'host' as const }
+    const status = hooksEnabled
+      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.install(runtimeHomePath ?? undefined))
+      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
+    if (status.state === 'error') {
+      console.warn(
+        '[codex-hook-service] failed to prepare explicit account runtime hooks',
+        status.detail
+      )
+    }
+    return runtimeHomePath
+  }
+
   const ensureRealHomeHooksIfSelected = (): boolean => {
     if (
       target?.runtime === 'wsl' ||
@@ -1430,6 +1483,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+      prepareForCodexPtyLaunch: (ptyId, target) =>
+        codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
@@ -2279,6 +2334,11 @@ void app.whenReady().then(async () => {
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
+    captureCodexSessionAccountAttributions(identities, {
+      getPtyIdForPaneKey,
+      getPaneAccount: getCodexPaneAccount,
+      recordSessionAccount: recordCodexSessionAccount
+    })
     const ownedIdentities = identities.map((identity) => ({
       ...identity,
       worktreeId:
@@ -2665,6 +2725,8 @@ void app.whenReady().then(async () => {
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+    prepareForCodexPtyLaunch: (ptyId, target) =>
+      codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   const pluginSystemStartupStartedAt = performance.now()

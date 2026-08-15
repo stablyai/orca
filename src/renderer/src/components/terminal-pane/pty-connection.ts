@@ -3849,6 +3849,9 @@ export function connectPanePty(
     ...(agentLaunchPreferences ? { agentLaunchPreferences } : {}),
     ...(launchToken ? { launchToken } : {}),
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
+    ...(paneStartup?.providerAccountRef
+      ? { providerAccountRef: paneStartup.providerAccountRef }
+      : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onPtySpawn,

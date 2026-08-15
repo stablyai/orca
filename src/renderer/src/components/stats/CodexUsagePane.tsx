@@ -1,6 +1,10 @@
 import { useEffect } from 'react'
 import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
-import type { CodexUsageRange, CodexUsageScope } from '../../../../shared/codex-usage-types'
+import type {
+  CodexUsageAccountOption,
+  CodexUsageRange,
+  CodexUsageScope
+} from '../../../../shared/codex-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { CodexUsageDetails } from './CodexUsageDetails'
@@ -9,6 +13,12 @@ import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
+import {
+  codexUsageAccountFilterValue,
+  findCodexUsageAccountOption,
+  parseCodexUsageAccountFilter,
+  shortCodexUsageAccountId
+} from './codex-usage-account-filter'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
@@ -40,6 +50,28 @@ const RANGE_LABELS: Record<CodexUsageRange, string> = {
   }
 }
 
+function accountOptionLabel(option: CodexUsageAccountOption): string {
+  if (option.kind === 'system') {
+    return translate('auto.components.stats.CodexUsagePane.accountSystem', 'System Codex login')
+  }
+  if (option.kind === 'unattributed') {
+    return translate('auto.components.stats.CodexUsagePane.accountUnattributed', 'Unattributed')
+  }
+  if (option.deleted) {
+    return translate(
+      'auto.components.stats.CodexUsagePane.accountDeleted',
+      'Deleted account ({{value0}})',
+      { value0: shortCodexUsageAccountId(option.accountId) }
+    )
+  }
+  return (
+    option.workspaceLabel ||
+    translate('auto.components.stats.CodexUsagePane.accountManaged', 'Account {{value0}}', {
+      value0: shortCodexUsageAccountId(option.accountId)
+    })
+  )
+}
+
 export function CodexUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.codexUsageScanState)
   const summary = useAppStore((state) => state.codexUsageSummary)
@@ -49,11 +81,14 @@ export function CodexUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.codexUsageRecentSessions)
   const scope = useAppStore((state) => state.codexUsageScope)
   const range = useAppStore((state) => state.codexUsageRange)
+  const accountFilter = useAppStore((state) => state.codexUsageAccountFilter)
+  const accountOptions = useAppStore((state) => state.codexUsageAccountOptions)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const setCodexUsageScope = useAppStore((state) => state.setCodexUsageScope)
   const setCodexUsageRange = useAppStore((state) => state.setCodexUsageRange)
+  const setCodexUsageAccountFilter = useAppStore((state) => state.setCodexUsageAccountFilter)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
@@ -136,6 +171,31 @@ export function CodexUsagePane(): React.JSX.Element {
           onValueChange={(value) => void setCodexUsageScope(value)}
         />,
         <UsageFilterRadioGroup
+          key="account"
+          label={translate('auto.components.stats.CodexUsagePane.accountLabel', 'Account')}
+          value={codexUsageAccountFilterValue(accountFilter)}
+          options={[
+            {
+              value: 'all',
+              label: translate('auto.components.stats.CodexUsagePane.accountAll', 'All accounts')
+            },
+            ...accountOptions.map((option) => ({
+              value: codexUsageAccountFilterValue(
+                option.kind === 'managed'
+                  ? { kind: 'managed', accountId: option.accountId }
+                  : { kind: option.kind }
+              ),
+              label: accountOptionLabel(option)
+            }))
+          ]}
+          onValueChange={(value) => {
+            const nextFilter = parseCodexUsageAccountFilter(value)
+            if (nextFilter) {
+              void setCodexUsageAccountFilter(nextFilter)
+            }
+          }}
+        />,
+        <UsageFilterRadioGroup
           key="range"
           label={translate('auto.components.stats.CodexUsagePane.89162e019b', 'Range')}
           value={range}
@@ -145,7 +205,21 @@ export function CodexUsagePane(): React.JSX.Element {
       ]}
       selectionSummary={
         <>
-          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} •{' '}
+          {accountFilter.kind === 'all'
+            ? translate('auto.components.stats.CodexUsagePane.accountAll', 'All accounts')
+            : accountOptionLabel(
+                findCodexUsageAccountOption(accountOptions, accountFilter) ??
+                  (accountFilter.kind === 'managed'
+                    ? {
+                        kind: 'managed',
+                        accountId: accountFilter.accountId,
+                        workspaceLabel: null,
+                        deleted: true
+                      }
+                    : { kind: accountFilter.kind })
+              )}{' '}
+          • {RANGE_LABELS[range]}
         </>
       }
       emptyMessage={translate(

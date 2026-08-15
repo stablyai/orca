@@ -46,7 +46,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
-import { ACCOUNT_HANDLERS } from './account'
+import { ACCOUNT_HANDLERS, formatAccountsBlock } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import {
@@ -91,6 +91,17 @@ describe('account CLI handlers', () => {
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
   let logSpy: ReturnType<typeof vi.spyOn>
+
+  it('renders a friendly label and canonical UUID for launch selection', () => {
+    expect(
+      formatAccountsBlock('Codex', {
+        accounts: [
+          { id: 'account-uuid-a', email: 'user@example.com', workspaceLabel: 'Acme workspace' }
+        ],
+        activeAccountId: 'account-uuid-a'
+      })
+    ).toContain('Acme workspace (active)  account-uuid-a')
+  })
 
   function context(agent: string, json = false): HandlerContext {
     return {

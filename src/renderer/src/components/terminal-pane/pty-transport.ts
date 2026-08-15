@@ -565,6 +565,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     resumeProviderSession,
     launchToken,
     launchAgent,
+    providerAccountRef,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -837,6 +838,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...((options.launchAgent ?? launchAgent)
             ? { launchAgent: options.launchAgent ?? launchAgent }
             : {}),
+          ...(providerAccountRef ? { providerAccountRef } : {}),
           ...((options.startupCommandDelivery ?? startupCommandDelivery)
             ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
             : {}),

@@ -20,6 +20,7 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import {
+  AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -145,6 +146,7 @@ export function createRemoteRuntimePtyTransport(
     resumeProviderSession,
     launchToken,
     launchAgent,
+    providerAccountRef,
     terminalColorQueryReplies,
     agentPrompt,
     agentPromptDelivery,
@@ -2040,6 +2042,7 @@ export function createRemoteRuntimePtyTransport(
                       ...(agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
+                      ...(providerAccountRef ? { providerAccountRef } : {}),
                       placement: { tabId, leafId },
                       presentation: 'background'
                     },
@@ -2060,6 +2063,7 @@ export function createRemoteRuntimePtyTransport(
                         ...(agentLaunchPreferences
                           ? { launchPreferences: agentLaunchPreferences }
                           : {}),
+                        ...(providerAccountRef ? { providerAccountRef } : {}),
                         placement: { tabId, leafId },
                         presentation: 'background'
                       },
@@ -2076,9 +2080,14 @@ export function createRemoteRuntimePtyTransport(
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-                  : {}),
+                ...(providerAccountRef
+                  ? {
+                      hostAuthorityCapability: AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY,
+                      requireHostAuthority: true
+                    }
+                  : resumeProviderSessionToSend && launchAgentToSend === 'omp'
+                    ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                    : {}),
                 legacy: legacyCreate
               })
           : await legacyCreate()

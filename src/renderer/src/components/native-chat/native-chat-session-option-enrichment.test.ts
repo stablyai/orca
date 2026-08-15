@@ -70,6 +70,37 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'local')).toBeNull()
   })
 
+  it('keeps Codex discovery caches separate for PTYs pinned to different accounts', async () => {
+    const discoverA = vi
+      .fn()
+      .mockResolvedValue([{ id: 'account-a-model', label: 'Account A', options: [] }])
+    const discoverB = vi
+      .fn()
+      .mockResolvedValue([{ id: 'account-b-model', label: 'Account B', options: [] }])
+
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      ptyId: 'pty-a',
+      discover: discoverA
+    })
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      ptyId: 'pty-b',
+      discover: discoverB
+    })
+    await vi.waitFor(() => expect(discoverB).toHaveBeenCalledOnce())
+
+    expect(readNativeChatEnrichedModels('codex', 'local', 'pty-a')?.map(({ id }) => id)).toEqual([
+      'account-a-model'
+    ])
+    expect(readNativeChatEnrichedModels('codex', 'local', 'pty-b')?.map(({ id }) => id)).toEqual([
+      'account-b-model'
+    ])
+    expect(readNativeChatEnrichedModels('codex', 'local')).toBeNull()
+  })
+
   it('does not probe agents whose catalogs have no discovery command', () => {
     const discover = vi.fn()
     ensureNativeChatModelEnrichment({ agent: 'gemini', hostKey: 'local', discover })
@@ -316,5 +347,88 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     ).resolves.toBeNull()
+  })
+
+  it('uses discovered Codex models and their per-model reasoning levels', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' },
+            { id: 'max', label: 'Max' },
+            { id: 'ultra', label: 'Ultra' }
+          ],
+          defaultThinkingLevel: 'high'
+        },
+        { id: 'account-only-model', label: 'Account only model' }
+      ]
+    })
+
+    const discovered = await discoverNativeChatCatalogModels('codex', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    expect(discovered?.map(({ id }) => id)).toEqual(['gpt-5.6-sol', 'account-only-model'])
+    expect(discovered?.[0].options[0].kind).toMatchObject({
+      type: 'select',
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+        { value: 'max', label: 'Max' },
+        { value: 'ultra', label: 'Ultra' }
+      ],
+      defaultValue: 'high'
+    })
+    expect(discovered?.[1].options).toEqual([])
+
+    const listener = vi.fn()
+    subscribeNativeChatEnrichedModels('codex', 'local', listener)
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      discover: async () => discovered
+    })
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
+    const enriched = readNativeChatEnrichedModels('codex', 'local')!
+    expect(enriched.map(({ id }) => id)).toEqual(['gpt-5.6-sol', 'account-only-model'])
+    expect(enriched[0].options[0].kind).toMatchObject({
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+        { value: 'max', label: 'Max' },
+        { value: 'ultra', label: 'Ultra' }
+      ]
+    })
+  })
+
+  it('does not advertise the Codex spec fallback when probing is unavailable', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'spec',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }]
+    })
+
+    await expect(
+      discoverNativeChatCatalogModels(
+        'codex',
+        {
+          settings: {},
+          worktreeId: 'repo::/worktree',
+          worktreePath: '/worktree'
+        },
+        'pty-account-a'
+      )
+    ).resolves.toBeNull()
+    expect(mocks.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'repo::/worktree' }),
+      'codex',
+      'pty-account-a'
+    )
   })
 })
