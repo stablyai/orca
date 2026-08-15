@@ -526,7 +526,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
-    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
+    const ompWrapperLine = `command omp '--extension' "\${ORCA_OMP_STATUS_EXTENSION}" "$@"`
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -1160,6 +1160,72 @@ export MY_VAR=foo
       expect(result.status).toBe(0)
       // Syntax error causes discovery to fail, falls back to HOME
       expect(result.stdout).toContain(`ORCA_ORIG_ZDOTDIR=${testHome}`)
+    })
+
+    it('survives a user global alias that matches a wrapper literal', async () => {
+      // Why: zsh `alias -g` expands bare words anywhere on a line, including inside a
+      // `case` pattern list. An unquoted `--help` pattern inherited the alias body and
+      // its `>&` aborted the parse of the whole wrapper, silently dropping every helper
+      // defined after it (OMP wrapper and the OSC 133 lifecycle hooks alike).
+      writeFileSync(
+        join(testHome, '.zshrc'),
+        "alias -g -- --help='--help 2>&1 | bat --language=help --style=plain'\n"
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR
+
+      const result = spawnSync(
+        'zsh',
+        ['-i', '-c', 'whence -w __orca_omp_should_skip_extension; whence -w __orca_osc133_precmd'],
+        { env: cleanEnv as NodeJS.ProcessEnv, encoding: 'utf8' }
+      )
+
+      expect(result.stderr).not.toContain('parse error')
+      expect(result.status).toBe(0)
+      // Both helpers prove the wrapper parsed past the aliased token to the end of the file.
+      expect(result.stdout).toContain('__orca_omp_should_skip_extension: function')
+      expect(result.stdout).toContain('__orca_osc133_precmd: function')
+    })
+
+    it('still skips the OMP extension for every documented literal', async () => {
+      // Why: quoting the case patterns must not change which tokens match.
+      writeFileSync(join(testHome, '.zshrc'), "alias -g config='not-config'\n")
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR
+
+      const result = spawnSync(
+        'zsh',
+        [
+          '-i',
+          '-c',
+          `set -- 'help' '--help' '-h' '--version' '-v' 'config' 'worktree' 'wt' 'launch' 'ask' ''
+for __t in "$@"; do
+  if __orca_omp_should_skip_extension "$__t"; then print -r -- "skip[$__t]=YES"; else print -r -- "skip[$__t]=NO"; fi
+done`
+        ],
+        { env: cleanEnv as NodeJS.ProcessEnv, encoding: 'utf8' }
+      )
+
+      expect(result.status).toBe(0)
+      for (const token of ['help', '--help', '-h', '--version', '-v', 'config', 'worktree', 'wt']) {
+        expect(result.stdout).toContain(`skip[${token}]=YES`)
+      }
+      // `launch` and `ask` are real OMP invocations that must keep the status extension.
+      expect(result.stdout).toContain('skip[launch]=NO')
+      expect(result.stdout).toContain('skip[ask]=NO')
+      expect(result.stdout).toContain('skip[]=NO')
     })
 
     it('handles framework pattern with ${ZDOTDIR:-$HOME}', async () => {

@@ -625,7 +625,7 @@ describePosix('daemon shell-ready launch config', () => {
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
-    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
+    const ompWrapperLine = `command omp '--extension' "\${ORCA_OMP_STATUS_EXTENSION}" "$@"`
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)

@@ -40,13 +40,17 @@ const OMP_SUBCOMMANDS = [
 ] as const
 
 export function getPosixOmpShellWrapper(): string {
-  const subcommands = OMP_SUBCOMMANDS.join('|')
+  // Why: quote every literal token — zsh `alias -g` expands bare words anywhere on a
+  // line, so an unquoted `--help` pattern inherits the user's alias body (e.g. the
+  // common `alias -g -- --help='--help 2>&1 | bat'`) and the injected `>&` aborts the
+  // parse of Orca's whole rc file. Quoting is inert for these metachar-free tokens.
+  const subcommands = OMP_SUBCOMMANDS.map((value) => `'${value}'`).join('|')
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
   case "\${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
     ${subcommands}) return 0 ;;
   esac
   return 1
@@ -57,9 +61,9 @@ __orca_omp() {
   if [[ $__orca_use_extension -eq 1 && -n "\${ORCA_OMP_STATUS_EXTENSION:-}" && -f "\${ORCA_OMP_STATUS_EXTENSION}" ]]; then
     if [[ "\${1:-}" == "launch" ]]; then
       shift
-      command omp launch --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp 'launch' '--extension' "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
     else
-      command omp --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp '--extension' "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
     fi
   else
     command omp "$@"

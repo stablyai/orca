@@ -386,7 +386,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshLogin]) {
-      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
+      expect(wrapperFile).toContain(
+        `command omp '--extension' "\${ORCA_OMP_STATUS_EXTENSION}" "$@"`
+      )
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')

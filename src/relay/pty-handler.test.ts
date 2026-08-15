@@ -3032,7 +3032,7 @@ describe('PtyHandler', () => {
         'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
       )
       expect(readFileSync(rcfile, 'utf8')).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-      expect(readFileSync(rcfile, 'utf8')).toContain('command omp --extension')
+      expect(readFileSync(rcfile, 'utf8')).toContain(`command omp '--extension'`)
 
       rmSync(homeDir, { recursive: true, force: true })
     }
