@@ -115,6 +115,25 @@ describe('account CLI handlers', () => {
     }
   )
 
+  it('strips control characters from workspace labels before terminal output', () => {
+    const rendered = formatAccountsBlock('Codex', {
+      accounts: [
+        {
+          id: 'account-uuid-a',
+          email: 'user@example.com',
+          workspaceLabel: 'Acme\nworkspace\u001b[31m'
+        }
+      ],
+      activeAccountId: 'account-uuid-a'
+    })
+
+    expect(rendered).toContain('Acmeworkspace (active)  account-uuid-a')
+    expect(rendered).not.toContain('\n  workspace')
+    expect(rendered).not.toContain('\u001b')
+    expect(rendered).not.toContain('[31m')
+    expect(rendered.split('\n')).toHaveLength(2)
+  })
+
   function context(agent: string, json = false): HandlerContext {
     return {
       client,

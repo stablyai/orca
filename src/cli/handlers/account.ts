@@ -22,6 +22,7 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -49,6 +50,18 @@ type AccountsBlock = {
   }
 }
 
+function sanitizeAccountListField(value: string): string {
+  return stripAnsiEscapeSequences(value).replace(/[\u0000-\u001F\u007F]/g, '')
+}
+
+function formatAccountDisplayName(account: {
+  email: string
+  workspaceLabel?: string | null
+}): string {
+  const label = sanitizeAccountListField(account.workspaceLabel?.trim() ?? '')
+  return label || sanitizeAccountListField(account.email)
+}
+
 /** Renders a provider's managed-account list as a human-readable block, marking the active account. */
 export function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
@@ -61,7 +74,7 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   ])
   const lines = block.accounts.map(
     (account) =>
-      `  ${account.workspaceLabel?.trim() || account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}  ${account.id}`
+      `  ${formatAccountDisplayName(account)}${activeAccountIds.has(account.id) ? ' (active)' : ''}  ${account.id}`
   )
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
