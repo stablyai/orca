@@ -12,7 +12,9 @@ describe('Plane links', () => {
   })
 
   it('parses Plane workspace issue URLs', () => {
-    expect(parsePlaneIssueLink('https://plane.home.usableapps.io/usableapps/issues/aif-8009')).toEqual({
+    expect(
+      parsePlaneIssueLink('https://plane.home.usableapps.io/usableapps/issues/aif-8009')
+    ).toEqual({
       baseUrl: 'https://plane.home.usableapps.io',
       workspaceSlug: 'usableapps',
       projectIdentifier: 'AIF',
@@ -35,5 +37,14 @@ describe('Plane links', () => {
 
   it('rejects non-web URLs', () => {
     expect(parsePlaneIssueLink('file://plane.example.com/acme/issues/ENG-12')).toBeNull()
+  })
+
+  it('rejects web URLs without a Plane issue route', () => {
+    expect(parsePlaneIssueLink('https://example.com/AIF-8009')).toBeNull()
+  })
+
+  it('rejects unsafe sequence IDs', () => {
+    expect(parsePlaneIssueLink('AIF-9007199254740993')).toBeNull()
+    expect(parsePlaneIssueLink('AIF-0')).toBeNull()
   })
 })

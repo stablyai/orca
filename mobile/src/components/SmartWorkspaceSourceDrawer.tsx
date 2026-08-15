@@ -104,7 +104,8 @@ export function SmartWorkspaceSourceDrawer({
 
   // Linear and Plane search without a repo; other provider/branch searches need a
   // connected repo-backed target.
-  const searchEnabled = visible && (effectiveMode === 'linear' || effectiveMode === 'plane' || sshReady)
+  const searchEnabled =
+    visible && (effectiveMode === 'linear' || effectiveMode === 'plane' || sshReady)
 
   const {
     rows,
@@ -232,7 +233,10 @@ export function SmartWorkspaceSourceDrawer({
             </View>
           ) : null}
 
-          {!sshReady && effectiveMode !== 'text' && effectiveMode !== 'linear' ? (
+          {!sshReady &&
+          effectiveMode !== 'text' &&
+          effectiveMode !== 'linear' &&
+          effectiveMode !== 'plane' ? (
             <Text style={styles.notice}>Connect the repository to search sources.</Text>
           ) : needsGitHubRemote ? (
             <Text style={styles.notice}>

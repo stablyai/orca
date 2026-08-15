@@ -933,28 +933,36 @@ import {
   testConnection as testPlaneConnection
 } from '../plane/client'
 import {
-  addIssueComment as addPlaneIssueComment,
   createIssue as createPlaneIssue,
   deleteIssue as deletePlaneIssue,
   getIssue as getPlaneIssue,
-  issueComments as getPlaneIssueComments,
-  issueAttachments as getPlaneIssueAttachments,
-  issueLinks as getPlaneIssueLinks,
+  listIssues as listPlaneIssues,
+  searchIssues as searchPlaneIssues,
+  updateIssue as updatePlaneIssue,
+  type PlaneListFilter
+} from '../plane/issues'
+import {
+  addIssueComment as addPlaneIssueComment,
   addIssueLink as addPlaneIssueLink,
+  issueAttachments as getPlaneIssueAttachments,
+  issueComments as getPlaneIssueComments,
+  issueLinks as getPlaneIssueLinks
+} from '../plane/issue-activity'
+import {
   listCycles as listPlaneCycles,
   listEstimates as listPlaneEstimates,
-  listIssues as listPlaneIssues,
   listLabels as listPlaneLabels,
   listMembers as listPlaneMembers,
   listModules as listPlaneModules,
   listProjects as listPlaneProjects,
   listStates as listPlaneStates,
-  listWorkItemTypes as listPlaneWorkItemTypes,
-  searchIssues as searchPlaneIssues,
-  updateIssue as updatePlaneIssue,
-  type PlaneListFilter
-} from '../plane/issues'
-import type { PlaneConnectArgs, PlaneCreateIssueArgs, PlaneIssueUpdate } from '../../shared/plane/types'
+  listWorkItemTypes as listPlaneWorkItemTypes
+} from '../plane/project-resources'
+import type {
+  PlaneConnectArgs,
+  PlaneCreateIssueArgs,
+  PlaneIssueUpdate
+} from '../../shared/plane/types'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -36702,7 +36710,10 @@ export class OrcaRuntimeService {
     return listPlaneWorkItemTypes(projectId, instanceId)
   }
 
-  planeListEstimates(projectId: string, instanceId?: string): ReturnType<typeof listPlaneEstimates> {
+  planeListEstimates(
+    projectId: string,
+    instanceId?: string
+  ): ReturnType<typeof listPlaneEstimates> {
     return listPlaneEstimates(projectId, instanceId)
   }
 

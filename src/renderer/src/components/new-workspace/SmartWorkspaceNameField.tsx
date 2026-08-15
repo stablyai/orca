@@ -52,6 +52,7 @@ import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import {
   buildJiraIssueSearchJql,
@@ -1457,7 +1458,10 @@ export default function SmartWorkspaceNameField({
     }
     if (
       planeAvailable &&
-      rows.some((row) => row.kind === 'plane' && row.issue.identifier.toLowerCase() === trimmed.toLowerCase())
+      rows.some(
+        (row) =>
+          row.kind === 'plane' && row.issue.identifier.toLowerCase() === trimmed.toLowerCase()
+      )
     ) {
       return 'plane'
     }
@@ -1517,7 +1521,12 @@ export default function SmartWorkspaceNameField({
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading || planeLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      planeLoading
   const reserveLinearLoadingResults = unresolvedLinearUrlIntent && searchResultRows.length === 0
   // Why: only spin on first load — not on every in-flight refresh while rows stay visible.
   const showSearchSpinner = loading && searchResultRows.length === 0
@@ -2410,6 +2419,9 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'jira' || row.kind === 'jira-account') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
+  if (row.kind === 'plane') {
+    return <PlaneIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -2429,6 +2441,9 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   }
   if (kind === 'jira') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'plane') {
+    return <PlaneIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }

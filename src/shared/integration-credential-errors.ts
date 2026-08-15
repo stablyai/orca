@@ -11,6 +11,7 @@ export function isIntegrationCredentialDecryptionError(error: unknown): boolean 
   return (
     message.includes(credentialDecryptionMessage('Linear')) ||
     message.includes(credentialDecryptionMessage('Jira')) ||
-    message.includes(credentialDecryptionMessage('Bitbucket'))
+    message.includes(credentialDecryptionMessage('Bitbucket')) ||
+    message.includes(credentialDecryptionMessage('Plane'))
   )
 }

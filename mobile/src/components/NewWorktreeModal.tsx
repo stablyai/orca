@@ -399,6 +399,7 @@ function NewWorktreeModalContent({
       }
 
       const [preflightRes, linearRes] = await probes
+      const planeRes = await client.sendRequest('plane.status', {})
       if (stale) {
         return
       }
@@ -407,13 +408,16 @@ function NewWorktreeModalContent({
           ?.installed === true
       const linearConnected =
         (okResult(linearRes)?.result as { connected?: boolean } | undefined)?.connected === true
+      const planeConnected =
+        (okResult(planeRes)?.result as { connected?: boolean } | undefined)?.connected === true
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         // Drop filterAvailableTaskProviders' forced 'github' fallback when the user
         // hid GitHub; the Branch tab always guarantees at least one tab remains.
         filterAvailableTaskProviders(visibleProviders, {
           gitlabInstalled: glabInstalled,
-          linearConnected
+          linearConnected,
+          planeConnected
         }).filter((provider) => visibleProviders.includes(provider))
       )
     })()

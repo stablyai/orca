@@ -166,16 +166,21 @@ function readToken(instanceId: string): string | null {
   return token
 }
 
-export async function connect(args: PlaneConnectArgs): Promise<{ ok: true; viewer: PlaneViewer } | { ok: false; error: string }> {
-  const baseUrl = normalizeBaseUrl(args.baseUrl)
-  const workspaceSlug = args.workspaceSlug.trim()
-  const apiKey = args.apiKey.trim()
-  if (!workspaceSlug || !apiKey) {
-    return { ok: false, error: 'Workspace slug and API key are required' }
-  }
-  const id = instanceId(baseUrl, workspaceSlug)
+export async function connect(
+  args: PlaneConnectArgs
+): Promise<{ ok: true; viewer: PlaneViewer } | { ok: false; error: string }> {
   try {
-    const viewer = await fetchPlaneViewer({ instance: { id, baseUrl, workspaceSlug, displayName: workspaceSlug }, apiKey })
+    const baseUrl = normalizeBaseUrl(args.baseUrl)
+    const workspaceSlug = args.workspaceSlug.trim()
+    const apiKey = args.apiKey.trim()
+    if (!workspaceSlug || !apiKey) {
+      return { ok: false, error: 'Workspace slug and API key are required' }
+    }
+    const id = instanceId(baseUrl, workspaceSlug)
+    const viewer = await fetchPlaneViewer({
+      instance: { id, baseUrl, workspaceSlug, displayName: workspaceSlug },
+      apiKey
+    })
     ensureDirs()
     cachedTokens.set(id, apiKey)
     writeEncryptedCredential(SERVICE, getInstanceTokenPath(id), apiKey)
@@ -190,7 +195,12 @@ export async function connect(args: PlaneConnectArgs): Promise<{ ok: true; viewe
       userId: viewer.id ?? null,
       credentialRevision: Date.now()
     }
-    writeInstanceFile({ version: 1, activeInstanceId: id, selectedInstanceId: id, instances: [instance, ...existing] })
+    writeInstanceFile({
+      version: 1,
+      activeInstanceId: id,
+      selectedInstanceId: id,
+      instances: [instance, ...existing]
+    })
     return { ok: true, viewer }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -207,7 +217,10 @@ export function disconnect(instanceId?: string): void {
       unlinkSync(getInstanceTokenPath(id))
     } catch {}
   }
-  writeInstanceFile({ ...file, instances: file.instances.filter((instance) => !ids.includes(instance.id)) })
+  writeInstanceFile({
+    ...file,
+    instances: file.instances.filter((instance) => !ids.includes(instance.id))
+  })
 }
 
 export function selectInstance(instanceId: PlaneInstanceSelection): PlaneConnectionStatus {
@@ -229,7 +242,8 @@ export function getStatus(): PlaneConnectionStatus {
   const selectedInstanceId =
     file.selectedInstanceId === 'all'
       ? 'all'
-      : file.selectedInstanceId && instances.some((instance) => instance.id === file.selectedInstanceId)
+      : file.selectedInstanceId &&
+          instances.some((instance) => instance.id === file.selectedInstanceId)
         ? file.selectedInstanceId
         : activeInstanceId
   const active = instances.find((instance) => instance.id === activeInstanceId) ?? null
@@ -238,12 +252,16 @@ export function getStatus(): PlaneConnectionStatus {
     activeInstanceId,
     selectedInstanceId,
     instances,
-    viewer: active ? { id: active.userId ?? undefined, displayName: active.displayName, email: active.email } : null,
+    viewer: active
+      ? { id: active.userId ?? undefined, displayName: active.displayName, email: active.email }
+      : null,
     credentialError: activeInstanceId ? (credentialErrors.get(activeInstanceId) ?? null) : null
   }
 }
 
-export async function testConnection(instanceId?: string): Promise<{ ok: true; viewer: PlaneViewer } | { ok: false; error: string }> {
+export async function testConnection(
+  instanceId?: string
+): Promise<{ ok: true; viewer: PlaneViewer } | { ok: false; error: string }> {
   try {
     const client = getClient(instanceId)
     return { ok: true, viewer: await fetchPlaneViewer(client) }
@@ -254,7 +272,10 @@ export async function testConnection(instanceId?: string): Promise<{ ok: true; v
 
 export function getClient(instanceId?: string): PlaneClientForInstance {
   const file = getInstanceFile()
-  const id = instanceId ?? (file.selectedInstanceId === 'all' ? file.activeInstanceId : file.selectedInstanceId) ?? file.activeInstanceId
+  const id =
+    instanceId ??
+    (file.selectedInstanceId === 'all' ? file.activeInstanceId : file.selectedInstanceId) ??
+    file.activeInstanceId
   const instance = file.instances.find((item) => item.id === id)
   if (!instance) {
     throw new Error('Plane is not connected')
@@ -282,9 +303,17 @@ export function getClients(selection?: PlaneInstanceSelection): PlaneClientForIn
   return [getClient(effectiveSelection ?? undefined)]
 }
 
-export async function planeFetch<T>(client: PlaneClientForInstance, path: string, init: RequestInit = {}): Promise<T> {
+const PLANE_REQUEST_TIMEOUT_MS = 30_000
+
+export async function planeFetch<T>(
+  client: PlaneClientForInstance,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
   const response = await fetch(`${client.instance.baseUrl}${path}`, {
     ...init,
+    signal: init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
@@ -304,7 +333,8 @@ export async function planeFetch<T>(client: PlaneClientForInstance, path: string
 async function fetchPlaneViewer(client: PlaneClientForInstance): Promise<PlaneViewer> {
   const data = await planeFetch<Record<string, unknown>>(client, '/api/v1/users/me/')
   const id = stringField(data, 'id') ?? undefined
-  const displayName = stringField(data, 'display_name') ?? stringField(data, 'first_name') ?? 'Plane user'
+  const displayName =
+    stringField(data, 'display_name') ?? stringField(data, 'first_name') ?? 'Plane user'
   return { id, displayName, email: stringField(data, 'email') }
 }
 

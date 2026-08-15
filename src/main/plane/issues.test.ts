@@ -15,7 +15,9 @@ vi.mock('./client', () => ({
     `${client.instance.baseUrl}/${client.instance.workspaceSlug}/issues/${identifier}`
 }))
 
-function client(overrides: Partial<PlaneClientForInstance['instance']> = {}): PlaneClientForInstance {
+function client(
+  overrides: Partial<PlaneClientForInstance['instance']> = {}
+): PlaneClientForInstance {
   return {
     apiKey: 'token',
     instance: {
@@ -77,10 +79,27 @@ describe('Plane issue API adapter', () => {
         { id: 'issue-1', identifier: 'AIF-1', assigneeIds: ['user-1'], labelIds: ['label-1'] },
         { id: 'issue-3', identifier: 'AIF-3' }
       ],
-      hasMore: true
+      hasMore: false
     })
-    expect(planeFetch.mock.calls[1][1]).toContain('expand=assignees%2Clabels%2Cstate%2Cproject%2Cmodule%2Ctype')
+    expect(planeFetch.mock.calls[1][1]).toContain(
+      'expand=assignees%2Clabels%2Cstate%2Cproject%2Cmodule%2Ctype'
+    )
     expect(planeFetch.mock.calls[2][1]).toContain('cursor=2%3A1%3A0')
+  })
+
+  it('maps project_detail when project is absent', async () => {
+    planeFetch.mockResolvedValueOnce(
+      issue('issue-1', 1, {
+        project: undefined,
+        project_detail: { id: 'project-detail-1', identifier: 'PD', name: 'Detail project' },
+        project_identifier: undefined
+      })
+    )
+    const { getIssue } = await import('./issues')
+
+    await expect(getIssue('PD-1')).resolves.toMatchObject({
+      project: { id: 'project-detail-1', identifier: 'PD', name: 'Detail project' }
+    })
   })
 
   it('writes documented create fields including module cycle type estimate and external source', async () => {
@@ -121,15 +140,13 @@ describe('Plane issue API adapter', () => {
   })
 
   it('matches created filter when Plane expands created_by as an object', async () => {
-    planeFetch
-      .mockResolvedValueOnce({ results: [project()] })
-      .mockResolvedValueOnce({
-        results: [
-          issue('issue-1', 1, { created_by: { id: 'user-1', display_name: 'Ada' } }),
-          issue('issue-2', 2, { created_by: { id: 'user-2', display_name: 'Grace' } })
-        ],
-        next_page_results: false
-      })
+    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+      results: [
+        issue('issue-1', 1, { created_by: { id: 'user-1', display_name: 'Ada' } }),
+        issue('issue-2', 2, { created_by: { id: 'user-2', display_name: 'Grace' } })
+      ],
+      next_page_results: false
+    })
     const { listIssues } = await import('./issues')
 
     await expect(listIssues('created', 10)).resolves.toMatchObject({
@@ -138,9 +155,7 @@ describe('Plane issue API adapter', () => {
   })
 
   it('writes update fields using Plane payload names', async () => {
-    planeFetch
-      .mockResolvedValueOnce(issue('issue-1', 1))
-      .mockResolvedValueOnce(undefined)
+    planeFetch.mockResolvedValueOnce(issue('issue-1', 1)).mockResolvedValueOnce(undefined)
     const { updateIssue } = await import('./issues')
 
     await expect(
@@ -168,13 +183,20 @@ describe('Plane issue API adapter', () => {
         next_cursor: '100:1:0',
         next_page_results: true
       })
-      .mockResolvedValueOnce({ results: [{ id: 'cycle-2', name: 'Cycle 2' }], next_page_results: false })
+      .mockResolvedValueOnce({
+        results: [{ id: 'cycle-2', name: 'Cycle 2' }],
+        next_page_results: false
+      })
       .mockResolvedValueOnce({ results: [{ id: 'module-1', name: 'Module 1', status: 'planned' }] })
       .mockResolvedValueOnce({ results: [{ id: 'type-1', name: 'Bug', is_active: true }] })
       .mockResolvedValueOnce({ results: [{ id: 'estimate-1', name: 'Points' }] })
-    const { listCycles, listModules, listWorkItemTypes, listEstimates } = await import('./issues')
+    const { listCycles, listModules, listWorkItemTypes, listEstimates } =
+      await import('./project-resources')
 
-    await expect(listCycles('project-1')).resolves.toMatchObject([{ id: 'cycle-1' }, { id: 'cycle-2' }])
+    await expect(listCycles('project-1')).resolves.toMatchObject([
+      { id: 'cycle-1' },
+      { id: 'cycle-2' }
+    ])
     await expect(listModules('project-1')).resolves.toMatchObject([{ id: 'module-1' }])
     await expect(listWorkItemTypes('project-1')).resolves.toMatchObject([{ id: 'type-1' }])
     await expect(listEstimates('project-1')).resolves.toMatchObject([{ id: 'estimate-1' }])
@@ -184,16 +206,26 @@ describe('Plane issue API adapter', () => {
   it('lists and creates work item links and lists attachment metadata', async () => {
     planeFetch
       .mockResolvedValueOnce(issue('issue-1', 1))
-      .mockResolvedValueOnce({ results: [{ id: 'link-1', title: 'Spec', url: 'https://example.com' }] })
+      .mockResolvedValueOnce({
+        results: [{ id: 'link-1', title: 'Spec', url: 'https://example.com' }]
+      })
       .mockResolvedValueOnce(issue('issue-1', 1))
       .mockResolvedValueOnce({ id: 'link-2', title: 'PR', url: 'https://example.com/pr' })
       .mockResolvedValueOnce(issue('issue-1', 1))
       .mockResolvedValueOnce({ results: [{ id: 'asset-1', file_name: 'trace.txt', size: 42 }] })
-    const { issueLinks, addIssueLink, issueAttachments } = await import('./issues')
+    const { issueLinks, addIssueLink, issueAttachments } = await import('./issue-activity')
 
     await expect(issueLinks('AIF-1')).resolves.toMatchObject([{ id: 'link-1' }])
-    await expect(addIssueLink('AIF-1', 'PR', 'https://example.com/pr')).resolves.toEqual({ ok: true, id: 'link-2' })
-    expect(JSON.parse(planeFetch.mock.calls[3][2].body)).toEqual({ title: 'PR', url: 'https://example.com/pr' })
-    await expect(issueAttachments('AIF-1')).resolves.toMatchObject([{ id: 'asset-1', name: 'trace.txt', size: 42 }])
+    await expect(addIssueLink('AIF-1', 'PR', 'https://example.com/pr')).resolves.toEqual({
+      ok: true,
+      id: 'link-2'
+    })
+    expect(JSON.parse(planeFetch.mock.calls[3][2].body)).toEqual({
+      title: 'PR',
+      url: 'https://example.com/pr'
+    })
+    await expect(issueAttachments('AIF-1')).resolves.toMatchObject([
+      { id: 'asset-1', name: 'trace.txt', size: 42 }
+    ])
   })
 })

@@ -54,11 +54,17 @@ export function mapWorkItem(
   if (!id || !title) {
     return null
   }
-  const projectRecord = record(raw.project) || record(raw.project_detail)
-  const projectId = project?.id ?? stringField(raw, 'project_id') ?? stringField(projectRecord, 'id') ?? ''
-  const projectIdentifier = project?.identifier ?? stringField(raw, 'project_identifier') ?? stringField(projectRecord, 'identifier')
+  const projectRecord = recordOrNull(raw.project) ?? recordOrNull(raw.project_detail) ?? {}
+  const projectId =
+    project?.id ?? stringField(raw, 'project_id') ?? stringField(projectRecord, 'id') ?? ''
+  const projectIdentifier =
+    project?.identifier ??
+    stringField(raw, 'project_identifier') ??
+    stringField(projectRecord, 'identifier')
   const sequenceId = numberField(raw, 'sequence_id') ?? numberField(raw, 'sequence')
-  const identifier = stringField(raw, 'identifier') ?? (projectIdentifier && sequenceId ? `${projectIdentifier}-${sequenceId}` : id)
+  const identifier =
+    stringField(raw, 'identifier') ??
+    (projectIdentifier && sequenceId ? `${projectIdentifier}-${sequenceId}` : id)
   return {
     id,
     identifier,
@@ -95,7 +101,9 @@ export function mapState(input: unknown): PlaneState | null {
   const raw = record(input)
   const id = stringField(raw, 'id')
   const name = stringField(raw, 'name')
-  return id && name ? { id, name, group: stringField(raw, 'group'), color: stringField(raw, 'color') } : null
+  return id && name
+    ? { id, name, group: stringField(raw, 'group'), color: stringField(raw, 'color') }
+    : null
 }
 
 export function mapLabel(input: unknown): PlaneLabel | null {
@@ -108,7 +116,8 @@ export function mapLabel(input: unknown): PlaneLabel | null {
 export function mapMember(input: unknown): PlaneMember | null {
   const raw = record(input)
   const id = stringField(raw, 'id') ?? stringField(raw, 'member_id')
-  const displayName = stringField(raw, 'display_name') ?? stringField(raw, 'first_name') ?? stringField(raw, 'email')
+  const displayName =
+    stringField(raw, 'display_name') ?? stringField(raw, 'first_name') ?? stringField(raw, 'email')
   return id && displayName ? { id, displayName, email: stringField(raw, 'email') } : null
 }
 
@@ -116,10 +125,21 @@ export function mapComment(input: unknown): PlaneComment | null {
   const raw = record(input)
   const id = stringField(raw, 'id')
   const body = stringField(raw, 'comment_html') ?? stringField(raw, 'comment_stripped')
-  return id && body ? { id, body, createdAt: stringField(raw, 'created_at'), author: mapMember(raw.actor ?? raw.created_by) } : null
+  return id && body
+    ? {
+        id,
+        body,
+        createdAt: stringField(raw, 'created_at'),
+        author: mapMember(raw.actor ?? raw.created_by)
+      }
+    : null
 }
 
-export function mapCycle(client: PlaneClient, projectId: string, input: unknown): PlaneCycle | null {
+export function mapCycle(
+  client: PlaneClient,
+  projectId: string,
+  input: unknown
+): PlaneCycle | null {
   const raw = record(input)
   const id = stringField(raw, 'id')
   const name = stringField(raw, 'name')
@@ -138,7 +158,11 @@ export function mapCycle(client: PlaneClient, projectId: string, input: unknown)
     : null
 }
 
-export function mapModule(client: PlaneClient, projectId: string, input: unknown): PlaneModule | null {
+export function mapModule(
+  client: PlaneClient,
+  projectId: string,
+  input: unknown
+): PlaneModule | null {
   const raw = record(input)
   const id = stringField(raw, 'id')
   const name = stringField(raw, 'name')
@@ -181,7 +205,11 @@ export function mapWorkItemType(
     : null
 }
 
-export function mapEstimate(client: PlaneClient, projectId: string, input: unknown): PlaneEstimate | null {
+export function mapEstimate(
+  client: PlaneClient,
+  projectId: string,
+  input: unknown
+): PlaneEstimate | null {
   const raw = record(input)
   const id = stringField(raw, 'id')
   const name = stringField(raw, 'name')

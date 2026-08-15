@@ -13,7 +13,10 @@ import { useIntegrationSubordinateRowClass } from './integration-card-presentati
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
-import { LINEAR_INTEGRATION_SECTION_ID, PLANE_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
+import {
+  LINEAR_INTEGRATION_SECTION_ID,
+  PLANE_INTEGRATION_SECTION_ID
+} from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -257,8 +260,10 @@ export function PlaneIntegrationCard(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const mountedRef = useMountedRef()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null)
-  const [testResultByInstance, setTestResultByInstance] = useState<Record<string, VerificationResult>>({})
+  const [testingInstanceIds, setTestingInstanceIds] = useState<Set<string>>(() => new Set())
+  const [testResultByInstance, setTestResultByInstance] = useState<
+    Record<string, VerificationResult>
+  >({})
 
   const contextMatches = planeStatusContextKey === getProviderRuntimeContextKey(settings)
   const checking = !contextMatches || !planeStatusChecked
@@ -266,7 +271,7 @@ export function PlaneIntegrationCard(): React.JSX.Element {
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
 
   const handleTest = async (instanceId: string): Promise<void> => {
-    setTestingInstanceId(instanceId)
+    setTestingInstanceIds((prev) => new Set(prev).add(instanceId))
     setTestResultByInstance((prev) => {
       const next = { ...prev }
       delete next[instanceId]
@@ -280,7 +285,11 @@ export function PlaneIntegrationCard(): React.JSX.Element {
       ...prev,
       [instanceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
     }))
-    setTestingInstanceId(null)
+    setTestingInstanceIds((prev) => {
+      const next = new Set(prev)
+      next.delete(instanceId)
+      return next
+    })
   }
 
   const handleDisconnect = async (instanceId?: string): Promise<void> => {
@@ -307,7 +316,11 @@ export function PlaneIntegrationCard(): React.JSX.Element {
       statusLabel={connected ? 'Connected' : 'Not connected'}
       actions={
         !checking ? (
-          <Button variant={connected ? 'outline' : 'default'} size="sm" onClick={() => setDialogOpen(true)}>
+          <Button
+            variant={connected ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => setDialogOpen(true)}
+          >
             {connected ? 'Add instance' : 'Add Plane access'}
           </Button>
         ) : null
@@ -319,11 +332,13 @@ export function PlaneIntegrationCard(): React.JSX.Element {
           <div className="space-y-2">
             {planeStatus.instances.map((instance) => {
               const testResult = testResultByInstance[instance.id]
-              const testing = testingInstanceId === instance.id
+              const testing = testingInstanceIds.has(instance.id)
               return (
                 <div key={instance.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{instance.workspaceSlug}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {instance.workspaceSlug}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{instance.baseUrl}</p>
                   </div>
                   {testResult?.state === 'ok' ? (
@@ -337,7 +352,12 @@ export function PlaneIntegrationCard(): React.JSX.Element {
                       <span className="truncate">{testResult.error}</span>
                     </span>
                   ) : null}
-                  <Button variant="outline" size="sm" onClick={() => void handleTest(instance.id)} disabled={testing}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleTest(instance.id)}
+                    disabled={testing}
+                  >
                     {testing ? <LoaderCircle className="size-3.5 mr-1.5 animate-spin" /> : null}
                     {testing ? 'Testing...' : 'Test'}
                   </Button>
@@ -355,7 +375,8 @@ export function PlaneIntegrationCard(): React.JSX.Element {
         ) : !checking ? (
           <>
             <p className="text-xs text-muted-foreground">
-              Add a Plane base URL, workspace slug, and Personal Access Token. Tokens are stored by the active runtime.
+              Add a Plane base URL, workspace slug, and Personal Access Token. Tokens are stored by
+              the active runtime.
             </p>
             <Button variant="ghost" size="sm" onClick={() => void checkPlaneConnection(true)}>
               Re-check

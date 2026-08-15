@@ -25,8 +25,11 @@ export function parsePlaneIssueLink(input: string): PlaneIssueLink | null {
     }
     const pathParts = url.pathname.split('/').filter(Boolean)
     const issueRouteIndex = pathParts.findIndex((part) => PLANE_ISSUE_ROUTE_SEGMENTS.has(part))
-    const identifier = pathParts.find((part, index) =>
-      index > issueRouteIndex && PLANE_IDENTIFIER_PATTERN.test(part)
+    if (issueRouteIndex === -1) {
+      return null
+    }
+    const identifier = pathParts.find(
+      (part, index) => index > issueRouteIndex && PLANE_IDENTIFIER_PATTERN.test(part)
     )
     const parsed = identifier ? parsePlaneIdentifier(identifier) : null
     if (!parsed) {
@@ -54,6 +57,9 @@ function parsePlaneIdentifier(value: string): PlaneIssueLink | null {
   }
   const projectIdentifier = match[1].toUpperCase()
   const sequenceId = Number(match[2])
+  if (!Number.isSafeInteger(sequenceId) || sequenceId <= 0) {
+    return null
+  }
   return {
     projectIdentifier,
     sequenceId,
