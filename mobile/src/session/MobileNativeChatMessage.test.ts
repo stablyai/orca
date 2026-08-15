@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MAX_TOOL_DETAIL_LENGTH } from './mobile-native-chat-tool-summary'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -38,9 +38,6 @@ function toolMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
 describe('MobileNativeChatMessage', () => {
   let renderer: ReactTestRenderer | null = null
 
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
@@ -50,20 +47,9 @@ describe('MobileNativeChatMessage', () => {
     message: NativeChatMessage,
     props: { toolsExpanded?: boolean } = {}
   ): ReactTestRenderer {
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
-      })
-    } finally {
-      spy.mockRestore()
-    }
     return renderer!
   }
 

@@ -10,11 +10,16 @@ import {
 import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  areLocalWindowsWslPathAliases,
+  isPathInsideOrEqual
+} from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import {
   buildCheckRunDetailsTabId,
+  createCheckRunDetailsRequestId,
   getCheckRunDetailsTabLabel,
+  isSameGitHubRepository,
   isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
@@ -23,29 +28,33 @@ import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
+import type { SearchResult } from '../../../../shared/code-search-types'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
-  GitCommitCompareSummary,
+  GitCommitCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type {
+  GitBranchLineTotal,
   GitConflictKind,
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
-  GlobalSettings,
-  GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
-  PersistedOpenFile,
-  Tab,
-  TabGroup,
-  GitUpstreamStatus,
+  GitUpstreamStatus
+} from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type {
   ActiveRightSidebarTab,
-  RightSidebarExplorerView,
-  SearchResult,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from '../../../../shared/types'
-import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
+  RightSidebarExplorerView
+} from '../../../../shared/ui-chrome-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../../../../shared/workspace-session-state-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import {
@@ -105,12 +114,13 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { sanitizeRecentTabIds } from './tab-group-state'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 
 export type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView,
   RightSidebarTab
-} from '../../../../shared/types'
+} from '../../../../shared/ui-chrome-types'
 
 const DEFAULT_FILE_SEARCH_STATE = {
   query: '',
@@ -1025,6 +1035,23 @@ function isSameEditorOwner(
   )
 }
 
+function canReuseLocalWslAlias(
+  state: AppState,
+  existing: OpenFile,
+  file: Pick<OpenFile, 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'externalSshTargetId'>,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  return (
+    isLocalWindowsDesktopClient() &&
+    runtimeOwnerKey(runtimeEnvironmentId) === null &&
+    !existing.externalSshTargetId?.trim() &&
+    !file.externalSshTargetId?.trim() &&
+    areLocalWindowsWslPathAliases(existing.filePath, file.filePath) &&
+    getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
+    getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
+  )
+}
+
 export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
@@ -1743,9 +1770,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath &&
           matchesEditorMode(f, reusableOpenFileModes) &&
-          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
+          (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
       )
       // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
       const id = existing
@@ -3802,14 +3829,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const checkRunDetails: OpenCheckRunDetailsState = {
       contextKey,
       check,
+      requestId: state.requestId,
       details: state.details,
       loading: state.loading,
       error: state.error,
+      githubRepository: state.githubRepository ?? null,
       gitlabProjectRef: state.gitlabProjectRef ?? null
     }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
+        const existingDetails = existing.checkRunDetails
+        const incomingIsStale =
+          existingDetails?.contextKey === contextKey &&
+          existingDetails.requestId !== undefined &&
+          (state.requestId === undefined || state.requestId < existingDetails.requestId)
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id
@@ -3818,7 +3852,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   mode: 'check-details' as const,
                   relativePath: label,
                   language: 'plaintext',
-                  checkRunDetails
+                  checkRunDetails: incomingIsStale ? existingDetails : checkRunDetails
                 }
               : f
           ),
@@ -3860,24 +3894,39 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         return s
       }
       const current = existing.checkRunDetails
+      if (current.contextKey !== contextKey) {
+        return s
+      }
+      if (
+        state.requestId !== undefined &&
+        current.requestId !== undefined &&
+        state.requestId < current.requestId
+      ) {
+        return s
+      }
       // Why: the sidebar resolves the MR's project asynchronously, so an early patch
       // must not blank a ref we already know.
+      const githubRepository = state.githubRepository ?? current.githubRepository ?? null
       const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
       const nextCheckRunDetails: OpenCheckRunDetailsState = {
         contextKey,
         check,
+        requestId: state.requestId ?? current.requestId,
         details: state.details,
         loading: state.loading,
         error: state.error,
+        githubRepository,
         gitlabProjectRef
       }
       if (
         current.contextKey === nextCheckRunDetails.contextKey &&
+        current.requestId === nextCheckRunDetails.requestId &&
         current.check.status === nextCheckRunDetails.check.status &&
         current.check.conclusion === nextCheckRunDetails.check.conclusion &&
         current.loading === nextCheckRunDetails.loading &&
         current.error === nextCheckRunDetails.error &&
         current.details === nextCheckRunDetails.details &&
+        isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
         isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
       ) {
         return s
@@ -3897,15 +3946,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     if (!file || file.mode !== 'check-details' || !checkRunDetails) {
       return
     }
+    const { contextKey, check } = checkRunDetails
+    const requestId = createCheckRunDetailsRequestId()
+    const patch = (next: CheckRunDetailsTabPatch): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, { ...next, requestId })
+    }
     const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
     const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
     const repo = state.repos.find((candidate) => candidate.id === repoId)
     if (!repo?.path) {
+      patch({
+        details: checkRunDetails.details,
+        loading: false,
+        error: translate(
+          'auto.store.slices.editor.checkRunDetailsRepoUnavailable',
+          'Repository details are unavailable for this check.'
+        )
+      })
       return
-    }
-    const { contextKey, check } = checkRunDetails
-    const patch = (next: CheckRunDetailsTabPatch): void => {
-      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
@@ -3927,7 +3985,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               workflowRunId: check.workflowRunId,
               checkName: check.name,
               url: check.url,
-              prRepo: null
+              prRepo: checkRunDetails.githubRepository ?? null
             },
             { repoId: repo.id }
           )
@@ -4109,7 +4167,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: session-local conflict tracking (Resolved-locally) lives only in the renderer; main returns raw git status, so the renderer owns conflictStatusSource.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
-      const hadStatusEntry = Object.prototype.hasOwnProperty.call(s.gitStatusByWorktree, worktreeId)
+      const hadStatusEntry = Object.hasOwn(s.gitStatusByWorktree, worktreeId)
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }

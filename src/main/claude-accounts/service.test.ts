@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentials,

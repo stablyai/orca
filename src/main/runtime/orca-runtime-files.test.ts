@@ -2,6 +2,7 @@
    authorization, and watcher lifecycle fixtures; splitting would duplicate the
    setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FileReadCapExceededError, StreamProtocolError } from '../ssh/ssh-filesystem-stream-reader'
 import { EventEmitter } from 'node:events'
 import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -22,6 +23,7 @@ const {
   closeWatcherInWatcherProcessMock,
   checkRgAvailableMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
+  searchWithGitGrepMock,
   wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
@@ -35,6 +37,7 @@ const {
   statMock: vi.fn(),
   watchInWatcherProcessMock: vi.fn(),
   closeWatcherInWatcherProcessMock: vi.fn(),
+  searchWithGitGrepMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -91,6 +94,10 @@ vi.mock('../ipc/local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
+vi.mock('../ipc/filesystem-search-git', () => ({
+  searchWithGitGrep: searchWithGitGrepMock
+}))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn(),
   onSshFilesystemProviderRegistered: () => () => undefined,
@@ -98,7 +105,12 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
-import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
+import {
+  awaitRuntimeFileWatcherUnsubscribes,
+  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES,
+  RuntimeFileCommands
+} from './orca-runtime-files'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   resetSshConnectionGenerations,
@@ -151,6 +163,7 @@ function createRuntimeFileCommands(options?: {
   resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
   hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
+  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
@@ -186,6 +199,9 @@ function createRuntimeFileCommands(options?: {
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
       : {}),
     hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
+    ...(options?.hasRecentNativeChatOutputPath
+      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
+      : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
@@ -200,6 +216,12 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
   child.stderr = new EventEmitter()
   child.kill = vi.fn()
   return child
+}
+
+async function flushRuntimeSearchMicrotasks(): Promise<void> {
+  for (let index = 0; index < 8; index++) {
+    await Promise.resolve()
+  }
 }
 
 describe('RuntimeFileCommands', () => {
@@ -217,6 +239,7 @@ describe('RuntimeFileCommands', () => {
     closeWatcherInWatcherProcessMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
+    searchWithGitGrepMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
     resetSshConnectionGenerations()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
@@ -754,6 +777,68 @@ describe('RuntimeFileCommands', () => {
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
+    expect(checkRgAvailableMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['error-first', 'close-first'] as const)(
+    'falls back once when runtime rg native launch failure is %s',
+    async (order) => {
+      const resolveRuntimeFileTarget = vi.fn(async () => ({
+        worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+        connectionId: null
+      }))
+      const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+      const child = createRuntimeSearchChild()
+      Object.defineProperty(child, 'pid', { value: undefined })
+      resolveAuthorizedPathMock.mockResolvedValue('/repo')
+      wslAwareSpawnMock.mockReturnValue(child)
+      const fallback = { files: [], totalMatches: 0, truncated: false }
+      searchWithGitGrepMock.mockResolvedValue(fallback)
+
+      const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+        query: 'needle',
+        maxResults: 10
+      })
+      await flushRuntimeSearchMicrotasks()
+      const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+      if (order === 'error-first') {
+        expect(() => child.emit('error', error)).not.toThrow()
+        child.emit('close', -2, null)
+      } else {
+        child.emit('close', -2, null)
+        expect(() => child.emit('error', error)).not.toThrow()
+      }
+
+      await expect(resultPromise).resolves.toBe(fallback)
+      expect(searchWithGitGrepMock).toHaveBeenCalledTimes(1)
+      expect(checkRgAvailableMock).not.toHaveBeenCalled()
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    }
+  )
+
+  it("falls back when a runtime native launcher exits outside ripgrep's contract", async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const child = createRuntimeSearchChild()
+    Object.defineProperty(child, 'pid', { value: 1 })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    wslAwareSpawnMock.mockReturnValue(child)
+    const fallback = { files: [], totalMatches: 0, truncated: false }
+    searchWithGitGrepMock.mockResolvedValue(fallback)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await flushRuntimeSearchMicrotasks()
+    child.emit('close', 127, null)
+
+    await expect(resultPromise).resolves.toBe(fallback)
+    expect(searchWithGitGrepMock).toHaveBeenCalledTimes(1)
   })
 
   it('routes runtime rg searches through the registered WSL project runtime', async () => {
@@ -767,6 +852,7 @@ describe('RuntimeFileCommands', () => {
     }))
     const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
+    Object.defineProperty(child, 'pid', { value: 1 })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     checkRgAvailableMock.mockResolvedValue(true)
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
@@ -779,7 +865,7 @@ describe('RuntimeFileCommands', () => {
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
-    child.emit('close')
+    child.emit('close', 127, null)
 
     await expect(resultPromise).resolves.toMatchObject({ files: [] })
     expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
@@ -788,6 +874,7 @@ describe('RuntimeFileCommands', () => {
       'C:\\repo'
     )
     expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(searchWithGitGrepMock).not.toHaveBeenCalled()
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       'rg',
       expect.any(Array),
@@ -796,6 +883,25 @@ describe('RuntimeFileCommands', () => {
         wslDistro: 'Ubuntu'
       })
     )
+  })
+
+  it('keeps the runtime WSL preflight and falls back before starting real rg', async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo' },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const fallback = { files: [], totalMatches: 0, truncated: false }
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    checkRgAvailableMock.mockResolvedValue(false)
+    searchWithGitGrepMock.mockResolvedValue(fallback)
+
+    await expect(
+      commands.searchRuntimeFiles('id:wt-1', { query: 'needle', maxResults: 10 })
+    ).resolves.toBe(fallback)
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).not.toHaveBeenCalled()
   })
 
   describe('resolveTerminalPath', () => {
@@ -849,11 +955,18 @@ describe('RuntimeFileCommands', () => {
       )
     }
 
-    function createRemoteTerminalArtifactGrantFixture(artifactPath = '/tmp/result.json') {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+    function createRemoteTerminalArtifactGrantFixture(
+      artifactPath = '/tmp/result.json',
+      nativeChat = false
+    ) {
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        ...(nativeChat ? { hasRecentNativeChatOutputPath: vi.fn(() => true) } : {})
+      })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       let realArtifactPath = artifactPath
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 11, mtime: 3 })
+      let artifactStat = { type: 'file', size: 11, mtime: 3 }
+      const stat = vi.fn(async () => artifactStat)
       const readTerminalArtifact = vi
         .fn()
         .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
@@ -871,8 +984,18 @@ describe('RuntimeFileCommands', () => {
         writeTerminalArtifact,
         moveArtifactTarget: (nextPath: string) => {
           realArtifactPath = nextPath
+        },
+        replaceArtifact: () => {
+          artifactStat = { type: 'file', size: 12, mtime: 4 }
         }
       }
+    }
+
+    function resolveRemoteNativeChatArtifact(commands: RuntimeFileCommands, artifactPath: string) {
+      return commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a', null, true, {
+        tabId: 'tab-1',
+        sessionId: 'session-1'
+      })
     }
 
     it('resolves an absolute path inside the worktree to a relative path', async () => {
@@ -894,6 +1017,28 @@ describe('RuntimeFileCommands', () => {
           absolutePath: '/repo/src/index.ts'
         }
       })
+    })
+
+    it('keeps in-worktree resolution unchanged when chat provenance is present', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '/repo/src/index.ts',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('resolves an absolute path through a known sibling workspace', async () => {
@@ -1271,9 +1416,13 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    it('does not mint an absolute terminal artifact grant without a source terminal', async () => {
+    it('keeps old-client behavior without native-chat provenance', async () => {
       const artifactPath = await tempFile('result.json', '{}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
 
       const result = await commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a')
 
@@ -1284,6 +1433,139 @@ describe('RuntimeFileCommands', () => {
         isDirectory: false
       })
       expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
+    })
+
+    it('mints an exact-path grant for an out-of-worktree path cited by native chat', async () => {
+      const artifactPath = await tempFile('chat-result.html', '<h1>Result</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        artifactPath,
+        artifactPath
+      )
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+      const target = absoluteFileTarget(result)
+      await expect(
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          '<h1>Changed</h1>',
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_read_only')
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe('<h1>Result</h1>')
+    })
+
+    it('binds a cited symlink alias to its canonical read-only target', async () => {
+      const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
+      const citedPath = join(artifactPath, '..', 'chat-citation.html')
+      await symlink(artifactPath, citedPath)
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        citedPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+        'wt-1',
+        { tabId: 'tab-1', sessionId: 'session-1' },
+        citedPath,
+        citedPath
+      )
+      expect(result).toMatchObject({
+        absolutePath: await realpath(artifactPath),
+        exists: true,
+        openTarget: {
+          kind: 'absolute-file',
+          absolutePath: await realpath(artifactPath),
+          readOnly: true
+        }
+      })
+    })
+
+    it('refuses an out-of-worktree chat path without transcript provenance', async () => {
+      const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
+      const hasRecentNativeChatOutputPath = vi.fn(() => false)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        artifactPath,
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(result.openTarget).toBeUndefined()
+      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses native-chat tilde paths when the workspace runs in WSL', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands } = createRuntimeFileCommands({
+        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`,
+        hasRecentNativeChatOutputPath
+      })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/.ssh/config',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, absolutePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
     })
 
     it('does not mint an absolute terminal artifact grant for an unobserved path', async () => {
@@ -2050,6 +2332,30 @@ describe('RuntimeFileCommands', () => {
       ).rejects.toThrow('terminal_file_grant_stale')
     })
 
+    it('keeps local terminal artifact previews above the remote cap available', async () => {
+      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
+      const artifactPath = await tempFile('result.png', 'a'.repeat(size))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      const result = await resolveTerminalArtifactPath(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({
+        content: Buffer.alloc(size, 0x61).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    })
+
     it('rejects binary-extension terminal artifacts from the editable text path', async () => {
       const artifactPath = await tempFile('report.pdf', '%PDF text-looking bytes')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
@@ -2117,6 +2423,69 @@ describe('RuntimeFileCommands', () => {
       expect(writeTerminalArtifact).toHaveBeenCalled()
     })
 
+    it('reads a remote non-temp artifact cited by native chat', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact } = createRemoteTerminalArtifactGrantFixture(
+        artifactPath,
+        true
+      )
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({ content: '{"ok":true}' })
+      expect(readTerminalArtifact).toHaveBeenCalledWith(
+        artifactPath,
+        expect.objectContaining({ expectedRealPath: artifactPath })
+      )
+    })
+
+    it('rejects a retargeted remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, moveArtifactTarget } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      moveArtifactTarget('/home/me/private.json')
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
+    it('rejects a replaced remote native-chat artifact grant', async () => {
+      const artifactPath = '/home/me/report.json'
+      const { commands, readTerminalArtifact, replaceArtifact } =
+        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
+      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
+      const target = absoluteFileTarget(result)
+
+      replaceArtifact()
+
+      await expect(
+        commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
+      expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
     it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
       const { commands, readTerminalArtifact, moveArtifactTarget } =
         createRemoteTerminalArtifactGrantFixture()
@@ -2153,6 +2522,28 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('terminal_file_grant_stale')
       expect(readTerminalArtifact).not.toHaveBeenCalled()
+    })
+
+    it('rejects additive remote terminal preview fields beyond the request budget', async () => {
+      const { commands, readTerminalArtifact } =
+        createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
+      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
+      const target = absoluteFileTarget(result)
+      readTerminalArtifact.mockResolvedValue({
+        content: 'a',
+        isBinary: true,
+        futureMetadata: 'x'.repeat(128)
+      })
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a',
+          128
+        )
+      ).rejects.toThrow('file_too_large')
     })
 
     it('rejects remote terminal artifact writes when a grant no longer resolves to the granted path', async () => {
@@ -2198,6 +2589,28 @@ describe('RuntimeFileCommands', () => {
       expect(stat).not.toHaveBeenCalled()
     })
 
+    it('still refuses a native-chat ~/ path on a remote worktree', async () => {
+      const hasRecentNativeChatOutputPath = vi.fn(() => true)
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        hasRecentNativeChatOutputPath
+      })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/notes.md',
+        null,
+        'client-a',
+        null,
+        true,
+        { tabId: 'tab-1', sessionId: 'session-1' }
+      )
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
+    })
+
     it('reports a missing remote file as not existing', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
@@ -2217,6 +2630,191 @@ describe('RuntimeFileCommands', () => {
 
       await expect(commands.resolveTerminalPath('id:wt-1', 'src/x.ts')).rejects.toThrow(
         'Remote connection dropped'
+      )
+    })
+  })
+
+  // Why: mobile opens every image tab through files.readPreview, so this constant is the most
+  // reachable way to overflow the outbound envelope and kill the socket.
+  describe('previewable binary budget', () => {
+    const previewTempDirs: string[] = []
+
+    afterEach(async () => {
+      await Promise.all(previewTempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
+      previewTempDirs.length = 0
+    })
+
+    async function previewFixture(size = Buffer.byteLength('fake-png')): Promise<string> {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-preview-budget-'))
+      previewTempDirs.push(dir)
+      await writeFile(join(dir, 'logo.png'), Buffer.alloc(size, 0x61))
+      return dir
+    }
+
+    it('stays inside the transport ceiling once base64-inflated', () => {
+      const result = {
+        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      }
+
+      expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThanOrEqual(
+        REMOTE_RPC_MAX_CONTENT_BYTES
+      )
+    })
+
+    it('rejects a previewable image one byte above the cap', async () => {
+      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      await expect(
+        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).rejects.toThrow('file_too_large')
+    })
+
+    it('returns full base64 for a previewable image at the cap', async () => {
+      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      await expect(
+        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).resolves.toEqual({
+        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES, 0x61).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    })
+
+    it('keeps local previews above the remote cap available without a request budget', async () => {
+      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
+      const dir = await previewFixture(size)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual({
+        content: Buffer.alloc(size, 0x61).toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    })
+
+    it('rejects an SSH text preview past the decoded text limit the local branch enforces', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      // NUL-free control bytes: sniffed as text, yet each escapes to six JSON bytes.
+      const content = '\u0001'.repeat(1024 * 1024)
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: content.length }),
+        readFile: vi.fn().mockResolvedValue({ content, isBinary: false })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('still returns an SSH binary preview inside the base64 cap', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const preview = { content: 'a'.repeat(1024 * 1024), isBinary: true, isImage: true }
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi
+          .fn()
+          .mockResolvedValue({ type: 'file', size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES }),
+        readFile: vi.fn().mockResolvedValue(preview)
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual(
+        preview
+      )
+    })
+
+    it('rejects an SSH binary result that grew past its request-scoped budget', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const readFile = vi.fn().mockResolvedValue({
+        content: 'a'.repeat(13),
+        isBinary: true,
+        isImage: true
+      })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 0 }),
+        readFile
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 12)).rejects.toThrow(
+        'file_too_large'
+      )
+      expect(readFile).toHaveBeenCalledWith('/repo/logo.png', {
+        maxBinaryBytes: 0,
+        maxTextBytes: 512 * 1024
+      })
+    })
+
+    it('rejects escape-dense SSH text beyond the request-scoped result budget', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 64 }),
+        readFile: vi.fn().mockResolvedValue({ content: '\u0001'.repeat(64), isBinary: false })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt', 128)).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    // Why: without translation the reader's raw "exceeds client cap" string reaches the client as a
+    // generic runtime_error, which neither the desktop nor the mobile preview arm recognizes.
+    it('translates an over-cap stream read into file_too_large', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
+        readFile: vi
+          .fn()
+          .mockRejectedValue(
+            new FileReadCapExceededError('Reported totalSize 900000 exceeds client cap 524288')
+          )
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it('leaves a genuine stream protocol failure unmasked', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
+        readFile: vi.fn().mockRejectedValue(new StreamProtocolError('Malformed chunk for stream 4'))
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
+        'Malformed chunk'
+      )
+    })
+
+    it('rejects oversized SSH preview metadata with small content', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({
+        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1 }),
+        readFile: vi.fn().mockResolvedValue({
+          content: 'a',
+          isBinary: true,
+          mimeType: 'x'.repeat(128)
+        })
+      } as never)
+
+      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 128)).rejects.toThrow(
+        'file_too_large'
       )
     })
   })

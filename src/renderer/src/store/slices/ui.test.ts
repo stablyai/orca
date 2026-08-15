@@ -6,15 +6,13 @@ import {
   getDefaultUIState,
   getWorktreeCardModeProperties
 } from '../../../../shared/constants'
-import type {
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
-  PersistedUIState,
-  Repo,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
@@ -785,6 +783,26 @@ describe('createUISlice hydratePersistedUI', () => {
         ...makePersistedUI(),
         activeView: undefined as unknown as PersistedUIState['activeView']
       },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  // Why: the Skills page was removed after being unreachable since #4535, so a
+  // profile written before then can still carry `activeView: 'skills'` on disk.
+  // Dropping it from TopLevelView is what demotes it — this pins that the removal
+  // is a migration and not a blank main surface on next launch.
+  it('demotes a persisted skills view to terminal now that the page is gone', () => {
+    const store = createUIStore()
+    // Why: the default is already 'terminal', so seed a different view first —
+    // otherwise this passes whether hydration demoted the value or never ran.
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'skills' as unknown as PersistedUIState['activeView']
+      }),
       'startup'
     )
 

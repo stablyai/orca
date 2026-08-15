@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
-import type { GitHubPrStartPoint } from '../../../src/shared/types'
+import type { GitHubPrStartPoint } from '../../../src/shared/worktree/types'
 import type { ComposerBaseState } from './mobile-composer-source-types'
 
 // The resolved start point for a linked PR/MR: the base branch to create from

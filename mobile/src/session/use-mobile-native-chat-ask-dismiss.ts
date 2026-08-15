@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { nativeChatAskDismissKey, type AskPrompt } from './mobile-native-chat-ask'
+import { nativeChatAskDismissKey, type AskPrompt } from '../../../src/shared/native-chat-ask'
 
 type AskDismissal = { sessionKey: string | null; askKey: string }
 type DetectedAsk = { sessionKey: string | null; askKey: string | null }

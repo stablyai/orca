@@ -226,4 +226,25 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(lines[0]).toBe('--end-of-options')
     expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
   })
+
+  // Why pin this: `show --end-of-options <oid>:<path>` is the only Git command on the
+  // pinned SSH branch-diff path, and both blob sides depend on it resolving against the
+  // named commit rather than live HEAD, and on failing (not falling back) for a path
+  // absent at that commit — that failure is what renders additions and deletions.
+  it('reads a blob at a pinned object id', async () => {
+    await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
+    await runGit(['add', 'pinned.txt'])
+    await runGit(['commit', '-qm', 'pinned'])
+    const pinnedOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+
+    await writeFile(join(repoPath, 'pinned.txt'), 'moved on\n')
+    await runGit(['commit', '-qam', 'after pinned'])
+
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:pinned.txt`])
+    ).resolves.toMatchObject({ stdout: 'pinned\n' })
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
+    ).rejects.toBeDefined()
+  })
 })

@@ -4,7 +4,7 @@ import {
   getProviderChecksLabel,
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
-import type { PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 function check(conclusion: PRCheckDetail['conclusion'], name = String(conclusion)): PRCheckDetail {
   return { name, status: 'completed', conclusion, url: null }

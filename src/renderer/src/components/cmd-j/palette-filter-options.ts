@@ -3,7 +3,9 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Project, ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getProjectHeaderRevealTarget,
   type ProjectGroupingModel
@@ -49,14 +51,6 @@ export type PaletteFilterModel = {
   hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   /** The focused runtime host, which host-less repos and worktrees inherit. */
   defaultHostId: ExecutionHostId
-}
-
-export const EMPTY_PALETTE_FILTER_MODEL: PaletteFilterModel = {
-  hosts: [],
-  projects: [],
-  repoIdsByProjectKey: new Map(),
-  hostIdByRepoId: new Map(),
-  defaultHostId: LOCAL_EXECUTION_HOST_ID
 }
 
 /**

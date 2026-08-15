@@ -5,7 +5,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
 // a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
@@ -223,8 +223,8 @@ export function terminalTabHasUnreadActivity({
   unreadAgentCompletionPanes
 }: {
   terminalTabId: string
-  unreadTerminalTabs: Record<string, true | boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, true | boolean | undefined>
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
 }): boolean {
   return (
     unreadTerminalTabs[terminalTabId] === true ||
@@ -234,7 +234,7 @@ export function terminalTabHasUnreadActivity({
 
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, true | boolean | undefined> | undefined,
+  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
   for (const [paneKey, unread] of Object.entries(unreadAgentCompletionPanes ?? {})) {

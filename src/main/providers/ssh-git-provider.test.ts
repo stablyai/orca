@@ -1081,6 +1081,125 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(diffs)
   })
 
+  it('getBranchDiff forwards a pinned head OID without adding it when omitted', async () => {
+    const headOid = 'a'.repeat(40)
+    mux.request.mockResolvedValue([])
+
+    await provider.getBranchDiff('/home/user/repo', 'main', {
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid
+    })
+    await provider.getBranchDiff('/home/user/repo', 'main', {
+      includePatch: true,
+      filePath: 'src/other-file.ts',
+      headOid: undefined
+    })
+
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid,
+      __streamResponse: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/other-file.ts',
+      __streamResponse: true
+    })
+  })
+
+  // Why: an unpinned compare snapshot reaches getBranchDiff as null despite the type.
+  it('omits a null head OID and shares the absent-head dedupe key', async () => {
+    const diffs = [{ kind: 'text', originalContent: 'old', modifiedContent: 'new' }]
+    const pendingDiff = deferredValue(diffs)
+    const headOid = 'a'.repeat(40)
+    mux.request.mockReturnValue(pendingDiff.promise)
+
+    const reads = [
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: null as unknown as undefined
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts'
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid
+      })
+    ]
+
+    await waitForRequestCount(mux.request, 2)
+    expect(mux.request).toHaveBeenCalledTimes(2)
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      __streamResponse: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid,
+      __streamResponse: true
+    })
+
+    pendingDiff.resolve()
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 3 }, () => diffs))
+  })
+
+  it('coalesces matching branch diff heads while keeping distinct and absent heads separate', async () => {
+    const diffs = [{ kind: 'text', originalContent: 'old', modifiedContent: 'new' }]
+    const pendingDiff = deferredValue(diffs)
+    const firstHeadOid = 'a'.repeat(40)
+    const secondHeadOid = 'b'.repeat(40)
+    mux.request.mockReturnValue(pendingDiff.promise)
+
+    const reads = [
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: firstHeadOid
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        filePath: 'src/file.ts',
+        headOid: firstHeadOid,
+        includePatch: true
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: secondHeadOid
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts'
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: undefined
+      })
+    ]
+
+    await waitForRequestCount(mux.request, 3)
+    expect(mux.request).toHaveBeenCalledTimes(3)
+
+    pendingDiff.resolve()
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 5 }, () => diffs))
+  })
+
   it('coalesces concurrent identical diff RPCs while in flight', async () => {
     const diff = {
       kind: 'text',

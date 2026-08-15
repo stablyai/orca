@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   BROWSER_PALETTE_QUERY_MAX_BYTES,
   searchBrowserPages,

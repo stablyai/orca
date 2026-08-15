@@ -74,8 +74,8 @@ type ExecFileCallback = (error: unknown, stdout?: string, stderr?: string) => vo
 }
 
 function mockBrowserManager(
-  tabs: Map<string, number> = new Map([['tab-1', 100]]),
-  worktrees: Map<string, string> = new Map(),
+  tabs = new Map<string, number>([['tab-1', 100]]),
+  worktrees = new Map<string, string>(),
   overrides: Partial<BrowserManager> = {}
 ): BrowserManager {
   return {

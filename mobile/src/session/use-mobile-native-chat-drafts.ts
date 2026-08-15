@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
-  countImageSourceTurnsAfter,
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
   findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
-  normalizedUserText,
+  normalizeReconcileText,
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
+import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import {
   appendMobileNativeChatPending,
   combineMobileNativeChatPending,
@@ -27,8 +27,7 @@ export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 
-// How long an ack-lost send waits for its transcript echo before the UI surfaces
-// that delivery remains unconfirmed.
+// Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
 const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
 export function useMobileNativeChatDrafts(args: {
@@ -132,17 +131,17 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return null
       }
-      const normalizedText = text.trim()
-      const currentMessages = messagesRef.current
+      const normalizedText = normalizeReconcileText(text)
       return {
         draftKey,
         pendingKey,
         normalizedText,
-        baselineOccurrences: countUserTextOccurrences(currentMessages, normalizedText),
-        baselineTailMessageId: currentMessages[currentMessages.length - 1]?.id ?? null
+        baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
+        baselineTailMessageId: messagesRef.current.at(-1)?.id ?? null,
+        glueBaselineTrusted: !transcriptLoading
       }
     },
-    [draftKey, pendingKey]
+    [draftKey, pendingKey, transcriptLoading]
   )
 
   // Why: over relay the send RPC can take seconds (or lose only its ack), and a
@@ -292,34 +291,7 @@ export function useMobileNativeChatDrafts(args: {
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
-      const landedCounts = new Map<string, number>()
-      for (const message of messages) {
-        const text = normalizedUserText(message)
-        if (text) {
-          landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
-        }
-      }
-      // Why: compare against the count captured before send; historical equal
-      // turns cannot clear a new echo, while duplicates land one occurrence each.
-      // An image-only echo has no text to match, so it reconciles by ORDINAL
-      // against the count of new `[Image: source: …]` echo turns after its
-      // baseline tail — text echoes are excluded so an unrelated outstanding
-      // text send cannot clear it. Ordinal-vs-count stays stable when the effect
-      // re-runs on the shrunken list, and ignores paginated-in history.
-      const next = current.filter((item) => {
-        if (landedImagePendingIds.has(item.id)) {
-          return false
-        }
-        // Image echoes hand their local URIs to the authoritative message above;
-        // never drop them through the text-only fallback before that handoff.
-        if (item.images?.length) {
-          return true
-        }
-        return item.text.trim() === ''
-          ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) <
-              item.expectedOccurrence
-          : (landedCounts.get(item.text.trim()) ?? 0) < item.expectedOccurrence
-      })
+      const next = retireLandedMobileNativeChatPending(messages, current, landedImagePendingIds)
       if (next.length === current.length) {
         return previous
       }

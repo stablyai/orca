@@ -23,6 +23,7 @@ import { decodeDaemonResponseError } from './daemon-errors'
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
 const REQUEST_TIMEOUT_MS = 30000
+const NOTIFY_SETTLEMENT_TIMEOUT_MS = 5000
 
 export type DaemonClientOptions = {
   socketPath: string
@@ -114,12 +115,24 @@ export class DaemonClient {
     }
   }
 
+  // Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
+  private readToken(): string {
+    try {
+      return readFileSync(this.tokenPath, 'utf-8').trim()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+        return ''
+      }
+      throw error
+    }
+  }
+
   private async doConnect(
     timeoutMs: number,
     attemptGeneration: number,
     sharedBudget: boolean
   ): Promise<void> {
-    const token = readFileSync(this.tokenPath, 'utf-8').trim()
+    const token = this.readToken()
     const deadlineMs = Date.now() + timeoutMs
     const remainingMs = (): number =>
       sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs
@@ -233,6 +246,50 @@ export class DaemonClient {
       // Notifications are best-effort; an oversized payload must not tear down the caller.
       return false
     }
+  }
+
+  async notifyWithSettlement(
+    type: string,
+    payload: unknown,
+    timeoutMs = NOTIFY_SETTLEMENT_TIMEOUT_MS
+  ): Promise<boolean> {
+    if (!this.connected || !this.controlSocket) {
+      return false
+    }
+
+    const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
+    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+    let encoded: string
+    try {
+      encoded = encodeNdjson(msg)
+    } catch {
+      return false
+    }
+    return await new Promise<boolean>((resolve) => {
+      const socket = this.controlSocket!
+      const generation = this.connectionGeneration
+      let settled = false
+      const settle = (accepted: boolean): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        resolve(accepted)
+      }
+      const rejectAndDisconnect = (): void => {
+        if (this.controlSocket === socket && this.connectionGeneration === generation) {
+          this.handleDisconnect(generation)
+        }
+        settle(false)
+      }
+      const timer = setTimeout(rejectAndDisconnect, timeoutMs)
+      try {
+        socket.write(encoded, (error) => (error ? rejectAndDisconnect() : settle(true)))
+      } catch {
+        rejectAndDisconnect()
+      }
+    })
   }
 
   onEvent(listener: (event: unknown) => void): () => void {

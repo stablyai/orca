@@ -96,7 +96,8 @@ const ORIGIN = {
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
   baselineOccurrences: 0,
-  baselineTailMessageId: null
+  baselineTailMessageId: null,
+  glueBaselineTrusted: true
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {
@@ -127,24 +128,12 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(Harness))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      spy.mockRestore()
-    }
   })
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -364,24 +353,12 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
   }
 
   function render(tab: unknown): void {
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(Harness, { tab }))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(Harness, { tab }))
-      })
-    } finally {
-      spy.mockRestore()
-    }
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     draftsArgs.length = 0
     viewMode.isTabChatView = () => true
     sessionState.messages = []
@@ -487,25 +464,13 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     viewMode.isTabChatView = () => true
     setTranscript('ready')
     promptsState.ask = PROMPT
     promptsState.detectedAsk = PROMPT
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(Harness))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      spy.mockRestore()
-    }
   })
 
   afterEach(() => {
@@ -757,22 +722,10 @@ describe('useMobileNativeChatController streaming scope', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     viewMode.isTabChatView = () => true
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
-      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...a)
+    act(() => {
+      renderer = create(createElement(Harness))
     })
-    try {
-      act(() => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      spy.mockRestore()
-    }
   })
 
   afterEach(() => {

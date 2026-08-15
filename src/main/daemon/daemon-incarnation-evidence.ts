@@ -237,7 +237,7 @@ async function probeWindowsProcess(
 
 export function parseLinuxProcessState(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
-  if (commandEnd < 0) {
+  if (commandEnd === -1) {
     return null
   }
   return (

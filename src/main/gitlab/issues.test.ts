@@ -186,6 +186,32 @@ describe('gitlab issue operations', () => {
     expect(result.error?.type).toBe('permission_denied')
   })
 
+  it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: [], total: 0 })
+    })
+
+    const result = await listIssues('/repo-root', 5)
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('unknown')
+    expect(result.error?.message).toContain('{"data":[],"total":0}')
+    expect(result.error?.message).not.toContain('is not a function')
+  })
+
+  it('reports a GitLab error envelope by its own message', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ message: '403 Forbidden' })
+    })
+
+    const result = await listIssues('/repo-root', 5)
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('permission_denied')
+  })
+
   it('returns an isolated not_found error (never a cwd-inferred glab call) when the project is unresolved', async () => {
     // Why: a cwd-inferred `glab issue list` would hit `git: exit status 128`
     // on an SSH connection and, in an "All projects" aggregate, sink the

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const {
   handleMock,
   showSaveDialogMock,
@@ -3096,6 +3096,42 @@ describe('registerFilesystemHandlers', () => {
       },
       {}
     )
+  })
+
+  it('forwards the pinned head through SSH branch diff queries', async () => {
+    const result = {
+      kind: 'text',
+      originalContent: 'left',
+      modifiedContent: 'right',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const getBranchDiff = vi.fn().mockResolvedValue([result])
+    getSshGitProviderMock.mockReturnValue({ getBranchDiff })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:branchDiff')!(null, {
+        worktreePath: '/home/user/project',
+        compare: {
+          baseRef: 'origin/main',
+          baseOid: 'base-oid',
+          headOid: 'head-oid',
+          mergeBase: 'merge-base-oid'
+        },
+        filePath: 'src/file.ts',
+        oldPath: 'src/old-file.ts',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(result)
+
+    expect(getBranchDiff).toHaveBeenCalledWith('/home/user/project', 'merge-base-oid', {
+      includePatch: true,
+      headOid: 'head-oid',
+      filePath: 'src/file.ts',
+      oldPath: 'src/old-file.ts'
+    })
   })
 
   // Why: the original SSH Quick Open bug had two halves — relay-side policy

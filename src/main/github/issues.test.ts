@@ -195,6 +195,7 @@ describe('issue source operations', () => {
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         id: 9,
+        node_id: 'IC_enterprise_9',
         user: { login: 'octo', avatar_url: '', type: 'User' },
         body: 'Enterprise comment',
         created_at: '2026-07-16T00:00:00.000Z',
@@ -208,7 +209,10 @@ describe('issue source operations', () => {
         repo: 'orca',
         host: 'github.acme-corp.com'
       })
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'IC_enterprise_9' }
+    })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [

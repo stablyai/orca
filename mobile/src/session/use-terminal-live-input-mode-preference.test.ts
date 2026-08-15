@@ -34,18 +34,6 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve }
 }
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePreferenceHarness {
   let current: ReturnType<typeof useTerminalLiveInputModePreference> | null = null
   let renderer: ReactTestRenderer | null = null
@@ -58,14 +46,9 @@ function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePr
     return null
   }
 
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
   if (!current || !renderer) {
     throw new Error('terminal live input mode preference hook did not render')
   }

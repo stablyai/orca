@@ -1,4 +1,5 @@
 import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 import type {
@@ -27,7 +28,7 @@ export type WorkspaceTabPaletteSearchResult = {
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 function findRange(text: string, query: string): MatchRange | null {

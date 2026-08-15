@@ -24,7 +24,6 @@ describe('useMobileNativeChatSession', () => {
   let emit: (frame: unknown) => void = () => {}
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     state = null
   })
 
@@ -45,20 +44,9 @@ describe('useMobileNativeChatSession', () => {
   }
 
   async function mount(client: RpcClient): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { client }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { client }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('drops an older-page response captured before transcript replacement', async () => {
@@ -121,7 +109,10 @@ describe('useMobileNativeChatSession', () => {
       await Promise.resolve()
     })
 
-    expect(state?.messages).toEqual([])
+    // The retained window keeps rendering while the source is gone; what must
+    // never land is the page that resolved after it disappeared.
+    expect(state?.messages.map((entry) => entry.id)).not.toContain('stale-page')
+    expect(state?.messages).toHaveLength(40)
     expect(state?.status).toBe('idle')
     expect(state?.loadingEarlier).toBe(false)
   })
@@ -445,7 +436,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   }[] = []
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     renders.length = 0
   })
 
@@ -482,20 +472,9 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   }
 
   async function mountAt(client: RpcClient | null, sessionId: string | null): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, sessionId }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { client, sessionId }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('reports loading on the very first render, before the subscription effect runs', async () => {
@@ -578,6 +557,30 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       status: 'ready',
       transcriptLoading: false,
       ids: ['a-1', 'a-2']
+    })
+  })
+
+  it('keeps the retained transcript rendered when the stream reports an error', async () => {
+    // A transient read failure must not blank a conversation the user is looking
+    // at; the last settled list for this identity stays until a read supersedes it.
+    let emitFrame: (frame: unknown) => void = () => {}
+    const client = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        emitFrame = onData
+        onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mountAt(client, 'session-a')
+    expect(renders.at(-1)).toMatchObject({ status: 'ready', ids: ['a-1'] })
+
+    renders.length = 0
+    await act(async () => emitFrame({ type: 'error', message: 'stream broke' }))
+
+    expect(renders.at(-1)).toMatchObject({
+      status: 'error',
+      transcriptLoading: false,
+      ids: ['a-1']
     })
   })
 

@@ -1,13 +1,13 @@
 /* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
-  FolderWorkspace,
-  GlobalSettings,
   SetupSplitDirection,
-  Tab,
-  TuiAgent,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
+} from '../../../shared/worktree/launch-types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
@@ -171,6 +171,11 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
 }
 
+type InitialTerminalOptions = {
+  activateCreatedTabs?: boolean
+  backendStartupTerminalSpawned?: boolean
+}
+
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
  * The caller passes only `worktreeId`; the helper derives `repoId` and returns early
@@ -279,6 +284,7 @@ export function activateAndRevealWorktree(
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
     executionHostId?: ExecutionHostId
+    backendStartupTerminalSpawned?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -339,7 +345,8 @@ export function activateAndRevealWorktree(
     opts?.startup,
     opts?.setup,
     opts?.issueCommand,
-    opts?.defaultTabs
+    opts?.defaultTabs,
+    opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : undefined
   )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
@@ -371,7 +378,7 @@ export function activateAndRevealWorktree(
     }
   }
 
-  if (opts?.notifyHostRuntime !== false) {
+  if (opts?.notifyHostRuntime !== false && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
   }
 
@@ -432,7 +439,7 @@ export function ensureWorktreeHasInitialTerminal(
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch,
   defaultTabs?: WorktreeDefaultTabsLaunch,
-  opts?: { activateCreatedTabs?: boolean }
+  opts?: InitialTerminalOptions
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
@@ -459,8 +466,12 @@ export function ensureWorktreeHasInitialTerminal(
     wrappedSetupCommandStr = sequenced.setupCommand
   }
 
-  // Why: web clients mirror the server's session tabs, so avoid spawning a duplicate host terminal before the mirror lands.
-  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
+  const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
+  // Why: explicit spawn evidence survives the new-worktree ownership race; active web sessions provide the same authority for later activations.
+  if (
+    backendStartupTerminalSpawned ||
+    isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))
+  ) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       queueSetupAndIssueCommands(
@@ -472,6 +483,9 @@ export function ensureWorktreeHasInitialTerminal(
         wrappedSetupCommandStr,
         opts
       )
+      return existingTerminalTabId
+    }
+    if (existingTerminalTabId && backendStartupTerminalSpawned) {
       return existingTerminalTabId
     }
     if (setup || issueCommand) {
@@ -586,7 +600,7 @@ function applyDefaultTerminalTabs(
   issueCommand: IssueCommandLaunch | undefined,
   defaultTabs: WorktreeDefaultTabsLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
-  opts: { activateCreatedTabs?: boolean } | undefined
+  opts: InitialTerminalOptions | undefined
 ): string | null {
   if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
     return null
@@ -675,7 +689,7 @@ function queueSetupAndIssueCommands(
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
-  opts: { activateCreatedTabs?: boolean } | undefined
+  opts: InitialTerminalOptions | undefined
 ): void {
   // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {

@@ -1600,4 +1600,46 @@ branch refs/heads/main
       'git branch -D -- feature/test'
     )
   })
+
+  it('marks cleanup failed when sparse rollback cannot clear metadata or remove the worktree', async () => {
+    mockGitCommands({
+      'git config --get push.autoSetupRemote': {
+        error: Object.assign(new Error('key unset'), { code: 1 })
+      },
+      'git sparse-checkout set -- packages/web': {
+        error: new Error('sparse setup failed')
+      },
+      'git config --local --unset-all branch.feature/test.base': {
+        error: new Error('metadata cleanup failed')
+      },
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove --force /repo-feature': {
+        error: new Error('worktree cleanup failed')
+      }
+    })
+
+    const error = await addSparseWorktree('/repo', '/repo-feature', 'feature/test', [
+      'packages/web'
+    ]).catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({
+      cleanupFailed: true,
+      message: expect.stringContaining('cleanup also failed')
+    })
+    const calls = getGitCalls()
+    expectGitCallOrder(
+      calls,
+      'git config --local --unset-all branch.feature/test.base',
+      'git worktree remove --force /repo-feature'
+    )
+  })
 })

@@ -97,7 +97,7 @@ describe('CliInstaller', () => {
       expect(installed.pathConfigured).toBe(true)
 
       const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
       expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
       expect(launcherContent).toContain('export ORCA_APP_EXECUTABLE="$ELECTRON"')
       expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
@@ -130,7 +130,7 @@ describe('CliInstaller', () => {
       expect(installed.detail).toContain('.local')
 
       const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
       expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
 
       const removed = await installer.remove()
@@ -489,7 +489,7 @@ describe('CliInstaller', () => {
     const registryReader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => ({
-        HK: { CU: 0x80000001 },
+        HK: { CU: 0x80000001, LM: 0x80000002 },
         getRegistryKey: () => ({
           Path: { name: 'Path', type: 2, value: registryPath }
         })

@@ -44,6 +44,7 @@ const imeHarness = vi.hoisted(() => ({
     claimKeyEvent: ReturnType<typeof vi.fn>
     dispose: ReturnType<typeof vi.fn>
     sendInput: (data: string) => void
+    getKittyKeyboardFlags: () => number
   }[],
   trackers: [] as { dispose: ReturnType<typeof vi.fn> }[],
   claimResult: false
@@ -115,11 +116,17 @@ vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
 vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
-  installTerminalImeNativeTextForwarder: (args: { sendInput: (data: string) => void }) => {
+  installTerminalImeNativeTextForwarder: (args: {
+    sendInput: (data: string) => void
+    getKittyKeyboardFlags?: () => number
+  }) => {
     const forwarder = {
       claimKeyEvent: vi.fn(() => imeHarness.claimResult),
       dispose: vi.fn(),
-      sendInput: args.sendInput
+      sendInput: args.sendInput,
+      // Why captured: the bridge's whole job is handing the live mirror to the
+      // forwarder, so the test reads what a real commit would read.
+      getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
     imeHarness.forwarders.push(forwarder)
     return forwarder
@@ -270,6 +277,26 @@ describe('AgentTerminalPreview', () => {
     expect(imeHarness.trackers).toHaveLength(0)
   })
 
+  // The bridge omitted this dependency entirely, so every Preview
+  // commit was evaluated at flags 0. Ordering and provenance live in
+  // preview-terminal-snapshot-replay.test.ts; this pins the wiring.
+  it('hands the forwarder the live mirror seeded from the snapshot flags', async () => {
+    platformState.value = 'darwin'
+    connect.mockResolvedValue({
+      snapshot: { data: '', cols: 80, rows: 24, seq: 1, kittyKeyboardFlags: 8 },
+      replay: []
+    })
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
+    await waitFor(() => expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(8))
+
+    // Live output keeps advancing the same mirror the forwarder reads.
+    act(() => {
+      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
+    })
+    expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(0)
+  })
+
   it('disposes the IME bridge on unmount', async () => {
     platformState.value = 'darwin'
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
@@ -391,6 +418,37 @@ describe('AgentTerminalPreview', () => {
     act(() => emitAppMenuPaste!())
     await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
     expect(input).toHaveBeenCalledWith('pty-1', 'clip-text')
+  })
+
+  it('encodes a leading newline for a remote Windows Codex preview without submitting', async () => {
+    readClipboardText.mockResolvedValueOnce('\nsecond line')
+    const view = render(
+      <AgentTerminalPreview
+        ptyId="remote:windows-box@@pty-1"
+        terminalInput={{
+          hostPlatform: 'win32',
+          localWindowsConpty: false,
+          windowsShiftEnterEncoding: 'alt-enter',
+          windowsInputRecordPasteNewline: 'alt-enter',
+          ctrlEnterCsiU: false,
+          kittyKeyboardAdvertised: false
+        }}
+      />
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const focusTarget = document.createElement('input')
+    host.appendChild(focusTarget)
+    focusTarget.focus()
+
+    act(() => emitAppMenuPaste!())
+
+    await waitFor(() =>
+      expect(input).toHaveBeenCalledWith('remote:windows-box@@pty-1', '\x1b\rsecond line')
+    )
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\rsecond line')
+    expect(terminal.paste).not.toHaveBeenCalled()
   })
 
   it('handles app-menu selection actions while the preview owns focus', async () => {

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: these activation cases share one mock store and assert ordering across startup, setup, issue commands, and default tabs. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SetupScriptLaunchMode } from '../../../shared/types'
+import type { SetupScriptLaunchMode } from '../../../shared/worktree/launch-types'
 import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
@@ -360,6 +360,38 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     // held for the first mirrored tab rather than silently dropped.
     expect(result).toBeNull()
     expect(useAppStore.getState().pendingIssueCommandSplitByTabId).toEqual({})
+
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }
+    } as unknown as Partial<AppStoreState>)
+
+    expect(useAppStore.getState().pendingIssueCommandSplitByTabId['mirror-tab-1']).toEqual({
+      command: 'gh issue view 42'
+    })
+  })
+
+  it('does not create a fallback while a backend startup terminal awaits mirroring', () => {
+    useAppStore.setState({
+      getKnownWorktreeById: ((id: string) =>
+        id === 'wt-1'
+          ? { id: 'wt-1' }
+          : undefined) as unknown as AppStoreState['getKnownWorktreeById']
+    } as Partial<AppStoreState>)
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      { command: 'gh issue view 42' },
+      undefined,
+      { backendStartupTerminalSpawned: true }
+    )
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
 
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }

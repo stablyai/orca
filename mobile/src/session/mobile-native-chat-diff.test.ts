@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffFromText, diffFromToolCall } from './mobile-native-chat-diff'
+import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 
 describe('diffFromToolCall', () => {
   it('builds del/add lines from an Edit tool call', () => {
@@ -36,8 +36,6 @@ describe('diffFromText', () => {
     expect(diffFromText('Here is a list:\n- one bullet\nthat is all')).toBeNull()
   })
 
-  // Parity guard: the mobile module re-exports the shared parser, so the -- / ++
-  // content collision must stay fixed on both platforms.
   it('counts a removed -- comment line despite the --- prefix collision', () => {
     const lines = diffFromText('@@ -1,2 +1,2 @@\n ctx\n---sql comment\n+new')
     expect(lines).toEqual([

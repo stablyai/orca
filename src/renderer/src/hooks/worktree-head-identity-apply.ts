@@ -1,4 +1,4 @@
-import type { Worktree, WorktreeHeadIdentity } from '../../../shared/types'
+import type { Worktree, WorktreeHeadIdentity } from '../../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 
 export type WorktreeHeadIdentityApplyDeps = {

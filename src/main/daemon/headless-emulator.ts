@@ -10,9 +10,11 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
+import { readTerminalModes } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
+import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import {
   installTerminalViewAttributeResponder,
@@ -255,6 +257,7 @@ export class HeadlessEmulator {
         this.restoredOscLinks
       ),
       rehydrateSequences: buildRehydrateSequences(modes),
+      ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
       cwd: this.oscText.cwd,
       modes,
       cols: this.terminal.cols,
@@ -265,10 +268,6 @@ export class HeadlessEmulator {
       ...(this.partialEscapeTail.length > 0
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
-    }
-    if (this.partialEscapeTail.length > 0) {
-      // Why a separate field: consumers write their own reset sequences after the body, and any ESC after a dangling partial would abort it.
-      snapshot.pendingEscapeTailAnsi = this.partialEscapeTail
     }
     return snapshot
   }
@@ -340,24 +339,6 @@ export class HeadlessEmulator {
   }
 
   private getModes(): TerminalModes {
-    const buffer = this.terminal.buffer.active
-    const mouseTrackingMode = this.mouseModes.mouseTrackingMode
-    return {
-      bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: mouseTrackingMode !== 'none',
-      mouseTrackingMode,
-      sgrMouseMode: this.mouseModes.sgrMouseMode,
-      sgrMousePixelsMode: this.mouseModes.sgrMousePixelsMode,
-      applicationCursor:
-        buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
-      alternateScreen: buffer.type === 'alternate',
-      kittyKeyboardFlags: this.getKittyKeyboardFlags()
-    }
-  }
-
-  private getKittyKeyboardFlags(): number {
-    const flags = (this.terminal as TerminalWithSynchronousWrite)._core?.coreService?.kittyKeyboard
-      ?.flags
-    return typeof flags === 'number' ? flags : 0
+    return readTerminalModes(this.terminal, this.mouseModes)
   }
 }

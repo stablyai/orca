@@ -218,7 +218,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       id: 'preserved-branch:feature/test:def456',
@@ -254,7 +254,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).not.toHaveBeenCalled()
   })
@@ -1658,6 +1658,14 @@ describe('setActiveWorktree', () => {
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
       expect(terminal.shellOverride).toBe('wsl.exe')
+
+      const hostTerminal = store
+        .getState()
+        .createTab(wt, undefined, 'powershell.exe', { forceHostRuntime: true })
+      expect(hostTerminal).toMatchObject({
+        shellOverride: 'powershell.exe',
+        forceHostRuntime: true
+      })
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,

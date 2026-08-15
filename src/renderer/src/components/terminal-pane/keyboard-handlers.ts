@@ -15,7 +15,8 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
@@ -627,6 +628,17 @@ export function useTerminalKeyboardShortcuts({
             }
           }
           deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+          return
+        }
+        // Why: the composed glyph reaches the pty from the composition session-end handler, which
+        // runs after this keydown. Sending now puts a cursor chord ahead of the text it was typed
+        // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
+        // fallback timer is right because a newline arriving late still arrives; a chord arriving
+        // mid-preedit is the corruption itself, so this one waits without a deadline.
+        if (e.isComposing || hasPendingImeComposition) {
+          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
+            fallbackMs: null
+          })
           return
         }
         sendResolvedInput()

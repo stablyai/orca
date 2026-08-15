@@ -7,16 +7,7 @@ type Gate = (targetHandle: string) => Promise<boolean>
 
 describe('useMobileAttachmentInputLeaseGate', () => {
   let renderer: ReactTestRenderer | null = null
-  let errorSpy: ReturnType<typeof vi.spyOn> | null = null
-
   beforeEach(() => {
-    const original = console.error
-    errorSpy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...(args as Parameters<typeof console.error>))
-    })
     vi.useFakeTimers()
   })
 
@@ -24,7 +15,6 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     act(() => renderer?.unmount())
     renderer = null
     vi.useRealTimers()
-    errorSpy?.mockRestore()
   })
 
   function renderGate(args: {

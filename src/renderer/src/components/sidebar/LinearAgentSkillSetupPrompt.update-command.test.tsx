@@ -81,7 +81,6 @@ function discoveredSkill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/Users/test/.agents/skills/orca-linear',
     skillFilePath: '/Users/test/.agents/skills/orca-linear/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }

@@ -32,7 +32,7 @@ function hasCode(error: unknown, code: string): boolean {
 
 export function parseLinuxStartTicks(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
-  if (commandEnd < 0) {
+  if (commandEnd === -1) {
     return null
   }
   // Field 22 is index 19 after removing pid and the parenthesized command.

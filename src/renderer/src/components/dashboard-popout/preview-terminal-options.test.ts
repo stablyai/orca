@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   buildPreviewAppearanceOptions,
   buildPreviewTerminalOptions
@@ -10,6 +10,8 @@ import {
 const SETTINGS = {
   terminalFontSize: 17,
   terminalFontFamily: 'Fira Code',
+  terminalFontWeight: 500,
+  terminalFontWeightBold: 800,
   terminalCursorStyle: 'bar',
   terminalCursorBlink: false,
   terminalLineHeight: 1.4,
@@ -22,6 +24,8 @@ describe('buildPreviewAppearanceOptions', () => {
     const options = buildPreviewAppearanceOptions(SETTINGS, false)
     expect(options.fontSize).toBe(17)
     expect(options.fontFamily).toContain('Fira Code')
+    expect(options.fontWeight).toBe(500)
+    expect(options.fontWeightBold).toBe(800)
     expect(options.cursorStyle).toBe('bar')
     expect(options.cursorBlink).toBe(false)
     expect(options.lineHeight).toBe(1.4)

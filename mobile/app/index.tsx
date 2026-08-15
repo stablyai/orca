@@ -25,7 +25,12 @@ import type { HomeWorktreeSummary, HostWorktreeInfo } from '../src/worktree/home
 import type { RpcClient } from '../src/transport/rpc-client'
 import { createHostConnectRefetchGate } from '../src/transport/host-connect-refetch-gate'
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
-import { useCloseHost, useForceReconnect, usePrimeHosts } from '../src/transport/client-context'
+import {
+  useDisconnectHostClient,
+  useForceReconnect,
+  useForgetHostClient,
+  usePrimeHosts
+} from '../src/transport/client-context'
 import { useAllHostClients } from '../src/transport/use-all-host-clients'
 import {
   resolveHomeHostConnectionState,
@@ -255,7 +260,8 @@ export default function HomeScreen() {
     () => Object.fromEntries(allClients.map(({ hostId, path }) => [hostId, path])),
     [allClients]
   )
-  const closeHostClient = useCloseHost()
+  const disconnectHostClient = useDisconnectHostClient()
+  const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
   // Why: prime the cache with loaded HostProfiles to avoid a second serialized Keychain pass (multi-second connect latency) on cold start.
@@ -644,7 +650,7 @@ export default function HomeScreen() {
     }
     const hostToRemove = confirmRemove
     try {
-      await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
+      await removeHostAndCloseClient(hostToRemove.id, forgetHostClient)
       setConfirmRemove(null)
       setHostCatalog(await loadHostCatalog())
     } catch {
@@ -950,7 +956,7 @@ export default function HomeScreen() {
             : false,
           onDismiss: () => setActionTarget(null),
           onReconnect: (hostId) => void forceReconnectHost(hostId),
-          onDisconnect: closeHostClient,
+          onDisconnect: disconnectHostClient,
           onEdit: openMobileHostEdit,
           onRemove: (host) => setConfirmRemove(host)
         })}

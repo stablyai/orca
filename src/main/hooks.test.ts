@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import type * as GitRunner from './git/runner'
 
 import { join } from 'node:path'
@@ -201,6 +201,7 @@ describe('parseOrcaYaml', () => {
       'environmentRecipes:',
       '  - id: cloud-sandbox',
       '    name: Cloud Sandbox',
+      '    checkoutMode: provisioned-root',
       '    description: Starts a per-workspace VM.',
       '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
       '    suspend: ./scripts/orca-vm/suspend-cloud-sandbox.sh',
@@ -214,11 +215,34 @@ describe('parseOrcaYaml', () => {
         {
           id: 'cloud-sandbox',
           name: 'Cloud Sandbox',
+          checkoutMode: 'provisioned-root',
           description: 'Starts a per-workspace VM.',
           create: './scripts/orca-vm/start-cloud-sandbox.sh',
           suspend: './scripts/orca-vm/suspend-cloud-sandbox.sh',
           resume: './scripts/orca-vm/resume-cloud-sandbox.sh',
           destroy: './scripts/orca-vm/destroy-cloud-sandbox.sh'
+        }
+      ]
+    })
+  })
+
+  it('rejects environment recipes with an unknown checkout mode', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Cloud Sandbox',
+      '    checkoutMode: magic',
+      '    create: ./scripts/create.sh'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      environmentRecipeDiagnostics: [
+        {
+          index: 0,
+          field: 'checkoutMode',
+          message:
+            'Recipe "cloud-sandbox" checkoutMode must be "orca-worktree" or "provisioned-root".'
         }
       ]
     })

@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /** Why: plain-English agent names for non-localized surfaces (keybinding
  * titles in the shared registry, which main, renderer, and the keybindings

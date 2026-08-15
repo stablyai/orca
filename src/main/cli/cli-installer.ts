@@ -19,6 +19,7 @@ import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
 import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
+import { getBundledLauncherPath, LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
 import {
   invalidateWindowsUserPathRegistryCache,
   readFreshWindowsUserPathRegistry,
@@ -29,7 +30,6 @@ import {
 const execFileAsync = promisify(execFile)
 const DEFAULT_MAC_COMMAND_PATH = '/usr/local/bin/orca'
 const DEV_COMMAND_NAME = 'orca-dev'
-const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
 const WINDOWS_PATH_WRITE_TIMEOUT_MS = 5_000
@@ -88,7 +88,7 @@ export class CliInstaller {
       return DEV_COMMAND_NAME
     }
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
-    return this.platform === 'linux' ? LINUX_COMMAND_NAME : 'orca'
+    return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : 'orca'
   }
 
   constructor(options: CliInstallerOptions = {}) {
@@ -351,7 +351,7 @@ export class CliInstaller {
     if (this.platform === 'linux') {
       // Why: Linux lacks a privileged global command flow; ~/.local/bin is the least-surprising user-scoped dir.
       // Why `orca-ide`: GNOME Orca ships /usr/bin/orca, so avoid shadowing that screen reader.
-      return join(this.homePath, '.local', 'bin', LINUX_COMMAND_NAME)
+      return join(this.homePath, '.local', 'bin', LINUX_CLI_COMMAND_NAME)
     }
 
     if (this.platform === 'win32') {
@@ -959,7 +959,7 @@ export ORCA_NODE_OPTIONS="\${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
-ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
 `
 }
 
@@ -1200,18 +1200,4 @@ function quotePowerShell(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-export function getBundledLauncherPath(
-  platform: NodeJS.Platform,
-  resourcesPath: string
-): string | null {
-  if (platform === 'darwin') {
-    return join(resourcesPath, 'bin', 'orca')
-  }
-  if (platform === 'linux') {
-    return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)
-  }
-  if (platform === 'win32') {
-    return join(resourcesPath, 'bin', 'orca.exe')
-  }
-  return null
-}
+export { getBundledLauncherPath }

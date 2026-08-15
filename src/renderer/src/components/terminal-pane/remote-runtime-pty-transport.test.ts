@@ -5054,6 +5054,91 @@ describe('createRemoteRuntimePtyTransport', () => {
     transport.destroy?.()
   })
 
+  it('re-arms the retained-buffer restore when a recovery subscribe replays no snapshot', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const onStreamRecovered = vi.fn()
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({
+      url: '',
+      callbacks: { onReplayData, onStreamRecovered, onConnect }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const firstStreamId = latestSubscribePayload().streamId
+    emitSnapshot(firstStreamId, 'INITIAL_SNAPSHOT')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: firstStreamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+    await vi.waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1))
+    // The first subscribe already carries the host snapshot; re-arming there would cost
+    // every pane a redundant restore request on open.
+    expect(onStreamRecovered).not.toHaveBeenCalled()
+
+    subscriptionCallbacks?.onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+      ).toHaveLength(2)
+    )
+    const reconnectStreamId = latestSubscribePayload().streamId
+    // An exited-but-preserved pane has nothing to push and will never emit live bytes,
+    // so without the re-arm the pane stays blank until a visibility flip.
+    emitSnapshot(reconnectStreamId, '')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: reconnectStreamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+
+    await vi.waitFor(() => expect(onStreamRecovered).toHaveBeenCalledTimes(1))
+    expect(onReplayData.mock.calls.map((call) => call[0])).toEqual(['INITIAL_SNAPSHOT'])
+
+    subscriptionCallbacks?.onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() =>
+      expect(
+        subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+      ).toHaveLength(3)
+    )
+    const populatedReconnectStreamId = latestSubscribePayload().streamId
+    emitSnapshot(populatedReconnectStreamId, 'RECOVERY_SNAPSHOT')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: populatedReconnectStreamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+
+    await vi.waitFor(() => expect(onConnect).toHaveBeenCalledTimes(3))
+    expect(onStreamRecovered).toHaveBeenCalledTimes(1)
+    expect(onReplayData.mock.calls.map((call) => call[0])).toEqual([
+      'INITIAL_SNAPSHOT',
+      'RECOVERY_SNAPSHOT'
+    ])
+    transport.destroy?.()
+  })
+
   it('backs off before retrying a capacity-rejected terminal stream', async () => {
     vi.useFakeTimers()
     try {

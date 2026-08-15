@@ -5,10 +5,12 @@ import { credentialDecryptionMessage } from '../../shared/integration-credential
 const getClients = vi.fn()
 const clearToken = vi.fn()
 const isAuthError = vi.fn()
+const acquire = vi.fn().mockResolvedValue(undefined)
+const release = vi.fn()
 
 vi.mock('./client', () => ({
-  acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
+  acquire,
+  release,
   getClients: (...args: unknown[]) => getClients(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args),
   clearToken: (...args: unknown[]) => clearToken(...args)
@@ -281,6 +283,30 @@ describe('Linear teams', () => {
 
     expect(entry.client.team).toHaveBeenCalledWith('team-1')
     expect(members).toHaveBeenCalledWith({ first: 100 })
+  })
+
+  it.each([
+    ['getTeamStates', 'getTeamStatesOrThrow'],
+    ['getTeamLabels', 'getTeamLabelsOrThrow'],
+    ['getTeamMembers', 'getTeamMembersOrThrow']
+  ] as const)('preserves the %s error policy', async (fallbackReader, throwingReader) => {
+    const error = new Error('request failed')
+    const entry = makeTeamLookupEntry('workspace-1', 'Workspace', null)
+    vi.mocked(entry.client.team).mockRejectedValue(error)
+    getClients.mockReturnValue([entry])
+    const readers = await import('./teams')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(readers[fallbackReader]('team-1', 'workspace-1')).resolves.toEqual([])
+    await expect(readers[throwingReader]('team-1', 'workspace-1')).rejects.toBe(error)
+    expect(warn).toHaveBeenCalledWith(`[linear] ${fallbackReader} failed:`, error)
+    expect(release).toHaveBeenCalledTimes(2)
+
+    isAuthError.mockReturnValue(true)
+    await expect(readers[fallbackReader]('team-1', 'workspace-1')).rejects.toBe(error)
+    expect(clearToken).toHaveBeenCalledWith('workspace-1')
+    expect(release).toHaveBeenCalledTimes(3)
+    warn.mockRestore()
   })
 
   it('surfaces Linear credential decrypt errors on active team reads', async () => {

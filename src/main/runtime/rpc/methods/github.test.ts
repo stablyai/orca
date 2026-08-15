@@ -192,6 +192,32 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: [] })
   })
 
+  it('forwards request cancellation to PR check-details work', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRepoPRCheckDetails: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+    const controller = new AbortController()
+
+    await dispatcher.dispatch(
+      makeRequest('github.prCheckDetails', { repo: 'repo-1', checkRunId: 9 }),
+      { signal: controller.signal }
+    )
+
+    expect(runtime.getRepoPRCheckDetails).toHaveBeenCalledWith(
+      'repo-1',
+      {
+        checkRunId: 9,
+        workflowRunId: undefined,
+        checkName: undefined,
+        url: undefined,
+        prRepo: null
+      },
+      controller.signal
+    )
+  })
+
   it('fetches PR comments on the runtime server with explicit PR repo', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -217,6 +243,31 @@ describe('github RPC methods', () => {
       }
     )
     expect(response).toMatchObject({ ok: true, result: [] })
+  })
+
+  it('sets a PR comment reaction on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      setRepoPRCommentReaction: vi.fn().mockResolvedValue(true)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.setPRCommentReaction', {
+        repo: 'repo-1',
+        reactionSubjectId: 'IC_1',
+        content: 'heart',
+        reacted: true,
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
+      })
+    )
+
+    expect(runtime.setRepoPRCommentReaction).toHaveBeenCalledWith('repo-1', 'IC_1', 'heart', true, {
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.acme.test'
+    })
+    expect(response).toMatchObject({ ok: true, result: true })
   })
 
   it('fetches PR file contents on the runtime server', async () => {

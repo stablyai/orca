@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../store/types'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   buildRecentTabSwitcherModel,
   getNextRecentTabSwitcherIndex,

@@ -8,7 +8,8 @@ import {
 import { CONTEXTUAL_TOUR_IDS } from '../../shared/contextual-tours'
 import { FEATURE_INTERACTION_IDS } from '../../shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../shared/feature-tips'
-import type { OnboardingState, PersistedUIState } from '../../shared/types'
+import type { OnboardingState } from '../../shared/onboarding-state-types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import {
   DEV_SHOW_FIRST_RUN_EDUCATION_ENV,
   shouldSuppressDevEducation,

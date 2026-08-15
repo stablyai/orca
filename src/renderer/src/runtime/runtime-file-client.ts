@@ -1,14 +1,13 @@
 /* eslint-disable max-lines -- Why: this client intentionally centralizes the
 file preload API plus remote runtime fallbacks so call sites cannot drift on
 local-vs-environment routing rules. */
+import type { SearchOptions, SearchResult } from '../../../shared/code-search-types'
 import type {
   DirEntry,
   FsChangedPayload,
-  GlobalSettings,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult
-} from '../../../shared/types'
+  MarkdownDocument
+} from '../../../shared/filesystem-entry-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,

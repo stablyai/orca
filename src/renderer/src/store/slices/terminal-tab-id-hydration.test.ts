@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

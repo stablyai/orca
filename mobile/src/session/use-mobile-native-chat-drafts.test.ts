@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
@@ -29,10 +29,6 @@ function assistantTextMessage(id: string, text: string): NativeChatMessage {
 describe('useMobileNativeChatDrafts', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -69,20 +65,9 @@ describe('useMobileNativeChatDrafts', () => {
   }
 
   async function mount(tabId: string): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { tabId }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   async function switchTo(tabId: string): Promise<void> {
@@ -331,8 +316,8 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(1)
 
-    // Claude echoes a captioned image send as two turns: the source marker and
-    // the caption prefixed with `[Image #1] ` — the pending must still match.
+    // Claude echoes a captioned image send as a source turn plus a caption
+    // carrying `[Image #1]`; the pending must still match.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -341,6 +326,37 @@ describe('useMobileNativeChatDrafts', () => {
             assistantTextMessage('a1', 'hi'),
             userTextMessage('u1', '[Image: source: /tmp/a.png]'),
             userTextMessage('u2', '[Image #1] look at this')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
+  })
+
+  it('reconciles a captioned image echo with a trailing [Image #N] marker', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('look at this')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(1)
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('u2', 'look at this[Image #1]')
           ]
         })
       )

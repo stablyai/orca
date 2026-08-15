@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
 import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +14,7 @@ import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import {
@@ -3299,7 +3301,14 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
-    expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
+    // A mobile WebSocket client is transport-capped; a local caller gets undefined here.
+    expect(getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'docs/readme.md',
+      false,
+      undefined,
+      remoteRpcContentBudget('req_git_diff')
+    )
     expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
     expect(browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
@@ -3473,6 +3482,114 @@ describe('OrcaRuntimeRpcServer', () => {
         error: expect.objectContaining({ code: 'unauthorized' })
       })
     )
+  })
+
+  it('isolates mutation replay by the authenticated paired device across reconnects', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const firstDevice = server['deviceRegistry']!.addDevice('first-cli', 'runtime')
+    const secondDevice = server['deviceRegistry']!.addDevice('second-cli', 'runtime')
+
+    const resetMessages = async (id: string, authenticatedToken: string) => {
+      const replies: Record<string, unknown>[] = []
+      await server['handleWebSocketMessage'](
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id,
+            method: 'orchestration.reset',
+            orchestrationRequestId: 'paired-reset-request',
+            params: { messages: true }
+          })
+        ),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {},
+        undefined,
+        undefined,
+        authenticatedToken
+      )
+      return replies[0]
+    }
+
+    try {
+      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'before reset' })
+      const first = await resetMessages('reset-first', firstDevice.token)
+      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'after reset' })
+      const replay = await resetMessages('reset-replay', firstDevice.token)
+
+      expect(first).toMatchObject({
+        ok: true,
+        result: { reset: 'messages', mutation: { replayed: false } }
+      })
+      expect(replay).toMatchObject({
+        ok: true,
+        result: { reset: 'messages', mutation: { replayed: true } }
+      })
+      expect(db.getInbox()).toEqual([expect.objectContaining({ subject: 'after reset' })])
+
+      const isolated = await resetMessages('reset-second-device', secondDevice.token)
+      expect(isolated).toMatchObject({
+        ok: true,
+        result: { reset: 'messages', mutation: { replayed: false } }
+      })
+      expect(db.getInbox()).toEqual([])
+    } finally {
+      db.close()
+      await server.stop()
+    }
+  })
+
+  it('keeps authenticated paired callers attached to existing federated workers', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('existing-cli', 'runtime')
+    const existingFingerprint = createHash('sha256').update(device.token).digest('hex')
+    db.createRemoteDispatchAttachment({
+      dispatchId: 'ctx_existing_remote',
+      taskId: 'task_existing_remote',
+      homePeerFingerprint: existingFingerprint,
+      protocolVersion: 1,
+      runtimeEpoch: 'runtime_before_upgrade',
+      mutationReceipt: {
+        callerFingerprint: existingFingerprint,
+        requestId: 'request_existing_remote',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'hash_existing_remote'
+      }
+    })
+    const replies: Record<string, unknown>[] = []
+
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'show-existing-remote',
+            method: 'orchestration.federationShow',
+            params: { dispatchId: 'ctx_existing_remote' }
+          })
+        ),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {},
+        undefined,
+        undefined,
+        device.token
+      )
+
+      expect(replies[0]).toMatchObject({
+        ok: true,
+        result: { dispatchId: 'ctx_existing_remote', attachment: { state: 'starting' } }
+      })
+    } finally {
+      db.close()
+      await server.stop()
+    }
   })
 
   it('rejects unpaired terminal creates before runtime dispatch', async () => {
@@ -6026,7 +6143,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     const wideStartGate = new Promise<void>((resolve) => {
       releaseWideStart = resolve
     })
-    let wideStopSpy: ReturnType<typeof vi.spyOn> | null = null
+    let wideStopSpy: ReturnType<typeof vi.spyOn> = null
     vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
       if (opts.host === '0.0.0.0') {
         // Why: hold the widen mid-flight (loopback already stopped) so stop() must race the rebind.

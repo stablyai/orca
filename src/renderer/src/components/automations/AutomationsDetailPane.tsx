@@ -1,5 +1,5 @@
 import React from 'react'
-import { Eye, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Eye, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,7 @@ import type {
   ExternalAutomationRun,
   AutomationRun
 } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
 import { HermesCronOutputView } from './HermesCronOutputView'
@@ -80,6 +80,7 @@ type AutomationsDetailPaneProps = {
   rerunAutomationRun: (automation: Automation, run: AutomationRun) => void
   openRunWorkspace: (run: AutomationRun) => void
   openAutomationRunPage: (run: AutomationRun) => void
+  onBackToList: () => void
 }
 
 export function AutomationsDetailPane({
@@ -114,12 +115,22 @@ export function AutomationsDetailPane({
   requestDeleteAutomation,
   rerunAutomationRun,
   openRunWorkspace,
-  openAutomationRunPage
+  openAutomationRunPage,
+  onBackToList
 }: AutomationsDetailPaneProps): React.JSX.Element {
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {selectedExternal ? (
-        <div className="scrollbar-sleek min-h-0 overflow-auto p-5">
+        <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-5">
+          <div className="mb-3">
+            <Button type="button" variant="ghost" size="sm" onClick={onBackToList}>
+              <ArrowLeft className="size-4" />
+              {translate(
+                'auto.components.automations.AutomationsPage.backToList',
+                'All automations'
+              )}
+            </Button>
+          </div>
           {selectedExternalRunPage ? (
             <AutomationRunPageFrame
               title={selectedExternalRunPage.job.name}
@@ -159,9 +170,21 @@ export function AutomationsDetailPane({
           className="min-h-0 flex-1 gap-0"
         >
           <div
-            className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2"
+            className="flex shrink-0 items-center gap-2 border-b border-border/50 px-5 py-2"
             data-contextual-tour-target="automations-runs"
           >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onBackToList}
+              aria-label={translate(
+                'auto.components.automations.AutomationsPage.backToList',
+                'All automations'
+              )}
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
             <TabsList variant="line" className="h-8">
               <TabsTrigger value="overview">
                 {translate('auto.components.automations.AutomationsPage.bb1b2cd31e', 'Overview')}

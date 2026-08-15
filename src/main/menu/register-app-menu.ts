@@ -5,7 +5,7 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../shared/keybindings'
-import type { UpdateCheckOptions } from '../../shared/types'
+import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 
@@ -167,11 +167,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  // Why: keep native menu hints while letting non-macOS Ctrl+Z/Ctrl+Y reach the focused terminal or DOM control.
+  const undoRedoOptions: Electron.MenuItemConstructorOptions = isMac
+    ? {}
+    : { registerAccelerator: false }
   const editMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.edit', 'Edit'),
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
+      { role: 'undo', ...undoRedoOptions },
+      { role: 'redo', ...undoRedoOptions },
       { type: 'separator' },
       { role: 'cut' },
       createAppMenuSelectionItem({
