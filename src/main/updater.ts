@@ -34,6 +34,12 @@ import {
 } from './update-install-exit-watchdog'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import {
+  armMacUpdateInstallHandoff,
+  clearMacUpdateInstallHandoff,
+  findConflictingMacAppPids,
+  type MacUpdateInstallHandoffHandle
+} from './macos-update-install-handoff'
 import { getLinuxRootPackageType } from './linux-update-package-type'
 import {
   beginLinuxPackageInstallDiagnosticCapture,
@@ -191,6 +197,7 @@ let pinnedBuildSelectionInProgress = false
 // deliberate downgrade, so newer-only gates must yield to it too.
 let isPinnedBuildActive = false
 let getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
+let macUpdateInstallHandoff: MacUpdateInstallHandoffHandle | null = null
 
 function getAutoUpdater(): ElectronAutoUpdater {
   if (!autoUpdater) {
@@ -745,6 +752,49 @@ async function performQuitAndInstall(): Promise<void> {
         version: pendingVersion || null,
         macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
       })
+      macUpdateInstallHandoff =
+        process.platform === 'darwin' && app.isPackaged
+          ? armMacUpdateInstallHandoff({
+              appDataPath: app.getPath('appData'),
+              executablePath: process.execPath,
+              isPackaged: true,
+              sourceVersion: app.getVersion(),
+              targetVersion: pendingVersion
+            })
+          : null
+      if (macUpdateInstallHandoff) {
+        const conflictingPids = await findConflictingMacAppPids()
+        if (conflictingPids === null) {
+          recordUpdaterLifecycle(
+            'quit_and_install_process_check_failed',
+            { version: pendingVersion || null },
+            { level: 'warn', message: 'Could not inspect other Orca app processes' }
+          )
+          resetQuitForUpdateState()
+          sendInstallFailureStatus({
+            state: 'error',
+            message: 'Could not verify that Orca is ready to update. Try Restart to Update again.',
+            installRetryable: true
+          })
+          span.fail('Could not inspect other Orca app processes')
+          return
+        }
+        if (conflictingPids.length > 0) {
+          recordUpdaterLifecycle(
+            'quit_and_install_blocked_by_other_instances',
+            { conflictingProcessCount: conflictingPids.length, version: pendingVersion || null },
+            { level: 'warn', message: 'Another Orca app process would block ShipIt' }
+          )
+          resetQuitForUpdateState()
+          sendInstallFailureStatus({
+            state: 'error',
+            message: `Close the other Orca process${conflictingPids.length === 1 ? '' : 'es'} (PID ${conflictingPids.join(', ')}) and try Restart to Update again.`,
+            installRetryable: true
+          })
+          span.fail('Another Orca app process would block the macOS installer')
+          return
+        }
+      }
       span.addEvent('pre_quit_cleanup_start')
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
@@ -807,7 +857,10 @@ async function performQuitAndInstall(): Promise<void> {
       // Why: DebUpdater/RpmUpdater install through spawnSync, so a normal return already means the
       // package is installed. Commit here or a throw in the cleanup below is reported as an install
       // failure — offering a recovery card, and stale stderr, for an update that actually succeeded.
-      if (getLinuxRootPackageType() !== null) {
+      if (
+        getLinuxRootPackageType() !== null ||
+        (process.platform === 'darwin' && isMacInstallerReady())
+      ) {
         updateInstallCommitted = true
         armUpdateInstallExitWatchdog()
       }
@@ -822,8 +875,8 @@ async function performQuitAndInstall(): Promise<void> {
         windowCount: BrowserWindow.getAllWindows().length
       })
 
-      // Why: committed installs keep quittingForUpdate so dock activate can't reopen the old process; macOS without Squirrel stays uncommitted so late native errors can still recover.
-      if (!updateInstallCommitted && (process.platform !== 'darwin' || isMacInstallerReady())) {
+      // Why: committed installs keep quittingForUpdate so dock activate can't reopen the old process; macOS commits immediately after its native handoff above.
+      if (!updateInstallCommitted && process.platform !== 'darwin') {
         updateInstallCommitted = true
         // Why: past commit the installer waits for this process to exit; a wedged async shutdown would strand the user with no app and no update (#4438).
         armUpdateInstallExitWatchdog()
@@ -874,6 +927,8 @@ async function performQuitAndInstall(): Promise<void> {
 }
 
 function resetQuitForUpdateState(): void {
+  clearMacUpdateInstallHandoff(macUpdateInstallHandoff)
+  macUpdateInstallHandoff = null
   quitAndInstallInProgress = false
   quittingForUpdate = false
   updateInstallCommitted = false

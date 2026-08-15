@@ -112,6 +112,7 @@ import {
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
 import type { UpdateCheckOptions } from '../shared/update-status-types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import { shouldDeferMacLaunchForUpdate } from './macos-update-install-handoff'
 import {
   installServeSupervisorDisconnectQuit,
   notifyServeSupervisorReady
@@ -646,6 +647,17 @@ const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
 installUncaughtPipeErrorGuard()
 // Why (issue #9441): without this, one rejected background promise during startup restore kills main silently (exit 1, no crash report).
 installUnhandledRejectionLogging()
+if (
+  shouldDeferMacLaunchForUpdate({
+    appDataPath: app.getPath('appData'),
+    appVersion: app.getVersion(),
+    executablePath: process.execPath,
+    isPackaged: app.isPackaged
+  })
+) {
+  console.info('[updater] Deferring old-version launch while ShipIt applies the update')
+  app.exit(0)
+}
 // Why: expose the app version via process.env so main and the forked daemon can set TERM_PROGRAM_VERSION without importing electron.
 process.env.ORCA_APP_VERSION = app.getVersion()
 configureRemoteServerUpdater({
@@ -3320,6 +3332,7 @@ app.on('window-all-closed', () => {
     shouldQuitWhenAllWindowsClosed({
       platform: process.platform,
       isQuitting,
+      isQuittingForUpdate: isQuittingForUpdate(),
       isServeMode
     })
   ) {

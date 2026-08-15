@@ -79,6 +79,7 @@ export type UpdateStatus = (
       message: string
       userInitiated?: boolean
       activeNudgeId?: string
+      installRetryable?: boolean
       recovery?: LinuxPackageInstallRecovery
     }
 ) & { source?: UpdateSource }

@@ -273,6 +273,22 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(download).toHaveBeenCalledTimes(1)
   })
 
+  it('retries a blocked native install without downloading the staged build again', () => {
+    renderAfterAvailableStatus()
+
+    act(() =>
+      useAppStore.getState().setUpdateStatus({
+        state: 'error',
+        message: 'Close the other Orca process and try Restart to Update again.',
+        installRetryable: true
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+    expect(quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(download).not.toHaveBeenCalled()
+  })
+
   it('shows the appended install cause behind the generic card details', () => {
     const message =
       'Could not start the update installer. Orca remains open. (Command failed: pkexec must be setuid root)'

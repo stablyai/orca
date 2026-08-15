@@ -11,6 +11,9 @@ const {
   resolveLinuxPackageInstallInstructionsMock,
   revalidateLinuxPackageForInstallMock,
   revealLinuxPackageMock,
+  armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPidsMock,
   resetHandlers
 } = vi.hoisted(() => {
   const updaterHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -37,7 +40,13 @@ const {
     }
   }
   return {
-    appMock: { isPackaged: true, getVersion: vi.fn(() => '1.0.51'), on: vi.fn(), quit: vi.fn() },
+    appMock: {
+      isPackaged: true,
+      getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => 'orca-test-app-data'),
+      on: vi.fn(),
+      quit: vi.fn()
+    },
     autoUpdaterMock,
     clearTrackedLinuxPackageArtifactMock: vi.fn(),
     getTrackedLinuxPackageArtifactMock: vi.fn(),
@@ -45,6 +54,9 @@ const {
     resolveLinuxPackageInstallInstructionsMock: vi.fn(),
     revalidateLinuxPackageForInstallMock: vi.fn(),
     revealLinuxPackageMock: vi.fn(),
+    armMacUpdateInstallHandoffMock: vi.fn(),
+    clearMacUpdateInstallHandoffMock: vi.fn(),
+    findConflictingMacAppPidsMock: vi.fn(),
     resetHandlers: () => updaterHandlers.clear()
   }
 })
@@ -76,6 +88,11 @@ vi.mock('./update-install-exit-watchdog', () => ({
 }))
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
+}))
+vi.mock('./macos-update-install-handoff', () => ({
+  armMacUpdateInstallHandoff: armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoff: clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPids: findConflictingMacAppPidsMock
 }))
 vi.mock('./linux-update-package-type', () => ({ getLinuxRootPackageType: () => 'deb' }))
 vi.mock('./linux-package-update-recovery', () => ({
@@ -118,6 +135,9 @@ describe('linux package recovery actions', () => {
       .mockResolvedValue({ ok: true, command: "sudo apt install -- '<pkg>'", packageFileName: 'p' })
     revalidateLinuxPackageForInstallMock.mockReset().mockResolvedValue({ ok: true })
     revealLinuxPackageMock.mockReset().mockResolvedValue({ ok: true })
+    armMacUpdateInstallHandoffMock.mockReset().mockReturnValue(null)
+    clearMacUpdateInstallHandoffMock.mockReset()
+    findConflictingMacAppPidsMock.mockReset().mockResolvedValue([])
   })
 
   const startUpdater = async (): Promise<{

@@ -42,6 +42,17 @@ describe('shouldQuitWhenAllWindowsClosed', () => {
     ).toBe(true)
   })
 
+  it('continues the native update quit before Electron emits before-quit', () => {
+    expect(
+      shouldQuitWhenAllWindowsClosed({
+        platform: 'darwin',
+        isQuitting: false,
+        isQuittingForUpdate: true,
+        isServeMode: false
+      })
+    ).toBe(true)
+  })
+
   it('continues a committed quit after a serve owner was promoted to desktop', () => {
     expect(
       shouldQuitWhenAllWindowsClosed({

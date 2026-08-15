@@ -86,6 +86,12 @@ describe('statusesEqual', () => {
     ).toBe(false)
     expect(statusesEqual(withRecovery, { ...withRecovery })).toBe(true)
   })
+
+  it('does not dedupe an install-retryable error against an ordinary error', () => {
+    expect(statusesEqual(withoutRecovery, { ...withoutRecovery, installRetryable: true })).toBe(
+      false
+    )
+  })
 })
 
 describe('isReleaseAssetsPublishingFailure', () => {

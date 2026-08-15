@@ -128,6 +128,7 @@ const {
     appMock: {
       isPackaged: true,
       getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => 'orca-test-app-data'),
       on: appOn,
       emit: appEmit,
       quit: vi.fn()
@@ -218,6 +219,22 @@ vi.mock('./update-install-exit-watchdog', () => ({
   disarmUpdateInstallExitWatchdog: disarmExitWatchdogMock
 }))
 
+const {
+  armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPidsMock
+} = vi.hoisted(() => ({
+  armMacUpdateInstallHandoffMock: vi.fn(),
+  clearMacUpdateInstallHandoffMock: vi.fn(),
+  findConflictingMacAppPidsMock: vi.fn()
+}))
+
+vi.mock('./macos-update-install-handoff', () => ({
+  armMacUpdateInstallHandoff: armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoff: clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPids: findConflictingMacAppPidsMock
+}))
+
 const { fetchNewerReleaseTagsMock } = vi.hoisted(() => ({
   fetchNewerReleaseTagsMock: vi.fn()
 }))
@@ -261,12 +278,16 @@ describe('updater', () => {
     browserWindowMock.getAllWindows.mockReturnValue([])
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
+    appMock.getPath.mockReset().mockReturnValue('orca-test-app-data')
     appMock.quit.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
     armExitWatchdogMock.mockReset()
     disarmExitWatchdogMock.mockReset()
+    armMacUpdateInstallHandoffMock.mockReset().mockReturnValue(null)
+    clearMacUpdateInstallHandoffMock.mockReset()
+    findConflictingMacAppPidsMock.mockReset().mockResolvedValue([])
     powerMonitorOnMock.mockReset()
     getLinuxRootPackageTypeMock.mockReset().mockReturnValue(null)
     recordUpdaterLifecycleMock.mockReset()
@@ -1760,6 +1781,120 @@ describe('updater', () => {
     expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
       killAllPtyMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('blocks a doomed macOS install until another app instance exits', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    vi.useFakeTimers()
+    const handoff = { attemptId: 'attempt-1', filePath: 'handoff.json' }
+    armMacUpdateInstallHandoffMock.mockReturnValue(handoff)
+    findConflictingMacAppPidsMock.mockResolvedValueOnce([777]).mockResolvedValueOnce([])
+    const send = vi.fn()
+    const onBeforeQuit = vi.fn()
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+
+    setupAutoUpdater({ webContents: { send } } as never, { onBeforeQuit })
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.advanceTimersByTimeAsync(0)
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    nativeDownloadedHandler?.()
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(onBeforeQuit).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(clearMacUpdateInstallHandoffMock).toHaveBeenCalledWith(handoff)
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(send).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Close the other Orca process (PID 777) and try Restart to Update again.',
+      installRetryable: true
+    })
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    platformSpy.mockRestore()
+  })
+
+  it('keeps the staged macOS update retryable when the process check fails', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    vi.useFakeTimers()
+    armMacUpdateInstallHandoffMock.mockReturnValue({
+      attemptId: 'attempt-1',
+      filePath: 'handoff.json'
+    })
+    findConflictingMacAppPidsMock.mockResolvedValue(null)
+    const send = vi.fn()
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater({ webContents: { send } } as never)
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.advanceTimersByTimeAsync(0)
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    nativeDownloadedHandler?.()
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Could not verify that Orca is ready to update. Try Restart to Update again.',
+      installRetryable: true
+    })
+    platformSpy.mockRestore()
+  })
+
+  it('arms the cross-profile launch handoff before cleanup or native install', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    vi.useFakeTimers()
+    armMacUpdateInstallHandoffMock.mockReturnValue({
+      attemptId: 'attempt-1',
+      filePath: 'handoff.json'
+    })
+    const onBeforeQuit = vi.fn()
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater({ webContents: { send: vi.fn() } } as never, { onBeforeQuit })
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.advanceTimersByTimeAsync(0)
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    nativeDownloadedHandler?.()
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(armMacUpdateInstallHandoffMock).toHaveBeenCalledWith({
+      appDataPath: 'orca-test-app-data',
+      executablePath: process.execPath,
+      isPackaged: true,
+      sourceVersion: '1.0.51',
+      targetVersion: '1.0.61'
+    })
+    expect(armMacUpdateInstallHandoffMock.mock.invocationCallOrder[0]).toBeLessThan(
+      findConflictingMacAppPidsMock.mock.invocationCallOrder[0]
+    )
+    expect(findConflictingMacAppPidsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      onBeforeQuit.mock.invocationCallOrder[0]
+    )
+    expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
+      autoUpdaterMock.quitAndInstall.mock.invocationCallOrder[0]
+    )
+    platformSpy.mockRestore()
   })
 
   it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {

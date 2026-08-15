@@ -390,8 +390,10 @@ export function UpdateCard() {
                   // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
                   primaryAction: cachedVersion
                     ? {
-                        label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
-                        onClick: handleUpdate
+                        label: status.installRetryable
+                          ? translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again')
+                          : translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+                        onClick: status.installRetryable ? handleInstallRetry : handleUpdate
                       }
                     : {
                         label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),

@@ -51,6 +51,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.message === right.message &&
         left.userInitiated === right.userInitiated &&
         left.activeNudgeId === right.activeNudgeId &&
+        left.installRetryable === right.installRetryable &&
         // Why: clearing recovery must reach the renderer even when the message is unchanged, or dead actions stay enabled.
         left.recovery?.kind === right.recovery?.kind &&
         left.recovery?.packageType === right.recovery?.packageType &&

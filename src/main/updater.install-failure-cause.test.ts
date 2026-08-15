@@ -10,7 +10,10 @@ const {
   autoUpdaterMock,
   isMock,
   killAllPtyMock,
-  recordUpdaterLifecycleMock
+  recordUpdaterLifecycleMock,
+  armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPidsMock
 } = vi.hoisted(() => {
   const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
   const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -71,7 +74,10 @@ const {
     autoUpdaterMock,
     isMock: { dev: false },
     killAllPtyMock: vi.fn(),
-    recordUpdaterLifecycleMock: vi.fn()
+    recordUpdaterLifecycleMock: vi.fn(),
+    armMacUpdateInstallHandoffMock: vi.fn(),
+    clearMacUpdateInstallHandoffMock: vi.fn(),
+    findConflictingMacAppPidsMock: vi.fn()
   }
 })
 
@@ -99,6 +105,11 @@ vi.mock('./updater-nudge', () => ({
 }))
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
+}))
+vi.mock('./macos-update-install-handoff', () => ({
+  armMacUpdateInstallHandoff: armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoff: clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPids: findConflictingMacAppPidsMock
 }))
 
 // The real electron-updater DebUpdater failure text when elevation is impossible.
@@ -179,6 +190,9 @@ describe('quitAndInstall failure carries the updater cause', () => {
     isMock.dev = false
     killAllPtyMock.mockReset()
     recordUpdaterLifecycleMock.mockReset()
+    armMacUpdateInstallHandoffMock.mockReset().mockReturnValue(null)
+    clearMacUpdateInstallHandoffMock.mockReset()
+    findConflictingMacAppPidsMock.mockReset().mockResolvedValue([])
     Object.defineProperty(process, 'platform', {
       value: 'linux',
       configurable: true

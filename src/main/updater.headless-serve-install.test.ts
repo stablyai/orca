@@ -8,6 +8,9 @@ const {
   recordUpdaterLifecycleMock,
   requestServeUpdateHandoffMock,
   failServeUpdateHandoffMock,
+  armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPidsMock,
   resetHandlers
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -26,6 +29,7 @@ const {
   const appMock = {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
+    getPath: vi.fn(() => 'orca-test-app-data'),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       appHandlers.set(event, [...(appHandlers.get(event) ?? []), handler])
       return appMock
@@ -58,6 +62,9 @@ const {
     recordUpdaterLifecycleMock: vi.fn(),
     requestServeUpdateHandoffMock: vi.fn(() => true),
     failServeUpdateHandoffMock: vi.fn(),
+    armMacUpdateInstallHandoffMock: vi.fn(),
+    clearMacUpdateInstallHandoffMock: vi.fn(),
+    findConflictingMacAppPidsMock: vi.fn(),
     resetHandlers: () => {
       appHandlers.clear()
       updaterHandlers.clear()
@@ -103,6 +110,11 @@ vi.mock('./serve-update-handoff', () => ({
   hasServeUpdateSupervisor: vi.fn(() => true),
   requestServeUpdateHandoff: requestServeUpdateHandoffMock
 }))
+vi.mock('./macos-update-install-handoff', () => ({
+  armMacUpdateInstallHandoff: armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoff: clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPids: findConflictingMacAppPidsMock
+}))
 
 describe('headless serve update install handoff', () => {
   beforeEach(() => {
@@ -122,6 +134,9 @@ describe('headless serve update install handoff', () => {
     recordUpdaterLifecycleMock.mockReset()
     requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
     failServeUpdateHandoffMock.mockReset()
+    armMacUpdateInstallHandoffMock.mockReset().mockReturnValue(null)
+    clearMacUpdateInstallHandoffMock.mockReset()
+    findConflictingMacAppPidsMock.mockReset().mockResolvedValue([])
     resetHandlers()
   })
 

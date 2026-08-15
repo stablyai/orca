@@ -3,6 +3,24 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('startup ordering', () => {
+  it('gates a racing old-version launch before profile locking or persistence', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const updateGate = source.indexOf(
+      'shouldDeferMacLaunchForUpdate({',
+      source.indexOf('installUnhandledRejectionLogging()')
+    )
+    const pathSetup = source.indexOf('patchPackagedProcessPath()', updateGate)
+    const profileConfiguration = source.indexOf('configureDevUserDataPath(is.dev)', updateGate)
+    const singleInstanceLock = source.indexOf('acquireSingleInstanceLock(app', updateGate)
+    const persistence = source.indexOf('initDataPath()', updateGate)
+
+    expect(updateGate).toBeGreaterThanOrEqual(0)
+    expect(pathSetup).toBeGreaterThan(updateGate)
+    expect(profileConfiguration).toBeGreaterThan(updateGate)
+    expect(singleInstanceLock).toBeGreaterThan(updateGate)
+    expect(persistence).toBeGreaterThan(singleInstanceLock)
+  })
+
   it('passes the startup barrier into PTY handlers without blocking window creation', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachStart = source.indexOf('attachMainWindowServices(')

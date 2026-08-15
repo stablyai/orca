@@ -7,7 +7,10 @@ const {
   autoUpdaterMock,
   shellMock,
   isMock,
-  killAllPtyMock
+  killAllPtyMock,
+  armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPidsMock
 } = vi.hoisted(() => {
   const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
   const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -64,6 +67,7 @@ const {
     appMock: {
       isPackaged: true,
       getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => 'orca-test-app-data'),
       on: appOn,
       emit: appEmit,
       quit: vi.fn()
@@ -79,7 +83,10 @@ const {
       openExternal: vi.fn()
     },
     isMock: { dev: false },
-    killAllPtyMock: vi.fn()
+    killAllPtyMock: vi.fn(),
+    armMacUpdateInstallHandoffMock: vi.fn(),
+    clearMacUpdateInstallHandoffMock: vi.fn(),
+    findConflictingMacAppPidsMock: vi.fn()
   }
 })
 
@@ -108,6 +115,12 @@ vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
 }))
 
+vi.mock('./macos-update-install-handoff', () => ({
+  armMacUpdateInstallHandoff: armMacUpdateInstallHandoffMock,
+  clearMacUpdateInstallHandoff: clearMacUpdateInstallHandoffMock,
+  findConflictingMacAppPids: findConflictingMacAppPidsMock
+}))
+
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
 }))
@@ -127,10 +140,14 @@ describe('updater mac install handoff', () => {
     shellMock.openExternal.mockReset()
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
+    appMock.getPath.mockReset().mockReturnValue('orca-test-app-data')
     appMock.quit.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    armMacUpdateInstallHandoffMock.mockReset().mockReturnValue(null)
+    clearMacUpdateInstallHandoffMock.mockReset()
+    findConflictingMacAppPidsMock.mockReset().mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
