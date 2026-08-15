@@ -15,6 +15,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { reconcileRequestedWorkerTerminalReleases } from '../../orchestration/worker-terminal-release-reconciliation'
 import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
@@ -680,6 +681,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             return { message: rejection, lifecycle: reconciled }
           }
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
+          if (reconciled.action === 'completed') {
+            // Why: a merged PR may predate worker_done, so re-enter the coalesced lifecycle pass.
+            void reconcileRequestedWorkerTerminalReleases(runtime).catch((error) => {
+              console.warn('[orchestration] completed worker lifecycle reconciliation failed', {
+                dispatchId: reconciled.dispatchId,
+                error: error instanceof Error ? error.message : String(error)
+              })
+            })
+          }
           return msg.type === 'worker_done'
             ? { message: msg, lifecycle: reconciled }
             : { message: msg }

@@ -8,6 +8,21 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 
+const releaseReconciliationMocks = vi.hoisted(() => ({
+  reconcileRequestedWorkerTerminalReleases: vi.fn().mockResolvedValue({
+    attempted: 0,
+    released: 0,
+    pending: 0,
+    unknown: 0,
+    retained: 0
+  })
+}))
+
+vi.mock(
+  '../../orchestration/worker-terminal-release-reconciliation',
+  () => releaseReconciliationMocks
+)
+
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
@@ -21,6 +36,7 @@ describe('orchestration RPC methods', () => {
   let activeRunId: string | undefined
 
   function setup(withBoundRun = true): void {
+    releaseReconciliationMocks.reconcileRequestedWorkerTerminalReleases.mockClear()
     ;({ db, runtime, ctx, activeRunId } = h.setup(withBoundRun))
   }
 
@@ -724,6 +740,12 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
+      expect(
+        releaseReconciliationMocks.reconcileRequestedWorkerTerminalReleases
+      ).toHaveBeenCalledOnce()
+      expect(
+        releaseReconciliationMocks.reconcileRequestedWorkerTerminalReleases
+      ).toHaveBeenCalledWith(runtime)
       // Lock released — a new dispatch to the same terminal must succeed.
       const t2 = db.createTask({ spec: 'follow-up work' })
       expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
