@@ -367,31 +367,25 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
   })
 
-  it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
-    const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
+  // Fast mode is read from Claude's ↯ glyph now, so an unknown boolean is just
+  // an unset radio group — there is no blind-flip command left to offer.
+  it('offers On/Off for an unknown boolean rather than a blind toggle', async () => {
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, setOption, invokeAction }
     render(
       <NativeChatSessionOptionPickers
         surface={liveSurface}
-        snapshot={[
-          model(),
-          {
-            ...fast,
-            kind: { type: 'boolean' },
-            valueSource: 'unknown',
-            action: { type: 'toggle-command' }
-          }
-        ]}
+        snapshot={[model(), { ...fast, kind: { type: 'boolean' }, valueSource: 'unknown' }]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Toggle fast mode')).not.toBeNull()
-    expect(screen.queryByText('On')).toBeNull()
-    expect(screen.queryByText('Off')).toBeNull()
-    screen.getByText('Toggle fast mode').click()
-    await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('fastMode'))
-    expect(setOption).not.toHaveBeenCalled()
+    expect(screen.queryByText('Toggle fast mode')).toBeNull()
+    expect(screen.getByText('On')).not.toBeNull()
+    expect(screen.getByText('Off')).not.toBeNull()
+    screen.getByText('On').click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith('fastMode', true))
+    expect(invokeAction).not.toHaveBeenCalled()
   })
 
   it('uses On/Off radios for known boolean options without inventing a selection', async () => {

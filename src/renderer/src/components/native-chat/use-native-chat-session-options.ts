@@ -31,6 +31,7 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import {
+  readClaudeFastModeFromTerminalScreen,
   readClaudePermissionModeFromTerminalScreen,
   readClaudeSessionOptionsFromTerminalScreen
 } from './claude-terminal-session-options'
@@ -196,6 +197,12 @@ export function useNativeChatSessionOptions(args: {
         (found, screen) => found ?? readClaudePermissionModeFromTerminalScreen(screen),
         null
       )
+      // Same reason as the mode: the glyph rides the status line, which outlives
+      // the banner the model read depends on.
+      const fastMode = screens.reduce<true | null>(
+        (found, screen) => found ?? readClaudeFastModeFromTerminalScreen(screen),
+        null
+      )
       for (const screen of screens) {
         const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
           screen,
@@ -213,12 +220,16 @@ export function useNativeChatSessionOptions(args: {
         reportedScreenRef.current = screen
         surface.reportSessionOptions({
           ...reportedValues,
-          ...(permissionMode ? { permissionMode } : {})
+          ...(permissionMode ? { permissionMode } : {}),
+          ...(fastMode ? { fastMode } : {})
         })
         return
       }
-      if (!cancelled && permissionMode) {
-        surface.reportSessionOptions({ permissionMode })
+      if (!cancelled && (permissionMode || fastMode)) {
+        surface.reportSessionOptions({
+          ...(permissionMode ? { permissionMode } : {}),
+          ...(fastMode ? { fastMode } : {})
+        })
       }
     }
     void reportCurrentValues()

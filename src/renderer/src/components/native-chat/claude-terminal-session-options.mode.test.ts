@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { readClaudePermissionModeFromTerminalScreen } from './claude-terminal-session-options'
+import {
+  readClaudeFastModeFromTerminalScreen,
+  readClaudePermissionModeFromTerminalScreen,
+  readClaudeSessionOptionsFromTerminalScreen
+} from './claude-terminal-session-options'
 
 /** The status line identifies itself, so the mode read needs no banner — the
  *  banner scrolls out of the viewport after the first screenful. */
@@ -63,5 +67,32 @@ describe('permission mode: what must NOT be read as live status', () => {
       .map((line) => `${line}\n`)
       .join('\n')
     expect(read(`${spaced}\n> `)).toBeNull()
+  })
+})
+
+describe('fast mode from the ↯ glyph', () => {
+  // Why the glyph and not a command: `/fast` with no argument opens a
+  // confirmation panel, so the picker sets `/fast on|off` and reads state here.
+  it('reads fast mode as on when the glyph is present, with no banner', () => {
+    expect(readClaudeFastModeFromTerminalScreen('Opus 4.8 ↯\n> ')).toBe(true)
+  })
+
+  it('reports nothing without the glyph, since absence is not proof of Claude', () => {
+    expect(readClaudeFastModeFromTerminalScreen('Opus 4.8\n> ')).toBeNull()
+  })
+
+  it('ignores the glyph in the confirmation panel title', () => {
+    const panel = '↯ Fast mode (research preview)\n  Fast mode  OFF  $10/$50 per Mtok'
+    expect(readClaudeFastModeFromTerminalScreen(panel)).toBeNull()
+  })
+
+  it('reports a truthful off when the banner proves the screen is Claude', () => {
+    const screen = '╭ Claude Code v2.1.220\n│ Opus 4.8 · with high effort\n╰\n> '
+    expect(readClaudeSessionOptionsFromTerminalScreen(screen)?.fastMode).toBe(false)
+  })
+
+  it('reports on when the banner carries the glyph', () => {
+    const screen = '╭ Claude Code v2.1.220\n│ Opus 4.8 ↯ · with high effort\n╰\n> '
+    expect(readClaudeSessionOptionsFromTerminalScreen(screen)?.fastMode).toBe(true)
   })
 })

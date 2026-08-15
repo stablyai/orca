@@ -9,7 +9,6 @@ import {
   clearNativeChatSessionModel,
   clearTrackedSessionOption,
   flattenNativeChatSessionOptionRecord,
-  isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
@@ -57,9 +56,6 @@ export function buildNativeChatSessionOptionCommand(args: {
   if (midSession?.kind === 'command') {
     return midSession.build(args.value)
   }
-  if (midSession?.kind === 'toggle-command') {
-    return midSession.command
-  }
   if (!args.apply.composedIntoModel || !args.modelId || !args.catalog.composeModelValue) {
     return null
   }
@@ -101,12 +97,14 @@ function recordCommandApply(args: {
   if (!midSession || midSession.kind === 'unsupported') {
     return false
   }
-  if (isFlipOnlyMidSession(midSession) && command === midSession.command) {
-    clearTrackedSessionOption(record, effectiveModelId, optionId)
-    return true
-  }
   if (isSessionOptionAgentPickerCommand(midSession, command)) {
-    clearNativeChatSessionModel(record)
+    // Why per-option: a picker only invalidates what it edits. Clearing the
+    // model for, say, a typed bare `/fast` would blank every model-scoped row.
+    if (optionId === 'model') {
+      clearNativeChatSessionModel(record)
+    } else {
+      clearTrackedSessionOption(record, effectiveModelId, optionId)
+    }
     return true
   }
   if (midSession.kind !== 'command') {

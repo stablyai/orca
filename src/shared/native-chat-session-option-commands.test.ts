@@ -51,7 +51,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
     ).toBe('/effort high')
   })
 
-  it('returns the bare toggle command for flip-only options', () => {
+  it('sets fast mode outright, since a bare /fast opens a confirmation panel', () => {
     const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
       .find((model) => model.id === 'opus')!
       .options.find((option) => option.id === 'fastMode')!.apply
@@ -65,7 +65,24 @@ describe('buildNativeChatSessionOptionCommand', () => {
         models: CLAUDE_SESSION_OPTION_CATALOG.models,
         record: claudeRecord('opus')
       })
-    ).toBe('/fast')
+    ).toBe('/fast on')
+  })
+
+  it('turns fast mode off with the same absolute form', () => {
+    const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
+      .find((model) => model.id === 'opus')!
+      .options.find((option) => option.id === 'fastMode')!.apply
+    expect(
+      buildNativeChatSessionOptionCommand({
+        optionId: 'fastMode',
+        value: false,
+        apply: fastModeApply,
+        modelId: 'opus',
+        catalog: CLAUDE_SESSION_OPTION_CATALOG,
+        models: CLAUDE_SESSION_OPTION_CATALOG.models,
+        record: claudeRecord('opus')
+      })
+    ).toBe('/fast off')
   })
 
   it('does not turn a Codex model pick into pasted slash-command prose', () => {

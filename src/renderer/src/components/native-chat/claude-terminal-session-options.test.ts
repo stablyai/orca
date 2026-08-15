@@ -248,7 +248,7 @@ describe('Claude terminal session option detection', () => {
         frame('Opus 4.8 with high effort · API Usage Billing'),
         DISCOVERED
       )
-    ).toEqual({ model: 'opus', effort: 'high' })
+    ).toEqual({ model: 'opus', effort: 'high', fastMode: false })
   })
 
   it('still reports a custom model when the host list cannot name it', () => {
@@ -268,7 +268,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      fastMode: false
     })
   })
 
@@ -280,7 +281,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      fastMode: false
     })
   })
 
@@ -316,7 +318,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'xhigh'
+      effort: 'xhigh',
+      fastMode: false
     })
   })
 

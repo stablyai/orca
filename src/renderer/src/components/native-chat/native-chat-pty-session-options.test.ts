@@ -242,7 +242,7 @@ describe('native chat PTY session options', () => {
     expect(onAgentPicker).not.toHaveBeenCalled()
   })
 
-  it('leaves flip-only unknown after a one-shot so the UI never invents on/off', async () => {
+  it('sets fast mode from an unknown baseline, with no Toggle action to fall back on', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high'
@@ -257,25 +257,24 @@ describe('native chat PTY session options', () => {
       persistSelection: persist
     })!
     const fastBefore = surface.getSnapshot().find(({ id }) => id === 'fastMode')
-    expect(fastBefore?.action?.type).toBe('toggle-command')
+    // Why: `/fast on|off` sets outright, so an unknown baseline is no obstacle —
+    // and a bare `/fast` would only open Claude's confirmation panel.
+    expect(fastBefore?.action).toBeUndefined()
     expect(fastBefore?.kind).toMatchObject({ type: 'boolean' })
-    expect(fastBefore?.kind).not.toHaveProperty('defaultValue')
 
-    await expect(surface.setOption('fastMode', true)).rejects.toThrow(
-      'Current value is unknown; use the Toggle action instead.'
-    )
-    expect(dispatch).not.toHaveBeenCalled()
-    const result = await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: a flip-only command never reports an absolute value.
+    const result = await surface.setOption('fastMode', true)
+    expect(dispatch).toHaveBeenCalledWith('/fast on')
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
+      valueSource: 'dispatched',
+      kind: { type: 'boolean', currentValue: true }
     })
-    expect(persist).not.toHaveBeenCalled()
+    // An absolute set is a durable preference, like effort.
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'opus', optionId: 'fastMode', value: true })
+    )
   })
 
-  it('no-ops a seeded toggle when already at the requested value', async () => {
+  it('re-sends a same-value set, since an absolute command cannot invert the agent', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high',
@@ -290,36 +289,10 @@ describe('native chat PTY session options', () => {
     })!
 
     const result = await surface.setOption('fastMode', true)
-    expect(dispatch).not.toHaveBeenCalled()
+    expect(dispatch).toHaveBeenCalledWith('/fast on')
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
+      valueSource: 'dispatched',
       kind: { type: 'boolean', currentValue: true }
-    })
-  })
-
-  it('no-ops a known toggle at the same absolute target (flip is not set-to-value)', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch
-    })!
-
-    await surface.setOption('fastMode', false)
-    dispatch.mockClear()
-    // Why: a second same-target set would re-send `/fast` and invert the agent
-    // if the first flip landed — unlike set-to-value commands, flips cannot retry.
-    const result = await surface.setOption('fastMode', false)
-    expect(dispatch).not.toHaveBeenCalled()
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: false }
     })
   })
 
@@ -337,17 +310,16 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch
     })!
 
-    await surface.setOption('fastMode', false)
     dispatch.mockClear()
     const result = await surface.setOption('fastMode', true)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
+    expect(dispatch).toHaveBeenCalledWith('/fast on')
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
+      valueSource: 'dispatched',
       kind: { type: 'boolean', currentValue: true }
     })
   })
 
-  it('tracks a known toggle flip as applied without persisting', async () => {
+  it('tracks an absolute fast-mode set as dispatched, and persists it', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high',
@@ -364,14 +336,17 @@ describe('native chat PTY session options', () => {
     })!
 
     const result = await surface.setOption('fastMode', false)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: flip-only never heals; applied is best-known absolute, not dispatched.
+    expect(dispatch).toHaveBeenCalledWith('/fast off')
+    // Why: the agent's own status line is the source of truth now, so a dispatch
+    // stays `dispatched` until the ↯ glyph confirms it.
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
+      valueSource: 'dispatched',
       kind: { type: 'boolean', currentValue: false }
     })
     expect(result.snapshot.find(({ id }) => id === 'fastMode')?.action).toBeUndefined()
-    expect(persist).not.toHaveBeenCalled()
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'opus', optionId: 'fastMode', value: false })
+    )
   })
 
   it('serializes concurrent setOption calls so later writes win in order', async () => {
@@ -382,7 +357,7 @@ describe('native chat PTY session options', () => {
     })
     let releaseFirst: (() => void) | undefined
     const dispatch = vi.fn((command: string) => {
-      if (command === '/fast') {
+      if (command === '/fast off') {
         return new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
@@ -411,66 +386,6 @@ describe('native chat PTY session options', () => {
     })
     expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
       kind: { currentValue: false }
-    })
-  })
-
-  it('stays unknown after a typed flip then a picker toggle (no invented absolute)', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high'
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch
-    })!
-
-    // Typed `/fast` clears any prior tracking; option stays unknown.
-    surface.recordOutgoingCommand('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
-    })
-
-    await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
-    })
-  })
-
-  it('does not re-assert absolute state when a typed flip clears tracking mid-dispatch', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    let resolveDispatch: (() => void) | undefined
-    const dispatch = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveDispatch = resolve
-        })
-    )
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch
-    })!
-
-    const pending = surface.setOption('fastMode', false)
-    await vi.waitFor(() => expect(dispatch).toHaveBeenCalled())
-    // Why: typed `/fast` during await must win — do not write the picker value after.
-    surface.recordOutgoingCommand('/fast')
-    resolveDispatch?.()
-    await pending
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
     })
   })
 

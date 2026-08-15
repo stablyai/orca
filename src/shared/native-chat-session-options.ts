@@ -44,7 +44,7 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Why: picker-only and toggle-only PTY commands cannot be represented as
    * a truthful radio/checkbox state, so the producer exposes an action row. */
-  action?: { type: 'agent-picker' | 'toggle-command' }
+  action?: { type: 'agent-picker' }
 }
 
 export type SessionOptionSetResult = {

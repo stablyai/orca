@@ -120,16 +120,6 @@ function DescriptorMenuRows(props: {
   openChoiceAction: (action: SessionOptionChoiceAction) => void
 }): React.JSX.Element {
   const { descriptor, pending, setValue, invokeAction, openChoiceAction } = props
-  // Why: flip-only without a baseline is an action — never claim On/Off.
-  if (descriptor.action?.type === 'toggle-command') {
-    return (
-      <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
-        {translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', {
-          value0: nativeChatSessionOptionLabel(descriptor).toLowerCase()
-        })}
-      </DropdownMenuItem>
-    )
-  }
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
     return (

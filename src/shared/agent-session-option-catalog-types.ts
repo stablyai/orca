@@ -17,7 +17,6 @@ export type CatalogMidSessionApply =
       pickerCommand?: string
       detectAgentInteraction?: CatalogAgentInteractionDetection
     }
-  | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
   /** Presses a key that cycles a session-scoped value by one step; the caller
    *  reads the resulting state and presses again until the target appears. */

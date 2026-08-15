@@ -230,6 +230,26 @@ function withoutTrailingBlankRows(lines: readonly string[]): readonly string[] {
   return lines.slice(0, end)
 }
 
+// Claude marks fast mode with this glyph; its absence on a confirmed Claude
+// screen means off. The panel title carries it too, so skip that row — we never
+// open the panel ourselves, but a user can.
+const FAST_MODE_GLYPH = '\u21AF'
+const FAST_MODE_PANEL_TITLE = 'fast mode (research preview)'
+
+function matchFastModeGlyph(lines: readonly string[]): boolean {
+  return lines.some(
+    (line) => line.includes(FAST_MODE_GLYPH) && !line.toLowerCase().includes(FAST_MODE_PANEL_TITLE)
+  )
+}
+
+/** Reads fast mode WITHOUT requiring Claude's banner. Affirmative only: absence
+ *  cannot mean off here, since we have no proof this screen is even Claude's. */
+export function readClaudeFastModeFromTerminalScreen(
+  screen: string | null | undefined
+): true | null {
+  return screen && matchFastModeGlyph(normalizedScreenLines(screen)) ? true : null
+}
+
 function matchPermissionModeIndicator(lines: readonly string[]): ClaudePermissionMode | null {
   const window = withoutTrailingBlankRows(lines).slice(-INDICATOR_WINDOW_SIZE)
   let mode: ClaudePermissionMode | null = null
@@ -284,6 +304,10 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   const effort = effortLabel ? EFFORT_ID_BY_LABEL[effortLabel.toLowerCase()] : undefined
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
+  }
+  // The banner proves this is Claude, so a missing glyph is a truthful `off`.
+  if (model.options.some((option) => option.id === 'fastMode')) {
+    result.fastMode = matchFastModeGlyph(lines)
   }
   return result
 }

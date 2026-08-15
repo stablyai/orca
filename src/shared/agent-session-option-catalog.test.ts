@@ -278,3 +278,29 @@ describe('claude permission mode', () => {
     })
   })
 })
+
+describe('claude fast mode', () => {
+  const fastMode = () =>
+    getAgentSessionOptionCatalog('claude')
+      ?.models.find((model) => model.id === 'opus')
+      ?.options.find((option) => option.id === 'fastMode')
+
+  // Why: a bare `/fast` opens a confirmation panel (Tab to toggle · Enter to
+  // confirm) that a dispatch leaves hanging and unapplied. The argument form
+  // sets the value outright.
+  it('sets the value outright rather than opening the confirmation panel', () => {
+    const midSession = fastMode()?.apply.midSession
+    expect(midSession?.kind).toBe('command')
+    if (midSession?.kind !== 'command') {
+      throw new Error('fast mode must dispatch a command')
+    }
+    expect(midSession.build(true)).toBe('/fast on')
+    expect(midSession.build(false)).toBe('/fast off')
+    expect(midSession.build(true)).not.toBe('/fast')
+  })
+
+  it('still recognizes a bare /fast as the panel that invalidates tracked state', () => {
+    const midSession = fastMode()?.apply.midSession
+    expect(midSession?.kind === 'command' && midSession.pickerCommand).toBe('/fast')
+  })
+})

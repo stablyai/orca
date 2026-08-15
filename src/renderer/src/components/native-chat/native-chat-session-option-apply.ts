@@ -14,7 +14,6 @@ import type {
 import { buildNativeChatSessionOptionCommand } from '../../../../shared/native-chat-session-option-commands'
 import {
   getTrackedSessionOption as getTrackedOption,
-  isFlipOnlyMidSession,
   type NativeChatSessionOptionRecord
 } from '../../../../shared/native-chat-session-option-state'
 import type {
@@ -211,20 +210,7 @@ async function applySetOption(
     return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
   }
 
-  const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
-  const trackedToggle = liveFlipOnly
-    ? getTrackedOption(ctx.getRecord(), previousModelId, id)
-    : undefined
-  if (liveFlipOnly && !trackedToggle) {
-    // Why: a flip from an unknown baseline cannot honor an absolute target.
-    throw new Error('Current value is unknown; use the Toggle action instead.')
-  }
-  // Why: same absolute target must never re-dispatch a flip (would invert the agent).
-  if (liveFlipOnly && trackedToggle?.value === value) {
-    return { snapshot: ctx.publish() }
-  }
-  // Why: flip-only never heals via agent report — track as applied best-known.
-  const source = liveFlipOnly || ctx.mode !== 'live' ? 'applied' : 'dispatched'
+  const source = ctx.mode !== 'live' ? 'applied' : 'dispatched'
 
   // Why: baseline for detecting a model switch, typed command, or agent report
   // that lands mid-dispatch, so the commit below never overwrites newer state.
@@ -260,20 +246,6 @@ async function applySetOption(
     }
   }
 
-  if (liveFlipOnly) {
-    // Why: typed flips, reports, or model changes during dispatch supersede the
-    // baseline this absolute target was computed from.
-    if (trackedModelId(record) !== trackedModelBeforeDispatch) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    // Why: never persist unconfirmed flip-only state into durable defaults.
-    ctx.setTrackedValue(id, value, source)
-    return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-  }
-
   if (ctx.mode === 'live' && id !== 'model') {
     // Why: a model switch, typed command, or agent report during dispatch supersedes
     // the baseline this commit was computed from — committing now would overwrite
@@ -300,25 +272,14 @@ async function applyInvokeAction(
   if (!resolved) {
     throw new Error(`Unknown session option: ${id}`)
   }
-  const { apply, modelId } = resolved
+  const { apply } = resolved
   if (apply.midSession?.kind === 'agent-picker') {
     if (ctx.mode !== 'live') {
       throw new Error('This option is only available after the session starts.')
     }
     return handleAgentPicker(ctx, apply.midSession)
   }
-  if (!isFlipOnlyMidSession(apply.midSession)) {
-    throw new Error('This option requires a value.')
-  }
-  if (ctx.mode !== 'live') {
-    throw new Error('This option is only available after the session starts.')
-  }
-  if (getTrackedOption(ctx.getRecord(), modelId, id)) {
-    throw new Error('This option has a known value; choose On or Off instead.')
-  }
-  // Why: an unknown baseline remains unknown after one inversion.
-  await ctx.dispatchCommand(apply.midSession.command)
-  return finish(ctx)
+  throw new Error('This option requires a value.')
 }
 
 export function createSessionOptionAppliers(ctx: SessionOptionApplyContext): {
