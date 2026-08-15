@@ -19,6 +19,7 @@ export type ViewportGuestHandle = {
   debuggerSendCommand: ReturnType<typeof vi.fn>
   debuggerIsAttached: ReturnType<typeof vi.fn>
   debuggerAttach: ReturnType<typeof vi.fn>
+  debuggerOn: ReturnType<typeof vi.fn>
   setGuestUserAgent: (ua: string) => void
   commitNavigationTo: (nextUrl: string) => void
 }
@@ -31,6 +32,7 @@ export function createViewportGuestFactory(
     const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
+    const debuggerOn = vi.fn()
     let currentUa = GUEST_ELECTRON_UA
     // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
     let committedUrl = url
@@ -53,7 +55,9 @@ export function createViewportGuestFactory(
       debugger: {
         isAttached: debuggerIsAttached,
         attach: debuggerAttach,
-        sendCommand: debuggerSendCommand
+        sendCommand: debuggerSendCommand,
+        on: debuggerOn,
+        off: vi.fn()
       }
     }
     return {
@@ -61,6 +65,7 @@ export function createViewportGuestFactory(
       debuggerSendCommand,
       debuggerIsAttached,
       debuggerAttach,
+      debuggerOn,
       setGuestUserAgent: (ua: string) => {
         currentUa = ua
       },

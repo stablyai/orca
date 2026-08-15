@@ -221,16 +221,16 @@ export class CdpWsProxy {
     }
     this.attached = true
 
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Inject before any page loads so challenges succeed.
-    try {
-      await this.webContents.debugger.sendCommand('Page.enable', {})
-      await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-        source: ANTI_DETECTION_SCRIPT
-      })
-    } catch {
-      /* best-effort — page domain may not be ready yet */
+    // Why: embedded webviews already install anti-detection in preload; duplicate main-world installation throws.
+    if (this.webContents.getType() !== 'webview') {
+      try {
+        await this.webContents.debugger.sendCommand('Page.enable', {})
+        await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+          source: ANTI_DETECTION_SCRIPT
+        })
+      } catch {
+        /* best-effort — page domain may not be ready yet */
+      }
     }
 
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {

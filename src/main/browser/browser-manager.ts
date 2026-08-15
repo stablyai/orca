@@ -289,8 +289,10 @@ export class BrowserManager {
     this.settingsResolver = resolver
   }
 
-  // Why: addScriptToEvaluateOnNewDocument (CDP) is the only reliable pre-page-script hook per nav; executeJavaScript ran on the old page context.
-  private injectAntiDetection(guest: Electron.WebContents): () => void {
+  private installDebuggerOverrideLifecycle(
+    guest: Electron.WebContents,
+    injectAntiDetection: boolean
+  ): () => void {
     let disposed = false
     let reattachTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -302,6 +304,10 @@ export class BrowserManager {
         if (!guest.debugger.isAttached()) {
           guest.debugger.attach('1.3')
         }
+        if (!injectAntiDetection) {
+          return
+        }
+        // Why: popup/offscreen contents lack the webview preload, so CDP is their pre-page-script hook.
         void guest.debugger
           .sendCommand('Page.enable', {})
           .then(() =>
@@ -315,7 +321,7 @@ export class BrowserManager {
       }
     }
 
-    // Why: proxy/bridge stop detaches the debugger and drops injections; re-attach (500ms delay to avoid racing a mid-restart) to keep overrides.
+    // Why: proxy/bridge stop detaches the debugger and drops both injections and viewport UA overrides.
     const onDetach = (): void => {
       if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
         reattachTimer = setTimeout(() => {
@@ -644,8 +650,11 @@ export class BrowserManager {
     }
     let clickedLinkRoutingActive = Boolean(clickedLinkFrameName)
 
-    // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
-    const disposeAntiDetection = this.injectAntiDetection(guest)
+    // Why: webview preload owns first-document anti-detection, but every guest still needs debugger reattach for viewport overrides.
+    const disposeDebuggerOverrides = this.installDebuggerOverrideLifecycle(
+      guest,
+      guest.getType() !== 'webview'
+    )
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const installClickedLinkRouting = (): void => {
@@ -913,7 +922,7 @@ export class BrowserManager {
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeAntiDetection()
+      disposeDebuggerOverrides()
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('did-create-window', handleDidCreateWindow)

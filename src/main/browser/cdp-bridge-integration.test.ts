@@ -352,6 +352,11 @@ describe('Browser automation pipeline (integration)', () => {
       name: 'More information...'
     })
     expect(activeGuest.debugger.attach).toHaveBeenCalledTimes(1)
+    expect(
+      activeGuest.debugger.sendCommand.mock.calls.some(
+        ([method]) => method === 'Page.addScriptToEvaluateOnNewDocument'
+      )
+    ).toBe(false)
   })
 
   it('preserves debugger listeners owned by other browser streams', async () => {

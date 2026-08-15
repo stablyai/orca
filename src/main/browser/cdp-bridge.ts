@@ -1157,10 +1157,12 @@ export class CdpBridge {
       flatten: true
     })
 
-    // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
-    await sender('Page.addScriptToEvaluateOnNewDocument', {
-      source: ANTI_DETECTION_SCRIPT
-    })
+    // Why: embedded webviews install this in their preload; a second main-world install throws on non-configurable webdriver.
+    if (guest.getType() !== 'webview') {
+      await sender('Page.addScriptToEvaluateOnNewDocument', {
+        source: ANTI_DETECTION_SCRIPT
+      })
+    }
 
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)

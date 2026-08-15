@@ -488,7 +488,7 @@ describe('browserManager', () => {
     ).toHaveLength(2)
   })
 
-  it('cancels pending anti-detection reattach timers when unregistering a guest', () => {
+  it('cancels pending anti-detection reattach timers when clearing non-webview policies', () => {
     vi.useFakeTimers()
 
     const debuggerHandlers = new Map<string, () => void>()
@@ -496,7 +496,7 @@ describe('browserManager', () => {
     const guest = {
       id: 809,
       isDestroyed: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
+      getType: vi.fn(() => 'window'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -517,22 +517,59 @@ describe('browserManager', () => {
         })
       }
     }
-    webContentsFromIdMock.mockReturnValue(guest)
-
     browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-reattach',
-      webContentsId: 809,
-      rendererWebContentsId
-    })
 
     debuggerHandlers.get('detach')?.()
     expect(vi.getTimerCount()).toBe(1)
 
-    browserManager.unregisterGuest('browser-reattach')
+    browserManager.unregisterAll()
     expect(vi.getTimerCount()).toBe(0)
 
     vi.advanceTimersByTime(500)
     expect(debuggerAttachMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the webview debugger attached without duplicating preload anti-detection', () => {
+    vi.useFakeTimers()
+
+    const debuggerHandlers = new Map<string, () => void>()
+    const debuggerAttachMock = vi.fn()
+    const debuggerSendCommandMock = vi.fn().mockResolvedValue(undefined)
+    const guest = {
+      id: 810,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com/'),
+      debugger: {
+        isAttached: vi.fn(() => false),
+        attach: debuggerAttachMock,
+        sendCommand: debuggerSendCommandMock,
+        on: vi.fn((eventName: string, handler: () => void) => {
+          debuggerHandlers.set(eventName, handler)
+        }),
+        off: vi.fn((eventName: string, handler: () => void) => {
+          if (debuggerHandlers.get(eventName) === handler) {
+            debuggerHandlers.delete(eventName)
+          }
+        })
+      }
+    }
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    expect(debuggerAttachMock).toHaveBeenCalledTimes(1)
+    expect(debuggerSendCommandMock).not.toHaveBeenCalled()
+
+    debuggerHandlers.get('detach')?.()
+    vi.advanceTimersByTime(500)
+
+    expect(debuggerAttachMock).toHaveBeenCalledTimes(2)
+    expect(debuggerSendCommandMock).not.toHaveBeenCalled()
+    browserManager.unregisterAll()
   })
 })

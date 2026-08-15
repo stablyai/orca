@@ -1,6 +1,8 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
+import { installBrowserAntiDetection as installCdpAntiDetection } from '../../shared/browser-anti-detection'
+import { installBrowserAntiDetection as installPreloadAntiDetection } from '../../preload/browser-anti-detection-installation'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 
@@ -74,6 +76,10 @@ function createContext(args: {
 }
 
 describe('ANTI_DETECTION_SCRIPT', () => {
+  it('keeps the standalone preload installer identical to the CDP installer', () => {
+    expect(installPreloadAntiDetection.toString()).toBe(installCdpAntiDetection.toString())
+  })
+
   it('does not expose Chrome globals under a Firefox identity', () => {
     const context = createContext({
       nativeNotificationPermission: 'denied',

@@ -180,7 +180,7 @@ describe('createMainWindow', () => {
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
       partition: 'persist:orca-browser',
-      preload: expect.stringMatching(/browser-window-close-preload\.js$/),
+      preload: expect.stringMatching(/browser-guest-preload\.js$/),
       sandbox: true
     })
 
@@ -210,7 +210,7 @@ describe('createMainWindow', () => {
       untrustedPreloadParams as never
     )
     expect(untrustedPreloadParams.preload).toBeUndefined()
-    expect(hardenedPrefs.preload).toMatch(/browser-window-close-preload\.js$/)
+    expect(hardenedPrefs.preload).toMatch(/browser-guest-preload\.js$/)
     expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
 
     const secondGuest = { marker: 'second-guest' }
