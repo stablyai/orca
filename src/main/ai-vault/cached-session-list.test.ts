@@ -82,14 +82,15 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     configureAiVaultSessionSources({
       getAdditionalKimiHomePaths: () => ['/managed/kimi/home']
     })
-    scanAiVaultSessions.mockResolvedValueOnce(scanResult('scan-A'))
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
 
     await listAiVaultSessions()
 
-    expect(scanAiVaultSessions).toHaveBeenCalledWith(
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
       expect.objectContaining({
         additionalKimiSessionsDirs: ['/managed/kimi/home/sessions']
-      })
+      }),
+      expect.any(AbortSignal)
     )
   })
 })
