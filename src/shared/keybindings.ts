@@ -31,6 +31,8 @@ export type KeybindingActionId =
   | 'worktree.palette'
   | 'worktree.navigateUp'
   | 'worktree.navigateDown'
+  | 'worktree.navigateActiveUp'
+  | 'worktree.navigateActiveDown'
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
@@ -254,6 +256,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+  },
+  {
+    id: 'worktree.navigateActiveUp',
+    title: 'Previous active worktree',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'previous', 'active', 'running'],
+    defaultBindings: platformBindings(['Mod+Alt+Shift+ArrowUp'])
+  },
+  {
+    id: 'worktree.navigateActiveDown',
+    title: 'Next active worktree',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'active', 'running'],
+    defaultBindings: platformBindings(['Mod+Alt+Shift+ArrowDown'])
   },
   {
     id: 'workspace.create',

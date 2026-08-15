@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { HostSectionRow } from './host-section-rows'
-import { getCyclableWorktreeIds, resolveCycledWorktreeId } from './worktree-keyboard-cycle'
+import {
+  getActiveCyclableWorktreeIds,
+  getCyclableWorktreeIds,
+  resolveCycledWorktreeId
+} from './worktree-keyboard-cycle'
 
 describe('resolveCycledWorktreeId', () => {
   const worktreeIds = ['a', 'b', 'c']
@@ -127,6 +131,27 @@ describe('getCyclableWorktreeIds', () => {
 
     expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['visible-after-host'])
   })
+
+  it('keeps only worktrees with a live terminal, browser, or agent', () => {
+    const rows: HostSectionRow[] = [
+      worktree('terminal'),
+      worktree('browser'),
+      worktree('agent'),
+      worktree('sleeping')
+    ]
+
+    expect(
+      getActiveCyclableWorktreeIds(rows, 'single-location', {
+        tabsByWorktree: {
+          terminal: [{ id: 'terminal-tab' }],
+          agent: [{ id: 'agent-tab' }]
+        },
+        ptyIdsByTabId: { 'terminal-tab': ['pty-1'] },
+        browserTabsByWorktree: { browser: [{ id: 'browser-tab' }] },
+        worktreeIdsWithLiveAgent: new Set(['agent'])
+      })
+    ).toEqual(['terminal', 'browser', 'agent'])
+  })
 })
 
 describe('WorktreeList keyboard cycling', () => {
@@ -145,6 +170,7 @@ describe('WorktreeList keyboard cycling', () => {
     // Why: a second buildRows call drifts from the rendered layout (host sections,
     // pinned placement); cycling must read the same rows the viewport renders.
     expect(navigateWorktree).toContain('getCyclableWorktreeIds(rows, pinnedDisplayPolicy)')
+    expect(navigateWorktree).toContain('getActiveCyclableWorktreeIds(rows, pinnedDisplayPolicy')
     expect(navigateWorktree).toContain('resolveCycledWorktreeId')
     expect(navigateWorktree).not.toContain('buildRows(')
   })
