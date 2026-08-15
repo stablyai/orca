@@ -2,6 +2,7 @@
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -9,6 +10,7 @@ import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
+import { translate } from '@/i18n/i18n'
 import {
   createTerminalImeDeferredNewlineSender,
   createTerminalImeModifiedEnterChordOwner,
@@ -676,9 +678,18 @@ export function useTerminalKeyboardShortcuts({
         e.stopImmediatePropagation()
         void copyTerminalSelection({
           terminal: pane.terminal,
-          writeClipboardText: window.api.ui.writeTerminalClipboardText
-        }).catch(() => {
-          /* ignore clipboard write failures */
+          writeClipboardText: window.api.ui.writeTerminalClipboardText,
+          clearSelectionOnSuccess: true
+        }).catch((error) => {
+          // Why surface: silent swallow hides copy failures from users (e.g.
+          // clipboard write rejection on Windows, verify mismatch under Wayland).
+          console.error('Terminal copy via keyboard shortcut failed:', error)
+          toast.error(
+            translate(
+              'auto.components.terminal.pane.copy.failed',
+              'Unable to copy terminal selection'
+            )
+          )
         })
         return
       }

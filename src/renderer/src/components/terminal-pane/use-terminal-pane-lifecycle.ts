@@ -1233,8 +1233,11 @@ export function useTerminalPaneLifecycle({
           void copyTerminalSelection({
             terminal: pane.terminal,
             writeClipboardText: window.api.ui.writeTerminalClipboardText
-          }).catch(() => {
-            /* ignore clipboard write failures */
+          }).catch((error) => {
+            // Why log: copy-on-select is automatic (not user-initiated), so a
+            // toast on every failure would be noisy. Log for diagnostics instead
+            // of silently swallowing — surface the real error to devtools.
+            console.error('Copy-on-select clipboard write failed:', error)
           })
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)

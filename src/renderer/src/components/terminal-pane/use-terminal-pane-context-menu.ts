@@ -171,7 +171,14 @@ export function useTerminalPaneContextMenu({
       // close, but xterm.js only accepts input when its own helper textarea is
       // focused. Without this, the user has to click the pane again before
       // typing works (see #592).
-      focus: () => pane.terminal.focus()
+      focus: () => pane.terminal.focus(),
+      onError: () =>
+        toast.error(
+          translate(
+            'auto.components.terminal.pane.use.terminal.pane.context.menu.copy.failed',
+            'Unable to copy terminal selection'
+          )
+        )
     })
   }
 

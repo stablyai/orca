@@ -22,6 +22,31 @@ describe('runTerminalCopy', () => {
     expect(focus).toHaveBeenCalledTimes(1)
   })
 
+  it('calls onError when provided and the clipboard write rejects', async () => {
+    const focus = vi.fn()
+    const onError = vi.fn()
+    const writeClipboardText = vi.fn().mockRejectedValue(REJECTION)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runTerminalCopy({ selection: 'terminal text', writeClipboardText, focus, onError })
+
+    expect(onError).toHaveBeenCalledWith(REJECTION)
+    expect(consoleError).not.toHaveBeenCalled()
+    expect(focus).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
+
+  it('logs to console.error when no onError is provided and the write rejects', async () => {
+    const focus = vi.fn()
+    const writeClipboardText = vi.fn().mockRejectedValue(REJECTION)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runTerminalCopy({ selection: 'terminal text', writeClipboardText, focus })
+
+    expect(consoleError).toHaveBeenCalledWith('Terminal copy failed:', REJECTION)
+    consoleError.mockRestore()
+  })
+
   it('refocuses the pane after a successful copy', async () => {
     const focus = vi.fn()
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
