@@ -126,9 +126,10 @@ function isIdentityRefreshDue(repo: Repo, now: number): boolean {
 function pruneRetryDeadlines(liveRepos: Repo[]): void {
   const liveKeys = new Set(liveRepos.map(getRepoLocationKey))
   for (const locationKey of probeRetryAfterByLocation.keys()) {
-    // Why: an in-flight probe re-adds its own key on settle, so skipping those
-    // keeps a probe that outlived one sweep from losing its backoff.
-    if (!liveKeys.has(locationKey) && !inFlightProbesByLocation.has(locationKey)) {
+    // A probe still running for a dropped repo needs no exemption: it re-adds its
+    // own deadline on settle, and only live repos are ever candidates, so nothing
+    // reads this entry in between.
+    if (!liveKeys.has(locationKey)) {
       probeRetryAfterByLocation.delete(locationKey)
     }
   }
@@ -138,8 +139,8 @@ function selectEnrichmentCandidates(store: RepoIdentityStore): Repo[] {
   const now = Date.now()
   const repos = store.getRepos().filter((repo) => repo.kind !== 'folder')
   // Why here: this is the one place that already enumerates every live repo, and
-  // `getRepos()` reads a fully-hydrated in-memory array, so a repo is never
-  // transiently absent mid-sweep and cannot lose its startup delay or backoff.
+  // `getRepos()` builds its list synchronously from in-memory state, so a repo is
+  // never transiently absent mid-sweep and cannot lose its startup delay or backoff.
   pruneRetryDeadlines(repos)
   // Why: the settled `null` marker stays a candidate on purpose — a repo that
   // gains a remote later must still resolve. Do not tighten this to
