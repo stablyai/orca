@@ -587,7 +587,8 @@ describe('client UI RPC methods', () => {
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
     ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
     ['pluginsAlphaNoticeDismissed', { pluginsAlphaNoticeDismissed: true }],
-    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
+    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }],
+    ['githubTaskPrimaryAction', { githubTaskPrimaryAction: 'open-in-browser' }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
