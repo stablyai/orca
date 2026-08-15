@@ -14,6 +14,8 @@ import {
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
+const CODEX_CONTEXT_COMPACTED_STATUS_TEXT = 'Context compacted'
+
 export function decodeCodexTranscriptLine(
   line: string,
   fallbackId: string
@@ -150,6 +152,15 @@ function codexCompletedTurnItem(
     return null
   }
   const id = extractString(item.id) ?? fallbackId
+  if (item.type === 'ContextCompaction') {
+    return {
+      id,
+      role: 'system',
+      blocks: [{ type: 'text', text: CODEX_CONTEXT_COMPACTED_STATUS_TEXT }],
+      timestamp,
+      source: 'transcript'
+    }
+  }
   const blocks = codexTurnItemBlocks(item.content)
   if (blocks.length === 0) {
     return null
