@@ -80,11 +80,12 @@ type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
  * on the auto-repeat instead would have to run before the two input sources separate, so this
  * waits for a trace showing a user holds a chord mid-preedit.
  */
-function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
+export function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
   // Field by field, and it must stay that way: a browser keeps KeyboardEvent's fields as
-  // prototype accessors, so `{ ...event }` is an empty object and the snapshot loses its
-  // `code`, which silently disables the whole recovery. happy-dom keeps them as own properties
-  // and would go on passing, so this is the only warning that survives in the source.
+  // prototype accessors, so `{ ...event }` is an empty object and the snapshot loses its `code`,
+  // which silently disables the whole recovery. happy-dom keeps them as own properties, so no
+  // test replaying real events can see that — which is why this function is exported and pinned
+  // directly against a prototype-only object.
   return {
     // The code, not `key`: a CJK source rewrites `key` to 'Process' (#12171, #13033) and every
     // consumer below matches on `key`. Safe because the caller has already checked this code is
@@ -581,18 +582,25 @@ export function useTerminalKeyboardShortcuts({
       // delivers no keyup — and an IME that commits without replaying would lose the chord
       // outright here. Elsewhere the paths below keep sending it once the composition commits,
       // which is late rather than never.
-      if (isMac && isImeOwnedKeyboardEvent(e) && isImeExemptTerminalChord(e)) {
-        // Not armed from a rename field or the search input: that field can unmount before the
-        // key comes up, and the release would then arrive with the terminal as its target and
-        // pass the guard below, sending a chord aimed at the field to the shell.
-        if (!isEditableTarget(e.target)) {
-          pendingImeChords.set(e.code, imeChordSnapshot(e))
-          // Claimed here rather than at the release, so no other window listener acts on a press
-          // this pane has already taken. Without it the same chord fires twice on a remap: once
-          // from a global handler on the press, once from here on the release.
-          e.preventDefault()
-          e.stopImmediatePropagation()
-        }
+      // Not armed from a rename field or the search input: that field can unmount before the key
+      // comes up, and the release would then arrive with the terminal as its target and pass the
+      // guard below, sending a chord aimed at the field to the shell.
+      const exemptChord =
+        isMac &&
+        isImeOwnedKeyboardEvent(e) &&
+        isImeExemptTerminalChord(e) &&
+        !isEditableTarget(e.target)
+          ? imeChordSnapshot(e)
+          : null
+      // Claimed on the press, so no other window listener acts on a chord this pane has already
+      // taken — otherwise a remap fires twice, once globally on the press and once here on the
+      // release. Only what the release will answer for, though: `Cmd+Alt+←` is exempt but resolves
+      // to nothing here, because the worktree history binding owns it, and claiming it would
+      // swallow a press this pane never answers.
+      if (exemptChord && answersSwallowedImeChord(exemptChord)) {
+        pendingImeChords.set(e.code, exemptChord)
+        e.preventDefault()
+        e.stopImmediatePropagation()
         return
       }
 
@@ -1087,6 +1095,12 @@ export function useTerminalKeyboardShortcuts({
       }
       // The composition ended while the key was down, so the IME took the chord as its cue to
       // commit rather than eating it, and the platform's unmarked replay is on its way.
+      //
+      // Generalising from the two recorded input sources: the replay is Chromium redispatching a
+      // key the IME did not consume, so an IME that consumed one is still composing here and is
+      // handled below. An input source that both ended its composition and consumed the key would
+      // fall through this branch and lose the chord — no recording shows one, and closing that
+      // would need a deadline on the replay, which is a second timer able to fire the chord twice.
       if (!isImeOwnedKeyboardEvent(e)) {
         return
       }
@@ -1117,12 +1131,26 @@ export function useTerminalKeyboardShortcuts({
         }
       }
       const action = resolveShortcutEvent(pressed)
-      // Both of these arm the native-only tracker from the press so the OS still sees the
-      // gesture; arming from a release would leave the tracker holding a key that is already up.
-      if (!action || action.type === 'switchInputSource' || action.type === 'selectAll') {
+      if (!action || !answersSwallowedImeChord(pressed)) {
         return
       }
       runShortcutAction(pressed, action, manager, true)
+    }
+
+    /**
+     * Whether the release path answers for this chord — read on the press too, so the pane claims
+     * exactly what it will answer for and nothing else.
+     *
+     * `switchInputSource` and `selectAll` are excluded because both arm the native-only tracker
+     * from a press so the OS still sees the gesture, which a release cannot do. Leaving them
+     * unclaimed keeps them on the keydown path, where they already work.
+     */
+    function answersSwallowedImeChord(chord: PendingImeChord): boolean {
+      if (matchFileSearchShortcut(chord, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
+        return true
+      }
+      const action = resolveShortcutEvent(chord)
+      return action !== null && action.type !== 'switchInputSource' && action.type !== 'selectAll'
     }
 
     const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {

@@ -4,7 +4,7 @@
 // Korean and Japanese traces through the real handler and xterm. Why the two input sources need
 // different answers is in `isImeExemptTerminalChord` (terminal-shortcut-policy.ts).
 import { describe, expect, it } from 'vitest'
-import { resolveTerminalKeyboardShortcutAction } from './keyboard-handlers'
+import { imeChordSnapshot, resolveTerminalKeyboardShortcutAction } from './keyboard-handlers'
 import { isImeExemptTerminalChord, type TerminalShortcutEvent } from './terminal-shortcut-policy'
 
 // `isComposing` alone decides ownership; `keyCode` is carried so each fixture reads as the
@@ -61,6 +61,36 @@ describe('terminal chords stay live during an IME composition', () => {
       type: 'sendInput',
       data: expected
     })
+  })
+
+  // Chromium keeps a KeyboardEvent's fields as accessors on the prototype, so a spread copies
+  // nothing and the remembered chord loses its `code` — every swallowed chord then goes silently
+  // undelivered. happy-dom keeps them as own properties, so replaying real events cannot see it.
+  // Modelling the browser's shape explicitly is the only form of that check which runs here.
+  it('copies fields that live only on the prototype, as a browser reports them', () => {
+    const fields = {
+      key: 'Process',
+      code: 'ArrowLeft',
+      metaKey: true,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false
+    }
+    const prototype = Object.create(
+      null,
+      Object.fromEntries(
+        Object.entries(fields).map(([name, value]) => [name, { get: () => value }])
+      )
+    ) as KeyboardEvent
+    const event = Object.create(prototype) as KeyboardEvent
+    // What a spread would have to work with.
+    expect(Object.keys(event)).toEqual([])
+
+    const chord = imeChordSnapshot(event)
+    expect(chord.code).toBe('ArrowLeft')
+    expect(chord.metaKey).toBe(true)
+    // The code, not the rewritten `key`.
+    expect(chord.key).toBe('ArrowLeft')
   })
 
   // The gate that decides whether a composing keydown is remembered for its release. Asserted

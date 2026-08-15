@@ -737,6 +737,47 @@ describe('constructed shapes the macOS captures do not contain', () => {
     rig.unmount()
   })
 
+  // Exempt by code and modifier, but the terminal policy resolves it to nothing: Cmd+Alt+Arrow is
+  // the worktree history binding, owned by a window handler that mounts after this pane. Claiming
+  // a press this pane never answers would kill that binding for the length of a composition.
+  it('leaves a press it will not answer for to the handlers behind it', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, beforeFirstChord)
+
+    const seenBehindUs: string[] = []
+    const later = (event: Event): void => {
+      seenBehindUs.push((event as KeyboardEvent).code)
+    }
+    window.addEventListener('keydown', later, { capture: true })
+    const press = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      metaKey: true,
+      altKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperties(press, { isComposing: { value: true }, keyCode: { value: 229 } })
+    rig.textarea.dispatchEvent(press)
+    await macrotask()
+    window.removeEventListener('keydown', later, { capture: true })
+
+    expect(seenBehindUs).toEqual(['ArrowLeft'])
+    expect(press.defaultPrevented).toBe(false)
+    // And nothing is left armed to fire on the release either.
+    await replay(rig.textarea, [
+      { t: 'keyup', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true }
+    ])
+    await commitComposition(rig.textarea, '日本語')
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
   // The pane takes the press when it remembers it, so a global handler bound to the same chord
   // must not also act on it — that fires the remapped action twice, once per phase.
   it('consumes the keydown it remembers', async () => {
