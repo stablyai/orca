@@ -1057,7 +1057,11 @@ function prepareCodexRuntimeHomeForLaunch(
     ) {
       throw new Error('agent_session_account_runtime_mismatch')
     }
-    if (explicitAccountRef.accountId === null && explicitAccountRef.runtime === 'host') {
+    if (
+      explicitAccountRef.accountId === null &&
+      explicitAccountRef.runtime === 'host' &&
+      codexRuntimeHome!.isExplicitHostSystemDefaultRealHomeSelected(launchEnv)
+    ) {
       // Why: establish the hook lane before account prep chooses real home vs
       // the shared mirror. An unusable lane must not fail the launch.
       ensureRealHomeCodexHookState({
@@ -1066,7 +1070,8 @@ function prepareCodexRuntimeHomeForLaunch(
       })
     }
     const runtimeHomePath = codexRuntimeHome!.prepareForCodexAccountLaunch(resolvedAccountRef, {
-      unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+      unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+      launchEnv
     })
     if (runtimeHomePath === null) {
       // Why: null is the real ~/.codex lane. Managed-home hook writes must not

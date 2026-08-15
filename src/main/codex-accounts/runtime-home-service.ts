@@ -271,7 +271,7 @@ export class CodexRuntimeHomeService {
   /** Resolves one launch without changing the user's global account selection. */
   prepareForCodexAccountLaunch(
     ref: ProviderAccountRef,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; launchEnv?: NodeJS.ProcessEnv }
   ): string | null {
     if (ref.provider !== 'codex') {
       throw new Error('agent_session_account_agent_mismatch')
@@ -292,10 +292,10 @@ export class CodexRuntimeHomeService {
         return home
       }
       // Why: explicit system default must not inherit an unverified CODEX_HOME
-      // when the real-home lane is unavailable (Windows / no probe / hook
-      // gate off). Do not use the globally selected managed account.
-      if (!this.canRouteHostSystemDefaultToRealHome()) {
-        this.invalidateBackfillAfterManagedSystemDefaultLaunch()
+      // when the real-home lane is unavailable (Windows / no probe / custom
+      // CODEX_HOME / hook gate off). Do not use the globally selected managed account.
+      if (!this.canRouteHostSystemDefaultToRealHome(options?.launchEnv)) {
+        this.invalidateBackfillAfterManagedSystemDefaultLaunch(options?.launchEnv)
         // Why: syncForCurrentSelection follows the globally selected managed
         // account and would leave that account's auth in the shared mirror.
         syncSystemCodexResourcesIntoManagedHome()
@@ -780,8 +780,15 @@ export class CodexRuntimeHomeService {
     return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
   }
 
-  private canRouteHostSystemDefaultToRealHome(): boolean {
-    return isShellStartupEnvProbeSupported() && this.realHomeLaneGate()
+  // Why: an explicit system-default launch ignores the global selection, but it
+  // must still leave the real home on every lane prepareForCodexLaunch excludes —
+  // a custom CODEX_HOME would otherwise run against a home Orca cannot hook.
+  isExplicitHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
+    return isShellStartupEnvProbeSupported() && !hasCustomCodexHomeOverrideForLaunch(launchEnv)
+  }
+
+  private canRouteHostSystemDefaultToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
+    return this.isExplicitHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {
