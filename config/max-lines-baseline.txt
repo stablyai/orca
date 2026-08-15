@@ -111,15 +111,10 @@ inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
 inline src/renderer/src/components/browser-pane/BrowserPane.tsx
-inline src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx
 inline src/renderer/src/components/editor/MarkdownPreview.tsx
-inline src/renderer/src/components/editor/MonacoEditor.tsx
-inline src/renderer/src/components/editor/editor-autosave-controller.ts
-inline src/renderer/src/components/editor/ipynb-parse.ts
-inline src/renderer/src/components/editor/useEditorPanelContentState.ts
 inline src/renderer/src/components/feature-wall/BrowserAnimatedVisual.tsx
 inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
 inline src/renderer/src/components/feature-wall/WorkbenchAnimatedVisual.tsx
@@ -160,7 +155,6 @@ inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useIpcEvents.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
-inline src/renderer/src/lib/file-type-icons.ts
 inline src/renderer/src/lib/pane-manager/pane-manager.ts
 inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
 inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
