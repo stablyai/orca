@@ -11,7 +11,7 @@ export function readActiveComposition(page: Page): Promise<string | null> {
     const composition = textarea?.parentElement?.querySelector<HTMLElement>(
       '.composition-view.active'
     )
-    return composition?.textContent?.replaceAll('‎', '') ?? null
+    return composition?.textContent?.replaceAll('\u200e', '') ?? null
   })
 }
 

@@ -737,6 +737,74 @@ describe('constructed shapes the macOS captures do not contain', () => {
     rig.unmount()
   })
 
+  // selectAll and switchInputSource arm the native-only tracker from a press so the OS still sees
+  // the gesture, which a release cannot do. So they are left unclaimed and keep running on the
+  // keydown — the action still happens, just not through the recovery.
+  it('runs a remapped selectAll on the press rather than answering from the release', async () => {
+    const rig = openRig({ keybindings: { 'terminal.selectAll': ['Mod+Backspace'] } })
+    const selectAll = vi.spyOn(rig.terminal, 'selectAll').mockImplementation(() => {})
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, [
+      ...beforeFirstChord,
+      { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
+      {
+        t: 'keydown',
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 229,
+        isComposing: true,
+        meta: true
+      },
+      { t: 'keyup', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true }
+    ])
+    await commitComposition(rig.textarea, '日本語')
+
+    // Once, from the keydown. A second call would mean the release answered for it too.
+    expect(selectAll).toHaveBeenCalledTimes(1)
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // One chord can carry both bindings. Reading the file-search match first would claim the press,
+  // and a release that then finds no selection falls through to selectAll — arming the tracker
+  // from a keyup, with no press left to spend it.
+  it('does not claim a chord that is both file search and selectAll', async () => {
+    const rig = openRig({
+      keybindings: {
+        'sidebar.search.toggle': ['Mod+Backspace'],
+        'terminal.selectAll': ['Mod+Backspace']
+      }
+    })
+    const selectAll = vi.spyOn(rig.terminal, 'selectAll').mockImplementation(() => {})
+    vi.spyOn(rig.terminal, 'getSelection').mockReturnValue('')
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, beforeFirstChord)
+
+    const press = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      code: 'Backspace',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperties(press, { isComposing: { value: true }, keyCode: { value: 229 } })
+    rig.textarea.dispatchEvent(press)
+    await macrotask()
+
+    // Already run, from the press. A claimed press would leave this at zero here and reach
+    // selectAll only from the keyup, which is the stale arm.
+    expect(selectAll).toHaveBeenCalledTimes(1)
+    rig.unmount()
+  })
+
   // Exempt by code and modifier, but the terminal policy resolves it to nothing: Cmd+Alt+Arrow is
   // the worktree history binding, owned by a window handler that mounts after this pane. Claiming
   // a press this pane never answers would kill that binding for the length of a composition.

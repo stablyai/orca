@@ -22,7 +22,7 @@ import {
   KEY,
   KOTOERI_ROMAJI_ID,
   KOTOERI_ROMAJI_PARENT_ID,
-  pressChord,
+  pressChordWithFoldedModifier,
   pressChordWithSeparateModifier,
   selectInputSource,
   TWO_SET_KOREAN_ID,
@@ -98,11 +98,11 @@ test.describe('macOS chord input pipeline probe @headful', () => {
 
     await installMainProcessInputProbe(electronApp)
     await installChordProbe(orcaPage)
-    pressChord(processId, KEY.left, 'command')
+    pressChordWithFoldedModifier(processId, KEY.left, 'command')
     await orcaPage.waitForTimeout(800)
-    pressChord(processId, KEY.left, 'option')
+    pressChordWithFoldedModifier(processId, KEY.left, 'option')
     await orcaPage.waitForTimeout(800)
-    pressChord(processId, KEY.left)
+    pressChordWithFoldedModifier(processId, KEY.left)
     await orcaPage.waitForTimeout(800)
 
     const mainRows = await readMainProcessInputProbe(electronApp)
@@ -143,10 +143,10 @@ test.describe('macOS chord input pipeline probe @headful', () => {
 
     await installMainProcessInputProbe(electronApp)
     await installChordProbe(orcaPage)
-    pressChord(processId, KEY.left, 'command')
+    pressChordWithFoldedModifier(processId, KEY.left, 'command')
     await orcaPage.waitForTimeout(1_500)
     // A bare arrow afterwards shows the window still routes keys here at all.
-    pressChord(processId, KEY.left)
+    pressChordWithFoldedModifier(processId, KEY.left)
     await orcaPage.waitForTimeout(800)
 
     const mainRows = await readMainProcessInputProbe(electronApp)
@@ -259,10 +259,10 @@ test.describe('macOS chord input pipeline probe @headful', () => {
       await orcaPage.waitForTimeout(1_200)
 
       // A live preedit eats the first Return; the second flushes the line.
-      pressChord(processId, KEY.returnKey)
+      pressChordWithFoldedModifier(processId, KEY.returnKey)
       let bytes = await waitForTerminalImeBytes(orcaPage, reader, 5_000).catch(() => [])
       if (bytes.length === 0) {
-        pressChord(processId, KEY.returnKey)
+        pressChordWithFoldedModifier(processId, KEY.returnKey)
         bytes = await waitForTerminalImeBytes(orcaPage, reader, 10_000).catch(() => [])
       }
       writeEvidence('kotoeri-command-release-pty.json', bytes)

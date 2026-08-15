@@ -1,11 +1,20 @@
 // Hand-run: needs a real macOS input source, so no workflow calls it. A red run here is a
 // local environment or an IME behaviour change, not necessarily a regression.
-import { execFileSync } from 'node:child_process'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { pressChordWithSeparateModifier } from './macos-input-source-driver'
+import {
+  ABC_ID,
+  bounceFocus,
+  enableInputSource,
+  KEY,
+  KOTOERI_ROMAJI_ID,
+  KOTOERI_ROMAJI_PARENT_ID,
+  pressChordAsTyped,
+  selectInputSource,
+  TWO_SET_KOREAN_ID,
+  typeKeyCodes
+} from './macos-input-source-driver'
 import {
   focusActiveTerminalInput,
   getTerminalContent,
@@ -42,88 +51,6 @@ import {
  * input source is read back, and a composition must actually form before any target key is
  * pressed, so a run where the IME never engaged is void rather than green.
  */
-
-const TWO_SET_KOREAN_ID = 'com.apple.inputmethod.Korean.2SetKorean'
-const KOTOERI_ROMAJI_ID = 'com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese'
-// Selecting a Kotoeri MODE fails with paramErr (-50) while its parent input method is disabled,
-// and the parent has a different InputSourceID, so select-input-source.swift's own
-// enable-everything-for-this-id pass cannot reach it. Enable the parent first.
-const KOTOERI_ROMAJI_PARENT_ID = 'com.apple.inputmethod.Kotoeri.RomajiTyping'
-const ABC_ID = 'com.apple.keylayout.ABC'
-const SELECT_INPUT_SOURCE = path.resolve(__dirname, 'select-input-source.swift')
-
-const KEY = {
-  left: 123,
-  right: 124,
-  return: 36,
-  backspace: 51
-} as const
-
-function selectInputSource(id: string): void {
-  execFileSync('swift', [SELECT_INPUT_SOURCE, id])
-}
-
-/** Enable (without selecting) every TIS entry whose InputSourceID matches `id`. */
-function enableInputSource(id: string): void {
-  const source = `
-import Carbon
-let properties = [kTISPropertyInputSourceID: ${JSON.stringify(id)} as CFString] as CFDictionary
-let sources = TISCreateInputSourceList(properties, true).takeRetainedValue() as! [TISInputSource]
-guard !sources.isEmpty else { exit(3) }
-for candidate in sources { TISEnableInputSource(candidate) }
-exit(0)
-`
-  execFileSync('swift', ['-'], { input: source })
-}
-
-function focusApp(processId: number): void {
-  execFileSync('osascript', [
-    '-e',
-    `tell application "System Events" to set frontmost of first application process whose unix id is ${processId} to true`,
-    '-e',
-    'delay 0.3'
-  ])
-}
-
-/** Bounce focus away and back so the app's input context re-reads the selected input source. */
-function bounceFocus(processId: number): void {
-  execFileSync('osascript', ['-e', 'tell application "Finder" to activate', '-e', 'delay 0.4'])
-  focusApp(processId)
-}
-
-/** Type key codes one at a time with a delay so the IME engages on every keystroke. */
-function typeKeyCodes(processId: number, keyCodes: readonly number[]): void {
-  focusApp(processId)
-  execFileSync('osascript', [
-    '-e',
-    'tell application "System Events"',
-    '-e',
-    `repeat with currentKeyCode in {${keyCodes.join(', ')}}`,
-    '-e',
-    'key code (currentKeyCode as integer)',
-    '-e',
-    'delay 0.12',
-    '-e',
-    'end repeat',
-    '-e',
-    'end tell'
-  ])
-}
-
-/**
- * The chord itself, pressed by the OS so the IME decides how to resolve it. A modifier goes as
- * its own key event rather than folded into the target key's flags, because macOS delivers no
- * keyup for a key released while Command is held: the modifier's release is the only end that
- * gesture has, and `using command down` never produces one.
- */
-function pressChord(processId: number, keyCode: number, modifier?: 'command' | 'option'): void {
-  if (modifier) {
-    pressChordWithSeparateModifier(processId, keyCode, modifier)
-    return
-  }
-  focusApp(processId)
-  execFileSync('osascript', ['-e', `tell application "System Events" to key code ${keyCode}`])
-}
 
 function readActiveComposition(page: Page): Promise<string | null> {
   // The macOS preedit lives in xterm's `.composition-view`, not in the helper textarea value;
@@ -174,11 +101,11 @@ async function flushLineToReader(
   processId: number,
   reader: TerminalImeByteReader
 ): Promise<string[]> {
-  pressChord(processId, KEY.return)
+  pressChordAsTyped(processId, KEY.returnKey)
   try {
     return await waitForTerminalImeBytes(page, reader, 5_000)
   } catch {
-    pressChord(processId, KEY.return)
+    pressChordAsTyped(processId, KEY.returnKey)
     return waitForTerminalImeBytes(page, reader, 10_000)
   }
 }
@@ -248,7 +175,7 @@ test.describe('Native macOS IME cursor chords during composition @headful', () =
         typeKeyCodes(processId, [5, 40])
         await expect.poll(() => readActiveComposition(orcaPage), { timeout: 10_000 }).toBe('하')
 
-        pressChord(processId, KEY.left, chord.modifier)
+        pressChordAsTyped(processId, KEY.left, chord.modifier)
         // Recorded: 2-Set Korean answers the chord with compositionend — the preedit must be
         // gone before any flush. A surviving preedit here would eat the Return below and turn
         // the byte assertion into a different scenario's evidence.
@@ -305,11 +232,13 @@ test.describe('Native macOS IME cursor chords during composition @headful', () =
           .toMatch(/[ぁ-ん]/)
       }
 
-      pressChord(processId, KEY.left, 'command')
+      pressChordAsTyped(processId, KEY.left, 'command')
       // Recorded: Kotoeri swallows the chord — no commit, no composition event. The preedit
       // surviving the press is the half of #12871 that held on main and must keep holding.
+      // Read once rather than polled: the wait above is the settle, so the preedit is either
+      // still there now or the chord committed it. Polling would let a late one pass.
       await orcaPage.waitForTimeout(700)
-      await expect.poll(() => readActiveComposition(orcaPage)).toMatch(/[ぁ-ん]/)
+      expect(await readActiveComposition(orcaPage)).toMatch(/[ぁ-ん]/)
 
       // The Return commits さ and macOS redispatches it unmarked, which also flushes the line.
       // Byte order pins the #12732 exemption end to end: the chord's \x01 was queued behind
@@ -347,8 +276,8 @@ test.describe('Native macOS IME cursor chords during composition @headful', () =
         .poll(() => getTerminalContent(orcaPage, 100_000), { timeout: 10_000 })
         .toContain('abc')
 
-      pressChord(processId, KEY.left, 'command')
-      pressChord(processId, KEY.left, 'option')
+      pressChordAsTyped(processId, KEY.left, 'command')
+      pressChordAsTyped(processId, KEY.left, 'option')
 
       // The genuine non-IME control per the composition rulebook: with no composition anywhere
       // the movement bytes flow immediately and alone, in press order.

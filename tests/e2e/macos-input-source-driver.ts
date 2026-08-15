@@ -80,7 +80,12 @@ export function pressChordWithSeparateModifier(
   execFileSync('swift', [POST_MODIFIER_CHORD, String(MODIFIER_KEY[modifier]), String(keyCode)])
 }
 
-export function pressChord(
+/**
+ * The modifier folded into the target key's flags, which is what `using <modifier> down` does.
+ * That produces no modifier press or release at all, so a recording taken through this cannot
+ * show where a gesture ends. Use `pressChordAsTyped` unless the folded shape is the point.
+ */
+export function pressChordWithFoldedModifier(
   processId: number,
   keyCode: number,
   modifier?: 'command' | 'option'
@@ -90,4 +95,22 @@ export function pressChord(
     '-e',
     `tell application "System Events" to key code ${keyCode}${modifier ? ` using ${modifier} down` : ''}`
   ])
+}
+
+/**
+ * The chord as a hand types it: the modifier as its own key event. macOS delivers no keyup for a
+ * key released while Command is held, so the modifier's release is that gesture's only end, and
+ * the folded form never produces one.
+ */
+export function pressChordAsTyped(
+  processId: number,
+  keyCode: number,
+  modifier?: 'command' | 'option'
+): void {
+  if (modifier) {
+    pressChordWithSeparateModifier(processId, keyCode, modifier)
+    return
+  }
+  focusApp(processId)
+  execFileSync('osascript', ['-e', `tell application "System Events" to key code ${keyCode}`])
 }

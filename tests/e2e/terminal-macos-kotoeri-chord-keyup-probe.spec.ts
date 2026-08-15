@@ -15,7 +15,7 @@ import {
   KEY,
   KOTOERI_ROMAJI_ID,
   KOTOERI_ROMAJI_PARENT_ID,
-  pressChord,
+  pressChordWithFoldedModifier,
   selectInputSource,
   TWO_SET_KOREAN_ID,
   typeKeyCodes
@@ -86,10 +86,10 @@ test.describe('Kotoeri chord keyup probe @headful', () => {
     }
 
     await installChordProbe(orcaPage)
-    pressChord(processId, KEY.left, 'command')
+    pressChordWithFoldedModifier(processId, KEY.left, 'command')
     await orcaPage.waitForTimeout(1_500)
     // A bare arrow afterwards shows whether the window still routes keys here at all.
-    pressChord(processId, KEY.left)
+    pressChordWithFoldedModifier(processId, KEY.left)
     await orcaPage.waitForTimeout(800)
 
     const rows = await readChordProbe(orcaPage)
@@ -123,11 +123,11 @@ test.describe('Kotoeri chord keyup probe @headful', () => {
     await focusActiveTerminalInput(orcaPage)
 
     await installChordProbe(orcaPage)
-    pressChord(processId, KEY.left, 'command')
+    pressChordWithFoldedModifier(processId, KEY.left, 'command')
     await orcaPage.waitForTimeout(800)
-    pressChord(processId, KEY.left, 'option')
+    pressChordWithFoldedModifier(processId, KEY.left, 'option')
     await orcaPage.waitForTimeout(800)
-    pressChord(processId, KEY.left)
+    pressChordWithFoldedModifier(processId, KEY.left)
     await orcaPage.waitForTimeout(800)
 
     const rows = await readChordProbe(orcaPage)
@@ -170,7 +170,7 @@ test.describe('Kotoeri chord keyup probe @headful', () => {
         .toMatch(/[\u3041-\u3093]/)
 
       await installChordProbe(orcaPage)
-      pressChord(processId, KEY.left, 'option')
+      pressChordWithFoldedModifier(processId, KEY.left, 'option')
       await orcaPage.waitForTimeout(1_200)
 
       const rows = await readChordProbe(orcaPage)
@@ -189,10 +189,10 @@ test.describe('Kotoeri chord keyup probe @headful', () => {
 
       // A live preedit eats the first Return; the second one flushes the line (same as the
       // contributor's flushLineToReader).
-      pressChord(processId, 36)
+      pressChordWithFoldedModifier(processId, 36)
       let bytes = await waitForTerminalImeBytes(orcaPage, reader, 5_000).catch(() => [])
       if (bytes.length === 0) {
-        pressChord(processId, 36)
+        pressChordWithFoldedModifier(processId, 36)
         bytes = await waitForTerminalImeBytes(orcaPage, reader, 10_000).catch(() => [])
       }
       console.log('KOTOERI_OPTION_PTY', JSON.stringify(bytes))

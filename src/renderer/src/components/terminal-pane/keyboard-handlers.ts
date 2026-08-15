@@ -1146,11 +1146,16 @@ export function useTerminalKeyboardShortcuts({
      * unclaimed keeps them on the keydown path, where they already work.
      */
     function answersSwallowedImeChord(chord: PendingImeChord): boolean {
-      if (matchFileSearchShortcut(chord, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
-        return true
-      }
       const action = resolveShortcutEvent(chord)
-      return action !== null && action.type !== 'switchInputSource' && action.type !== 'selectAll'
+      // Checked before the file-search match, not after: one chord can carry both, and a
+      // file-search release that finds no selection falls through to the action.
+      if (action?.type === 'switchInputSource' || action?.type === 'selectAll') {
+        return false
+      }
+      return (
+        action !== null ||
+        matchFileSearchShortcut(chord, shortcutPlatform, keybindings, terminalShortcutPolicy)
+      )
     }
 
     const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {
