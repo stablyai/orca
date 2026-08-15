@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import type { ManagedCliHomeAccountsState, ManagedCliHomeProvider } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
@@ -57,25 +57,40 @@ export function ManagedCliHomeAccountsControl({
   const [removeTarget, setRemoveTarget] = useState<
     ManagedCliHomeAccountsState['accounts'][number] | null
   >(null)
+  const loadGeneration = useRef(0)
 
   const load = useCallback(async () => {
+    const generation = loadGeneration.current
     try {
       const api = getApi(provider)
-      setState(await api.list())
+      const next = await api.list()
+      if (generation !== loadGeneration.current) {
+        return
+      }
+      setState(next)
       setError(null)
     } catch (loadError) {
+      if (generation !== loadGeneration.current) {
+        return
+      }
       setError(errorMessage(loadError))
     } finally {
-      setLoading(false)
+      if (generation === loadGeneration.current) {
+        setLoading(false)
+      }
     }
   }, [provider])
 
   useEffect(() => void load(), [load])
 
+  const busy = loading || action !== null
+
   const run = async (
     key: string,
     operation: () => Promise<ManagedCliHomeAccountsState>
   ): Promise<void> => {
+    loadGeneration.current += 1
+    setLoading(false)
     setAction(key)
     setError(null)
     try {
@@ -143,13 +158,13 @@ export function ManagedCliHomeAccountsControl({
               'auto.components.settings.ManagedCliHomeAccountsControl.placeholder',
               'Work or Personal'
             )}
-            disabled={action !== null}
+            disabled={busy}
           />
           <Button
             variant="outline"
             className="w-36"
             onClick={() => void importAccount()}
-            disabled={!label.trim() || action !== null}
+            disabled={!label.trim() || busy}
           >
             {action === 'import' ? <Loader2 className="animate-spin" /> : null}
             {translate(
@@ -185,7 +200,7 @@ export function ManagedCliHomeAccountsControl({
             <Button
               variant="outline"
               size="sm"
-              disabled={action !== null}
+              disabled={busy}
               onClick={() => void run('system', () => getApi(provider).select({ accountId: null }))}
             >
               {translate('auto.components.settings.ManagedCliHomeAccountsControl.use', 'Use')}
@@ -216,7 +231,7 @@ export function ManagedCliHomeAccountsControl({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={action !== null}
+                  disabled={busy}
                   onClick={() =>
                     void run(`select:${account.id}`, () =>
                       getApi(provider).select({ accountId: account.id })
@@ -234,7 +249,7 @@ export function ManagedCliHomeAccountsControl({
                   'Remove {{provider}} account',
                   { provider: displayName }
                 )}
-                disabled={action !== null}
+                disabled={busy}
                 onClick={() => setRemoveTarget(account)}
               >
                 <Trash2 />
@@ -266,6 +281,7 @@ export function ManagedCliHomeAccountsControl({
             </Button>
             <Button
               variant="destructive"
+              disabled={busy}
               onClick={() => {
                 const target = removeTarget
                 if (!target) {

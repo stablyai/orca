@@ -47,6 +47,36 @@ describe('ManagedCliHomeAccountsControl', () => {
     expect(document.body.textContent).not.toContain('managedHomePath')
   })
 
+  it('disables account actions until the initial list resolves', async () => {
+    let resolveList: ((value: { accounts: unknown[]; activeAccountId: string }) => void) | undefined
+    grokApi.list.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve
+        })
+    )
+
+    render(<ManagedCliHomeAccountsControl provider="grok" />)
+    fireEvent.change(screen.getByLabelText('Account label'), { target: { value: 'Personal' } })
+    expect(screen.getByRole('button', { name: 'Choose home…' })).toBeDisabled()
+
+    resolveList?.({
+      accounts: [
+        {
+          id: 'grok-a',
+          provider: 'grok',
+          label: 'Work',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeAccountId: 'grok-a'
+    })
+    expect(await screen.findByText('Work')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose home…' })).toBeEnabled()
+  })
+
   it('imports a labeled provider home through the main-owned picker', async () => {
     grokApi.import.mockResolvedValue({ accounts: [], activeAccountId: null })
     render(<ManagedCliHomeAccountsControl provider="gemini" />)

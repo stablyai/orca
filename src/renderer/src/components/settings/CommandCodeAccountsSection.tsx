@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import type { CommandCodeManagedAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
@@ -42,15 +42,26 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
   const [removeTarget, setRemoveTarget] = useState<
     CommandCodeManagedAccountsState['accounts'][number] | null
   >(null)
+  const loadGeneration = useRef(0)
 
   const load = useCallback(async (): Promise<void> => {
+    const generation = loadGeneration.current
     try {
-      setState(await window.api.commandCodeAccounts.list())
+      const next = await window.api.commandCodeAccounts.list()
+      if (generation !== loadGeneration.current) {
+        return
+      }
+      setState(next)
       setError(null)
     } catch (loadError) {
+      if (generation !== loadGeneration.current) {
+        return
+      }
       setError(errorMessage(loadError))
     } finally {
-      setLoading(false)
+      if (generation === loadGeneration.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -58,10 +69,14 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
     void load()
   }, [load])
 
+  const busy = loading || action !== null
+
   const run = async (
     key: string,
     operation: () => Promise<CommandCodeManagedAccountsState>
   ): Promise<void> => {
+    loadGeneration.current += 1
+    setLoading(false)
     setAction(key)
     setError(null)
     try {
@@ -138,7 +153,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
               maxLength={120}
               onChange={(event) => setLabel(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && label.trim() && action === null) {
+                if (event.key === 'Enter' && label.trim() && !busy) {
                   void importAccount()
                 }
               }}
@@ -146,13 +161,13 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
                 'auto.components.settings.CommandCodeAccountsSection.placeholder',
                 'Work or Personal'
               )}
-              disabled={action !== null}
+              disabled={busy}
             />
             <Button
               variant="outline"
               className="w-36"
               onClick={() => void importAccount()}
-              disabled={!label.trim() || action !== null}
+              disabled={!label.trim() || busy}
             >
               {action === 'import' ? <Loader2 className="animate-spin" /> : null}
               {action === 'import'
@@ -198,7 +213,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={action !== null}
+                disabled={busy}
                 onClick={() =>
                   void run('select:system', () =>
                     window.api.commandCodeAccounts.select({ accountId: null })
@@ -246,7 +261,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={action !== null}
+                      disabled={busy}
                       onClick={() =>
                         void run(`select:${account.id}`, () =>
                           window.api.commandCodeAccounts.select({ accountId: account.id })
@@ -264,7 +279,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
                       'auto.components.settings.CommandCodeAccountsSection.removeLabel',
                       'Remove Command Code account'
                     )}
-                    disabled={action !== null}
+                    disabled={busy}
                     onClick={() => setRemoveTarget(account)}
                   >
                     <Trash2 />
@@ -298,7 +313,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
             </Button>
             <Button
               variant="destructive"
-              disabled={action !== null}
+              disabled={busy}
               onClick={() => {
                 const target = removeTarget
                 if (!target) {

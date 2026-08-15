@@ -72,6 +72,26 @@ describe('CommandCodeAccountsSection', () => {
     expect(document.body.textContent).not.toContain('apiKey')
   })
 
+  it('disables account actions until the initial list resolves', async () => {
+    let resolveList:
+      | ((value: { accounts: typeof account[]; activeAccountId: string }) => void)
+      | undefined
+    mocks.list.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve
+        })
+    )
+
+    render(<CommandCodeAccountsSection />)
+    fireEvent.change(screen.getByLabelText('Account label'), { target: { value: 'Personal' } })
+    expect(screen.getByRole('button', { name: 'Choose home…' })).toBeDisabled()
+
+    resolveList?.({ accounts: [account], activeAccountId: account.id })
+    expect(await screen.findByText('Work')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose home…' })).toBeEnabled()
+  })
+
   it('imports an existing home with the required label', async () => {
     render(<CommandCodeAccountsSection />)
     await screen.findByText('Work')
