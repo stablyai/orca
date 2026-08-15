@@ -1,3 +1,5 @@
+import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
+
 const EDITOR_FONT_ZOOM_MIN = -6
 const EDITOR_FONT_ZOOM_MAX = 18
 const EDITOR_FONT_ZOOM_STEP = 1
@@ -26,4 +28,14 @@ export function computeEditorFontSize(baseFontSize: number, zoomLevel: number): 
 export function computeDiffEditorFontSize(baseFontSize: number, zoomLevel: number): number {
   // Dense diff gutters/decorations need smaller defaults than terminal text to fit app chrome.
   return computeEditorFontSize(baseFontSize - 0.5, zoomLevel)
+}
+
+/**
+ * Monaco `lineHeight` in px. Inherits terminal Line Height.
+ * Unset / invalid values keep the documented default of 1 (`MIN_TERMINAL_LINE_HEIGHT`).
+ * Why: omitting this option leaves Monaco on GOLDEN_LINE_HEIGHT_RATIO (1.5 on
+ * macOS), so the file view cannot match a terminal at Line Height 1.
+ */
+export function computeEditorLineHeight(fontSize: number, terminalLineHeight?: number): number {
+  return fontSize * normalizeTerminalLineHeight(terminalLineHeight)
 }

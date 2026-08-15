@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { monacoTypographyOptions } from '@/lib/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { computeEditorLineHeight } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -106,9 +107,21 @@ export default function MonacoEditor({
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
   const typography = useEditorTypography()
-  const typographyOptions = useMemo(() => monacoTypographyOptions(typography), [typography])
-  // Mirrors Monaco's automatic spacing closely enough to size before mount.
-  const autoHeightLineHeight = typography.lineHeight || Math.ceil(typography.fontSize * 1.45)
+  const typographyOptions = useMemo(() => {
+    const options = monacoTypographyOptions(typography)
+    // An explicit editor line height wins. Unset keeps the terminal Line Height,
+    // including its documented default of 1, instead of Monaco's golden ratio.
+    if (options.lineHeight !== 0) {
+      return options
+    }
+    return {
+      ...options,
+      lineHeight: computeEditorLineHeight(typography.fontSize, settings?.terminalLineHeight)
+    }
+  }, [typography, settings?.terminalLineHeight])
+  const autoHeightLineHeight =
+    typography.lineHeight ||
+    Math.ceil(computeEditorLineHeight(typography.fontSize, settings?.terminalLineHeight))
   const editorWordWrap = settings?.editorWordWrap
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
