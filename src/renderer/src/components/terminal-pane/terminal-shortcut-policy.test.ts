@@ -777,6 +777,23 @@ describe('kitty keyboard protocol panes', () => {
     })
   })
 
+  it('sends German Option+L @ as text in compose mode', () => {
+    expect(resolveKitty(event({ key: '@', code: 'KeyL', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '@'
+    })
+
+    // A designated Meta-side Option remains a shortcut, while the compose side types @.
+    expect(resolveKitty(event({ key: '@', code: 'KeyL', altKey: true }), 'left', 1)).toEqual({
+      type: 'sendInput',
+      data: '\x1b[108;3u'
+    })
+    expect(resolveKitty(event({ key: '@', code: 'KeyL', altKey: true }), 'left', 2)).toEqual({
+      type: 'sendInput',
+      data: '@'
+    })
+  })
+
   it('includes shift in the kitty modifier field', () => {
     expect(resolveKitty(event({ key: '∏', code: 'KeyP', altKey: true, shiftKey: true }))).toEqual({
       type: 'sendInput',

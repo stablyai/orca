@@ -296,8 +296,19 @@ export function resolveTerminalShortcutAction(
 
   // Why: macOptionIsMeta stays off so non-US layouts can compose @/€; match event.code since composition rewrites event.key.
   if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && macOptionAsAlt !== 'true') {
+    // Why: event.location reflects the char key, not the held modifier, so the caller supplies Option's tracked keydown location.
+    const isLeftOption = optionKeyLocation === 1
+    const isRightOption = optionKeyLocation === 2
+    const shouldActAsMeta =
+      (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
+
     // Why: kitty pane — encode the physical base key as CSI-u; the composed codepoint (alt+π) binds nothing, Dead keys exempt to keep composition.
     if (event.key !== 'Dead' && isKittyKeyboardActivePane?.()) {
+      // Why: Pi enables kitty mode, whose Alt encoding makes composed `@`
+      // non-textual. Compose-side Option must match native macOS terminals.
+      if (!shouldActAsMeta && event.key === '@') {
+        return { type: 'sendInput', data: event.key }
+      }
       const baseCharacter =
         (event.code ? layoutBaseCharacterForCode?.(event.code) : undefined) ??
         resolveUnshiftedCharacterForCode(event.code)
@@ -310,13 +321,6 @@ export function resolveTerminalShortcutAction(
     }
 
     if (!event.shiftKey) {
-      // Why: event.location reflects the char key, not the held modifier, so the caller supplies Option's tracked keydown location.
-      const isLeftOption = optionKeyLocation === 1
-      const isRightOption = optionKeyLocation === 2
-
-      const shouldActAsMeta =
-        (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
-
       if (shouldActAsMeta) {
         const character = resolveUnshiftedCharacterForCode(event.code)
         if (character) {
