@@ -23,12 +23,28 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is terminal, not a progress report. It settles the task
+  # and revokes your dispatch capability the moment it lands, so a mid-run
+  # update sent this way ends your run and makes every later worker_done and
+  # heartbeat fail. For an interim update use --type status below.
   orca orchestration send --from term_WORKER \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
     --task-id task_SNAP --dispatch-id ctx_SNAP --outcome succeeded \\
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
+
+  # Report mid-run progress without ending the task.
+  #
+  # RULE: status is the only content-bearing message that settles nothing, so
+  # every "phase one is done, starting phase two" update belongs here. Reach
+  # for it whenever you have something to say and the task is not finished;
+  # heartbeat carries no body, and worker_done would end the run.
+  orca orchestration send --from term_WORKER \\
+    --type status --subject "<short progress headline>" \\
+    --body "<what just finished, what you are starting next>" \\
+    --task-id task_SNAP --dispatch-id ctx_SNAP
 
   # BEHAVIOR RULE: send a heartbeat every 5 minutes
   # while actively working on the task. The coordinator uses this to

@@ -77,6 +77,31 @@ describe('buildDispatchPreamble', () => {
     }
   )
 
+  it('offers status as the content-bearing way to report mid-run progress', () => {
+    const result = buildDispatchPreamble(baseParams())
+    // Why: status is the only worker message that carries a body without
+    // settling anything. Without it in the preamble the sole content-bearing
+    // command a worker has been taught is worker_done, so a progress update
+    // becomes a completion and revokes the dispatch capability.
+    expect(result).toContain('--type status')
+    expect(result).toMatch(/--subject "<short progress headline>"/)
+    expect(result).toContain('--body "<what just finished, what you are starting next>"')
+    // Attribution matches the other lifecycle-adjacent commands so the
+    // coordinator can place the update on the right dispatch, not just the task.
+    expect(result).toMatch(/--type status[\s\S]*--task-id task_abc123 --dispatch-id ctx_def456/)
+    expect(result).toMatch(/orchestration send --from term_worker/)
+  })
+
+  it('warns that worker_done is terminal and revokes the dispatch capability', () => {
+    const result = buildDispatchPreamble(baseParams())
+    // Why: naming the consequence is what separates the two commands. A worker
+    // told only "send it exactly once" still reads worker_done as the reporting
+    // verb; a worker told it revokes the capability does not reach for it midway.
+    expect(result).toMatch(/worker_done is terminal, not a progress report/)
+    expect(result).toMatch(/revokes your dispatch capability/)
+    expect(result).toMatch(/use --type status/)
+  })
+
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('--type heartbeat')
@@ -123,7 +148,10 @@ describe('buildDispatchPreamble', () => {
       dispatchCapability: 'dcap_test_secret'
     })
 
-    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
+    // worker_done, status, heartbeat, ask, escalation. Only the first and the
+    // heartbeat are capability-gated at the runtime, but every worker-originated
+    // command carries the flag so one omission cannot become the odd one out.
+    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(5)
     expect(result).not.toContain('"dispatchCapability"')
   })
 
