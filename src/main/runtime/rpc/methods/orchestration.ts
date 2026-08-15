@@ -1455,7 +1455,6 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
           devMode: params.devMode,
           ...(params.to
             ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
@@ -1521,7 +1520,6 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         dispatchId: ctx.id,
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
-        workerHandle: to,
         dispatchCapability,
         devMode: params.devMode,
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
@@ -1569,7 +1567,6 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle,
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })

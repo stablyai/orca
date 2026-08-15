@@ -8,7 +8,6 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     dispatchId: 'ctx_def456',
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
-    workerHandle: 'term_worker',
     ...overrides
   }
 }
@@ -49,7 +48,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('replace it with --outcome failed')
     expect(result).toContain('--files-modified "path/a,path/b"')
     expect(result).toContain('--report-path "<optional: path to the full artifact>"')
-    expect(result).toMatch(/orchestration send --from term_worker/)
+    expect(result).not.toContain('--from')
     expect(result).not.toContain('orchestration send --to term_coord')
   })
 
@@ -88,12 +87,12 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--task-id task_abc123')
     expect(result).toContain('--dispatch-id ctx_def456')
     expect(result).toContain('--phase "<short: investigating|implementing|reviewing|waiting>"')
-    expect(result).toMatch(/orchestration send --from term_worker/)
+    expect(result).not.toContain('--from')
   })
 
   it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toMatch(/orchestration ask --from term_worker/)
+    expect(result).toMatch(/orchestration ask \\/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
@@ -107,12 +106,13 @@ describe('buildDispatchPreamble', () => {
     expect(occurrences).toBe(2)
   })
 
-  it('binds every injected worker command to the dispatched terminal', () => {
+  it('lets every injected worker command bind to the current pane identity', () => {
     const result = buildDispatchPreamble(baseParams())
 
-    expect(result).toMatch(/orchestration ask --from term_worker/)
-    expect(result).toMatch(/orchestration send --from term_worker \\\n    --type escalation/)
-    expect(result).toContain('orchestration check --terminal term_worker')
+    expect(result).not.toContain('--from')
+    expect(result).not.toContain('--terminal')
+    expect(result).toMatch(/orchestration send \\\n    --type escalation/)
+    expect(result).toContain('orchestration check')
   })
 
   it('carries the minted Dispatch capability on lifecycle and question commands', () => {
@@ -205,7 +205,6 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 7,
@@ -228,7 +227,6 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 0,
@@ -245,8 +243,7 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_x',
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c',
-      workerHandle: 'term_w'
+      coordinatorHandle: 'term_c'
     })
 
     expect(result).not.toContain('--- BASE DRIFT ---')
@@ -259,7 +256,6 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 3,
@@ -282,8 +278,7 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
-      coordinatorHandle: 'term_COORD',
-      workerHandle: 'term_WORKER'
+      coordinatorHandle: 'term_COORD'
     })
     expect(result).toMatchSnapshot()
   })

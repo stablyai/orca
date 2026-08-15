@@ -226,7 +226,6 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,
           coordinatorHandle: params.from,
-          workerHandle: terminalHandle,
           dispatchCapability: capability,
           devMode: params.devMode,
           cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
