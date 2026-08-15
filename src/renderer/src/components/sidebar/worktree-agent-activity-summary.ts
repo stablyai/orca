@@ -15,6 +15,8 @@ import {
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
+  /** Subset of hasLiveWorking: a fresh working entry whose turn is compacting. */
+  hasLiveCompacting: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -25,6 +27,7 @@ const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>>
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
+  hasLiveCompacting: false,
   hasLiveDone: false,
   hasRetainedDone: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
@@ -177,6 +180,7 @@ function summariesEqual(
   return (
     previous.hasPermission === next.hasPermission &&
     previous.hasLiveWorking === next.hasLiveWorking &&
+    previous.hasLiveCompacting === next.hasLiveCompacting &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
     agentStatusPaneIdsByTabIdEqual(
@@ -214,12 +218,15 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state'>
+  entry: Pick<AgentStatusEntry, 'state' | 'compacting'>
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
   } else if (entry.state === 'working') {
     summary.hasLiveWorking = true
+    if (entry.compacting === true) {
+      summary.hasLiveCompacting = true
+    }
   } else if (entry.state === 'done') {
     summary.hasLiveDone = true
   }

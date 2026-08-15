@@ -24,9 +24,12 @@ function buildWorktreeAgentFreshnessSignature(
     if (entry.state !== 'working' && entry.state !== 'blocked' && entry.state !== 'waiting') {
       continue
     }
+    // Why: the compacting flag rides a 'working' state without changing it, so
+    // it must be in the signature or the card won't repaint when a turn enters
+    // or leaves compaction.
     signature += `${entry.paneKey}\0${
       isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? '1' : '0'
-    }\0`
+    }\0${entry.compacting ? 'c' : ''}\0`
   }
   return signature
 }

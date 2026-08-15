@@ -238,6 +238,7 @@ describe('shared agent-hook-listener', () => {
     })
     expect(pre).not.toBeNull()
     expect(pre!.payload.state).toBe('working')
+    expect(pre!.payload.compacting).toBe(true)
     expect(pre!.payload.agentType).toBe('claude')
 
     const post = normalizeAndAccept(state, 'claude', {
@@ -248,7 +249,156 @@ describe('shared agent-hook-listener', () => {
     })
     expect(post).not.toBeNull()
     expect(post!.payload.state).toBe('done')
+    expect(post!.payload.compacting).toBeUndefined()
     expect(post!.payload.agentType).toBe('claude')
+  })
+
+  it('restores an in-progress turn to working on PostCompact after an auto-compact', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const pre = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'auto',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(pre?.payload.compacting).toBe(true)
+    const post = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostCompact',
+      trigger: 'auto',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(post?.payload.state).toBe('working')
+    expect(post?.payload.compacting).toBeUndefined()
+  })
+
+  it('restores to working on PostCompact when an auto-compact is the first event seen', () => {
+    const pre = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreCompact',
+          trigger: 'auto',
+          prompt_id: CLAUDE_PROMPT_ID,
+          session_id: 'session-a'
+        }
+      },
+      'production',
+      { allowUnanchoredPreCompact: true, allowUnanchoredPostCompact: true }
+    )
+    expect(pre?.payload.state).toBe('working')
+    expect(pre?.payload.compacting).toBe(true)
+    if (pre) {
+      state.lastStatusByPaneKey.set(PANE_KEY, pre)
+    }
+    const post = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostCompact',
+          trigger: 'auto',
+          prompt_id: CLAUDE_PROMPT_ID,
+          session_id: 'session-a'
+        }
+      },
+      'production',
+      { allowUnanchoredPreCompact: true, allowUnanchoredPostCompact: true }
+    )
+    expect(post?.payload.state).toBe('working')
+    expect(post?.payload.compacting).toBeUndefined()
+  })
+
+  it('restores to done on PostCompact when a manual compact is the first event seen', () => {
+    const pre = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreCompact',
+          trigger: 'manual',
+          prompt_id: CLAUDE_PROMPT_ID,
+          session_id: 'session-a'
+        }
+      },
+      'production',
+      { allowUnanchoredPreCompact: true, allowUnanchoredPostCompact: true }
+    )
+    expect(pre?.payload.compacting).toBe(true)
+    if (pre) {
+      state.lastStatusByPaneKey.set(PANE_KEY, pre)
+    }
+    const post = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostCompact',
+          trigger: 'manual',
+          prompt_id: CLAUDE_PROMPT_ID,
+          session_id: 'session-a'
+        }
+      },
+      'production',
+      { allowUnanchoredPreCompact: true, allowUnanchoredPostCompact: true }
+    )
+    expect(post?.payload.state).toBe('done')
+  })
+
+  it('keeps the compacting flag through a subagent event mid-compaction', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'auto',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const childRefresh = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SubagentStart',
+      agent_id: 'a1',
+      agent_type: 'general-purpose'
+    })
+    expect(childRefresh?.payload.state).toBe('working')
+    expect(childRefresh?.payload.compacting).toBe(true)
+  })
+
+  it('ignores a PostCompact that arrives when not compacting', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const post = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostCompact',
+          trigger: 'auto',
+          prompt_id: CLAUDE_PROMPT_ID,
+          session_id: 'session-a'
+        }
+      },
+      'production'
+    )
+    expect(post).toBeNull()
   })
 
   it('keeps the preceding user prompt on the completed compact row', () => {

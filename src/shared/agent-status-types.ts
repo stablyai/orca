@@ -135,6 +135,11 @@ export type AgentStatusEntry = {
   interrupted?: boolean
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
+  /** True while the agent is compacting/compressing its conversation (Claude's
+   *  PreCompact). Orthogonal garnish on a `working` state — the pane is still
+   *  busy, but the compaction phase gets its own label/glyph so a long compact
+   *  doesn't read as an ordinary tool run. Undefined on any non-working state. */
+  compacting?: boolean
   /** Orchestration dispatch context for panes spawned by another agent.
    *  Why: parent/child hierarchy is pane-level state, not worktree lineage — workers often share the coordinator's worktree. */
   orchestration?: AgentStatusOrchestrationContext
@@ -184,6 +189,8 @@ export type AgentStatusPayload = {
    *  completions (notifications, automation runs, unread badges, finished timestamps)
    *  must ignore it. Only meaningful on `done`. */
   sessionBoundary?: boolean
+  /** True while the reporting session is compacting. See AgentStatusEntry. */
+  compacting?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -217,6 +224,7 @@ export function pickParsedAgentStatusPayload(
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.compacting !== undefined ? { compacting: row.compacting } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
   }
 }
@@ -417,6 +425,9 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    // Why: compaction is a phase of a `working` turn; clamp to that state so a
+    // stale flag can't linger onto the next done/waiting transition.
+    compacting: obj.compacting === true && state === 'working' ? true : undefined,
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

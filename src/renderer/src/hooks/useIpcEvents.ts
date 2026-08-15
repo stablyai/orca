@@ -3185,6 +3185,9 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         sessionBoundary: data.sessionBoundary,
+        // Why: same field-whitelist trap — omitting compacting here would drop
+        // the "Compacting" phase flag on its way to the store.
+        compacting: data.compacting,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })

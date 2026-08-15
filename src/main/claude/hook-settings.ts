@@ -65,7 +65,19 @@ export const CLAUDE_EVENTS = [
   {
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  }
+  },
+  // Why: PreCompact fires when Claude compacts the conversation (auto or
+  // /compact). Compaction can run for minutes with no other hook, so without
+  // this the pane keeps whatever state it last reported — typically a Stop's
+  // 'done', which shows a misleading idle check while the agent is still busy.
+  // Older Claude builds ignore unregistered event names (StopFailure precedent).
+  { eventName: 'PreCompact', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: PostCompact is compaction's terminating signal — a manual /compact
+  // fires no Stop/SessionStart afterward, so without this an idle session that
+  // PreCompact flipped to 'working' would never return to green. Restores the
+  // pre-compaction state (see normalizeClaudeEvent). Coexists with any user
+  // PostCompact command; Orca only manages its own hook entry.
+  { eventName: 'PostCompact', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {

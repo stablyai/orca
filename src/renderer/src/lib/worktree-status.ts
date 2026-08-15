@@ -11,7 +11,16 @@ import type {
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
-export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
+export type WorktreeStatus =
+  | 'active'
+  | 'working'
+  // Why: a working sub-state — the worktree's live agent is compacting its
+  // conversation. Distinguished so the rollup dot reads "Compacting" instead of
+  // an ordinary spinner (see resolveWorktreeStatus).
+  | 'compacting'
+  | 'permission'
+  | 'done'
+  | 'inactive'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -23,6 +32,7 @@ type WorktreeStatusHeuristicOptions = {
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
   active: 'Active',
   working: 'Working',
+  compacting: 'Compacting',
   permission: 'Needs permission',
   done: 'Done',
   inactive: 'Inactive'
@@ -132,6 +142,10 @@ export function resolveWorktreeStatus(args: {
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
   hasPermission: boolean
   hasLiveWorking: boolean
+  /** Any fresh working entry in this worktree whose turn is compacting. Subset
+   *  of hasLiveWorking — surfaced so the dot can show the compacting variant.
+   *  Optional so existing call sites that don't track it default to no-compact. */
+  hasLiveCompacting?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
 }): WorktreeStatus {
@@ -155,7 +169,11 @@ export function resolveWorktreeStatus(args: {
   }
   // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
-    return 'working'
+    // Why: compaction is still "working", but when a live turn is compacting we
+    // surface the distinct dot. If a worktree mixes a plainly-working pane with
+    // a compacting one this still shows compacting — an acceptable simplification
+    // since both mean "busy" and single-agent worktrees are the common case.
+    return args.hasLiveCompacting ? 'compacting' : 'working'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'

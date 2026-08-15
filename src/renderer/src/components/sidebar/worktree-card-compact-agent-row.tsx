@@ -40,6 +40,11 @@ function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
+  // Why: during compaction the cached tool preview is stale; name the phase
+  // instead so the row explains why it is still busy.
+  if (agent.state === 'working' && agent.entry.compacting === true) {
+    return 'Compacting conversation'
+  }
   if (agent.state === 'working') {
     const toolName = agent.entry.toolName?.trim() ?? ''
     const toolInput = agent.entry.toolInput?.trim() ?? ''

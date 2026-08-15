@@ -16,6 +16,7 @@ function makeAgentStatusEntry(args: {
   worktreeId?: string
   parentPaneKey?: string
   restoredUnconfirmed?: true
+  compacting?: boolean
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -26,6 +27,7 @@ function makeAgentStatusEntry(args: {
     stateHistory: [],
     worktreeId: args.worktreeId,
     restoredUnconfirmed: args.restoredUnconfirmed,
+    compacting: args.compacting,
     orchestration: args.parentPaneKey
       ? {
           taskId: 'task-1',
@@ -89,6 +91,46 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasRetainedDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('flags hasLiveCompacting for a compacting working entry (subset of hasLiveWorking)', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const state: AgentActivityInput = {
+      tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working', compacting: true })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')).toMatchObject({
+      hasLiveWorking: true,
+      hasLiveCompacting: true
+    })
+  })
+
+  it('leaves hasLiveCompacting false for a plain working entry', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const state: AgentActivityInput = {
+      tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working' })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')).toMatchObject({
+      hasLiveWorking: true,
+      hasLiveCompacting: false
+    })
   })
 
   it('reuses the cached summary when same-state agent pings only clone the status map', () => {

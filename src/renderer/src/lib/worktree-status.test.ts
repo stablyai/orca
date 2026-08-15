@@ -254,6 +254,51 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
+  it('shows compacting when the live working turn is compacting', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveCompacting: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('compacting')
+  })
+
+  it('keeps plain working when nothing is compacting', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveCompacting: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
+  })
+
+  it('lets permission outrank a compacting turn', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: true,
+      hasLiveWorking: true,
+      hasLiveCompacting: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('permission')
+  })
+
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [working]' }],

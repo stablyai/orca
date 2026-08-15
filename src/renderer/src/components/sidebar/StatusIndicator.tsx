@@ -1,4 +1,5 @@
 import React from 'react'
+import { ChevronsRightLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -48,6 +49,24 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <AgentQuestionIcon className="size-3" />
+      </span>
+    )
+  }
+
+  if (status === 'compacting') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        {/* Why: a distinct collapse glyph (not the yellow spinner) so the rollup
+            dot reads as compaction; the pulse keeps the still-busy affordance.
+            Matches AgentStateDot's compacting glyph for a single visual vocabulary. */}
+        <ChevronsRightLeft
+          className="size-3 text-sky-500 animate-pulse motion-reduce:animate-none"
+          strokeWidth={2.75}
+        />
       </span>
     )
   }

@@ -2152,6 +2152,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,
+          // Why: compacting lives on `working` only (clamped in the normalizer)
+          // and clears on the next non-compacting event, so writing it through
+          // directly is enough — the sidebar promotes it to a "Compacting" glyph.
+          compacting: payload.compacting,
           // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a
           // metadata-less `done`; preserving the flag there keeps completion-reactive
           // consumers from treating the still-idle session as newly finished. Turn evidence
@@ -2193,6 +2197,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existing?.state === 'done' &&
           entry.state === 'done' &&
           agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+        // Why: compaction starts and ends without a wire-state change (working
+        // stays working), so treat the flag flip as sort-relevant — otherwise
+        // the epoch never bumps and the freshness-gated card keeps rendering a
+        // plain spinner instead of the "Compacting" phase.
+        const compactingChanged = (existing?.compacting ?? false) !== (entry.compacting ?? false)
         const sortRelevantChange =
           !existing ||
           existing.state !== payload.state ||
@@ -2200,7 +2209,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           attributionChanged ||
           commandCodeNewTurn ||
           sameStateStateStartedAtChanged ||
-          sameStateDoneAttentionChanged
+          sameStateDoneAttentionChanged ||
+          compactingChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&

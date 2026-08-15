@@ -161,7 +161,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
+  // Compacting is a working-phase garnish — only promote it after interrupt loses.
+  const isCompacting = isWorking && agent.entry.compacting === true
+  const dotState: AgentDotState = isInterrupted
+    ? 'interrupted'
+    : isCompacting
+      ? 'compacting'
+      : asDotState(agent.state)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.

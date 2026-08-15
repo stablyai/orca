@@ -13,6 +13,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'blocked',
   'interrupted',
   'working',
+  'compacting',
   'done',
   'idle'
 ]
@@ -30,7 +31,15 @@ function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
 }
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  return agent.entry.interrupted === true ? 'interrupted' : asDotState(agent.state)
+  if (agent.entry.interrupted === true) {
+    return 'interrupted'
+  }
+  // Why: only while the row is genuinely working — a decayed/stale row reports
+  // 'idle' via agent.state, and a compacting flag must not resurrect it.
+  if (agent.state === 'working' && agent.entry.compacting === true) {
+    return 'compacting'
+  }
+  return asDotState(agent.state)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -45,6 +54,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'failed'
     case 'working':
       return 'working'
+    case 'compacting':
+      return 'compacting'
     case 'done':
       return 'done'
     case 'idle':

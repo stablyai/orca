@@ -55,6 +55,20 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('text-emerald-500')
   })
 
+  it('renders compacting as a pulsing sky collapse glyph, distinct from working and done', () => {
+    const markup = renderMarkup('compacting')
+
+    // Why: compaction is a live phase of a working turn, so it must not reuse
+    // the yellow working spinner or the emerald done check — its own glyph is
+    // the whole point of surfacing the phase.
+    expect(markup).toContain('lucide-chevrons-right-left')
+    expect(markup).toContain('text-sky-500')
+    expect(markup).toContain('animate-pulse')
+    expect(markup).toContain('motion-reduce:animate-none')
+    expect(markup).not.toContain('border-yellow-500')
+    expect(markup).not.toContain('lucide-circle-check')
+  })
+
   it.each(['permission', 'waiting'] satisfies AgentDotState[])(
     'renders %s as the shared question glyph',
     (state) => {

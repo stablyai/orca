@@ -158,6 +158,14 @@ export type ClaudeLeadTurnState = {
   waitingToolUseId?: string
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  /** True while PreCompact has fired but PostCompact has not. Drives the
+   *  distinct "compacting" presentation on top of the 'working' state. */
+  compacting?: true
+  /** The lead state that existed before compaction started, restored on
+   *  PostCompact. Auto-compact happens mid-turn (restore 'working'); a manual
+   *  /compact on an idle session restores 'done' so it returns to green rather
+   *  than stranding a spinner (manual /compact has no other terminating hook). */
+  stateBeforeCompact?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 }
 
 type CodexLeadTurnState = {
@@ -2802,7 +2810,76 @@ function buildClaudeCachedLeadStatusPayload(
       interrupted: lead?.interrupted
     }),
     updateToolSnapshot: false,
-    interrupted: lead?.interrupted
+    interrupted: lead?.interrupted,
+    // Why: a subagent lifecycle/tool event during the lead's compaction must not
+    // drop the compacting flag — otherwise the badge flickers off mid-compaction
+    // until PostCompact restores it.
+    compacting: lead?.compacting
+  })
+}
+
+function normalizeClaudePreCompactEvent(
+  state: HookListenerState,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  // Why: stash the state that existed before compaction so PostCompact can
+  // restore it. A second PreCompact (Claude can fire more than one) must keep
+  // the ORIGINAL pre-compaction state, not the interim 'working' this sets.
+  // With no prior lead state (Orca restarted mid-session, or PreCompact is the
+  // first event we see), fall back on the trigger: an auto-compact interrupted
+  // a live turn (restore 'working'), a manual/unknown one is a resting session
+  // (restore 'done').
+  const stateBeforeCompact = lead?.compacting
+    ? lead.stateBeforeCompact
+    : lead
+      ? { state: lead.state, ...(lead.interrupted ? { interrupted: true as const } : {}) }
+      : {
+          state:
+            readString(hookPayload, 'trigger') === 'auto' ? ('working' as const) : ('done' as const)
+        }
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: 'working',
+    compacting: true,
+    ...(stateBeforeCompact ? { stateBeforeCompact } : {})
+  })
+  // Why: compaction is not tool activity — don't reset the tool/prompt snapshot.
+  return buildClaudeStatusPayload(state, 'PreCompact', '', paneKey, hookPayload, {
+    stateName: 'working',
+    updateToolSnapshot: false,
+    compacting: true
+  })
+}
+
+function normalizeClaudePostCompactEvent(
+  state: HookListenerState,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  // Why: only act while mid-compaction. A stray PostCompact (or one arriving
+  // after the turn already resumed and cleared the flag) must not clobber the
+  // live state.
+  if (!lead?.compacting) {
+    return null
+  }
+  // Why: a manual /compact is a user-terminated turn (#11352) — always restore
+  // 'done' so the spinner cannot stick. Auto-compact interrupted a live turn
+  // and must resume the stashed pre-compaction state (usually 'working').
+  const trigger = readString(hookPayload, 'trigger')
+  const restored =
+    trigger === 'manual'
+      ? { state: 'done' as const }
+      : (lead.stateBeforeCompact ?? { state: 'done' as const })
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: restored.state,
+    ...(restored.interrupted ? { interrupted: true as const } : {})
+  })
+  return buildClaudeStatusPayload(state, 'PostCompact', '', paneKey, hookPayload, {
+    stateName: restored.state,
+    updateToolSnapshot: false,
+    interrupted: restored.interrupted
   })
 }
 
@@ -2868,6 +2945,16 @@ function normalizeClaudeEvent(
     return null
   }
 
+  // Why: compaction is its own two-event lifecycle (PreCompact → PostCompact),
+  // handled apart from the turn-state flow so it can stash and restore the
+  // pre-compaction state rather than being force-mapped to working/done.
+  if (eventName === 'PreCompact') {
+    return normalizeClaudePreCompactEvent(state, paneKey, hookPayload)
+  }
+  if (eventName === 'PostCompact') {
+    return normalizeClaudePostCompactEvent(state, paneKey, hookPayload)
+  }
+
   // Why: Claude normally emits PreToolUse while AskUserQuestion is blocked; newer builds can also report it as PermissionRequest.
   // Treat the PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const eventToolName = readString(hookPayload, 'tool_name')
@@ -2875,19 +2962,15 @@ function normalizeClaudeEvent(
     (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
     isAskUserQuestionTool(eventToolName)
   const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
-  // Why: /compact can take minutes and does not emit Stop. PreCompact marks the pane busy;
-  // PostCompact clears it so a finished compact cannot leave a sticky working spinner (#11352).
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
-    eventName === 'PreCompact' ||
-    (eventName === 'PostCompact' && hookPayload.trigger === 'auto') ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
-        : isTurnBoundary || (eventName === 'PostCompact' && hookPayload.trigger === 'manual')
+        : isTurnBoundary
           ? 'done'
           : null
 
@@ -3054,6 +3137,7 @@ function buildClaudeStatusPayload(
     updateToolSnapshot: boolean
     interrupted?: boolean
     sessionBoundary?: boolean
+    compacting?: boolean
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -3078,6 +3162,7 @@ function buildClaudeStatusPayload(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
+    compacting: options.compacting,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
 }
