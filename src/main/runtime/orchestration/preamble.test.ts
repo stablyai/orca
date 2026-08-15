@@ -162,10 +162,24 @@ describe('buildDispatchPreamble', () => {
       dispatchCapability: 'dcap_test_secret'
     })
 
-    // worker_done, status, heartbeat, ask, escalation. The runtime verifies the
-    // capability for worker_done and heartbeat on the send path and for ask on
-    // its own; status and escalation are not verified. Every worker-originated
-    // command still carries the flag so one omission cannot become the odd one out.
+    // Why per command, not a count: a bare total passes when one command loses
+    // the flag and another gains it twice, which is exactly the shape a bad edit
+    // takes. The runtime verifies the capability for worker_done and heartbeat
+    // on the send path and for ask on its own; status and escalation are not
+    // verified, but every worker-originated command carries it so one omission
+    // cannot become the odd one out. `[^#]*` keeps each match inside its block.
+    const sendCarriesCapability = (type: string) =>
+      new RegExp(
+        `orchestration send --from term_worker --dispatch-capability dcap_test_secret[^#]*--type ${type}\\b`
+      )
+
+    for (const type of ['worker_done', 'status', 'heartbeat', 'escalation']) {
+      expect(result).toMatch(sendCarriesCapability(type))
+    }
+    expect(result).toMatch(
+      /orchestration ask --from term_worker --dispatch-capability dcap_test_secret[^#]*--question/
+    )
+    // Total guard so a sixth carrier cannot appear unasserted.
     expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(5)
     expect(result).not.toContain('"dispatchCapability"')
   })
