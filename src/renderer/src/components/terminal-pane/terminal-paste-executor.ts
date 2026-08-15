@@ -62,7 +62,10 @@ async function executeTerminalPastePlanNow(
   if (plan.mode !== 'chunked') {
     const pasteResult = await runTerminalPasteOperationWithTimeout(() => {
       return pasteText(plan.payload.plainText, {
-        forceBracketedPaste: plan.mode === 'bracketed-terminal'
+        forceBracketedPaste: plan.mode === 'bracketed-terminal',
+        ...(plan.windowsInputRecordNewline
+          ? { windowsInputRecordNewline: plan.windowsInputRecordNewline }
+          : {})
       })
     }, operationTimeoutMs)
     if (pasteResult.timedOut) {

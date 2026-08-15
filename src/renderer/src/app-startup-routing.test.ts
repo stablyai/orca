@@ -2,9 +2,25 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+function readSource(relativePath: string): string {
+  return readFileSync(join(process.cwd(), relativePath), 'utf8')
+}
+
+const APP_PATH = 'src/renderer/src/App.tsx'
+const STARTUP_HYDRATION_PATH = 'src/renderer/src/app-shell/use-app-startup-hydration.ts'
+const DEGRADED_RECOVERY_PATH = 'src/renderer/src/startup/startup-degraded-recovery.ts'
+const CHROME_LAYOUT_PATH = 'src/renderer/src/app-shell/use-app-chrome-layout.ts'
+const SHELL_SERVICES_PATH = 'src/renderer/src/app-shell/use-app-shell-services.ts'
+const BACKGROUND_SERVICES_PATH = 'src/renderer/src/app-shell/AppBackgroundServices.tsx'
+const WORKSPACE_SHELL_PATH = 'src/renderer/src/app-shell/AppWorkspaceShell.tsx'
+const ROOT_SURFACES_PATH = 'src/renderer/src/app-shell/AppRootSurfaces.tsx'
+const LAZY_MODAL_MOUNTS_PATH = 'src/renderer/src/app-shell/use-lazy-modal-mounts.ts'
+const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-persistence.ts'
+const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
+
 describe('renderer startup runtime routing', () => {
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(STARTUP_HYDRATION_PATH)
     const startupBlockStart = source.indexOf('void (async () => {')
     // Why: concurrent startup branches all settle before hydrate-session-stores.
     const startupBlockEnd = source.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
@@ -14,7 +30,9 @@ describe('renderer startup runtime routing', () => {
       const relativeIndex = startupBlock.indexOf(needle)
       return relativeIndex === -1 ? -1 : startupBlockStart + relativeIndex
     }
-    const settingsIndex = indexInStartupBlock('actions.fetchSettings()')
+    const settingsIndex = indexInStartupBlock(
+      'actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })'
+    )
     const uiGetIndex = indexInStartupBlock("timeRendererStartupStep('ui-get'")
     const hydrateUiIndex = indexInStartupBlock("timeRendererStartupSyncStep('hydrate-persisted-ui'")
     const localReposIndex = indexInStartupBlock(
@@ -80,6 +98,14 @@ describe('renderer startup runtime routing', () => {
     expect(fullWorktreesIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
     )
+    const ownerDefaultsIndex = source.indexOf(
+      'actions.awaitOwnerWorktreeVisibilityDefaultsHydration()'
+    )
+    const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
+    expect(ownerDefaultsIndex).toBeGreaterThan(
+      source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
+    )
+    expect(ownerDefaultsIndex).toBeLessThan(remoteCatalogIndex)
     // Why: the deferred full scan must be followed by a re-prune so deleted-worktree visit
     // timestamps for non-session repos are dropped once every repo is authoritative.
     expect(
@@ -99,7 +125,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(STARTUP_HYDRATION_PATH)
     const hydrationDoneIndex = source.indexOf(
       "logRendererStartupDiagnostic('startup-hydration-done'"
     )
@@ -122,12 +148,13 @@ describe('renderer startup runtime routing', () => {
       'actions.fetchReposForAllHosts()'
     )
 
-    const startupFailureIndex = source.indexOf(
+    const degradedSource = readSource(DEGRADED_RECOVERY_PATH)
+    const startupFailureIndex = degradedSource.indexOf(
       '[startup] Workspace session hydration failed; leaving disk state untouched:'
     )
     expect(startupFailureIndex).toBeGreaterThanOrEqual(0)
     expect(
-      source.indexOf('startupWorktreeRefreshCompleted: true', startupFailureIndex)
+      degradedSource.indexOf('startupWorktreeRefreshCompleted: true', startupFailureIndex)
     ).toBeGreaterThan(startupFailureIndex)
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchProjectGroupsForAllHosts()'
@@ -138,23 +165,17 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const servicesIndex = source.indexOf('await window.api.app.awaitFirstWindowStartupServices()')
+    const source = readSource(STARTUP_HYDRATION_PATH)
+    const servicesIndex = source.indexOf("timeRendererStartupStep('first-window-services-await'")
     const preReconnectRecoveryIndex = source.indexOf(
-      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
-      servicesIndex
+      "timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect'"
     )
     const capabilityRefreshIndex = source.indexOf(
-      'refreshTerminalProviderSnapshotCapabilities(',
-      preReconnectRecoveryIndex
+      "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
     )
-    const reconnectIndex = source.indexOf(
-      'actions.reconnectPersistedTerminals(abortController.signal)',
-      preReconnectRecoveryIndex
-    )
+    const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
     const postReconnectRecoveryIndex = source.indexOf(
-      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
-      reconnectIndex
+      "timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect'"
     )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
@@ -165,7 +186,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('refreshes terminal snapshot capability before degraded reconnect', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(DEGRADED_RECOVERY_PATH)
     const degradedStart = source.indexOf(
       '[startup] Workspace session hydration failed; leaving disk state untouched:'
     )
@@ -181,10 +202,7 @@ describe('renderer startup runtime routing', () => {
       'refreshTerminalProviderSnapshotCapabilities(',
       recoveryIndex
     )
-    const reconnectIndex = source.indexOf(
-      'actions.reconnectPersistedTerminals(abortController.signal)',
-      recoveryIndex
-    )
+    const reconnectIndex = source.indexOf('reconnectPersistedTerminals(abortSignal)', recoveryIndex)
 
     expect(degradedStart).toBeGreaterThanOrEqual(0)
     expect(servicesIndex).toBeGreaterThan(degradedStart)
@@ -194,10 +212,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/automations/AutomationsPage.tsx'),
-      'utf8'
-    )
+    const source = readSource('src/renderer/src/components/automations/AutomationsPage.tsx')
     const fullRefreshStart = source.indexOf('const mountedBeforeStartupWorktreeRefreshRef')
     const fullRefreshEffect = source.slice(
       fullRefreshStart,
@@ -210,24 +225,29 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import the floating terminal panel on startup', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const shellSource = readSource(WORKSPACE_SHELL_PATH)
+    const surfacesSource = readSource(ROOT_SURFACES_PATH)
 
-    expect(source).toContain(
-      "import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'"
+    expect(shellSource).toContain(
+      "import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'"
     )
-    expect(source).toContain("import('./components/floating-terminal/FloatingTerminalPanel').then")
-    expect(source).not.toContain("from './components/floating-terminal/FloatingTerminalPanel'")
+    expect(surfacesSource).toContain(
+      "import('../components/floating-terminal/FloatingTerminalPanel').then"
+    )
+    for (const source of [shellSource, surfacesSource]) {
+      expect(source).not.toContain("from '../components/floating-terminal/FloatingTerminalPanel'")
+    }
   })
 
   it('does not eagerly import idle optional overlay surfaces on startup', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(ROOT_SURFACES_PATH)
 
-    expect(source).toContain("import('./components/UpdateCard').then")
-    expect(source).toContain("import('./components/contextual-tours/ContextualTourOverlay').then")
-    expect(source).toContain("import('./components/setup-guide/SetupGuideTelemetryObserver').then")
-    expect(source).not.toContain("from './components/UpdateCard'")
-    expect(source).not.toContain("from './components/contextual-tours/ContextualTourOverlay'")
-    expect(source).not.toContain("from './components/setup-guide/SetupGuideTelemetryObserver'")
+    expect(source).toContain("import('../components/UpdateCard').then")
+    expect(source).toContain("import('../components/contextual-tours/ContextualTourOverlay').then")
+    expect(source).toContain("import('../components/setup-guide/SetupGuideTelemetryObserver').then")
+    expect(source).not.toContain("from '../components/UpdateCard'")
+    expect(source).not.toContain("from '../components/contextual-tours/ContextualTourOverlay'")
+    expect(source).not.toContain("from '../components/setup-guide/SetupGuideTelemetryObserver'")
     expect(source).toContain('const shouldMountSetupGuideTelemetryObserver = persistedUIReady')
     expect(source).not.toContain(
       "const shouldMountSetupGuideTelemetryObserver = persistedUIReady && activeModal === 'setup-guide'"
@@ -235,16 +255,15 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('keeps crash-report listeners eager while lazy-loading the dialog surface', () => {
-    const appSource = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const hostSource = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/crash-report/CrashReportDialog.tsx'),
-      'utf8'
-    )
+    const surfacesSource = readSource(ROOT_SURFACES_PATH)
+    const hostSource = readSource('src/renderer/src/components/crash-report/CrashReportDialog.tsx')
 
-    expect(appSource).toContain(
-      "import { CrashReportDialog } from './components/crash-report/CrashReportDialog'"
+    expect(surfacesSource).toContain(
+      "import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'"
     )
-    expect(appSource).not.toContain("from './components/crash-report/CrashReportDialogSurface'")
+    expect(surfacesSource).not.toContain(
+      "from '../components/crash-report/CrashReportDialogSurface'"
+    )
     expect(hostSource).toContain("import('./CrashReportDialogSurface').then")
     expect(hostSource).toContain('window.api.crashReports.getLatestPending()')
     expect(hostSource).toContain('window.api.ui.onOpenCrashReport')
@@ -254,10 +273,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('clears stale crash-report state before opening the lazy manual report surface', () => {
-    const hostSource = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/crash-report/CrashReportDialog.tsx'),
-      'utf8'
-    )
+    const hostSource = readSource('src/renderer/src/components/crash-report/CrashReportDialog.tsx')
     const manualOpenStart = hostSource.indexOf('return window.api.ui.onOpenCrashReport(() => {')
     const manualOpenEnd = hostSource.indexOf('  }, [loadCrashReport])', manualOpenStart)
     const manualOpenBlock = hostSource.slice(manualOpenStart, manualOpenEnd)
@@ -272,32 +288,34 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('loads dictation only when voice is enabled or a session is active', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(ROOT_SURFACES_PATH)
 
-    expect(source).toContain("import('./components/dictation/DictationController').then")
-    expect(source).not.toContain("from './components/dictation/DictationController'")
+    expect(source).toContain("import('../components/dictation/DictationController').then")
+    expect(source).not.toContain("from '../components/dictation/DictationController'")
     expect(source).toContain("settings?.voice?.enabled === true || dictationState !== 'idle'")
     expect(source).toContain('shouldMountDictationController ?')
   })
 
   it('loads the SSH passphrase dialog only when a credential request is queued', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(ROOT_SURFACES_PATH)
 
-    expect(source).toContain("import('./components/settings/SshPassphraseDialog').then")
-    expect(source).not.toContain("from './components/settings/SshPassphraseDialog'")
+    expect(source).toContain("import('../components/settings/SshPassphraseDialog').then")
+    expect(source).not.toContain("from '../components/settings/SshPassphraseDialog'")
     expect(source).toContain('s.sshCredentialQueue.length > 0')
     expect(source).toContain('hasSshCredentialRequest ?')
   })
 
   it('defers background polling until the workspace session is ready', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-
-    expect(source).toContain('useGitStatusPolling({ enabled: workspaceSessionReady })')
-    expect(source).toContain('<WorkspacePortScanner enabled={workspaceSessionReady} />')
+    expect(readSource(SHELL_SERVICES_PATH)).toContain(
+      'useGitStatusPolling({ enabled: workspaceSessionReady })'
+    )
+    expect(readSource(BACKGROUND_SERVICES_PATH)).toContain(
+      '<WorkspacePortScanner enabled={workspaceSessionReady} />'
+    )
   })
 
   it('prefetches terminal snapshot capabilities before reconnect unlocks cold activation', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(STARTUP_HYDRATION_PATH)
     const capabilityIndex = source.indexOf(
       "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
     )
@@ -308,54 +326,61 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not load the terminal workbench on the no-workspace landing path', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const shellSource = readSource(WORKSPACE_SHELL_PATH)
+    const layoutSource = readSource(CHROME_LAYOUT_PATH)
 
-    expect(source).toContain("const Terminal = lazy(() => import('./components/Terminal'))")
-    expect(source).not.toContain("from './components/Terminal'")
-    expect(source).toContain('const hasMountedTerminalWorkbenchRef = useRef(false)')
-    expect(source).toContain('hasMountedTerminalWorkbenchRef.current = true')
-    expect(source).toContain('activeWorktreeId !== null || backgroundTerminalMountRequested')
-    expect(source).toContain('backgroundTerminalMountRequested ||')
-    expect(source).toContain('hasMountedTerminalWorkbenchRef.current')
-    expect(source).toContain('shouldMountTerminalWorkbench ?')
+    expect(shellSource).toContain("const Terminal = lazy(() => import('../components/Terminal'))")
+    expect(shellSource).not.toContain("from '../components/Terminal'")
+    expect(layoutSource).toContain(
+      'const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested'
+    )
+    // Why pin the latch: once the workbench has mounted it must stay mounted, so hidden
+    // terminal/browser/editor panes survive activeWorktreeId briefly going null.
+    expect(layoutSource).toContain(
+      'const [hasMountedTerminalWorkbench, setHasMountedTerminalWorkbench] = useState(false)'
+    )
+    expect(layoutSource).toContain('setHasMountedTerminalWorkbench(true)')
+    expect(layoutSource).toContain(
+      'const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench'
+    )
+    expect(shellSource).toContain('shouldMountTerminalWorkbench ?')
   })
 
   it('keeps the new-workspace composer eager because it is a critical create surface', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const lazyModalSource = readFileSync(
-      join(process.cwd(), 'src/renderer/src/lazy-modal-mount-state.ts'),
-      'utf8'
-    )
+    const source = readSource(ROOT_SURFACES_PATH)
+    const lazyModalSource = readSource('src/renderer/src/lazy-modal-mount-state.ts')
 
     expect(source).toContain(
-      "import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'"
+      "import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'"
     )
-    expect(source).not.toContain("import('./components/NewWorkspaceComposerModal')")
+    expect(source).not.toContain("import('../components/NewWorkspaceComposerModal')")
     expect(source).toContain("activeModal === 'new-workspace-composer'")
     expect(lazyModalSource).not.toContain("'new-workspace-composer'")
   })
 
   it('does not eagerly import inactive sidebar dialog flows on startup', () => {
-    const appSource = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const sidebarSource = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/sidebar/index.tsx'),
-      'utf8'
-    )
+    const surfacesSource = readSource(ROOT_SURFACES_PATH)
+    const mountSource = readSource(LAZY_MODAL_MOUNTS_PATH)
+    const sidebarSource = readSource('src/renderer/src/components/sidebar/index.tsx')
 
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/AddRepoDialog'))")
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/NonGitFolderDialog'))")
-    expect(appSource).toContain("import('./components/sidebar/AddProjectFromFolderDialog')")
-    expect(appSource).toContain("lazy(() => import('./components/sidebar/ProjectAddedDialog'))")
-    expect(appSource).toContain("activeModal === 'add-repo'")
-    expect(appSource).toContain("activeModal === 'confirm-non-git-folder'")
-    expect(appSource).toContain("activeModal === 'confirm-add-project-from-folder'")
-    expect(appSource).toContain("activeModal === 'project-added'")
-    expect(appSource).toContain('shouldMountAddRepoDialog ? (')
-    expect(appSource).toContain('boundaryId="modal.add-repo"')
-    expect(appSource).toContain('boundaryId="modal.confirm-non-git-folder"')
-    expect(appSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
-    expect(appSource).toContain('boundaryId="modal.project-added"')
-    expect(appSource).toContain('setTimeout(() =>')
+    expect(surfacesSource).toContain("lazy(() => import('../components/sidebar/AddRepoDialog'))")
+    expect(surfacesSource).toContain(
+      "lazy(() => import('../components/sidebar/NonGitFolderDialog'))"
+    )
+    expect(surfacesSource).toContain("import('../components/sidebar/AddProjectFromFolderDialog')")
+    expect(surfacesSource).toContain(
+      "lazy(() => import('../components/sidebar/ProjectAddedDialog'))"
+    )
+    expect(surfacesSource).toContain("activeModal === 'add-repo'")
+    expect(surfacesSource).toContain("activeModal === 'confirm-non-git-folder'")
+    expect(surfacesSource).toContain("activeModal === 'confirm-add-project-from-folder'")
+    expect(surfacesSource).toContain("activeModal === 'project-added'")
+    expect(surfacesSource).toContain('shouldMountAddRepoDialog ? (')
+    expect(surfacesSource).toContain('boundaryId="modal.add-repo"')
+    expect(surfacesSource).toContain('boundaryId="modal.confirm-non-git-folder"')
+    expect(surfacesSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
+    expect(surfacesSource).toContain('boundaryId="modal.project-added"')
+    expect(mountSource).toContain('setTimeout(() =>')
     expect(sidebarSource).toContain("lazyWithRetry(() => import('./WorktreeMetaDialog'))")
     expect(sidebarSource).not.toContain("from './AddRepoDialog'")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./AddRepoDialog'))")
@@ -379,10 +404,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('loads Linear agent setup implementation only after the prompt opens it', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
-      'utf8'
-    )
+    const source = readSource('src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx')
 
     expect(source).toContain("() => import('./LinearAgentSkillSetupDialog')")
     expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
@@ -391,10 +413,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import optional status-bar segments on startup', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/status-bar/StatusBar.tsx'),
-      'utf8'
-    )
+    const source = readSource('src/renderer/src/components/status-bar/StatusBar.tsx')
 
     expect(source).toContain("import('./ResourceUsageStatusSegment').then")
     expect(source).toContain("import('./PortsStatusSegment').then")
@@ -407,16 +426,16 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import the status bar shell on startup', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(ROOT_SURFACES_PATH)
 
-    expect(source).toContain("import('./components/status-bar/StatusBar').then")
-    expect(source).not.toContain("from './components/status-bar/StatusBar'")
+    expect(source).toContain("import('../components/status-bar/StatusBar').then")
+    expect(source).not.toContain("from '../components/status-bar/StatusBar'")
     expect(source).toContain('statusBarVisible ? (')
     expect(source).toContain('h-6 min-h-[24px] shrink-0 border-t border-border')
   })
 
   it('keeps activeView off the 150ms debounced UI writer hot path (#9002)', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(PERSISTED_UI_WRITER_PATH)
     const writerStart = source.indexOf('const timer = window.setTimeout(() => {')
     const writerEnd = source.indexOf('}, 150)', writerStart)
     const writerBlock = source.slice(writerStart, writerEnd)
@@ -437,7 +456,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('persists activeView through its narrow preference on every switch (#9002)', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(PERSISTED_UI_WRITER_PATH)
 
     const preferenceEffect = [
       '// Why (#9002): activeView has its own tiny profile preference',
@@ -452,21 +471,22 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('arms the OSC 52 default-on notice behind a statically mounted Toaster (#10567)', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-
     // Why pin the call site: the hook is the only caller, so deleting this line silences
     // the migration notice on desktop with every unit suite still green.
-    expect(source).toContain('useOsc52ClipboardDefaultOnNotice(persistedUIReady)')
+    expect(readSource(SHELL_SERVICES_PATH)).toContain(
+      'useOsc52ClipboardDefaultOnNotice(persistedUIReady)'
+    )
     // Why pin the static import and the unconditional mount: sonner drops a toast enqueued
     // before any Toaster subscribes, and never replays it — a lazy Toaster would burn the
     // profile's one notice with its callbacks never firing, so it could never re-arm.
-    expect(source).toContain("import { Toaster } from '@/components/ui/sonner'")
-    expect(source).not.toContain("import('@/components/ui/sonner')")
-    expect(source).toContain('<Toaster closeButton')
+    const appSource = readSource(APP_PATH)
+    expect(appSource).toContain("import { Toaster } from '@/components/ui/sonner'")
+    expect(appSource).not.toContain("import('@/components/ui/sonner')")
+    expect(appSource).toContain('<Toaster closeButton')
   })
 
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const source = readSource(SESSION_PERSISTENCE_PATH)
     const checkpointStart = source.indexOf(
       'const shutdownCheckpoint = createShutdownCheckpointGuard('
     )

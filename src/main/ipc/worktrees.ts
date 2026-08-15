@@ -79,7 +79,7 @@ import {
 } from '../../shared/worktree/ownership'
 import {
   createWorktreeVisibilitySourceMatcher,
-  normalizeCustomWorktreeVisibilitySources
+  resolveCustomWorktreeVisibilitySources
 } from '../../shared/worktree/visibility-sources'
 import {
   assertWorktreeCleanForRemoval,
@@ -121,6 +121,8 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from './worktree-logic'
+import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../shared/worktree/retired-name-registry'
 import { dedupeWorktreesByPath } from './worktree-path-comparison'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
@@ -881,7 +883,7 @@ function buildDetectedGitWorktrees(
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -1033,7 +1035,7 @@ function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktre
   const worktrees = listFolderWorkspaces(store, repo)
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   return worktrees.map((worktree) =>
     toDetectedWorktree({
@@ -1118,7 +1120,7 @@ function buildDisconnectedDetectedWorktrees(
   const settings = store.getSettings()
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   const detected = worktrees.map((worktree) => {
     const meta = store.getWorktreeMeta(worktree.id)
@@ -1846,6 +1848,7 @@ export function registerWorktreeHandlers(
   // Remove previously registered handlers so re-register works when macOS re-activates and creates a new window.
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
+  ipcMain.removeHandler('worktrees:listRetiredNames')
   ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:listKnownForExecutionHost')
   ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
@@ -1931,6 +1934,14 @@ export function registerWorktreeHandlers(
     })
 
     return results.flat()
+  })
+
+  ipcMain.handle('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    if (!repo) {
+      return EMPTY_RETIRED_NAME_REGISTRY
+    }
+    return getRetiredNameRegistryForRepo(store, repo, store.getRepos(), store.getSettings())
   })
 
   ipcMain.handle('worktrees:list', async (_event, args: { repoId: string }) => {

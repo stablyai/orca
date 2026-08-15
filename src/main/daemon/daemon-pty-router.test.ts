@@ -76,6 +76,7 @@ function createAdapter(
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
+    writeWithSettlement: vi.fn(async () => true),
     resize: vi.fn(),
     setPtyBackgrounded: vi.fn(),
     getBufferSnapshot: vi.fn(async () => null),
@@ -452,6 +453,18 @@ describe('DaemonPtyRouter', () => {
     expect(legacyV32.write).toHaveBeenCalledWith('v32-session', 'old-v32\n')
     expect(legacyV33.write).toHaveBeenCalledWith('v33-session', 'old-v33\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('routes settlement-aware writes to the owning daemon generation', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(false)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toBe(false)
+    expect(legacy.writeWithSettlement).toHaveBeenCalledWith('legacy-session', 'pointer')
+    expect(current.writeWithSettlement).not.toHaveBeenCalled()
   })
 
   it('routes background hints and authoritative snapshots to the session owner', async () => {

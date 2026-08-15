@@ -14,6 +14,7 @@ import type { WorktreeSidebarHeaderDrag } from './use-worktree-sidebar-header-dr
 import type { WorktreeListVirtualizer } from './use-worktree-list-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './virtualized-worktree-viewport-props'
 import type { WorktreeVirtualRowContext } from './worktree-virtual-row-dispatch'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
@@ -23,6 +24,7 @@ type BuildArgs = {
   virtualization: WorktreeListVirtualizer
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   settings: AppState['settings']
+  worktreeVisibilityDefaultsByHost: AppState['worktreeVisibilityDefaultsByHost']
   sshConnectionStates: AppState['sshConnectionStates']
   newCardStyle: boolean
   folderBackedProjectGroupIds: ReadonlySet<string>
@@ -83,6 +85,12 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
       projectActions: {
+        getWorktreeVisibilityDefaults: (repo) =>
+          getRepoOwnerWorktreeVisibilityDefaults(
+            repo,
+            args.settings,
+            args.worktreeVisibilityDefaultsByHost
+          ),
         onOpenRepoSettings: props.handleOpenRepoSettings,
         onOpenWorktreeVisibility: props.handleOpenWorktreeVisibility,
         onCreateGroupFromRepo: props.handleCreateGroupFromRepo,

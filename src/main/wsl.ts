@@ -303,6 +303,12 @@ export function getWslHome(distro: string): string | null {
   }
 }
 
+/** Pure cache lookup — never probes. Lets callers that memoize a derived value avoid caching one
+ *  built from the unresolved fallback, since only the success path is cached above. */
+export function hasCachedWslHome(distro: string): boolean {
+  return wslHomeCache.has(distro)
+}
+
 export async function getWslHomeAsync(distro: string): Promise<string | null> {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!

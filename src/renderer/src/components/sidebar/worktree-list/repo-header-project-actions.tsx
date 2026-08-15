@@ -27,6 +27,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
 import type { ProjectGroup } from '../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { WorktreeVisibilityDefaults } from '../../../../../shared/global-settings-types'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
@@ -41,6 +42,7 @@ import {
 import { getWorktreeVisibilityMenuLabel } from './worktree-visibility-menu-label'
 
 export type RepoHeaderProjectActions = {
+  getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
   onOpenRepoSettings: (projectId: string, sectionId?: string) => void
   onOpenWorktreeVisibility: (repo: Repo) => void
   onCreateGroupFromRepo: (repo: Repo) => void
@@ -114,7 +116,7 @@ export function RepoHeaderProjectActionsMenu({
         {isGitRepoKind(repo) ? (
           <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
             <Eye className="size-3.5" />
-            {getWorktreeVisibilityMenuLabel(repo)}
+            {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo))}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>

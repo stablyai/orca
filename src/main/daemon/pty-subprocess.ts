@@ -20,7 +20,10 @@ import {
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
+import {
+  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsShellLaunchArgs
+} from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -693,6 +696,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           }) ?? shellPath)
         : shellPath
     }
+    if (
+      pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
+      env.ORCA_CODEX_LAUNCH_PREFLIGHT
+    ) {
+      // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+      env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+    }
     // Why: a bare `pwsh.exe` resolves to the Store App Execution Alias stub whose launch fails with ERROR_ACCESS_DENIED (5).
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
@@ -714,7 +724,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         spawnCwd,
         getDefaultCwd(),
         resolvedWslContext,
-        opts.command
+        opts.command,
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -745,7 +756,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               {
                 distro: codexHomeWslInfo.distro
               },
-              opts.command
+              opts.command,
+              env.ORCA_CODEX_LAUNCH_PREFLIGHT
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd

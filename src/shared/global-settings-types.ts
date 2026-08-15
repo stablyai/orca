@@ -36,9 +36,25 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  ExternalWorktreeVisibility,
+  WorktreeVisibilitySourcePreferences
+} from './repo-types'
+
+export type WorktreeVisibilityDefaults = {
+  /** Default for worktrees outside a recognized source. */
+  external?: ExternalWorktreeVisibility
+  /** Host-owned roots applied to every repository on that host. */
+  customSources?: CustomWorktreeVisibilitySource[]
+  /** Defaults for built-in and host-owned custom sources. */
+  sourcePreferences?: WorktreeVisibilitySourcePreferences
+}
 
 export type GlobalSettings = {
   workspaceDir: string
+  /** Host-owned defaults used when a repository has no explicit visibility override. */
+  worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>

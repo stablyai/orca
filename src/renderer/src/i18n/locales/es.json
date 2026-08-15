@@ -4703,7 +4703,9 @@
           "noneFound": "No se encontraron worktrees ajenos a Orca",
           "tryDifferentSearch": "Prueba con otro nombre o ruta.",
           "disableSource": "Desactiva una fuente para gestionar sus worktrees individualmente.",
-          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte."
+          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte.",
+          "openGlobalSettings": "Gestionar en Ajustes globales",
+          "globalSettingsSources": "Estas fuentes tienen una configuración global que puedes anular aquí:"
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
@@ -4715,15 +4717,21 @@
           "duplicatePath": "Esta ubicación ya está en la lista.",
           "limit": "Elimina una ubicación personalizada antes de añadir otra.",
           "sources": "Fuentes",
-          "sourcesDescription": "Las fuentes activadas incluyen los worktrees actuales y futuros en la barra lateral.",
+          "sourcesDescription": "Las fuentes mostradas incluyen los worktrees actuales y futuros en la barra lateral.",
           "found": "Encontrados: {{value0}}",
           "remove": "Eliminar {{value0}}",
           "removeLocation": "Eliminar ubicación personalizada",
-          "toggle": "Mostrar los worktrees actuales y futuros de {{value0}}",
           "addLocation": "Añadir ubicación",
           "worktreeRoot": "Raíz de worktrees",
           "add": "Añadir",
-          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta."
+          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta.",
+          "visibility": "Visibilidad de {{value0}}",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "overridingGlobal": "Anulando la configuración global: {{value0}}",
+          "projectOnly": "Añadida solo en este proyecto.",
+          "useGlobalFor": "Usar la configuración global para {{value0}}",
+          "useGlobal": "Usar global"
         },
         "add": {
           "repo": {
@@ -5968,7 +5976,11 @@
           "5567191a6e": "Examinar",
           "0e9fc0eadc": "Directorio de espacio de trabajo",
           "e2955d9ccb": "Configura dónde se crean nuevos espacios de trabajo.",
-          "7511097c5d": "Espacio de trabajo"
+          "7511097c5d": "Espacio de trabajo",
+          "externalWorktrees": "Worktrees externos",
+          "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada.",
+          "show": "Mostrar",
+          "hide": "Ocultar"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Aplicar cambios",
@@ -6631,7 +6643,14 @@
           "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} mediante {{value1}}",
+          "externalWorktrees": "Worktrees externos",
+          "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
+          "externalWorktreesInherited": "Usando el valor global: {{value0}}",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "externalWorktreesGlobal": "Valor global predeterminado: {{value0}}",
+          "useGlobal": "Usar valor global"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Plantilla de comando",
@@ -8252,7 +8271,9 @@
             "e61157e926": "Ajuste de línea en el editor",
             "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
             "editorFontFamily": "Fuente del editor",
-            "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal."
+            "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
+            "externalWorktrees": "Worktrees externos",
+            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada."
           }
         },
         "git": {
@@ -8736,6 +8757,8 @@
             "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward.",
             "projectRuntime": "Runtime del proyecto",
             "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
+            "externalWorktrees": "Worktrees externos",
+            "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
             "copy": "copy",
             "clone": "clone",
             "apfs": "apfs"
@@ -10112,6 +10135,11 @@
           "setupRecipe": "Configura una receta de entorno para tu proveedor de nube.",
           "createWorkspace": "Crea un espacio de trabajo y selecciona esa receta en Ejecutar en.",
           "openSetup": "Configurar recetas de entorno"
+        },
+        "GlobalWorktreeVisibilitySourcesSetting": {
+          "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
+          "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
+          "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
         }
       },
       "right": {

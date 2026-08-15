@@ -727,6 +727,7 @@ function WorktreeJumpPaletteContent({
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sleepingAgentSessionsByPaneKey = useAppStore((s) => s.sleepingAgentSessionsByPaneKey)
   const settings = useAppStore((s) => s.settings)
+  const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -1498,7 +1499,9 @@ function WorktreeJumpPaletteContent({
     }
     for (const repoId of buildImportedWorktreesCardCandidates({
       repos,
-      detectedWorktreesByRepo
+      detectedWorktreesByRepo,
+      settings,
+      visibilityDefaultsByHost: worktreeVisibilityDefaultsByHost
     }).keys()) {
       ids.add(repoId)
     }
@@ -1506,7 +1509,15 @@ function WorktreeJumpPaletteContent({
       ids.add(creation.request.repoId)
     }
     return ids
-  }, [allWorktrees, detectedWorktreesByRepo, pendingWorktreeCreations, repos, worktreesByRepo])
+  }, [
+    allWorktrees,
+    detectedWorktreesByRepo,
+    pendingWorktreeCreations,
+    repos,
+    settings,
+    worktreeVisibilityDefaultsByHost,
+    worktreesByRepo
+  ])
   const hasAnyProjectSearchCandidates = useMemo(
     () =>
       hasCmdJProjectSearchCandidates({
@@ -3244,9 +3255,9 @@ function WorktreeJumpPaletteContent({
                 )
                 const WorkspaceTabIcon =
                   result.contentType === 'terminal' ? SquareTerminal : FileText
-                // Why null on a typed query: live corner pips belong to the frozen recent section —
-                // Open Tabs search results stay content-icon only (no agent status overlay).
-                const recentRow = hasQuery ? null : (recentTabRowById.get(entry.id) ?? null)
+                // Why regardless of query: a searched-for tab is exactly when you need to know it's
+                // still working — the map covers every open tab, not just the recent section.
+                const recentRow = recentTabRowById.get(entry.id) ?? null
 
                 return (
                   <CommandItem

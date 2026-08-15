@@ -81,6 +81,8 @@ async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<
       log = await readLogTail(join(logDirectory, logName), signal)
     } catch {
       signal.throwIfAborted()
+      // Why: AGY rotates logs between directory listing and reading; one
+      // vanished candidate must not hide another live runtime.
       continue
     }
     const ports = parseAntigravityCliServerPorts(log)

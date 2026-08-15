@@ -29,6 +29,8 @@ export function useSidebarExternalWorktreeCards(args: {
   const { repos, visibleReposForRows, detectedWorktreesByRepo, filterRepoIds } = args
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const settings = useAppStore((s) => s.settings)
+  const visibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
   >(new Map())
@@ -49,17 +51,34 @@ export function useSidebarExternalWorktreeCards(args: {
       repos: visibleReposForRows,
       detectedWorktreesByRepo,
       filterRepoIds,
-      forceVisibleRepoIds
+      forceVisibleRepoIds,
+      settings,
+      visibilityDefaultsByHost
     })
-  }, [detectedWorktreesByRepo, filterRepoIds, importedWorktreeCardActionState, visibleReposForRows])
+  }, [
+    detectedWorktreesByRepo,
+    filterRepoIds,
+    importedWorktreeCardActionState,
+    settings,
+    visibilityDefaultsByHost,
+    visibleReposForRows
+  ])
   const newExternalWorktreesInboxByRepo = useMemo(
     () =>
       buildNewExternalWorktreesInboxCandidates({
         repos: visibleReposForRows,
         detectedWorktreesByRepo,
-        filterRepoIds
+        filterRepoIds,
+        settings,
+        visibilityDefaultsByHost
       }),
-    [detectedWorktreesByRepo, filterRepoIds, visibleReposForRows]
+    [
+      detectedWorktreesByRepo,
+      filterRepoIds,
+      settings,
+      visibilityDefaultsByHost,
+      visibleReposForRows
+    ]
   )
 
   const setImportedWorktreeCardState = useCallback(
