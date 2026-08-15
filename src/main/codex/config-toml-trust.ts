@@ -65,6 +65,11 @@ export type CodexHookTrustState = {
   enabled?: boolean
 }
 
+export type CodexHookTrustKeyMove = {
+  fromKey: string
+  toKey: string
+}
+
 export type CodexProjectTrustLevel = 'trusted' | 'untrusted'
 
 // Why: normalize keys at the Map edge so Codex-written separator/casing variants match computeTrustKey() lookups.
@@ -362,6 +367,40 @@ export function upsertHookTrustEntriesInContent(
       getTrustKeyWriteVariants(computeTrustKey(entry)),
       entry.trustedHash ?? computeTrustedHash(entry),
       entry.enabled
+    )
+  }
+  return updated
+}
+
+export function moveHookTrustEntriesInContent(
+  existingContent: string,
+  moves: readonly CodexHookTrustKeyMove[]
+): string {
+  const existing =
+    existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
+  const states = readHookTrustEntriesFromContent(existing)
+  const resolvedMoves = moves.flatMap(({ fromKey, toKey }) => {
+    if (normalizeHookTrustKeyForLookup(fromKey) === normalizeHookTrustKeyForLookup(toKey)) {
+      return []
+    }
+    const state = states.get(fromKey)
+    return state?.trustedHash
+      ? [{ fromKey, toKey, trustedHash: state.trustedHash, enabled: state.enabled }]
+      : []
+  })
+  let updated = existing
+  // Why: remove old index-addressed user trust blocks before writing the shifted keys so remote prepend does not leave duplicate approvals.
+  if (resolvedMoves.length > 0) {
+    updated = removeHookTrustEntriesFromContent(updated, [
+      ...new Set(resolvedMoves.map(({ fromKey }) => fromKey))
+    ])
+  }
+  for (const { toKey, trustedHash, enabled } of resolvedMoves) {
+    updated = upsertTrustBlocks(
+      updated,
+      getTrustKeyWriteVariants(toKey),
+      trustedHash,
+      enabled ?? true
     )
   }
   return updated

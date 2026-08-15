@@ -84,6 +84,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Claude Code - action required')).toBe('permission')
   })
 
+  it('detects Codex native Action Required titles without a codex token', () => {
+    expect(detectAgentStatusFromTitle('[ ! ] Action Required | my-project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('[ . ] Action Required | my-project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('[!] Action Required | project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Action Required | project')).toBeNull()
+  })
+
   it('detects "permission" keyword with agent name', () => {
     expect(detectAgentStatusFromTitle('codex - permission needed')).toBe('permission')
   })

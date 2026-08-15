@@ -92,6 +92,16 @@ function hookTrustHeader(key: string, useDefaultCodexHome = false): string {
     : `[hooks.state."${escapeTomlBasicString(canonicalKey)}"]`
 }
 
+function hookTrustBlock(content: string, key: string): string {
+  const header = hookTrustHeader(key)
+  const start = content.indexOf(header)
+  if (start === -1) {
+    return ''
+  }
+  const nextHeader = content.indexOf('\n[', start + header.length)
+  return content.slice(start, nextHeader === -1 ? content.length : nextHeader)
+}
+
 function canonicalizeHookTrustKeyForTest(key: string, useDefaultCodexHome: boolean): string {
   const lastColon = key.lastIndexOf(':')
   const secondLast = lastColon === -1 ? -1 : key.lastIndexOf(':', lastColon - 1)
@@ -157,6 +167,129 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('model = "gpt-5.2-codex"')
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
+  })
+
+  it('prepends remote hooks without invalidating existing user hook trust', async () => {
+    const remoteHooksPath = '/home/dev/.codex/hooks.json'
+    const userStopCommand = 'echo user-stop-hook'
+    const userTrustedHash = 'sha256:user-approved-stop-hook'
+    const files = new Map<string, string>([
+      [
+        remoteHooksPath,
+        `${JSON.stringify({
+          hooks: {
+            Stop: [{ hooks: [{ type: 'command', command: userStopCommand }] }]
+          }
+        })}\n`
+      ],
+      [
+        '/home/dev/.codex/config.toml',
+        upsertHookTrustEntriesInContent('', [
+          {
+            sourcePath: remoteHooksPath,
+            eventLabel: 'stop',
+            groupIndex: 0,
+            handlerIndex: 0,
+            command: userStopCommand,
+            trustedHash: userTrustedHash,
+            enabled: false
+          }
+        ])
+      ]
+    ])
+    const modes = new Map<string, number>()
+    const dirs = new Set<string>(['/'])
+    const noEntry = (path: string): { code: number; message: string } => ({
+      code: 2,
+      message: `ENOENT ${path}`
+    })
+    const sftp = {
+      readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
+        const value = files.get(path)
+        if (value === undefined) {
+          cb(noEntry(path))
+          return
+        }
+        cb(null, value)
+      },
+      writeFile: (
+        path: string,
+        content: string,
+        options: string | { mode?: number },
+        cb: (err: unknown) => void
+      ): void => {
+        files.set(path, content)
+        if (typeof options !== 'string' && options.mode !== undefined) {
+          modes.set(path, options.mode)
+        }
+        cb(null)
+      },
+      rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
+        const value = files.get(src)
+        if (value === undefined) {
+          cb(noEntry(src))
+          return
+        }
+        files.set(dst, value)
+        files.delete(src)
+        const mode = modes.get(src)
+        if (mode !== undefined) {
+          modes.set(dst, mode)
+          modes.delete(src)
+        }
+        cb(null)
+      },
+      unlink: (path: string, cb: (err: unknown) => void): void => {
+        files.delete(path)
+        modes.delete(path)
+        cb(null)
+      },
+      chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
+        modes.set(path, mode)
+        cb(null)
+      },
+      stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
+        if (!files.has(path)) {
+          cb(noEntry(path))
+          return
+        }
+        cb(null, { mode: modes.get(path) ?? 0o100644 })
+      },
+      readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
+        if (!dirs.has(path)) {
+          cb(noEntry(path))
+          return
+        }
+        cb(null, [])
+      },
+      mkdir: (path: string, cb: (err: unknown) => void): void => {
+        dirs.add(path)
+        cb(null)
+      }
+    }
+
+    const service = new CodexHookService()
+    const status = await service.installRemote(sftp as never, '/home/dev')
+    const repeatedStatus = await service.installRemote(sftp as never, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(repeatedStatus.state).toBe('installed')
+    const hooks = JSON.parse(files.get(remoteHooksPath)!) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    expect(hooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe(userStopCommand)
+    expect(hooks.hooks.SubagentStart?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    expect(hooks.hooks.SubagentStop?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    const toml = files.get('/home/dev/.codex/config.toml') ?? ''
+    expect(toml).toContain(':stop:0:0')
+    expect(toml).toContain(':subagent_start:0:0')
+    expect(toml).toContain(':subagent_stop:0:0')
+    const userStopTrust = hookTrustBlock(toml, `${remoteHooksPath}:stop:1:0`)
+    expect(userStopTrust).toContain('enabled = false')
+    expect(userStopTrust).toContain(`trusted_hash = "${userTrustedHash}"`)
+    expect(hookTrustBlock(toml, `${remoteHooksPath}:stop:0:0`)).not.toContain(userTrustedHash)
+    expect(toml).not.toContain(`${remoteHooksPath}:stop:2:0`)
   })
 
   it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', () => {
