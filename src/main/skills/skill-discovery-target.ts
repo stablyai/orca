@@ -125,6 +125,8 @@ export async function discoverSkillsOnTarget(
     // partial answer to degrade to, and returning zero skills would read as
     // "nothing is installed" and re-offer installs for skills that are present.
     // An error keeps the picker's retry affordance and says something true.
-    throw new Error('Skill discovery is still reading a slow location. Try again.')
+    throw new Error('Skill discovery is still reading a slow location. Try again.', {
+      cause: error
+    })
   }
 }

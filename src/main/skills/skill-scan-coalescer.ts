@@ -44,9 +44,14 @@ export class SkillScanShedError extends Error {
 }
 
 /**
- * True for the two ways a scan now ends without an answer: shed before it began,
- * or aborted because it was abandoned for age. Callers that can degrade a single
- * root should treat both the same — re-throwing either one fails a whole scan.
+ * True for the ways a scan ends without an answer: shed before it began, or
+ * aborted because it was abandoned for age. Callers that can degrade a single
+ * root should treat them the same — re-throwing either one fails a whole scan.
+ *
+ * Matching on the name is safe rather than broad: the walk and the candidate
+ * tasks catch every filesystem error locally, so the only `AbortError` that can
+ * escape a scan is the one its own signal raised. `TimeoutError` is the name
+ * `AbortSignal.timeout()` aborts with, so a pre-flight deadline lands here too.
  */
 export function isSkillRootUnavailableError(error: unknown): boolean {
   return (
