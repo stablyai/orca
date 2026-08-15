@@ -8059,7 +8059,14 @@ export function connectPanePty(
               })) {
                 writeReplayData(replayChunk)
               }
-              writeReplayData(reattachReplayResetSequence(modelData))
+              writeReplayData(
+                reattachReplayResetSequence(
+                  modelData,
+                  false,
+                  snapshot.alternateScreen,
+                  snapshot.showCursor
+                )
+              )
               if (snapshot.pendingEscapeTailAnsi) {
                 writeReplayData(snapshot.pendingEscapeTailAnsi)
               }
@@ -8368,7 +8375,7 @@ export function connectPanePty(
                 modelData,
                 Boolean(connectResult?.coldRestore),
                 modelSnapshot.alternateScreen ?? connectResult?.isAlternateScreen,
-                connectResult?.showCursor
+                modelSnapshot.showCursor ?? connectResult?.showCursor
               )
             )
             if (modelSnapshot.pendingEscapeTailAnsi) {

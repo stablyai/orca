@@ -12111,12 +12111,16 @@ export class OrcaRuntimeService {
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+      const effectiveShowCursor = liveModeTracker.hasObservedCursorVisibility
+        ? liveModeTracker.cursorVisible
+        : snapshot.showCursor
       const reconciledSnapshot = this.preferTrackedLastTitle(ptyId, {
         ...snapshot,
         seq: providerOffset + snapshot.seq,
         ...(effectiveAlternateScreen !== undefined
           ? { alternateScreen: effectiveAlternateScreen }
-          : {})
+          : {}),
+        ...(effectiveShowCursor !== undefined ? { showCursor: effectiveShowCursor } : {})
       })
       if (liveModeTracker.hasObservedAlternateScreenSwitch) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)

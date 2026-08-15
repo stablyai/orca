@@ -10440,6 +10440,59 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.isTerminalAlternateScreen('pty-tui-race')).toBe(false)
     })
 
+    it('carries a cursor transition that races a provider snapshot response', async () => {
+      const { runtime } = createSideEffectRuntime()
+      let resolveProviderSnapshot:
+        | ((snapshot: {
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            showCursor: boolean
+          }) => void)
+        | undefined
+      const serializeProviderBuffer = vi.fn(
+        () =>
+          new Promise<{
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            showCursor: boolean
+          }>((resolve) => {
+            resolveProviderSnapshot = resolve
+          })
+      )
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-cursor-race',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      const snapshotPromise = runtime.serializeTerminalBuffer('pty-cursor-race')
+      await vi.waitFor(() => expect(resolveProviderSnapshot).toBeDefined())
+      runtime.onPtyData('pty-cursor-race', '\x1b[?25l', 100)
+      resolveProviderSnapshot?.({
+        data: 'captured visible cursor',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        showCursor: true
+      })
+
+      await expect(snapshotPromise).resolves.toMatchObject({ showCursor: false })
+    })
+
     it('translates reset provider snapshots without retaining the old title', async () => {
       const { runtime } = createSideEffectRuntime()
       runtime.synchronizePtyOutputSequenceFromProvider(

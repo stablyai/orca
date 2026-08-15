@@ -1384,6 +1384,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       source: 'headless',
       oscLinks: snapshot.oscLinks,
       alternateScreen: snapshot.modes.alternateScreen,
+      showCursor: snapshot.modes.showCursor,
       // Why known `0` is carried too: it proves the app negotiated nothing at
       // this boundary, which is a different fact from a source that cannot say.
       ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),

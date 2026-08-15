@@ -31,6 +31,8 @@ export type PtyProviderBufferSnapshot = {
   source: 'headless'
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
+  /** Cursor visibility proven at this snapshot's `seq` boundary. */
+  showCursor?: boolean
   pendingEscapeTailAnsi?: string
   /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
    *  boundary. Absent means the source could not prove them; readers must not

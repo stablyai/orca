@@ -136,6 +136,7 @@ export type PtyApi = {
     pendingDeliveryStartSeq?: number
     source?: 'headless' | 'renderer'
     alternateScreen?: boolean
+    showCursor?: boolean
     /** Authoritative normal buffer paired with an alternate-screen frame. */
     scrollbackAnsi?: string
     /** Trailing incomplete escape the emulator ingested; the restorer must

@@ -1111,6 +1111,7 @@ const api = {
       pendingDeliveryStartSeq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      showCursor?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number

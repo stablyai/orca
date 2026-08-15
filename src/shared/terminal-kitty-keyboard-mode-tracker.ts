@@ -42,6 +42,8 @@ export class TerminalKittyKeyboardModeTracker {
   private altStackComplete = true
   private alternateScreenActive = false
   private alternateScreenSwitchObserved = false
+  private cursorIsVisible = true
+  private cursorVisibilityObserved = false
   // Why: a constructor-fresh tracker reports known-inactive, which is correct
   // for a PTY it watches from spawn but was never proven for a pre-existing
   // one. Grounding flips on evidence only: an explicit fresh-PTY reset, a
@@ -84,6 +86,14 @@ export class TerminalKittyKeyboardModeTracker {
     return this.alternateScreenSwitchObserved
   }
 
+  get cursorVisible(): boolean {
+    return this.cursorIsVisible
+  }
+
+  get hasObservedCursorVisibility(): boolean {
+    return this.cursorVisibilityObserved
+  }
+
   /** Full reset to a fresh PTY: known-inactive on both screens. */
   reset(): void {
     this.baselineProven = true
@@ -100,6 +110,8 @@ export class TerminalKittyKeyboardModeTracker {
     this.altStackComplete = true
     this.alternateScreenActive = false
     this.alternateScreenSwitchObserved = false
+    this.cursorIsVisible = true
+    this.cursorVisibilityObserved = false
   }
 
   /**
@@ -167,6 +179,7 @@ export class TerminalKittyKeyboardModeTracker {
         this.reset()
         this.scanTail = tail
         this.alternateScreenSwitchObserved = true
+        this.cursorVisibilityObserved = true
         continue
       }
       if (match[0].endsWith('!p')) {
@@ -174,6 +187,10 @@ export class TerminalKittyKeyboardModeTracker {
         continue
       }
       if (match[1] !== undefined) {
+        if (match[1].split(';').includes('25')) {
+          this.cursorIsVisible = match[2] === 'h'
+          this.cursorVisibilityObserved = true
+        }
         this.applyScreenSwitch(match[1], match[2] === 'h')
         continue
       }
@@ -186,6 +203,8 @@ export class TerminalKittyKeyboardModeTracker {
     // screens via coreService.reset but does not switch buffers — mirror that
     // so a soft-resetting TUI stops receiving kitty-encoded Option chords.
     this.baselineProven = true
+    this.cursorIsVisible = true
+    this.cursorVisibilityObserved = true
     this.currentFlags = 0
     this.mainFlags = 0
     this.altFlags = 0

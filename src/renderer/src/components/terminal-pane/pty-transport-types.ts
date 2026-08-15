@@ -34,6 +34,8 @@ export type PtyBufferSnapshot = {
    *  scrollback lives in xterm and a clear destroys scroll-up after a tab
    *  return. Mirrors the attach-time guard in pty-transport.ts. */
   alternateScreen?: boolean
+  /** Cursor visibility proven at this snapshot's sequence boundary. */
+  showCursor?: boolean
   /** Authoritative normal buffer paired with an alternate-screen frame. */
   scrollbackAnsi?: string
   /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
