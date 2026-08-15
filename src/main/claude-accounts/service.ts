@@ -33,6 +33,13 @@ import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { findDuplicateClaudeAccount } from './claude-duplicate-account'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
+import {
+  buildWslLoginConfigDirScript,
+  buildWslLoginPathExport,
+  createWslLoginOpenerHandoff,
+  openWslLoginAuthorizationUrl,
+  parseWslLoginConfigDirOutput
+} from './wsl-login-browser-opener'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import {
@@ -579,6 +586,35 @@ export class ClaudeAccountService {
   ): Promise<CapturedClaudeAuth> {
     const tempConfig = this.createTemporaryClaudeConfigDir(location)
     const loginAbortController = new AbortController()
+    let openerError: Error | null = null
+    const handoff = tempConfig.linuxPath
+      ? createWslLoginOpenerHandoff({
+          windowsConfigDir: tempConfig.windowsPath,
+          pollMs: 25,
+          onUrl: async (url) => {
+            try {
+              await openWslLoginAuthorizationUrl(url)
+            } catch {
+              openerError = new Error(
+                'Claude sign-in could not open the authorization page. Sign-in was stopped.'
+              )
+              loginAbortController.abort()
+            }
+          },
+          onInvalid: () => {
+            openerError = new Error(
+              'Claude sign-in requested an unsupported browser address. Sign-in was stopped.'
+            )
+            loginAbortController.abort()
+          },
+          onReadError: () => {
+            openerError = new Error(
+              'Claude sign-in could not read the browser handoff. Sign-in was stopped.'
+            )
+            loginAbortController.abort()
+          }
+        })
+      : null
     this.cancelPendingClaudeLogin = () => {
       if (loginAbortController.signal.aborted) {
         return false
@@ -611,7 +647,7 @@ export class ClaudeAccountService {
         previousLegacyKeychain
       )
     } catch (error) {
-      captureError = error
+      captureError = openerError ?? error
     } finally {
       if (process.platform === 'darwin') {
         try {
@@ -631,6 +667,7 @@ export class ClaudeAccountService {
           cleanupError = error
         }
       }
+      handoff?.stop()
       this.removeTemporaryClaudeConfigDir(tempConfig)
       this.cancelPendingClaudeLogin = null
     }
@@ -658,22 +695,29 @@ export class ClaudeAccountService {
     if (!location.wslDistro) {
       throw new Error('Could not resolve the active WSL distribution for Claude login.')
     }
-    const linuxPath = execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        location.wslDistro,
-        '--',
-        'bash',
-        '-lc',
-        'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"'
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-      .replaceAll(String.fromCharCode(0), '')
-      .trim()
-    if (!linuxPath.startsWith('/')) {
-      throw new Error('Could not create a temporary WSL Claude login directory.')
+    let linuxPath: string | null = null
+    try {
+      linuxPath = parseWslLoginConfigDirOutput(
+        execFileSync(
+          'wsl.exe',
+          [
+            '-d',
+            location.wslDistro,
+            '--',
+            'bash',
+            '-lc',
+            buildEncodedWslBashCommand(buildWslLoginConfigDirScript())
+          ],
+          { encoding: 'utf-8', timeout: 5000 }
+        )
+      )
+    } catch {
+      console.warn('[claude-accounts] WSL login opener preparation failed')
+    }
+    if (!linuxPath) {
+      throw new Error(
+        `Orca could not prepare a temporary Claude sign-in folder with a browser opener in ${location.wslDistro}. Sign-in cannot open a browser from that distribution.`
+      )
     }
     return {
       windowsPath: toWindowsWslPath(linuxPath, location.wslDistro),
@@ -1057,7 +1101,7 @@ export class ClaudeAccountService {
                 '--',
                 'bash',
                 '-lc',
-                `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
+                `${options?.keepStdinOpen ? buildWslLoginPathExport(configDir.linuxPath) : ''}export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
               ],
               env: process.env,
               shell: false,

@@ -17,11 +17,13 @@ import {
 } from './keychain'
 
 const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-test')
+const openExternal = vi.hoisted(() => vi.fn(async (_url: string) => undefined))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => CLAUDE_SERVICE_TEST_ROOT
-  }
+  },
+  shell: { openExternal }
 }))
 
 const commandMocks = vi.hoisted(() => ({
@@ -1468,6 +1470,200 @@ describe('ClaudeAccountService credential capture', () => {
       )
     } finally {
       vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('composes the WSL bridge through public add and reauthenticate flows', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    openExternal.mockClear()
+    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+    const linuxRoot = '/mnt/c/Users/Rod/AppData/Local/Temp/orca-t11823'
+    const windowsRoot = 'C:\\Users\\Rod\\AppData\\Local\\Temp\\orca-t11823'
+    const authRoot = `${linuxRoot}/.local/share/orca/claude-accounts`
+    let tempNumber = 0
+    let loginNumber = 0
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      const rawCommand = args.at(-1) ?? ''
+      const encoded = rawCommand.match(/printf %s '([^']+)' \| base64 -d/)
+      const command = encoded ? Buffer.from(encoded[1], 'base64').toString('utf8') : rawCommand
+      if (command.includes('printf "%s\\n%s')) {
+        return 'Ubuntu\n/mnt/c/Users/Rod\n'
+      }
+      if (command.includes('mktemp -d')) {
+        tempNumber += 1
+        const tempLinuxPath = `${linuxRoot}/login-${tempNumber}`
+        mkdirSync(`${windowsRoot}\\login-${tempNumber}`, { recursive: true })
+        return `ORCA_CLAUDE_LOGIN_DIR=${tempLinuxPath}\n`
+      }
+      if (command.includes('candidate=')) {
+        const match = command.match(/candidate='([^']+)'/)
+        return `${match?.[1] ?? `${authRoot}/unknown/auth`}\n`
+      }
+      if (command.includes('mkdir -p')) {
+        const match = command.match(/mkdir -p '([^']+)'/)
+        if (match) {
+          const authPath = match[1].replace(/^\/mnt\/c\//, 'C:\\')
+          mkdirSync(authPath, { recursive: true })
+          const marker = command.match(/printf '%s\\n' '([^']+)' > '([^']+)'/)
+          if (marker) {
+            const markerPath = marker[2].replace(/^\/mnt\/c\//, 'C:\\')
+            const accountMatch = marker[2].match(/claude-accounts\/([^/]+)\/auth\//)
+            const localMarkerPath = accountMatch
+              ? join(
+                  CLAUDE_SERVICE_TEST_ROOT,
+                  'claude-accounts',
+                  accountMatch[1],
+                  'auth',
+                  '.orca-managed-claude-auth'
+                )
+              : markerPath
+            mkdirSync(join(localMarkerPath, '..'), { recursive: true })
+            writeFileSync(localMarkerPath, `${marker[1]}\n`, 'utf-8')
+          }
+        }
+      }
+      return ''
+    })
+    const makeChild = () => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdin: PassThrough
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: ReturnType<typeof vi.fn>
+      }
+      child.stdin = new PassThrough()
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      return child
+    }
+    const spawnMock = vi.fn((_command: string, args: string[]) => {
+      const child = makeChild()
+      const shellCommand = args.at(-1) ?? ''
+      if (shellCommand.includes("'auth' 'login'")) {
+        loginNumber += 1
+        const configMatch = shellCommand.match(/CLAUDE_CONFIG_DIR='([^']+)'/)
+        const configDir = configMatch?.[1].replace(/^\/mnt\/c\//, 'C:\\')
+        if (!configDir) {
+          throw new Error('missing WSL config directory')
+        }
+        mkdirSync(configDir, { recursive: true })
+        writeFileSync(
+          join(configDir, '.credentials.json'),
+          `{"claudeAiOauth":{"accessToken":"token-${loginNumber}"}}\n`,
+          'utf-8'
+        )
+        writeFileSync(
+          join(configDir, '.claude.json'),
+          JSON.stringify({ oauthAccount: { emailAddress: `user-${loginNumber}@example.com` } }),
+          'utf-8'
+        )
+        writeFileSync(
+          join(configDir, 'open-url.request'),
+          'https://platform.claude.com/oauth/code/callback?code=redacted',
+          'utf-8'
+        )
+        setTimeout(() => child.emit('close', 0), 250)
+        return child
+      }
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+      execFileSync: execFileSyncMock
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: (linuxPath: string) => {
+        const accountMatch = linuxPath.match(/claude-accounts\/([^/]+)\/auth$/)
+        return accountMatch
+          ? join(CLAUDE_SERVICE_TEST_ROOT, 'claude-accounts', accountMatch[1], 'auth')
+          : `${windowsRoot}\\${linuxPath.split('/').at(-1)}`
+      }
+    }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [] as ClaudeManagedAccount[],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
+        syncForCurrentSelection: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+      execFileSyncMock.mockImplementationOnce(() => {
+        throw new Error('mktemp failed')
+      })
+      expect(() =>
+        (
+          service as unknown as {
+            createTemporaryClaudeConfigDir(location: {
+              managedAuthRuntime: 'wsl'
+              wslDistro: string
+            }): unknown
+          }
+        ).createTemporaryClaudeConfigDir({
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ).toThrow(
+        'Orca could not prepare a temporary Claude sign-in folder with a browser opener in Ubuntu. Sign-in cannot open a browser from that distribution.'
+      )
+
+      await service.addAccount({ runtime: 'wsl' })
+      await service.addAccount({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      await service.reauthenticateAccount(settings.claudeManagedAccounts[0]!.id)
+
+      expect(settings.claudeManagedAccounts).toHaveLength(2)
+      expect(openExternal).toHaveBeenCalledTimes(3)
+      expect(
+        openExternal.mock.calls.every(([url]) => url.startsWith('https://platform.claude.com/'))
+      ).toBe(true)
+      expect(
+        spawnMock.mock.calls.some(([, args]) =>
+          args
+            .at(-1)
+            ?.includes(
+              `export PATH="$PATH":'/mnt/c/Users/Rod/AppData/Local/Temp/orca-t11823/login-1/orca-opener'`
+            )
+        )
+      ).toBe(true)
+      expect(
+        spawnMock.mock.calls.some(
+          ([, args]) =>
+            args.at(-1)?.includes("exec claude 'auth' 'status' '--json'") &&
+            !args.at(-1)?.includes('orca-opener')
+        )
+      ).toBe(true)
+      expect(
+        execFileSyncMock.mock.calls.some(
+          ([, args]) => args.includes('-d') && args.includes('Ubuntu')
+        )
+      ).toBe(true)
+    } finally {
+      vi.doUnmock('node:child_process')
+      rmSync(windowsRoot, { recursive: true, force: true })
     }
   })
 
