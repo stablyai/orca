@@ -120,7 +120,13 @@ describe('Plane OAuth flow', () => {
     const rejection = expect(result).rejects.toThrow('Plane OAuth callback was invalid')
     await Promise.resolve()
 
-    requestListener()({ url: '/wrong/path?code=code' }, responseMock())
+    const authUrl = new URL(openExternalMock.mock.calls[0]?.[0])
+    const state = authUrl.searchParams.get('state')
+    expect(state).toBeTruthy()
+    requestListener()(
+      { url: `/wrong/path?code=code&state=${encodeURIComponent(state ?? '')}` },
+      responseMock()
+    )
 
     await rejection
   })
