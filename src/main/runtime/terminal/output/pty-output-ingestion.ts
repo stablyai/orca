@@ -107,6 +107,10 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       this.paneExitScanStateByPtyId.set(ptyId, createPaneExitScanState()).get(ptyId)
     if (paneExitScan) {
       const scanned = scanPaneExitMarker(paneExitScan, data)
+      if (scanned.output.length !== data.length && !transformed) {
+        // Stripped marker bytes must not keep the longer raw frame length.
+        sequenceChars = scanned.output.length
+      }
       data = scanned.output
       if (scanned.exitCode !== null) {
         this.lastReportedPaneExitCodeByPtyId.set(ptyId, scanned.exitCode)
