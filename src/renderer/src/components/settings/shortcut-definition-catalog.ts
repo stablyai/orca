@@ -5,6 +5,10 @@ import {
   type KeybindingDefinition,
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
+import {
+  findMacSystemHotkeyConflicts,
+  type MacCapturedDigitChord
+} from '../../../../shared/macos-symbolic-hotkeys'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
@@ -23,6 +27,7 @@ export function buildShortcutDefinitionCatalog(options: {
   pluginCommands: readonly ActivePluginCommand[]
   keybindings: KeybindingOverrides
   platform: NodeJS.Platform
+  macCapturedDigitChords?: readonly MacCapturedDigitChord[]
 }): ShortcutDefinitionCatalog {
   const pluginDefinitions = buildPluginCommandKeybindingDefinitions(options.pluginCommands)
   const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
@@ -51,6 +56,22 @@ export function buildShortcutDefinitionCatalog(options: {
         `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
       ])
     }
+  }
+  // Why: Mission Control chords never reach the app, so this is the only place the user can learn why the binding is dead.
+  const systemConflicts = findMacSystemHotkeyConflicts(
+    definitions,
+    options.platform,
+    options.keybindings,
+    options.macCapturedDigitChords ?? []
+  )
+  for (const conflict of systemConflicts) {
+    if (ignoredConflictActionIds.includes(conflict.actionId)) {
+      continue
+    }
+    conflictByAction.set(conflict.actionId, [
+      ...(conflictByAction.get(conflict.actionId) ?? []),
+      `${formatKeybindingList(conflict.capturedBindings, options.platform)} is captured by macOS Mission Control (Switch to Desktop) before it reaches Orca. Disable it in System Settings → Keyboard → Keyboard Shortcuts → Mission Control, or remap this shortcut.`
+    ])
   }
   return {
     groups,

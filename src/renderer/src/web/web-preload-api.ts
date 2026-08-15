@@ -582,6 +582,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
+      // Why: the web client cannot probe the local machine's Spaces shortcuts — stay silent.
+      getMacCapturedDigitChords: () => Promise.resolve([]),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),

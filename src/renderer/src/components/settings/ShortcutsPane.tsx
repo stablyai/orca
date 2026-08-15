@@ -11,6 +11,7 @@ import {
   type KeybindingDefinition,
   type KeybindingInput
 } from '../../../../shared/keybindings'
+import type { MacCapturedDigitChord } from '../../../../shared/macos-symbolic-hotkeys'
 import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
@@ -81,12 +82,27 @@ export function ShortcutsPane(): React.JSX.Element {
   )
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
+  const [macCapturedDigitChords, setMacCapturedDigitChords] = useState<
+    readonly MacCapturedDigitChord[]
+  >([])
 
   // Why: suspend global dispatch so a captured chord reaches the editor.
   useEffect(() => {
     window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
     return () => window.api.ui.setShortcutRecorderFocused(false)
   }, [recordingActionId])
+
+  // Why: Mission Control chords are consumed before app delivery, so the only detection is a state probe on pane mount.
+  useEffect(() => {
+    if (!isMac) {
+      return
+    }
+    void window.api.app.getMacCapturedDigitChords().then((chords) => {
+      if (mountedRef.current && chords.length > 0) {
+        setMacCapturedDigitChords(chords)
+      }
+    })
+  }, [mountedRef])
 
   const { groups, definitions, definitionsByAction, ignoredConflictActionIds, conflictByAction } =
     useMemo(
@@ -95,9 +111,10 @@ export function ShortcutsPane(): React.JSX.Element {
           disabledTuiAgents,
           pluginCommands,
           keybindings,
-          platform
+          platform,
+          macCapturedDigitChords
         }),
-      [disabledTuiAgents, keybindings, pluginCommands]
+      [disabledTuiAgents, keybindings, macCapturedDigitChords, pluginCommands]
     )
   const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
     definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId)
