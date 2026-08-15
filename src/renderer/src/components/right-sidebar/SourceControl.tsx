@@ -195,6 +195,7 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import { GIT_HISTORY_DEFAULT_LIMIT, GIT_HISTORY_MAX_LIMIT } from '../../../../shared/git-history'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import {
@@ -416,6 +417,16 @@ export function shouldClearBranchCompareForMissingBase(input: {
     return false
   }
   return input.remoteStatus !== undefined
+}
+
+// Why: step off the last LANDED limit, not the requested one — refreshGitHistory swallows errors,
+// so stepping off the request lets failed clicks escalate to the cap and wedge the button.
+export function resolveNextGitHistoryLimit(landedLimit: number | undefined): number | null {
+  const current = landedLimit ?? GIT_HISTORY_DEFAULT_LIMIT
+  if (current >= GIT_HISTORY_MAX_LIMIT) {
+    return null
+  }
+  return Math.min(GIT_HISTORY_MAX_LIMIT, current + GIT_HISTORY_DEFAULT_LIMIT)
 }
 
 export function resolveSourceControlPickerBaseRef(input: {
@@ -1186,6 +1197,8 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  // Why: per worktree so paging into one branch's history doesn't leak into another's.
+  const gitHistoryLimitByWorktreeRef = useRef<Record<string, number>>({})
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -2044,6 +2057,7 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
+        delete gitHistoryLimitByWorktreeRef.current[key]
       }
     }
   }, [updateCommitDrafts, worktreeMap])
@@ -4988,7 +5002,10 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           connectionId
         },
-        { limit: 50, baseRef: compareBaseRef }
+        {
+          limit: gitHistoryLimitByWorktreeRef.current[worktreeId] ?? GIT_HISTORY_DEFAULT_LIMIT,
+          baseRef: compareBaseRef
+        }
       )
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
@@ -5022,6 +5039,18 @@ function SourceControlInner(): React.JSX.Element {
 
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
+
+  const loadMoreGitHistory = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const next = resolveNextGitHistoryLimit(gitHistoryState.result?.limit)
+    if (next === null) {
+      return
+    }
+    gitHistoryLimitByWorktreeRef.current[activeWorktreeId] = next
+    await refreshGitHistoryRef.current()
+  }, [activeWorktreeId, gitHistoryState])
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
@@ -6301,9 +6330,11 @@ function SourceControlInner(): React.JSX.Element {
             <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
               <GitHistoryPanel
                 state={gitHistoryState}
+                worktreeId={activeWorktreeId ?? undefined}
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
+                onLoadMore={() => void loadMoreGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}

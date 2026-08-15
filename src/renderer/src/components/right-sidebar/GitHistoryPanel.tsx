@@ -4,14 +4,19 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import {
+  GIT_HISTORY_MAX_LIMIT,
+  type GitHistoryItem,
+  type GitHistoryResult
+} from '../../../../shared/git-history'
 import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels
 } from '../../../../shared/git-history-graph'
 import { GitHistoryRow } from './GitHistoryRow'
-import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
+import { GitHistoryCommitFiles } from './GitHistoryCommitFiles'
+import { useGitHistoryCommitExpansion } from './useGitHistoryCommitExpansion'
 import {
   GitHistoryCommitContextMenu,
   type GitHistoryCommitAction
@@ -42,18 +47,23 @@ function clampGitHistoryPanelHeight(height: number): number {
 
 export function GitHistoryPanel({
   state,
+  worktreeId,
   collapsed,
   onToggle,
   onRefresh,
+  onLoadMore,
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
   onCommitAction
 }: {
   state: GitHistoryPanelState
+  // The worktree this history belongs to; scopes the per-commit expansion/file caches.
+  worktreeId?: string
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
+  onLoadMore?: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
   onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
   onOpenCommitFile?: (
@@ -81,65 +91,17 @@ export function GitHistoryPanel({
   }, [result])
 
   const loading = state.status === 'loading' || state.status === 'refreshing'
+  // Why: the git layer clamps at GIT_HISTORY_MAX_LIMIT, so stop offering paging once there.
+  const canLoadMore = Boolean(onLoadMore && result?.hasMore && result.limit < GIT_HISTORY_MAX_LIMIT)
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
-  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
-  // never refetches; an entry is cleared on error to allow a retry.
-  const loadedCommitsRef = useRef<Set<string>>(new Set())
-
-  // A new history result can reorder or replace commits, so drop any expansion
-  // and cached file lists rather than risk showing stale files under a row.
-  useEffect(() => {
-    setExpanded(new Set())
-    setFilesByCommit({})
-    loadedCommitsRef.current = new Set()
-  }, [result])
-
-  const handleToggleExpand = useCallback(
-    (item: GitHistoryItem): void => {
-      const id = item.id
-      const willExpand = !expanded.has(id)
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (willExpand) {
-          next.add(id)
-        } else {
-          next.delete(id)
-        }
-        return next
-      })
-      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
-        return
-      }
-      loadedCommitsRef.current.add(id)
-      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
-      onLoadCommitFiles(item)
-        .then((entries) => {
-          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
-        })
-        .catch((error: unknown) => {
-          loadedCommitsRef.current.delete(id)
-          setFilesByCommit((prev) => ({
-            ...prev,
-            [id]: {
-              status: 'error',
-              error:
-                error instanceof Error
-                  ? error.message
-                  : translate(
-                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
-                      'Failed to load commit files'
-                    )
-            }
-          }))
-        })
-    },
-    [expanded, onLoadCommitFiles]
-  )
+  const { expanded, filesByCommit, toggleExpand } = useGitHistoryCommitExpansion({
+    result,
+    worktreeId,
+    onLoadCommitFiles
+  })
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -354,7 +316,7 @@ export function GitHistoryPanel({
                 expanded={isExpanded}
                 preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
                 onOpenCommit={onOpenCommit}
-                onToggleExpand={canExpand ? handleToggleExpand : undefined}
+                onToggleExpand={canExpand ? toggleExpand : undefined}
               />
             )
             return (
@@ -379,6 +341,23 @@ export function GitHistoryPanel({
               </React.Fragment>
             )
           })}
+          {canLoadMore && (
+            <div className="flex justify-center px-6 py-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-auto py-0.5 text-[11px] text-muted-foreground"
+                disabled={loading}
+                onClick={onLoadMore}
+              >
+                {translate(
+                  'auto.components.right.sidebar.GitHistoryPanel.loadMoreCommits',
+                  'Load more commits'
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
