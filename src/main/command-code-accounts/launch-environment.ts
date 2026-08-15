@@ -1,8 +1,6 @@
-import type { TuiAgent } from '../../shared/tui-agent'
-
 export function applyCommandCodeManagedCredentialToLaunchEnv(args: {
   env: Record<string, string> | undefined
-  launchAgent: TuiAgent | string | undefined
+  launchAgent: string | undefined
   connectionId: string | null | undefined
   runtime: 'host' | 'wsl'
   reattached: boolean

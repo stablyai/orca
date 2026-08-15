@@ -22,7 +22,7 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
+import { stripTerminalControlCharacters } from '../../shared/ansi-escape-sequences'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -50,16 +50,12 @@ type AccountsBlock = {
   }
 }
 
-function sanitizeAccountListField(value: string): string {
-  return stripAnsiEscapeSequences(value).replace(/[\u0000-\u001F\u007F]/g, '')
-}
-
 function formatAccountDisplayName(account: {
   email: string
   workspaceLabel?: string | null
 }): string {
-  const label = sanitizeAccountListField(account.workspaceLabel?.trim() ?? '')
-  return label || sanitizeAccountListField(account.email)
+  const label = stripTerminalControlCharacters(account.workspaceLabel?.trim() ?? '')
+  return label || stripTerminalControlCharacters(account.email)
 }
 
 /** Renders a provider's managed-account list as a human-readable block, marking the active account. */

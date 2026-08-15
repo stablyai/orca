@@ -25,3 +25,11 @@ export function stripAnsiEscapeSequences(value: string): string {
     .replace(CSI_SEQUENCE_PATTERN, '')
     .replace(ESCAPE_SEQUENCE_PATTERN, '')
 }
+
+/**
+ * Strips escapes and every control byte, tabs and line breaks included, so a
+ * value can be written into a single line of terminal output verbatim.
+ */
+export function stripTerminalControlCharacters(value: string): string {
+  return stripAnsiEscapeSequences(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+}

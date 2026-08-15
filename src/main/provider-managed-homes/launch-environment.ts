@@ -1,5 +1,4 @@
 import type { ManagedCliHomeProvider } from '../../shared/managed-account-types'
-import type { TuiAgent } from '../../shared/tui-agent'
 
 const ENV_KEYS: Record<ManagedCliHomeProvider, 'GROK_HOME' | 'GEMINI_CLI_HOME'> = {
   grok: 'GROK_HOME',
@@ -9,7 +8,7 @@ const ENV_KEYS: Record<ManagedCliHomeProvider, 'GROK_HOME' | 'GEMINI_CLI_HOME'> 
 export function applyManagedProviderHomeToLaunchEnv(args: {
   provider: ManagedCliHomeProvider
   env: Record<string, string> | undefined
-  launchAgent: TuiAgent | string | undefined
+  launchAgent: string | undefined
   connectionId: string | null | undefined
   runtime: 'host' | 'wsl'
   reattached: boolean

@@ -1,3 +1,4 @@
+import type * as NodeChildProcess from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -5,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const spawnMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:child_process', async () => {
-  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+  const actual = await vi.importActual<typeof NodeChildProcess>('node:child_process')
   return {
     ...actual,
     spawn: spawnMock
