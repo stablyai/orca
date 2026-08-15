@@ -115,6 +115,7 @@ import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fe
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
+import { AgentSessionProjectAssociationStore } from '../ai-vault/session-project-association-store'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
@@ -292,9 +293,10 @@ import {
 } from '../../shared/execution-host'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { getRegisteredSshState } from '../ipc/ssh'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
+import {
+  isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -1145,6 +1147,7 @@ export type CodexRateLimitResetRpcResult = {
 )
 
 type RuntimeStore = {
+  getProfileStorageDirectory?: Store['getProfileStorageDirectory']
   getRepos: Store['getRepos']
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
@@ -2750,6 +2753,7 @@ export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
+  private readonly agentSessionProjectAssociations: AgentSessionProjectAssociationStore | null
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3453,6 +3457,11 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.agentSessionProjectAssociations = store?.getProfileStorageDirectory
+      ? new AgentSessionProjectAssociationStore(
+          join(store.getProfileStorageDirectory(), 'agent-session-project-associations.json')
+        )
+      : null
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -5098,8 +5107,61 @@ export class OrcaRuntimeService {
   // Why: scans the transcript-owning host's disk (correct by construction over
   // RPC — a remote/SSH host scans its own disk). Delegates to the one shared
   // cache so the desktop panel and the mobile screen never double-scan.
-  listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
-    return listAiVaultSessions(args)
+  async listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
+    const result = await listAiVaultSessions(args)
+    if (!this.agentSessionProjectAssociations || !this.store) {
+      return result
+    }
+    return this.agentSessionProjectAssociations.enrich({
+      result,
+      projects: this.listProjects(),
+      worktrees: [...(await this.getResolvedWorktreeMap()).values()],
+      hookSessions: this.getAgentProviderSessionSnapshotFn?.() ?? []
+    })
+  }
+
+  async resumeAiVaultSession(args: {
+    sessionId: string
+    worktree: string
+    presentation?: RuntimeTerminalPresentation
+  }): Promise<RuntimeEnsureAgentSessionResult> {
+    const result = await this.listAiVaultSessions({ unlimited: true, force: true })
+    const session = result.sessions.find((candidate) => candidate.id === args.sessionId)
+    if (!session?.providerSession || !session.project) {
+      throw new Error('agent_session_not_found')
+    }
+    if (!isResumableTuiAgent(session.agent)) {
+      throw new Error('agent_session_not_resumable')
+    }
+    const worktree = await this.resolveWorktreeSelector(args.worktree)
+    const targetProject = this.listProjects().find(
+      (project) =>
+        project.id === worktree.projectId || project.sourceRepoIds.includes(worktree.repoId)
+    )
+    if (targetProject?.id !== session.project.id || worktree.isArchived) {
+      throw new Error('agent_session_project_mismatch')
+    }
+    return this.ensureAgentSession({
+      kind: 'explicit',
+      worktree: `id:${worktree.id}`,
+      agent: session.agent,
+      providerSession: session.providerSession,
+      ...(session.agent === 'omp' ? { ompResumeFilePath: session.filePath } : {}),
+      ...(args.presentation ? { presentation: args.presentation } : {})
+    })
+  }
+
+  async stopAiVaultSession(sessionId: string): Promise<RuntimeTerminalClose> {
+    const session = (
+      await this.listAiVaultSessions({ unlimited: true, force: true })
+    ).sessions.find((candidate) => candidate.id === sessionId)
+    if (!session) {
+      throw new Error('agent_session_not_found')
+    }
+    if (!session.liveTerminalHandle) {
+      throw new Error('agent_session_not_live')
+    }
+    return this.closeTerminal(session.liveTerminalHandle)
   }
 
   resolveAiVaultSessionTitles(
@@ -10920,6 +10982,48 @@ export class OrcaRuntimeService {
       }
     }
     return retainedChanged
+  }
+
+  captureAgentSessionProjectAssociation(
+    payload: Pick<AgentStatusIpcPayload, 'worktreeId' | 'agentType' | 'providerSession'>
+  ): void {
+    const worktreeId = payload.worktreeId
+    if (
+      !worktreeId ||
+      !payload.agentType ||
+      !payload.providerSession ||
+      !this.agentSessionProjectAssociations ||
+      !this.store
+    ) {
+      return
+    }
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    if (!parsed) {
+      return
+    }
+    const meta = this.store.getWorktreeMeta(worktreeId)
+    const projects = this.listProjects()
+    const project =
+      (meta?.projectId
+        ? projects.find((candidate) => candidate.id === meta.projectId)
+        : undefined) ??
+      projects.find((candidate) => candidate.sourceRepoIds.includes(parsed.repoId))
+    if (!project) {
+      return
+    }
+    void this.agentSessionProjectAssociations
+      .capture({
+        agent: payload.agentType,
+        providerSession: payload.providerSession,
+        worktree: {
+          id: worktreeId,
+          repoId: parsed.repoId,
+          path: parsed.worktreePath,
+          ...(meta?.projectId ? { projectId: meta.projectId } : {})
+        },
+        project
+      })
+      .catch((error) => console.warn('[agent-session] project association capture failed', error))
   }
 
   private retainAgentRowSnapshot(
@@ -18069,6 +18173,7 @@ export class OrcaRuntimeService {
         workspaceKind: 'git',
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        ...(worktree.projectId ? { projectId: worktree.projectId } : {}),
         ...((worktree.hostId ?? meta?.hostId) ? { hostId: worktree.hostId ?? meta?.hostId } : {}),
         terminalPlatform,
         repo: repo?.displayName ?? worktree.repoId,

@@ -767,6 +767,7 @@ export type RuntimeWorktreePsSummary = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
+  projectId?: string
   hostId?: Worktree['hostId']
   terminalPlatform?: NodeJS.Platform
   repo: string

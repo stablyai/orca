@@ -35,11 +35,47 @@ function runtimeStub() {
   return {
     getRuntimeId: () => 'runtime-1',
     ensureAgentSession: vi.fn().mockResolvedValue(terminalResult()),
-    createAgentSession: vi.fn().mockResolvedValue(terminalResult())
+    createAgentSession: vi.fn().mockResolvedValue(terminalResult()),
+    listAiVaultSessions: vi.fn().mockResolvedValue({ sessions: [], issues: [], scannedAt: 'now' }),
+    resumeAiVaultSession: vi.fn().mockResolvedValue(terminalResult('adopted')),
+    stopAiVaultSession: vi
+      .fn()
+      .mockResolvedValue({ handle: 'term_1', tabId: 'tab-1', ptyKilled: true })
   }
 }
 
 describe('agent session RPC methods', () => {
+  it('exposes list, project-safe resume, and stop through the common session namespace', async () => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+    expect(await dispatcher.dispatch(request('agentSession.list', { limit: 50 }))).toMatchObject({
+      ok: true,
+      result: { sessions: [] }
+    })
+    expect(
+      await dispatcher.dispatch(
+        request('agentSession.resume', {
+          sessionId: 'codex:session-1',
+          worktree: 'id:repo::/workspace/task',
+          presentation: 'focused'
+        })
+      )
+    ).toMatchObject({ ok: true, result: { disposition: 'adopted' } })
+    expect(
+      await dispatcher.dispatch(request('agentSession.stop', { sessionId: 'codex:session-1' }))
+    ).toMatchObject({ ok: true, result: { ptyKilled: true } })
+    expect(runtime.listAiVaultSessions).toHaveBeenCalledWith({ limit: 50 })
+    expect(runtime.resumeAiVaultSession).toHaveBeenCalledWith({
+      sessionId: 'codex:session-1',
+      worktree: 'id:repo::/workspace/task',
+      presentation: 'focused'
+    })
+    expect(runtime.stopAiVaultSession).toHaveBeenCalledWith('codex:session-1')
+  })
+
   it('dispatches an explicit structured resume without an authoritative command', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({

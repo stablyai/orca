@@ -179,6 +179,36 @@ describe('mobile AI Vault resume target guards', () => {
     })
   })
 
+  it('never resumes a deleted-worktree session in an unrelated active project', () => {
+    const target = resolveMobileAiVaultSessionResumeTarget({
+      session: session({
+        cwd: '/Users/ada/removed/task',
+        project: {
+          id: 'project-orca',
+          repoId: 'orca-repo',
+          displayName: 'Orca',
+          originalWorktreeId: 'removed-wt',
+          originalWorktreePath: '/Users/ada/removed/task',
+          workspaceAvailability: 'missing'
+        }
+      }),
+      activeWorktreeId: 'hq-wt',
+      worktrees: [
+        worktree({
+          worktreeId: 'hq-wt',
+          repoId: 'hq-repo',
+          projectId: 'project-hq',
+          path: '/Users/ada/hq'
+        })
+      ],
+      repos
+    })
+    expect(target).toEqual({
+      status: 'blocked',
+      message: 'Open a worktree for Orca before resuming this session.'
+    })
+  })
+
   it('falls back to the active route worktree when the session worktree is archived', () => {
     const target = resolveMobileAiVaultSessionResumeTarget({
       session: session({ cwd: '/Users/ada/repo/archive/src' }),

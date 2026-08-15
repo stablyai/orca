@@ -111,6 +111,8 @@ const ProviderSession = z
   })
   .strict()
 
+const HistorySessionId = StrictNonEmptyString(4096, 'Invalid session ID')
+
 const AutomaticEnsure = z
   .object({
     kind: z.literal('automatic'),
@@ -201,6 +203,12 @@ type AgentSessionRuntime = OrcaRuntimeService & {
     request: RuntimeCreateAgentSessionRequest,
     caller?: RuntimeAgentSessionRpcCaller
   ): Promise<RuntimeCreateAgentSessionResult>
+  resumeAiVaultSession(args: {
+    sessionId: string
+    worktree: string
+    presentation?: 'background' | 'focused'
+  }): Promise<RuntimeEnsureAgentSessionResult>
+  stopAiVaultSession(sessionId: string): Promise<unknown>
 }
 
 function callerContext(
@@ -234,6 +242,32 @@ function assertOperationTimestampWithinFutureSkew(clientOperationId: string): vo
 }
 
 export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+  defineMethod({
+    name: 'agentSession.list',
+    params: z.object({ limit: z.number().int().positive().max(10_000).optional() }).strict(),
+    handler: (params, { runtime }) =>
+      (runtime as AgentSessionRuntime).listAiVaultSessions({ limit: params.limit ?? 1000 })
+  }),
+  defineMethod({
+    name: 'agentSession.resume',
+    params: z
+      .object({
+        sessionId: HistorySessionId,
+        worktree: WorktreeSelector,
+        presentation: Presentation.optional()
+      })
+      .strict(),
+    handler: (params, { runtime, clientKind }) =>
+      (runtime as AgentSessionRuntime).resumeAiVaultSession(
+        withExecutionHostAgentPresentation(params, clientKind)
+      )
+  }),
+  defineMethod({
+    name: 'agentSession.stop',
+    params: z.object({ sessionId: HistorySessionId }).strict(),
+    handler: (params, { runtime }) =>
+      (runtime as AgentSessionRuntime).stopAiVaultSession(params.sessionId)
+  }),
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,

@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 
 export const AI_VAULT_AGENTS = [
   'claude',
@@ -86,6 +87,16 @@ export type AiVaultSession = {
   executionHostPlatform?: NodeJS.Platform | null
   agent: AiVaultAgent
   sessionId: string
+  providerSession?: AgentProviderSessionMetadata
+  project?: {
+    id: string
+    repoId: string
+    displayName: string
+    originalWorktreeId: string
+    originalWorktreePath: string
+    workspaceAvailability: 'active' | 'archived' | 'missing'
+  }
+  liveTerminalHandle?: string
   title: string
   cwd: string | null
   branch: string | null

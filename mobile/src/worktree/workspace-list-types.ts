@@ -6,6 +6,7 @@ export type Worktree = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
+  projectId?: string
   hostId?: ExecutionHostId
   terminalPlatform?: NodeJS.Platform
   repo: string

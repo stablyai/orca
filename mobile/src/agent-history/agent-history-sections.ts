@@ -1,7 +1,4 @@
-import {
-  filterAiVaultSessions,
-  groupAiVaultSessions
-} from '../../../src/shared/ai-vault-session-filters'
+import { filterAiVaultSessions } from '../../../src/shared/ai-vault-session-filters'
 import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
@@ -20,7 +17,7 @@ export type MobileAgentHistorySection = {
 // Why: the host treats scopePaths as a WIDENING union (it adds in-scope sessions
 // beyond the recency cap, never restricts), so the Workspace/Project tabs must
 // narrow on the client like the desktop panel does. Mobile has no project-key
-// metadata, so both scoped tabs narrow by cwd path-prefix: Workspace = the active
+// metadata for legacy transcripts, so those scoped tabs narrow by cwd path-prefix: Workspace = the active
 // worktree path, Project = the active worktree + same-repo siblings (the same set
 // deriveMobileAiVaultScopePaths produces). 'all' applies no path narrowing.
 // hideEmptySessions matches the desktop default.
@@ -48,9 +45,16 @@ export function buildMobileAgentHistorySections(
     hideEmptySessions: true
   })
 
-  const groups = groupAiVaultSessions(filtered, 'folder')
-  return groups.map((group) => ({
-    key: group.key,
+  const groups = new Map<string, { label: string; sessions: AiVaultSession[] }>()
+  for (const session of filtered) {
+    const key = session.project ? `project:${session.project.id}` : `folder:${session.cwd ?? ''}`
+    const label = session.project?.displayName ?? session.cwd ?? 'Unknown folder'
+    const group = groups.get(key) ?? { label, sessions: [] }
+    group.sessions.push(session)
+    groups.set(key, group)
+  }
+  return [...groups.entries()].map(([key, group]) => ({
+    key,
     label: group.label,
     data: group.sessions.map((session) =>
       buildMobileAgentHistoryCard(session, options.activeWorktreePath, options.now)

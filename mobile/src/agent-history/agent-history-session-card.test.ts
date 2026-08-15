@@ -92,6 +92,37 @@ describe('isSessionInActiveWorktree', () => {
 })
 
 describe('buildMobileAgentHistorySections', () => {
+  it('groups attributed sessions by durable project name instead of worktree folder', () => {
+    const project = {
+      id: 'project-orca',
+      repoId: 'repo-orca',
+      displayName: 'Orca',
+      originalWorktreeId: 'worktree-old',
+      originalWorktreePath: '/Users/ada/worktrees/orca/task-old',
+      workspaceAvailability: 'missing' as const
+    }
+    const sections = buildMobileAgentHistorySections(
+      [
+        session({
+          id: 'codex:one',
+          agent: 'codex',
+          cwd: '/Users/ada/worktrees/orca/task-one',
+          project
+        }),
+        session({
+          id: 'codex:two',
+          agent: 'codex',
+          cwd: '/Users/ada/worktrees/orca/task-two',
+          project
+        })
+      ],
+      { query: '', scope: 'all', scopeFilterPaths: [], activeWorktreePath: null, now: NOW }
+    )
+    expect(sections).toHaveLength(1)
+    expect(sections[0]).toMatchObject({ key: 'project:project-orca', label: 'Orca' })
+    expect(sections[0].data.map((card) => card.id)).toEqual(['codex:one', 'codex:two'])
+  })
+
   it('hides empty sessions by default and groups remaining by folder', () => {
     const sections = buildMobileAgentHistorySections(
       [

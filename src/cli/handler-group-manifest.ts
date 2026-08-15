@@ -13,6 +13,16 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'agent-session',
+    keys: [
+      'agent session start',
+      'agent session list',
+      'agent session resume',
+      'agent session stop'
+    ],
+    load: async () => (await import('./handlers/agent-session.js')).AGENT_SESSION_HANDLERS
+  },
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS

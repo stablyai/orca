@@ -2306,6 +2306,11 @@ void app.whenReady().then(async () => {
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
   const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
+    runtime?.captureAgentSessionProjectAssociation({
+      worktreeId: enriched.worktreeId,
+      agentType: enriched.payload.agentType,
+      providerSession: enriched.providerSession
+    })
     if (hookStatusChangedSessionTabs(enriched)) {
       runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
@@ -2558,6 +2563,9 @@ void app.whenReady().then(async () => {
     orchestrationEnvironmentTransport
   })
   runtime = runtimeService
+  for (const status of agentHookServer.getStatusSnapshot()) {
+    runtimeService.captureAgentSessionProjectAssociation(status)
+  }
   runtimeService.prepareLegacyWorkerTerminalRecovery()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {

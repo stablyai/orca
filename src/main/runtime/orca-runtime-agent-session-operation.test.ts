@@ -290,3 +290,51 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 })
+
+describe('AI Vault session resume', () => {
+  it('passes the scanned OMP session file through the provider adapter', async () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'listAiVaultSessions').mockResolvedValue({
+      sessions: [
+        {
+          id: 'omp:session-1',
+          agent: 'omp',
+          sessionId: 'session-1',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          filePath: '/profile/omp/project/session-1.jsonl',
+          project: { id: 'orca' }
+        }
+      ],
+      issues: [],
+      scannedAt: '2026-08-15T00:00:00.000Z'
+    } as never)
+    vi.spyOn(runtime, 'listProjects').mockReturnValue([
+      { id: 'orca', sourceRepoIds: ['repo-orca'] }
+    ] as never)
+    const internals = runtime as unknown as {
+      resolveWorktreeSelector: ReturnType<typeof vi.fn>
+    }
+    internals.resolveWorktreeSelector = vi.fn(async () => ({
+      id: 'repo-orca::/workspace/orca/task',
+      repoId: 'repo-orca',
+      projectId: 'orca',
+      isArchived: false
+    }))
+    const ensure = vi
+      .spyOn(runtime, 'ensureAgentSession')
+      .mockResolvedValue({ disposition: 'adopted' } as never)
+
+    await runtime.resumeAiVaultSession({
+      sessionId: 'omp:session-1',
+      worktree: 'id:repo-orca::/workspace/orca/task'
+    })
+
+    expect(ensure).toHaveBeenCalledWith({
+      kind: 'explicit',
+      worktree: 'id:repo-orca::/workspace/orca/task',
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      ompResumeFilePath: '/profile/omp/project/session-1.jsonl'
+    })
+  })
+})
