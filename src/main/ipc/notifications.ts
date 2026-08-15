@@ -106,6 +106,13 @@ let deliveryProbeInFlight: Promise<NotificationDeliveryProbeResult> | null = nul
 // Why: firing one probe instantiates Electron's presenter and pops the macOS permission dialog; once per session is enough.
 let permissionDialogTriggeredThisSession = false
 
+// Why: only stamp once Orca has actually asked the OS (or the OS already answered), so the flag can never claim a prompt that never happened.
+function markNotificationPromptAttempted(store: Store): void {
+  if (store.getUI().notificationPermissionRequested !== true) {
+    store.updateUI({ notificationPermissionRequested: true })
+  }
+}
+
 /**
  * Fallback for hosts without the native helper: schedules a silent probe and reports whether macOS accepted it.
  * On a fresh install the probe also instantiates Electron's presenter, which pops the macOS permission dialog.
@@ -337,23 +344,23 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       if (process.platform !== 'darwin' || !Notification.isSupported()) {
         return { state: 'unsupported', authoritative: false }
       }
-      // Why: probes surface the macOS permission dialog, so mark startup registration done to avoid a second prompt later.
-      if (store.getUI().notificationPermissionRequested !== true) {
-        store.updateUI({ notificationPermissionRequested: true })
-      }
       // Preferred source: the bundled helper reads real auth silently, so polling tracks System Settings changes without banners.
       const authorization = await readNotificationAuthorizationStatus()
       if (authorization === 'authorized') {
+        // Why: the OS already has an opinion, so no startup prompt is owed.
+        markNotificationPromptAttempted(store)
         lastObservedDeliveryOutcome = 'delivered'
         return { state: 'delivered', authoritative: true }
       }
       if (authorization === 'denied') {
+        markNotificationPromptAttempted(store)
         lastObservedDeliveryOutcome = 'failed'
         return { state: 'blocked', authoritative: true }
       }
       if (authorization === 'not-determined') {
         // Why: the dialog only appears once something asks; fire one probe per session to trigger it, then report pending.
         if (!permissionDialogTriggeredThisSession) {
+          markNotificationPromptAttempted(store)
           void probeNotificationDelivery()
         }
         return { state: 'awaiting-decision', authoritative: true }
@@ -365,6 +372,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           authoritative: false
         }
       }
+      markNotificationPromptAttempted(store)
       return probeNotificationDelivery()
     }
   )
@@ -455,9 +463,9 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { delivered: false, reason: 'not-supported' }
       }
 
-      function deliverNativeNotification():
-        | NotificationDispatchResult
-        | Promise<NotificationDispatchResult> {
+      function deliverNativeNotification(
+        awaitingPermission = false
+      ): NotificationDispatchResult | Promise<NotificationDispatchResult> {
         if (getEffectiveNotificationSoundId(settings) !== 'system') {
           notificationOptions.silent = true
         } else if (process.platform === 'darwin') {
@@ -556,22 +564,40 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
               release()
               return { delivered: false, reason: 'not-displayed' }
             }
+            // Why: macOS emits 'show' for requests it queues behind an unanswered permission dialog, so
+            // a confirmed show proves nothing while undecided — re-read to see whether the user just allowed it.
+            if (awaitingPermission) {
+              return readNotificationAuthorizationStatus().then((authorization) => {
+                if (authorization !== 'authorized') {
+                  return { delivered: false, reason: 'blocked-by-system' as const }
+                }
+                lastObservedDeliveryOutcome = 'delivered'
+                return { delivered: true }
+              })
+            }
             lastObservedDeliveryOutcome = 'delivered'
             return { delivered: true }
           })
         }
 
-        return { delivered: true }
+        // Why: macOS accepts requests while undecided but displays nothing, so an unconfirmed send must not claim success.
+        return awaitingPermission
+          ? { delivered: false, reason: 'blocked-by-system' }
+          : { delivered: true }
       }
 
       if (process.platform !== 'darwin') {
         return deliverNativeNotification()
       }
-      // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
+      // Why: macOS silently swallows notifications while permission is denied (verified macOS 26); skip so the renderer can show a fallback.
       return readNotificationAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
+        if (authorization === 'denied') {
           lastObservedDeliveryOutcome = 'failed'
           return { delivered: false, reason: 'blocked-by-system' }
+        }
+        // Why: show() is the only call that makes macOS present the permission dialog, so an undecided state must reach it.
+        if (authorization === 'not-determined') {
+          return deliverNativeNotification(true)
         }
         return deliverNativeNotification()
       })
@@ -628,18 +654,32 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   })
 }
 
+let startupRegistrationInFlight: Promise<void> | null = null
+
 /**
  * On first launch (macOS permission 'not-determined'), show a welcome notification to trigger the system prompt.
  *
  * Why: macOS requires at least one notification attempt before it will prompt to allow/deny.
  */
-export function triggerStartupNotificationRegistration(store: Store): void {
+export function triggerStartupNotificationRegistration(store: Store): Promise<void> {
   if (process.platform !== 'darwin' || !Notification.isSupported()) {
+    return Promise.resolve()
+  }
+  // Why: the readout is async now, so two window 'show' events must not each fire a welcome banner.
+  startupRegistrationInFlight ??= runStartupNotificationRegistration(store).finally(() => {
+    startupRegistrationInFlight = null
+  })
+  return startupRegistrationInFlight
+}
+
+async function runStartupNotificationRegistration(store: Store): Promise<void> {
+  const authorization = await readNotificationAuthorizationStatus()
+  // Why: a definitive readout means there is nothing left to prompt for.
+  if (authorization === 'authorized' || authorization === 'denied') {
     return
   }
-  // Why: fire once per install, not on every launch where status stays not-determined (e.g. user dismisses the dialog).
-  const ui = store.getUI()
-  if (ui.notificationPermissionRequested) {
+  // Why: the helper proving 'not-determined' outranks the sticky flag, which can be stamped without any OS interaction.
+  if (authorization !== 'not-determined' && store.getUI().notificationPermissionRequested) {
     return
   }
   store.updateUI({ notificationPermissionRequested: true })

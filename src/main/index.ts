@@ -3164,7 +3164,9 @@ void app.whenReady().then(async () => {
     }
     const onboarding = store.getOnboarding()
     if (onboarding.closedAt !== null) {
-      triggerStartupNotificationRegistration(store)
+      triggerStartupNotificationRegistration(store).catch((error) => {
+        console.warn('[notifications] startup registration failed:', error)
+      })
     }
   })
 })
