@@ -9,6 +9,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
+import { resetLinuxPtyChildPriority } from '../../pty/linux-pty-child-priority'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
@@ -103,6 +104,8 @@ export async function spawnNativeDaemonPty(args: {
       recover: physical.recover
     })
     physical.observeExit()
+    // Why: Electron's nice -8 must not pass to the shell or compilers it starts (#14639).
+    resetLinuxPtyChildPriority(proc.pid)
     reportsChildExitStatus = hostReportsChildExitStatus(tcc.file)
     try {
       args.onMacosTccSpawnStrategy?.(tcc.file === shellPath ? 'direct' : 'wrapped')
