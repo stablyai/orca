@@ -657,6 +657,8 @@ describe('wrapRuntimeHomeHookCommand', () => {
     expect(command).not.toContain('uname')
     expect(command).toContain('"$HOME/.orca/agent-hooks/claude-hook.cmd"')
     expect(command).toContain('/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"')
+    expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
+    expect(command).not.toContain('"$SYSTEMROOT/')
     expect(command).not.toMatch(/[A-Z]:[\\/]|\/Users\/|\/home\//)
   })
 
