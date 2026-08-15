@@ -50,6 +50,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
       ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
+      ORCA_OMP_FRESH_SESSION_DIR: 'C:\\Users\\jin\\.omp\\agent\\sessions\\orca-worktrees\\abc',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
@@ -72,6 +73,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).not.toContain('ORCA_CODEX_LAUNCH_PREFLIGHT')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+    expect(env.WSLENV).toContain('ORCA_OMP_FRESH_SESSION_DIR/p')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')

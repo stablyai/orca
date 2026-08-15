@@ -5,6 +5,10 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
+import {
+  ORCA_OMP_FORCE_NEW_SESSION_ENV,
+  ORCA_OMP_FRESH_SESSION_DIR_ENV
+} from '../../shared/omp-fresh-session-env'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
@@ -41,6 +45,13 @@ fi
     { mode: 0o755 }
   )
   chmodSync(ompPath, 0o755)
+}
+
+function readCapturedArgs(captureFile: string): string[] {
+  return readFileSync(captureFile, 'utf8')
+    .split('\n')
+    .filter((line) => /^ARG\d+=/.test(line))
+    .map((line) => line.replace(/^ARG\d+=/, ''))
 }
 
 async function runInteractiveBashPty(args: {
@@ -168,6 +179,167 @@ exit 0
     expect(wrapped).toContain('ARG3=ask')
     expect(readFileSync(wrappedAfterPi, 'utf8')).toBe('')
   })
+
+  itWithBash(
+    'forces a new OMP launch onto the fresh session directory with status extension',
+    async () => {
+      const tempDir = makeTempDir()
+      const binDir = join(tempDir, 'bin')
+      const sourceDir = join(tempDir, 'source-omp-agent')
+      const freshSessionDir = join(tempDir, 'fresh-omp-sessions')
+      const extensionDir = join(sourceDir, 'extensions')
+      mkdirSync(binDir)
+      mkdirSync(extensionDir, { recursive: true })
+      const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+      writeFileSync(statusExtension, 'export default {}')
+      writeFakeOmp(binDir)
+
+      const captureFile = join(tempDir, 'fresh-capture')
+      const forceAfterFile = join(tempDir, 'force-after')
+      await runInteractiveBashPty({
+        cwd: tempDir,
+        rcfileContent: getPosixOmpShellWrapper(),
+        env: {
+          ...process.env,
+          HOME: tempDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          PI_CODING_AGENT_DIR: '',
+          ORCA_PI_CODING_AGENT_DIR: '',
+          ORCA_OMP_CODING_AGENT_DIR: '',
+          ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
+          ORCA_OMP_STATUS_EXTENSION: statusExtension,
+          ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
+          ORCA_CAPTURE_FILE: captureFile,
+          ORCA_FORCE_AFTER_FILE: forceAfterFile,
+          [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1',
+          [ORCA_OMP_FRESH_SESSION_DIR_ENV]: freshSessionDir,
+          TERM: process.env.TERM || 'xterm-256color'
+        },
+        input: `omp ask
+printf '%s' "$${ORCA_OMP_FORCE_NEW_SESSION_ENV}" > "$ORCA_FORCE_AFTER_FILE"
+exit 0
+`
+      })
+
+      expect(readCapturedArgs(captureFile)).toEqual([
+        '--extension',
+        statusExtension,
+        '--session-dir',
+        freshSessionDir,
+        'ask'
+      ])
+      expect(readFileSync(forceAfterFile, 'utf8')).toBe('')
+    }
+  )
+
+  itWithBash('preserves omp launch dispatch when forcing a fresh session directory', async () => {
+    const tempDir = makeTempDir()
+    const binDir = join(tempDir, 'bin')
+    const sourceDir = join(tempDir, 'source-omp-agent')
+    const freshSessionDir = join(tempDir, 'fresh-omp-sessions')
+    const extensionDir = join(sourceDir, 'extensions')
+    mkdirSync(binDir)
+    mkdirSync(extensionDir, { recursive: true })
+    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    writeFileSync(statusExtension, 'export default {}')
+    writeFakeOmp(binDir)
+
+    const captureFile = join(tempDir, 'fresh-launch-capture')
+    await runInteractiveBashPty({
+      cwd: tempDir,
+      rcfileContent: getPosixOmpShellWrapper(),
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        PI_CODING_AGENT_DIR: '',
+        ORCA_PI_CODING_AGENT_DIR: '',
+        ORCA_OMP_CODING_AGENT_DIR: '',
+        ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
+        ORCA_OMP_STATUS_EXTENSION: statusExtension,
+        ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
+        ORCA_CAPTURE_FILE: captureFile,
+        [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1',
+        [ORCA_OMP_FRESH_SESSION_DIR_ENV]: freshSessionDir,
+        TERM: process.env.TERM || 'xterm-256color'
+      },
+      input: `omp launch codex
+exit 0
+`
+    })
+
+    expect(readCapturedArgs(captureFile)).toEqual([
+      'launch',
+      '--extension',
+      statusExtension,
+      '--session-dir',
+      freshSessionDir,
+      'codex'
+    ])
+  })
+
+  itWithBash.each([
+    {
+      name: '--resume',
+      command: 'omp --resume session-1',
+      expectedTail: ['--resume', 'session-1']
+    },
+    { name: '-r', command: 'omp -r session-1', expectedTail: ['-r', 'session-1'] },
+    { name: '--continue', command: 'omp --continue', expectedTail: ['--continue'] },
+    {
+      name: '--session-dir',
+      command: 'omp --session-dir /tmp/orca-explicit-omp-sessions ask',
+      expectedTail: ['--session-dir', '/tmp/orca-explicit-omp-sessions', 'ask']
+    },
+    {
+      name: '--no-session',
+      command: 'omp --no-session ask',
+      expectedTail: ['--no-session', 'ask']
+    },
+    { name: '--fork', command: 'omp --fork ask', expectedTail: ['--fork', 'ask'] }
+  ])(
+    'does not add a fresh session-dir for explicit OMP $name launches',
+    async ({ command, expectedTail }) => {
+      const tempDir = makeTempDir()
+      const binDir = join(tempDir, 'bin')
+      const sourceDir = join(tempDir, 'source-omp-agent')
+      const extensionDir = join(sourceDir, 'extensions')
+      mkdirSync(binDir)
+      mkdirSync(extensionDir, { recursive: true })
+      const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+      writeFileSync(statusExtension, 'export default {}')
+      writeFakeOmp(binDir)
+
+      const captureFile = join(tempDir, 'selector-capture')
+      await runInteractiveBashPty({
+        cwd: tempDir,
+        rcfileContent: getPosixOmpShellWrapper(),
+        env: {
+          ...process.env,
+          HOME: tempDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          PI_CODING_AGENT_DIR: '',
+          ORCA_PI_CODING_AGENT_DIR: '',
+          ORCA_OMP_CODING_AGENT_DIR: '',
+          ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
+          ORCA_OMP_STATUS_EXTENSION: statusExtension,
+          ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
+          ORCA_CAPTURE_FILE: captureFile,
+          [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1',
+          TERM: process.env.TERM || 'xterm-256color'
+        },
+        input: `${command}
+exit 0
+`
+      })
+
+      expect(readCapturedArgs(captureFile)).toEqual([
+        '--extension',
+        statusExtension,
+        ...expectedTail
+      ])
+    }
+  )
 
   itWithBash('runs OMP config subcommands without redirecting the home', async () => {
     const tempDir = makeTempDir()

@@ -15,6 +15,7 @@ import {
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import { buildStartupEnv, withFreshOmpSessionDir } from './tui-agent-startup-building'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
@@ -57,6 +58,7 @@ export function buildAgentStartupPlan(args: {
   isRemote?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
+  const startupEnv = buildStartupEnv(agent, args.agentEnv)
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
@@ -74,6 +76,12 @@ export function buildAgentStartupPlan(args: {
   if (!baseCommand.ok) {
     return null
   }
+  const launchCommand = withFreshOmpSessionDir({
+    agent,
+    command: baseCommand.command,
+    shell,
+    isRemote: args.isRemote
+  })
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     // Why: picker flags are a one-time launch choice; a resumed provider
@@ -87,12 +95,12 @@ export function buildAgentStartupPlan(args: {
     }
     return {
       agent,
-      launchCommand: baseCommand.command,
+      launchCommand,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   }
 
@@ -102,25 +110,25 @@ export function buildAgentStartupPlan(args: {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
     return {
       agent,
-      launchCommand: `${baseCommand.command}${promptSeparator} ${quotedPrompt}`,
+      launchCommand: `${launchCommand}${promptSeparator} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+      launchCommand: `${launchCommand} --prompt ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   }
 
@@ -153,35 +161,35 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+      launchCommand: `${launchCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   }
 
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+      launchCommand: `${launchCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   }
 
   return {
     agent,
-    launchCommand: baseCommand.command,
+    launchCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(startupEnv ? { env: startupEnv } : {})
   }
 }
 
@@ -256,6 +264,7 @@ export function buildAgentDraftLaunchPlan(args: {
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
+  const startupEnv = buildStartupEnv(agent, args.agentEnv)
   const shell = resolveStartupShell(platform, args.shell)
   const config = TUI_AGENT_CONFIG[agent]
   const trimmed = draft.trim()
@@ -284,23 +293,33 @@ export function buildAgentDraftLaunchPlan(args: {
     const quoted = quoteStartupArg(trimmed, shell)
     plan = {
       agent,
-      launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
+      launchCommand: `${withFreshOmpSessionDir({
+        agent,
+        command: baseCommand.command,
+        shell,
+        isRemote: args.isRemote
+      })} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(startupEnv ? { env: startupEnv } : {})
     }
   } else if (config.draftPromptEnvVar) {
     const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
     plan = {
       agent,
-      launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
+      launchCommand: `${withFreshOmpSessionDir({
+        agent,
+        command: baseCommand.command,
+        shell,
+        isRemote: args.isRemote
+      })}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
+      env: { ...startupEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
   if (

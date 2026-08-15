@@ -64,6 +64,8 @@ import { canConfirmAgentFromConsolePresence } from './windows-console-foreground
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { applyOmpFreshSessionDirEnv } from '../pty/omp-fresh-session-dir'
+import { ORCA_OMP_FRESH_SESSION_DIR_ENV } from '../../shared/omp-fresh-session-env'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
@@ -737,9 +739,15 @@ export class LocalPtyProvider implements IPtyProvider {
     if (args.env?.TERM) {
       finalEnv.TERM = args.env.TERM
     }
+    applyOmpFreshSessionDirEnv(finalEnv, { worktreeId: args.worktreeId, cwd })
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
       if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+        if (finalEnv[ORCA_OMP_FRESH_SESSION_DIR_ENV]) {
+          // Why: the concrete OMP command references this host path after WSL starts.
+          // WSLENV's /p flag converts it to a Linux path before `omp` reads argv.
+          addWslEnvKeys(finalEnv, [`${ORCA_OMP_FRESH_SESSION_DIR_ENV}/p`])
+        }
         if (codexHomeWslInfo) {
           if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
             delete finalEnv.CODEX_HOME

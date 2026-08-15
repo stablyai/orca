@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { delimiter } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 
@@ -114,6 +114,11 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { applyOmpFreshSessionDirEnv } from '../pty/omp-fresh-session-dir'
+import {
+  ORCA_OMP_FORCE_NEW_SESSION_ENV,
+  ORCA_OMP_FRESH_SESSION_DIR_ENV
+} from '../../shared/omp-fresh-session-env'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -186,6 +191,33 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('uses the resolved cwd for OMP fresh session dirs when caller omits cwd', async () => {
+      const sourceAgentDir = join('/tmp', 'source-omp-agent')
+      const unknownScopeEnv = {
+        ORCA_OMP_SOURCE_AGENT_DIR: sourceAgentDir,
+        [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1'
+      }
+      applyOmpFreshSessionDirEnv(unknownScopeEnv, {})
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'omp',
+        env: {
+          ORCA_OMP_SOURCE_AGENT_DIR: sourceAgentDir,
+          [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1'
+        }
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env[ORCA_OMP_FRESH_SESSION_DIR_ENV]).toContain(
+        join(sourceAgentDir, 'sessions', 'orca-worktrees')
+      )
+      expect(spawnCall[2].env[ORCA_OMP_FRESH_SESSION_DIR_ENV]).not.toBe(
+        unknownScopeEnv[ORCA_OMP_FRESH_SESSION_DIR_ENV]
+      )
     })
 
     it('does not inherit NODE_ENV from the Orca process env', async () => {

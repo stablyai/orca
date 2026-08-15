@@ -75,7 +75,9 @@ export function launchAgentInWebHostTab(args: {
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
-    ...(hasPrompt
+    // Why: promptless OMP launches still carry one-shot fresh-session env and a
+    // concrete session-dir argv; host shorthand would let OMP auto-resume.
+    ...((hasPrompt || agent === 'omp')
       ? {
           launchAgent: agent,
           command: startupPlan.launchCommand,

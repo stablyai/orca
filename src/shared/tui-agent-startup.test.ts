@@ -6,6 +6,10 @@ import {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix
 } from './tui-agent-startup'
+import {
+  ORCA_OMP_FORCE_NEW_SESSION_ENV,
+  ORCA_OMP_FRESH_SESSION_DIR_ENV
+} from './omp-fresh-session-env'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
@@ -718,6 +722,64 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('sets one-shot fresh-session env for OMP startup without persisting it', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'omp',
+      prompt: 'fix the omp regression',
+      cmdOverrides: {},
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      `omp --session-dir "$${ORCA_OMP_FRESH_SESSION_DIR_ENV}" 'fix the omp regression'`
+    )
+    expect(plan?.env).toEqual({
+      ORCA_AGENT_MODE: 'managed',
+      [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1'
+    })
+    expect(plan?.launchConfig.agentEnv).toEqual({ ORCA_AGENT_MODE: 'managed' })
+    expect(plan?.launchConfig.agentEnv).not.toHaveProperty(ORCA_OMP_FORCE_NEW_SESSION_ENV)
+    expect(plan?.launchConfig.agentEnv).not.toHaveProperty(ORCA_OMP_FRESH_SESSION_DIR_ENV)
+  })
+
+  it.each([
+    ['--resume', 'omp --resume session-1'],
+    ['--continue', 'omp --continue'],
+    ['--session-dir', 'omp --session-dir /tmp/orca-explicit-omp-sessions'],
+    ['--no-session', 'omp --no-session'],
+    ['--fork', 'omp --fork session-1']
+  ])('does not add a fresh OMP session dir to explicit startup selector %s', (_name, command) => {
+    const plan = buildAgentStartupPlan({
+      agent: 'omp',
+      prompt: '',
+      cmdOverrides: { omp: command },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe(command)
+    expect(plan?.launchCommand).not.toContain(ORCA_OMP_FRESH_SESSION_DIR_ENV)
+  })
+
+  it.each([
+    ['--resume', 'omp --resume session-1'],
+    ['--continue', 'omp --continue'],
+    ['--session-dir', 'omp --session-dir /tmp/orca-explicit-omp-sessions'],
+    ['--no-session', 'omp --no-session'],
+    ['--fork', 'omp --fork session-1']
+  ])('does not add a fresh OMP session dir to explicit draft selector %s', (_name, command) => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'omp',
+      draft: 'fix the omp regression',
+      cmdOverrides: { omp: command },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(`${command}; unset ORCA_OMP_PREFILL`)
+    expect(plan?.launchCommand).not.toContain(ORCA_OMP_FRESH_SESSION_DIR_ENV)
+  })
+
   it('captures empty args and env as explicit launch config values', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -840,23 +902,34 @@ describe('tui agent startup plans', () => {
     ).toBe('pi & set "ORCA_PI_PREFILL="')
   })
 
-  it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
+  it('returns an OMP draft plan with one-shot fresh-session env and OMP-scoped prefill', () => {
     // Why: OMP owns its own managed prefill extension and env var.
     // orca-prefill.ts reads ORCA_OMP_PREFILL for OMP launches — see
     // src/main/pi/titlebar-extension-service.ts — so a draft plan for OMP
     // MUST emit that name. A regression here would either silently drop the
-    // draft (Pi var ignored by OMP) or honor a stale Pi-PTY draft.
+    // draft (Pi var ignored by OMP), honor a stale Pi-PTY draft, or persist the
+    // one-shot fresh-session override into later resume launches.
     const plan = buildAgentDraftLaunchPlan({
       agent: 'omp',
       draft: 'fix the omp regression',
       cmdOverrides: {},
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
       platform: 'linux'
     })
 
     expect(plan).not.toBeNull()
-    expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
+    expect(plan?.env).toEqual({
+      ORCA_AGENT_MODE: 'managed',
+      [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1',
+      ORCA_OMP_PREFILL: 'fix the omp regression'
+    })
+    expect(plan?.launchConfig.agentEnv).toEqual({ ORCA_AGENT_MODE: 'managed' })
+    expect(plan?.launchConfig.agentEnv).not.toHaveProperty(ORCA_OMP_FORCE_NEW_SESSION_ENV)
+    expect(plan?.launchConfig.agentEnv).not.toHaveProperty(ORCA_OMP_FRESH_SESSION_DIR_ENV)
     expect(plan?.expectedProcess).toBe('omp')
-    expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
+    expect(plan?.launchCommand).toBe(
+      `omp --session-dir "$${ORCA_OMP_FRESH_SESSION_DIR_ENV}"; unset ORCA_OMP_PREFILL`
+    )
   })
 
   it('returns null for oversized Windows flag drafts so callers paste after ready', () => {

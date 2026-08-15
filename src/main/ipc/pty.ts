@@ -239,6 +239,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
+import { applyOmpFreshSessionDirEnv } from '../pty/omp-fresh-session-dir'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -4731,6 +4732,7 @@ export function registerPtyHandlers(
           codexSelectionTarget.runtime === 'wsl' ? expectedWslDistro : null
         )
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
+        applyOmpFreshSessionDirEnv(env, { worktreeId: args.worktreeId, cwd })
       }
 
       const authEnvToDelete = claudeAuth?.stripAuthEnv
@@ -6422,6 +6424,7 @@ export function registerPtyHandlers(
               codexSelectionTarget.runtime === 'wsl' ? expectedWslDistro : null
             )
             promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
+            applyOmpFreshSessionDirEnv(env, { worktreeId: args.worktreeId, cwd })
           } catch (err) {
             // Why: buildPtyHostEnv has fs side-effects (Pi/OMP install); clear per-PTY state on throw, but only minted ids — caller ids may name existing PTYs.
             if (isMintedSessionId) {

@@ -7,6 +7,10 @@ import {
 } from './pty-ipc-daemon-provider-fixtures'
 import { delimiter, join } from 'node:path'
 import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  ORCA_OMP_FORCE_NEW_SESSION_ENV,
+  ORCA_OMP_FRESH_SESSION_DIR_ENV
+} from '../../shared/omp-fresh-session-env'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './pty'
@@ -436,6 +440,23 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+      it('fills the fresh OMP session dir on the daemon host spawn path', async () => {
+        const sourceAgentDir = join('/user', '.omp', 'agent')
+        const env = await daemonSpawnAndGetEnv(
+          {
+            ORCA_OMP_SOURCE_AGENT_DIR: sourceAgentDir,
+            [ORCA_OMP_FORCE_NEW_SESSION_ENV]: '1'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'omp', cwd: join('/repo', 'worktree-a') }
+        )
+
+        expect(env[ORCA_OMP_FRESH_SESSION_DIR_ENV]).toContain(
+          join(sourceAgentDir, 'sessions', 'orca-worktrees')
+        )
       })
       it('deletes stale Claude scoped settings env from daemon-hosted PTYs', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions({}, undefined, undefined, {
