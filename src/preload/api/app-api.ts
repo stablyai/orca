@@ -5,7 +5,7 @@ import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal-render-desync-evidence'
-import type { MacCapturedDigitChord } from '../../shared/macos-symbolic-hotkeys'
+import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
@@ -44,9 +44,8 @@ export type AppApi = {
    *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
    *  Returns null on non-Darwin or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
-  /** macOS Mission Control digit chords (Switch to Desktop 1-9) the OS consumes before
-   *  app delivery, for shortcut-conflict warnings. Empty on non-Darwin or probe failure. */
-  getMacCapturedDigitChords: () => Promise<MacCapturedDigitChord[]>
+  /** Physical Mission Control chords before layout resolution. */
+  getMacCapturedDigitRowChords: () => Promise<MacCapturedDigitRowChord[]>
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
   setUnreadDockBadgeCount: (count: number) => Promise<void>
   /** Resolves the launch directory for global Floating Terminal tabs. */

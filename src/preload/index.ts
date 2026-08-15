@@ -4,7 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
-import type { MacCapturedDigitChord } from '../shared/macos-symbolic-hotkeys'
+import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
@@ -535,8 +535,8 @@ const api = {
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
-    getMacCapturedDigitChords: (): Promise<MacCapturedDigitChord[]> =>
-      ipcRenderer.invoke('app:getMacCapturedDigitChords'),
+    getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
+      ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>

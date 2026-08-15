@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { KEYBINDING_DEFINITIONS } from './keybindings'
 import {
-  capturedDigitChordsFromSymbolicHotkeysJson,
+  capturedDigitRowChordsFromSymbolicHotkeysJson,
   findMacSystemHotkeyConflicts,
-  type MacCapturedDigitChord
+  resolveCapturedDigitChordsForLayout,
+  type MacCapturedDigitChord,
+  type MacCapturedDigitRowChord,
+  type MacDigitRowCode
 } from './macos-symbolic-hotkeys'
 
 const CONTROL_MASK = 0x40000
@@ -21,43 +24,87 @@ function chord(
   return { digit, meta: false, control: true, alt: false, shift: false, ...overrides }
 }
 
-describe('capturedDigitChordsFromSymbolicHotkeysJson', () => {
+describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
   it('parses enabled Switch to Desktop entries and skips disabled ones', () => {
-    const chords = capturedDigitChordsFromSymbolicHotkeysJson({
+    const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
       AppleSymbolicHotKeys: {
         '118': hotkeyEntry(18, CONTROL_MASK),
         '119': hotkeyEntry(19, CONTROL_MASK),
         '120': hotkeyEntry(20, CONTROL_MASK, false)
       }
     })
-    expect(chords).toEqual([chord(1), chord(2)])
+    expect(chords).toEqual([physicalChord('Digit1'), physicalChord('Digit2')])
   })
 
   it('decodes option and shift modifier masks', () => {
-    const chords = capturedDigitChordsFromSymbolicHotkeysJson({
+    const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
       AppleSymbolicHotKeys: { '118': hotkeyEntry(18, CONTROL_MASK | OPTION_MASK | SHIFT_MASK) }
     })
-    expect(chords).toEqual([chord(1, { alt: true, shift: true })])
+    expect(chords).toEqual([physicalChord('Digit1', { alt: true, shift: true })])
   })
 
-  it('skips unrecognized keycodes and malformed entries', () => {
-    const chords = capturedDigitChordsFromSymbolicHotkeysJson({
+  it('skips non-standard, unrecognized, and malformed entries', () => {
+    const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
       AppleSymbolicHotKeys: {
-        // Why: a rebound non-digit chord (keycode 49 = Space) must not be misread as a digit.
         '118': hotkeyEntry(49, CONTROL_MASK),
         '119': { enabled: true },
-        '120': { enabled: true, value: { parameters: 'bogus' } }
+        '120': { enabled: true, value: { parameters: 'bogus' } },
+        '121': {
+          enabled: true,
+          value: { type: 'symbolic', parameters: [65535, 18, CONTROL_MASK] }
+        },
+        '122': {
+          enabled: true,
+          value: { type: 'standard', parameters: [65535, 18, Number.NaN] }
+        },
+        '123': {
+          enabled: true,
+          value: { type: 'standard', parameters: [65535, 18, CONTROL_MASK, 1] }
+        }
       }
     })
     expect(chords).toEqual([])
   })
 
+  it('skips chords with modifier bits the matcher cannot represent', () => {
+    const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
+      AppleSymbolicHotKeys: { '118': hotkeyEntry(18, CONTROL_MASK | 0x800000) }
+    })
+    expect(chords).toEqual([])
+  })
+
   it('returns empty for missing or non-object domains', () => {
-    expect(capturedDigitChordsFromSymbolicHotkeysJson(null)).toEqual([])
-    expect(capturedDigitChordsFromSymbolicHotkeysJson({})).toEqual([])
-    expect(capturedDigitChordsFromSymbolicHotkeysJson({ AppleSymbolicHotKeys: 'bogus' })).toEqual(
-      []
-    )
+    expect(capturedDigitRowChordsFromSymbolicHotkeysJson(null)).toEqual([])
+    expect(capturedDigitRowChordsFromSymbolicHotkeysJson({})).toEqual([])
+    expect(
+      capturedDigitRowChordsFromSymbolicHotkeysJson({ AppleSymbolicHotKeys: 'bogus' })
+    ).toEqual([])
+  })
+})
+
+function physicalChord(
+  code: MacDigitRowCode,
+  overrides: Partial<MacCapturedDigitRowChord> = {}
+): MacCapturedDigitRowChord {
+  return { code, meta: false, control: true, alt: false, shift: false, ...overrides }
+}
+
+describe('resolveCapturedDigitChordsForLayout', () => {
+  it('resolves physical keys through a digit-producing layout', () => {
+    const values = new Map<MacDigitRowCode, string>([
+      ['Digit1', '1'],
+      ['Digit2', '2']
+    ])
+    expect(
+      resolveCapturedDigitChordsForLayout(
+        [physicalChord('Digit1'), physicalChord('Digit2')],
+        (code) => values.get(code)
+      )
+    ).toEqual([chord(1), chord(2)])
+  })
+
+  it('does not equate AZERTY digit-row positions with logical digits', () => {
+    expect(resolveCapturedDigitChordsForLayout([physicalChord('Digit1')], () => '&')).toEqual([])
   })
 })
 
