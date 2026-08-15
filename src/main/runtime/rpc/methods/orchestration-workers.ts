@@ -209,6 +209,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
+        const inputReady = await runtime.waitForTerminalAgentInputReady(
+          terminalHandle,
+          agent as TuiAgent,
+          params.timeoutMs ?? 60_000
+        )
+        if (!inputReady) {
+          throw new Error('Agent input composer did not become ready before dispatch.')
+        }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({
           dispatchId: started.dispatch.id,

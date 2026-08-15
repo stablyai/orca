@@ -63,6 +63,7 @@ describe('orchestration worker release recovery', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',

@@ -16284,7 +16284,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('resolves tui-idle from a Codex ready prompt even when stale startup lines remain', async () => {
+  it('does not resolve tui-idle from the Codex composer while MCP servers are still starting', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -16312,6 +16312,32 @@ describe('OrcaRuntimeService', () => {
     )
 
     await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 20 })
+    ).rejects.toThrow('timeout')
+  })
+
+  it('resolves tui-idle from a Codex ready status after slow MCP startup settles', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        ' >_ OpenAI Codex (v0.132.0)\n',
+        ' model:       gpt-5.5 high   /model to change\n',
+        ' directory:   ~/orca/workspaces/orca/cli-debug\n',
+        'Starting MCP servers (0/2): codex_apps, computer-use (2s  esc to interrupt)\n',
+        '› Improve documentation in @filename gpt-5.5 high · Ready · cli-debug\n'
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
     ).resolves.toMatchObject({
       handle,
@@ -16319,6 +16345,90 @@ describe('OrcaRuntimeService', () => {
       satisfied: true,
       status: 'running'
     })
+  })
+
+  it('does not report Codex agent input ready until slow MCP startup settles', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        '\x1b[?1049h',
+        ' >_ OpenAI Codex (v0.132.0)\n',
+        ' model:       gpt-5.5 high   /model to change\n',
+        ' directory:   ~/orca/workspaces/orca/cli-debug\n',
+        '\x1b[?2004h',
+        'Starting MCP servers (0/2): codex_apps, computer-use (2s  esc to interrupt)\n',
+        '› Improve documentation in @filename\n'
+      ].join(''),
+      Date.now()
+    )
+
+    let settled = false
+    const readiness = runtime
+      .waitForTerminalAgentInputReady(handle, 'codex', 1_000)
+      .then((value) => {
+        settled = true
+        return value
+      })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    runtime.onPtyData(
+      'pty-bg',
+      '› Improve documentation in @filename gpt-5.5 high · Ready · cli-debug\n',
+      Date.now()
+    )
+    await expect(readiness).resolves.toBe(true)
+  })
+
+  it('waits for settled Codex startup in a renderer-owned terminal', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      hasPty: () => true,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-renderer')
+    const [terminal] = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals
+    expect(terminal).toBeDefined()
+    runtime.onPtyData(
+      'pty-renderer',
+      [
+        '\x1b[?1049h',
+        ' >_ OpenAI Codex (v0.132.0)\n',
+        ' model:       gpt-5.5 high   /model to change\n',
+        ' directory:   ~/orca/workspaces/orca/renderer-worker\n',
+        '\x1b[?2004h',
+        'Starting MCP servers (0/2): codex_apps, computer-use (2s  esc to interrupt)\n',
+        '› Improve documentation in @filename\n'
+      ].join(''),
+      Date.now()
+    )
+
+    let settled = false
+    const readiness = runtime
+      .waitForTerminalAgentInputReady(terminal!.handle, 'codex', 1_000)
+      .then((value) => {
+        settled = true
+        return value
+      })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    runtime.onPtyData(
+      'pty-renderer',
+      '› Improve documentation in @filename gpt-5.5 high · Ready · renderer-worker\n',
+      Date.now()
+    )
+    await expect(readiness).resolves.toBe(true)
   })
 
   it('resolves tui-idle when a stale Codex prompt is followed by Antigravity readiness', async () => {
@@ -47330,6 +47440,148 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('blocks automatic lifecycle removal when the worktree is pinned', async () => {
+    const pinnedMeta = makeWorktreeMeta({ isPinned: true })
+    const pinnedStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({ [TEST_WORKTREE_ID]: pinnedMeta }),
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === TEST_WORKTREE_ID ? pinnedMeta : undefined,
+      setWorktreeMeta: () => pinnedMeta
+    }
+    const runtime = createWorktreeRemovalRuntime(pinnedStore)
+
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, undefined, true)
+    ).rejects.toThrow('Cannot automatically delete pinned worktree')
+
+    expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('re-checks a lifecycle pin immediately before destructive removal', async () => {
+    let mutableMeta = makeWorktreeMeta()
+    const mutableStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({ [TEST_WORKTREE_ID]: mutableMeta }),
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === TEST_WORKTREE_ID ? mutableMeta : undefined,
+      setWorktreeMeta: () => mutableMeta
+    }
+    const runtime = createWorktreeRemovalRuntime(mutableStore)
+    vi.mocked(assertWorktreeCleanForRemoval).mockImplementationOnce(async () => {
+      mutableMeta = makeWorktreeMeta({ isPinned: true })
+    })
+
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, undefined, true)
+    ).rejects.toThrow('Cannot automatically delete pinned worktree')
+
+    expect(assertWorktreeCleanForRemoval).toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('blocks automatic lifecycle removal while any live terminal still uses the worktree', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Shell' }]
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'Shell' })
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID)
+
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, undefined, true, true)
+    ).rejects.toThrow('while it has active terminals')
+
+    expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('refuses automatic removal when HEAD changes inside the teardown boundary', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    const changedWorktrees = MOCK_GIT_WORKTREES.map((worktree) =>
+      worktree.path === TEST_WORKTREE_PATH ? { ...worktree, head: 'changed-after-merge' } : worktree
+    )
+    let guardCalls = 0
+    const guard = vi.fn(async () => {
+      guardCalls += 1
+      if (guardCalls === 3) {
+        vi.mocked(listWorktreesStrict).mockResolvedValue(changedWorktrees)
+      }
+    })
+
+    await expect(
+      runtime.removeManagedWorktree(
+        TEST_WORKTREE_ID,
+        false,
+        false,
+        false,
+        undefined,
+        true,
+        true,
+        'abc',
+        guard
+      )
+    ).rejects.toThrow(
+      'Worktree HEAD changed during automatic deletion: expected abc, found changed-after-merge.'
+    )
+
+    expect(guard).toHaveBeenCalledTimes(3)
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('serializes terminal creation behind automatic worktree removal', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    const cleanGate = deferred<void>()
+    vi.mocked(assertWorktreeCleanForRemoval)
+      .mockImplementationOnce(async () => cleanGate.promise)
+      .mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    const removal = runtime.removeManagedWorktree(
+      TEST_WORKTREE_ID,
+      false,
+      false,
+      false,
+      undefined,
+      true,
+      true,
+      'abc'
+    )
+    await vi.waitFor(() => expect(assertWorktreeCleanForRemoval).toHaveBeenCalledTimes(1))
+
+    let spawnLeaseAcquired = false
+    const spawnLease = runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID).then((release) => {
+      spawnLeaseAcquired = true
+      return release
+    })
+    await Promise.resolve()
+    expect(spawnLeaseAcquired).toBe(false)
+
+    cleanGate.resolve()
+    await expect(removal).resolves.toEqual({})
+    const releaseSpawn = await spawnLease
+    expect(spawnLeaseAcquired).toBe(true)
+    releaseSpawn()
   })
 
   it('passes project shared links through the runtime removal preflight and cleanup', async () => {

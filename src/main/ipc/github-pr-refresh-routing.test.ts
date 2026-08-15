@@ -4,11 +4,15 @@ const mocks = await vi.hoisted(async () => {
   const { createGitHubIpcMocks } = await import('./github-ipc-module-mocks')
   return createGitHubIpcMocks()
 })
+const reconcileWorkerWorktreeLifecyclesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => mocks.electron)
 vi.mock('../github/client', () => mocks.client)
 vi.mock('../github/work-item-details', () => mocks.workItemDetails)
 vi.mock('../github/pr-refresh-coordinator', () => mocks.prRefresh)
+vi.mock('../runtime/orchestration/worker-worktree-lifecycle-reconciliation', () => ({
+  reconcileWorkerWorktreeLifecycles: reconcileWorkerWorktreeLifecyclesMock
+}))
 vi.mock('../telemetry/client', () => mocks.telemetry)
 vi.mock('../telemetry/cohort-classifier', () => mocks.cohort)
 vi.mock('./ui', () => mocks.ui)
@@ -26,7 +30,10 @@ describe('registerGitHubHandlers', () => {
   const harness = createGitHubIpcHarness(mocks)
   const { handlers, store, stats } = harness
 
-  beforeEach(harness.reset)
+  beforeEach(() => {
+    harness.reset()
+    reconcileWorkerWorktreeLifecyclesMock.mockReset()
+  })
 
   it('returns typed automatic PR refresh validation skips without enqueueing', async () => {
     registerGitHubHandlers(store as never, stats as never)
@@ -97,6 +104,50 @@ describe('registerGitHubHandlers', () => {
       })
     )
     expect(candidate).not.toHaveProperty('localGitOptions')
+  })
+
+  it('reconciles the owning worktree when automatic refresh observes a merged PR', async () => {
+    reconcileWorkerWorktreeLifecyclesMock.mockResolvedValue({ attempted: 1, removed: 1 })
+    const runtime = { getRuntimeId: vi.fn() }
+    registerGitHubHandlers(store as never, stats as never, runtime as never)
+    const observer = mocks.prRefresh.setPRRefreshOutcomeObserver.mock.calls[0]?.[0]
+    const outcome = {
+      kind: 'found',
+      fetchedAt: Date.now(),
+      pr: {
+        number: 17,
+        title: 'Lifecycle reconciliation',
+        state: 'merged',
+        url: 'https://github.com/stablyai/orca/pull/17',
+        checksStatus: 'success',
+        updatedAt: new Date().toISOString(),
+        mergeable: 'MERGEABLE',
+        headSha: '1111111111111111111111111111111111111111'
+      }
+    }
+
+    observer?.(
+      {
+        cacheKey: '/workspace/repo::feature/lifecycle',
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::lifecycle',
+        branch: 'feature/lifecycle',
+        repoKind: 'git',
+        currentHeadOid: '1111111111111111111111111111111111111111'
+      },
+      outcome
+    )
+    await vi.waitFor(() => expect(reconcileWorkerWorktreeLifecyclesMock).toHaveBeenCalledTimes(1))
+
+    expect(reconcileWorkerWorktreeLifecyclesMock).toHaveBeenCalledWith(runtime, {
+      worktreeId: 'repo-1::lifecycle',
+      prEvidence: {
+        worktreeId: 'repo-1::lifecycle',
+        currentHeadOid: '1111111111111111111111111111111111111111',
+        outcome
+      }
+    })
   })
 
   it('keeps manual PR refresh validation strict', async () => {

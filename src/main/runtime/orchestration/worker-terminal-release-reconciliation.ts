@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { completeWorkerTerminalRelease } from '../rpc/methods/orchestration-worker-release-completion'
+import { reconcileWorkerWorktreeLifecycles } from './worker-worktree-lifecycle-reconciliation'
 
 export type WorkerTerminalReleaseReconciliationResult = {
   attempted: number
@@ -16,9 +17,9 @@ type ActiveReconciliation = {
 
 const activeReconciliationByRuntime = new WeakMap<OrcaRuntimeService, ActiveReconciliation>()
 
-// Finishes ONLY previously requested releases after startup/reconnect terminal discovery.
-// It never invents release intent: resources outside requested/releasing are untouched, and
-// unresolved identity defers (release_pending) rather than settling or broadening the close.
+// Converges terminal and Orca-created worktree lifecycles after startup/reconnect discovery.
+// Existing release intent is retried first; then exact merged-PR evidence may settle a stale idle
+// worker and request its ordinary release. Retained/failed/unproven resources remain untouched.
 export function reconcileRequestedWorkerTerminalReleases(
   runtime: OrcaRuntimeService
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
@@ -51,6 +52,26 @@ async function runReconciliationPasses(
     combined.pending += pass.pending
     combined.unknown += pass.unknown
     combined.retained += pass.retained
+    // Why: a crash can land after GitHub merged the PR but before task settlement, terminal
+    // release, or worktree removal. Terminal inventory is the existing startup/reconnect recovery
+    // boundary, so extend the SAME coalesced pass instead of adding a cleanup scheduler. Keeping
+    // this inside the rerun loop also consumes a request that arrives during async GitHub lookup.
+    try {
+      const worktrees = await reconcileWorkerWorktreeLifecycles(runtime)
+      if (worktrees.attempted > 0) {
+        console.info('[orchestration] worker worktree lifecycle reconciliation', {
+          attempted: worktrees.attempted,
+          removed: worktrees.removed,
+          alreadyRemoved: worktrees.alreadyRemoved,
+          retained: worktrees.retained,
+          releasePending: worktrees.releasePending
+        })
+      }
+    } catch (error) {
+      console.warn('[orchestration] worker worktree lifecycle reconciliation failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   } while (state.rerunRequested)
   if (combined.attempted > 0) {
     // Structured counts only; never transcript content or paths.

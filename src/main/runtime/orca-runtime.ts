@@ -2191,6 +2191,7 @@ type RuntimeWorktreeRemovalTarget = {
   id: string
   repoId: string
   path: string
+  isPinned?: boolean
   pushTarget?: GitPushTarget
 }
 
@@ -2210,12 +2211,16 @@ type PreservedBranchCleanupTarget = {
 function getRuntimeWorktreeRemovalOptionsKey(
   force: boolean,
   runHooks: boolean,
-  allowUnverifiedPtyStop: boolean
+  allowUnverifiedPtyStop: boolean,
+  respectPinned: boolean,
+  protectActiveTerminals: boolean,
+  expectedHead?: string,
+  hasAutomaticRemovalGuard = false
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
   const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
+  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}:${respectPinned ? 'respect-pinned' : 'ignore-pinned'}:${protectActiveTerminals ? 'protect-active-terminals' : 'stop-active-terminals'}:head=${expectedHead ?? '*'}:${hasAutomaticRemovalGuard ? 'guarded' : 'unguarded'}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
@@ -3545,9 +3550,16 @@ export class OrcaRuntimeService {
 
   private async stopPtysForDestructiveWorktreeRemoval(
     worktreeId: string,
-    options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
+    options: {
+      connectionId?: string
+      allowUnverifiedStop?: boolean
+      protectActiveTerminals?: boolean
+    } = {}
   ): Promise<void> {
-    const { connectionId, allowUnverifiedStop } = options
+    const { connectionId, allowUnverifiedStop, protectActiveTerminals } = options
+    if (protectActiveTerminals) {
+      await this.assertNoActiveTerminalsForAutomaticWorktreeRemoval(worktreeId)
+    }
     const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
@@ -3573,6 +3585,20 @@ export class OrcaRuntimeService {
     if (total > 0) {
       console.info(
         `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped}`
+      )
+    }
+  }
+
+  private async assertNoActiveTerminalsForAutomaticWorktreeRemoval(
+    worktreeId: string
+  ): Promise<void> {
+    const inventory = await this.listTerminals(`id:${worktreeId}`, 1, {
+      requireFreshPtyLiveness: true,
+      includeVisualLayouts: false
+    })
+    if (inventory.totalCount > 0) {
+      throw new Error(
+        `Cannot automatically delete worktree ${worktreeId} while it has active terminals.`
       )
     }
   }
@@ -4697,8 +4723,8 @@ export class OrcaRuntimeService {
       deferredDispatchIds: [...deferredDispatchIds]
     }
     this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
-    // Why: previously requested releases may only finish after the owning provider's terminals
-    // are rediscovered; this pass runs per scope (local and each reconnected provider).
+    // Why: release retries and merged-PR lifecycle recovery need fresh provider terminal
+    // discovery; this convergence pass runs per scope (local and each reconnected provider).
     void reconcileRequestedWorkerTerminalReleases(this).catch((error) => {
       console.warn('[orchestration] worker terminal release reconciliation failed', { error })
     })
@@ -22228,10 +22254,27 @@ export class OrcaRuntimeService {
     return null
   }
 
-  private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
-    const livePty = this.getLivePtyForHandle(handle)
-    const ptyId = livePty?.pty.ptyId
-    if (!ptyId) {
+  async waitForTerminalAgentInputReady(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs?: number
+  ): Promise<boolean> {
+    return Boolean(await this.waitForStartupDraftReady(handle, agent, timeoutMs, true))
+  }
+
+  private waitForStartupDraftReady(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs?: number,
+    requireSettledCodexStartup = false
+  ): Promise<string | null> {
+    let ptyId: string
+    try {
+      // Why: orchestration can dispatch into either a runtime-owned PTY or a renderer-owned
+      // leaf. Restricting this gate to getLivePtyForHandle made healthy desktop terminals look
+      // permanently unready even though terminal.wait and terminal.send support both owners.
+      ptyId = this.getTerminalAgentStatusPtyId(handle)
+    } catch {
       return Promise.resolve(null)
     }
     const readySignal =
@@ -22242,6 +22285,7 @@ export class OrcaRuntimeService {
       let quietTimer: NodeJS.Timeout | null = null
       let hardTimer: NodeJS.Timeout | null = null
       let unsubscribe: (() => void) | null = null
+      let sawDraftReadySignal = false
 
       const finish = (value: string | null): void => {
         if (settled) {
@@ -22267,7 +22311,23 @@ export class OrcaRuntimeService {
 
       const observeData = (data: string): void => {
         const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
-        if (ready) {
+        sawDraftReadySignal ||= ready
+        // Why: Codex mounts its composer before slow MCP startup has settled. A prompt glyph is
+        // therefore necessary but not sufficient for safe input; wait for the same settled-ready
+        // evidence used by terminal.wait before handing orchestration a dispatch capability.
+        const codexStartupSettled = (): boolean => {
+          if (agent !== 'codex' || !requireSettledCodexStartup) {
+            return true
+          }
+          let currentText: string
+          try {
+            currentText = this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
+          } catch {
+            return false
+          }
+          return findCodexReadyPromptIndex(currentText.toLowerCase()) !== null
+        }
+        if (sawDraftReadySignal && codexStartupSettled()) {
           finish(ptyId)
           return
         }
@@ -22277,11 +22337,19 @@ export class OrcaRuntimeService {
       }
 
       unsubscribe = this.subscribeToTerminalData(ptyId, observeData)
+      try {
+        // Why: renderer graph sync may have already captured the composer before the waiter
+        // subscribes, and renderer-owned PTYs do not necessarily populate recentPtyOutputById.
+        observeData(this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText)
+      } catch {
+        finish(null)
+        return
+      }
       const replay = this.recentPtyOutputById.get(ptyId)?.read()
       if (replay) {
         observeData(replay)
       }
-      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
+      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent, timeoutMs))
     })
   }
 
@@ -24735,7 +24803,8 @@ export class OrcaRuntimeService {
       const removalTarget = {
         id: worktree.id,
         repoId: worktree.repoId,
-        path: worktree.path
+        path: worktree.path,
+        isPinned: worktree.isPinned
       }
       return worktree.pushTarget
         ? { ...removalTarget, pushTarget: worktree.pushTarget }
@@ -24752,7 +24821,11 @@ export class OrcaRuntimeService {
       // Why: delete requests can arrive after Git no longer lists the worktree.
       // Only exact IDs with persisted Orca metadata are accepted here so
       // branch/path selectors cannot resolve to an arbitrary missing path.
-      return meta.pushTarget ? { ...removalTarget, pushTarget: meta.pushTarget } : removalTarget
+      const persistedTarget = {
+        ...removalTarget,
+        isPinned: meta.isPinned
+      }
+      return meta.pushTarget ? { ...persistedTarget, pushTarget: meta.pushTarget } : persistedTarget
     }
   }
 
@@ -24927,7 +25000,19 @@ export class OrcaRuntimeService {
     // Why (#11960): only an explicit Force Delete waives PTY-stop proof; `force`
     // alone is already set by the ordinary delete confirmation.
     allowUnverifiedPtyStop = false,
-    hostId?: string
+    hostId?: string,
+    // Why: user-invoked deletion remains an explicit override, while lifecycle automation must
+    // treat a pin as durable retention and re-check it inside the removal boundary.
+    respectPinned = false,
+    // Why: explicit user deletion owns terminal teardown, but lifecycle automation must never
+    // terminate an unrelated user terminal that happens to share the completed worker's worktree.
+    protectActiveTerminals = false,
+    // Why: merged-PR reconciliation proves one exact commit. Carry that proof into the runtime
+    // removal boundary so a commit racing the coordinator cannot inherit an obsolete decision.
+    expectedHead?: string,
+    // Why: orchestration ownership is stored outside the generic worktree runtime. Let the owner
+    // re-read its durable references under the same terminal-mutation boundary used for deletion.
+    automaticRemovalGuard?: () => void | Promise<void>
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -24935,11 +25020,40 @@ export class OrcaRuntimeService {
     const store = this.store
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
+    const assertAutomaticRemovalNotPinned = (): void => {
+      if (
+        respectPinned &&
+        (removalTarget.isPinned || store.getWorktreeMeta(removalTarget.id)?.isPinned)
+      ) {
+        throw new Error(`Cannot automatically delete pinned worktree ${removalTarget.id}.`)
+      }
+    }
+    const assertExpectedHead = (actualHead: string | null | undefined): void => {
+      if (expectedHead && actualHead !== expectedHead) {
+        throw new Error(
+          `Worktree HEAD changed during automatic deletion: expected ${expectedHead}, found ${actualHead ?? 'none'}.`
+        )
+      }
+    }
+    const revalidateAutomaticRemoval = async (): Promise<void> => {
+      assertAutomaticRemovalNotPinned()
+      await automaticRemovalGuard?.()
+      assertAutomaticRemovalNotPinned()
+    }
+    assertAutomaticRemovalNotPinned()
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(
+      force,
+      runHooks,
+      allowUnverifiedPtyStop,
+      respectPinned,
+      protectActiveTerminals,
+      expectedHead,
+      Boolean(automaticRemovalGuard)
+    )
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
       if (inFlightRemoval.optionsKey === optionsKey) {
@@ -24951,9 +25065,16 @@ export class OrcaRuntimeService {
     // Why: runtime callers can race the same workspace through CLI/mobile
     // retries. Share one destructive Git/filesystem operation per worktree ID.
     const removal = (async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
+      // Worktree terminal creation and removal share this queue. Once cleanup has acquired it,
+      // no new Orca terminal can attach between the final liveness proof and filesystem removal.
+      const releaseTerminalMutation = await this.acquireWorktreeTerminalMutation(removalTarget.id)
       // Why: CLI, mobile and headless serve delete through here rather than the IPC handler; without
       // this span their freezes are as invisible as desktop deletes were before `worktree.remove`.
       return withWorktreeSpan({ stage: 'remove', path: removalTarget.path }, async () => {
+        await revalidateAutomaticRemoval()
+        if (protectActiveTerminals) {
+          await this.assertNoActiveTerminalsForAutomaticWorktreeRemoval(removalTarget.id)
+        }
         const repo = store.getRepo(removalTarget.repoId)
         if (!repo) {
           const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
@@ -25068,6 +25189,9 @@ export class OrcaRuntimeService {
           removalTarget.path,
           registeredWorktrees
         )
+        if (registeredWorktree) {
+          assertExpectedHead(registeredWorktree.head)
+        }
         if (!registeredWorktree) {
           let canCleanOrphanedDirectory = false
           if (
@@ -25105,6 +25229,12 @@ export class OrcaRuntimeService {
             if (!force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
+            if (expectedHead) {
+              throw new Error(
+                `Cannot prove expected HEAD ${expectedHead} for unregistered worktree ${removalTarget.id}.`
+              )
+            }
+            await revalidateAutomaticRemoval()
             if (repo.connectionId) {
               const removalGate = await this.acquireFileWatcherRemoval(
                 removalTarget.path,
@@ -25114,7 +25244,8 @@ export class OrcaRuntimeService {
               try {
                 await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
                   connectionId: repo.connectionId,
-                  allowUnverifiedStop: allowUnverifiedPtyStop
+                  allowUnverifiedStop: allowUnverifiedPtyStop,
+                  protectActiveTerminals
                 })
                 await fsProvider!.deletePath(removalTarget.path, true)
                 removalCompleted = true
@@ -25133,7 +25264,8 @@ export class OrcaRuntimeService {
               let removalCompleted = false
               try {
                 await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                  allowUnverifiedStop: allowUnverifiedPtyStop
+                  allowUnverifiedStop: allowUnverifiedPtyStop,
+                  protectActiveTerminals
                 })
                 await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
                 removalCompleted = true
@@ -25179,11 +25311,18 @@ export class OrcaRuntimeService {
               if (!force) {
                 throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
               }
+              if (expectedHead) {
+                throw new Error(
+                  `Cannot prove expected HEAD ${expectedHead} for unregistered worktree ${removalTarget.id}.`
+                )
+              }
+              await revalidateAutomaticRemoval()
               const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
               let removalCompleted = false
               try {
                 await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                  allowUnverifiedStop: allowUnverifiedPtyStop
+                  allowUnverifiedStop: allowUnverifiedPtyStop,
+                  protectActiveTerminals
                 })
                 await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
                 removalCompleted = true
@@ -25266,6 +25405,8 @@ export class OrcaRuntimeService {
           removedMeta &&
           (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
         ) {
+          await revalidateAutomaticRemoval()
+          assertExpectedHead(registeredWorktree.head)
           const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
             canonicalWorktreePath,
             repoPath: repo.path,
@@ -25303,11 +25444,30 @@ export class OrcaRuntimeService {
           )
           let rawRemovalResult: RemoveWorktreeResult | undefined
           let removalCompleted = false
+          let finalRegisteredWorktree = registeredWorktree
           try {
+            await revalidateAutomaticRemoval()
             await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
               connectionId: repo.connectionId,
-              allowUnverifiedStop: allowUnverifiedPtyStop
+              allowUnverifiedStop: allowUnverifiedPtyStop,
+              protectActiveTerminals
             })
+            await revalidateAutomaticRemoval()
+            const finalWorktrees = await provider!.listWorktrees(repo.path)
+            const refreshed = findRegisteredDeletableWorktree(
+              repo.path,
+              canonicalWorktreePath,
+              finalWorktrees
+            )
+            if (!refreshed) {
+              throw new Error(
+                `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
+              )
+            }
+            assertExpectedHead(refreshed.head)
+            assertWorktreeUnlockedForRemoval(refreshed)
+            finalRegisteredWorktree = refreshed
+            await revalidateAutomaticRemoval()
             rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
               ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
               : provider!.removeWorktree(canonicalWorktreePath, force))
@@ -25317,7 +25477,7 @@ export class OrcaRuntimeService {
           }
           const removalResult = this.preserveBranchHeadFallback(
             rawRemovalResult,
-            registeredWorktree.head
+            finalRegisteredWorktree.head
           )
           await cleanupUnusedWorktreePushTargetRemoteSsh(
             provider!,
@@ -25330,7 +25490,7 @@ export class OrcaRuntimeService {
             removalTarget.id,
             cleanupHostId,
             removalResult,
-            registeredWorktree.head,
+            finalRegisteredWorktree.head,
             removedPushTarget
           )
           this.clearOptimisticReconcileToken(removalTarget.id)
@@ -25377,6 +25537,7 @@ export class OrcaRuntimeService {
             `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
           )
         }
+        assertExpectedHead(refreshedRegisteredWorktree.head)
         try {
           // Why: an archive hook can race another Git client that locks the row;
           // recheck before linked-path, watcher, or terminal teardown side effects.
@@ -25392,52 +25553,97 @@ export class OrcaRuntimeService {
         const ignoredLinkedPaths = force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
-        try {
-          await (hasLocalWorktreeGitOptions
-            ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
-                ...localWorktreeGitOptions,
-                ...(ignoredLinkedPaths.length > 0
-                  ? { ignoredUntrackedPaths: ignoredLinkedPaths }
-                  : {})
-              })
-            : ignoredLinkedPaths.length > 0
+        const assertStillCleanForRemoval = async (): Promise<void> => {
+          try {
+            await (hasLocalWorktreeGitOptions
               ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
-                  ignoredUntrackedPaths: ignoredLinkedPaths
+                  ...localWorktreeGitOptions,
+                  ...(ignoredLinkedPaths.length > 0
+                    ? { ignoredUntrackedPaths: ignoredLinkedPaths }
+                    : {})
                 })
-              : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
-        } catch (error) {
-          if (!isOrphanCompatiblePreflightError(error)) {
+              : ignoredLinkedPaths.length > 0
+                ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
+                    ignoredUntrackedPaths: ignoredLinkedPaths
+                  })
+                : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
+          } catch (error) {
+            if (!isOrphanCompatiblePreflightError(error)) {
+              throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+            }
+            // Why: Git can still classify this as an orphan after preflight;
+            // retain strict PTY teardown before any recursive fallback deletion.
+          }
+        }
+        const refreshRegisteredWorktreeForRemoval = async () => {
+          if (
+            !expectedHead &&
+            !respectPinned &&
+            !protectActiveTerminals &&
+            !automaticRemovalGuard
+          ) {
+            // Explicit legacy deletion already completed its established preflight above. Its
+            // Windows fallback may deliberately make the Git row disappear during teardown.
+            return refreshedRegisteredWorktree
+          }
+          const currentWorktrees = hasLocalWorktreeGitOptions
+            ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
+            : await listWorktreesStrict(repo.path)
+          const current = findRegisteredDeletableWorktree(
+            repo.path,
+            canonicalWorktreePath,
+            currentWorktrees
+          )
+          if (!current) {
+            throw new Error(
+              `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
+            )
+          }
+          assertExpectedHead(current.head)
+          try {
+            assertWorktreeUnlockedForRemoval(current)
+          } catch (error) {
             throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
           }
-          // Why: Git can still classify this as an orphan after preflight;
-          // retain strict PTY teardown before any recursive fallback deletion.
+          return current
         }
+        await assertStillCleanForRemoval()
 
         let removalResult: RemoveWorktreeResult | undefined
+        let finalRegisteredWorktree = refreshedRegisteredWorktree
         const removalGate = await this.acquireFileWatcherRemoval(canonicalWorktreePath)
         let removalCompleted = false
         try {
+          await revalidateAutomaticRemoval()
           // Why: linked-path deletion is destructive too; PTYs must release every
           // handle before Windows or WSL filesystem cleanup starts.
           await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-            allowUnverifiedStop: allowUnverifiedPtyStop
+            allowUnverifiedStop: allowUnverifiedPtyStop,
+            protectActiveTerminals
           })
+          await revalidateAutomaticRemoval()
+          finalRegisteredWorktree = await refreshRegisteredWorktreeForRemoval()
+          await assertStillCleanForRemoval()
 
           if (linkedPaths.length > 0) {
             await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
           }
 
           try {
+            await revalidateAutomaticRemoval()
+            finalRegisteredWorktree = await refreshRegisteredWorktreeForRemoval()
+            await assertStillCleanForRemoval()
             const removeOptions = {
               ...(!deleteBranch ? { deleteBranch } : {}),
+              ...(expectedHead ? { expectedHead } : {}),
               // Why: removal already validated the Git row under the selected
               // project runtime; keep branch cleanup on that same canonical row.
-              knownRemovedWorktree: refreshedRegisteredWorktree,
+              knownRemovedWorktree: finalRegisteredWorktree,
               ...localWorktreeGitOptions
             }
             removalResult = this.preserveBranchHeadFallback(
               await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
-              refreshedRegisteredWorktree.head
+              finalRegisteredWorktree.head
             )
           } catch (error) {
             // Why: Git for Windows can deregister a clean worktree before its
@@ -25448,7 +25654,7 @@ export class OrcaRuntimeService {
               canonicalWorktreePath,
               repoPath: repo.path,
               localWorktreeGitOptions,
-              registeredWorktree: refreshedRegisteredWorktree,
+              registeredWorktree: finalRegisteredWorktree,
               deleteBranch,
               closeWatcher: (worktreePath) => this.closeFileWatchersForRemoval(worktreePath)
             })
@@ -25520,7 +25726,7 @@ export class OrcaRuntimeService {
           removalTarget.id,
           cleanupHostId,
           removalResult,
-          refreshedRegisteredWorktree.head,
+          finalRegisteredWorktree.head,
           removedPushTarget
         )
         this.clearOptimisticReconcileToken(removalTarget.id)
@@ -25533,7 +25739,7 @@ export class OrcaRuntimeService {
           ...removalResult,
           ...(warning ? { warning } : {})
         }
-      })
+      }).finally(releaseTerminalMutation)
     })()
     this.removeManagedWorktreeInFlight.set(removalTarget.id, { optionsKey, promise: removal })
     try {
@@ -37707,7 +37913,21 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   }
   const readySegment = normalized.slice(headerIndex)
   // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
-  return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
+  if (!readySegment.includes('model:') || !readySegment.includes('directory:')) {
+    return null
+  }
+  // Why: Codex mounts its input composer before slow MCP startup has settled. The same banner and
+  // prompt glyph therefore appear while input is still unsafe to submit, and an early bracketed
+  // paste can interrupt MCP startup or disappear. Prefer the live idle OSC title when available;
+  // for hookless previews, require a later explicit Ready status after the most recent startup row.
+  const mcpStartupIndex = readySegment.lastIndexOf('starting mcp server')
+  if (mcpStartupIndex !== -1) {
+    const afterStartup = readySegment.slice(mcpStartupIndex)
+    if (!/[·•]\s*ready\s*[·•]/u.test(afterStartup)) {
+      return null
+    }
+  }
+  return headerIndex
 }
 
 function findAntigravityReadyPromptIndex(normalized: string): number | null {

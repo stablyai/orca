@@ -142,6 +142,7 @@ describe('orchestration federated worker output', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )

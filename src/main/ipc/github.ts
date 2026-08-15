@@ -22,6 +22,8 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { reconcileWorkerWorktreeLifecycles } from '../runtime/orchestration/worker-worktree-lifecycle-reconciliation'
 import {
   getPRForBranch,
   getIssue,
@@ -240,7 +242,11 @@ function validateAutomaticPRRefreshCandidate(
   return { kind: 'ok', candidate: applyRepoToPRRefreshCandidate(store, result.repo, candidate) }
 }
 
-export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
+export function registerGitHubHandlers(
+  store: Store,
+  stats: StatsCollector,
+  runtime?: OrcaRuntimeService
+): void {
   function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
     if (outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
       stats.record({
@@ -258,6 +264,29 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       store.getRepos().find((r) => resolve(r.path) === resolve(candidate.repoPath))
     if (repo) {
       recordPRIfNeeded(repo, outcome)
+    }
+    if (
+      runtime &&
+      candidate.worktreeId &&
+      outcome.kind === 'found' &&
+      outcome.pr.state === 'merged'
+    ) {
+      // Why: the PR refresh loop is the first deterministic observer of a merge. Feed its
+      // request-time HEAD proof into lifecycle convergence instead of waiting for an agent to
+      // remember bookkeeping after it has already finished.
+      void reconcileWorkerWorktreeLifecycles(runtime, {
+        worktreeId: candidate.worktreeId,
+        prEvidence: {
+          worktreeId: candidate.worktreeId,
+          currentHeadOid: candidate.currentHeadOid ?? null,
+          outcome
+        }
+      }).catch((error) => {
+        console.warn('[orchestration] merged PR lifecycle reconciliation failed', {
+          worktreeId: candidate.worktreeId,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
     }
   })
 

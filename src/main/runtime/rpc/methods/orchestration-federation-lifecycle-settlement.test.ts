@@ -112,6 +112,7 @@ describe('orchestration federation lifecycle settlement', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(workerRuntime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     vi.spyOn(workerRuntime, 'getTerminalPaneKey').mockReturnValue(
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )

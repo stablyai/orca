@@ -6689,7 +6689,10 @@ export class OrchestrationDb {
     )
   }
 
-  requestWorkerTerminalRelease(dispatchId: string):
+  requestWorkerTerminalRelease(
+    dispatchId: string,
+    options: { respectUserRetain?: boolean } = {}
+  ):
     | { disposition: 'requested'; resource: WorkerTerminalResourceRow }
     | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
     | {
@@ -6722,6 +6725,17 @@ export class OrchestrationDb {
       if (resource.release_state === 'released' || resource.ownership_state === 'released') {
         this.db.exec('COMMIT')
         return { disposition: 'already_released', resource }
+      }
+      if (
+        options.respectUserRetain &&
+        resource.release_state === 'retained' &&
+        resource.retained_reason === 'user_requested'
+      ) {
+        // Why: automatic lifecycle convergence must never race a deliberate retain into a
+        // release. Explicit worker-release keeps the existing override semantics by omitting
+        // this option; the reconciler opts into the atomic retain check.
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource, reason: 'user_requested' }
       }
       if (worker.state === 'stopped' || worker.state === 'abandoned') {
         this.db.exec('COMMIT')

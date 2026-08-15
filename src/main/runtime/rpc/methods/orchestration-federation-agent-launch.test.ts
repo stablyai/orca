@@ -35,6 +35,7 @@ describe('federated worker agent launch', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     // Why: without a stable pane the handler bails at agent_readiness, so the
     // assertions below would pass against a worker that never actually started.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_remote:leaf_remote')

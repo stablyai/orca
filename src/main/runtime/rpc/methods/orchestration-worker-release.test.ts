@@ -76,6 +76,7 @@ describe('orchestration worker release', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
@@ -801,6 +802,9 @@ describe('orchestration worker release', () => {
     }
     expect(retained).toMatchObject({ state: 'retained', reason: 'user_requested' })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
+    expect(db.requestWorkerTerminalRelease(dispatchId, { respectUserRetain: true })).toMatchObject({
+      disposition: 'retained'
+    })
 
     const release = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string

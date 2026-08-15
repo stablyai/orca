@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerTerminalListState } from '../../orchestration/worker-terminal-ownership'
+import {
+  reconcileWorkerWorktreeLifecycles,
+  type WorkerWorktreeLifecycleReceipt
+} from '../../orchestration/worker-worktree-lifecycle-reconciliation'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
 import {
@@ -44,14 +48,26 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
             'Connected-server workers do not support release yet; inspect the worker server directly.'
         }
       }
+      // Why: explicit release is also a recovery boundary. A worker whose completion callback was
+      // lost may still be proven complete by an exact merged PR; repair that durable state before
+      // the settled-only release guard runs.
+      await reconcileWorkerWorktreeLifecycles(runtime, {
+        dispatchId: params.dispatch,
+        automaticTerminalRelease: false
+      }).catch((error) => {
+        console.warn('[orchestration] pre-release worktree reconciliation failed', {
+          dispatchId: params.dispatch,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
       const requested = db.requestWorkerTerminalRelease(params.dispatch)
       if (requested.disposition === 'already_released') {
-        return {
+        return attachWorktreeLifecycle(runtime, params.dispatch, {
           dispatchId: params.dispatch,
           state: 'already_released',
           processAction: 'none',
           archive: archiveSummary(requested.resource)
-        }
+        })
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
@@ -70,28 +86,29 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
           })
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-            return {
+            return attachWorktreeLifecycle(runtime, params.dispatch, {
               dispatchId: params.dispatch,
               state: 'released',
               processAction: 'none',
               archive: archiveSummary(reconciled.resource)
-            }
+            })
           }
         }
-        return {
+        return attachWorktreeLifecycle(runtime, params.dispatch, {
           dispatchId: params.dispatch,
           state: 'retained',
           reason: requested.reason,
           processAction: 'none',
           archive: archiveSummary(resource)
-        }
+        })
       }
-      return completeWorkerTerminalRelease({
+      const terminal = await completeWorkerTerminalRelease({
         runtime,
         db,
         dispatchId: params.dispatch,
         resource: requested.resource
       })
+      return attachWorktreeLifecycle(runtime, params.dispatch, terminal)
     }
   }),
   defineMethod({
@@ -183,3 +200,29 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     })
   })
 ]
+
+async function attachWorktreeLifecycle(
+  runtime: Parameters<typeof reconcileWorkerWorktreeLifecycles>[0],
+  dispatchId: string,
+  terminal: WorkerReleaseReceipt
+): Promise<WorkerReleaseReceipt> {
+  try {
+    const worktrees = await reconcileWorkerWorktreeLifecycles(runtime, {
+      dispatchId,
+      automaticTerminalRelease: false
+    })
+    return { ...terminal, worktree: firstCreatedWorktreeReceipt(worktrees.results) }
+  } catch (error) {
+    console.warn('[orchestration] post-release worktree reconciliation failed', {
+      dispatchId,
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return terminal
+  }
+}
+
+function firstCreatedWorktreeReceipt(
+  receipts: WorkerWorktreeLifecycleReceipt[]
+): WorkerWorktreeLifecycleReceipt | null {
+  return receipts.find((receipt) => receipt.reason !== 'not_orchestration_created') ?? null
+}

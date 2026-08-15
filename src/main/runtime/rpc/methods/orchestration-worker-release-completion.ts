@@ -10,6 +10,7 @@ import {
   type WorkerTerminalTailArchive
 } from '../../orchestration/worker-output-archive'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { WorkerWorktreeLifecycleReceipt } from '../../orchestration/worker-worktree-lifecycle-reconciliation'
 import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
 
@@ -21,6 +22,7 @@ export type WorkerReleaseReceipt = {
   archive: { source: string | null; status: string | null } | null
   recovery?: string
   lastError?: string
+  worktree?: WorkerWorktreeLifecycleReceipt | null
 }
 
 type WorkerTerminalReleaseArgs = {

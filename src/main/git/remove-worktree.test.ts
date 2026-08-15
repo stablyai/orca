@@ -108,6 +108,30 @@ branch refs/heads/main
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git branch -d -- feature/test')
   })
 
+  it('refuses automatic removal when the worktree HEAD no longer matches its proof', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD changed789
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await expect(
+      removeWorktree('/repo', '/repo-feature', false, { expectedHead: 'def456' })
+    ).rejects.toThrow(
+      'Worktree HEAD changed during automatic deletion: expected def456, found changed789.'
+    )
+
+    expect(getGitCalls()).not.toContain('git worktree remove /repo-feature')
+    expect(moveWorktreeDirectoryToTrashMock).not.toHaveBeenCalled()
+  })
+
   it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {

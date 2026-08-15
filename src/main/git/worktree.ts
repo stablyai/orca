@@ -67,6 +67,8 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
+  /** Exact commit proven safe by an automatic lifecycle owner. Re-read immediately before remove. */
+  expectedHead?: string
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
 }
 
@@ -1167,7 +1169,18 @@ async function performRemoveWorktree(
   force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  const currentWorktree = options.expectedHead
+    ? (await listWorktreesStrict(repoPath, options)).find((worktree) =>
+        areWorktreePathsEqual(worktree.path, worktreePath)
+      )
+    : undefined
+  if (options.expectedHead && currentWorktree?.head !== options.expectedHead) {
+    throw new Error(
+      `Worktree HEAD changed during automatic deletion: expected ${options.expectedHead}, found ${currentWorktree?.head ?? 'none'}.`
+    )
+  }
   const removedWorktree =
+    currentWorktree ??
     options.knownRemovedWorktree ??
     (await listWorktrees(repoPath, options)).find((worktree) =>
       areWorktreePathsEqual(worktree.path, worktreePath)

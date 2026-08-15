@@ -63,6 +63,7 @@ describe('orchestration new-worktree workers', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
     vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(
       new Promise(() => undefined)
     )
@@ -163,6 +164,30 @@ describe('orchestration new-worktree workers', () => {
       ])
     )
     expect(runtime.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('waits for the agent input composer before sending dispatch authority', async () => {
+    mockCreatedWorktree()
+    const inputReady = vi.mocked(runtime.waitForTerminalAgentInputReady)
+    const sendPrompt = vi.mocked(runtime.sendTerminalAgentPrompt)
+
+    await startWorker()
+
+    expect(inputReady).toHaveBeenCalledWith('term_worker', 'codex', 60_000)
+    expect(inputReady.mock.invocationCallOrder[0]).toBeLessThan(
+      sendPrompt.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('fails closed without sending or activating a dispatch when the composer never mounts', async () => {
+    mockCreatedWorktree()
+    vi.mocked(runtime.waitForTerminalAgentInputReady).mockResolvedValue(false)
+
+    const { result, task } = await startWorker()
+
+    expect(result).toMatchObject({ state: 'failed', stage: 'agent_readiness' })
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(db.getTask(task.id)?.status).toBe('failed')
   })
 
   it('passes launch preferences into agent-first worktree creation', async () => {

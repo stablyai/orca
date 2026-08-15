@@ -55,6 +55,9 @@ describe('orchestration RPC methods', () => {
         status: 'running',
         exitCode: null
       })
+      vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(
+        options?.ready !== false
+      )
       vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
         handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
       )

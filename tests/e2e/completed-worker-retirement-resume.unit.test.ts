@@ -281,6 +281,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     status: 'running',
     exitCode: null
   })
+  vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
   vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
     handle: TERMINAL_HANDLE,
