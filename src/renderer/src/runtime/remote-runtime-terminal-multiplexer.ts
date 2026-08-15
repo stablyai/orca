@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the remote terminal multiplexer owns one bridged subscription, stream lifecycle, binary frame parsing, and remote lock events as a single transport contract. */
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import { isValidTerminalHistorySize } from '../../../shared/terminal-history-dimensions'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -64,6 +65,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onSnapshot: (
     data: string,
     meta?: {
+      cols?: number
+      rows?: number
       pendingEscapeTailAnsi?: string
       seq?: number
       kittyKeyboardFlags?: number
@@ -888,8 +891,8 @@ class RemoteRuntimeTerminalMultiplexer {
             availability: classifySnapshotAvailability(stream.snapshotOverflowed, info),
             snapshot: {
               data: data ?? '',
-              cols: info?.cols ?? 80,
-              rows: info?.rows ?? 24,
+              cols: info?.cols ?? 0,
+              rows: info?.rows ?? 0,
               seq: info?.seq,
               source: info?.source,
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
@@ -899,6 +902,8 @@ class RemoteRuntimeTerminalMultiplexer {
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', {
+            cols: info?.cols,
+            rows: info?.rows,
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
             seq: info?.seq,
             kittyKeyboardFlags: info?.kittyKeyboardFlags
@@ -909,6 +914,8 @@ class RemoteRuntimeTerminalMultiplexer {
           // An empty snapshot is still applied so stale dropped output does
           // not linger on a terminal the model says is blank.
           stream.callbacks.onSnapshot(`\x1b[2J\x1b[3J\x1b[H${data ?? ''}`, {
+            cols: info?.cols,
+            rows: info?.rows,
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
             seq: info?.seq,
             kittyKeyboardFlags: info?.kittyKeyboardFlags
@@ -1552,9 +1559,10 @@ function decodeSnapshotInfo(
   if (!raw) {
     return null
   }
+  const hasSnapshotDimensions = isValidTerminalHistorySize(raw.cols, raw.rows)
   return {
-    cols: typeof raw.cols === 'number' ? raw.cols : undefined,
-    rows: typeof raw.rows === 'number' ? raw.rows : undefined,
+    cols: hasSnapshotDimensions ? (raw.cols as number) : undefined,
+    rows: hasSnapshotDimensions ? (raw.rows as number) : undefined,
     seq: typeof raw.seq === 'number' ? raw.seq : undefined,
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
     // Negative, fractional, and unsafe values are treated as absent, never clamped.

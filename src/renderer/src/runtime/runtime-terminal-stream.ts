@@ -13,7 +13,10 @@ export type RemoteRuntimePtyIdParts = {
 
 export type RuntimeTerminalDataSubscriptionOptions = {
   startAtLiveTail?: boolean
-  onSnapshot?: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
+  onSnapshot?: (
+    data: string,
+    meta?: { cols?: number; rows?: number; pendingEscapeTailAnsi?: string }
+  ) => void
   onEnd?: () => void
   onError?: (message: string) => void
   onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void

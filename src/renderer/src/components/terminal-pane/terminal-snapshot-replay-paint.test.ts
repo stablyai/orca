@@ -618,12 +618,15 @@ describe('hasPositiveTerminalDimensions', () => {
     expect(hasPositiveTerminalDimensions(1, 1)).toBe(true)
   })
 
-  // Why: Infinity passes `> 0` — the exact drift that let a malformed SSH
-  // model snapshot reach terminal.resize(Infinity, …).
-  it('rejects non-finite, non-positive, and non-numeric values', () => {
+  // Why: xterm throws on fractional grids and can allocate excessively for oversized grids.
+  it('rejects unsafe, out-of-contract, non-positive, and non-numeric values', () => {
     expect(hasPositiveTerminalDimensions(Infinity, 24)).toBe(false)
     expect(hasPositiveTerminalDimensions(80, Infinity)).toBe(false)
     expect(hasPositiveTerminalDimensions(Number.NaN, 24)).toBe(false)
+    expect(hasPositiveTerminalDimensions(80.5, 24)).toBe(false)
+    expect(hasPositiveTerminalDimensions(80, 24.5)).toBe(false)
+    expect(hasPositiveTerminalDimensions(1_001, 24)).toBe(false)
+    expect(hasPositiveTerminalDimensions(80, 501)).toBe(false)
     expect(hasPositiveTerminalDimensions(0, 24)).toBe(false)
     expect(hasPositiveTerminalDimensions(80, -1)).toBe(false)
     expect(hasPositiveTerminalDimensions(undefined, 24)).toBe(false)

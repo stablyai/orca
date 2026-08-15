@@ -6099,6 +6099,32 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onConnect).toHaveBeenCalled()
   })
 
+  it('forwards the source grid with an initial replay payload', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    await transport.connect({ url: '', callbacks: { onReplayData } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotStart,
+      encodeTerminalStreamJson({ kind: 'scrollback', cols: 60, rows: 20 })
+    )
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotChunk,
+      encodeTerminalStreamText('source-grid replay')
+    )
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+
+    expect(onReplayData).toHaveBeenCalledWith('source-grid replay', {
+      snapshotCols: 60,
+      snapshotRows: 20
+    })
+  })
+
   it('resolves explicit binary snapshot requests without replaying into xterm', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onReplayData = vi.fn()

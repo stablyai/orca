@@ -49,6 +49,10 @@ export type PtyBufferSnapshot = {
 /** Metadata for one authoritative replay payload. */
 export type PtyReplayDataMeta = {
   clearBeforeReplay?: boolean
+  /** Source grid for this replay payload. Zero means the producer could not
+   *  determine a size and must never reach xterm.resize(). */
+  snapshotCols?: number
+  snapshotRows?: number
   pendingEscapeTailAnsi?: string
   /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
    *  unknown; the pane tracker must stay unproven rather than assume zero. */

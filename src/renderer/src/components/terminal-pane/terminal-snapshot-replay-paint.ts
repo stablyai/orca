@@ -4,6 +4,7 @@ import {
   ABORT_TRUNCATED_CONTROL_STRING,
   buildSnapshotReplayPrologue
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { isValidTerminalHistorySize } from '../../../../shared/terminal-history-dimensions'
 
 // Once only: CAN must precede the first ESC of the replay, but the split branch
 // builds two prologues and later writes follow well-formed payloads.
@@ -17,18 +18,9 @@ function abortGapBeforeFirstWrite(writes: string[]): string[] {
  * paths so their dimension guards and alt-screen branches cannot drift.
  */
 
-/** True only for finite positive numeric cols/rows — Infinity/NaN/undefined
- *  from a malformed snapshot must degrade to "no resize", never reach
- *  terminal.resize(). */
+/** True only for dimensions safe to restore into xterm. */
 export function hasPositiveTerminalDimensions(cols: unknown, rows: unknown): boolean {
-  return (
-    typeof cols === 'number' &&
-    typeof rows === 'number' &&
-    Number.isFinite(cols) &&
-    Number.isFinite(rows) &&
-    cols > 0 &&
-    rows > 0
-  )
+  return isValidTerminalHistorySize(cols, rows)
 }
 
 /** Narrowing form of hasPositiveTerminalDimensions for optional-typed payloads. */
