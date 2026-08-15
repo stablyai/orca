@@ -27,4 +27,25 @@ describe('findSkillFiles', () => {
   it('returns nothing for a missing root rather than throwing', async () => {
     expect(await findSkillFiles(join(await makeTree(), 'absent'), 4)).toEqual([])
   })
+
+  it('stops walking once its signal aborts', async () => {
+    const root = join(await makeTree(), 'skills')
+    await writeFileAt(join(root, 'one', 'SKILL.md'))
+    await writeFileAt(join(root, 'two', 'SKILL.md'))
+
+    await expect(findSkillFiles(root, 4, AbortSignal.abort())).rejects.toThrow()
+  })
+
+  // Why not a truncated list: a caller that cached one would publish "these skills
+  // no longer exist" for a root that was merely slow.
+  it('rejects rather than returning the entries it had already collected', async () => {
+    const root = join(await makeTree(), 'skills')
+    await writeFileAt(join(root, 'one', 'SKILL.md'))
+    await writeFileAt(join(root, 'two', 'SKILL.md'))
+    const controller = new AbortController()
+    const walk = findSkillFiles(root, 4, controller.signal)
+    controller.abort()
+
+    await expect(walk).rejects.toThrow()
+  })
 })
