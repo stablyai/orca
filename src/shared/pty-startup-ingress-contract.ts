@@ -25,6 +25,14 @@ export type PtyStartupIngressOptions = {
    * query reply is about to be written, so a shell owner can drop it.
    */
   readForegroundProcess?: () => string | null | undefined
+  /**
+   * POSIX tty foreground process-group token (tpgid), the instance boundary a
+   * name-only match cannot see. Read lazily only when a query is captured or a
+   * deferred reply is verified — never per output span. Absent on ConPTY/wsl.exe;
+   * name-only ownership remains only when both observation and verification
+   * lack a token.
+   */
+  readForegroundProcessToken?: () => number | null | undefined
 }
 
 export type PtyIngressSourceSpan = {

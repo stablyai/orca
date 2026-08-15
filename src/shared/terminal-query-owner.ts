@@ -13,9 +13,23 @@ import {
 
 export type ForegroundProcessReader = () => string | null | undefined
 
+/** POSIX tty foreground process-group id (tpgid); null when it cannot be read. */
+export type ForegroundProcessToken = number | null | undefined
+export type ForegroundProcessTokenReader = () => ForegroundProcessToken
+
 export function readForegroundProcess(
   reader: ForegroundProcessReader | undefined
 ): string | null | undefined {
+  try {
+    return reader?.()
+  } catch {
+    return undefined
+  }
+}
+
+export function readForegroundProcessToken(
+  reader: ForegroundProcessTokenReader | undefined
+): ForegroundProcessToken {
   try {
     return reader?.()
   } catch {
@@ -43,6 +57,39 @@ export function shouldInjectQueryReplyForOwnerFromProcess(
   return shouldInjectQueryReplyForOwner(queryOwner, readForegroundProcess(reader))
 }
 
+export function shouldInjectQueryReplyForOwnerWithToken(
+  queryOwner: string | null | undefined,
+  foregroundProcess: string | null | undefined,
+  observedToken: ForegroundProcessToken,
+  currentToken: ForegroundProcessToken
+): boolean {
+  if (!shouldInjectQueryReplyForOwner(queryOwner, foregroundProcess)) {
+    return false
+  }
+  // Both tokens absent keeps the name-only fallback (tpgid could not be
+  // established at either boundary). Once a token was observed, a missing or
+  // different current token must deny: the same-name querier is gone and its
+  // process group with it.
+  if (observedToken === undefined || observedToken === null) {
+    return currentToken === undefined || currentToken === null
+  }
+  return currentToken !== undefined && currentToken !== null && currentToken === observedToken
+}
+
+export function shouldInjectQueryReplyForOwnerFromProcessWithToken(
+  queryOwner: string | null | undefined,
+  reader: ForegroundProcessReader | undefined,
+  observedToken: ForegroundProcessToken,
+  tokenReader: ForegroundProcessTokenReader | undefined
+): boolean {
+  return shouldInjectQueryReplyForOwnerWithToken(
+    queryOwner,
+    readForegroundProcess(reader),
+    observedToken,
+    readForegroundProcessToken(tokenReader)
+  )
+}
+
 const MAX_OUTSTANDING_QUERIES = 64
 
 // Why 5s: reply grammars carry no request id, so a claim must outlive the slowest
@@ -53,12 +100,13 @@ export const TERMINAL_QUERY_OUTSTANDING_TTL_MS = 5_000
 type OutstandingQuery = {
   identities: TerminalQueryReplyIdentity[]
   owner: string | null | undefined
+  token: ForegroundProcessToken
   observedAt: number
 }
 
 export type TerminalQueryReplyOwnerClaim =
   | { matched: false }
-  | { matched: true; owner: string | null | undefined }
+  | { matched: true; owner: string | null | undefined; token?: ForegroundProcessToken }
 
 /** One or more reply identities a query is allowed to elicit; [] when none. */
 function expectedReplyIdentities(query: string): TerminalQueryReplyIdentity[] {
@@ -127,10 +175,14 @@ function expectedReplyIdentities(query: string): TerminalQueryReplyIdentity[] {
 export class TerminalQueryOwnerTracker {
   private scanState: TerminalReplyQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
   private pendingOwner: string | null | undefined
+  private pendingToken: ForegroundProcessToken = undefined
   private value: string | null | undefined
   private readonly outstanding: OutstandingQuery[] = []
 
-  constructor(private readonly reader: ForegroundProcessReader | undefined) {}
+  constructor(
+    private readonly reader: ForegroundProcessReader | undefined,
+    private readonly tokenReader?: ForegroundProcessTokenReader
+  ) {}
 
   get owner(): string | null | undefined {
     return this.value
@@ -142,12 +194,23 @@ export class TerminalQueryOwnerTracker {
     const scan = scanTerminalReplyQuerySequences(span.data, span.rawStartSeq, previous)
     this.scanState = scan.state
     const currentOwner = readForegroundProcess(this.reader)
+    // Why lazy: the token costs a `ps` subprocess, so it is only read when this
+    // span actually captures a fresh query or opens a split, never per output
+    // span. A split *completion* reuses the token captured at its start.
+    let tokenRead = false
+    let currentToken: ForegroundProcessToken = undefined
     for (const query of scan.queries) {
       const identities = expectedReplyIdentities(query.data)
       if (identities.length === 0) {
         continue
       }
-      const owner = query.startSeq < span.rawStartSeq ? this.pendingOwner : currentOwner
+      const split = query.startSeq < span.rawStartSeq
+      if (!split && !tokenRead) {
+        tokenRead = true
+        currentToken = readForegroundProcessToken(this.tokenReader)
+      }
+      const owner = split ? this.pendingOwner : currentOwner
+      const token = split ? this.pendingToken : currentToken
       this.value = owner
       // Reply grammars carry no request id, so only the selector a reply echoes
       // back (CPR marker, DA level, window number, DECRPM parameter, OSC slot,
@@ -157,7 +220,7 @@ export class TerminalQueryOwnerTracker {
       for (const identity of identities) {
         for (let index = this.outstanding.length - 1; index >= 0; index -= 1) {
           const outstanding = this.outstanding[index]
-          if (!outstanding || outstanding.owner === owner) {
+          if (!outstanding || (outstanding.owner === owner && outstanding.token === token)) {
             continue
           }
           const identityIndex = outstanding.identities.indexOf(identity)
@@ -170,13 +233,19 @@ export class TerminalQueryOwnerTracker {
           }
         }
       }
-      this.outstanding.push({ identities, owner, observedAt: Date.now() })
+      this.outstanding.push({ identities, owner, token, observedAt: Date.now() })
       if (this.outstanding.length > MAX_OUTSTANDING_QUERIES) {
         this.outstanding.shift()
       }
     }
     if (scan.state.pendingStartSeq !== previous.pendingStartSeq) {
-      this.pendingOwner = scan.state.pending ? currentOwner : undefined
+      if (scan.state.pending) {
+        this.pendingOwner = currentOwner
+        this.pendingToken = readForegroundProcessToken(this.tokenReader)
+      } else {
+        this.pendingOwner = undefined
+        this.pendingToken = undefined
+      }
     }
   }
 
@@ -200,7 +269,9 @@ export class TerminalQueryOwnerTracker {
     if (outstanding.identities.length === 0) {
       this.outstanding.splice(index, 1)
     }
-    return { matched: true, owner: outstanding.owner }
+    return outstanding.token === undefined
+      ? { matched: true, owner: outstanding.owner }
+      : { matched: true, owner: outstanding.owner, token: outstanding.token }
   }
 
   private pruneExpiredOutstanding(): void {

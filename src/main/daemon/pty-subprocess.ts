@@ -18,7 +18,10 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
-import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import {
+  readPosixPtyForegroundGroupToken,
+  signalPosixPtyForegroundGroup
+} from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -1090,6 +1093,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
       try {
         return getFallbackForegroundProcess()
+      } catch {
+        return null
+      }
+    },
+    getForegroundProcessToken: () => {
+      // Why: reply ownership needs the tty's process-group id, the same-name
+      // instance boundary; a dead pty can no longer answer for its tty.
+      if (dead) {
+        return null
+      }
+      try {
+        return readPosixPtyForegroundGroupToken(proc.pid, readPtsName(proc))
       } catch {
         return null
       }

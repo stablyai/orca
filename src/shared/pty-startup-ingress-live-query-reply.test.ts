@@ -317,6 +317,107 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('drops a same-name delayed OSC 11 reply when the tpgid token changed', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let foreground = 'gh'
+    let token: number | null = 100
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground,
+      readForegroundProcessToken: () => token
+    })
+
+    // Instance A asks; the reply arrives after a new instance of the same
+    // executable (new process group) takes the tty.
+    ingress.accept('\x1b]11;?\x07')
+    token = 200
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    vi.advanceTimersByTime(200)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('delivers a same-name reply while the tpgid token is unchanged', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'gh',
+      readForegroundProcessToken: () => 100
+    })
+
+    expect(answerObservedLiveReply(ingress, OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([OSC_COLOR_REPLY])
+    ingress.drainAndClose()
+  })
+
+  it('denies a reply when the current token is unreadable after an observed token', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let token: number | null = 100
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'gh',
+      readForegroundProcessToken: () => token
+    })
+
+    ingress.accept('\x1b]11;?\x07')
+    token = null
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    vi.advanceTimersByTime(200)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('keeps name-only ownership when no token was observed', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const token: number | null = null
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'gh',
+      readForegroundProcessToken: () => token
+    })
+
+    ingress.accept('\x1b]11;?\x07')
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([OSC_COLOR_REPLY])
+    ingress.drainAndClose()
+  })
+
+  it('drops a same-name delayed CPR reply when the tpgid token changed', () => {
+    const writes: string[] = []
+    let token: number | null = 100
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'gh',
+      readForegroundProcessToken: () => token
+    })
+
+    ingress.accept('\x1b[6n')
+    token = 200
+    expect(ingress.answerLiveQueryReply('\x1b[12;34R')).toBe(true)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
   it('swallows a delayed OSC 10 reply from owner A once owner B asks OSC 11', () => {
     vi.useFakeTimers()
     const writes: string[] = []

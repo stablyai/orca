@@ -1,8 +1,9 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import {
-  readForegroundProcess,
-  shouldInjectQueryReplyForOwner,
+  shouldInjectQueryReplyForOwnerFromProcessWithToken,
   type ForegroundProcessReader,
+  type ForegroundProcessToken,
+  type ForegroundProcessTokenReader,
   type TerminalQueryOwnerTracker
 } from './terminal-query-owner'
 import { needsCookedEchoSafeQueryReply } from './terminal-query-reply'
@@ -14,8 +15,9 @@ export function routeTerminalLiveQueryReply(
   ownerBackend: PtyOwnerBackend,
   tracker: TerminalQueryOwnerTracker,
   foregroundReader: ForegroundProcessReader | undefined,
-  answerCooked: (owner: ReplyOwner) => boolean,
-  answerImmediate: (owner: ReplyOwner) => boolean
+  tokenReader: ForegroundProcessTokenReader | undefined,
+  answerCooked: (owner: ReplyOwner, token: ForegroundProcessToken) => boolean,
+  answerImmediate: (owner: ReplyOwner, token: ForegroundProcessToken) => boolean
 ): boolean {
   const claim = tracker.claimReplyOwner(reply)
   if (!claim.matched) {
@@ -23,11 +25,16 @@ export function routeTerminalLiveQueryReply(
   }
   if (
     ownerBackend === 'posix-pty' &&
-    !shouldInjectQueryReplyForOwner(claim.owner, readForegroundProcess(foregroundReader))
+    !shouldInjectQueryReplyForOwnerFromProcessWithToken(
+      claim.owner,
+      foregroundReader,
+      claim.token,
+      tokenReader
+    )
   ) {
     return true
   }
   return needsCookedEchoSafeQueryReply(reply)
-    ? answerCooked(claim.owner)
-    : answerImmediate(claim.owner)
+    ? answerCooked(claim.owner, claim.token)
+    : answerImmediate(claim.owner, claim.token)
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import {
   getPosixPtyForegroundGroup,
+  readPosixPtyForegroundGroupToken,
   signalPosixPtyForegroundGroup
 } from './posix-pty-foreground-group'
 
@@ -133,6 +134,54 @@ describe('signalPosixPtyForegroundGroup', () => {
     } finally {
       kill.mockRestore()
     }
+  })
+})
+
+describe('readPosixPtyForegroundGroupToken', () => {
+  it('reads the tpgid token of the pinned tty', () => {
+    expect(
+      readPosixPtyForegroundGroupToken(84644, '/dev/ttys318', {
+        platform: 'darwin',
+        currentPid: 4242,
+        readProcessTable: () => macosTable
+      })
+    ).toBe(84985)
+  })
+
+  it('omits the token on Windows and without a slave device name', () => {
+    expect(
+      readPosixPtyForegroundGroupToken(84644, '/dev/ttys318', {
+        platform: 'win32',
+        currentPid: 4242,
+        readProcessTable: () => macosTable
+      })
+    ).toBeNull()
+    expect(
+      readPosixPtyForegroundGroupToken(84644, undefined, {
+        platform: 'darwin',
+        currentPid: 4242,
+        readProcessTable: () => macosTable
+      })
+    ).toBeNull()
+  })
+
+  it('reads null when the table read fails or the tty pin breaks', () => {
+    expect(
+      readPosixPtyForegroundGroupToken(84644, '/dev/ttys318', {
+        platform: 'darwin',
+        currentPid: 4242,
+        readProcessTable: () => {
+          throw new Error('ps timed out')
+        }
+      })
+    ).toBeNull()
+    expect(
+      readPosixPtyForegroundGroupToken(84644, '/dev/ttys999', {
+        platform: 'darwin',
+        currentPid: 4242,
+        readProcessTable: () => macosTable
+      })
+    ).toBeNull()
   })
 })
 

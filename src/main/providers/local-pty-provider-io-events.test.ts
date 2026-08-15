@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as PosixPtyForegroundGroup from '../pty/posix-pty-foreground-group'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
@@ -14,7 +15,8 @@ const {
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
-  createShellPromptReadinessProbeMock
+  createShellPromptReadinessProbeMock,
+  readPosixPtyForegroundGroupTokenMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -28,7 +30,8 @@ const {
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
-  createShellPromptReadinessProbeMock: vi.fn()
+  createShellPromptReadinessProbeMock: vi.fn(),
+  readPosixPtyForegroundGroupTokenMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -111,6 +114,12 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 
+vi.mock('../pty/posix-pty-foreground-group', async (importOriginal) => ({
+  ...(await importOriginal<typeof PosixPtyForegroundGroup>()),
+  readPosixPtyForegroundGroupToken: (...args: unknown[]) =>
+    readPosixPtyForegroundGroupTokenMock(...args)
+}))
+
 import { LocalPtyProvider } from './local-pty-provider'
 import {
   applyLocalPtyProviderMockDefaults,
@@ -142,6 +151,9 @@ describe('LocalPtyProvider', () => {
       createShellPromptReadinessProbeMock
     })
 
+    readPosixPtyForegroundGroupTokenMock.mockReset()
+    readPosixPtyForegroundGroupTokenMock.mockReturnValue(null)
+
     exitCb = undefined
     mockProc = createLocalPtyMockProcess({
       get: () => exitCb,
@@ -168,6 +180,34 @@ describe('LocalPtyProvider', () => {
       provider.write(id, '\x1b[1;2R')
 
       expect(mockProc.write).toHaveBeenCalledWith('\x1b[1;2R')
+    })
+
+    it('drops a same-name delayed reply when the tpgid token changed', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      mockProc.process = 'gh'
+      readPosixPtyForegroundGroupTokenMock.mockReturnValue(100)
+
+      // Instance A asks while it owns the tty.
+      onDataCb('\x1b[6n')
+      // Instance B reuses the same executable name with a new process group.
+      readPosixPtyForegroundGroupTokenMock.mockReturnValue(200)
+
+      provider.write(id, '\x1b[12;34R')
+
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('keeps a same-name reply while the tpgid token is unchanged', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      mockProc.process = 'gh'
+      readPosixPtyForegroundGroupTokenMock.mockReturnValue(100)
+
+      onDataCb('\x1b[6n')
+      provider.write(id, '\x1b[12;34R')
+
+      expect(mockProc.write).toHaveBeenCalledWith('\x1b[12;34R')
     })
 
     it('is a no-op for unknown PTY ids', () => {

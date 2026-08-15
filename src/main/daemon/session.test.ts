@@ -38,11 +38,15 @@ function createMockSubprocess() {
     },
     foregroundProcess: null as string | null,
     rawForegroundProcess: null as string | null,
+    foregroundProcessToken: null as number | null,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
     getRawForegroundProcess(): string | null {
       return this.rawForegroundProcess
+    },
+    getForegroundProcessToken(): number | null {
+      return this.foregroundProcessToken
     },
     write(data: string) {
       written.push(data)
@@ -319,6 +323,35 @@ describe('Session', () => {
       // Enrichment now reports the derived agent identity; the raw read stays 'node'.
       subprocess.foregroundProcess = 'codex'
 
+      session.write(reply)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subprocess.written).toEqual([reply])
+    })
+
+    it('drops a live reply after a same-name instance takes the tty (tpgid changed)', async () => {
+      createSession({ ownerBackend: 'posix-pty' })
+      subprocess.rawForegroundProcess = 'gh'
+      subprocess.foregroundProcess = 'gh'
+      subprocess.foregroundProcessToken = 100
+      const reply = '\x1b]11;rgb:00/00/00\x07'
+
+      subprocess.simulateData('\x1b]11;?\x07')
+      // Same executable name, new process instance -> new process group.
+      subprocess.foregroundProcessToken = 200
+
+      session.write(reply)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('delivers a same-name live reply while the tpgid token is unchanged', async () => {
+      createSession({ ownerBackend: 'posix-pty' })
+      subprocess.rawForegroundProcess = 'gh'
+      subprocess.foregroundProcess = 'gh'
+      subprocess.foregroundProcessToken = 100
+      const reply = '\x1b]11;rgb:00/00/00\x07'
+
+      subprocess.simulateData('\x1b]11;?\x07')
       session.write(reply)
       await vi.advanceTimersByTimeAsync(0)
       expect(subprocess.written).toEqual([reply])

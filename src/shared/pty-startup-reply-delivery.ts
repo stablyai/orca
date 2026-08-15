@@ -1,8 +1,9 @@
+/* eslint-disable max-lines -- Echo probing, ordered deferred writes, and owner revalidation share one state machine. */
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
 import type { PtyIngressSourceSpan } from './pty-startup-ingress-contract'
 // oxfmt-ignore
-import { shouldInjectQueryReplyForOwnerFromProcess, type ForegroundProcessReader, TerminalQueryOwnerTracker } from './terminal-query-owner'
+import { shouldInjectQueryReplyForOwnerFromProcessWithToken, type ForegroundProcessReader, type ForegroundProcessToken, type ForegroundProcessTokenReader, TerminalQueryOwnerTracker } from './terminal-query-owner'
 import { routeTerminalLiveQueryReply } from './terminal-live-query-reply'
 
 // Why this module exists: a startup color reply is written to the PTY master, so
@@ -79,7 +80,7 @@ const ECHO_PROBE_MAX_STARTS_PER_SECOND = 10
 
 type ExpectedEcho = { projections: readonly string[]; remainingBytes: number }
 // oxfmt-ignore
-type PendingWrite = { reply: string; onFailed: (() => void) | undefined; queryOwner: string | null | undefined; verifyForeground: boolean }
+type PendingWrite = { reply: string; onFailed: (() => void) | undefined; queryOwner: string | null | undefined; queryToken: ForegroundProcessToken; verifyForeground: boolean }
 type ActiveEchoProbe = { timer: ReturnType<typeof setTimeout> | null }
 
 /** Only a POSIX tty both echoes the reply and still delivers a deferred write. */
@@ -188,9 +189,10 @@ export class PtyStartupReplyDelivery {
     private readonly ownerBackend: PtyOwnerBackend,
     private readonly writeProvider: (data: string) => void,
     private readonly echoProbe?: PtySlaveEchoProbe,
-    private readonly foregroundProcessReader?: ForegroundProcessReader
+    private readonly foregroundProcessReader?: ForegroundProcessReader,
+    private readonly foregroundTokenReader?: ForegroundProcessTokenReader
   ) {
-    this.queryOwner = new TerminalQueryOwnerTracker(foregroundProcessReader)
+    this.queryOwner = new TerminalQueryOwnerTracker(foregroundProcessReader, foregroundTokenReader)
   }
 
   get hasExpectedEcho(): boolean {
@@ -203,7 +205,7 @@ export class PtyStartupReplyDelivery {
 
   // oxfmt-ignore
   answerLive(reply: string): boolean {
-    return !this.closed && routeTerminalLiveQueryReply(reply, this.ownerBackend, this.queryOwner, this.foregroundProcessReader, (owner) => this.answer(reply, undefined, true, owner), (owner) => this.writeReply(reply, undefined, false, true, owner))
+    return !this.closed && routeTerminalLiveQueryReply(reply, this.ownerBackend, this.queryOwner, this.foregroundProcessReader, this.foregroundTokenReader, (owner, token) => this.answer(reply, undefined, true, owner, token), (owner, token) => this.writeReply(reply, undefined, false, true, owner, token))
   }
 
   /**
@@ -215,7 +217,7 @@ export class PtyStartupReplyDelivery {
    * written independently — one failing says nothing about the ones that landed.
    */
   // oxfmt-ignore
-  answer(reply: string, onFailed?: () => void, verifyForeground = false, queryOwner = verifyForeground ? this.queryOwner.owner : undefined): boolean {
+  answer(reply: string, onFailed?: () => void, verifyForeground = false, queryOwner = verifyForeground ? this.queryOwner.owner : undefined, queryToken: ForegroundProcessToken = undefined): boolean {
     if (this.closed) {
       return false
     }
@@ -235,6 +237,7 @@ export class PtyStartupReplyDelivery {
       reply,
       onFailed,
       queryOwner,
+      queryToken,
       verifyForeground
     })
     this.armWriteTimer()
@@ -357,7 +360,7 @@ export class PtyStartupReplyDelivery {
     this.clearActiveEchoProbe()
     for (const pending of this.pendingWrites.splice(0)) {
       // oxfmt-ignore
-      this.writeReply(pending.reply, pending.onFailed, kernelEchoImpossible, pending.verifyForeground, pending.queryOwner)
+      this.writeReply(pending.reply, pending.onFailed, kernelEchoImpossible, pending.verifyForeground, pending.queryOwner, pending.queryToken)
     }
   }
 
@@ -397,15 +400,22 @@ export class PtyStartupReplyDelivery {
   }
 
   // oxfmt-ignore
-  private writeReply(reply: string, onFailed?: () => void, kernelEchoImpossible = false, verifyForeground = false, queryOwner?: string | null): boolean {
+  private writeReply(reply: string, onFailed?: () => void, kernelEchoImpossible = false, verifyForeground = false, queryOwner?: string | null, queryToken: ForegroundProcessToken = undefined): boolean {
     if (this.closed) {
       return false
     }
     // Why: startup owns its replies; only live replies can become stale mid-session.
+    // The tpgid token closes the same-name instance gap: a new run with the same
+    // executable gets a new process group, so a delayed reply no longer authorizes it.
     if (
       verifyForeground &&
       this.ownerBackend === 'posix-pty' &&
-      !shouldInjectQueryReplyForOwnerFromProcess(queryOwner, this.foregroundProcessReader)
+      !shouldInjectQueryReplyForOwnerFromProcessWithToken(
+        queryOwner,
+        this.foregroundProcessReader,
+        queryToken,
+        this.foregroundTokenReader
+      )
     ) {
       return false
     }

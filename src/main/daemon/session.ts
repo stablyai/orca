@@ -59,6 +59,10 @@ export type SubprocessHandle = {
   /** Dead-guarded raw node-pty foreground, unenriched and uncached. Stable
    *  terminal-reply ownership only — never use for identity display. */
   getRawForegroundProcess?(): string | null
+  /** Dead-guarded POSIX tty foreground process-group token (tpgid), the
+   *  same-name instance boundary for terminal-reply ownership. Null on
+   *  Windows/ConPTY or when the group cannot be established safely. */
+  getForegroundProcessToken?(): number | null
   /** Await process-table evidence captured after this confirmation request. */
   confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the host skips its stdin fallback write. */
@@ -207,7 +211,8 @@ export class Session {
       // Why: reply ownership must ride the stable raw identity; the enriched
       // foreground can flip to a derived agent name mid-reply and drop a write.
       readForegroundProcess: () =>
-        this.subprocess.getRawForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
+        this.subprocess.getRawForegroundProcess?.() ?? this.subprocess.getForegroundProcess(),
+      readForegroundProcessToken: () => this.subprocess.getForegroundProcessToken?.() ?? null
     })
     if (this._shellState === 'pending') {
       this.shellPromptReadinessProbe = createShellPromptReadinessProbe({

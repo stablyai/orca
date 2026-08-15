@@ -62,7 +62,10 @@ import {
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
-import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
+import {
+  readPosixPtyForegroundGroupToken,
+  signalPosixPtyForegroundGroup
+} from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import type {
@@ -742,7 +745,11 @@ export class PtyHandler {
         } catch {
           return null
         }
-      }
+      },
+      // Why: tpgid is a `ps` subprocess, so it is read lazily only when a query
+      // is captured or a deferred reply is verified — never per output span.
+      readForegroundProcessToken: () =>
+        readPosixPtyForegroundGroupToken(managed.pty.pid, readPtsName(managed.pty))
     })
     const startup = managed.startupCommand
     if (startup?.waitForShellReady) {

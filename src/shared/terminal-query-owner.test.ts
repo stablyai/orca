@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  shouldInjectQueryReplyForOwnerWithToken,
   TERMINAL_QUERY_OUTSTANDING_TTL_MS,
   TerminalQueryOwnerTracker
 } from './terminal-query-owner'
@@ -189,6 +190,101 @@ describe('TerminalQueryOwnerTracker', () => {
 
     vi.advanceTimersByTime(TERMINAL_QUERY_OUTSTANDING_TTL_MS - 1)
     expect(tracker.claimReplyOwner('\x1b[12;34R')).toEqual({ matched: true, owner: 'orb' })
+  })
+
+  it('requires both name and tpgid token equality once a token was observed', () => {
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', 100, 100)).toBe(true)
+    // Same executable name, new process instance -> new process group.
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', 100, 200)).toBe(false)
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'node', 100, 100)).toBe(false)
+  })
+
+  it('denies a missing current token after an observed token', () => {
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', 100, null)).toBe(false)
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', 100, undefined)).toBe(false)
+  })
+
+  it('keeps name-only ownership when no token was observed', () => {
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', null, null)).toBe(true)
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'gh', null, 200)).toBe(false)
+    expect(shouldInjectQueryReplyForOwnerWithToken('gh', 'node', undefined, 200)).toBe(false)
+  })
+
+  it('retires an older same-name claim when a new process group asks again', () => {
+    let token = 100
+    const tracker = new TerminalQueryOwnerTracker(
+      () => 'node',
+      () => token
+    )
+    tracker.accept({ data: '\x1b[6n', rawStartSeq: 0, rawEndSeq: 4 })
+    token = 200
+    tracker.accept({ data: '\x1b[6n', rawStartSeq: 4, rawEndSeq: 8 })
+
+    expect(tracker.claimReplyOwner('\x1b[12;34R')).toEqual({
+      matched: true,
+      owner: 'node',
+      token: 200
+    })
+    expect(tracker.claimReplyOwner('\x1b[34;12R')).toEqual({ matched: false })
+  })
+
+  it('captures the tpgid token at query observation', () => {
+    let foreground = 'gh'
+    let token: number | null = 100
+    const tracker = new TerminalQueryOwnerTracker(
+      () => foreground,
+      () => token
+    )
+
+    tracker.accept({ data: '\x1b]11;?\x07', rawStartSeq: 0, rawEndSeq: 7 })
+    token = 200
+
+    expect(tracker.claimReplyOwner('\x1b]11;rgb:00/00/00\x07')).toEqual({
+      matched: true,
+      owner: 'gh',
+      token: 100
+    })
+  })
+
+  it('preserves the split-query token from query start', () => {
+    let foreground = 'gh'
+    let token: number | null = 100
+    const tracker = new TerminalQueryOwnerTracker(
+      () => foreground,
+      () => token
+    )
+
+    tracker.accept({ data: '\x1b]11;?', rawStartSeq: 0, rawEndSeq: 6 })
+    foreground = 'node'
+    token = 200
+    tracker.accept({ data: '\x07', rawStartSeq: 6, rawEndSeq: 7 })
+
+    expect(tracker.claimReplyOwner('\x1b]11;rgb:00/00/00\x07')).toEqual({
+      matched: true,
+      owner: 'gh',
+      token: 100
+    })
+  })
+
+  it('reads the token only when a query is captured, not per output span', () => {
+    let reads = 0
+    const tracker = new TerminalQueryOwnerTracker(
+      () => 'gh',
+      () => {
+        reads += 1
+        return 100
+      }
+    )
+
+    tracker.accept({ data: 'ordinary output', rawStartSeq: 0, rawEndSeq: 15 })
+    expect(reads).toBe(0)
+    tracker.accept({ data: '\x1b]11;?', rawStartSeq: 15, rawEndSeq: 21 })
+    expect(reads).toBe(1)
+    // A split completion reuses the token captured at its start.
+    tracker.accept({ data: '\x07', rawStartSeq: 21, rawEndSeq: 22 })
+    expect(reads).toBe(1)
+    tracker.accept({ data: 'more output', rawStartSeq: 22, rawEndSeq: 33 })
+    expect(reads).toBe(1)
   })
 
   it('expires a stale CPR claim so Shift-F3 is no longer consumed after the owner exits', () => {

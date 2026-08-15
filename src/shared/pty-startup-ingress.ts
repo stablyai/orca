@@ -57,7 +57,7 @@ export class PtyStartupIngress {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
     // oxfmt-ignore
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe, options.readForegroundProcess)
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe, options.readForegroundProcess, options.readForegroundProcessToken)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {

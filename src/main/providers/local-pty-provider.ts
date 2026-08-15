@@ -69,7 +69,10 @@ import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
-import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import {
+  readPosixPtyForegroundGroupToken,
+  signalPosixPtyForegroundGroup
+} from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
   createPtySlaveEchoProbe,
@@ -985,7 +988,11 @@ export class LocalPtyProvider implements IPtyProvider {
         } catch {
           return null
         }
-      }
+      },
+      // Why: tpgid is a `ps` subprocess, so it is read lazily only when a query
+      // is captured or a deferred reply is verified — never per output span.
+      readForegroundProcessToken: () =>
+        readPosixPtyForegroundGroupToken(proc.pid, readPtsName(proc))
     })
     startupIngressByPty.set(id, startupIngress)
 

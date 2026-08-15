@@ -94,6 +94,37 @@ export function getPosixPtyForegroundGroup(
 }
 
 /**
+ * Reads the PTY's foreground process-group token (tpgid) for query-reply instance
+ * ownership. tpgid is the instance boundary: a fresh same-name run creates a new
+ * process group, so a delayed reply matched only by name would authorize the wrong
+ * instance. Reuses the tty-pinned resolver, so a recycled root pid cannot
+ * misidentify a foreign tty; every failure reads as null. Name-only ownership
+ * remains only if both query capture and reply verification lack a token.
+ * Callers invoke this lazily, only at query capture and reply
+ * verification — never per output span — because each read is a `ps` subprocess.
+ */
+export function readPosixPtyForegroundGroupToken(
+  rootPid: number,
+  ptsName: string | undefined,
+  deps: PosixPtyForegroundGroupDeps = {}
+): number | null {
+  if ((deps.platform ?? process.platform) === 'win32' || !ptsName) {
+    return null
+  }
+  const currentPid = deps.currentPid ?? process.pid
+  try {
+    return getPosixPtyForegroundGroup(
+      (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
+      rootPid,
+      ptsName,
+      currentPid
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
  * Sends `signal` to the PTY's foreground process group, falling back to the
  * supplied root-pid delivery when the group cannot be established safely.
  *
