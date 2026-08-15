@@ -19,6 +19,21 @@ describe('parseKimiLoginInstructions', () => {
     })
   })
 
+  it('strips sentence punctuation that follows the verification URL', () => {
+    expect(
+      parseKimiLoginInstructions(
+        'Open https://auth.kimi.com/device.\nEnter code: ABCD-EFGH',
+        '/managed/home'
+      )?.verificationUrl
+    ).toBe('https://auth.kimi.com/device')
+    expect(
+      parseKimiLoginInstructions(
+        'Visit (https://auth.kimi.com/device?user_code=ABCD-EFGH),',
+        '/managed/home'
+      )?.verificationUrl
+    ).toBe('https://auth.kimi.com/device?user_code=ABCD-EFGH')
+  })
+
   it('drops lines that could contain bearer credentials', () => {
     const instructions = parseKimiLoginInstructions(
       [

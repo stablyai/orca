@@ -166,14 +166,16 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
 
   it('uses legacy account discovery when the runtime cannot scope an unknown PTY', async () => {
     const prepareForCodexLaunch = vi.fn(() => '/managed/current/home')
+    const prepareForCodexPtyLaunch = vi.fn(() => undefined)
 
     const result = await prepareLocalCommitMessageAgentEnv(
       'codex',
-      { prepareForCodexLaunch, prepareForCodexPtyLaunch: () => undefined },
+      { prepareForCodexLaunch, prepareForCodexPtyLaunch },
       { runtime: 'host' },
       'pty-unrecorded'
     )
 
+    expect(prepareForCodexPtyLaunch).toHaveBeenCalledWith('pty-unrecorded', { runtime: 'host' })
     expect(prepareForCodexLaunch).toHaveBeenCalledWith({ runtime: 'host' })
     expect(result).toEqual({
       ok: true,

@@ -10,6 +10,9 @@ export const KIMI_LOGIN_FORCE_KILL_WAIT_MS = 2_000
 const MAX_LOGIN_OUTPUT_CHARS = 8_000
 const MAX_INSTRUCTION_CHARS = 1_200
 const URL_PATTERN = /https:\/\/[^\s<>"']+/i
+// Why: the CLI prints the URL inside a sentence, so trailing punctuation is not
+// part of the address the login handler opens.
+const TRAILING_URL_PUNCTUATION_PATTERN = /[.,;:!?)\]}>'"]+$/
 const USER_CODE_PATTERN = /\b(?:user\s+)?code\s*[:=]\s*[A-Z0-9-]{4,}\b/i
 const SENSITIVE_LINE_PATTERN =
   /access[_ -]?token|refresh[_ -]?token|authorization:\s*bearer|\bbearer\s+\S+/i
@@ -54,7 +57,8 @@ export function parseKimiLoginInstructions(
   if (!message) {
     return null
   }
-  const verificationUrl = message.match(URL_PATTERN)?.[0] ?? null
+  const verificationUrl =
+    message.match(URL_PATTERN)?.[0].replace(TRAILING_URL_PUNCTUATION_PATTERN, '') || null
   if (
     !verificationUrl ||
     (!USER_CODE_PATTERN.test(message) && !/[?&]user_code=/i.test(verificationUrl))
