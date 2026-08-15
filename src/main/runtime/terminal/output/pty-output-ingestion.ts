@@ -20,6 +20,10 @@ import {
   tailGainedNewerBlockedReason
 } from '../../terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import {
+  createPaneExitScanState,
+  scanPaneExitMarker
+} from '../../../shell-pane-exit-scanner'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(
@@ -98,6 +102,16 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     sequenceChars = data.length,
     transformed = false
   ): number {
+    const paneExitScan =
+      this.paneExitScanStateByPtyId.get(ptyId) ??
+      this.paneExitScanStateByPtyId.set(ptyId, createPaneExitScanState()).get(ptyId)
+    if (paneExitScan) {
+      const scanned = scanPaneExitMarker(paneExitScan, data)
+      data = scanned.output
+      if (scanned.exitCode !== null) {
+        this.lastReportedPaneExitCodeByPtyId.set(ptyId, scanned.exitCode)
+      }
+    }
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.scanProviderModeTrackers(ptyId, data)

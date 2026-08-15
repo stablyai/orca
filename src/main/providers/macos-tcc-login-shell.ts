@@ -1,7 +1,6 @@
 import { runProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
-import { basename } from 'node:path'
 import {
   runMacosLoginSessionPtyProbe,
   type LoginPreflightOutcome
@@ -12,8 +11,12 @@ export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 export const MACOS_LOGIN_PATH = '/usr/bin/login'
 const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
-const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
-const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
+// Why: login(1) always exits 0, so exec would drop the inner command status
+// that `terminal wait --for exit` reports. Stay the parent, emit the child's
+// code via OSC, then exit with that same code. `command --` keeps a
+// dash-prefixed shell path from being parsed as a builtin flag.
+export const MACOS_TCC_SHELL_TRAMPOLINE =
+  'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 // Off the spawn path, the death watch can outwait a slow PAM stack without delaying terminal creation.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000
@@ -263,7 +266,20 @@ export function hostReportsChildExitStatus(file: string): boolean {
   return file !== MACOS_LOGIN_PATH
 }
 
-/** login(1) gives signed terminal CLIs independent TCC grants; positional trampoline args cannot become shell source. */
+/**
+ * Wrap a macOS shell spawn in `/usr/bin/login -flpq <user> …` so terminal children
+ * get their own TCC identity instead of collapsing into Orca's bundle id — signed
+ * CLIs like `op` otherwise re-prompt every launch because tccd attributes the grant
+ * to Orca and never persists it (#6996, #8985).
+ *
+ * A clean bash trampoline restores SHELL after login(1) overwrites it, then runs
+ * the configured shell as a child so the inner exit code can be reported. Values
+ * stay positional so custom paths and arguments are never interpreted as shell
+ * source. `command --` is not a login exec, so Bash `--rcfile` still applies.
+ *
+ * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
+ * or when the login(1) PAM preflight rejects this process's user.
+ */
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
   args: string[],
@@ -294,11 +310,6 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
 
   const shellEnvValue = env?.SHELL || file
-  // Login argv[0] disables Bash --rcfile; the Orca rcfile already implements login startup.
-  const trampoline =
-    basename(file).toLowerCase() === 'bash' && args.includes('--rcfile')
-      ? DIRECT_SHELL_TRAMPOLINE
-      : LOGIN_SHELL_TRAMPOLINE
 
   // -p blocks inherited BASH_ENV and imported functions before the fixed positional trampoline.
   return {
@@ -311,7 +322,7 @@ export function wrapShellSpawnForMacosTccAttribution(
       '--norc',
       '-p',
       '-c',
-      trampoline,
+      MACOS_TCC_SHELL_TRAMPOLINE,
       'orca-tcc-login',
       shellEnvValue,
       file,
