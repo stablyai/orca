@@ -6867,20 +6867,32 @@ export class OrchestrationDb {
           ) as MessageRow
         }
       } else if (params.lifecycle.kind === 'runtime_failure') {
-        const settlement = this.settleFederatedRuntimeFailureInTransaction({
-          taskId: params.lifecycle.taskId,
-          dispatchId: params.dispatchId,
-          reason: params.lifecycle.reason,
-          result: params.lifecycle.result
-        })
-        if (settlement) {
-          lifecycle = { action: 'settled', outcome: 'failed', duplicate }
+        const inactiveReason = `Dispatch ${params.dispatchId} is no longer active.`
+        if (duplicate) {
+          lifecycle = hasLifecycleRejectionMarker(message.payload)
+            ? { action: 'rejected', code: 'inactive_dispatch', reason: inactiveReason }
+            : { action: 'settled', outcome: 'failed', duplicate: true }
         } else {
-          message = this.convertLifecycleMessageToRejection(
-            message.id,
-            'inactive_dispatch',
-            `Dispatch ${params.dispatchId} is no longer active.`
-          ) as MessageRow
+          const settlement = this.settleFederatedRuntimeFailureInTransaction({
+            taskId: params.lifecycle.taskId,
+            dispatchId: params.dispatchId,
+            reason: params.lifecycle.reason,
+            result: params.lifecycle.result
+          })
+          if (settlement) {
+            lifecycle = { action: 'settled', outcome: 'failed', duplicate: false }
+          } else {
+            lifecycle = {
+              action: 'rejected',
+              code: 'inactive_dispatch',
+              reason: inactiveReason
+            }
+            message = this.convertLifecycleMessageToRejection(
+              message.id,
+              lifecycle.code,
+              lifecycle.reason
+            ) as MessageRow
+          }
         }
       } else if (params.lifecycle.kind === 'rejected') {
         lifecycle = {

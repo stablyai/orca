@@ -23,6 +23,7 @@ describe('orchestration federation', () => {
   let workerDispatcher: RpcDispatcher
   let workerCapabilities: string[]
   let workerPeerFingerprint: string
+  let loseNextAckBeforeDelivery: boolean
   let loseNextAckResponse: boolean
 
   beforeEach(() => {
@@ -37,6 +38,7 @@ describe('orchestration federation', () => {
     })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     workerPeerFingerprint = 'windows_peer_fingerprint'
+    loseNextAckBeforeDelivery = false
     loseNextAckResponse = false
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
@@ -52,6 +54,10 @@ describe('orchestration federation', () => {
             result: { ...workerRuntime.getStatus(), capabilities: workerCapabilities },
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
+        }
+        if (method === 'orchestration.federationAck' && loseNextAckBeforeDelivery) {
+          loseNextAckBeforeDelivery = false
+          throw new Error('connection lost before acknowledgment')
         }
         const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
@@ -443,7 +449,7 @@ describe('orchestration federation', () => {
     expect(homeDb.getTask(task.id)?.status).toBe('blocked')
   })
 
-  it('relays a remote watchdog deadline failure home without creating a replacement Dispatch', async () => {
+  it('replays a remote watchdog failure after an acknowledgment is lost before delivery', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const original = homeDb.getDispatchContext(task.id)!
@@ -468,10 +474,33 @@ describe('orchestration federation', () => {
         afterSequence: 0
       })[0]?.payload
     ).toContain('runtime_budget_exhausted:term')
-    const synced = await syncFederatedDispatch(homeRuntime, original.id)
-    expect(synced.imported).toBe(1)
+    const [relay] = workerDb.listPendingFederationRelay(original.id, 'to_home')
+    const importRelay = vi.spyOn(homeDb, 'importFederatedRelayItem')
+    loseNextAckBeforeDelivery = true
+
+    await expect(syncFederatedDispatch(homeRuntime, original.id)).rejects.toThrow(
+      'connection lost before acknowledgment'
+    )
+    const firstMessage = homeDb.getMessageById(relay.message_id)
+    const firstTask = homeDb.getTask(task.id)
+    const firstDispatch = homeDb.getDispatchContextById(original.id)
+    const replayed = await syncFederatedDispatch(homeRuntime, original.id)
 
     expect(homeDb.getDispatchContext(task.id)?.id).toBe(original.id)
+    expect(replayed).toEqual({ imported: 0, acknowledgedThrough: relay.sequence })
+    expect(importRelay.mock.results.map((result) => result.value)).toMatchObject([
+      {
+        duplicate: false,
+        lifecycle: { action: 'settled', outcome: 'failed', duplicate: false }
+      },
+      {
+        duplicate: true,
+        lifecycle: { action: 'settled', outcome: 'failed', duplicate: true }
+      }
+    ])
+    expect(homeDb.getMessageById(relay.message_id)).toEqual(firstMessage)
+    expect(homeDb.getTask(task.id)).toEqual(firstTask)
+    expect(homeDb.getDispatchContextById(original.id)).toEqual(firstDispatch)
     expect(homeDb.getTask(task.id)).toMatchObject({
       status: 'blocked',
       result: expect.stringContaining('runtime_budget_exhausted:term')
@@ -480,6 +509,55 @@ describe('orchestration federation', () => {
       state: 'stopped',
       stage: 'runtime_budget_exhausted'
     })
+    expect(workerDb.listPendingFederationRelay(original.id, 'to_home')).toHaveLength(0)
+  })
+
+  it('replays a rejected runtime failure without mutating its durable message twice', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    const dispatch = homeDb.getDispatchContext(task.id)!
+    homeDb.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded',
+      result: 'already completed'
+    })
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)!
+    workerDb.reconcileRemoteWorkerWatchdogSentinel(dispatch.id, {
+      dispatchId: dispatch.id,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt: attachment.deadline_at,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      exitCode: null,
+      signal: 'SIGTERM',
+      stop: 'term'
+    })
+    const [relay] = workerDb.listPendingFederationRelay(dispatch.id, 'to_home')
+    const importRelay = vi.spyOn(homeDb, 'importFederatedRelayItem')
+    loseNextAckBeforeDelivery = true
+
+    await expect(syncFederatedDispatch(homeRuntime, dispatch.id)).rejects.toThrow(
+      'connection lost before acknowledgment'
+    )
+    const firstMessage = homeDb.getMessageById(relay.message_id)
+    await syncFederatedDispatch(homeRuntime, dispatch.id)
+
+    expect(importRelay.mock.results.map((result) => result.value)).toMatchObject([
+      {
+        duplicate: false,
+        lifecycle: { action: 'rejected', code: 'inactive_dispatch' }
+      },
+      {
+        duplicate: true,
+        lifecycle: { action: 'rejected', code: 'inactive_dispatch' }
+      }
+    ])
+    expect(homeDb.getMessageById(relay.message_id)).toEqual(firstMessage)
+    expect(homeDb.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: 'already completed'
+    })
+    expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(0)
   })
 
   it('rejects control mail before queueing when the worker lacks that capability', async () => {
