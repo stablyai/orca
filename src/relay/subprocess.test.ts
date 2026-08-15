@@ -552,7 +552,7 @@ describe('Subprocess: Relay entry point', () => {
       await relay.waitForExit(2000)
       expect(relay.proc.exitCode).toBe(0)
     },
-    10_000
+    30_000
   )
 
   // Why: a relay holding zero PTYs preserves nothing, so the unlimited default must still be

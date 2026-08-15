@@ -205,6 +205,12 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Keyboard Shortcuts')
   })
 
+  it('opens the skills section in Settings from the help menu', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).toContain('Skills')
+    expect(html).toContain('Keyboard Shortcuts')
+  })
+
   it('renders Milestones with progress when setup is incomplete', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Milestones')

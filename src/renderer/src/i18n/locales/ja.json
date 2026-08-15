@@ -824,7 +824,10 @@
         "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
         "pluginsTitle": "プラグイン",
         "pluginsDescription": "実験的機能の Orca プラグインをインストール・管理します。",
-        "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+        "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+        "skillsBeta": "ベータ",
+        "skillsTitle": "スキル",
+        "skillsDescription": "プロバイダーとソース別にローカルのエージェントスキルを閲覧します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -4310,7 +4313,8 @@
           "d396773ef0": "チェック中",
           "f8a2c91d4e": "マイルストーン",
           "b7e4d2a19c": "オンボーディング",
-          "c4f8e1b72a": "X"
+          "c4f8e1b72a": "X",
+          "1a2f3b9d44": "スキル"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "フォルダーピッカーを開いてプロジェクトを追加します",
@@ -6957,7 +6961,9 @@
           "devDescription": "UI の状態を確認するための開発者専用ツール。",
           "linearTitle": "Linear",
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
-          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+          "skillsTitle": "スキル",
+          "skillsDescription": "プロバイダーとソース別にローカルのエージェントスキルを閲覧します。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -10140,6 +10146,14 @@
           "saveFailed": "表示設定のデフォルトを保存できませんでした。",
           "updateServer": "ソースのデフォルトを設定するには、このサーバーを更新してください。",
           "updateServerDefaults": "表示のデフォルトを設定するには、このサーバーを更新してください。"
+        },
+        "skillsSearch": {
+          "title": "スキル",
+          "description": "ローカルの Codex、Claude、Agent Skills、バンドル、リポジトリ、プラグインのスキルを閲覧します。",
+          "keywordGallery": "スキルギャラリー",
+          "keywordCodex": "Codex スキル",
+          "keywordClaude": "Claude スキル",
+          "keywordPlugins": "プラグインスキル"
         }
       },
       "right": {

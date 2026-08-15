@@ -928,7 +928,10 @@
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "skillsBeta": "Beta",
+        "skillsTitle": "Skills",
+        "skillsDescription": "Browse local agent skills by provider and source."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -4545,7 +4548,8 @@
           "d396773ef0": "checking",
           "f8a2c91d4e": "Milestones",
           "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "c4f8e1b72a": "X",
+          "1a2f3b9d44": "Skills"
         },
         "SidebarToolbar": {
           "87d0064026": "Workspace board moved to the bottom bar",
@@ -7354,7 +7358,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "skillsTitle": "Skills",
+          "skillsDescription": "Browse local agent skills by provider and source."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -10733,6 +10739,14 @@
           "cancel": "Keep cleaning",
           "stopping": "Stopping…",
           "confirm": "Stop cleanup"
+        },
+        "skillsSearch": {
+          "title": "Skills",
+          "description": "Browse local Codex, Claude, Agent Skills, bundled, repository, and plugin skills.",
+          "keywordGallery": "skills gallery",
+          "keywordCodex": "codex skills",
+          "keywordClaude": "claude skills",
+          "keywordPlugins": "plugin skills"
         }
       },
       "right": {

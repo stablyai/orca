@@ -824,7 +824,10 @@
         "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Instala y administra plugins experimentales de Orca.",
-        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+        "skillsBeta": "Beta",
+        "skillsTitle": "Skills",
+        "skillsDescription": "Explora skills locales de agentes por proveedor y origen."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -4329,7 +4332,8 @@
           "d396773ef0": "comprobando",
           "f8a2c91d4e": "Milestones",
           "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "c4f8e1b72a": "X",
+          "1a2f3b9d44": "Skills"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "Abrir el selector de carpetas para agregar un proyecto",
@@ -6935,7 +6939,9 @@
           "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
           "linearTitle": "Linear",
           "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
-          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+          "skillsTitle": "Skills",
+          "skillsDescription": "Explora skills locales de agentes por proveedor y origen."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -10140,6 +10146,14 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "skillsSearch": {
+          "title": "Skills",
+          "description": "Explora skills locales de Codex, Claude, Agent Skills, empaquetadas, de repositorio y de plugins.",
+          "keywordGallery": "galería de skills",
+          "keywordCodex": "skills de Codex",
+          "keywordClaude": "skills de Claude",
+          "keywordPlugins": "skills de plugins"
         }
       },
       "right": {

@@ -824,7 +824,10 @@
         "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
         "pluginsTitle": "插件",
         "pluginsDescription": "安装和管理实验性 Orca 插件。",
-        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+        "skillsBeta": "Beta",
+        "skillsTitle": "技能",
+        "skillsDescription": "按提供方和来源浏览本地代理技能。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -4322,7 +4325,8 @@
           "d396773ef0": "检查中",
           "f8a2c91d4e": "里程碑",
           "b7e4d2a19c": "入门引导",
-          "c4f8e1b72a": "X"
+          "c4f8e1b72a": "X",
+          "1a2f3b9d44": "技能"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "打开文件夹选择器以添加项目",
@@ -6932,7 +6936,9 @@
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
           "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
-          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+          "skillsTitle": "技能",
+          "skillsDescription": "按提供方和来源浏览本地代理技能。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -10160,6 +10166,14 @@
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",
           "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
+        },
+        "skillsSearch": {
+          "title": "技能",
+          "description": "浏览本地 Codex、Claude、Agent Skills、捆绑、仓库和插件技能。",
+          "keywordGallery": "技能图库",
+          "keywordCodex": "Codex 技能",
+          "keywordClaude": "Claude 技能",
+          "keywordPlugins": "插件技能"
         }
       },
       "right": {

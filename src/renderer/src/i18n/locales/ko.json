@@ -824,7 +824,10 @@
         "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
         "pluginsTitle": "플러그인",
         "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
-        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+        "skillsBeta": "베타",
+        "skillsTitle": "스킬",
+        "skillsDescription": "제공자와 소스별로 로컬 에이전트 스킬을 탐색합니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -4310,7 +4313,8 @@
           "d396773ef0": "확인 중",
           "f8a2c91d4e": "마일스톤",
           "b7e4d2a19c": "온보딩",
-          "c4f8e1b72a": "X"
+          "c4f8e1b72a": "X",
+          "1a2f3b9d44": "스킬"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "폴더 선택기를 열어 프로젝트를 추가하세요.",
@@ -6920,7 +6924,9 @@
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
-          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+          "skillsTitle": "스킬",
+          "skillsDescription": "제공자와 소스별로 로컬 에이전트 스킬을 탐색합니다."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -10140,6 +10146,14 @@
           "saveFailed": "가시성 기본값을 저장할 수 없습니다.",
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",
           "updateServerDefaults": "표시 기본값을 구성하려면 이 서버를 업데이트하세요."
+        },
+        "skillsSearch": {
+          "title": "스킬",
+          "description": "로컬 Codex, Claude, Agent Skills, 번들, 저장소, 플러그인 스킬을 탐색합니다.",
+          "keywordGallery": "스킬 갤러리",
+          "keywordCodex": "Codex 스킬",
+          "keywordClaude": "Claude 스킬",
+          "keywordPlugins": "플러그인 스킬"
         }
       },
       "right": {

@@ -37,6 +37,7 @@ describe('settings navigation metadata', () => {
       'agents',
       'accounts',
       'orchestration',
+      'skills',
       'computer-use',
       'voice',
       'orca-account',
@@ -136,6 +137,7 @@ describe('settings navigation metadata', () => {
     })
     const webIds = webSections.map((section) => section.id)
 
+    expect(webIds).not.toContain('skills')
     expect(webIds).not.toContain('browser')
     expect(webIds).not.toContain('ssh')
     expect(webIds).not.toContain('mobile')
@@ -200,6 +202,24 @@ describe('settings navigation metadata', () => {
     expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
     expect(experimental?.group).toBe('experimental')
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
+  })
+
+  it('registers Skills as a searchable AI capability with the BookOpen icon', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const skills = sections.find((section) => section.id === 'skills')
+
+    expect(skills).toMatchObject({
+      title: 'Skills',
+      group: 'capabilities',
+      badge: 'Beta'
+    })
+    expect(skills?.icon.displayName ?? skills?.icon.name).toBe('BookOpen')
+    expect(skills?.searchEntries[0]?.keywords).toContain('skills gallery')
   })
 
   it('places Plugins under Experimental on desktop and omits it on the web', () => {

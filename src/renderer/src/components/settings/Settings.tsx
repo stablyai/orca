@@ -61,6 +61,8 @@ import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
+import { SkillsManageButton } from '@/components/skills/SkillsManageButton'
+import { SkillsSettingsPane } from './SkillsSettingsPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
@@ -298,6 +300,7 @@ function Settings(): React.JSX.Element {
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
+  const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
@@ -374,7 +377,9 @@ function Settings(): React.JSX.Element {
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
     [fontSuggestions]
   )
-  const [activeSectionId, setActiveSectionId] = useState('general')
+  const [activeSectionId, setActiveSectionId] = useState(
+    activeView === 'skills' ? 'skills' : 'general'
+  )
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
@@ -1318,6 +1323,23 @@ function Settings(): React.JSX.Element {
 
                 {showDesktopOnlySettings ? (
                   <>
+                    <SettingsSection
+                      id="skills"
+                      title={translate('auto.components.settings.Settings.skillsTitle', 'Skills')}
+                      description={translate(
+                        'auto.components.settings.Settings.skillsDescription',
+                        'Browse local agent skills by provider and source.'
+                      )}
+                      badge={translate(
+                        'auto.hooks.useSettingsNavigationMetadata.skillsBeta',
+                        'Beta'
+                      )}
+                      searchEntries={getSectionSearchEntries('skills')}
+                      headerAction={<SkillsManageButton />}
+                      bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
+                    >
+                      {isSectionMounted('skills') ? <SkillsSettingsPane /> : null}
+                    </SettingsSection>
                     <SettingsSection
                       id="computer-use"
                       title={translate(
