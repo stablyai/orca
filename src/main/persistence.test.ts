@@ -2622,6 +2622,110 @@ describe('Store', () => {
     expect((readDataFile() as PersistedState).settings.terminalTuiScrollSensitivity).toBe(1)
   })
 
+  it.each([
+    [600, 800],
+    [700, 900],
+    [800, 900],
+    [900, 900]
+  ])(
+    'migrates a pre-split regular weight of %i to the bold weight it already rendered (%i)',
+    async (terminalFontWeight, expectedBold) => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { terminalFontWeight },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+
+      expect(store.getSettings().terminalFontWeightBold).toBe(expectedBold)
+      // The regression: an unmigrated profile fell back to 700, lighter than its own regular weight.
+      expect(store.getSettings().terminalFontWeightBold).toBeGreaterThanOrEqual(terminalFontWeight)
+      store.flush()
+      expect((readDataFile() as PersistedState).settings.terminalFontWeightBold).toBe(expectedBold)
+    }
+  )
+
+  it('leaves light pre-split profiles on the 700 bold default', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalFontWeight: 300 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalFontWeight).toBe(300)
+    expect(store.getSettings().terminalFontWeightBold).toBe(700)
+  })
+
+  it('keeps an explicitly configured bold weight instead of re-deriving it', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalFontWeight: 800, terminalFontWeightBold: 400 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalFontWeightBold).toBe(400)
+  })
+
+  it('persists the derived bold weight without another settings change', async () => {
+    const settledStore = await createStore()
+    settledStore.flush()
+    const settled = readDataFile() as PersistedState
+    settled.settings.terminalFontWeight = 800
+    delete (settled.settings as Partial<GlobalSettings>).terminalFontWeightBold
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+
+      expect(store.getSettings().terminalFontWeightBold).toBe(900)
+      vi.advanceTimersByTime(1_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect((readDataFile() as PersistedState).settings.terminalFontWeightBold).toBe(900)
+  })
+
+  it('persists a normalized explicit bold weight', async () => {
+    const settledStore = await createStore()
+    settledStore.flush()
+    const settled = readDataFile() as PersistedState
+    settled.settings.terminalFontWeightBold = 1200
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+
+      expect(store.getSettings().terminalFontWeightBold).toBe(900)
+      vi.advanceTimersByTime(1_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect((readDataFile() as PersistedState).settings.terminalFontWeightBold).toBe(900)
+  })
+
   it('preserves TUI scroll sensitivity choices after the one-report migration', async () => {
     writeDataFile({
       schemaVersion: 1,

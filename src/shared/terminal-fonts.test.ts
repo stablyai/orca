@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
   DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
+  legacyDerivedTerminalFontWeightBold,
   resolveTerminalFontWeights,
   normalizeTerminalFontWeight,
   normalizeTerminalFontWeightBold
@@ -25,6 +26,16 @@ describe('terminal font weights', () => {
       fontWeight: 500,
       fontWeightBold: 700
     })
+  })
+
+  it('reproduces the pre-split derivation for migrating old profiles', () => {
+    expect(legacyDerivedTerminalFontWeightBold(undefined)).toBe(700)
+    expect(legacyDerivedTerminalFontWeightBold(300)).toBe(700)
+    expect(legacyDerivedTerminalFontWeightBold(500)).toBe(700)
+    expect(legacyDerivedTerminalFontWeightBold(600)).toBe(800)
+    expect(legacyDerivedTerminalFontWeightBold(700)).toBe(900)
+    expect(legacyDerivedTerminalFontWeightBold(800)).toBe(900)
+    expect(legacyDerivedTerminalFontWeightBold(900)).toBe(900)
   })
 
   it('does not derive bold from the base weight', () => {

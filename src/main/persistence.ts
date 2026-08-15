@@ -194,6 +194,11 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import {
+  DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
+  legacyDerivedTerminalFontWeightBold,
+  normalizeTerminalFontWeightBold
+} from '../shared/terminal-fonts'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { mergeWorkspaceCleanupUIState } from '../shared/workspace-cleanup-ui-state'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
@@ -679,6 +684,11 @@ type LegacyTerminalScrollbackSettings = {
   terminalScrollbackBytes?: unknown
 }
 
+type LegacyTerminalFontWeightSettings = {
+  terminalFontWeight?: number | null
+  terminalFontWeightBold?: number | null
+}
+
 type RetiredGlobalSettings = {
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
@@ -719,6 +729,32 @@ function migrateTerminalScrollbackRows(settings: unknown): {
   return {
     rows,
     needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
+  }
+}
+
+// Why (STA-4236): #14368 split bold out of terminalFontWeight. Profiles saved before it have no
+// bold value, and the 700 default renders lighter than a regular weight of 800 or 900. Carry the
+// weight those profiles were already rendering forward once.
+function migrateTerminalFontWeightBold(settings: unknown): {
+  fontWeightBold: number
+  needsSave: boolean
+} {
+  const legacySettings =
+    settings && typeof settings === 'object' ? (settings as LegacyTerminalFontWeightSettings) : {}
+
+  if (Object.hasOwn(legacySettings, 'terminalFontWeightBold')) {
+    const fontWeightBold = normalizeTerminalFontWeightBold(legacySettings.terminalFontWeightBold)
+    return {
+      fontWeightBold,
+      needsSave: legacySettings.terminalFontWeightBold !== fontWeightBold
+    }
+  }
+
+  return {
+    fontWeightBold: Object.hasOwn(legacySettings, 'terminalFontWeight')
+      ? legacyDerivedTerminalFontWeightBold(legacySettings.terminalFontWeight)
+      : DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
+    needsSave: true
   }
 }
 
@@ -3296,6 +3332,10 @@ export class Store {
         if (migratedTerminalTuiScrollSensitivity.needsSave) {
           this.loadNeedsSave = true
         }
+        const migratedTerminalFontWeightBold = migrateTerminalFontWeightBold(parsed.settings)
+        if (migratedTerminalFontWeightBold.needsSave) {
+          this.loadNeedsSave = true
+        }
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -3596,6 +3636,7 @@ export class Store {
                 : defaults.settings.terminalRightClickToPaste,
             terminalRightClickToPasteDefaultedForPlatform: true,
             ...migratedTerminalTuiScrollSensitivity.settings,
+            terminalFontWeightBold: migratedTerminalFontWeightBold.fontWeightBold,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: compact worktree cards graduated from Experimental; preserve the old opt-in for rollout-era profiles.

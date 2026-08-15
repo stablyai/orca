@@ -25,6 +25,15 @@ export function normalizeTerminalFontWeightBold(fontWeight: number | null | unde
   return normalizeWeight(fontWeight, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD)
 }
 
+// The pre-#14368 derivation. Kept only so profiles saved before bold became its own setting
+// migrate to the weight they were already rendering, instead of dropping to the 700 default.
+export function legacyDerivedTerminalFontWeightBold(fontWeight: number | null | undefined): number {
+  return Math.min(
+    TERMINAL_FONT_WEIGHT_MAX,
+    Math.max(DEFAULT_TERMINAL_FONT_WEIGHT_BOLD, normalizeTerminalFontWeight(fontWeight) + 200)
+  )
+}
+
 // Numeric weight gaps do not guarantee distinct font faces, so bold stays independently configurable.
 export function resolveTerminalFontWeights(
   fontWeight: number | null | undefined,
