@@ -27,6 +27,7 @@ type RemoteFileBrowserProps = (
   | { runtimeEnvironmentId: string; targetId?: never }
 ) & {
   initialPath?: string
+  selectionPurpose?: 'open-project' | 'create-inside'
   onSelect: (path: string) => void
   onCancel: () => void
 }
@@ -53,6 +54,7 @@ export function RemoteFileBrowser({
   targetId,
   runtimeEnvironmentId,
   initialPath = '~',
+  selectionPurpose = 'open-project',
   onSelect,
   onCancel
 }: RemoteFileBrowserProps): React.JSX.Element {
@@ -763,11 +765,17 @@ export function RemoteFileBrowser({
       >
         {fileHint
           ? FILE_HINT_TEXT
-          : translate(
-              'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
-              'Opens as a project on this host · {{value0}}',
-              { value0: resolvedPath }
-            )}
+          : selectionPurpose === 'create-inside'
+            ? translate(
+                'auto.components.sidebar.RemoteFileBrowser.55216d346f',
+                'New repository folder will be created inside · {{value0}}',
+                { value0: resolvedPath }
+              )
+            : translate(
+                'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
+                'Opens as a project on this host · {{value0}}',
+                { value0: resolvedPath }
+              )}
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onCancel}>
@@ -780,7 +788,12 @@ export function RemoteFileBrowser({
           disabled={selectDisabled}
           title={resolvedPath}
         >
-          {translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
+          {selectionPurpose === 'create-inside'
+            ? translate(
+                'auto.components.sidebar.RemoteFileBrowser.7194618895',
+                'Select parent folder'
+              )
+            : translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
         </Button>
       </div>
     </div>

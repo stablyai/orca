@@ -4405,7 +4405,9 @@
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'",
-          "largeInputNoMatches": "No matches for this long input"
+          "largeInputNoMatches": "No matches for this long input",
+          "55216d346f": "New repository folder will be created inside · {{value0}}",
+          "7194618895": "Select parent folder"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "Remove",
@@ -7027,8 +7029,8 @@
           "setupExistingFolder": "Import existing folder",
           "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
           "setupExistingFolderPathPlaceholder": "/path/to/project/on/host",
-          "cloneUrlPlaceholder": "Repository URL",
-          "cloneDestinationPlaceholder": "/destination/on/host",
+          "cloneUrlPlaceholder": "https://github.com/owner/repository.git",
+          "cloneDestinationPlaceholder": "/parent/directory/on/host",
           "setupKindGit": "Git repo",
           "setupKindFolder": "Folder",
           "settingUpHost": "Importing...",
@@ -7069,7 +7071,14 @@
           "show": "Show",
           "hide": "Hide",
           "externalWorktreesGlobal": "Global default: {{value0}}",
-          "useGlobal": "Use global"
+          "useGlobal": "Use global",
+          "browseHostFilesystem": "Browse host filesystem",
+          "cloneParentBrowseHelp": "Choose the directory where Orca should create the repository folder.",
+          "cloneSourceLabel": "Repository URL",
+          "cloneParentLabel": "Parent folder",
+          "cloneParentHelp": "Orca creates the repository folder inside this directory.",
+          "clonePathPreview": "Creates {{path}}",
+          "chooseFolder": "Choose folder"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -10733,6 +10742,23 @@
           "cancel": "Keep cleaning",
           "stopping": "Stopping…",
           "confirm": "Stop cleanup"
+        },
+        "GitHubRepositoryPicker": {
+          "dbbe08840d": "Choose from GitHub",
+          "35722ed29c": "Search repositories…",
+          "610e020ba9": "Loading GitHub repositories…",
+          "f22b38fcca": "Retry",
+          "b306b325d2": "No repositories found.",
+          "f1cd6dcccf": "Private repository"
+        },
+        "RepositoryHostCloneStep": {
+          "9718c9172b": "Browse host filesystem",
+          "dd432fb54c": "Choose the directory where Orca should create the repository folder.",
+          "287b80e006": "Choose folder",
+          "2d9b8fcbe2": "Repository URL",
+          "dfb6632216": "Parent folder",
+          "372cff9ced": "Creates {{path}}",
+          "a00f0d9e1f": "Orca creates the repository folder inside this directory."
         }
       },
       "right": {

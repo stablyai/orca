@@ -285,6 +285,7 @@ type WebRuntimeEnvelopeCaller = <TResult>(
   timeoutMs?: number
 ) => Promise<RuntimeRpcResponse<TResult>>
 type WebGitHubRouteKey =
+  | 'listRepositories'
   | 'repoSlug'
   | 'repoUpstream'
   | 'prForBranch'
@@ -334,6 +335,7 @@ type WebGitHubRouteKey =
   | 'listIssueTypesBySlug'
   | 'updateIssueTypeBySlug'
 type WebGitHubRuntimeMethod =
+  | 'github.listRepositories'
   | 'github.repoSlug'
   | 'github.repoUpstream'
   | 'github.prForBranch'
@@ -436,6 +438,7 @@ type WebKeybindingDocument = {
 }
 
 export const GITHUB_WEB_RPC_METHODS = {
+  listRepositories: 'github.listRepositories',
   repoSlug: 'github.repoSlug',
   repoUpstream: 'github.repoUpstream',
   prForBranch: 'github.prForBranch',
@@ -2432,6 +2435,8 @@ function createGitHubApi(): WebGitHubApi {
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
   const githubApi = {
     viewer: () => Promise.resolve(null),
+    listRepositories: () =>
+      route<WebGitHubResult<'listRepositories'>>(GITHUB_WEB_RPC_METHODS.listRepositories),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
     repoUpstream: (args) =>
       route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),

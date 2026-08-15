@@ -15,6 +15,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
+import type { GitHubRepositoryCatalogItem } from '../shared/github-repository-catalog'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
@@ -1340,6 +1341,8 @@ const api = {
 
   gh: {
     viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
+    listRepositories: (): Promise<GitHubRepositoryCatalogItem[]> =>
+      ipcRenderer.invoke('gh:listRepositories'),
 
     repoSlug: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),

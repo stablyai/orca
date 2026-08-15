@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import React, { act } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -13,11 +13,16 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
+import { TooltipProvider } from '../ui/tooltip'
 
 let container: HTMLDivElement
 let root: Root
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
+const browseDir = vi.fn(async ({ dirPath }: { dirPath: string }) => ({
+  resolvedPath: dirPath === '~' ? '/home/alice' : dirPath,
+  entries: [{ name: 'projects', isDirectory: true }]
+}))
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'displayName' | 'path'>): Repo {
   return {
@@ -65,6 +70,12 @@ function connectedSshState(targetId: string) {
 }
 
 beforeEach(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  browseDir.mockClear()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { ssh: { browseDir } }
+  })
   useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -82,13 +93,15 @@ afterEach(() => {
 function renderSection(repo: Repo, selectedProjectSetupId?: string): void {
   act(() => {
     root.render(
-      React.createElement(RepositoryHostSetupsSection, {
-        repo,
-        selectedProjectSetupId,
-        forceVisible: true,
-        searchQuery: '',
-        searchEntries: []
-      })
+      <TooltipProvider>
+        <RepositoryHostSetupsSection
+          repo={repo}
+          selectedProjectSetupId={selectedProjectSetupId}
+          forceVisible
+          searchQuery=""
+          searchEntries={[]}
+        />
+      </TooltipProvider>
     )
   })
 }
@@ -509,7 +522,12 @@ describe('RepositoryHostSetupsSection', () => {
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
-      path: '/Users/alice/orca'
+      path: '/Users/alice/orca',
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/stablyai/orca',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/stablyai/orca.git'
+      }
     })
     useAppStore.setState({
       repos: [localRepo],
@@ -536,15 +554,36 @@ describe('RepositoryHostSetupsSection', () => {
     clickButton('Clone from URL')
 
     const urlInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="Repository URL"]'
+      'input[placeholder="https://github.com/owner/repository.git"]'
     )
     const destinationInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="/destination/on/host"]'
+      'input[placeholder="/parent/directory/on/host"]'
     )
-    expect(urlInput).toBeTruthy()
+    expect(urlInput?.value).toBe('https://github.com/stablyai/orca.git')
     expect(destinationInput).toBeTruthy()
-    typeIntoInput(urlInput!, 'https://github.com/stablyai/orca.git')
-    typeIntoInput(destinationInput!, '/home/alice')
+    const browseButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Browse host filesystem"]'
+    )
+    expect(browseButton).toBeTruthy()
+
+    await act(async () => {
+      browseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(browseDir).toHaveBeenCalledWith({ targetId: 'openclaw 2', dirPath: '~' })
+    expect(container.textContent).toContain('Browse host filesystem')
+
+    const selectParentButton = findButton('Select parent folder')
+    expect(selectParentButton).toBeTruthy()
+    await act(async () => {
+      selectParentButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(
+      container.querySelector<HTMLInputElement>('input[placeholder="/parent/directory/on/host"]')
+        ?.value
+    ).toBe('/home/alice')
+    expect(container.textContent).toContain('Creates /home/alice/orca')
 
     const cloneButton = findButton('Clone')
     expect(cloneButton).toBeTruthy()

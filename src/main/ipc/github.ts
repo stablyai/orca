@@ -67,6 +67,7 @@ import {
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
 import { diagnoseGhAuth } from '../github/auth-diagnose'
+import { listAuthenticatedGitHubRepositories } from '../github/repository-catalog'
 import {
   notePRRefreshValidationDenial,
   type PRRefreshValidationDenialReason
@@ -1204,6 +1205,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   // Star operations target the Orca repo itself — no repoPath validation needed
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
+  ipcMain.handle('gh:listRepositories', () => listAuthenticatedGitHubRepositories())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', async (_event, source: unknown) => {
     const sourceParse = appStarSourceSchema.safeParse(source)

@@ -872,6 +872,7 @@ import {
   updateProjectItemFieldValue,
   updatePullRequestBySlug
 } from '../github/project-view'
+import { listAuthenticatedGitHubRepositories } from '../github/repository-catalog'
 import type {
   ClearProjectItemFieldArgs,
   GetProjectViewTableArgs,
@@ -20970,6 +20971,12 @@ export class OrcaRuntimeService {
       args.prRepo ?? null,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )
+  }
+
+  async listGitHubRepositories(): Promise<
+    Awaited<ReturnType<typeof listAuthenticatedGitHubRepositories>>
+  > {
+    return listAuthenticatedGitHubRepositories()
   }
 
   async listGitHubProjects(

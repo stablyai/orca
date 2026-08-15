@@ -41,6 +41,7 @@ export function CreateProjectParentBrowser({
         <RemoteFileBrowser
           targetId={sshTargetId}
           initialPath={createParent || '~'}
+          selectionPurpose="create-inside"
           onSelect={(path) => {
             onParentChange(path)
             onClose()
@@ -51,6 +52,7 @@ export function CreateProjectParentBrowser({
         <RemoteFileBrowser
           runtimeEnvironmentId={runtimeEnvironmentId as string}
           initialPath={createParent || '~'}
+          selectionPurpose="create-inside"
           onSelect={(path) => {
             onParentChange(path)
             onClose()

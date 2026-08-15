@@ -352,6 +352,11 @@ export const GITHUB_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.getGitHubRateLimit(params)
   }),
   defineMethod({
+    name: 'github.listRepositories',
+    params: z.object({}),
+    handler: async (_params, { runtime }) => runtime.listGitHubRepositories()
+  }),
+  defineMethod({
     name: 'github.listWorkItems',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
