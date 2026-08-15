@@ -203,6 +203,60 @@ function findClaudeCatalogModel(
  *   reported id is one the picker actually lists; omitting it falls back to the
  *   version-neutral seed families.
  */
+type ClaudePermissionMode = 'manual' | 'acceptEdits' | 'plan' | 'auto' | 'bypassPermissions'
+
+// Claude's status-line labels. Every mode names itself, manual included
+// (`⏸ manual mode on`) — observed live, not derivable from the binary's table.
+const MODE_BY_INDICATOR: [string, ClaudePermissionMode][] = [
+  ['manual mode on', 'manual'],
+  ['accept edits on', 'acceptEdits'],
+  ['plan mode on', 'plan'],
+  ['auto mode on', 'auto'],
+  ['bypass permissions on', 'bypassPermissions']
+]
+
+// Why: the live indicator renders just below the composer; anything further
+// up the viewport is scrolled-past conversation text and may be stale.
+const INDICATOR_WINDOW_SIZE = 8
+
+// Why: a viewport taller than its content ends in blank rows that would fill
+// the window. Trim only that trailing run — dropping interior blanks instead
+// would let the window creep up past blank-separated conversation text.
+function withoutTrailingBlankRows(lines: readonly string[]): readonly string[] {
+  let end = lines.length
+  while (end > 0 && !lines[end - 1]) {
+    end -= 1
+  }
+  return lines.slice(0, end)
+}
+
+function matchPermissionModeIndicator(lines: readonly string[]): ClaudePermissionMode | null {
+  const window = withoutTrailingBlankRows(lines).slice(-INDICATOR_WINDOW_SIZE)
+  let mode: ClaudePermissionMode | null = null
+  for (const line of window) {
+    const lowered = line.toLowerCase()
+    for (const [indicator, value] of MODE_BY_INDICATOR) {
+      // Only the status glyph may precede it: digits and bullets would let a
+      // list item ("3. Auto mode on: …") pose as live status. Over-restricting
+      // just reports manual, Claude's default — under-restricting reports a lie.
+      if (new RegExp(`^[^a-z0-9.*•-]*${indicator}`).test(lowered)) {
+        mode = value
+      }
+    }
+  }
+  return mode
+}
+
+/** Reads the mode WITHOUT requiring Claude's banner, which scrolls out of the
+ *  viewport after the first screenful. The status line identifies itself, so an
+ *  affirmative match stands alone — but absence cannot mean manual here, since
+ *  we have no proof this screen is even Claude's. */
+export function readClaudePermissionModeFromTerminalScreen(
+  screen: string | null | undefined
+): ClaudePermissionMode | null {
+  return screen ? matchPermissionModeIndicator(normalizedScreenLines(screen)) : null
+}
+
 export function readClaudeSessionOptionsFromTerminalScreen(
   screen: string | null | undefined,
   models?: readonly CatalogModel[]
