@@ -159,7 +159,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
                 </span>{' '}
                 {translate(
                   'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_summary',
-                  'issues available as tasks · add Linear or Jira if your team plans work there'
+                  'issues available as tasks · add Linear, Jira, or Plane if your team plans work there'
                 )}
               </>
             )

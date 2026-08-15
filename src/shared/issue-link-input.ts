@@ -3,8 +3,6 @@ import { parseLinearIssueInput } from './linear/links'
 import { parsePlaneIssueLink } from './plane/links'
 import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 
-// Why: narrows the canonical provider union instead of minting a parallel one,
-// so adding Jira here is a one-entry change rather than a new axis.
 export const ISSUE_LINK_PROVIDERS = [
   'github',
   'linear',

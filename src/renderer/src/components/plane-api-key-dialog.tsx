@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 
 export function PlaneApiKeyDialog({
@@ -42,11 +43,15 @@ export function PlaneApiKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Plane access</DialogTitle>
+          <DialogTitle>
+            {translate('auto.components.planeApiKeyDialog.title', 'Add Plane access')}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="plane-base-url">Base URL</Label>
+            <Label htmlFor="plane-base-url">
+              {translate('auto.components.planeApiKeyDialog.baseUrl', 'Base URL')}
+            </Label>
             <Input
               id="plane-base-url"
               value={baseUrl}
@@ -55,7 +60,9 @@ export function PlaneApiKeyDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="plane-workspace">Workspace slug</Label>
+            <Label htmlFor="plane-workspace">
+              {translate('auto.components.planeApiKeyDialog.workspaceSlug', 'Workspace slug')}
+            </Label>
             <Input
               id="plane-workspace"
               value={workspaceSlug}
@@ -64,7 +71,12 @@ export function PlaneApiKeyDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="plane-api-key">Personal access token</Label>
+            <Label htmlFor="plane-api-key">
+              {translate(
+                'auto.components.planeApiKeyDialog.personalAccessToken',
+                'Personal access token'
+              )}
+            </Label>
             <Input
               id="plane-api-key"
               type="password"
@@ -76,13 +88,15 @@ export function PlaneApiKeyDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            {translate('auto.components.planeApiKeyDialog.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={() => void submit()}
             disabled={saving || !baseUrl.trim() || !workspaceSlug.trim() || !apiKey.trim()}
           >
-            {saving ? 'Connecting...' : 'Connect'}
+            {saving
+              ? translate('auto.components.planeApiKeyDialog.connecting', 'Connecting...')
+              : translate('auto.components.planeApiKeyDialog.connect', 'Connect')}
           </Button>
         </DialogFooter>
       </DialogContent>

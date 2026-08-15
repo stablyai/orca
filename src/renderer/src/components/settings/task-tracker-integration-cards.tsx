@@ -306,14 +306,35 @@ export function PlaneIntegrationCard(): React.JSX.Element {
       name="Plane"
       description={
         connected
-          ? `${planeStatus.instances.length} instance${planeStatus.instances.length === 1 ? '' : 's'} connected`
+          ? planeStatus.instances.length === 1
+            ? translate(
+                'auto.components.settings.taskTrackerIntegrationCards.planeInstanceConnected',
+                '1 instance connected'
+              )
+            : translate(
+                'auto.components.settings.taskTrackerIntegrationCards.planeInstancesConnected',
+                `${planeStatus.instances.length} instances connected`
+              )
           : checking
-            ? 'Checking Plane access before showing setup actions.'
-            : 'Add self-hosted or cloud Plane access to browse and link work items.'
+            ? translate(
+                'auto.components.settings.taskTrackerIntegrationCards.planeChecking',
+                'Checking Plane access before showing setup actions.'
+              )
+            : translate(
+                'auto.components.settings.taskTrackerIntegrationCards.planeSetupDescription',
+                'Add self-hosted or cloud Plane access to browse and link work items.'
+              )
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate('auto.components.settings.taskTrackerIntegrationCards.connected', 'Connected')
+          : translate(
+              'auto.components.settings.taskTrackerIntegrationCards.notConnected',
+              'Not connected'
+            )
+      }
       actions={
         !checking ? (
           <Button
@@ -321,7 +342,15 @@ export function PlaneIntegrationCard(): React.JSX.Element {
             size="sm"
             onClick={() => setDialogOpen(true)}
           >
-            {connected ? 'Add instance' : 'Add Plane access'}
+            {connected
+              ? translate(
+                  'auto.components.settings.taskTrackerIntegrationCards.addInstance',
+                  'Add instance'
+                )
+              : translate(
+                  'auto.components.settings.taskTrackerIntegrationCards.addPlaneAccess',
+                  'Add Plane access'
+                )}
           </Button>
         ) : null
       }
@@ -343,7 +372,11 @@ export function PlaneIntegrationCard(): React.JSX.Element {
                   </div>
                   {testResult?.state === 'ok' ? (
                     <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
-                      <CheckCircle2 className="size-3.5" /> Verified
+                      <CheckCircle2 className="size-3.5" />{' '}
+                      {translate(
+                        'auto.components.settings.taskTrackerIntegrationCards.verified',
+                        'Verified'
+                      )}
                     </span>
                   ) : null}
                   {testResult?.state === 'error' ? (
@@ -359,11 +392,22 @@ export function PlaneIntegrationCard(): React.JSX.Element {
                     disabled={testing}
                   >
                     {testing ? <LoaderCircle className="size-3.5 mr-1.5 animate-spin" /> : null}
-                    {testing ? 'Testing...' : 'Test'}
+                    {testing
+                      ? translate(
+                          'auto.components.settings.taskTrackerIntegrationCards.testing',
+                          'Testing...'
+                        )
+                      : translate(
+                          'auto.components.settings.taskTrackerIntegrationCards.test',
+                          'Test'
+                        )}
                   </Button>
                   <button
                     onClick={() => void handleDisconnect(instance.id)}
-                    aria-label={`Disconnect ${instance.workspaceSlug}`}
+                    aria-label={translate(
+                      'auto.components.settings.taskTrackerIntegrationCards.disconnectInstance',
+                      `Disconnect ${instance.workspaceSlug}`
+                    )}
                     className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                   >
                     <Unlink className="size-3.5" />
@@ -375,11 +419,16 @@ export function PlaneIntegrationCard(): React.JSX.Element {
         ) : !checking ? (
           <>
             <p className="text-xs text-muted-foreground">
-              Add a Plane base URL, workspace slug, and Personal Access Token. Tokens are stored by
-              the active runtime.
+              {translate(
+                'auto.components.settings.taskTrackerIntegrationCards.planeTokenStorage',
+                'Add a Plane base URL, workspace slug, and Personal Access Token. Tokens are stored by the active runtime.'
+              )}
             </p>
             <Button variant="ghost" size="sm" onClick={() => void checkPlaneConnection(true)}>
-              Re-check
+              {translate(
+                'auto.components.settings.taskTrackerIntegrationCards.recheck',
+                'Re-check'
+              )}
             </Button>
           </>
         ) : null}

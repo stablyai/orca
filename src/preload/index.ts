@@ -2042,45 +2042,70 @@ const api = {
       baseUrl: string
       workspaceSlug: string
       apiKey: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('plane:connect', args),
+    }): ReturnType<PreloadApi['plane']['connect']> => ipcRenderer.invoke('plane:connect', args),
     disconnect: (args?: { instanceId?: string }): Promise<void> =>
       ipcRenderer.invoke('plane:disconnect', args),
-    selectInstance: (args: { instanceId: string }): Promise<unknown> =>
+    selectInstance: (args: {
+      instanceId: string
+    }): ReturnType<PreloadApi['plane']['selectInstance']> =>
       ipcRenderer.invoke('plane:selectInstance', args),
-    status: (): Promise<unknown> => ipcRenderer.invoke('plane:status'),
+    status: (): ReturnType<PreloadApi['plane']['status']> => ipcRenderer.invoke('plane:status'),
     testConnection: (args?: {
       instanceId?: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+    }): ReturnType<PreloadApi['plane']['testConnection']> =>
       ipcRenderer.invoke('plane:testConnection', args),
-    listProjects: (args?: { instanceId?: string }): Promise<unknown[]> =>
+    listProjects: (args?: {
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listProjects']> =>
       ipcRenderer.invoke('plane:listProjects', args),
-    listStates: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listStates: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listStates']> =>
       ipcRenderer.invoke('plane:listStates', args),
-    listLabels: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listLabels: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listLabels']> =>
       ipcRenderer.invoke('plane:listLabels', args),
-    listMembers: (args?: { instanceId?: string }): Promise<unknown[]> =>
+    listMembers: (args?: { instanceId?: string }): ReturnType<PreloadApi['plane']['listMembers']> =>
       ipcRenderer.invoke('plane:listMembers', args),
-    listCycles: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listCycles: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listCycles']> =>
       ipcRenderer.invoke('plane:listCycles', args),
-    listModules: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listModules: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listModules']> =>
       ipcRenderer.invoke('plane:listModules', args),
-    listWorkItemTypes: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listWorkItemTypes: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listWorkItemTypes']> =>
       ipcRenderer.invoke('plane:listWorkItemTypes', args),
-    listEstimates: (args: { projectId: string; instanceId?: string }): Promise<unknown[]> =>
+    listEstimates: (args: {
+      projectId: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['listEstimates']> =>
       ipcRenderer.invoke('plane:listEstimates', args),
     searchIssues: (args: {
       query: string
       limit?: number
       instanceId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('plane:searchIssues', args),
+    }): ReturnType<PreloadApi['plane']['searchIssues']> =>
+      ipcRenderer.invoke('plane:searchIssues', args),
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed' | 'open'
       limit?: number
       instanceId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('plane:listIssues', args),
-    getIssue: (args: { id: string; instanceId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('plane:getIssue', args),
+    }): ReturnType<PreloadApi['plane']['listIssues']> =>
+      ipcRenderer.invoke('plane:listIssues', args),
+    getIssue: (args: {
+      id: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['getIssue']> => ipcRenderer.invoke('plane:getIssue', args),
     createIssue: (args: {
       projectId: string
       title: string
@@ -2117,9 +2142,15 @@ const api = {
       instanceId?: string
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('plane:addIssueComment', args),
-    issueComments: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+    issueComments: (args: {
+      id: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['issueComments']> =>
       ipcRenderer.invoke('plane:issueComments', args),
-    issueLinks: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+    issueLinks: (args: {
+      id: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['issueLinks']> =>
       ipcRenderer.invoke('plane:issueLinks', args),
     addIssueLink: (args: {
       id: string
@@ -2128,9 +2159,12 @@ const api = {
       instanceId?: string
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('plane:addIssueLink', args),
-    issueAttachments: (args: { id: string; instanceId?: string }): Promise<unknown[]> =>
+    issueAttachments: (args: {
+      id: string
+      instanceId?: string
+    }): ReturnType<PreloadApi['plane']['issueAttachments']> =>
       ipcRenderer.invoke('plane:issueAttachments', args)
-  },
+  } satisfies PreloadApi['plane'],
 
   starNag: {
     onShow: (
