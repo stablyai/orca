@@ -3121,7 +3121,11 @@ describe('useIpcEvents browser tab close routing', () => {
   type SelectFloatingIndexListener = (payload: { index: number }) => void
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
   type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
-  type TerminalTabCloseRequestListener = (data: { requestId: string; tabId: string }) => void
+  type TerminalTabCloseRequestListener = (data: {
+    requestId: string
+    tabId: string
+    localPtyTeardownOwnedExternally?: boolean
+  }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
@@ -3472,12 +3476,19 @@ describe('useIpcEvents browser tab close routing', () => {
       persistWorkspaceSession
     })
 
-    listenerRef.current?.({ requestId: 'close-1', tabId: 'terminal-1' })
+    listenerRef.current?.({
+      requestId: 'close-1',
+      tabId: 'terminal-1',
+      localPtyTeardownOwnedExternally: true
+    })
     await Promise.resolve()
 
     expect(closeTerminalTabMock).toHaveBeenCalledWith(
       'terminal-1',
-      expect.objectContaining({ rejectPinned: true })
+      expect.objectContaining({
+        rejectPinned: true,
+        localPtyTeardownOwnedExternally: true
+      })
     )
     expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
     expect(respondTerminalTabClose).not.toHaveBeenCalled()

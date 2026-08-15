@@ -1872,6 +1872,7 @@ const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
+const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
@@ -2004,7 +2005,10 @@ type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
-  closeTerminalTab?(tabId: string): Promise<void>
+  closeTerminalTab?(
+    tabId: string,
+    options?: { localPtyTeardownOwnedExternally?: boolean }
+  ): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
@@ -5786,14 +5790,19 @@ export class OrcaRuntimeService {
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
+        const retainedIncarnation = oldLeaf?.ptyId
+          ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
+          : undefined
         if (
           preserveLivePtysDuringReload &&
           oldLeaf?.ptyId &&
-          this.handleByPtyId.has(oldLeaf.ptyId) &&
+          (this.handleByPtyId.has(oldLeaf.ptyId) ||
+            (retainedIncarnation &&
+              retainedIncarnation.incarnationId ===
+                this.ptysById.get(oldLeaf.ptyId)?.incarnationId)) &&
           !nextPtyIds.has(oldLeaf.ptyId)
         ) {
-          // Why: a CLI-created agent keeps using its exported handle even if
-          // the reloaded renderer has not rebound the pane yet.
+          // Why: the first reload graph can precede pane rebinding; the live PTY incarnation still owns its handle.
           nextLeaves.set(oldLeafKey, oldLeaf)
           nextPtyIds.add(oldLeaf.ptyId)
         } else if (oldLeaf?.ptyId && nextPtyIds.has(oldLeaf.ptyId)) {
@@ -5806,7 +5815,7 @@ export class OrcaRuntimeService {
           // no next owner — invalidate it so in-flight CLI waiters fail fast
           // instead of hanging on a dead leaf.
           const oldHandle = this.handleByLeafKey.get(oldLeafKey)
-          const incarnationHandle = this.handleByPtyIncarnation.get(oldLeaf.ptyId)?.handle
+          const incarnationHandle = retainedIncarnation?.handle
           if (
             oldHandle !== undefined &&
             (oldHandle === this.handleByPtyId.get(oldLeaf.ptyId) || oldHandle === incarnationHandle)
@@ -7990,6 +7999,7 @@ export class OrcaRuntimeService {
       expectedPublicationEpoch?: string
       expectedTerminalHandle?: string
       clientNavigationId?: string
+      localPtyTeardownOwnedExternally?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionTabCloseResult> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
@@ -8142,7 +8152,11 @@ export class OrcaRuntimeService {
             ? this.rendererPublicationThrottle.acquire(win.webContents)
             : () => {}
         try {
-          await this.notifier.closeTerminalTab(tab.parentTabId)
+          await (options.localPtyTeardownOwnedExternally
+            ? this.notifier.closeTerminalTab(tab.parentTabId, {
+                localPtyTeardownOwnedExternally: true
+              })
+            : this.notifier.closeTerminalTab(tab.parentTabId))
         } finally {
           releasePublicationThrottle()
         }
@@ -9446,6 +9460,12 @@ export class OrcaRuntimeService {
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    if (retained?.handle === handle) {
+      this.handleByPtyIncarnation.delete(ptyId)
+    } else {
+      this.invalidatePtyIncarnationHandle(ptyId)
+    }
     this.handleByPtyId.set(ptyId, handle)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
@@ -9491,16 +9511,24 @@ export class OrcaRuntimeService {
   }
 
   private invalidateAllHandlesForPty(ptyId: string): void {
+    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    const preallocatedHandle = this.handleByPtyId.get(ptyId)
     this.invalidatePtyIncarnationHandle(ptyId)
     this.handleByPtyId.delete(ptyId)
     const invalidated = new Set<string>()
+    if (preallocatedHandle && preallocatedHandle !== incarnationHandle) {
+      invalidated.add(preallocatedHandle)
+    }
     for (const [handle, record] of this.handles) {
       if (record.ptyId === ptyId) {
         invalidated.add(handle)
         this.handles.delete(handle)
-        this.syntheticTerminalHandles.delete(handle)
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
+    }
+    for (const handle of invalidated) {
+      this.handles.delete(handle)
+      this.syntheticTerminalHandles.delete(handle)
+      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
     }
     for (const [leafKey, handle] of this.handleByLeafKey) {
       if (invalidated.has(handle)) {
@@ -27467,6 +27495,42 @@ export class OrcaRuntimeService {
     return count
   }
 
+  private getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
+    const ptyIds = new Set<string>()
+    for (const pty of this.ptysById.values()) {
+      if (pty.connected && pty.worktreeId === worktreeId && pty.tabId === tabId) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
+        ptyIds.add(leaf.ptyId)
+      }
+    }
+    return [...ptyIds]
+  }
+
+  private async stopExplicitlyClosedTabPtys(
+    ptyIds: readonly string[],
+    addressedPtyId: string
+  ): Promise<boolean> {
+    let addressedPtyStopped = false
+    const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
+    for (const ptyId of ptyIds) {
+      let verifiedStopped = false
+      try {
+        verifiedStopped = (await this.ptyController?.stopAndWait?.(ptyId, { deadlineMs })) ?? false
+      } catch {
+        // Why: verified teardown is preferred, but its transport failure must not suppress the legacy provider kill.
+      }
+      const stopped = verifiedStopped || (this.ptyController?.kill(ptyId) ?? false)
+      if (ptyId === addressedPtyId) {
+        addressedPtyStopped = stopped
+      }
+    }
+    return addressedPtyStopped
+  }
+
   private resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {
@@ -27648,6 +27712,20 @@ export class OrcaRuntimeService {
       const siblingCount = surface?.tab.parentLayout
         ? countTerminalLayoutLeaves(surface.tab.parentLayout.root)
         : this.countLeavesInTab(tabId)
+      if (siblingCount <= 1 && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+          localPtyTeardownOwnedExternally: true
+        })
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
+      if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
@@ -27660,8 +27738,6 @@ export class OrcaRuntimeService {
             }
             this.notifier?.closeTerminal(tabId)
           }
-        } else if (siblingCount <= 1 && pty.pty.tabId && this.notifier?.closeTerminalTab) {
-          await this.notifier.closeTerminalTab(tabId)
         } else {
           this.notifier?.closeTerminal(tabId)
         }
@@ -27670,15 +27746,23 @@ export class OrcaRuntimeService {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    let ptyKilled = false
-    if (leaf.ptyId) {
-      ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
-    }
     // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
+    const ptyIdsToKill =
+      siblingCount <= 1
+        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
+        : leaf.ptyId
+          ? [leaf.ptyId]
+          : []
     if (siblingCount <= 1 && this.notifier?.closeTerminalTab) {
-      await this.notifier.closeTerminalTab(leaf.tabId)
-    } else if (!ptyKilled || siblingCount <= 1) {
+      await this.notifier.closeTerminalTab(leaf.tabId, {
+        localPtyTeardownOwnedExternally: true
+      })
+    }
+    const ptyKilled = leaf.ptyId
+      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
+      : false
+    if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
     return { handle, tabId: leaf.tabId, ptyKilled }
@@ -32927,10 +33011,17 @@ export class OrcaRuntimeService {
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.issueHandle(leaf)
-    if (!handle) {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const candidateHandle =
+      this.handleByLeafKey.get(leafKey) ??
+      (leaf.ptyId
+        ? (this.handleByPtyId.get(leaf.ptyId) ??
+          this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
+        : undefined)
+    if (!candidateHandle || !this.waitersByHandle.has(candidateHandle)) {
       return
     }
+    const handle = this.issueHandle(leaf)
     const waiters = this.waitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return

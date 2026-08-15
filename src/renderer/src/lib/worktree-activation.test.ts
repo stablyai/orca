@@ -134,6 +134,19 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 
+  it('creates a terminal when explicit launch work targets an empty workspace', () => {
+    const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', { command: 'claude "Fix this bug"' })
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'claude "Fix this bug"'
+    })
+  })
+
   it('creates configured default tabs once with title, color, and opted-in commands', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))

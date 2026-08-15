@@ -3854,9 +3854,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             ] as const
         )
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
-        rowHydrationByWorktree.map(
-          ([worktreeId, hydration]) => [worktreeId, hydration.rows] as const
-        )
+        rowHydrationByWorktree
+          .map(([worktreeId, hydration]) => [worktreeId, hydration.rows] as const)
+          .filter(
+            ([worktreeId, tabs]) =>
+              tabs.length > 0 || session.tabsByWorktree[worktreeId]?.length === 0
+          )
       )
       const releasedPtyIdsByTabId = new Map<string, Set<string>>(
         rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.releasedPtyIdsByTabId])
