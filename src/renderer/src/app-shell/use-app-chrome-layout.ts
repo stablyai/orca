@@ -53,15 +53,16 @@ export function useAppChromeLayout() {
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
 
-  const hasMountedTerminalWorkbenchRef = useRef(false)
-  if (activeWorktreeId !== null || backgroundTerminalMountRequested) {
-    hasMountedTerminalWorkbenchRef.current = true
+  const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested
+  // Why a latch in state, not a ref: the write has to be visible to the next render, and a
+  // render-phase ref write would also survive a render React discards. Setting state during
+  // render is the supported way to derive it, and the `||` below keeps this render correct.
+  const [hasMountedTerminalWorkbench, setHasMountedTerminalWorkbench] = useState(false)
+  if (canMountTerminalWorkbenchNow && !hasMountedTerminalWorkbench) {
+    setHasMountedTerminalWorkbench(true)
   }
   // Why: skip the terminal bundle on the landing path, but once mounted keep hidden panes alive through sleep/shutdown when activeWorktreeId briefly goes null.
-  const shouldMountTerminalWorkbench =
-    activeWorktreeId !== null ||
-    backgroundTerminalMountRequested ||
-    hasMountedTerminalWorkbenchRef.current
+  const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench
   // Why: visible worktree creation owns its faux tab strip start to finish; keep the previous workspace mounted for retention without real chrome.
   const creationLayoutActive = shouldShowWorktreeCreationSurface({
     activeView,

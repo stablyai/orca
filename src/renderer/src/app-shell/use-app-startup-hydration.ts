@@ -83,8 +83,13 @@ function useStartupActions() {
  */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
   const actions = useStartupActions()
+  // Why a ref: the boot chain must not restart if a caller passes a new callback identity.
+  // Synced in an effect (declared before the chain below, so it lands first on mount) because
+  // a render-phase write can leak from a render React discards.
   const onOnboardingLoadedRef = useRef(onOnboardingLoaded)
-  onOnboardingLoadedRef.current = onOnboardingLoaded
+  useEffect(() => {
+    onOnboardingLoadedRef.current = onOnboardingLoaded
+  }, [onOnboardingLoaded])
 
   useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
@@ -73,7 +73,12 @@ export function useGlobalKeybindings(args: {
     workspaceChromeActive: layout.workspaceChromeActive
   }
   const shortcutStateRef = useRef(shortcutState)
-  shortcutStateRef.current = shortcutState
+  // Why useLayoutEffect: the mirror must be current before any key event can read it, and a
+  // render-phase write would also publish state from a render React discards. Key events are
+  // discrete, so they always observe the committed value.
+  useLayoutEffect(() => {
+    shortcutStateRef.current = shortcutState
+  })
 
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
