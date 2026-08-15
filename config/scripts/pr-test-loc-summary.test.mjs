@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { listPullFiles, nextLink } from '../../.github/scripts/pr-test-loc-summary.mjs'
 import {
+  LOC_HANDS_OFF_COMMENT,
   isTestPath,
-  listPullFiles,
   mergeLocBlock,
-  nextLink,
   renderLocBlock,
   sumChangedFiles
-} from '../../.github/scripts/pr-test-loc-summary.mjs'
+} from '../../.github/scripts/pr-test-loc-table.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const locScript = join(projectDir, '.github/scripts/pr-test-loc-summary.mjs')
@@ -49,8 +49,8 @@ describe('PR test LoC summary', () => {
     ])
 
     expect(totals).toEqual({
-      test: { added: 12, deleted: 3 },
-      nonTest: { added: 4, deleted: 1 }
+      test: { files: 1, added: 12, deleted: 3 },
+      nonTest: { files: 2, added: 4, deleted: 1 }
     })
   })
 
@@ -96,17 +96,30 @@ describe('PR test LoC summary', () => {
     })
 
     expect(sumChangedFiles(files)).toEqual({
-      test: { added: 5, deleted: 1 },
-      nonTest: { added: 2, deleted: 0 }
+      test: { files: 1, added: 5, deleted: 1 },
+      nonTest: { files: 1, added: 2, deleted: 0 }
     })
   })
 
   it('replaces an existing header and prepends when missing', () => {
-    const totals = { test: { added: 2, deleted: 1 }, nonTest: { added: 4, deleted: 0 } }
+    const totals = {
+      test: { files: 1, added: 2, deleted: 1 },
+      nonTest: { files: 1, added: 4, deleted: 0 }
+    }
     const block = renderLocBlock(totals)
 
+    expect(block).toContain(LOC_HANDS_OFF_COMMENT)
+    expect(block).toContain('| Test | 1 | +2 | −1 | +1 |')
+    expect(block).toContain('| Non-test | 1 | +4 | 0 | +4 |')
+    expect(block).toContain('| Total | 2 | +6 | −1 | +5 |')
     expect(mergeLocBlock('## ELI5\n\nHello\n', totals)).toBe(`${block}\n\n## ELI5\n\nHello\n`)
     expect(mergeLocBlock(`${block}\n\n## ELI5\n`, totals)).toBe(`${block}\n\n## ELI5\n`)
+    expect(
+      mergeLocBlock(
+        '<!-- orca-pr-loc -->\n**LoC** · test **+1 / −0**\n<!-- /orca-pr-loc -->\n\n## ELI5\n',
+        totals
+      )
+    ).toBe(`${block}\n\n## ELI5\n`)
   })
 
   it('counts and merges from a files JSON fixture', () => {
@@ -127,8 +140,10 @@ describe('PR test LoC summary', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout.startsWith('<!-- orca-pr-loc -->')).toBe(true)
-    expect(result.stdout).toContain('test **+6 / −1**')
-    expect(result.stdout).toContain('non-test **+2 / −0**')
+    expect(result.stdout).toContain(LOC_HANDS_OFF_COMMENT)
+    expect(result.stdout).toContain('| Test | 1 | +6 | −1 | +5 |')
+    expect(result.stdout).toContain('| Non-test | 1 | +2 | 0 | +2 |')
+    expect(result.stdout).toContain('| Total | 2 | +8 | −1 | +7 |')
     expect(result.stdout).toContain('## ELI5\n\nHello\n')
     expect(result.stdout.match(/<!-- orca-pr-loc -->/g)).toHaveLength(1)
   })
@@ -150,7 +165,8 @@ describe('PR test LoC summary', () => {
     expect(locJob['runs-on']).toBe('ubuntu-latest')
     expect(locJob.steps).toHaveLength(1)
     expect(locJob.steps[0].run).toContain('gh api')
-    expect(locJob.steps[0].run).toContain('contents/.github/scripts/pr-test-loc-summary.mjs')
+    expect(locJob.steps[0].run).toContain('pr-test-loc-table.mjs')
+    expect(locJob.steps[0].run).toContain('pr-test-loc-summary.mjs')
     expect(locJob.steps[0].run).toContain('--update-pr')
     expect(workflow.permissions['pull-requests']).toBe('write')
     expect(serialized).not.toContain('actions/checkout')

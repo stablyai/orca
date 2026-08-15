@@ -1,67 +1,8 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { mergeLocBlock, renderLocBlock, sumChangedFiles } from './pr-test-loc-table.mjs'
 
-export const LOC_BLOCK_START = '<!-- orca-pr-loc -->'
-export const LOC_BLOCK_END = '<!-- /orca-pr-loc -->'
 export const PR_FILES_PAGE_LIMIT = 3000
-
-const TEST_DIR_SEGMENT = /(?:^|\/)(?:__tests__|e2e|tests)(?:\/|$)/i
-const TEST_FILENAME = /\.(?:test|spec|e2e)\.[^/]+$/i
-
-export function isTestPath(path) {
-  const normalized = path.replaceAll('\\', '/')
-  return TEST_DIR_SEGMENT.test(normalized) || TEST_FILENAME.test(normalized)
-}
-
-export function emptyLocTotals() {
-  return {
-    test: { added: 0, deleted: 0 },
-    nonTest: { added: 0, deleted: 0 }
-  }
-}
-
-export function sumChangedFiles(files) {
-  const totals = emptyLocTotals()
-  for (const file of files) {
-    const path = file.filename
-    if (path == null) {
-      continue
-    }
-    const bucket = isTestPath(path) ? totals.test : totals.nonTest
-    bucket.added += Number(file.additions ?? 0)
-    bucket.deleted += Number(file.deletions ?? 0)
-  }
-  return totals
-}
-
-export function formatLocLine({ test, nonTest }) {
-  return `**LoC** · test **+${test.added} / −${test.deleted}** · non-test **+${nonTest.added} / −${nonTest.deleted}**`
-}
-
-export function renderLocBlock(totals) {
-  return `${LOC_BLOCK_START}\n${formatLocLine(totals)}\n${LOC_BLOCK_END}`
-}
-
-export function mergeLocBlock(body, totals) {
-  const block = renderLocBlock(totals)
-  const current = body ?? ''
-  const start = current.indexOf(LOC_BLOCK_START)
-  const end = current.indexOf(LOC_BLOCK_END)
-
-  if (start !== -1 && end !== -1 && end > start) {
-    const rest = current.slice(end + LOC_BLOCK_END.length).replace(/^\r?\n/, '')
-    if (rest.trim().length === 0) {
-      return `${current.slice(0, start)}${block}\n`
-    }
-    return `${current.slice(0, start)}${block}\n\n${rest.replace(/^\r?\n+/, '')}`
-  }
-
-  if (current.trim().length === 0) {
-    return `${block}\n`
-  }
-
-  return `${block}\n\n${current.replace(/^\r?\n+/, '')}`
-}
 
 export function nextLink(linkHeader) {
   if (linkHeader == null || linkHeader.length === 0) {

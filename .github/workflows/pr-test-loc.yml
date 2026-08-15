@@ -29,6 +29,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/scripts/pr-test-loc-summary.mjs?ref=pull/${{ github.event.pull_request.number }}/head" \
-            --jq .content | base64 --decode > "$RUNNER_TEMP/pr-test-loc-summary.mjs"
+          for script in pr-test-loc-table.mjs pr-test-loc-summary.mjs; do
+            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/scripts/${script}?ref=pull/${{ github.event.pull_request.number }}/head" \
+              --jq .content | base64 --decode > "$RUNNER_TEMP/${script}"
+          done
           node "$RUNNER_TEMP/pr-test-loc-summary.mjs" --update-pr "${{ github.event.pull_request.number }}"
