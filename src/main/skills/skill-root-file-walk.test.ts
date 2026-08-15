@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findSkillFiles } from './skill-root-file-walk'
+import { isSkillRootUnavailableError } from './skill-scan-coalescer'
 
 /** Set by a test to run at a chosen point inside the walk; cleared after each. */
 let onStat: ((path: string) => Promise<void>) | null = null
@@ -48,12 +49,20 @@ describe('findSkillFiles', () => {
     expect(await findSkillFiles(join(await makeTree(), 'absent'), 4)).toEqual([])
   })
 
-  it('stops walking once its signal aborts', async () => {
+  // The name is load-bearing, not incidental: `isSkillRootUnavailableError` matches
+  // on it to decide whether a root degrades to `unavailable` or fails the discovery.
+  // Callers elsewhere fabricate this shape, so this is the one place that pins a
+  // real abort actually producing it.
+  it('stops walking once its signal aborts, rejecting with an AbortError', async () => {
     const root = join(await makeTree(), 'skills')
     await writeFileAt(join(root, 'one', 'SKILL.md'))
     await writeFileAt(join(root, 'two', 'SKILL.md'))
 
-    await expect(findSkillFiles(root, 4, AbortSignal.abort())).rejects.toThrow()
+    const walk = findSkillFiles(root, 4, AbortSignal.abort())
+
+    await expect(walk).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(walk).rejects.toBeInstanceOf(Error)
+    expect(isSkillRootUnavailableError(await walk.catch((error: unknown) => error))).toBe(true)
   })
 
   // The broken-link catch around the symlink branch must not swallow the abort a
