@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
@@ -30,6 +31,13 @@ export type HeadlessPairedRuntimeHost = {
   client: RuntimeClient
   dispose: () => Promise<void>
   offer: RuntimeDesktopPairingOffer
+}
+
+export type RestartableHeadlessPairedRuntimeHost = {
+  userDataDir: string
+  start: () => Promise<Omit<HeadlessPairedRuntimeHost, 'dispose'>>
+  stop: () => Promise<void>
+  dispose: () => Promise<void>
 }
 
 export class HeadlessPairedRuntimeStartupDiagnosticBuffer {
@@ -115,6 +123,22 @@ function redactPairingMaterial(value: string): string {
     .replace(WEB_CLIENT_PAIRING_PATTERN, '$1[redacted]')
 }
 
+async function reserveLoopbackPort(): Promise<number> {
+  const server = createServer()
+  return new Promise<number>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close()
+        reject(new Error('Headless serve fixture could not reserve a loopback port'))
+        return
+      }
+      server.close((error) => (error ? reject(error) : resolve(address.port)))
+    })
+  })
+}
+
 async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDesktopPairingOffer> {
   const child = app.process()
   const stdout = child.stdout
@@ -183,64 +207,91 @@ async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDeskto
   })
 }
 
-export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
+export async function createRestartableHeadlessPairedRuntimeHost(): Promise<RestartableHeadlessPairedRuntimeHost> {
+  const servePort = await reserveLoopbackPort()
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-headless-paired-'))
-  let app: ElectronApplication | undefined
-  try {
-    writeFileSync(
-      path.join(userDataDir, 'orca-data.json'),
-      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-    )
-    const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-    void _unused
-    const isolation = createElectronHomeIsolation({
-      inheritedEnv: cleanEnv,
-      launchEnv: {
-        NODE_ENV: 'development',
-        ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
-        ORCA_E2E_HEADLESS: '1'
-      },
-      extraEnv: {},
-      userDataDir
-    })
-    const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-    app = await electron.launch({
+  writeFileSync(
+    path.join(userDataDir, 'orca-data.json'),
+    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+  )
+  const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
+  void _unused
+  const isolation = createElectronHomeIsolation({
+    inheritedEnv: cleanEnv,
+    launchEnv: {
+      NODE_ENV: 'development',
+      ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
+      ORCA_E2E_HEADLESS: '1'
+    },
+    extraEnv: {},
+    userDataDir
+  })
+  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  let activeApp: ElectronApplication | undefined
+
+  const stop = async (): Promise<void> => {
+    const app = activeApp
+    activeApp = undefined
+    if (app) {
+      await closeElectronAppForE2E(app)
+    }
+  }
+
+  const start = async (): Promise<Omit<HeadlessPairedRuntimeHost, 'dispose'>> => {
+    if (activeApp) {
+      throw new Error('Headless paired runtime host is already running')
+    }
+    const app = await electron.launch({
       args: [
         ...getOrcaElectronLaunchArgs(mainPath, false),
         '--serve',
         '--serve-json',
         '--serve-port',
-        '0',
+        String(servePort),
         '--serve-pairing-address',
         '127.0.0.1'
       ],
       env: isolation.env
     })
-    const [offer] = await Promise.all([
-      readPairingOffer(app),
-      app
-        .evaluate(({ app: electronApp }) => electronApp.getPath('home'))
-        .then((home) => assertElectronResolvedIsolatedHome(home, isolation))
-    ])
-    return {
-      app,
-      client: new RuntimeClient(userDataDir, 5_000),
-      offer,
-      dispose: async () => {
-        await closeElectronAppForE2E(app)
-        await cleanupE2EDaemons(userDataDir)
-        rmSync(userDataDir, { recursive: true, force: true })
-      }
-    }
-  } catch (error) {
+    activeApp = app
     try {
-      if (app) {
-        await closeElectronAppForE2E(app)
+      const [offer] = await Promise.all([
+        readPairingOffer(app),
+        app
+          .evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+          .then((home) => assertElectronResolvedIsolatedHome(home, isolation))
+      ])
+      return {
+        app,
+        client: new RuntimeClient(userDataDir, 5_000),
+        offer
       }
+    } catch (error) {
+      activeApp = undefined
+      await closeElectronAppForE2E(app)
+      throw error
+    }
+  }
+
+  return {
+    userDataDir,
+    start,
+    stop,
+    dispose: async () => {
+      await stop()
       await cleanupE2EDaemons(userDataDir)
-    } finally {
       rmSync(userDataDir, { recursive: true, force: true })
     }
+  }
+}
+
+export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
+  const session = await createRestartableHeadlessPairedRuntimeHost()
+  try {
+    const host = await session.start()
+    return { ...host, dispose: session.dispose }
+  } catch (error) {
+    await session.dispose().catch(() => undefined)
     throw error
   }
 }

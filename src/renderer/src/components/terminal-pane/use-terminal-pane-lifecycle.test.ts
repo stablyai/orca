@@ -11,6 +11,7 @@ import {
   resolveQueuedInitialCwd,
   replayLayoutWithOneShotParkIntent,
   resetTerminalKeyboardProtocolAfterInterrupt,
+  retryTerminalPaneRecoveriesOnVisibilityResume,
   retireMountedTerminalPaneSurface,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
@@ -547,5 +548,19 @@ describe('terminal pane visibility resume tracking', () => {
       false
     )
     expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
+  })
+
+  it('retries only latched remote pane recoveries after a hidden pane is revealed', () => {
+    const healthyRetry = vi.fn(() => false)
+    const latchedRetry = vi.fn(() => true)
+    const transports = [{ retryRecovery: healthyRetry }, { retryRecovery: latchedRetry }, {}]
+
+    expect(retryTerminalPaneRecoveriesOnVisibilityResume(transports, false)).toBe(0)
+    expect(healthyRetry).not.toHaveBeenCalled()
+    expect(latchedRetry).not.toHaveBeenCalled()
+
+    expect(retryTerminalPaneRecoveriesOnVisibilityResume(transports, true)).toBe(1)
+    expect(healthyRetry).toHaveBeenCalledOnce()
+    expect(latchedRetry).toHaveBeenCalledOnce()
   })
 })
