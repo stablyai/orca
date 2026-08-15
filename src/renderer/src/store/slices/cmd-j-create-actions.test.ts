@@ -10,10 +10,15 @@ import {
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
+const toastErrorMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: toastErrorMock, success: vi.fn(), message: vi.fn() }
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -62,6 +67,7 @@ describe('Cmd+J lifted creation actions', () => {
     pairedWebFlag.__ORCA_WEB_CLIENT__ = true
     createWebRuntimeSessionBrowserTabMock.mockReset()
     createWebRuntimeSessionTerminalMock.mockReset()
+    toastErrorMock.mockReset()
   })
 
   afterEach(() => {
@@ -189,6 +195,8 @@ describe('Cmd+J lifted creation actions', () => {
       activate: true
     })
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
+    // Why: issue #9464 — remote create failure must be visible, not a dead click.
+    expect(toastErrorMock).toHaveBeenCalled()
   })
 
   it('does not create a local folder terminal while paired ownership is unresolved', async () => {
@@ -274,6 +282,22 @@ describe('Cmd+J lifted creation actions', () => {
       targetGroupId: 'group-1',
       activate: true
     })
+    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalled()
+  })
+
+  it('records interaction when remote terminal creation succeeds', async () => {
+    createWebRuntimeSessionTerminalMock.mockResolvedValue(true)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalled()
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-tabs')
+    expect(toastErrorMock).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 

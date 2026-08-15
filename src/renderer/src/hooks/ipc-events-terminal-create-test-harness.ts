@@ -172,6 +172,9 @@ export async function setupTerminalCreateSurfacing(
   vi.doMock('@/lib/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
+  vi.doMock('sonner', () => ({
+    toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() }
+  }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab,
     isEmptyFloatingWorkspacePanelVisible: () => false,

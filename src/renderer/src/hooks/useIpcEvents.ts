@@ -2558,6 +2558,24 @@ export function useIpcEvents(): void {
             activate: true
           })
           if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+            if (outcome.status === 'created') {
+              // Why: local createTab records this; remote host create must too
+              // so feature-discovery telemetry stays consistent across entry points.
+              useAppStore.getState().recordFeatureInteraction?.('terminal-tabs')
+            }
+            return
+          }
+          // Why: remote-owned workspaces must stay host-owned. A failed host create
+          // used to fall through to a local tab that either never spawned or was
+          // wiped by the next session snapshot — looking like a silent no-op
+          // (issue #9464). Surface the failure instead.
+          if (environmentId) {
+            toast.error(
+              translate(
+                'auto.hooks.useIpcEvents.remote_terminal_create_failed',
+                'Could not create a new terminal on the remote server.'
+              )
+            )
             return
           }
           const newTab = store.createTab(worktreeId)

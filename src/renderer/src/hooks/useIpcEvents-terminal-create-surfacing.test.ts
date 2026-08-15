@@ -44,6 +44,23 @@ describe('useIpcEvents updater integration', () => {
     expect(createTab).toHaveBeenCalledWith('wt-1')
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
 
+    // Why: issue #9464 — when the worktree is remote-owned and host create fails,
+    // do not fall through to a local createTab (silent no-op / ghost tab).
+    createWebRuntimeSessionTerminal.mockClear()
+    createTab.mockClear()
+    setActiveTabType.mockClear()
+    storeState.repos = [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:remote-env-1' }]
+    newTerminalTabListenerRef.current()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'remote-env-1',
+      activate: true
+    })
+    expect(createTab).not.toHaveBeenCalled()
+    storeState.repos = [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }]
+
     // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
     // reveal a local terminal -> restart. Connection and navigation are transient.
     storeState.repos.push({

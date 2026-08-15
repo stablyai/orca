@@ -1518,13 +1518,41 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       ? worktreeRoute.route.runtimeEnvironmentId
       : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     if (runtimeEnvironmentId) {
+      // Why: remote-owned workspaces are host-authoritative. Never fall back to a
+      // local tab (split ownership / silent ghost tabs — issue #5321 / #9464).
+      // Surface failure so Cmd+T / "+" is not a silent no-op when the host RPC fails.
       const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-      await createWebRuntimeSessionTerminal({
-        worktreeId,
-        environmentId: runtimeEnvironmentId,
-        targetGroupId: groupId,
-        activate: true
-      })
+      const { toast } = await import('sonner')
+      const { translate } = await import('@/i18n/i18n')
+      try {
+        const created = await createWebRuntimeSessionTerminal({
+          worktreeId,
+          environmentId: runtimeEnvironmentId,
+          targetGroupId: groupId,
+          activate: true
+        })
+        if (created) {
+          get().recordFeatureInteraction?.('terminal-tabs')
+          return
+        }
+        toast.error(
+          translate(
+            'auto.store.slices.terminals.remote_terminal_create_failed',
+            'Could not create a new terminal on the remote server.'
+          )
+        )
+      } catch (error) {
+        console.warn(
+          '[terminals] remote terminal tab creation failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+        toast.error(
+          translate(
+            'auto.store.slices.terminals.remote_terminal_create_failed',
+            'Could not create a new terminal on the remote server.'
+          )
+        )
+      }
       return
     }
     if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {

@@ -667,6 +667,24 @@ export function useTabGroupWorkspaceModel({
             activate: true
           })
           if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+            if (outcome.status === 'created') {
+              // Why: local createTab records this; remote host create must too
+              // so feature-discovery telemetry stays consistent across entry points.
+              useAppStore.getState().recordFeatureInteraction?.('terminal-tabs')
+            }
+            return
+          }
+          // Why: remote-owned workspaces stay host-owned. Local shell fallback after
+          // a failed host create is a silent no-op or ghost tab (issue #9464).
+          if (environmentId) {
+            const { toast } = await import('sonner')
+            const { translate } = await import('@/i18n/i18n')
+            toast.error(
+              translate(
+                'auto.components.tab.group.remote_terminal_create_failed',
+                'Could not create a new terminal on the remote server.'
+              )
+            )
             return
           }
           const terminal = createTab(worktreeId, groupId, shellOverride)
