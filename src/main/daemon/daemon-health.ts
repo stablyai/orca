@@ -671,6 +671,11 @@ async function readVerifiedDaemonPid(
   return parsedPid
 }
 
+let cachedDaemonBundleStaleness: {
+  key: string
+  pending: Promise<boolean | null>
+} | null = null
+
 export async function isDaemonStaleForCurrentBundle(
   runtimeDir: string,
   socketPath: string,
@@ -678,19 +683,56 @@ export async function isDaemonStaleForCurrentBundle(
   currentAppVersion: string,
   protocolVersion = PROTOCOL_VERSION
 ): Promise<boolean> {
-  const parsedPid = await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
-  if (!parsedPid) {
-    return false
+  let cacheKey: string | null = null
+  try {
+    cacheKey = JSON.stringify([
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      currentAppVersion,
+      protocolVersion,
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    ])
+  } catch {
+    // Retry the verified read below so a transient PID-file race does not become sticky.
   }
 
-  if (parsedPid.appVersion !== null) {
-    return parsedPid.appVersion !== currentAppVersion
+  if (cacheKey && cachedDaemonBundleStaleness?.key === cacheKey) {
+    return (await cachedDaemonBundleStaleness.pending) ?? false
   }
 
-  // Why: older packaged daemons do not carry a reliable build-generation
-  // marker. Replacing them once prevents archive-preserved mtimes from
-  // reusing stale native modules across the first metadata-aware upgrade.
-  return true
+  const pending = (async (): Promise<boolean | null> => {
+    const parsedPid = await readVerifiedDaemonPid(
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      protocolVersion
+    )
+    if (!parsedPid) {
+      return null
+    }
+
+    if (parsedPid.appVersion !== null) {
+      return parsedPid.appVersion !== currentAppVersion
+    }
+
+    // Why: older packaged daemons do not carry a reliable build-generation
+    // marker. Replacing them once prevents archive-preserved mtimes from
+    // reusing stale native modules across the first metadata-aware upgrade.
+    return true
+  })()
+  if (cacheKey) {
+    cachedDaemonBundleStaleness = { key: cacheKey, pending }
+  }
+  const stale = await pending
+  if (
+    stale === null &&
+    cachedDaemonBundleStaleness?.key === cacheKey &&
+    cachedDaemonBundleStaleness.pending === pending
+  ) {
+    cachedDaemonBundleStaleness = null
+  }
+  return stale ?? false
 }
 
 // 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
@@ -707,7 +749,6 @@ function getMacDaemonTccAttributionCacheKey(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
-  packagedAppVersion: string | null,
   protocolVersion: number
 ): string | null {
   try {
@@ -717,14 +758,7 @@ function getMacDaemonTccAttributionCacheKey(
       return null
     }
     const spawnerExists = parsedPid.spawnerExecPath ? existsSync(parsedPid.spawnerExecPath) : null
-    return JSON.stringify([
-      socketPath,
-      tokenPath,
-      packagedAppVersion,
-      protocolVersion,
-      pidRecord,
-      spawnerExists
-    ])
+    return JSON.stringify([socketPath, tokenPath, protocolVersion, pidRecord, spawnerExists])
   } catch {
     return null
   }
@@ -732,16 +766,13 @@ function getMacDaemonTccAttributionCacheKey(
 
 /**
  * macOS pins a process's TCC "responsible process" to the binary that forked it,
- * by file reference. The detached daemon outlives that app instance, and once the
- * spawning binary is deleted (every packaged update replaces the bundle) tccd
- * can't resolve the grant subject — `osascript`/System Events from every terminal
- * hosted by that daemon is silently denied (-25211) no matter what the user grants.
+ * by file reference. If that binary path disappears while the daemon survives, tccd
+ * cannot resolve the grant subject for the daemon's terminals (STA-3491).
  */
 export async function getMacDaemonTccAttributionHealth(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
-  packagedAppVersion: string | null,
   protocolVersion = PROTOCOL_VERSION
 ): Promise<MacDaemonTccAttributionHealth> {
   if (process.platform !== 'darwin') {
@@ -751,7 +782,6 @@ export async function getMacDaemonTccAttributionHealth(
     runtimeDir,
     socketPath,
     tokenPath,
-    packagedAppVersion,
     protocolVersion
   )
   if (cacheKey && cachedMacDaemonTccAttributionHealth?.key === cacheKey) {
@@ -767,11 +797,6 @@ export async function getMacDaemonTccAttributionHealth(
     )
     if (!parsedPid) {
       return 'unknown'
-    }
-    // Packaged updates can replace the bundle at the same path; missing version
-    // metadata also identifies a daemon from before the current packaged generation.
-    if (packagedAppVersion !== null && parsedPid.appVersion !== packagedAppVersion) {
-      return 'severed'
     }
     if (parsedPid.spawnerExecPath) {
       return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'

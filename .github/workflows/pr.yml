@@ -50,6 +50,27 @@ jobs:
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
+      - name: Check VM runtime rollback compatibility
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet --merge-base "$BASE_SHA" "$HEAD_SHA" -- \
+            src/shared/ephemeral-vm-runtime-store.ts \
+            src/shared/ephemeral-vm-runtime-feature-store.ts \
+            src/shared/ephemeral-vm-runtime-rollback-projection.ts \
+            src/shared/ephemeral-vm-runtimes.ts \
+            src/shared/ephemeral-vm-recipes.ts \
+            src/shared/orca-yaml-hook-types.ts \
+            src/main/ephemeral-vm-runtime-service.ts \
+            src/main/ephemeral-vm-runtime-provisioning-persistence.ts \
+            src/main/ephemeral-vm-failed-start-cleanup.ts; then
+            echo "VM runtime persistence is unchanged."
+            exit 0
+          fi
+          node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
+            config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
+
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
@@ -479,6 +500,9 @@ jobs:
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
           TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
+          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
+            TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
+          fi
           TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then

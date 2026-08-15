@@ -11,18 +11,19 @@ const TAB_ID = 'tab-close-continuity'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const PTY_ID = 'pty-close-continuity'
+const RUNTIME_OWNED_PTY_ID = 'serve-close-continuity'
 const SIBLING_PTY_ID = 'pty-close-continuity-sibling'
 const INCARNATION_ID = '22222222-2222-4222-8222-222222222222'
 const SIBLING_INCARNATION_ID = '44444444-4444-4444-8444-444444444444'
 
-function makeSession(): WorkspaceSessionState {
+function makeSession(ptyId = PTY_ID): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
     tabsByWorktree: {
       [WORKTREE_ID]: [
         {
           id: TAB_ID,
-          ptyId: PTY_ID,
+          ptyId,
           worktreeId: WORKTREE_ID,
           title: 'Fixture shell',
           customTitle: null,
@@ -37,7 +38,7 @@ function makeSession(): WorkspaceSessionState {
         root: { type: 'leaf', leafId: LEAF_ID },
         activeLeafId: LEAF_ID,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
+        ptyIdsByLeafId: { [LEAF_ID]: ptyId }
       }
     },
     terminalPtyIncarnationsByPaneKey: {
@@ -54,8 +55,12 @@ function makeDeferred() {
   return { promise, resolve }
 }
 
-function createHarness() {
-  let session = makeSession()
+function createHarness(
+  options: { ptyId?: string; publishMobileSurface?: boolean; registerPtyBacked?: boolean } = {}
+) {
+  const ptyId = options.ptyId ?? PTY_ID
+  let session = makeSession(ptyId)
+  let sessionAvailable = true
   let incarnationId = INCARNATION_ID
   let includeSiblingPty = false
   const repo = {
@@ -72,7 +77,7 @@ function createHarness() {
     getWorktreeMeta: () => undefined,
     getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
     getProjects: () => [],
-    getWorkspaceSession: () => session,
+    getWorkspaceSession: () => (sessionAvailable ? session : undefined),
     setWorkspaceSession: (next: WorkspaceSessionState) => {
       session = next
     }
@@ -93,7 +98,7 @@ function createHarness() {
   })
   const listProcesses = vi.fn(async () => [
     {
-      id: PTY_ID,
+      id: ptyId,
       incarnationId,
       cwd: WORKTREE_PATH,
       title: 'Fixture shell'
@@ -137,11 +142,49 @@ function createHarness() {
           worktreeId: WORKTREE_ID,
           leafId: LEAF_ID,
           paneRuntimeId: 7,
-          ptyId: PTY_ID
+          ptyId
         }
-      ]
+      ],
+      ...(options.publishMobileSurface
+        ? {
+            mobileSessionTabs: [
+              {
+                worktree: WORKTREE_ID,
+                publicationEpoch: 'renderer:close-continuity',
+                snapshotVersion: 1,
+                activeGroupId: null,
+                activeTabId: `${TAB_ID}::${LEAF_ID}`,
+                activeTabType: 'terminal' as const,
+                tabs: [
+                  {
+                    type: 'terminal' as const,
+                    id: `${TAB_ID}::${LEAF_ID}`,
+                    parentTabId: TAB_ID,
+                    leafId: LEAF_ID,
+                    ptyId,
+                    title: 'Fixture shell',
+                    isActive: true
+                  }
+                ]
+              }
+            ]
+          }
+        : {})
     })
   const syncEmptyGraph = () => runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  const syncFixtureTabWithoutLeaf = () =>
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Fixture shell',
+          activeLeafId: LEAF_ID,
+          layout: { type: 'leaf', leafId: LEAF_ID }
+        }
+      ],
+      leaves: []
+    })
   const syncSplitFixtureGraph = () => {
     includeSiblingPty = true
     session = {
@@ -157,7 +200,7 @@ function createHarness() {
           activeLeafId: LEAF_ID,
           expandedLeafId: null,
           ptyIdsByLeafId: {
-            [LEAF_ID]: PTY_ID,
+            [LEAF_ID]: ptyId,
             [SIBLING_LEAF_ID]: SIBLING_PTY_ID
           }
         }
@@ -183,7 +226,7 @@ function createHarness() {
           worktreeId: WORKTREE_ID,
           leafId: LEAF_ID,
           paneRuntimeId: 7,
-          ptyId: PTY_ID
+          ptyId
         },
         {
           tabId: TAB_ID,
@@ -196,6 +239,13 @@ function createHarness() {
     })
   }
 
+  if (options.registerPtyBacked) {
+    runtime.registerPty(ptyId, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: INCARNATION_ID
+    })
+  }
   syncFixtureGraph()
   return {
     runtime,
@@ -206,8 +256,12 @@ function createHarness() {
     stopAndWait,
     syncEmptyGraph,
     syncFixtureGraph,
+    syncFixtureTabWithoutLeaf,
     syncSplitFixtureGraph,
     getSession: () => session,
+    makeSessionUnavailable: () => {
+      sessionAvailable = false
+    },
     retirePersistedTab: () => {
       session = {
         ...session,
@@ -226,6 +280,16 @@ function createHarness() {
       incarnationId = next
     }
   }
+}
+
+function createPtyBackedPublishedSurfaceHarness() {
+  const harness = createHarness({
+    ptyId: RUNTIME_OWNED_PTY_ID,
+    publishMobileSurface: true,
+    registerPtyBacked: true
+  })
+  harness.syncFixtureTabWithoutLeaf()
+  return harness
 }
 
 describe('terminal close and handle incarnation continuity', () => {
@@ -312,7 +376,46 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.acknowledged.resolve()
 
     await expect(closing).resolves.toMatchObject({ ptyKilled: true })
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
+      deadlineMs: expect.any(Number)
+    })
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+  })
+
+  it('finishes PTY teardown when the session store disappears after retirement', async () => {
+    const harness = createPtyBackedPublishedSurfaceHarness()
+    const closeMobileSessionTab = vi.spyOn(harness.runtime, 'closeMobileSessionTab')
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    expect(terminal).toMatchObject({ ptyId: RUNTIME_OWNED_PTY_ID })
+    const { handle } = terminal
+
+    const closing = harness.runtime.closeTerminal(handle)
+    await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
+    expect(closeMobileSessionTab).toHaveBeenCalled()
+    expect(harness.kill).not.toHaveBeenCalled()
+
+    harness.retirePersistedTab()
+    harness.makeSessionUnavailable()
+    harness.acknowledged.resolve()
+
+    await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: true })
+    expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
+    expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
+      deadlineMs: expect.any(Number)
+    })
+  })
+
+  it('does not tear down a published PTY when retirement fails before acknowledgement', async () => {
+    const harness = createPtyBackedPublishedSurfaceHarness()
+    harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+
+    await expect(harness.runtime.closeTerminal(terminal.handle)).rejects.toThrow(
+      'terminal_tab_pinned'
+    )
+    expect(harness.closeTerminal).not.toHaveBeenCalled()
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
+    expect(harness.kill).not.toHaveBeenCalled()
   })
 
   it('keeps a handle valid when renderer reload preserves the PTY incarnation', async () => {

@@ -213,6 +213,8 @@ export type WorktreeSlice = {
       linkedTaskSourceContext?: TaskSourceContext | null
       /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
       startupDraft?: string
+      /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+      nameWasGenerated?: boolean
       provisionedRoot?: {
         runtimeId: string
         executionHostId: ExecutionHostId

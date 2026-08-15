@@ -566,7 +566,10 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(Object.keys(beforeActivation.pendingStartupByTabId)).toEqual([])
     expect(beforeActivation.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    activateAndRevealWorktree(WORKTREE_ID, { notifyHostRuntime: false })
+    const activationResult = activateAndRevealWorktree(WORKTREE_ID, {
+      notifyHostRuntime: false
+    })
+    expect(activationResult).not.toBe(false)
     const activated = useAppStore.getState()
 
     expect(activated.tabsByWorktree[WORKTREE_ID]).toEqual([])

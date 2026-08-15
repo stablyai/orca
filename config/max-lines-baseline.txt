@@ -178,7 +178,6 @@ inline src/relay/pty-handler.test.ts
 inline src/relay/pty-handler.ts
 inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/App.tsx
 inline src/renderer/src/components/GitHubItemDialog.tsx
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
@@ -306,7 +305,6 @@ inline src/renderer/src/store/slices/ui.test.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/renderer/src/store/slices/workspace-cleanup.ts
 inline src/renderer/src/store/slices/worktrees.test.ts
-inline src/renderer/src/store/slices/worktrees.ts
 inline src/renderer/src/web/web-preload-api.test.ts
 inline src/renderer/src/web/web-preload-api.ts
 inline src/renderer/src/web/web-runtime-client.ts

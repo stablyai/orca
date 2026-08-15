@@ -552,8 +552,7 @@ function createOutOfProcessLauncher(
             const attributionHealth = await getMacDaemonTccAttributionHealth(
               runtimeDir,
               socketPath,
-              tokenPath,
-              app.isPackaged ? app.getVersion() : null
+              tokenPath
             )
             if (attributionHealth === 'severed') {
               // Why: replacing with live sessions would kill them; Settings → Developer
@@ -950,8 +949,7 @@ export async function initDaemonPtyProvider(
       tokenPath: info.tokenPath,
       pidPath: getDaemonPidPath(runtimeDir),
       profileScope: runtimeDir,
-      runtimeDir,
-      packagedAppVersion: app.isPackaged ? app.getVersion() : null
+      runtimeDir
     })
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
@@ -964,7 +962,7 @@ export async function initDaemonPtyProvider(
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: app.isPackaged ? app.getVersion() : null,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
@@ -979,7 +977,7 @@ export async function initDaemonPtyProvider(
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver' || reason === 'severed_tcc_attribution') {
+      } else {
         // Must reach the launcher below without an await in between; see the consume site.
         attributedReplaceReason = reason
       }
@@ -1079,8 +1077,7 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
   return getMacDaemonTccAttributionHealth(
     runtimeDir,
     getDaemonSocketPath(runtimeDir),
-    getDaemonTokenPath(runtimeDir),
-    app.isPackaged ? app.getVersion() : null
+    getDaemonTokenPath(runtimeDir)
   )
 }
 
@@ -1201,7 +1198,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: app.isPackaged ? app.getVersion() : null,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the
@@ -1215,7 +1212,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver' || reason === 'severed_tcc_attribution') {
+      } else {
         // Must reach the launcher below without an await in between; see the consume site.
         attributedReplaceReason = reason
       }
@@ -1421,7 +1418,6 @@ export async function createLegacyDaemonAdapters(
         pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
         profileScope: runtimeDir,
         runtimeDir,
-        packagedAppVersion: app.isPackaged ? app.getVersion() : null,
         protocolVersion,
         historyPath
       })

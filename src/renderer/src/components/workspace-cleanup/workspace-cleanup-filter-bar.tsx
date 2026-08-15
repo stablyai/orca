@@ -67,8 +67,13 @@ export function WorkspaceCleanupFilterBar({
             ) : null}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={6} className="w-[320px] p-0">
-          <ScrollArea className="max-h-[420px]">
+        <PopoverContent
+          align="end"
+          sideOffset={6}
+          className="flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
+        >
+          {/* 471px preserves the 420px facet viewport plus the fixed footer at full height. */}
+          <ScrollArea className="min-h-0 flex-1">
             <WorkspaceCleanupLifecycleFacets {...facetProps} />
             <WorkspaceCleanupGitReviewFacets {...facetProps} />
           </ScrollArea>

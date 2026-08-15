@@ -57,6 +57,9 @@ describe('OrchestrationDb reset scopes', () => {
     expect(db!.getTask(state.task.id)).toBeUndefined()
     expect(db!.getWorkerDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getFederatedDispatch(state.started.dispatch.id)).toBeUndefined()
+    const sqlite = (db as unknown as { db: { prepare: (sql: string) => { all: () => unknown[] } } })
+      .db
+    expect(sqlite.prepare('SELECT * FROM run_coordinator_handles').all()).toEqual([])
     // The ledger survives so a lost reset response cannot replay as a new mutation.
     expect(db!.getMutationReceipt('caller_1', 'request_1')).toBeDefined()
     expect(db!.getInbox()).toEqual([])

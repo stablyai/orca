@@ -20,6 +20,7 @@ import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-naviga
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import {
   isSetupHookTrusted,
@@ -198,6 +199,18 @@ function NewWorktreeModalContent({
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
+  // Why: a deleted workspace's directory can still hold agent conversation state keyed by cwd, so
+  // its name must never be suggested again. Fetched per selected repo while the sheet is open.
+  // Keyed on the path set rather than the array so a poll that changes nothing does not refetch.
+  const retiredNamesRefreshKey = useMemo(
+    () => [...(existingWorktreePaths ?? [])].sort().join('\0'),
+    [existingWorktreePaths]
+  )
+  const retiredWorktreeNames = useRetiredWorktreeNames(
+    client,
+    selectedRepo?.id,
+    retiredNamesRefreshKey
+  )
   const { drawerView, formSheetVisible, formSheetInteractive, transitionDrawer, openSourceDrawer } =
     useNewWorktreeDrawerNavigation(visible)
   const createInFlightRef = useRef(false)
@@ -611,7 +624,9 @@ function NewWorktreeModalContent({
       // the authoritative collision is checked server-side against git
       // branches/remotes/PRs, so we also retry-with-suffix on conflict.
       const trimmedName = composer.name.trim()
-      const baseName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
+      const baseName =
+        trimmedName ||
+        getSuggestedCreatureName(existingWorktreePaths ?? [], undefined, retiredWorktreeNames)
 
       let setupDecision: SetupDecision = 'inherit'
       if (setupCommand) {
@@ -665,6 +680,9 @@ function NewWorktreeModalContent({
             client,
             repoId: selectedRepo.id,
             baseName,
+            // `baseName` is the suggestion exactly when the user typed nothing, so no identity check
+            // is needed — desktop's seeded composer needs one (useComposerState `nameWasGenerated`).
+            nameWasGenerated: !trimmedName,
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
