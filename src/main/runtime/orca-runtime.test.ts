@@ -29210,17 +29210,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('closes a runtime-owned pty by handle even when its spawn-time tabId has gone stale (#14719)', async () => {
-    // Repro for https://github.com/stablyai/orca/issues/14719: `terminal
-    // close --tab` can return `tab_not_found` while the terminal stays
-    // `running`. `RuntimePtyWorktreeRecord.tabId` is documented as a
-    // spawn-time snapshot ("later reveals can adopt under the env key"), so
-    // a pty spawned under one tabId (here: 'stale-tab', simulating an
-    // Antigravity/agy-style out-of-band spawn) can end up republished in the
-    // live mobile-session snapshot under a different `parentTabId`
-    // ('live-tab'). `closeTerminalTab` still keys its `closeMobileSessionTab`
-    // lookup off the stale `pty.pty.tabId`, and that lookup
-    // (id / parentTabId / browserWorkspaceId) has no ptyId fallback, even
-    // though the live snapshot's tab still carries the same `ptyId`.
+    // The runtime PTY has a stale tab ID, but the live tab retains its PTY ID.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       activeRepoId: TEST_REPO_ID,
