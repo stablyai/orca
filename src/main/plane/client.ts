@@ -22,7 +22,16 @@ import { connectOAuth } from './oauth'
 
 export type PlaneClientForInstance = {
   instance: PlaneInstance
-  auth: { kind: 'apiKey'; apiKey: string } | { kind: 'oauth'; accessToken: string }
+  auth:
+    | { kind: 'apiKey'; apiKey: string }
+    | {
+        kind: 'oauth'
+        accessToken: string
+        refreshToken?: string
+        expiresAt?: number
+        clientId: string
+        clientSecret: string
+      }
 }
 
 export async function connect(
@@ -163,11 +172,30 @@ export function getClient(instanceId?: string): PlaneClientForInstance {
       throw new Error('Plane credential is missing')
     }
     if (instance.authMode === 'oauth') {
-      const parsed = JSON.parse(token) as { accessToken?: unknown }
+      const parsed = JSON.parse(token) as {
+        accessToken?: unknown
+        refreshToken?: unknown
+        expiresAt?: unknown
+        clientId?: unknown
+        clientSecret?: unknown
+      }
       if (typeof parsed.accessToken !== 'string' || !parsed.accessToken) {
         throw new Error('Plane OAuth token is missing')
       }
-      return { instance, auth: { kind: 'oauth', accessToken: parsed.accessToken } }
+      if (typeof parsed.clientId !== 'string' || typeof parsed.clientSecret !== 'string') {
+        throw new Error('Plane OAuth client credentials are missing. Reconnect Plane to continue.')
+      }
+      return {
+        instance,
+        auth: {
+          kind: 'oauth',
+          accessToken: parsed.accessToken,
+          refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : undefined,
+          expiresAt: typeof parsed.expiresAt === 'number' ? parsed.expiresAt : undefined,
+          clientId: parsed.clientId,
+          clientSecret: parsed.clientSecret
+        }
+      }
     }
     return { instance, auth: { kind: 'apiKey', apiKey: token } }
   } catch (error) {

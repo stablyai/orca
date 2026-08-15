@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import type { PlaneInstance, PlaneInstanceSelection } from '../../shared/plane/types'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken,
+  writeCredentialFileAtomic,
   writeEncryptedCredential
 } from '../integration-credential-file'
 import {
@@ -55,10 +56,10 @@ export function writeInstanceFile(file: PlaneInstanceFile): void {
         : activeInstanceId
   cachedInstanceFile = { version: 1, activeInstanceId, selectedInstanceId, instances }
   instanceFileLoadedFromDisk = true
-  writeFileSync(getInstanceFilePath(), JSON.stringify(cachedInstanceFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  writeCredentialFileAtomic(
+    getInstanceFilePath(),
+    Buffer.from(JSON.stringify(cachedInstanceFile, null, 2), 'utf-8')
+  )
 }
 
 export function readToken(instanceId: string): string | null {

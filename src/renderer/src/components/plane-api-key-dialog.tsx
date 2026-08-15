@@ -43,9 +43,16 @@ export function PlaneApiKeyDialog({
       setError(result.error)
       return
     }
-    setApiKey('')
-    setClientSecret('')
-    onOpenChange(false)
+    handleOpenChange(false)
+  }
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) {
+      setApiKey('')
+      setClientSecret('')
+      setError(null)
+    }
+    onOpenChange(nextOpen)
   }
 
   const disabled =
@@ -55,7 +62,7 @@ export function PlaneApiKeyDialog({
     (authMode === 'oauth' ? !clientId.trim() || !clientSecret.trim() : !apiKey.trim())
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -161,7 +168,7 @@ export function PlaneApiKeyDialog({
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={saving}>
             {translate('auto.components.planeApiKeyDialog.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={disabled}>

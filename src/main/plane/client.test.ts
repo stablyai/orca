@@ -22,6 +22,28 @@ vi.mock('node:fs', () => ({
   unlinkSync: (path: string) => {
     tokenFiles.delete(path)
   },
+  openSync: (path: string) => {
+    tokenFiles.set(path, Buffer.alloc(0))
+    return path
+  },
+  writeSync: (path: string, data: Buffer, offset: number, length: number) => {
+    const current = tokenFiles.get(path) ?? Buffer.alloc(0)
+    tokenFiles.set(path, Buffer.concat([current, data.subarray(offset, offset + length)]))
+    return length
+  },
+  fsyncSync: vi.fn(),
+  closeSync: vi.fn(),
+  renameSync: (from: string, to: string) => {
+    const data = tokenFiles.get(from) ?? Buffer.alloc(0)
+    tokenFiles.delete(from)
+    if (to === '/tmp/orca-plane-test/plane-instances.json') {
+      instanceFile.value = data.toString('utf8')
+      return
+    }
+    tokenFiles.set(to, data)
+  },
+  chmodSync: vi.fn(),
+  statSync: (path: string) => ({ size: tokenFiles.get(path)?.length ?? 0 }),
   writeFileSync: (path: string, data: string | Buffer) => {
     if (path === '/tmp/orca-plane-test/plane-instances.json') {
       instanceFile.value = String(data)
@@ -33,8 +55,15 @@ vi.mock('node:fs', () => ({
 
 vi.mock('../integration-credential-file', () => ({
   CredentialDecryptionError: class CredentialDecryptionError extends Error {},
-  credentialFileHasContent: (buffer: Buffer | undefined) => Boolean(buffer?.length),
+  credentialFileHasContent: (path: string) => Boolean(tokenFiles.get(path)?.length),
   readStoredCredentialToken: (_service: string, buffer: Buffer) => buffer.toString('utf8'),
+  writeCredentialFileAtomic: (path: string, data: Buffer) => {
+    if (path === '/tmp/orca-plane-test/plane-instances.json') {
+      instanceFile.value = data.toString('utf8')
+      return
+    }
+    tokenFiles.set(path, data)
+  },
   writeEncryptedCredential: (_service: string, path: string, token: string) =>
     tokenFiles.set(path, Buffer.from(token))
 }))
@@ -95,6 +124,45 @@ describe('Plane client storage', () => {
     )
     const { getClient } = await import('./client')
 
-    expect(getClient().auth).toEqual({ kind: 'oauth', accessToken: 'oauth-token' })
+    expect(() => getClient()).toThrow('Plane OAuth client credentials are missing')
+  })
+
+  it('returns bearer clients with stored OAuth refresh metadata', async () => {
+    instanceFile.value = JSON.stringify({
+      version: 1,
+      activeInstanceId: 'plane-oauth',
+      selectedInstanceId: 'plane-oauth',
+      instances: [
+        {
+          id: 'plane-oauth',
+          baseUrl: 'https://plane.example',
+          workspaceSlug: 'acme',
+          displayName: 'Acme',
+          authMode: 'oauth'
+        }
+      ]
+    })
+    tokenFiles.clear()
+    tokenFiles.set(
+      '/tmp/orca-plane-test/plane-tokens/plane-oauth.enc',
+      Buffer.from(
+        JSON.stringify({
+          accessToken: 'oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() + 60_000,
+          clientId: 'client-id',
+          clientSecret: 'client-secret'
+        })
+      )
+    )
+    const { getClient } = await import('./client')
+
+    expect(getClient().auth).toMatchObject({
+      kind: 'oauth',
+      accessToken: 'oauth-token',
+      refreshToken: 'refresh-token',
+      clientId: 'client-id',
+      clientSecret: 'client-secret'
+    })
   })
 })

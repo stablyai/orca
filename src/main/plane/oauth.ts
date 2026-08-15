@@ -1,9 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { shell } from 'electron'
-import { getInstanceTokenPath } from './storage-paths'
-import { fetchPlaneViewer, instanceId, normalizeBaseUrl } from './api-request'
-import { writeEncryptedCredential } from '../integration-credential-file'
+import {
+  fetchPlaneViewer,
+  instanceId,
+  normalizeBaseUrl,
+  PLANE_REQUEST_TIMEOUT_MS
+} from './api-request'
 import type { PlaneInstance, PlaneOAuthConnectArgs, PlaneViewer } from '../../shared/plane/types'
 
 type InstanceFile = {
@@ -13,9 +16,14 @@ type InstanceFile = {
   instances: PlaneInstance[]
 }
 
-type OAuthToken = { accessToken: string; refreshToken?: string; expiresAt?: number }
+type OAuthToken = {
+  accessToken: string
+  refreshToken?: string
+  expiresAt?: number
+  clientId: string
+  clientSecret: string
+}
 
-const SERVICE = 'Plane'
 const DEFAULT_SCOPE = 'read write'
 
 export async function connectOAuth(
@@ -40,12 +48,18 @@ export async function connectOAuth(
     const id = instanceId(baseUrl, workspaceSlug)
     const viewer = await fetchPlaneViewer({
       instance: { id, baseUrl, workspaceSlug, authMode: 'oauth', displayName: workspaceSlug },
-      auth: { kind: 'oauth', accessToken: token.accessToken }
+      auth: {
+        kind: 'oauth',
+        accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
+        expiresAt: token.expiresAt,
+        clientId: token.clientId,
+        clientSecret: token.clientSecret
+      }
     })
     const serialized = JSON.stringify(token)
     storage.ensureDirs()
     storage.setToken(id, serialized)
-    writeEncryptedCredential(SERVICE, getInstanceTokenPath(id), serialized)
     const file = storage.getInstanceFile()
     const existing = file.instances.filter((instance) => instance.id !== id)
     storage.writeInstanceFile({
@@ -87,15 +101,34 @@ async function runOAuthCallback(
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('scope', scope.trim() || DEFAULT_SCOPE)
   authUrl.searchParams.set('state', state)
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  let closed = false
+  const cleanup = (): void => {
+    if (timeout) {
+      clearTimeout(timeout)
+      timeout = null
+    }
+    if (!closed) {
+      closed = true
+      server.close()
+    }
+  }
   const result = new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Plane OAuth timed out')), 120_000)
+    timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('Plane OAuth timed out'))
+    }, 120_000)
     server.on('request', (req, res) => {
       handleCallback(req, res, state, redirectUri, resolve, reject)
-      clearTimeout(timeout)
-      server.close()
+      cleanup()
     })
   })
-  await shell.openExternal(authUrl.toString())
+  try {
+    await shell.openExternal(authUrl.toString())
+  } catch (error) {
+    cleanup()
+    throw error
+  }
   return result
 }
 
@@ -149,6 +182,7 @@ async function exchangeCode(
   const response = await fetch(new URL('/auth/o/token/', baseUrl), {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    signal: AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS),
     body
   })
   if (!response.ok) {
@@ -162,6 +196,10 @@ async function exchangeCode(
   return {
     accessToken: raw.access_token,
     refreshToken: typeof raw.refresh_token === 'string' ? raw.refresh_token : undefined,
-    expiresAt: expiresIn ? Date.now() + expiresIn * 1000 : undefined
+    expiresAt: expiresIn ? Date.now() + expiresIn * 1000 : undefined,
+    clientId: args.clientId,
+    clientSecret: args.clientSecret
   }
 }
+
+export const planeOAuthTestInternals = { exchangeCode, runOAuthCallback }

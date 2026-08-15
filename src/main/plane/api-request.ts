@@ -1,7 +1,9 @@
 import type { PlaneViewer } from '../../shared/plane/types'
 import type { PlaneClientForInstance } from './client'
+import { writeToken } from './instance-storage'
 
-const PLANE_REQUEST_TIMEOUT_MS = 30_000
+export const PLANE_REQUEST_TIMEOUT_MS = 30_000
+const OAUTH_EXPIRY_SKEW_MS = 60_000
 
 export function normalizeBaseUrl(value: string): string {
   const url = new URL(value.trim())
@@ -21,19 +23,19 @@ export async function planeFetch<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
-  const authHeader: Record<string, string> =
-    client.auth.kind === 'oauth'
-      ? { Authorization: `Bearer ${client.auth.accessToken}` }
-      : { 'X-API-Key': client.auth.apiKey }
+  const auth = await currentAuth(client)
+  const headers = new Headers(init.headers)
+  headers.set('Accept', 'application/json')
+  headers.set('Content-Type', 'application/json')
+  if (auth.kind === 'oauth') {
+    headers.set('Authorization', `Bearer ${auth.accessToken}`)
+  } else {
+    headers.set('X-API-Key', auth.apiKey)
+  }
   const response = await fetch(`${client.instance.baseUrl}${path}`, {
     ...init,
     signal: init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...authHeader,
-      ...(init.headers as Record<string, string> | undefined)
-    }
+    headers
   })
   if (!response.ok) {
     throw new Error(`Plane API ${response.status}: ${await response.text()}`.slice(0, 300))
@@ -42,6 +44,65 @@ export async function planeFetch<T>(
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+async function currentAuth(
+  client: PlaneClientForInstance
+): Promise<PlaneClientForInstance['auth']> {
+  if (client.auth.kind !== 'oauth' || !tokenExpiresSoon(client.auth.expiresAt)) {
+    return client.auth
+  }
+  if (!client.auth.refreshToken || !client.auth.clientId || !client.auth.clientSecret) {
+    throw new Error('Plane OAuth token expired. Reconnect Plane to continue.')
+  }
+  const token = await refreshOAuthToken(client)
+  const auth = { kind: 'oauth' as const, ...token }
+  client.auth = auth
+  writeToken(client.instance.id, JSON.stringify(token))
+  return auth
+}
+
+function tokenExpiresSoon(expiresAt?: number): boolean {
+  return typeof expiresAt === 'number' && expiresAt <= Date.now() + OAUTH_EXPIRY_SKEW_MS
+}
+
+async function refreshOAuthToken(client: PlaneClientForInstance): Promise<{
+  accessToken: string
+  refreshToken: string
+  expiresAt?: number
+  clientId: string
+  clientSecret: string
+}> {
+  if (client.auth.kind !== 'oauth' || !client.auth.refreshToken) {
+    throw new Error('Plane OAuth token expired. Reconnect Plane to continue.')
+  }
+  const response = await fetch(new URL('/auth/o/token/', client.instance.baseUrl), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    signal: AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS),
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: client.auth.refreshToken,
+      client_id: client.auth.clientId,
+      client_secret: client.auth.clientSecret
+    })
+  })
+  if (!response.ok) {
+    throw new Error(`Plane OAuth refresh failed: ${await response.text()}`.slice(0, 300))
+  }
+  const raw = (await response.json()) as Record<string, unknown>
+  if (typeof raw.access_token !== 'string' || !raw.access_token) {
+    throw new Error('Plane OAuth refresh response did not include an access token')
+  }
+  const expiresIn = typeof raw.expires_in === 'number' ? raw.expires_in : null
+  return {
+    accessToken: raw.access_token,
+    refreshToken:
+      typeof raw.refresh_token === 'string' ? raw.refresh_token : client.auth.refreshToken,
+    expiresAt: expiresIn ? Date.now() + expiresIn * 1000 : undefined,
+    clientId: client.auth.clientId,
+    clientSecret: client.auth.clientSecret
+  }
 }
 
 export async function fetchPlaneViewer(client: PlaneClientForInstance): Promise<PlaneViewer> {
