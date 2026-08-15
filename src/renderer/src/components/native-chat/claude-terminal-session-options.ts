@@ -219,9 +219,9 @@ const MODE_BY_INDICATOR: [string, ClaudePermissionMode][] = [
 // up the viewport is scrolled-past conversation text and may be stale.
 const INDICATOR_WINDOW_SIZE = 8
 
-// Why: a viewport taller than its content ends in blank rows that would fill
-// the window. Trim only that trailing run — dropping interior blanks instead
-// would let the window creep up past blank-separated conversation text.
+/** Drops the trailing blank run a viewport taller than its content leaves
+ *  behind. Only that run: dropping interior blanks would let the indicator
+ *  window creep up past blank-separated conversation text. */
 function withoutTrailingBlankRows(lines: readonly string[]): readonly string[] {
   let end = lines.length
   while (end > 0 && !lines[end - 1]) {
@@ -230,12 +230,14 @@ function withoutTrailingBlankRows(lines: readonly string[]): readonly string[] {
   return lines.slice(0, end)
 }
 
-// Claude marks fast mode with this glyph; its absence on a confirmed Claude
-// screen means off. The panel title carries it too, so skip that row — we never
-// open the panel ourselves, but a user can.
+// Claude marks fast mode with this glyph; absence on a confirmed Claude screen
+// means off.
 const FAST_MODE_GLYPH = '\u21AF'
 const FAST_MODE_PANEL_TITLE = 'fast mode (research preview)'
 
+/** Whether the live status line carries the fast-mode glyph. Skips the
+ *  confirmation panel's title row, which carries it too — we never open that
+ *  panel ourselves, but a user can. */
 function matchFastModeGlyph(lines: readonly string[]): boolean {
   return lines.some(
     (line) => line.includes(FAST_MODE_GLYPH) && !line.toLowerCase().includes(FAST_MODE_PANEL_TITLE)
@@ -250,6 +252,8 @@ export function readClaudeFastModeFromTerminalScreen(
   return screen && matchFastModeGlyph(normalizedScreenLines(screen)) ? true : null
 }
 
+/** The mode named by the status line nearest the composer, or null if none of
+ *  them is on screen. */
 function matchPermissionModeIndicator(lines: readonly string[]): ClaudePermissionMode | null {
   const window = withoutTrailingBlankRows(lines).slice(-INDICATOR_WINDOW_SIZE)
   let mode: ClaudePermissionMode | null = null

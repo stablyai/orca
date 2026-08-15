@@ -21,6 +21,7 @@ export type ClaudePermissionModeCycleResult = {
 const DEFAULT_SETTLE_MS = 250
 const DEFAULT_MAX_PRESSES = 6
 
+/** Settle pause between presses, so the TUI can redraw before the next read. */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

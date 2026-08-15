@@ -22,9 +22,9 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
   }
 }
 
-// Why: scoped to the permission-mode option. These values collide with other
-// catalogs — Cursor ships a model literally named `auto` — and a shared switch
-// would relabel it in every non-English locale.
+/** Localized label for a permission-mode value, scoped to that option: these
+ *  values collide with other catalogs — Cursor ships a model literally named
+ *  `auto` — and a shared switch would relabel it in every non-English locale. */
 function permissionModeChoiceLabel(value: string): string | null {
   switch (value) {
     case 'manual':
@@ -113,9 +113,10 @@ export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): s
   )
 }
 
+/** Visible text for the Mode pill. Always names the current mode, including the
+ *  manual default — unlike the shared options pill, showing the selection is
+ *  this control's whole purpose. */
 export function nativeChatPermissionModePillLabel(descriptor: SessionOptionDescriptor): string {
-  // Why: dedicated pill always shows the current mode — unlike the shared
-  // options pill, it does not stay quiet for the manual default.
   if (
     descriptor.valueSource === 'unknown' ||
     descriptor.kind.type !== 'select' ||

@@ -24,6 +24,8 @@ export function createNativeChatSessionOptionRecord(
   return { agent, valuesByModel: {}, sessionValues: {} }
 }
 
+/** Deep-copies one bucket of tracked values, tolerating a record rehydrated
+ *  from a cache written before that bucket existed. */
 function cloneTrackedOptionValues(
   values: Record<string, TrackedNativeChatSessionOption> | undefined
 ): Record<string, TrackedNativeChatSessionOption> {

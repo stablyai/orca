@@ -17,8 +17,8 @@ import { hasYoloTuiAgentLaunch } from './tui-agent-permissions'
 const PERMISSION_MODE_OPTION_ID = 'permissionMode'
 const BYPASS_PERMISSIONS_VALUE = 'bypassPermissions'
 
-// Why: Claude refuses bypassPermissions unless launched with
-// --dangerously-skip-permissions; gate the choice rather than offer a mode it rejects.
+/** Marks bypass unselectable when the session wasn't launched with the flag.
+ *  Claude refuses that mode outright, so offering it would only ever fail. */
 function gatePermissionModeChoices(
   choices: readonly SessionOptionSelectChoice[],
   bypassAvailable: boolean
