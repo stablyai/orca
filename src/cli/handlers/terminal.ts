@@ -14,7 +14,7 @@ import type {
 import type { RuntimeCreateAgentSessionResult } from '../../shared/agent-session-host-authority'
 import type { ProviderAccountRef } from '../../shared/provider-account-ref'
 import { AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type { CodexRateLimitAccountsState } from '../../shared/types'
+import type { CodexRateLimitAccountsState } from '../../shared/managed-account-types'
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {

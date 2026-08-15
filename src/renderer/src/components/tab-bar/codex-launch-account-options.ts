@@ -1,5 +1,5 @@
 import type { ProviderAccountRef } from '../../../../shared/provider-account-ref'
-import type { CodexManagedAccountSummary } from '../../../../shared/types'
+import type { CodexManagedAccountSummary } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
 
 export type CodexLaunchAccountLane = {
@@ -71,7 +71,11 @@ export function buildCodexLaunchAccountOptions(
             provider: 'codex',
             accountId: account.id,
             runtime: lane.runtime,
-            ...(lane.wslDistro ? { wslDistro: lane.wslDistro } : {})
+            ...(account.wslDistro
+              ? { wslDistro: account.wslDistro }
+              : lane.wslDistro
+                ? { wslDistro: lane.wslDistro }
+                : {})
           }
         }
       })
