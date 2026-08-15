@@ -143,15 +143,26 @@ function handleCallback(
   const url = new URL(req.url ?? '/', redirectUri)
   const code = url.searchParams.get('code')
   const receivedState = url.searchParams.get('state')
+  const providerError = url.searchParams.get('error')
+  const providerDescription = url.searchParams.get('error_description')
   if (url.pathname !== '/plane/oauth/callback' || !code || receivedState !== state) {
     res.writeHead(400).end('Plane OAuth failed. You can close this window.')
-    reject(new Error('Plane OAuth callback was invalid'))
+    reject(new Error(oauthCallbackError(providerError, providerDescription)))
     return
   }
   res
     .writeHead(200, { 'Content-Type': 'text/plain' })
     .end('Plane connected. You can close this window.')
   resolve({ code, redirectUri })
+}
+
+function oauthCallbackError(error: string | null, description: string | null): string {
+  if (!error) {
+    return 'Plane OAuth callback was invalid'
+  }
+  return description
+    ? `Plane OAuth failed: ${error} (${description})`
+    : `Plane OAuth failed: ${error}`
 }
 
 function listen(server: ReturnType<typeof createServer>): Promise<number> {

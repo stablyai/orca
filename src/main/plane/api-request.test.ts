@@ -112,6 +112,43 @@ describe('Plane API requests', () => {
       expect.stringContaining('fresh-token')
     )
   })
+
+  it('asks users to reconnect when an expired OAuth token has no refresh token', async () => {
+    await expect(
+      planeFetch(
+        oauthClient({ refreshToken: undefined, expiresAt: Date.now() - 1 }),
+        '/api/v1/users/me/'
+      )
+    ).rejects.toThrow('Plane OAuth token expired. Reconnect Plane to continue.')
+  })
+
+  it('surfaces failed OAuth refresh responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('invalid refresh', { status: 401 })
+    )
+
+    await expect(
+      planeFetch(oauthClient({ expiresAt: Date.now() - 1 }), '/api/v1/users/me/')
+    ).rejects.toThrow('Plane OAuth refresh failed: invalid refresh')
+  })
+
+  it('shares a single in-flight OAuth refresh per instance', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ access_token: 'fresh-token', expires_in: 3600 }))
+      .mockImplementation(() => Promise.resolve(response({ ok: true })))
+    const first = oauthClient({ expiresAt: Date.now() - 1 })
+    const second = oauthClient({ expiresAt: Date.now() - 1 })
+
+    await Promise.all([
+      planeFetch(first, '/api/v1/users/me/'),
+      planeFetch(second, '/api/v1/users/me/')
+    ])
+
+    expect(
+      fetchMock.mock.calls.filter((call) => call[0]?.toString().includes('/auth/o/token/'))
+    ).toHaveLength(1)
+  })
 })
 
 function planeClient(): PlaneClientForInstance {
@@ -123,5 +160,27 @@ function planeClient(): PlaneClientForInstance {
       displayName: 'Acme'
     },
     auth: { kind: 'apiKey', apiKey: 'pat-token' }
+  }
+}
+
+function oauthClient(
+  overrides: Partial<Extract<PlaneClientForInstance['auth'], { kind: 'oauth' }>> = {}
+): PlaneClientForInstance {
+  return {
+    instance: {
+      id: 'plane-oauth',
+      baseUrl: 'https://plane.example',
+      workspaceSlug: 'acme',
+      displayName: 'Acme',
+      authMode: 'oauth'
+    },
+    auth: {
+      kind: 'oauth',
+      accessToken: 'expired-token',
+      refreshToken: 'refresh-token',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      ...overrides
+    }
   }
 }

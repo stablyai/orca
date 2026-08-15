@@ -102,7 +102,7 @@ describe('Plane client storage', () => {
     })
   })
 
-  it('returns bearer clients for stored OAuth instances', async () => {
+  it('throws when stored OAuth credentials lack client credentials', async () => {
     instanceFile.value = JSON.stringify({
       version: 1,
       activeInstanceId: 'plane-oauth',

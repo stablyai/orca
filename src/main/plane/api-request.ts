@@ -22,8 +22,8 @@ export async function planeFetch<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
   const auth = await currentAuth(client)
+  const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
@@ -46,6 +46,8 @@ export async function planeFetch<T>(
   return (await response.json()) as T
 }
 
+const inFlightRefresh = new Map<string, Promise<Awaited<ReturnType<typeof refreshOAuthToken>>>>()
+
 async function currentAuth(
   client: PlaneClientForInstance
 ): Promise<PlaneClientForInstance['auth']> {
@@ -55,10 +57,16 @@ async function currentAuth(
   if (!client.auth.refreshToken || !client.auth.clientId || !client.auth.clientSecret) {
     throw new Error('Plane OAuth token expired. Reconnect Plane to continue.')
   }
-  const token = await refreshOAuthToken(client)
+  const id = client.instance.id
+  let pending = inFlightRefresh.get(id)
+  if (!pending) {
+    pending = refreshOAuthToken(client).finally(() => inFlightRefresh.delete(id))
+    inFlightRefresh.set(id, pending)
+  }
+  const token = await pending
   const auth = { kind: 'oauth' as const, ...token }
   client.auth = auth
-  writeToken(client.instance.id, JSON.stringify(token))
+  writeToken(id, JSON.stringify(token))
   return auth
 }
 
