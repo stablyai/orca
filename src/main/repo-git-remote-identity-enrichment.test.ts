@@ -329,6 +329,60 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
   })
 
+  it('forgets a removed repo location so its deadline cannot outlive the repo', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const repo = makeRepo({ gitRemoteIdentity: remoteIdentity })
+    const live: Repo[] = [repo]
+    const store: RepoIdentityStore = {
+      getRepos: () => live,
+      getRepo: (id) => live.find((candidate) => candidate.id === id),
+      updateRepo: () => null
+    }
+
+    // Seeds the startup-delay deadline for this location.
+    await sweep(store)
+    live.length = 0
+    await sweep(store)
+    live.push(repo)
+    // Past the seeded deadline: a retained entry would make this location due at once.
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+  })
+
+  it('keeps a surviving repo backoff when a sibling repo is removed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const kept = makeRepo({ gitRemoteIdentity: remoteIdentity })
+    const removed = makeRepo({
+      id: 'repo-2',
+      path: '/workspace/other-app',
+      gitRemoteIdentity: remoteIdentity
+    })
+    const live: Repo[] = [kept, removed]
+    const store: RepoIdentityStore = {
+      getRepos: () => live,
+      getRepo: (id) => live.find((candidate) => candidate.id === id),
+      updateRepo: () => null
+    }
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    await sweep(store)
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(2)
+
+    live.splice(1, 1)
+    await sweep(store)
+
+    // The kept repo is still inside its 6h refresh window, so pruning its sibling
+    // must not make it due again.
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(2)
+  })
+
   it('does not write stale identity data after the repo path changes', async () => {
     const probe = deferred<GitRemoteIdentityProbe>()
     vi.mocked(probeGitRemoteIdentity).mockReturnValue(probe.promise)

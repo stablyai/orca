@@ -36,6 +36,11 @@ export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
       )
   }),
   defineMethod({
+    name: 'worktree.listRetiredNames',
+    params: WorktreeDetectedListParams,
+    handler: async (params, { runtime }) => runtime.listRetiredWorktreeNames(params.repo)
+  }),
+  defineMethod({
     name: 'worktree.detectedList',
     params: WorktreeDetectedListParams,
     handler: async (params, context) =>

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from './db'
 import {
   acquireFederationAckLease,
   clearFederationAckCheckpoints,
@@ -118,6 +119,96 @@ describe('federation relay parsing', () => {
 })
 
 describe('federation relay acknowledgments', () => {
+  it('does not wake a waiter for an acknowledged duplicate replay', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Federation replay wake',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
+    })
+    const task = db.createTask({ spec: 'Remote work', runId: run.id })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      federation: {
+        environmentId: 'environment_windows',
+        environmentName: 'windows',
+        peerFingerprint: 'windows_peer_fingerprint',
+        protocolVersion: 3
+      }
+    })
+    db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'ready', state: 'ready' })
+    const relayItem = (sequence: number) => ({
+      dispatch_id: dispatch.id,
+      direction: 'to_home' as const,
+      sequence,
+      message_id: `msg_federated_${sequence}`,
+      kind: 'status',
+      payload: JSON.stringify({
+        subject: `Remote status ${sequence}`,
+        body: `Update ${sequence}`,
+        type: 'status'
+      })
+    })
+    let pulled = [relayItem(1)]
+    let rejectAck = true
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      peerFingerprint: 'windows_peer_fingerprint'
+    } as never)
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_environmentId, method) => {
+        if (method === 'orchestration.federationPull') {
+          return { runtimeEpoch: 'remote_epoch_1', items: pulled }
+        }
+        if (method === 'orchestration.federationAck') {
+          if (rejectAck) {
+            rejectAck = false
+            throw new Error('ack response lost before remote mutation')
+          }
+          return { acknowledgedThrough: pulled.at(-1)?.sequence ?? 0 }
+        }
+        throw new Error(`Unexpected method ${method}`)
+      }
+    )
+
+    await expect(syncFederatedDispatch(runtime, dispatch.id)).rejects.toThrow(
+      'ack response lost before remote mutation'
+    )
+    const first = db.getOrCreateRunDelivery({
+      runId: run.id,
+      consumerGeneration: run.consumer_generation
+    })
+    expect(first?.messages.map((message) => message.id)).toEqual(['msg_federated_1'])
+    db.acknowledgeRunDelivery({
+      runId: run.id,
+      consumerGeneration: run.consumer_generation,
+      deliveryId: first!.delivery.id
+    })
+    const waiting = runtime.waitForMessage(`run:${run.id}`, {
+      typeFilter: ['status'],
+      timeoutMs: 5_000
+    })
+    let settled = false
+    void waiting.then(() => {
+      settled = true
+    })
+
+    await syncFederatedDispatch(runtime, dispatch.id)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(settled).toBe(false)
+    expect(db.getMessageById('msg_federated_1')?.read).toBe(1)
+
+    pulled = [relayItem(2)]
+    await syncFederatedDispatch(runtime, dispatch.id)
+    await expect(waiting).resolves.toBe('notified')
+    expect(db.getUnreadMessages(`run:${run.id}`).map((message) => message.id)).toEqual([
+      'msg_federated_2'
+    ])
+    db.close()
+  })
+
   it('drains a terminal retry from the page after the first terminal report', async () => {
     const pending = Array.from({ length: 51 }, (_, index) => {
       const sequence = index + 1

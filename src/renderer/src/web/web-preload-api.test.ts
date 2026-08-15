@@ -3621,6 +3621,12 @@ describe('web worktree preload API', () => {
       targetBranch: 'release',
       isCrossRepository: false
     })
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'nautilus',
+      setupDecision: 'inherit',
+      nameWasGenerated: true
+    })
 
     expect(runtimeCalls).toEqual([
       {
@@ -3660,8 +3666,15 @@ describe('web worktree preload API', () => {
           targetBranch: 'release',
           isCrossRepository: false
         }
+      },
+      {
+        method: 'worktree.create',
+        params: expect.objectContaining({ repo: 'repo-1', nameWasGenerated: true })
       }
     ])
+    // Why: this client hand-enumerates create params, so a new optional field silently vanishes.
+    // Absent must mean user-typed — the host neither skips a retired candidate nor retires it.
+    expect(runtimeCalls[0]?.params).not.toHaveProperty('nameWasGenerated')
   })
 
   it('encodes explicit push target clears for runtime worktree updates', async () => {

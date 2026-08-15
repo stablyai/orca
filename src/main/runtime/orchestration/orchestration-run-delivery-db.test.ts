@@ -163,6 +163,30 @@ describe('OrchestrationDb Run state', () => {
       expect(replacement?.messages.map((message) => message.subject)).toEqual(['one'])
     })
 
+    it('does not move a mismatched Run through another Run Dispatch mailbox', () => {
+      const d = createDb()
+      const runA = createBoundRun(d)
+      const runB = d.createRun({
+        objective: 'Dispatch owner',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:22222222-2222-4222-9222-222222222222'
+      })
+      const task = d.createTask({ spec: 'work', runId: runB.id })
+      const dispatch = d.createDispatchContext(task.id, 'term_worker')
+      const mismatched = d.insertMessage({
+        from: 'worker',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'wrong Run',
+        runId: runA.id
+      })
+
+      expect(d.routeUnreadDispatchMailboxToRunMailbox(dispatch.id, runB.id)).toMatchObject({
+        routedCount: 0,
+        hasMore: false
+      })
+      expect(d.getMessageById(mismatched.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
+    })
+
     it('replays an outstanding batch after reopening the database', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-delivery-'))
       const dbPath = join(dir, 'orchestration.db')

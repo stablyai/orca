@@ -91,6 +91,7 @@ import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import type {
@@ -2774,7 +2775,8 @@ function getRepoForExecutionHost(
   )
 }
 
-function notifyReposChanged(mainWindow: BrowserWindow): void {
+export function notifyReposChanged(mainWindow: BrowserWindow): void {
+  wakeFolderRepoGitUpgradeWatch()
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
