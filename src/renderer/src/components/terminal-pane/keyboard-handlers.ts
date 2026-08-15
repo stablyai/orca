@@ -15,7 +15,8 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
@@ -613,20 +614,31 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        if ((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter)) {
-          if (isWindows) {
-            const chord = getModifiedEnterChord(e)
-            const claimedChord = chord
-              ? {
-                  ...chord,
-                  terminalModifierKeyDownObserved: terminalImeEnterModifierKeydowns.has(chord.kind)
-                }
-              : null
-            if (claimedChord && !modifiedEnterChordOwner.claim(claimedChord)) {
-              return
+        if (e.isComposing || hasPendingImeComposition) {
+          if (e.key === 'Enter' || imeProcessEnter) {
+            if (isWindows) {
+              const chord = getModifiedEnterChord(e)
+              const claimedChord = chord
+                ? {
+                    ...chord,
+                    terminalModifierKeyDownObserved: terminalImeEnterModifierKeydowns.has(
+                      chord.kind
+                    )
+                  }
+                : null
+              if (claimedChord && !modifiedEnterChordOwner.claim(claimedChord)) {
+                return
+              }
             }
+            deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+            return
           }
-          deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+          // Why: the composed glyph reaches the pty from the session-end handler, which runs after
+          // this keydown. Sending now puts a cursor chord ahead of the text it was typed after —
+          // `가나다` then Cmd+Left leaves `다가나`. Hold it until the session has flushed.
+          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
+            fallbackMs: null
+          })
           return
         }
         sendResolvedInput()
