@@ -138,7 +138,7 @@ function sanitizeToolInput(
   const result: Record<string, unknown> = {}
   let count = 0
   for (const key in value) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    if (!Object.hasOwn(value, key)) {
       continue
     }
     if (count >= MOBILE_TOOL_INPUT_ITEMS_CAP || budget.remaining <= 0) {
@@ -148,7 +148,7 @@ function sanitizeToolInput(
     let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
     // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
     // to the same bounded key; suffix collisions so neither field is silently lost.
-    if (Object.prototype.hasOwnProperty.call(result, boundedKey)) {
+    if (Object.hasOwn(result, boundedKey)) {
       boundedKey = `${boundedKey}~${count}`
     }
     budget.remaining -= boundedKey.length

@@ -6,7 +6,7 @@ import {
   type SubprocessHandle
 } from './session'
 import { TerminalHost } from './terminal-host'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({

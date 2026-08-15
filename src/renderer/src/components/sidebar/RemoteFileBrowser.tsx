@@ -20,7 +20,7 @@ import {
 import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 import { translate } from '@/i18n/i18n'
-import type { FilesystemPathFlavor } from '../../../../shared/types'
+import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
 type RemoteFileBrowserProps = (
   | { targetId: string; runtimeEnvironmentId?: never }

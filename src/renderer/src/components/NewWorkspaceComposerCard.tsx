@@ -34,16 +34,13 @@ import {
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import type {
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearIssue,
-  SetupAgentStartupPolicy,
-  OrcaHooks,
-  SparsePreset,
-  TuiAgent
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../shared/jira-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../shared/orca-yaml-hook-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { SparsePreset } from '../../../shared/worktree/create-types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection

@@ -3,7 +3,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { buildFixCommitFailurePrompt } from './source-control-ai-prompts'
 import { summarizeCommitFailure } from './commit-failure-summary'
 import {

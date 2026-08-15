@@ -16,6 +16,7 @@ import {
   cancelPendingSimulatorPaneShutdown,
   shutdownManagedSimulatorIfNoPane
 } from './simulator-pane-shutdown-scheduler'
+import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 
 type OpenMobileEmulatorTabOptions = {
   targetGroupId?: string
@@ -55,6 +56,7 @@ export async function openMobileEmulatorTab(
   options: OpenMobileEmulatorTabOptions = {}
 ): Promise<string | null> {
   const store = useAppStore.getState()
+  assertClientCreationActionAvailable(store, worktreeId, 'mobile-emulator')
   if (store.settings?.mobileEmulatorEnabled === false) {
     return null
   }

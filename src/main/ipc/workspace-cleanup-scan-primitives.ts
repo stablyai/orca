@@ -1,8 +1,21 @@
 import { basename } from 'node:path'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceCleanupScanError } from '../../shared/workspace-cleanup'
 
 export const WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS = 8_000
+
+export class WorkspaceCleanupScanCancelledError extends Error {
+  constructor() {
+    super('Workspace cleanup scan cancelled')
+    this.name = 'WorkspaceCleanupScanCancelledError'
+  }
+}
+
+export function throwIfWorkspaceCleanupScanAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new WorkspaceCleanupScanCancelledError()
+  }
+}
 
 export function appendWorkspaceCleanupItems<T>(target: T[], entries: readonly T[]): void {
   // Why: cleanup can aggregate generated-size worktree batches; spreading
@@ -35,21 +48,34 @@ export async function mapWorkspaceCleanupWithConcurrency<T, R>(
 export async function withWorkspaceCleanupTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
-  message: string
+  message: string,
+  parentSignal?: AbortSignal
 ): Promise<T> {
   const controller = new AbortController()
   let timeoutId: NodeJS.Timeout | undefined
+  let onParentAbort: (() => void) | undefined
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       controller.abort()
       reject(new Error(message))
     }, timeoutMs)
+    onParentAbort = () => {
+      controller.abort()
+      reject(new WorkspaceCleanupScanCancelledError())
+    }
+    parentSignal?.addEventListener('abort', onParentAbort, { once: true })
+    if (parentSignal?.aborted) {
+      onParentAbort()
+    }
   })
   try {
     return await Promise.race([run(controller.signal), timeoutPromise])
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId)
+    }
+    if (onParentAbort) {
+      parentSignal?.removeEventListener('abort', onParentAbort)
     }
   }
 }

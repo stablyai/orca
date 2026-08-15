@@ -44,6 +44,21 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: object) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+    }
+  }) => ({
+    get: (filter: object) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+      items.map(({ cookie, url }) => ({ url, ...cookie })),
+    restoreClearIdentities: async () => undefined,
+    dispose: () => undefined
+  })
+}))
 
 import {
   buildChromiumCookieInsertParams,
@@ -423,7 +438,7 @@ describe('importCookiesFromBrowser Chromium', () => {
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
-  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let setUserAgentMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
@@ -431,7 +446,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
-    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     setUserAgentMock = vi.fn()
     appGetPathMock.mockReset()
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
@@ -450,7 +465,7 @@ describe('importCookiesFromBrowser Chromium', () => {
         remove: cookiesRemoveMock,
         flushStore: cookiesFlushStoreMock
       },
-      clearStorageData: clearStorageDataMock,
+      clearData: clearDataMock,
       setUserAgent: setUserAgentMock
     })
   })
@@ -511,9 +526,7 @@ describe('importCookiesFromBrowser Chromium', () => {
         ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
       ).toEqual(sourceFilesBefore)
       expect(cookiesRemoveMock).not.toHaveBeenCalled()
-      // Why: STA-3811 — the pre-import clear is selective now, so a wholesale wipe would
-      // take the non-transplantable families with it.
-      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      expect(clearDataMock).not.toHaveBeenCalled()
       // Why: STA-3514 — imports must never impersonate the source browser; the
       // session keeps the engine UA the registry set at startup.
       expect(setUserAgentMock).not.toHaveBeenCalled()

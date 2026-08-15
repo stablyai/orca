@@ -58,8 +58,8 @@ function splitHostCandidate(query: string): { host: string; port: string | null 
     return null
   }
   const colonIndex = query.indexOf(':')
-  const host = colonIndex < 0 ? query : query.slice(0, colonIndex)
-  const port = colonIndex < 0 ? null : query.slice(colonIndex + 1)
+  const host = colonIndex === -1 ? query : query.slice(0, colonIndex)
+  const port = colonIndex === -1 ? null : query.slice(colonIndex + 1)
   const extension = host.split('.').pop()?.toLowerCase() ?? ''
   if (HOST_FILE_EXTENSIONS.has(extension)) {
     return null
@@ -94,7 +94,7 @@ function isPrivateIpv4(host: string): boolean {
 
 function hasSourceExtensionBeforeColon(query: string): boolean {
   const colonIndex = query.indexOf(':')
-  if (colonIndex < 0) {
+  if (colonIndex === -1) {
     return false
   }
   const extension = query.slice(0, colonIndex).split('.').pop()?.toLowerCase() ?? ''

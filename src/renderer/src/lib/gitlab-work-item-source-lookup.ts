@@ -1,4 +1,4 @@
-import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/types'
+import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'

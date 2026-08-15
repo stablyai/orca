@@ -2,15 +2,15 @@
 co-locating issue list/create/update/comment operations keeps the shared
 acquire/release + error-classification pattern obvious. Each function is
 short; the file is long because the surface is broad. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
   GitLabAssignableUser,
   GitLabCommentResult,
   GitLabIssueInfo,
   GitLabIssueUpdate,
-  IssueSourcePreference,
   MRComment
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
 import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, type LocalGitExecOptions, type ProjectRef } from './gl-utils'

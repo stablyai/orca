@@ -43,7 +43,7 @@ import {
   WORKSPACE_FILE_PATH_MIME,
   WORKSPACE_FILE_PATHS_MIME
 } from '@/lib/workspace-file-drag'
-import type { GitFileStatus } from '../../../../shared/types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { STATUS_LABELS } from './status-display'
 import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
@@ -267,6 +267,7 @@ type FileExplorerRowProps = {
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
+  canOpenInOrcaBrowser: boolean
   canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
@@ -455,6 +456,7 @@ export function FileExplorerRow({
   connectionId,
   runtimeDownloadContext,
   supportsFolderDownload = false,
+  canOpenInOrcaBrowser,
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
@@ -764,7 +766,7 @@ export function FileExplorerRow({
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && (
+        {!node.isDirectory && activeWorktreeId && canOpenInOrcaBrowser && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
             {translate(

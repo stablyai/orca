@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { githubProjectHost } from '../../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
@@ -58,17 +58,15 @@ import {
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { GitHubReactionContent, PRComment } from '../../../../shared/github/comment-types'
+import type { PRRefreshErrorType } from '../../../../shared/github/pull-request-refresh-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type {
   GitLabDiscussionResolveResult,
   GitLabProjectRef,
-  GitLabWorkItemDetails,
-  PRInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  GitHubReactionContent,
-  PRRefreshErrorType
-} from '../../../../shared/types'
+  GitLabWorkItemDetails
+} from '../../../../shared/gitlab-types'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   buildResolvePullRequestConflictsPrompt,
@@ -79,17 +77,16 @@ import {
   getBrokenChecks,
   getCheckDetailsPromptKey
 } from '../pr-checks-fix-prompt'
-import {
-  buildPRCommentsResolutionPrompt,
-  isResolvablePRCommentGroup
-} from '../pr-comments-resolution-prompt'
+import { buildPRCommentsResolutionPrompt } from '../pr-comments-resolution-prompt'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
+import { buildSnapshottedThreadResolver } from './pr-comment-snapshotted-thread-resolver'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply,
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck,
+  hasPRCommentGroupNeedingReply,
   resolvePRReviewReplyThreadId,
   setPendingPRCommentAiAck,
   takePendingPRCommentAiAck
@@ -98,7 +95,7 @@ import type {
   PendingPRCommentAiAck,
   PendingPRCommentAiAckGithubTarget
 } from './pr-comments-ai-launch-ack'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import {
   hostedReviewProviderSupportsDraft,
@@ -195,7 +192,7 @@ import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { groupPRComments, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   openChecksPanelHostedReviewUrl,
   resolveChecksPanelHostedReviewModifierDestination,
@@ -3126,9 +3123,6 @@ export default function ChecksPanel(): React.JSX.Element {
       if (commentResolutionAckBusyRef.current) {
         return
       }
-      const selectedThreadIds = selectedGroups.flatMap((group) =>
-        group.kind === 'thread' && isResolvablePRCommentGroup(group) ? [group.threadId] : []
-      )
       if (selectedGroups.length === 0) {
         toast.message(
           translate(
@@ -3168,12 +3162,26 @@ export default function ChecksPanel(): React.JSX.Element {
         }
       })()
       const githubTarget = githubTargetFromPr ?? githubTargetFromUrl
+      // Why: resolving needs no prRepo, so a degraded PR entry that only yields a number must
+      // still ack by resolving instead of failing every selected thread.
+      const githubResolveTarget =
+        githubTarget ??
+        (activeReview.provider === 'github' && prNumber
+          ? { repoPath: repo.path, repoId: repo.id, prNumber }
+          : undefined)
+      // Why: the ack resolves against this MR after delivery, so pin the iid now — the panel
+      // may already be showing a different review by then.
+      const gitlabTarget =
+        activeReview.provider === 'gitlab'
+          ? { repoPath: repo.path, repoId: repo.id, iid: activeReview.number }
+          : undefined
       const commentResolution = {
         reviewContextKey: stateRequestKey,
         provider: activeReview.provider,
-        selectedThreadIds,
         selectedGroups,
-        githubTarget
+        githubTarget,
+        githubResolveTarget,
+        gitlabTarget
       }
       claimedCommentResolutionRef.current = null
       commentResolutionLaunchAcceptedRef.current = false
@@ -3185,13 +3193,13 @@ export default function ChecksPanel(): React.JSX.Element {
           { value0: activeReview.provider === 'gitlab' ? 'MR' : 'PR' }
         ),
         // Why: only GitHub with a resolved PR target posts fixing replies; other providers
-        // must not be promised a reply the ack never sends. Review threads get one reply
-        // each, conversation comments share one — so the copy stays deliberately vague.
+        // must not be promised a reply the ack never sends. Resolvable threads are acked by
+        // resolving alone, so the copy leads with that.
         description:
           githubTarget && activeReview.provider === 'github'
             ? translate(
-                'auto.components.right.sidebar.ChecksPanel.ed3f79c031',
-                'Review the prompt before starting an agent. After the prompt is delivered, Orca replies to the selected comments and resolves host threads when possible.'
+                'auto.components.right.sidebar.ChecksPanel.5eb2163b6b',
+                'Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.'
               )
             : translate(
                 'auto.components.right.sidebar.ChecksPanel.abf59262fb',
@@ -3257,25 +3265,42 @@ export default function ChecksPanel(): React.JSX.Element {
         checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
       const githubTarget = resolution.githubTarget
       const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
-      // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected, not an error.
-      let lastReplyError =
-        resolution.provider === 'github' && githubTarget == null
+      // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected,
+      // and a missing reply target only matters when something in the selection needs a reply.
+      let lastHostError =
+        resolution.provider === 'github' &&
+        githubTarget == null &&
+        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
           ? translate(
               'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
               'Could not resolve the GitHub PR to reply on.'
             )
           : undefined
+      const resolveSnapshottedThread = buildSnapshottedThreadResolver({
+        provider: resolution.provider,
+        githubResolveTarget: resolution.githubResolveTarget,
+        gitlabTarget: resolution.gitlabTarget,
+        resolveReviewThread,
+        resolveGitLabDiscussion: (args) =>
+          resolveGitLabMRDiscussionForChecks({ ...args, settings }),
+        isPanelStillOnLaunchReview,
+        onResolvedOptimistically: (threadId) => {
+          setComments((prev) => markPRCommentThreadResolved(prev, threadId, true))
+        },
+        onResolveFailed: ({ threadId, error }) => {
+          lastHostError =
+            error ||
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.430f1a62d4',
+              'Could not resolve the selected thread on the host.'
+            )
+          console.warn('Post-launch thread resolve failed:', threadId, error)
+        }
+      })
       const counts = await acknowledgePRCommentsAfterAiLaunch({
         groups: resolution.selectedGroups,
         deps: {
-          isStillCurrent: isPanelStillOnLaunchReview,
-          isThreadStillResolvable: (threadId) => {
-            const currentGroup = groupPRComments(commentsRef.current).find(
-              (group) => group.kind === 'thread' && group.threadId === threadId
-            )
-            return Boolean(currentGroup && isResolvablePRCommentGroup(currentGroup))
-          },
-          resolveThread: (threadId) => handleResolve(threadId, true, { notifyOnFailure: false }),
+          resolveThread: resolveSnapshottedThread,
           canReply: canReplyOnHost,
           replyInThread: async (comment, body) => {
             if (!githubTarget || !canPostPRReviewThreadReply(comment)) {
@@ -3316,11 +3341,11 @@ export default function ChecksPanel(): React.JSX.Element {
                 }
                 return true
               }
-              lastReplyError = result.error
+              lastHostError = result.error
               console.warn('In-thread fixing reply failed:', result.error)
               return false
             } catch (err) {
-              lastReplyError = err instanceof Error ? err.message : String(err)
+              lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post in-thread fixing reply for review comment:', err)
               return false
             }
@@ -3347,11 +3372,11 @@ export default function ChecksPanel(): React.JSX.Element {
                 }
                 return true
               }
-              lastReplyError = result.error
+              lastHostError = result.error
               console.warn('Conversation fixing reply failed:', result.error)
               return false
             } catch (err) {
-              lastReplyError = err instanceof Error ? err.message : String(err)
+              lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post conversation fixing reply for review comment:', err)
               return false
             }
@@ -3364,9 +3389,12 @@ export default function ChecksPanel(): React.JSX.Element {
       }
 
       // Why: surface the underlying API error when replies were possible but none landed.
+      // Resolvable threads are acked by resolving, so replied=0 is correct when nothing needed one.
       const repliedNoneDespiteHostSupport =
-        canReplyOnHost && counts.replied === 0 && resolution.selectedGroups.length > 0
-      if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastReplyError) {
+        canReplyOnHost &&
+        counts.replied === 0 &&
+        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+      if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
         toast.error(
           translate(
             'auto.components.right.sidebar.ChecksPanel.f273f2271c',
@@ -3376,7 +3404,7 @@ export default function ChecksPanel(): React.JSX.Element {
               value1: counts.replied,
               value2: counts.skipped,
               value3: counts.failed,
-              value4: lastReplyError ? ` ${lastReplyError}` : ''
+              value4: lastHostError ? ` ${lastHostError}` : ''
             }
           )
         )
@@ -3399,8 +3427,9 @@ export default function ChecksPanel(): React.JSX.Element {
       addPRConversationComment,
       addPRReviewCommentReply,
       clearSentCommentSelection,
-      handleResolve,
-      refreshCommentsAfterBulkResolve
+      refreshCommentsAfterBulkResolve,
+      resolveReviewThread,
+      settings
     ]
   )
 

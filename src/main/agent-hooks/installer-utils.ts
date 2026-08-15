@@ -316,7 +316,9 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 export function writeHooksJson(
   configPath: string,
   config: HooksConfig,
-  options?: { preserveMode?: boolean }
+  // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
+  // atomic write + rolling backup below stay shared instead of being reimplemented.
+  options?: { preserveMode?: boolean; serialized?: string }
 ): void {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
@@ -325,7 +327,7 @@ export function writeHooksJson(
   // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
     options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 

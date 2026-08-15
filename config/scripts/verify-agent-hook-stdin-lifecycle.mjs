@@ -142,7 +142,7 @@ function readGeneratedScripts(home, minMtime) {
     const body = readFileSync(path, 'utf8')
     const captureIndex = body.indexOf('payload=$(cat)')
     const firstExitIndex = body.indexOf('exit 0')
-    if (captureIndex < 0 || firstExitIndex <= captureIndex) {
+    if (captureIndex === -1 || firstExitIndex <= captureIndex) {
       throw new Error([fileName, ' can exit before capturing stdin'].join(''))
     }
     return { body, fileName, path, source }

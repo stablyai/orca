@@ -170,8 +170,8 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/pull-request-merge-methods'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
@@ -193,20 +193,18 @@ import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
 } from '../../../shared/source-control-ai-recipe-save'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
+import type { PRComment } from '../../../shared/github/comment-types'
 import type {
+  GitHubAssignableUser,
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubPRFileViewedState,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
-  GitHubAssignableUser,
-  GitHubPRMergeMethod,
-  GitBranchChangeEntry,
-  GitDiffResult,
-  PRCheckDetail,
-  PRComment
-} from '../../../shared/types'
+  GitHubPRMergeMethod
+} from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
@@ -1286,7 +1284,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
     invalidateWorkItemDetailsCacheByMatch(payload)
   })
 }
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
     workItemDetailsCacheEventUnsub?.()

@@ -1,6 +1,7 @@
 import type { Cookie, Cookies } from 'electron'
 import { parse as parseDomain } from 'psl'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+// Why: type-only, so this does not create a runtime cycle with the clear module.
+import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -59,12 +60,16 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 // it is copied. Signing in directly inside Orca is the only path that produces a working
 // session, so an import must never write these cookies and never remove them either — the
 // live session is always more valuable than anything an import could put in its place.
+// Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
+// public suffixes, because clearData derives one excluded origin and matches at that boundary.
 // Adding a site is one entry here.
 // youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
 // its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
 // users actually asked for.
 const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
-const COOKIE_CLEAR_CONCURRENCY = 8
+export const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `https://${root}`
+)
 
 export function isNonTransplantableCookieDomain(domain: string): boolean {
   const normalized = normalizeCookieDomain(domain)
@@ -154,7 +159,7 @@ function overlapsImportedDomain(
   return domainSuffixes(domain).some((suffix) => scopes.descendantRoots.has(suffix))
 }
 
-function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
+export function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
   try {
     const url = new URL(`${cookie.secure ? 'https' : 'http'}://${domain}/`)
     url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
@@ -164,118 +169,102 @@ function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
   }
 }
 
-export async function restoreImportedDomainCookies(
-  store: Pick<Cookies, 'set'>,
-  cookies: readonly Cookie[]
-): Promise<void> {
-  const failures: unknown[] = []
-  for (const cookie of cookies) {
-    try {
-      const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-      const url = domain ? cookieRemovalUrl(cookie, domain) : null
-      if (!url) {
-        continue
-      }
-      await store.set({
-        url,
-        name: cookie.name,
-        value: cookie.value,
-        ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
-        ...(cookie.path ? { path: cookie.path } : {}),
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        ...(cookie.expirationDate ? { expirationDate: cookie.expirationDate } : {})
-      })
-    } catch (err) {
-      failures.push(err)
-    }
-  }
-  if (failures.length > 0) {
-    throw new AggregateError(failures, 'Could not restore replaced cookies')
-  }
+// Why (STA-4097): 'set' stays out so the partition-dropping reconstruction cannot return.
+// Undoing a removal is only possible through CDP identities, which carry partitionKey.
+export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
+  snapshotClearIdentities(
+    cookies: readonly { cookie: Cookie; url: string }[]
+  ): Promise<CookieClearIdentity[]>
+  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
 }
 
-// Why: clearStorageData wipes the whole jar, including the non-transplantable families an
-// import is never allowed to remove; this is the clear step that can leave them in place.
-export async function removeAllCookiesExcept(
-  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
-  isExcluded: (cookie: Cookie) => boolean
-): Promise<void> {
-  const existingCookies = await store.get({})
-  const removableGroups = new Map<string, { cookie: Cookie; url: string }[]>()
-  for (const cookie of existingCookies) {
-    if (isExcluded(cookie)) {
-      continue
-    }
-    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-    const url = domain ? cookieRemovalUrl(cookie, domain) : null
-    if (!url) {
-      continue
-    }
-    const key = JSON.stringify([url, cookie.name])
-    const group = removableGroups.get(key) ?? []
-    group.push({ cookie, url })
-    removableGroups.set(key, group)
-  }
+export type ReplacedImportedDomainCookies = {
+  removed: Cookie[]
+  identities: CookieClearIdentity[]
+}
 
-  const removedCookies: Cookie[] = []
-  const results = await mapSettledWithConcurrency(
-    [...removableGroups.values()],
-    COOKIE_CLEAR_CONCURRENCY,
-    async (group) => {
-      // Why: identical remove keys must stay ordered so duplicate scoped cookies are not raced.
-      for (const { cookie, url } of group) {
-        await store.remove(url, cookie.name)
-        removedCookies.push(cookie)
-      }
+function replaceRemovalKey(url: string, name: string): string {
+  return JSON.stringify([url, name])
+}
+
+function assertIdentitiesCoverRemovable(
+  removable: readonly { cookie: Cookie; url: string }[],
+  identities: readonly CookieClearIdentity[]
+): void {
+  const covered = new Set(
+    identities.map((identity) => replaceRemovalKey(identity.url, identity.name))
+  )
+  for (const item of removable) {
+    if (!covered.has(replaceRemovalKey(item.url, item.cookie.name))) {
+      throw new Error('Could not replace existing cookies; the session was left unchanged')
     }
-  )
-  const failures = results.flatMap((result) =>
-    result.status === 'rejected' ? [result.reason] : []
-  )
-  if (failures.length === 0) {
-    return
   }
-  try {
-    await restoreImportedDomainCookies(store, removedCookies)
-  } catch (restoreError) {
-    throw new AggregateError([...failures, restoreError], 'Cookie clearing and rollback failed')
-  }
-  throw new AggregateError(failures, 'Could not clear existing cookies')
 }
 
 export async function replaceCookiesForImportedDomains(
-  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+  store: ImportedDomainReplaceStore,
   importedDomains: readonly string[]
-): Promise<Cookie[]> {
+): Promise<ReplacedImportedDomainCookies> {
   const scopes = importedDomainScopes(importedDomains)
   if (scopes.exact.size === 0) {
-    return []
+    return { removed: [], identities: [] }
   }
 
+  // Why (STA-4170): the removal plan is fixed here, beside the identities that can undo it, so
+  // the restorable set always equals the mutated set. Re-reading the jar later would widen the
+  // removal past what the snapshot can restore.
   const existingCookies = await store.get({})
-  const removedCookies: Cookie[] = []
+  const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of existingCookies) {
     const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
     if (!domain || !overlapsImportedDomain(cookie, domain, scopes)) {
       continue
     }
     const url = cookieRemovalUrl(cookie, domain)
-    if (!url) {
-      continue
+    if (url) {
+      removable.push({ cookie, url })
+    }
+  }
+  if (removable.length === 0) {
+    return { removed: [], identities: [] }
+  }
+
+  // Why: snapshotting before the first removal is what makes the rollback lossless; an
+  // incomplete snapshot aborts while the session is still untouched.
+  const identities = await store.snapshotClearIdentities(removable)
+  assertIdentitiesCoverRemovable(removable, identities)
+  const identitiesByKey = new Map<string, CookieClearIdentity[]>()
+  for (const identity of identities) {
+    const key = replaceRemovalKey(identity.url, identity.name)
+    const group = identitiesByKey.get(key) ?? []
+    group.push(identity)
+    identitiesByKey.set(key, group)
+  }
+
+  const removed: Cookie[] = []
+  // Why: one remove(url, name) deletes every cookie at that coordinate, partitioned twins
+  // included, so the rollback set is tracked per coordinate rather than per cookie.
+  const attemptedKeys = new Set<string>()
+  const attemptedIdentities: CookieClearIdentity[] = []
+  for (const { cookie, url } of removable) {
+    const key = replaceRemovalKey(url, cookie.name)
+    if (!attemptedKeys.has(key)) {
+      attemptedKeys.add(key)
+      attemptedIdentities.push(...(identitiesByKey.get(key) ?? []))
     }
     try {
       await store.remove(url, cookie.name)
-      removedCookies.push(cookie)
+      removed.push(cookie)
     } catch (err) {
       try {
-        await restoreImportedDomainCookies(store, removedCookies)
+        // Why: the failing coordinate is included because a rejected remove cannot prove the
+        // cookie survived; restoring a live cookie rewrites the value it was snapshotted with.
+        await store.restoreClearIdentities(attemptedIdentities.toReversed())
       } catch (restoreError) {
         throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
       }
       throw err
     }
   }
-  return removedCookies
+  return { removed, identities }
 }

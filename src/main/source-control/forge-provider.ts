@@ -66,7 +66,7 @@ export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
 export type ForgeProvider = {
   id: ForgeProviderId
   supportsReviewCreation: boolean
-  resolveRepository(context: ForgeProviderRepositoryContext): Promise<unknown | null>
+  resolveRepository(context: ForgeProviderRepositoryContext): Promise<unknown>
   getReviewForBranch(input: ForgeReviewForBranchInput): Promise<HostedReviewInfo | null>
   getReviewByNumber(input: ForgeReviewByNumberInput): Promise<HostedReviewInfo | null>
   createReview?(

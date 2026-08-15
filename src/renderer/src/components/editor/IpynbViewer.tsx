@@ -435,7 +435,7 @@ function getCellKey(cell: IpynbCell, index: number): string {
 }
 
 function hasOwnDraft(drafts: Record<string, string>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(drafts, key)
+  return Object.hasOwn(drafts, key)
 }
 
 function EditableTextCell({

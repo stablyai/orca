@@ -23,6 +23,9 @@ export type EditorPathMutationTarget = {
   relativePath: string
   runtimeEnvironmentId?: string | null
   allowLocalWindowsWslAliases?: true
+  indexedOpenFiles?: {
+    matches: (openFiles: OpenFile[]) => OpenFile[]
+  }
 }
 
 export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
@@ -127,8 +130,11 @@ export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
   target: EditorPathMutationTarget
 ): OpenFile[] {
+  if (target.indexedOpenFiles) {
+    return target.indexedOpenFiles.matches(openFiles)
+  }
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
-  const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(target, 'runtimeEnvironmentId')
+  const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
     if (file.worktreeId !== target.worktreeId) {

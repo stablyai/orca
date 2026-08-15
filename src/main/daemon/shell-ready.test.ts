@@ -5,6 +5,13 @@ import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
+import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import {
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
+import { HeadlessEmulator } from './headless-emulator'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -16,8 +23,8 @@ const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version'])
 const itWithBash = hasBash ? it : it.skip
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
 const itWithZsh = hasZsh ? it : it.skip
-const hasFish = process.platform !== 'win32' && spawnSync('fish', ['--version']).status === 0
-const itWithFish = hasFish ? it : it.skip
+const FISH = resolveFishBinary()
+const itWithFish = FISH.available ? it : it.skip
 
 const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
 
@@ -166,6 +173,11 @@ function expectFinalZdotdirRestoreContext(content: string) {
 }
 
 describePosix('daemon shell-ready launch config', () => {
+  // Always runs, so the CI lane cannot report green with every live fish test skipped.
+  it('has the fish the live tests need when CI requires one', () => {
+    expect(fishRequirementViolation(FISH)).toBeNull()
+  })
+
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined
   let userDataPath: string
@@ -252,10 +264,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })
@@ -290,6 +302,8 @@ describePosix('daemon shell-ready launch config', () => {
           }
         })
         let output = ''
+        let scannedOutput = ''
+        const startupScanState = createShellStartupOutputScanState()
         let commandWritten = false
         let erasureProbeWritten = false
         let queryCarry = ''
@@ -315,6 +329,7 @@ describePosix('daemon shell-ready launch config', () => {
         }, 50)
         proc.onData((chunk) => {
           output += chunk
+          scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
           // Why: fish stalls its first prompt 10s waiting on these and re-queries
           // each prompt, so answer every occurrence — an unanswered query makes
           // fish swallow the post-marker command as its reply.
@@ -344,9 +359,15 @@ describePosix('daemon shell-ready launch config', () => {
         clearTimeout(deadline)
         clearInterval(sentinelPoll)
         proc.kill()
+        scannedOutput += drainShellStartupOutputScanState(startupScanState)
 
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+        expect(scannedOutput).toBe(output.replace(SHELL_READY_MARKER_OUTPUT, ''))
+        const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+        expect(rendered.writeSync(scannedOutput)).toBe(true)
+        expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+        rendered.dispose()
         expect(existsSync(sentinel)).toBe(true)
         // Why: asserts the erase directly rather than inferring it from the marker
         // count, which only holds once enough prompts have been drawn to expose it.
@@ -456,6 +477,7 @@ describePosix('daemon shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -604,8 +626,6 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
-    const primeWrapperLine =
-      'command prime-agent --extension "${ORCA_PRIME_AGENT_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -627,9 +647,12 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
-    expect(zshrc).toContain(primeWrapperLine)
-    expect(zlogin).toContain(primeWrapperLine)
-    expect(bashRc).toContain(primeWrapperLine)
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
+    }
   })
 
   // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
@@ -643,6 +666,7 @@ describePosix('daemon shell-ready launch config', () => {
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     // precmd is prepended (captures $? first), epilogue appended last, so a framework needing last position stays between them.
     expect(bashRc).toContain(

@@ -1,4 +1,4 @@
-import { GitMerge } from 'lucide-react'
+import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -23,6 +23,60 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
+// Why: the glyph must carry review state — tone alone made a draft with failing
+// checks render as a red PR icon, which reads as closed.
+function getStateIcon(
+  state: WorktreeCardPrDisplay['state']
+): React.ComponentType<{ className?: string }> | null {
+  if (state === 'merged') {
+    return GitMerge
+  }
+  if (state === 'closed') {
+    return GitPullRequestClosed
+  }
+  if (state === 'draft') {
+    return GitPullRequestDraft
+  }
+  return null
+}
+
+// Why: checks only gate a review that is actually open; draft/closed/merged keep
+// their state tone so the glyph agrees with its tooltip. A stateless row (folder
+// cards render one while a linked review is loading or its details failed) has no
+// state glyph to contradict, so it still flags problems — but never claims success,
+// since emerald would assert an open review we have not confirmed.
+function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+  if (review.state && review.state !== 'open') {
+    return null
+  }
+  if (review.status === 'failure') {
+    return 'text-rose-500/85'
+  }
+  if (review.status === 'pending') {
+    return 'text-amber-500/85'
+  }
+  if (review.state === 'open' && review.status === 'success') {
+    return 'text-emerald-500/80'
+  }
+  return null
+}
+
+function getStateTone(state: WorktreeCardPrDisplay['state']): string {
+  if (state === 'merged') {
+    return 'text-purple-600/70 dark:text-purple-400/70'
+  }
+  if (state === 'open') {
+    return 'text-emerald-500/80'
+  }
+  if (state === 'closed') {
+    return 'text-muted-foreground/60'
+  }
+  if (state === 'draft') {
+    return 'text-muted-foreground/50'
+  }
+  return 'text-muted-foreground opacity-70'
+}
+
 export function ReviewIcon({
   review,
   className,
@@ -32,28 +86,8 @@ export function ReviewIcon({
   className?: string
   variant?: 'provider' | 'generic'
 }): React.JSX.Element {
-  const Icon = variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const checkTone =
-    review.state !== 'merged' && review.status === 'failure'
-      ? 'text-rose-500/85'
-      : review.state !== 'merged' && review.status === 'pending'
-        ? 'text-amber-500/85'
-        : review.state === 'open' && review.status === 'success'
-          ? 'text-emerald-500/80'
-          : null
-  return (
-    <Icon
-      className={cn(
-        className,
-        checkTone,
-        review.state === 'merged' && 'text-purple-600/70 dark:text-purple-400/70',
-        !checkTone && review.state === 'open' && 'text-emerald-500/80',
-        !checkTone && review.state === 'closed' && 'text-muted-foreground/60',
-        !checkTone && review.state === 'draft' && 'text-muted-foreground/50',
-        !checkTone &&
-          (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
-          'text-muted-foreground opacity-70'
-      )}
-    />
-  )
+  const providerIcon =
+    variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = getStateIcon(review.state) ?? providerIcon
+  return <Icon className={cn(className, getCheckTone(review) ?? getStateTone(review.state))} />
 }

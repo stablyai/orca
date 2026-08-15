@@ -38,9 +38,8 @@ export async function createStackedHostedReview(
           url: created.existingReview.url
         }
       }
-    } else {
-      currentReview = { number: created.number, url: created.url }
     }
+    currentReview = { number: created.number, url: created.url }
   }
   if (!currentReview) {
     return {

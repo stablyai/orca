@@ -29,6 +29,7 @@ import {
 } from './types'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
+const PS_IDENTITY_TIMEOUT_MS = 2_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
@@ -438,19 +439,47 @@ type PsProcessIdentity = {
   startedAtMs: number | null
 }
 
+function parsePsProcessIdentity(output: string): PsProcessIdentity {
+  // BSD ps formats lstart as a fixed-width 24-character timestamp.
+  const startedAtMs = Date.parse(output.slice(0, 24))
+  return {
+    commandLine: output.slice(24).trim(),
+    startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
+  }
+}
+
 function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
   try {
     const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
       encoding: 'utf8',
       timeout: 2_000
     })
-    // BSD ps formats lstart as a fixed-width 24-character timestamp.
-    const startedAtMs = Date.parse(output.slice(0, 24))
-    const commandLine = output.slice(24).trim()
-    return {
-      commandLine,
-      startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
-    }
+    return parsePsProcessIdentity(output)
+  } catch {
+    return null
+  }
+}
+
+async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessIdentity | null> {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        'ps',
+        ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
+        {
+          encoding: 'utf8',
+          timeout: PS_IDENTITY_TIMEOUT_MS
+        },
+        (error, output) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve(output)
+        }
+      )
+    })
+    return parsePsProcessIdentity(stdout)
   } catch {
     return null
   }
@@ -560,7 +589,7 @@ async function inspectDaemonProcessIdentity(
       commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
     )
   } catch {
-    const identity = getPsProcessIdentity(pid)
+    const identity = await getPsProcessIdentityAsync(pid)
     if (!identity) {
       return 'unknown'
     }
@@ -579,7 +608,7 @@ async function getDaemonCommandLine(pid: number): Promise<string | null> {
   try {
     return readFileSync(`/proc/${pid}/cmdline`, 'utf8')
   } catch {
-    return getPsProcessIdentity(pid)?.commandLine ?? null
+    return (await getPsProcessIdentityAsync(pid))?.commandLine ?? null
   }
 }
 
@@ -642,6 +671,11 @@ async function readVerifiedDaemonPid(
   return parsedPid
 }
 
+let cachedDaemonBundleStaleness: {
+  key: string
+  pending: Promise<boolean | null>
+} | null = null
+
 export async function isDaemonStaleForCurrentBundle(
   runtimeDir: string,
   socketPath: string,
@@ -649,19 +683,56 @@ export async function isDaemonStaleForCurrentBundle(
   currentAppVersion: string,
   protocolVersion = PROTOCOL_VERSION
 ): Promise<boolean> {
-  const parsedPid = await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
-  if (!parsedPid) {
-    return false
+  let cacheKey: string | null = null
+  try {
+    cacheKey = JSON.stringify([
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      currentAppVersion,
+      protocolVersion,
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    ])
+  } catch {
+    // Retry the verified read below so a transient PID-file race does not become sticky.
   }
 
-  if (parsedPid.appVersion !== null) {
-    return parsedPid.appVersion !== currentAppVersion
+  if (cacheKey && cachedDaemonBundleStaleness?.key === cacheKey) {
+    return (await cachedDaemonBundleStaleness.pending) ?? false
   }
 
-  // Why: older packaged daemons do not carry a reliable build-generation
-  // marker. Replacing them once prevents archive-preserved mtimes from
-  // reusing stale native modules across the first metadata-aware upgrade.
-  return true
+  const pending = (async (): Promise<boolean | null> => {
+    const parsedPid = await readVerifiedDaemonPid(
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      protocolVersion
+    )
+    if (!parsedPid) {
+      return null
+    }
+
+    if (parsedPid.appVersion !== null) {
+      return parsedPid.appVersion !== currentAppVersion
+    }
+
+    // Why: older packaged daemons do not carry a reliable build-generation
+    // marker. Replacing them once prevents archive-preserved mtimes from
+    // reusing stale native modules across the first metadata-aware upgrade.
+    return true
+  })()
+  if (cacheKey) {
+    cachedDaemonBundleStaleness = { key: cacheKey, pending }
+  }
+  const stale = await pending
+  if (
+    stale === null &&
+    cachedDaemonBundleStaleness?.key === cacheKey &&
+    cachedDaemonBundleStaleness.pending === pending
+  ) {
+    cachedDaemonBundleStaleness = null
+  }
+  return stale ?? false
 }
 
 // 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
@@ -669,40 +740,81 @@ export async function isDaemonStaleForCurrentBundle(
 // 'unknown' fails open: legacy pid files and probe failures must not trigger replacement.
 export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
 
+let cachedMacDaemonTccAttributionHealth: {
+  key: string
+  pending: Promise<MacDaemonTccAttributionHealth>
+} | null = null
+
+function getMacDaemonTccAttributionCacheKey(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion: number
+): string | null {
+  try {
+    const pidRecord = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    const parsedPid = parseDaemonPidFile(pidRecord)
+    if (!parsedPid) {
+      return null
+    }
+    const spawnerExists = parsedPid.spawnerExecPath ? existsSync(parsedPid.spawnerExecPath) : null
+    return JSON.stringify([socketPath, tokenPath, protocolVersion, pidRecord, spawnerExists])
+  } catch {
+    return null
+  }
+}
+
 /**
  * macOS pins a process's TCC "responsible process" to the binary that forked it,
- * by file reference. The detached daemon outlives that app instance, and once the
- * spawning binary is deleted (every packaged update replaces the bundle) tccd
- * can't resolve the grant subject — `osascript`/System Events from every terminal
- * hosted by that daemon is silently denied (-25211) no matter what the user grants.
+ * by file reference. If that binary path disappears while the daemon survives, tccd
+ * cannot resolve the grant subject for the daemon's terminals (STA-3491).
  */
 export async function getMacDaemonTccAttributionHealth(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
-  packagedAppVersion: string | null,
   protocolVersion = PROTOCOL_VERSION
 ): Promise<MacDaemonTccAttributionHealth> {
   if (process.platform !== 'darwin') {
     return 'unknown'
   }
-  const parsedPid = await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
-  if (!parsedPid) {
+  const cacheKey = getMacDaemonTccAttributionCacheKey(
+    runtimeDir,
+    socketPath,
+    tokenPath,
+    protocolVersion
+  )
+  if (cacheKey && cachedMacDaemonTccAttributionHealth?.key === cacheKey) {
+    return await cachedMacDaemonTccAttributionHealth.pending
+  }
+
+  const pending = (async (): Promise<MacDaemonTccAttributionHealth> => {
+    const parsedPid = await readVerifiedDaemonPid(
+      runtimeDir,
+      socketPath,
+      tokenPath,
+      protocolVersion
+    )
+    if (!parsedPid) {
+      return 'unknown'
+    }
+    if (parsedPid.spawnerExecPath) {
+      return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+    }
     return 'unknown'
+  })()
+  if (cacheKey) {
+    cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }
   }
-  // Packaged updates can replace the bundle at the same path, so path existence
-  // alone cannot prove the recorded spawning binary still backs this daemon.
+  const health = await pending
   if (
-    packagedAppVersion !== null &&
-    parsedPid.appVersion !== null &&
-    parsedPid.appVersion !== packagedAppVersion
+    health === 'unknown' &&
+    cachedMacDaemonTccAttributionHealth?.key === cacheKey &&
+    cachedMacDaemonTccAttributionHealth.pending === pending
   ) {
-    return 'severed'
+    cachedMacDaemonTccAttributionHealth = null
   }
-  if (parsedPid.spawnerExecPath) {
-    return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
-  }
-  return 'unknown'
+  return health
 }
 
 function isNoSuchProcessError(error: unknown): boolean {

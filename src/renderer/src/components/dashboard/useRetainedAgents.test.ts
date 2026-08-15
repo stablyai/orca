@@ -5,7 +5,9 @@ import { useAppStore } from '@/store'
 import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-pane-authority'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { collectRetainedAgentsOnDisappear, useRetainedAgentsSync } from './useRetainedAgents'
 
 const initialAppState = useAppStore.getInitialState()

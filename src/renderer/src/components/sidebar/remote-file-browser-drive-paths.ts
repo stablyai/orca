@@ -59,4 +59,4 @@ export function driveBreadcrumbPath(
   const kept = segments.slice(0, endIndex + 1)
   return kept.length === 0 ? driveRoot : `${driveRoot}${kept.join('\\')}`
 }
-import type { FilesystemPathFlavor } from '../../../../shared/types'
+import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'

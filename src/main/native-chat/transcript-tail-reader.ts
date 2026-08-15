@@ -1,4 +1,4 @@
-import { open, stat } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
 import type {
   AgentType,
   NativeChatMessage,
@@ -17,6 +17,13 @@ import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
 } from './transcript-turn-lifecycle'
+import {
+  closeTranscriptHandle,
+  wslGatedOpen,
+  wslGatedRead,
+  wslGatedStat
+} from './wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
@@ -58,12 +65,15 @@ export async function readNativeChatTranscriptTailFile(
   oversizedRecordCount?: number
 }> {
   signal?.throwIfAborted()
-  const end = Math.min((await stat(filePath)).size, endOffset ?? Number.MAX_SAFE_INTEGER)
+  const end = Math.min(
+    (await wslGatedStat(filePath, 'exact', signal)).size,
+    endOffset ?? Number.MAX_SAFE_INTEGER
+  )
   signal?.throwIfAborted()
   if (end === 0) {
     return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
   }
-  const handle = await open(filePath, 'r')
+  const handle = await wslGatedOpen(filePath, 'exact', signal)
   const lineParts: Buffer[] = []
   let lineBytes = 0
   let lineOversized = false
@@ -75,13 +85,13 @@ export async function readNativeChatTranscriptTailFile(
     signal?.throwIfAborted()
     const consumedTo = includeTrailingLine
       ? end
-      : await findLastCompleteLineEnd(handle, end, signal)
+      : await findLastCompleteLineEnd(handle, filePath, end, signal)
     if (consumedTo === 0) {
       return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = Buffer.allocUnsafe(1)
-    await handle.read(finalByte, 0, 1, consumedTo - 1)
+    await wslGatedRead(handle, filePath, finalByte, 0, 1, consumedTo - 1, 'exact', signal)
     signal?.throwIfAborted()
     ignoreNextMalformedRecord = finalByte[0] !== 0x0a
     let cursor = consumedTo - (finalByte[0] === 0x0a ? 1 : 0)
@@ -89,7 +99,16 @@ export async function readNativeChatTranscriptTailFile(
       signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+      const { bytesRead } = await wslGatedRead(
+        handle,
+        filePath,
+        buffer,
+        0,
+        buffer.length,
+        start,
+        'exact',
+        signal
+      )
       signal?.throwIfAborted()
       let segmentEnd = bytesRead
       for (let index = bytesRead - 1; index >= 0 && newestFirst.length <= limit; index--) {
@@ -125,7 +144,7 @@ export async function readNativeChatTranscriptTailFile(
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
     }
   } finally {
-    await handle.close()
+    await closeTranscriptHandle(handle, filePath)
   }
 
   function retainPart(part: Buffer): void {
@@ -183,13 +202,14 @@ export async function readNativeChatTranscriptTailFile(
 }
 
 async function findLastCompleteLineEnd(
-  handle: Awaited<ReturnType<typeof open>>,
+  handle: FileHandle,
+  filePath: string,
   end: number,
   signal?: AbortSignal
 ): Promise<number> {
   signal?.throwIfAborted()
   const lastByte = Buffer.allocUnsafe(1)
-  await handle.read(lastByte, 0, 1, end - 1)
+  await wslGatedRead(handle, filePath, lastByte, 0, 1, end - 1, 'exact', signal)
   signal?.throwIfAborted()
   if (lastByte[0] === 0x0a) {
     return end
@@ -199,10 +219,19 @@ async function findLastCompleteLineEnd(
     signal?.throwIfAborted()
     const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
     const buffer = Buffer.allocUnsafe(cursor - start)
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+    const { bytesRead } = await wslGatedRead(
+      handle,
+      filePath,
+      buffer,
+      0,
+      buffer.length,
+      start,
+      'exact',
+      signal
+    )
     signal?.throwIfAborted()
     const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
-    if (newline >= 0) {
+    if (newline !== -1) {
       return start + newline + 1
     }
     cursor = start
@@ -231,12 +260,20 @@ export async function readNativeChatTranscriptTail(
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
-  const filePath =
-    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
-  signal?.throwIfAborted()
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
+  let filePath: string | null
+  try {
+    filePath =
+      args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  } catch (error) {
+    signal?.throwIfAborted()
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(error).message }
+  }
+  signal?.throwIfAborted()
   // Why: a new agent session can report its id before the first JSONL flush;
   // callers keep that miss in loading/retry rather than showing a false error.
   if (!filePath) {

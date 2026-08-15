@@ -86,7 +86,7 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
   }
   const contents = readFileSync(lifecycleLedgerPath, 'utf8')
   const lastCompleteLine = contents.lastIndexOf('\n')
-  if (lastCompleteLine < 0) {
+  if (lastCompleteLine === -1) {
     return []
   }
   return contents

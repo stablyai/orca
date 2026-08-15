@@ -7,7 +7,7 @@ import type {
   LinearIssueContextResult,
   LinearIssueInclude,
   LinearIssueRequest
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import {
   LINEAR_ATTACHMENTS_CAP,
   LINEAR_ACTIVITY_CAP,
@@ -15,8 +15,8 @@ import {
   LINEAR_COMMENTS_CAP,
   LINEAR_COMMENT_BODY_CAP,
   clampLinearIssueDepth
-} from '../../shared/linear-agent-access'
-import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
+} from '../../shared/linear/agent-access'
+import { extractLinearInlineMedia } from '../../shared/linear/inline-media'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { getPublicFileUrlClient } from './client'

@@ -2,7 +2,7 @@ import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { dirname, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import type { GitFileStatus } from '../../../../shared/types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -29,6 +29,7 @@ type FileExplorerVirtualRowsProps = {
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
+  canOpenInOrcaBrowser?: (filePath: string) => boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
   onViewFile: (node: TreeNode) => void
@@ -75,6 +76,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     connectionId,
     runtimeDownloadContext,
     supportsFolderDownload = false,
+    canOpenInOrcaBrowser = () => false,
     onClick,
     onDoubleClick,
     onViewFile,
@@ -179,6 +181,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               connectionId={connectionId}
               runtimeDownloadContext={runtimeDownloadContext}
               supportsFolderDownload={supportsFolderDownload}
+              canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

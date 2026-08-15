@@ -5,7 +5,8 @@ import {
   saveSourceControlActionRecipe,
   toSourceControlAiRepoUpdate
 } from './source-control-ai-recipe-save'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')

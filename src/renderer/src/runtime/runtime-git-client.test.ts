@@ -641,8 +641,7 @@ describe('runtime git client', () => {
       settings: {
         activeRuntimeEnvironmentId: 'env-1',
         commitMessageAi,
-        agentCmdOverrides,
-        enableGitHubAttribution: true
+        agentCmdOverrides
       },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
@@ -655,7 +654,6 @@ describe('runtime git client', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
       },
       timeoutMs: 75_000

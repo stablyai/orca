@@ -4,7 +4,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -14,9 +13,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { useAppStore } from '@/store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
-import type { BrowserSessionProfile, BrowserViewportPresetId } from '../../../../shared/types'
+import type {
+  BrowserSessionProfile,
+  BrowserViewportPresetId
+} from '../../../../shared/browser-workspace-types'
 
 type DetectedBrowserEntry = {
   family: string
@@ -128,12 +131,6 @@ export function BrowserToolbarMenuDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent>
-              <DropdownMenuLabel className="font-normal">
-                {translate(
-                  'auto.components.browser.pane.BrowserToolbarMenu.c186b4d890',
-                  'Google requires signing in directly - imports skip it.'
-                )}
-              </DropdownMenuLabel>
               {detectedBrowsers.map((browser) =>
                 browser.profiles.length > 1 ? (
                   <DropdownMenuSub key={browser.family}>
@@ -177,6 +174,7 @@ export function BrowserToolbarMenuDropdown({
                   'From File…'
                 )}
               </DropdownMenuItem>
+              <BrowserCookieImportDisclosure />
             </DropdownMenuSubContent>
           </DropdownMenuPortal>
         </DropdownMenuSub>

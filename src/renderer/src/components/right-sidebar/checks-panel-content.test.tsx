@@ -2,7 +2,9 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { PRComment } from '../../../../shared/github/comment-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   buildMergeabilityRecalculationCommands,
   CheckJobLogTail,

@@ -336,7 +336,7 @@ export function createMainWindow(
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
+      syncTrafficLightPosition(mainWindow, 1.2 ** level)
     }
   })
 
