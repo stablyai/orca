@@ -22,16 +22,37 @@ const MAX_JOINABLE_SCAN_AGE_MS = 30_000
 // a walk per root (a dozen-plus at once), so a cap on live scans would shed healthy
 // roots and make skills vanish from the picker. A scan only becomes abandoned by
 // outliving MAX_JOINABLE_SCAN_AGE_MS without settling, which healthy roots never do,
-// so this budget is spent only by genuinely stalled mounts. Sized above the ~12 fixed
-// home roots so a single dead home dir can still be replaced once before shedding.
+// so this budget is spent only by genuinely stalled mounts.
+//
+// The budget is global and per-abandonment, not per-key: a single wedged root can
+// spend all of it on its own, one replacement per 30s window. That is the intended
+// shape — the number bounds how many stalled walks may be alive at once, whatever
+// mix of roots produced them. It is not a count of distinct roots.
 const MAX_ABANDONED_SCANS = 16
 
-/** Thrown instead of starting yet another walk while too many are stalled. */
+/**
+ * Thrown instead of starting yet another walk while too many are stalled.
+ *
+ * The key is deliberately not in the message: it carries an absolute workspace
+ * path, and this reaches a paired client and the renderer's error string.
+ */
 export class SkillScanShedError extends Error {
-  constructor(key: string) {
-    super(`Skill scan for ${key} was shed: too many stalled scans`)
+  constructor() {
+    super('Skill scan was shed: too many stalled scans')
     this.name = 'SkillScanShedError'
   }
+}
+
+/**
+ * True for the two ways a scan now ends without an answer: shed before it began,
+ * or aborted because it was abandoned for age. Callers that can degrade a single
+ * root should treat both the same — re-throwing either one fails a whole scan.
+ */
+export function isSkillRootUnavailableError(error: unknown): boolean {
+  return (
+    error instanceof SkillScanShedError ||
+    (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
+  )
 }
 
 /**
@@ -80,7 +101,7 @@ export class SkillScanCoalescer<T> {
         // Why leave the stalled entry in `pending`: it is still the only scan that
         // can answer this key, so keeping it lets the root recover on its own the
         // moment the mount responds, with no extra walk from us.
-        throw new SkillScanShedError(key)
+        throw new SkillScanShedError()
       }
       // Why: the replacement is what future callers read, so the walk this one
       // gives up on must stop issuing filesystem work rather than race it.

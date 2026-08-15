@@ -66,7 +66,11 @@ describe('findSkillFiles', () => {
     const root = join(base, 'skills')
     await writeFileAt(join(base, 'linked', 'deep', 'SKILL.md'))
     await mkdir(root, { recursive: true })
-    await symlink(join(base, 'linked'), join(root, 'via-link'), 'dir')
+    await symlink(
+      join(base, 'linked'),
+      join(root, 'via-link'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
     const controller = new AbortController()
     onStat = async (path) => {
       if (path.endsWith('via-link')) {

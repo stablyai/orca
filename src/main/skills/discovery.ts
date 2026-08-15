@@ -20,8 +20,8 @@ import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 import {
+  isSkillRootUnavailableError,
   SkillScanCoalescer,
-  SkillScanShedError,
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 
@@ -155,12 +155,16 @@ async function scanRootShared(
       }
     )
   } catch (error) {
-    if (!(error instanceof SkillScanShedError)) {
+    if (!isSkillRootUnavailableError(error)) {
       throw error
     }
     // Why degrade instead of rejecting: one unreachable root must not fail the
     // whole discovery and empty the picker for every healthy root beside it.
     // `unavailable` keeps that distinct from a root that genuinely is not there.
+    //
+    // The abort case matters as much as the shed one: callers already waiting on
+    // a scan that is later abandoned for age see it reject, and re-throwing here
+    // would turn one slow root into a failed discovery for every root.
     return { value: { exists: true, skills: [], unavailable: true }, cached: false }
   }
 }
