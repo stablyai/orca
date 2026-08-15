@@ -10,6 +10,7 @@ export type PlaneInstance = {
   id: string
   baseUrl: string
   workspaceSlug: string
+  authMode?: 'apiKey' | 'oauth'
   displayName: string
   email?: string | null
   userId?: string | null
@@ -29,6 +30,14 @@ export type PlaneConnectArgs = {
   baseUrl: string
   workspaceSlug: string
   apiKey: string
+}
+
+export type PlaneOAuthConnectArgs = {
+  baseUrl: string
+  workspaceSlug: string
+  clientId: string
+  clientSecret: string
+  scope?: string
 }
 
 export type PlaneProject = {

@@ -21,14 +21,18 @@ export async function planeFetch<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const timeoutSignal = AbortSignal.timeout(PLANE_REQUEST_TIMEOUT_MS)
+  const authHeader: Record<string, string> =
+    client.auth.kind === 'oauth'
+      ? { Authorization: `Bearer ${client.auth.accessToken}` }
+      : { 'X-API-Key': client.auth.apiKey }
   const response = await fetch(`${client.instance.baseUrl}${path}`, {
     ...init,
     signal: init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'X-API-Key': client.apiKey,
-      ...init.headers
+      ...authHeader,
+      ...(init.headers as Record<string, string> | undefined)
     }
   })
   if (!response.ok) {

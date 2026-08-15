@@ -22,7 +22,7 @@ function client(
   overrides: Partial<PlaneClientForInstance['instance']> = {}
 ): PlaneClientForInstance {
   return {
-    apiKey: 'token',
+    auth: { kind: 'apiKey', apiKey: 'token' },
     instance: {
       id: 'https://plane.example::acme',
       baseUrl: 'https://plane.example',

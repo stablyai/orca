@@ -2043,6 +2043,14 @@ const api = {
       workspaceSlug: string
       apiKey: string
     }): ReturnType<PreloadApi['plane']['connect']> => ipcRenderer.invoke('plane:connect', args),
+    connectOAuth: (args: {
+      baseUrl: string
+      workspaceSlug: string
+      clientId: string
+      clientSecret: string
+      scope?: string
+    }): ReturnType<PreloadApi['plane']['connectOAuth']> =>
+      ipcRenderer.invoke('plane:connectOAuth', args),
     disconnect: (args?: { instanceId?: string }): Promise<void> =>
       ipcRenderer.invoke('plane:disconnect', args),
     selectInstance: (args: {

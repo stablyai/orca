@@ -1,158 +1,28 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import {
-  getInstanceFilePath,
-  getInstanceTokenDir,
-  getInstanceTokenPath,
-  getOrcaDir
-} from './storage-paths'
-import {
-  CredentialDecryptionError,
-  credentialFileHasContent,
-  readStoredCredentialToken,
-  writeEncryptedCredential
-} from '../integration-credential-file'
 import { fetchPlaneViewer, instanceId, normalizeBaseUrl } from './api-request'
+import {
+  captureCredentialError,
+  deleteTokens,
+  ensureDirs,
+  getCredentialError,
+  getInstanceFile,
+  hasStoredToken,
+  readToken,
+  writeInstanceFile,
+  writeToken
+} from './instance-storage'
 import type {
   PlaneConnectArgs,
   PlaneConnectionStatus,
   PlaneInstance,
   PlaneInstanceSelection,
+  PlaneOAuthConnectArgs,
   PlaneViewer
 } from '../../shared/plane/types'
-
-type PlaneInstanceFile = {
-  version: 1
-  activeInstanceId: string | null
-  selectedInstanceId: PlaneInstanceSelection | null
-  instances: PlaneInstance[]
-}
+import { connectOAuth } from './oauth'
 
 export type PlaneClientForInstance = {
   instance: PlaneInstance
-  apiKey: string
-}
-
-const SERVICE = 'Plane'
-let cachedTokens = new Map<string, string>()
-const credentialErrors = new Map<string, string>()
-let cachedInstanceFile: PlaneInstanceFile | null = null
-let instanceFileLoadedFromDisk = false
-
-function ensureDirs(): void {
-  mkdirSync(getOrcaDir(), { recursive: true })
-  mkdirSync(getInstanceTokenDir(), { recursive: true })
-}
-
-function emptyInstanceFile(): PlaneInstanceFile {
-  return { version: 1, activeInstanceId: null, selectedInstanceId: null, instances: [] }
-}
-
-function normalizeInstance(input: unknown): PlaneInstance | null {
-  if (!input || typeof input !== 'object') {
-    return null
-  }
-  const raw = input as Record<string, unknown>
-  if (
-    typeof raw.id !== 'string' ||
-    typeof raw.baseUrl !== 'string' ||
-    typeof raw.workspaceSlug !== 'string' ||
-    typeof raw.displayName !== 'string'
-  ) {
-    return null
-  }
-  return {
-    id: raw.id,
-    baseUrl: raw.baseUrl,
-    workspaceSlug: raw.workspaceSlug,
-    displayName: raw.displayName,
-    email: typeof raw.email === 'string' ? raw.email : null,
-    userId: typeof raw.userId === 'string' ? raw.userId : null,
-    credentialRevision:
-      typeof raw.credentialRevision === 'number' && Number.isFinite(raw.credentialRevision)
-        ? raw.credentialRevision
-        : undefined
-  }
-}
-
-function hasStoredToken(id: string): boolean {
-  return cachedTokens.has(id) || credentialFileHasContent(getInstanceTokenPath(id))
-}
-
-function readInstanceFileFromDisk(): PlaneInstanceFile {
-  const path = getInstanceFilePath()
-  if (!existsSync(path)) {
-    return emptyInstanceFile()
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<PlaneInstanceFile>
-    const instances = Array.isArray(parsed.instances)
-      ? parsed.instances
-          .map((instance) => normalizeInstance(instance))
-          .filter((instance): instance is PlaneInstance => instance !== null)
-          .filter((instance) => hasStoredToken(instance.id))
-      : []
-    const activeInstanceId =
-      typeof parsed.activeInstanceId === 'string' &&
-      instances.some((instance) => instance.id === parsed.activeInstanceId)
-        ? parsed.activeInstanceId
-        : (instances[0]?.id ?? null)
-    const selectedInstanceId =
-      parsed.selectedInstanceId === 'all' ||
-      (typeof parsed.selectedInstanceId === 'string' &&
-        instances.some((instance) => instance.id === parsed.selectedInstanceId))
-        ? parsed.selectedInstanceId
-        : activeInstanceId
-    return { version: 1, activeInstanceId, selectedInstanceId, instances }
-  } catch {
-    return emptyInstanceFile()
-  }
-}
-
-function getInstanceFile(): PlaneInstanceFile {
-  if (!instanceFileLoadedFromDisk || !cachedInstanceFile) {
-    cachedInstanceFile = readInstanceFileFromDisk()
-    instanceFileLoadedFromDisk = true
-  }
-  return cachedInstanceFile
-}
-
-function writeInstanceFile(file: PlaneInstanceFile): void {
-  ensureDirs()
-  const instances = file.instances.filter((instance) => hasStoredToken(instance.id))
-  const selectableIds = new Set(instances.map((instance) => instance.id))
-  const activeInstanceId =
-    file.activeInstanceId && selectableIds.has(file.activeInstanceId)
-      ? file.activeInstanceId
-      : (instances[0]?.id ?? null)
-  const selectedInstanceId =
-    file.selectedInstanceId === 'all'
-      ? 'all'
-      : file.selectedInstanceId && selectableIds.has(file.selectedInstanceId)
-        ? file.selectedInstanceId
-        : activeInstanceId
-  cachedInstanceFile = { version: 1, activeInstanceId, selectedInstanceId, instances }
-  instanceFileLoadedFromDisk = true
-  writeFileSync(getInstanceFilePath(), JSON.stringify(cachedInstanceFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-}
-
-function readToken(instanceId: string): string | null {
-  const cached = cachedTokens.get(instanceId)
-  if (cached) {
-    return cached
-  }
-  const path = getInstanceTokenPath(instanceId)
-  if (!existsSync(path)) {
-    return null
-  }
-  const token = readStoredCredentialToken(SERVICE, readFileSync(path))
-  if (token) {
-    cachedTokens.set(instanceId, token)
-    credentialErrors.delete(instanceId)
-  }
-  return token
+  auth: { kind: 'apiKey'; apiKey: string } | { kind: 'oauth'; accessToken: string }
 }
 
 export async function connect(
@@ -168,17 +38,17 @@ export async function connect(
     const id = instanceId(baseUrl, workspaceSlug)
     const viewer = await fetchPlaneViewer({
       instance: { id, baseUrl, workspaceSlug, displayName: workspaceSlug },
-      apiKey
+      auth: { kind: 'apiKey', apiKey }
     })
     ensureDirs()
-    cachedTokens.set(id, apiKey)
-    writeEncryptedCredential(SERVICE, getInstanceTokenPath(id), apiKey)
+    writeToken(id, apiKey)
     const file = getInstanceFile()
     const existing = file.instances.filter((instance) => instance.id !== id)
     const instance: PlaneInstance = {
       id,
       baseUrl,
       workspaceSlug,
+      authMode: 'apiKey',
       displayName: viewer.displayName || workspaceSlug,
       email: viewer.email ?? null,
       userId: viewer.id ?? null,
@@ -196,16 +66,21 @@ export async function connect(
   }
 }
 
+export async function connectWithOAuth(
+  args: PlaneOAuthConnectArgs
+): Promise<{ ok: true; viewer: PlaneViewer } | { ok: false; error: string }> {
+  return connectOAuth(args, {
+    getInstanceFile,
+    writeInstanceFile,
+    ensureDirs,
+    setToken: writeToken
+  })
+}
+
 export function disconnect(instanceId?: string): void {
   const file = getInstanceFile()
   const ids = instanceId ? [instanceId] : file.instances.map((instance) => instance.id)
-  for (const id of ids) {
-    cachedTokens.delete(id)
-    credentialErrors.delete(id)
-    try {
-      unlinkSync(getInstanceTokenPath(id))
-    } catch {}
-  }
+  deleteTokens(ids)
   const instances = file.instances.filter((instance) => !ids.includes(instance.id))
   const activeInstanceId = instances.some((instance) => instance.id === file.activeInstanceId)
     ? file.activeInstanceId
@@ -257,7 +132,7 @@ export function getStatus(): PlaneConnectionStatus {
     viewer: active
       ? { id: active.userId ?? undefined, displayName: active.displayName, email: active.email }
       : null,
-    credentialError: activeInstanceId ? (credentialErrors.get(activeInstanceId) ?? null) : null
+    credentialError: activeInstanceId ? getCredentialError(activeInstanceId) : null
   }
 }
 
@@ -283,15 +158,20 @@ export function getClient(instanceId?: string): PlaneClientForInstance {
     throw new Error('Plane is not connected')
   }
   try {
-    const apiKey = readToken(instance.id)
-    if (!apiKey) {
-      throw new Error('Plane API key is missing')
+    const token = readToken(instance.id)
+    if (!token) {
+      throw new Error('Plane credential is missing')
     }
-    return { instance, apiKey }
+    if (instance.authMode === 'oauth') {
+      const parsed = JSON.parse(token) as { accessToken?: unknown }
+      if (typeof parsed.accessToken !== 'string' || !parsed.accessToken) {
+        throw new Error('Plane OAuth token is missing')
+      }
+      return { instance, auth: { kind: 'oauth', accessToken: parsed.accessToken } }
+    }
+    return { instance, auth: { kind: 'apiKey', apiKey: token } }
   } catch (error) {
-    if (error instanceof CredentialDecryptionError) {
-      credentialErrors.set(instance.id, error.message)
-    }
+    captureCredentialError(instance.id, error)
     throw error
   }
 }

@@ -14,6 +14,7 @@ import type {
   PlaneListFilter,
   PlaneMember,
   PlaneModule,
+  PlaneOAuthConnectArgs,
   PlaneProject,
   PlaneState,
   PlaneViewer,
@@ -74,6 +75,8 @@ async function localCall<T>(method: string, params?: unknown): Promise<T> {
       return api.connect(params as PlaneConnectArgs) as Promise<T>
     case 'plane.disconnect':
       return api.disconnect(params as { instanceId?: string } | undefined) as Promise<T>
+    case 'plane.connectOAuth':
+      return api.connectOAuth(params as PlaneOAuthConnectArgs) as Promise<T>
     case 'plane.selectInstance':
       return api.selectInstance(params as { instanceId: string }) as Promise<T>
     case 'plane.status':
@@ -141,6 +144,10 @@ export const planeConnect = (
   settings: RuntimePlaneSettings,
   args: PlaneConnectArgs
 ): Promise<PlaneConnectResult> => planeCall(settings, 'plane.connect', args)
+export const planeConnectOAuth = (
+  settings: RuntimePlaneSettings,
+  args: PlaneOAuthConnectArgs
+): Promise<PlaneConnectResult> => planeCall(settings, 'plane.connectOAuth', args)
 export const planeDisconnect = (
   settings: RuntimePlaneSettings,
   instanceId?: string

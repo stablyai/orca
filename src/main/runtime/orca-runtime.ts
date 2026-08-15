@@ -927,6 +927,7 @@ import {
 } from '../jira/issues'
 import {
   connect as connectPlane,
+  connectWithOAuth as connectPlaneOAuth,
   disconnect as disconnectPlane,
   getStatus as getPlaneStatus,
   selectInstance as selectPlaneInstance,
@@ -961,7 +962,8 @@ import {
 import type {
   PlaneConnectArgs,
   PlaneCreateIssueArgs,
-  PlaneIssueUpdate
+  PlaneIssueUpdate,
+  PlaneOAuthConnectArgs
 } from '../../shared/plane/types'
 import {
   clearProjectItemFieldValue,
@@ -36660,6 +36662,10 @@ export class OrcaRuntimeService {
 
   planeConnect(args: PlaneConnectArgs): ReturnType<typeof connectPlane> {
     return connectPlane(args)
+  }
+
+  planeConnectOAuth(args: PlaneOAuthConnectArgs): ReturnType<typeof connectPlaneOAuth> {
+    return connectPlaneOAuth(args)
   }
 
   planeDisconnect(instanceId?: string): { ok: true } {

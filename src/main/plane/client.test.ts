@@ -72,4 +72,29 @@ describe('Plane client storage', () => {
       instances: [{ id: 'plane-1' }]
     })
   })
+
+  it('returns bearer clients for stored OAuth instances', async () => {
+    instanceFile.value = JSON.stringify({
+      version: 1,
+      activeInstanceId: 'plane-oauth',
+      selectedInstanceId: 'plane-oauth',
+      instances: [
+        {
+          id: 'plane-oauth',
+          baseUrl: 'https://plane.example',
+          workspaceSlug: 'acme',
+          displayName: 'Acme',
+          authMode: 'oauth'
+        }
+      ]
+    })
+    tokenFiles.clear()
+    tokenFiles.set(
+      '/tmp/orca-plane-test/plane-tokens/plane-oauth.enc',
+      Buffer.from(JSON.stringify({ accessToken: 'oauth-token' }))
+    )
+    const { getClient } = await import('./client')
+
+    expect(getClient().auth).toEqual({ kind: 'oauth', accessToken: 'oauth-token' })
+  })
 })
