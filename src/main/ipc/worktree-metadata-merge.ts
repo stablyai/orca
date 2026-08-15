@@ -75,6 +75,9 @@ export function mergeWorktree(
     // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
     // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,
+    // Why: native todos are persisted on WorktreeMeta the same way as diff
+    // comments, so forward them verbatim for the renderer store to mirror.
+    todos: meta?.todos,
     mobileDiffReview: meta?.mobileDiffReview
   }
 }

@@ -247,6 +247,7 @@ import {
   stripOrcaProvenanceMetaUpdates,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
+import { WorktreeScopedTodoSchema } from '../runtime/rpc/methods/worktree-schemas'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -333,6 +334,26 @@ function resolveWorktreeRemovalOwnerHostId(
     store.getWorktreeMeta(worktreeId)?.hostId ??
     (repo ? getRepoExecutionHostId(repo) : fallbackHostId)
   )
+}
+
+// Why: validate each todo item at the IPC boundary so a skewed renderer or
+// other caller cannot persist malformed todos. Filter invalid items rather than
+// rejecting the whole batch; drop a non-array shape so existing todos survive.
+function sanitizeWorktreeMetaTodosUpdate(updates: Partial<WorktreeMeta>): Partial<WorktreeMeta> {
+  if (!('todos' in updates) || updates.todos === undefined) {
+    return updates
+  }
+  const raw = updates.todos as unknown
+  if (!Array.isArray(raw)) {
+    const { todos: _todos, ...rest } = updates
+    return rest
+  }
+  return {
+    ...updates,
+    todos: (raw as unknown[]).filter(
+      (item) => WorktreeScopedTodoSchema.safeParse(item).success
+    ) as WorktreeMeta['todos']
+  }
 }
 
 function removeWorktreeMetadataAndTransientState(
@@ -990,6 +1011,7 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
+    todos: meta.todos,
     mobileDiffReview: meta.mobileDiffReview
   }
 }
@@ -3308,7 +3330,9 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
-      const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
+      const validatedUpdates = sanitizeWorktreeMetaTodosUpdate(
+        normalizeLinkedWorkItemFields(args.updates)
+      )
       const updates =
         validatedUpdates.displayName !== undefined
           ? {

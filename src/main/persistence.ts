@@ -910,7 +910,8 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
     tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
-    tab === 'ports'
+    tab === 'ports' ||
+    tab === 'todos'
   ) {
     return tab
   }
@@ -5090,6 +5091,7 @@ export class Store {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
+        | 'todos'
       >
     > & {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

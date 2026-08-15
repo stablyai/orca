@@ -2252,6 +2252,7 @@ function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: strin
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
+
 function listRuntimeFolderWorkspaces(
   store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'setWorktreeMeta'>,
   repo: Repo
@@ -19575,6 +19576,7 @@ export class OrcaRuntimeService {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'todos'
       >
     > & {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

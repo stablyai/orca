@@ -10997,7 +10997,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "Agent",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "todosTab": "Todos"
           },
           "right": {
             "panel": {
@@ -11464,6 +11465,20 @@
             "mayBeSlower": "遅くなる可能性あり",
             "slowest": "最も低速",
             "unlimited": "無制限"
+          },
+          "TodosPanel": {
+            "worktreeSection": "This worktree",
+            "worktreeEmpty": "No todos for this worktree yet.",
+            "addPlaceholder": "Add a todo…",
+            "noWorktree": "Open a worktree to track todos.",
+            "projectSection": "Project",
+            "projectEmpty": "No project todos yet."
+          },
+          "todos": {
+            "TodoRow": {
+              "toggle": "Toggle todo",
+              "delete": "Delete todo"
+            }
           }
         }
       },
