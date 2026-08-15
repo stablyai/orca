@@ -191,7 +191,7 @@ function closingMarkupTagNames(value: string): Set<string> {
   let cursor = 0
   while (cursor < value.length) {
     const start = value.indexOf('<', cursor)
-    if (start < 0) {
+    if (start === -1) {
       return names
     }
     const end = findMobileMarkdownMarkupTagEnd(value, start + 1)
@@ -228,7 +228,7 @@ export function stripMobileMarkdownMarkupTags(value: string): string {
   const closingTagNames = closingMarkupTagNames(value)
   while (cursor < value.length) {
     const start = value.indexOf('<', cursor)
-    if (start < 0) {
+    if (start === -1) {
       return output + value.slice(cursor)
     }
     output += value.slice(cursor, start)
@@ -261,7 +261,7 @@ export function stripMobileMarkdownMarkupTags(value: string): string {
         !/[-:]/.test(name) &&
         !knownMarkupTagNames.has(lowerName) &&
         !closingTagNames.has(lowerName)
-      if (isNestedGeneric && nestedStart >= 0) {
+      if (isNestedGeneric && nestedStart !== -1) {
         output += value.slice(start, nestedStart)
         cursor = nestedStart
         continue

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinuxPackageInstallRecovery } from '../../../shared/types'
+import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
 
@@ -126,6 +126,19 @@ describe('UpdateCard Windows signature failures', () => {
     expect(screen.getByRole('button', { name: 'Hide details' }).getAttribute('aria-expanded')).toBe(
       'true'
     )
+  })
+
+  // An install failure now carries the updater's own text, so it can reach these branches too.
+  it('routes a signature verdict raised during install to the security-stop card', () => {
+    const message =
+      'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
+    renderAfterAvailableStatus()
+
+    act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
+
+    expect(screen.getByText("Update Wasn't Installed")).toBeTruthy()
+    // The generic restart advice must not be prefixed onto a security stop.
+    expect(screen.queryByText(/Quit and reopen Orca/)).toBeNull()
   })
 })
 
@@ -258,6 +271,18 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(screen.queryByText('Automatic Install Failed')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retry Download' }))
     expect(download).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the appended install cause behind the generic card details', () => {
+    const message =
+      'Could not start the update installer. Orca remains open. (Command failed: pkexec must be setuid root)'
+    renderAfterAvailableStatus()
+
+    act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
+
+    expect(screen.getByText('Update Error')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByText(message)).toBeTruthy()
   })
 
   it('leaves the HTTP/1.1 compatibility branch untouched', () => {

@@ -1,5 +1,6 @@
 import React from 'react'
 import { DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
 /**
@@ -34,8 +35,10 @@ export function FilterToggleRow({
       aria-label={ariaLabel}
       onClick={() => onChange(!checked)}
       className={cn(
-        'flex w-full items-center justify-between gap-2 rounded-[5px] px-2 py-1.5 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        indented && 'pl-6'
+        // Why pl-* and not px-2 + pl-6: Tailwind v4 emits px as padding-inline,
+        // which outranks a physical pl-6 override and flattens the indent.
+        'flex w-full items-center justify-between gap-2 rounded-[5px] py-1.5 pr-2 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        indented ? 'pl-7' : 'pl-2'
       )}
     >
       <span
@@ -49,23 +52,12 @@ export function FilterToggleRow({
       </span>
       <span className="inline-flex items-center gap-2">
         {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
-        <span
-          aria-hidden
-          className={cn(
-            'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
-            checked ? 'bg-primary' : 'bg-muted-foreground/30'
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
-              checked && 'translate-x-2.5'
-            )}
-          />
-        </span>
+        <SwitchIndicator
+          checked={checked}
+          size="compact"
+          className="data-[state=checked]:bg-primary"
+        />
       </span>
     </button>
   )
 }
-
-export default FilterToggleRow

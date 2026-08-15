@@ -363,6 +363,31 @@ describePosix('local PTY shell-ready launch config', () => {
     vi.restoreAllMocks()
   })
 
+  it('wraps fish launches with a fish_prompt shell-ready marker init command', async () => {
+    // Why: markerless fish resolved the ready barrier instantly and blind-wrote agent
+    // launch commands while fish/Starship still initialized (STA-3417).
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    const config = getShellReadyLaunchConfig('/opt/homebrew/bin/fish')
+
+    expect(config.supportsReadyMarker).toBe(true)
+    expect(config.env).toEqual({ ORCA_SHELL_READY_MARKER: '1' })
+    expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
+    const init = config.args?.[2] ?? ''
+    expect(init).toContain('--on-event fish_prompt')
+    // Why `builtin`: a user-defined printf function would swallow the marker.
+    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready\\007"')
+    expect(init).toContain('functions -e __orca_shell_ready_marker')
+  })
+
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
+
+    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+  })
+
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {
     // Why: mirrors the daemon path — guards the same zsh recursion loop for renderer/local PTYs spawned inside an Orca terminal.
     const previousZdotdir = process.env.ZDOTDIR
@@ -460,6 +485,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -522,6 +548,12 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
+    }
   })
 
   // Why: issue #2422 — without OSC 133 C/D markers, bash sessions kept the worktree spinner "working" ~30min after the agent exited.
@@ -784,8 +816,6 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
-      // Why: this test isolates zsh top-level path scoping, not attribution shim ordering.
-      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(
@@ -824,7 +854,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(movedUserData, 'shell-ready', 'zsh')
 
@@ -872,7 +901,6 @@ path=(/custom/bin $path)
         }
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
-        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
         delete cleanEnv.USER_ZSHRC_LOADED
         cleanEnv.ZDOTDIR = join(nonAsciiUserData, 'shell-ready', 'zsh')
 

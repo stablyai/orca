@@ -1,6 +1,11 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
-import { resetWebglTextureAtlas } from './pane-webgl-renderer'
+import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
+
+type PaneGetter = () => Iterable<ManagedPaneInternal>
+
+const pendingRevealRepaints = new Set<PaneGetter>()
+let revealRepaintScheduled = false
 
 function scheduleSettledFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
@@ -30,6 +35,34 @@ function forEachPaneOnSettledFrame(
   })
 }
 
+function flushPaneRevealRepaints(): void {
+  revealRepaintScheduled = false
+  const paneGetters = Array.from(pendingRevealRepaints)
+  pendingRevealRepaints.clear()
+  const livePanes = new Set<ManagedPaneInternal>()
+
+  for (const getPanes of paneGetters) {
+    try {
+      for (const pane of getPanes()) {
+        livePanes.add(pane)
+      }
+    } catch {
+      /* ignore — a manager may be destroyed while its repaint is pending */
+    }
+  }
+
+  for (const pane of livePanes) {
+    try {
+      reattachWebglIfNeeded(pane)
+    } catch {
+      /* ignore — one pane's teardown must not block global recovery */
+    }
+  }
+  if (livePanes.size > 0) {
+    resetAndRefreshAllTerminalWebglAtlases('settled-reveal')
+  }
+}
+
 /**
  * Repaints a revealed tab's panes from their xterm buffers.
  *
@@ -37,14 +70,17 @@ function forEachPaneOnSettledFrame(
  * per-cell model without ever presenting a frame. At reveal the model diff
  * reports those cells unchanged, so plain refreshes skip them and the canvas
  * keeps compositing pre-hide pixels until a selection or resize rebuilds the
- * model. Clearing the model per pane — after (re)attach, once layout has
- * settled — forces a full rebuild from the buffer without any PTY resize.
+ * model. Once layout settles, reattach every revealed renderer before one
+ * registry-wide atlas reset so no delayed pane-local clear can invalidate a
+ * sibling terminal's rebuilt model.
  */
 export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneInternal>): void {
-  forEachPaneOnSettledFrame(getPanes, (pane) => {
-    reattachWebglIfNeeded(pane)
-    resetWebglTextureAtlas(pane)
-  })
+  pendingRevealRepaints.add(getPanes)
+  if (revealRepaintScheduled) {
+    return
+  }
+  revealRepaintScheduled = true
+  scheduleSettledFrame(flushPaneRevealRepaints)
 }
 
 /**

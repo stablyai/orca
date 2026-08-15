@@ -56,7 +56,7 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
         continue
       }
       const idx = line.translateToString(true).indexOf(needle)
-      if (idx >= 0) {
+      if (idx !== -1) {
         hit = { row, col: idx }
         break
       }

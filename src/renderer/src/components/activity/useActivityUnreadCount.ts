@@ -60,8 +60,22 @@ export function countActivityUnread(
         }
       }
     }
-    if (isUnreadAgentState(entry.state) && ackAt < entry.stateStartedAt) {
+    // Why: a session-boundary done is an idle connect (STA-3386), not an event to read.
+    // History never contains a boundary, but it DOES keep the real completion a boundary
+    // displaced (the slice pushes it on done→done), so sidebar-badge mode — which skips the
+    // history loop above — must still count that displaced completion or the badge silently
+    // drops an unacknowledged finish the moment its session is resumed.
+    if (
+      isUnreadAgentState(entry.state) &&
+      entry.sessionBoundary !== true &&
+      ackAt < entry.stateStartedAt
+    ) {
       count += 1
+    } else if (mode === 'sidebar-badge' && entry.state === 'done' && entry.sessionBoundary) {
+      const displaced = entry.stateHistory.at(-1)
+      if (displaced && isUnreadAgentState(displaced.state) && ackAt < displaced.startedAt) {
+        count += 1
+      }
     }
   }
 

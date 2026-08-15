@@ -114,7 +114,7 @@ async function rightClickActiveTerminalSurface(page: Page): Promise<void> {
 
 async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ BrowserWindow, ipcMain }) => {
-    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => unknown
     const global = globalThis as unknown as {
       __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
     }
@@ -152,7 +152,7 @@ async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): 
 
 async function restoreClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ ipcMain }) => {
-    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => unknown
     const global = globalThis as unknown as {
       __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
     }

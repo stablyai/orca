@@ -111,11 +111,15 @@ describe('issue source operations', () => {
         title: 'Use upstream issues',
         state: 'open',
         html_url: 'https://github.com/stablyai/orca/issues/923',
-        labels: []
+        labels: [],
+        body: 'The issue body'
       })
     })
 
-    await expect(getIssue('/repo-root', 923)).resolves.toMatchObject({ number: 923 })
+    await expect(getIssue('/repo-root', 923)).resolves.toMatchObject({
+      number: 923,
+      description: 'The issue body'
+    })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '--cache', '300s', 'repos/stablyai/orca/issues/923'],
       { cwd: '/repo-root', host: 'github.com' }
@@ -191,6 +195,7 @@ describe('issue source operations', () => {
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         id: 9,
+        node_id: 'IC_enterprise_9',
         user: { login: 'octo', avatar_url: '', type: 'User' },
         body: 'Enterprise comment',
         created_at: '2026-07-16T00:00:00.000Z',
@@ -204,7 +209,10 @@ describe('issue source operations', () => {
         repo: 'orca',
         host: 'github.acme-corp.com'
       })
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'IC_enterprise_9' }
+    })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [

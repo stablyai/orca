@@ -1,5 +1,4 @@
-import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { isTextBlock } from './mobile-native-chat-blocks'
+import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 
 /** Concatenate a message's text blocks into a single copyable string. Tool
  *  calls/results and image refs are skipped — Copy is for the agent's prose. */

@@ -20,16 +20,12 @@ import {
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from './repo-header-action-button-class'
 import { getWorktreeLineageAncestors } from './worktree-lineage-projection'
-import type {
-  DetectedWorktree,
-  Project,
-  ProjectHostSetup,
-  FolderWorkspace,
-  Repo,
-  ProjectGroup,
-  Worktree,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
@@ -65,6 +61,13 @@ const repoMap = new Map([[repo.id, repo]])
 
 function readWorktreeListSource(): string {
   return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+}
+
+function readSectionHeaderRowSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./worktree-list/worktree-section-header-row.tsx', import.meta.url)),
+    'utf8'
+  )
 }
 
 const remoteRepo: Repo = {
@@ -3989,7 +3992,7 @@ describe('buildRows workspace lineage nesting', () => {
 
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).not.toContain('leading-none capitalize')
   })
@@ -4009,7 +4012,7 @@ describe('WorktreeList header styles', () => {
   })
 
   it('resolves repo header color from project group headers only', () => {
-    const source = readWorktreeListSource()
+    const source = readSectionHeaderRowSource()
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')

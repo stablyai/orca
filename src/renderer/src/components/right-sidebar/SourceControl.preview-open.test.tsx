@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
-  GitStatusEntry
-} from '../../../../shared/types'
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {
@@ -156,6 +156,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitStatusByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: [] },
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
+    gitBranchLineTotalByWorktree: {},
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,

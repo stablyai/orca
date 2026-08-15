@@ -45,7 +45,8 @@ describe('mobile session tab activation', () => {
       tabId: 'tab-1',
       leafId: 'leaf-1',
       notifyClients: false as const,
-      navigation: 'caller' as const
+      navigation: 'caller' as const,
+      intent: 'user' as const
     }
 
     await expect(activateMobileSessionTab(clientWith(sendRequest), params)).resolves.toMatchObject({

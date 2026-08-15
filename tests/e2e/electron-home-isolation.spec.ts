@@ -14,12 +14,13 @@ async function readElectronHomeState(electronApp: ElectronApplication) {
       home: process.env.HOME,
       userProfile: process.env.USERPROFILE,
       codexHome: process.env.CODEX_HOME,
-      orcaCodexHome: process.env.ORCA_CODEX_HOME,
-      realHomeFlag: process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME
+      orcaCodexHome: process.env.ORCA_CODEX_HOME
     }
   })
 }
 
+// Codex always routes to the real home now, so this single case covers both the
+// HOME boundary and that real-home routing lands inside the disposable profile.
 test('isolates Electron and Codex from the developer home by default', async ({ electronApp }) => {
   const state = await readElectronHomeState(electronApp)
   const expectedHome = path.join(state.userDataDir!, 'home')
@@ -30,17 +31,4 @@ test('isolates Electron and Codex from the developer home by default', async ({ 
   expect(state.userProfile).toBe(expectedHome)
   expect(state.codexHome).toBeUndefined()
   expect(state.orcaCodexHome).toBeUndefined()
-  expect(state.realHomeFlag).toBe('0')
-})
-
-test.describe('sandboxed real-home routing', () => {
-  test.use({ codexRealHomeEnabled: true })
-
-  test('keeps flag-ON routing inside the disposable home', async ({ electronApp }) => {
-    const state = await readElectronHomeState(electronApp)
-
-    expect(state.appHome).toBe(path.join(state.userDataDir!, 'home'))
-    expect(state.nodeHome).toBe(path.join(state.userDataDir!, 'home'))
-    expect(state.realHomeFlag).toBe('1')
-  })
 })

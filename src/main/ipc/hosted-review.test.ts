@@ -13,6 +13,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 const {
   handleMock,
   createHostedReviewMock,
+  createStackedHostedReviewMock,
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
+  createStackedHostedReviewMock: vi.fn(),
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
@@ -35,6 +37,10 @@ vi.mock('electron', () => ({
 vi.mock('../source-control/hosted-review-creation', () => ({
   createHostedReview: createHostedReviewMock,
   getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
+}))
+
+vi.mock('../source-control/stacked-hosted-review-creation', () => ({
+  createStackedHostedReview: createStackedHostedReviewMock
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
@@ -87,6 +93,7 @@ describe('registerHostedReviewHandlers', () => {
     setPlatform(ORIGINAL_PLATFORM)
     handleMock.mockReset()
     createHostedReviewMock.mockReset()
+    createStackedHostedReviewMock.mockReset()
     getHostedReviewCreationEligibilityMock.mockReset()
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
@@ -382,6 +389,35 @@ describe('registerHostedReviewHandlers', () => {
         meta: { prNumber: 42, prUrl: 'https://github.com/acme/orca/pull/42' }
       })
     )
+  })
+
+  it('routes stacked creation through its dedicated SSH-safe handler', async () => {
+    createStackedHostedReviewMock.mockResolvedValueOnce({
+      ok: true,
+      number: 43,
+      url: 'https://github.com/acme/orca/pull/43',
+      stackNumber: 50,
+      parentReview: { number: 42, url: 'https://github.com/acme/orca/pull/42' }
+    })
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:createStacked'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath,
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child'
+    })
+
+    expect(createStackedHostedReviewMock).toHaveBeenCalledWith(
+      worktreePath,
+      expect.objectContaining({ base: 'stack/parent', head: 'stack/child' }),
+      'ssh-1',
+      {}
+    )
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
   it('rejects creation when repoId and repoPath point at different registered repos', async () => {

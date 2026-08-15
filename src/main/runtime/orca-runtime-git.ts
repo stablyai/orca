@@ -2,21 +2,21 @@
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
   GitStagingArea,
   GitStatusResult,
-  GitUpstreamStatus,
-  GitWorktreeInfo,
-  GlobalSettings,
-  Repo,
-  TuiAgent,
-  Worktree
-} from '../../shared/types'
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import { assertGitDiffWithinTransportBudget } from '../../shared/git-diff-transport-budget'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import {
@@ -79,17 +79,18 @@ import type {
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
-import { gitExecFileAsync } from '../git/runner'
+import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/runner'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
+import {
+  loadPullRequestLinkedIssue,
+  type PullRequestLinkedIssueMeta
+} from '../source-control/pull-request-linked-issue'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
-  >
+  Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>
 > & {
   commitMessageDiscoveryHostKey?: string
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
@@ -171,6 +172,7 @@ export type RuntimeGitCommandHost = {
    * unlinked.
    */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
+  getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
 }
 
 export class RuntimeGitCommands {
@@ -180,6 +182,19 @@ export class RuntimeGitCommands {
     const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
     // Why: `undefined` means the host could not answer, not "unlinked".
     return live === undefined ? target.worktree.linkedIssue : live
+  }
+
+  private linkedIssueMetaForTarget(target: RuntimeGitTarget): PullRequestLinkedIssueMeta | null {
+    const live = this.host.getWorktreeLinkedIssueMeta?.(target.worktree.id)
+    if (live !== undefined) {
+      return live
+    }
+    const liveGitHubIssue = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
+    return {
+      linkedIssue: liveGitHubIssue === undefined ? target.worktree.linkedIssue : liveGitHubIssue,
+      linkedGitLabIssue: target.worktree.linkedGitLabIssue,
+      linkedWorkItem: target.worktree.linkedWorkItem
+    }
   }
 
   async getRuntimeGitStatus(
@@ -327,11 +342,14 @@ export class RuntimeGitCommands {
     return listLocalBranches(target.worktree.path, localGitOptionsForTarget(target))
   }
 
+  // Why: the budget is enforced here, after both branches, so an SSH payload forwarded verbatim from
+  // an older relay is capped too.
   async getRuntimeGitDiff(
     worktreeSelector: string,
     filePath: string,
     staged: boolean,
-    compareAgainstHead?: boolean
+    compareAgainstHead?: boolean,
+    maxContentBytes?: number
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
@@ -340,14 +358,20 @@ export class RuntimeGitCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getDiff(target.worktree.path, relativePath, staged, compareAgainstHead)
+      return assertGitDiffWithinTransportBudget(
+        await provider.getDiff(target.worktree.path, relativePath, staged, compareAgainstHead),
+        maxContentBytes
+      )
     }
-    return getDiff(
-      target.worktree.path,
-      relativePath,
-      staged,
-      compareAgainstHead,
-      localGitOptionsForTarget(target)
+    return assertGitDiffWithinTransportBudget(
+      await getDiff(
+        target.worktree.path,
+        relativePath,
+        staged,
+        compareAgainstHead,
+        localGitOptionsForTarget(target)
+      ),
+      maxContentBytes
     )
   }
 
@@ -508,7 +532,8 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     compare: { mergeBase: string; headOid: string },
     filePath: string,
-    oldPath?: string
+    oldPath?: string,
+    maxContentBytes?: number
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
@@ -520,34 +545,40 @@ export class RuntimeGitCommands {
       }
       const results = await provider.getBranchDiff(target.worktree.path, compare.mergeBase, {
         includePatch: true,
+        headOid: compare.headOid,
         filePath: relativePath,
         oldPath: oldRelativePath
       })
-      return (
+      return assertGitDiffWithinTransportBudget(
         results[0] ?? {
           kind: 'text',
           originalContent: '',
           modifiedContent: '',
           originalIsBinary: false,
           modifiedIsBinary: false
-        }
+        },
+        maxContentBytes
       )
     }
-    return getBranchDiff(
-      target.worktree.path,
-      {
-        mergeBase: compare.mergeBase,
-        headOid: compare.headOid,
-        filePath: relativePath,
-        oldPath: oldRelativePath
-      },
-      localGitOptionsForTarget(target)
+    return assertGitDiffWithinTransportBudget(
+      await getBranchDiff(
+        target.worktree.path,
+        {
+          mergeBase: compare.mergeBase,
+          headOid: compare.headOid,
+          filePath: relativePath,
+          oldPath: oldRelativePath
+        },
+        localGitOptionsForTarget(target)
+      ),
+      maxContentBytes
     )
   }
 
   async getRuntimeGitCommitDiff(
     worktreeSelector: string,
-    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string },
+    maxContentBytes?: number
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeRelativePath(args.filePath)
@@ -557,22 +588,28 @@ export class RuntimeGitCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getCommitDiff(target.worktree.path, {
-        commitOid: args.commitOid,
-        parentOid: args.parentOid,
-        filePath: relativePath,
-        oldPath: oldRelativePath
-      })
+      return assertGitDiffWithinTransportBudget(
+        await provider.getCommitDiff(target.worktree.path, {
+          commitOid: args.commitOid,
+          parentOid: args.parentOid,
+          filePath: relativePath,
+          oldPath: oldRelativePath
+        }),
+        maxContentBytes
+      )
     }
-    return getCommitDiff(
-      target.worktree.path,
-      {
-        commitOid: args.commitOid,
-        parentOid: args.parentOid,
-        filePath: relativePath,
-        oldPath: oldRelativePath
-      },
-      localGitOptionsForTarget(target)
+    return assertGitDiffWithinTransportBudget(
+      await getCommitDiff(
+        target.worktree.path,
+        {
+          commitOid: args.commitOid,
+          parentOid: args.parentOid,
+          filePath: relativePath,
+          oldPath: oldRelativePath
+        },
+        localGitOptionsForTarget(target)
+      ),
+      maxContentBytes
     )
   }
 
@@ -722,6 +759,14 @@ export class RuntimeGitCommands {
         error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
       }
     }
+    const issueMeta = this.linkedIssueMetaForTarget(target)
+    const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+      meta: issueMeta,
+      provider: input.provider,
+      repoPath: target.worktree.path,
+      connectionId: target.connectionId,
+      localGitOptions: localGitOptionsForTarget(target)
+    })
     let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
     try {
       const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -761,8 +806,12 @@ export class RuntimeGitCommands {
     if (!context) {
       return { success: false, error: 'No branch changes to summarize.' }
     }
-    // Why: both SSH and local branches share this context, so one attach covers each.
-    context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
+    const linkedIssueDetails = await linkedIssueDetailsPromise
+    context = {
+      ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+      ...(input.provider ? { provider: input.provider } : {}),
+      ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+    }
 
     if (target.connectionId) {
       return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
@@ -955,6 +1004,7 @@ export class RuntimeGitCommands {
       }
       return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
     }
+    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
     return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
   }
 
@@ -970,6 +1020,7 @@ export class RuntimeGitCommands {
       }
       return provider.getRemoteCommitUrl(target.worktree.path, sha)
     }
+    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
     return getRemoteCommitUrl(target.worktree.path, sha)
   }
 }

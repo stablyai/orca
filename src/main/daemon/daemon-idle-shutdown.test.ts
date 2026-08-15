@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
+import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { PROTOCOL_VERSION } from './types'
@@ -171,25 +172,27 @@ describe('current daemon lifecycle retirement', () => {
     await server.start()
   }
 
-  it('retires immediately after an unexpected empty disconnect and removes owned artifacts', async () => {
-    const launchNonce = 'launch-a'
-    writeFileSync(
-      pidPath,
-      serializeDaemonPidFile({ pid: process.pid, startedAtMs: null, launchNonce })
-    )
-    await startServer({ launchNonce })
-    const client = new DaemonClient({ socketPath, tokenPath })
-    await client.ensureConnected()
-    client.disconnect()
-    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
+  it.skipIf(process.platform === 'win32')(
+    'retires immediately after an unexpected empty disconnect and removes owned artifacts',
+    async () => {
+      const launchNonce = 'launch-a'
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({ pid: process.pid, startedAtMs: null, launchNonce })
+      )
+      await startServer({ launchNonce })
+      const client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      client.disconnect()
+      await waitFor(() => onIdleShutdown.mock.calls.length === 1)
 
-    expect(clock.pendingCount).toBe(0)
-    expect(existsSync(tokenPath)).toBe(false)
-    expect(existsSync(pidPath)).toBe(false)
-    if (process.platform !== 'win32') {
-      expect(existsSync(socketPath)).toBe(false)
+      expect(clock.pendingCount).toBe(0)
+      expect(existsSync(tokenPath)).toBe(false)
+      expect(existsSync(pidPath)).toBe(false)
+      // Why: the dead entry remains for the next publisher to replace.
+      expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
     }
-  })
+  )
 
   it('retires a fresh daemon that is never adopted by a full client pair', async () => {
     await startServer()

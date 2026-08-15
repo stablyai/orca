@@ -2,7 +2,9 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -28,11 +30,14 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
-import {
-  getCommitMessageAgentSpec,
-  type CommitMessageAgentCapability,
-  type CommitMessageModelCapability
+import type {
+  CommitMessageAgentCapability,
+  CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
+import {
+  getAgentModelProbeSpec,
+  type AgentModelProbeSpec
+} from '../../shared/agent-model-probe-spec'
 import {
   planAgentBinary,
   planCommitMessageGeneration,
@@ -59,6 +64,7 @@ import {
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -75,6 +81,7 @@ export type DiscoverCommitMessageModelsResult =
       capability: CommitMessageAgentCapability
       models: CommitMessageModelCapability[]
       defaultModelId: string
+      catalogOrigin: 'probe' | 'spec'
     }
   | { success: false; error: string }
 
@@ -227,9 +234,10 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
 }
 
 function toModelDiscoveryCapability(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   models = spec.models,
-  defaultModelId = spec.defaultModelId
+  defaultModelId = spec.defaultModelId,
+  catalogOrigin: 'probe' | 'spec' = 'spec'
 ): Extract<DiscoverCommitMessageModelsResult, { success: true }> {
   return {
     success: true,
@@ -241,12 +249,13 @@ function toModelDiscoveryCapability(
       models
     },
     models,
-    defaultModelId
+    defaultModelId,
+    catalogOrigin
   }
 }
 
 function finalizeModelDiscoveryOutput(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   stdout: string,
   stderr: string,
   code: number | null
@@ -281,11 +290,11 @@ function finalizeModelDiscoveryOutput(
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
-  return toModelDiscoveryCapability(spec, models, defaultModelId)
+  return toModelDiscoveryCapability(spec, models, defaultModelId, 'probe')
 }
 
 function planModelDiscovery(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   agentCommandOverride?: string
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
@@ -301,7 +310,7 @@ function planModelDiscovery(
     plan: {
       binary: command.binary,
       args: [...command.prefixArgs, ...modelDiscovery.args],
-      stdinPayload: null,
+      stdinPayload: modelDiscovery.stdinPayload ?? null,
       label: spec.label
     }
   }
@@ -313,9 +322,9 @@ export async function discoverCommitMessageModelsLocal(
   agentCommandOverride?: string,
   options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
 
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
@@ -330,6 +339,7 @@ export async function discoverCommitMessageModelsLocal(
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: ChildProcess
       const spawnEnv = env ?? process.env
+      let discoveryStdin: string | null = null
       try {
         const planned = planModelDiscovery(spec, agentCommandOverride)
         if (!planned.ok) {
@@ -337,11 +347,13 @@ export async function discoverCommitMessageModelsLocal(
           resolve({ success: false, error: planned.error })
           return
         }
+        discoveryStdin = planned.plan.stdinPayload
+        const stdinMode = discoveryStdin === null ? 'ignore' : 'pipe'
         if (process.platform === 'win32' && options.wslDistro) {
           child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
             cwd: options.cwd,
             env: buildWslLauncherEnv(env),
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true,
             wslDistro: options.wslDistro,
             useWslLoginShell: true
@@ -356,9 +368,15 @@ export async function discoverCommitMessageModelsLocal(
           const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
           child = spawn(spawnCmd, spawnArgs, {
             env: spawnEnv,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true
           })
+        }
+        if (discoveryStdin !== null) {
+          // Why: a CLI that rejects the args exits before reading stdin; the
+          // resulting EPIPE must surface as exit-code fallback, not a crash.
+          child.stdin?.on?.('error', () => {})
+          child.stdin?.end(discoveryStdin)
         }
       } catch (error) {
         markProcessClosed()
@@ -491,9 +509,9 @@ export async function discoverCommitMessageModelsRemote(
   ) => Promise<RemoteCommitMessageExecResult>,
   agentCommandOverride?: string
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
@@ -507,6 +525,12 @@ export async function discoverCommitMessageModelsRemote(
     result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${spec.label} model discovery took longer than ${GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
@@ -984,6 +1008,12 @@ async function runRemotePlan(
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${label} took longer than ${GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`

@@ -6,10 +6,12 @@ import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from
 // without an onclose. Both leave clients waiting out long backoff timers or
 // parked at the reconnect give-up cap (issue #5049). Surface every "the link
 // probably just came back" OS signal as a single nudge callback.
-export function subscribeConnectionRevivalTriggers(nudge: () => void): () => void {
+export function subscribeConnectionRevivalTriggers(
+  nudge: (reason: 'app-resume' | 'network-change') => void
+): () => void {
   const appStateSub = AppState.addEventListener('change', (next) => {
     if (next === 'active') {
-      nudge()
+      nudge('app-resume')
     }
   })
   let lastNetwork: Pick<NetworkState, 'isConnected' | 'type'> | null = null
@@ -39,7 +41,7 @@ export function subscribeConnectionRevivalTriggers(nudge: () => void): () => voi
         type: state.type,
         cameOnline
       })
-      nudge()
+      nudge('network-change')
     }
   })
   return () => {

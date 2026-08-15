@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { VirtualItem } from '@tanstack/react-virtual'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   HOST_STICKY_PINNED_HEIGHT,
   buildLineageRowRekeyMap,
@@ -11,11 +12,11 @@ import {
   type RenderRow
 } from './worktree-list-virtual-rows'
 
-function hostRow(hostId: string): RenderRow {
+function hostRow(hostId: ExecutionHostId): RenderRow {
   return {
     type: 'host-header',
     key: `host:${hostId}`,
-    hostId: hostId as never,
+    hostId,
     kind: 'ssh',
     label: hostId,
     detail: 'SSH',
@@ -25,8 +26,15 @@ function hostRow(hostId: string): RenderRow {
   }
 }
 
-function groupRow(key: string): RenderRow {
-  return { type: 'header', key, label: key, count: 1, tone: 'text-foreground' }
+function groupRow(key: string, hostId?: ExecutionHostId): RenderRow {
+  return {
+    type: 'header',
+    key,
+    label: key,
+    count: 1,
+    tone: 'text-foreground',
+    ...(hostId ? { hostId } : {})
+  }
 }
 
 function itemStub(id: string): RenderRow {
@@ -39,17 +47,34 @@ function virtualItem(index: number, start: number): VirtualItem {
 
 // rows: [host-a, group-a1, item, item, host-b, group-b1, item]
 const rows: RenderRow[] = [
-  hostRow('a'),
+  hostRow('ssh:a'),
   groupRow('a1'),
   itemStub('wt-1'),
   itemStub('wt-2'),
-  hostRow('b'),
+  hostRow('ssh:b'),
   groupRow('b1'),
   itemStub('wt-3')
 ]
 const stickyHeaderIndexes = getStickyHeaderIndexes(rows)
 // Geometry: each row 100px tall for easy math.
 const virtualItems = rows.map((_, index) => virtualItem(index, index * 100))
+
+describe('getRenderRowKey', () => {
+  it('scopes repeated group headers to their host section', () => {
+    expect(getRenderRowKey(groupRow('workspace-status:in-progress', 'local'))).toBe(
+      'hdr:local:workspace-status:in-progress'
+    )
+    expect(getRenderRowKey(groupRow('workspace-status:in-progress', 'ssh:builder'))).toBe(
+      'hdr:ssh:builder:workspace-status:in-progress'
+    )
+  })
+
+  it('preserves unsectioned group header keys', () => {
+    expect(getRenderRowKey(groupRow('workspace-status:in-progress'))).toBe(
+      'hdr:workspace-status:in-progress'
+    )
+  })
+})
 
 describe('getActiveStickyIndexesForScroll', () => {
   it('pins the host and its inner group while scrolled inside a section', () => {
@@ -149,7 +174,7 @@ describe('getActiveStickyIndexesForScroll', () => {
 
   it('keeps the previous mounted Project sticky when the next group is unmounted', () => {
     const multiGroupRows: RenderRow[] = [
-      hostRow('a'),
+      hostRow('ssh:a'),
       groupRow('a1'),
       itemStub('wt-1'),
       groupRow('a2'),
@@ -263,7 +288,8 @@ describe('buildLineageRowRekeyMap', () => {
 
   it('contributes nothing for non-lineage row types', () => {
     expect(
-      buildLineageRowRekeyMap([hostRow('a'), groupRow('a1'), hostRow('b'), groupRow('b1')]).size
+      buildLineageRowRekeyMap([hostRow('ssh:a'), groupRow('a1'), hostRow('ssh:b'), groupRow('b1')])
+        .size
     ).toBe(0)
   })
 

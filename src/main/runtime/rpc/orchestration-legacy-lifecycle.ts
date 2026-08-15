@@ -17,7 +17,7 @@ export async function handleLegacyLifecycleSend(args: {
   authority: LegacyCompatibilityAuthority
   request: RpcRequest
   params: LegacySendParams
-}): Promise<unknown | undefined> {
+}): Promise<unknown> {
   const { runtime, authority, request, params } = args
   if (!['heartbeat', 'worker_done', 'escalation'].includes(params.type ?? '')) {
     return undefined
@@ -41,7 +41,7 @@ export async function handleLegacyLifecycleSend(args: {
     throw new OrchestrationError('invalid_argument', 'Legacy lifecycle mail requires --to.')
   }
   const db = runtime.getOrchestrationDb()
-  if (!db.isLegacyCoordinatorHandle(dispatch.run_id, params.to)) {
+  if (!db.isLegacyCoordinatorDeliveryTarget(dispatch.run_id, params.to)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Terminal ${params.to} is not a retained coordinator for this legacy Dispatch.`

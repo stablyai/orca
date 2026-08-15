@@ -218,7 +218,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       id: 'preserved-branch:feature/test:def456',
@@ -254,7 +254,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).not.toHaveBeenCalled()
   })
@@ -1658,6 +1658,14 @@ describe('setActiveWorktree', () => {
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
       expect(terminal.shellOverride).toBe('wsl.exe')
+
+      const hostTerminal = store
+        .getState()
+        .createTab(wt, undefined, 'powershell.exe', { forceHostRuntime: true })
+      expect(hostTerminal).toMatchObject({
+        shellOverride: 'powershell.exe',
+        forceHostRuntime: true
+      })
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,
@@ -5319,7 +5327,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
   })
 
-  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
+  it('captures allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -5370,7 +5378,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    // Outside the allowlist, so manual sleep never claimed it.
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 

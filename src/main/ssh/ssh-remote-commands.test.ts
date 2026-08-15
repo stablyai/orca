@@ -117,6 +117,7 @@ describe('ssh remote command builders', () => {
     const probe = probeRelayInstalledCommand(posix, '/home/me/relay')
     expect(probe).toContain('test -d')
     expect(probe).toContain('managed-hook-runtime.js')
+    expect(probe).toContain('relay-ai-vault-service.js')
   })
 
   it('uses encoded PowerShell for Windows deploy commands', () => {
@@ -127,6 +128,7 @@ describe('ssh remote command builders', () => {
     const probe = probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
     expect(probe).toContain('-EncodedCommand')
     expect(decodePowerShellCommand(probe)).toContain('managed-hook-runtime.js')
+    expect(decodePowerShellCommand(probe)).toContain('relay-ai-vault-service.js')
   })
 
   it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {

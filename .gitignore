@@ -94,13 +94,17 @@ docs/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
+!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/relay-grace-time-reconfiguration.md
+!docs/reference/remote-wire-compatibility.md
+!docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md
+!docs/reference/worktree-scan-fingerprint.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -123,6 +127,10 @@ playwright-report/
 /.agents/skills/
 /skills-lock.json
 
+# Generated Clawpatch state includes machine-local paths and review records.
+/.clawpatch/
+/mobile/.clawpatch/
+
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/
 validation-screenshots/
@@ -135,3 +143,6 @@ src/renderer/src/i18n/locales/.es-catalog-cache.json
 
 # Bench result JSONs are working artifacts
 tests/tools/benchmarks/results/terminal-pipeline-*.json
+
+# Old release trees the cross-version wire harness extracts on demand
+tests/e2e/.cross-version-checkouts/

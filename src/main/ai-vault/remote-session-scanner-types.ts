@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { FileWithMtime } from './session-scanner-types'
+import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
 
 export type RemoteScannerContext = {
@@ -36,9 +37,10 @@ export type RemoteSessionSource = {
   directoryPredicate?: (name: string, depth: number) => boolean
   // A canonical file directly beneath every top-level session directory.
   fixedChildFileSegments?: readonly string[]
-  // Claude layout: count `<session>/subagents/*.jsonl` siblings from the walked
-  // listing and drop them from candidates instead of indexing them as sessions.
-  collectSubagentSiblingCounts?: boolean
+  // Sibling-subagent layouts (Claude `<session>/subagents/`, OMP's same-named
+  // artifact dir): count subagent transcripts from the walked listing and drop
+  // them from candidates instead of indexing them as sessions.
+  partitionSubagentTranscripts?: (paths: readonly string[]) => SubagentTranscriptPartition
   parse: (
     file: FileWithMtime,
     content: string,

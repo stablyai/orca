@@ -40,7 +40,23 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       children: React.ReactNode
       disabled?: boolean
     }) => <div data-disabled={disabled || undefined}>{children}</div>,
-    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuContent: ({
+      children,
+      side,
+      collisionPadding
+    }: {
+      children: React.ReactNode
+      side?: string
+      collisionPadding?: number
+    }) => (
+      <div
+        data-testid="session-option-menu"
+        data-side={side}
+        data-collision-padding={collisionPadding}
+      >
+        {children}
+      </div>
+    ),
     DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
     DropdownMenuItem: ({
@@ -172,6 +188,23 @@ const fast: SessionOptionDescriptor = {
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
+  it('prefers collision-aware upward placement for model and option menus', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+      />
+    )
+
+    const menus = screen.getAllByTestId('session-option-menu')
+    expect(menus).toHaveLength(2)
+    for (const menu of menus) {
+      expect(menu.getAttribute('data-side')).toBe('top')
+      expect(menu.getAttribute('data-collision-padding')).toBe('8')
+    }
+  })
+
   it('renders model and joined option labels, and hides an empty options pill', () => {
     const { rerender } = render(
       <NativeChatSessionOptionPickers

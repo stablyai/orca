@@ -119,7 +119,6 @@ export const RelayControlErrorMessageSchema = z
   })
   .strict()
 
-export type RelayHostChallengeMessage = z.infer<typeof RelayHostChallengeMessageSchema>
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>
 export type RelayConnectionOpenMessage = z.infer<typeof RelayConnectionOpenMessageSchema>
 export type RelayDrainMessage = z.infer<typeof RelayDrainMessageSchema>

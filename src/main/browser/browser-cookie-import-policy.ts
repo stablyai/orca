@@ -1,0 +1,270 @@
+import type { Cookie, Cookies } from 'electron'
+import { parse as parseDomain } from 'psl'
+// Why: type-only, so this does not create a runtime cycle with the clear module.
+import type { CookieClearIdentity } from './browser-cookie-import-clear'
+
+const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
+  'SIDCC',
+  '__Secure-1PSIDCC',
+  '__Secure-3PSIDCC',
+  '__Secure-STRP',
+  'AEC'
+])
+
+export type CookieImportMode = 'merge' | 'replace-imported-domains'
+
+export function normalizeCookieDomain(domain: string): string | null {
+  const candidate = domain.trim().replace(/^\.+/, '')
+  const isBracketedIpv6 = candidate.startsWith('[') && candidate.endsWith(']')
+  if (!candidate || /[/\\@?#%]/.test(candidate) || (!isBracketedIpv6 && candidate.includes(':'))) {
+    return null
+  }
+  try {
+    const parsed = new URL(`https://${candidate}/`)
+    const normalized = parsed.hostname.toLowerCase()
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.port ||
+      parsed.pathname !== '/' ||
+      parsed.search ||
+      parsed.hash ||
+      normalized.endsWith('.') ||
+      normalized.includes('..')
+    ) {
+      return null
+    }
+    return normalized
+  } catch {
+    return null
+  }
+}
+
+export function normalizeCookieImportDomain(domain: string): string | null {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return null
+  }
+  const parsed = parseDomain(normalized)
+  if ('error' in parsed) {
+    return normalized.startsWith('[') && normalized.endsWith(']') ? normalized : null
+  }
+  if (parsed.domain === null && parsed.listed) {
+    return null
+  }
+  return normalized
+}
+
+// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
+// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
+// it is copied. Signing in directly inside Orca is the only path that produces a working
+// session, so an import must never write these cookies and never remove them either — the
+// live session is always more valuable than anything an import could put in its place.
+// Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
+// public suffixes, because clearData derives one excluded origin and matches at that boundary.
+// Adding a site is one entry here.
+// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
+// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
+// users actually asked for.
+const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+export const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `https://${root}`
+)
+
+export function isNonTransplantableCookieDomain(domain: string): boolean {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return false
+  }
+  return NON_TRANSPLANTABLE_DOMAINS.some(
+    (root) => normalized === root || normalized.endsWith(`.${root}`)
+  )
+}
+
+// Why: Chromium stores host_key lowercase as 'google.com', '.google.com' or 'sub.google.com';
+// the LIKE pattern covers the leading-dot row and cannot match lookalikes ('withgoogle.com').
+export const NON_TRANSPLANTABLE_HOST_KEY_SQL = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `host_key = '${root}' OR host_key LIKE '%.${root}'`
+).join(' OR ')
+
+// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
+// rule for rotation-only cookies and applies to any family added without a full exclusion.
+export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
+  if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
+    return false
+  }
+  const normalized = normalizeCookieDomain(domain)
+  return normalized === 'google.com' || normalized?.endsWith('.google.com') === true
+}
+
+function domainSuffixes(domain: string): string[] {
+  const labels = domain.split('.')
+  return labels.map((_, index) => labels.slice(index).join('.'))
+}
+
+function importDomainAncestors(domain: string): string[] {
+  const parsed = parseDomain(domain)
+  const boundary = 'error' in parsed ? domain : (parsed.domain ?? domain)
+  const ancestors: string[] = []
+  for (const suffix of domainSuffixes(domain)) {
+    ancestors.push(suffix)
+    if (suffix === boundary) {
+      break
+    }
+  }
+  return ancestors
+}
+
+function importedDomainScopes(domains: readonly string[]): {
+  exact: Set<string>
+  ancestors: Set<string>
+  descendantRoots: Set<string>
+} {
+  const exact = new Set<string>()
+  const ancestors = new Set<string>()
+  const descendantRoots = new Set<string>()
+  const seen = new Set<string>()
+  for (const domain of domains) {
+    const candidate = normalizeCookieDomain(domain)
+    if (!candidate || seen.has(candidate)) {
+      continue
+    }
+    seen.add(candidate)
+    const normalized = normalizeCookieImportDomain(candidate)
+    if (!normalized || exact.has(normalized)) {
+      continue
+    }
+    exact.add(normalized)
+    if (normalized.includes('.')) {
+      descendantRoots.add(normalized)
+    }
+    for (const suffix of importDomainAncestors(normalized)) {
+      ancestors.add(suffix)
+    }
+  }
+  return { exact, ancestors, descendantRoots }
+}
+
+function overlapsImportedDomain(
+  cookie: Cookie,
+  domain: string,
+  scopes: ReturnType<typeof importedDomainScopes>
+): boolean {
+  if (scopes.exact.has(domain)) {
+    return true
+  }
+  if (cookie.hostOnly !== true && scopes.ancestors.has(domain)) {
+    return true
+  }
+  return domainSuffixes(domain).some((suffix) => scopes.descendantRoots.has(suffix))
+}
+
+export function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
+  try {
+    const url = new URL(`${cookie.secure ? 'https' : 'http'}://${domain}/`)
+    url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+// Why (STA-4097): 'set' stays out so the partition-dropping reconstruction cannot return.
+// Undoing a removal is only possible through CDP identities, which carry partitionKey.
+export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
+  snapshotClearIdentities(
+    cookies: readonly { cookie: Cookie; url: string }[]
+  ): Promise<CookieClearIdentity[]>
+  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
+}
+
+export type ReplacedImportedDomainCookies = {
+  removed: Cookie[]
+  identities: CookieClearIdentity[]
+}
+
+function replaceRemovalKey(url: string, name: string): string {
+  return JSON.stringify([url, name])
+}
+
+function assertIdentitiesCoverRemovable(
+  removable: readonly { cookie: Cookie; url: string }[],
+  identities: readonly CookieClearIdentity[]
+): void {
+  const covered = new Set(
+    identities.map((identity) => replaceRemovalKey(identity.url, identity.name))
+  )
+  for (const item of removable) {
+    if (!covered.has(replaceRemovalKey(item.url, item.cookie.name))) {
+      throw new Error('Could not replace existing cookies; the session was left unchanged')
+    }
+  }
+}
+
+export async function replaceCookiesForImportedDomains(
+  store: ImportedDomainReplaceStore,
+  importedDomains: readonly string[]
+): Promise<ReplacedImportedDomainCookies> {
+  const scopes = importedDomainScopes(importedDomains)
+  if (scopes.exact.size === 0) {
+    return { removed: [], identities: [] }
+  }
+
+  // Why (STA-4170): the removal plan is fixed here, beside the identities that can undo it, so
+  // the restorable set always equals the mutated set. Re-reading the jar later would widen the
+  // removal past what the snapshot can restore.
+  const existingCookies = await store.get({})
+  const removable: { cookie: Cookie; url: string }[] = []
+  for (const cookie of existingCookies) {
+    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+    if (!domain || !overlapsImportedDomain(cookie, domain, scopes)) {
+      continue
+    }
+    const url = cookieRemovalUrl(cookie, domain)
+    if (url) {
+      removable.push({ cookie, url })
+    }
+  }
+  if (removable.length === 0) {
+    return { removed: [], identities: [] }
+  }
+
+  // Why: snapshotting before the first removal is what makes the rollback lossless; an
+  // incomplete snapshot aborts while the session is still untouched.
+  const identities = await store.snapshotClearIdentities(removable)
+  assertIdentitiesCoverRemovable(removable, identities)
+  const identitiesByKey = new Map<string, CookieClearIdentity[]>()
+  for (const identity of identities) {
+    const key = replaceRemovalKey(identity.url, identity.name)
+    const group = identitiesByKey.get(key) ?? []
+    group.push(identity)
+    identitiesByKey.set(key, group)
+  }
+
+  const removed: Cookie[] = []
+  // Why: one remove(url, name) deletes every cookie at that coordinate, partitioned twins
+  // included, so the rollback set is tracked per coordinate rather than per cookie.
+  const attemptedKeys = new Set<string>()
+  const attemptedIdentities: CookieClearIdentity[] = []
+  for (const { cookie, url } of removable) {
+    const key = replaceRemovalKey(url, cookie.name)
+    if (!attemptedKeys.has(key)) {
+      attemptedKeys.add(key)
+      attemptedIdentities.push(...(identitiesByKey.get(key) ?? []))
+    }
+    try {
+      await store.remove(url, cookie.name)
+      removed.push(cookie)
+    } catch (err) {
+      try {
+        // Why: the failing coordinate is included because a rejected remove cannot prove the
+        // cookie survived; restoring a live cookie rewrites the value it was snapshotted with.
+        await store.restoreClearIdentities(attemptedIdentities.toReversed())
+      } catch (restoreError) {
+        throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
+      }
+      throw err
+    }
+  }
+  return { removed, identities }
+}

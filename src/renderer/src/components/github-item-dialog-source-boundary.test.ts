@@ -230,6 +230,42 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(checksSection).toContain('window.api.gh.prChecks({')
     expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
     expect(checksSection).toContain('prCheckDetails({')
+    expect(checksSection).toMatch(
+      /withGitHubCheckDetailsTimeout\(\(signal\) =>\s*runtimeHost\s*\?\s*callRuntimeRpc[\s\S]*:\s*window\.api\.gh\.prCheckDetails\(\{/
+    )
+    expect(checksSection).toContain('{ timeoutMs: 30_000, signal }')
+  })
+
+  it('makes failed check detail loads retryable and fences stale responses', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+    const checksSection = sourceBetween(
+      source,
+      'function ChecksTab',
+      'function GitHubLabelsSettingsLink'
+    )
+
+    expect(checksSection).toContain('createGitHubChecksTabState(checks, checkDetailsContextKey)')
+    expect(checksSection).toContain('checksState,\n    checks,\n    checkDetailsContextKey')
+    expect(checksSection).toContain('resetGitHubChecksTabForSource(current)')
+    expect(checksSection).toContain(
+      'committedChecksContextOwnerRef.current !== refreshContextOwner'
+    )
+    expect(checksSection).toContain('activeChecksRefreshRequestIdRef.current !== refreshRequestId')
+    expect(checksSection).toContain('current.contextOwner === refreshContextOwner')
+    expect(checksSection).toContain(
+      'const rerunContextOwner = committedChecksContextOwnerRef.current'
+    )
+    expect(checksSection).toContain('committedChecksContextOwnerRef.current !== rerunContextOwner')
+    expect(checksSection).toContain('await handleRefresh(rerunContextOwner)')
+    expect(checksSection).toContain('!mountedRef.current ||')
+    expect(checksSection).toContain('settleGitHubChecksTabDetails(current, key, requestId, next)')
+    expect(checksSection).toContain(
+      'onClick={() => requestCheckDetails(check, getCheckDetailsKey(check))}'
+    )
+    expect(checksSection).toContain('disabled={state.loading}')
+    expect(checksSection).toContain('aria-busy={state.loading}')
+    expect(checksSection).toContain("translate('githubChecks.retrying', 'Retrying…')")
+    expect(checksSection).toContain("'Retry'")
   })
 
   it('uses hydrated work item details for the page checks tab', () => {
@@ -241,5 +277,24 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
 
     expect(checksTab).toContain('item={displayWorkItem ?? workItem}')
+  })
+
+  it('records state authority for dialog state mutations so stale list refetches cannot revert them (STA-3343)', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+
+    // Issue close/reopen: assert on optimistic apply, revert on failure.
+    const editSection = sourceBetween(source, 'function GHEditSection', 'const closeAsDuplicate')
+    expect(editSection).toContain('assertTaskPageGitHubDialogStateAuthority({')
+    expect(editSection).toContain('if (authority?.revert())')
+
+    // PR close/reopen + merge: same protection for the shared Tasks list rows.
+    const actionsSection = sourceBetween(
+      source,
+      'function PRActionsPanel',
+      'function CommentReplyForm'
+    )
+    expect(actionsSection.match(/assertTaskPageGitHubDialogStateAuthority\(\{/g)).toHaveLength(2)
+    expect(actionsSection).toContain('if (authority.revert())')
+    expect(actionsSection).toContain("state: 'merged'")
   })
 })

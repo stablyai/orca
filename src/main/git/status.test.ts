@@ -1120,6 +1120,23 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
+  it('opts status reads into direct WSL Git without changing mutation options', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+
+    await getStatus('/repo', { wslDistro: 'Ubuntu' })
+    await stageFile('/repo', 'src/file.ts', { wslDistro: 'Ubuntu' })
+
+    expect(gitStreamOptionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ preferWslDirectGit: true, wslDistro: 'Ubuntu' })
+    )
+    const addOptions = gitExecFileAsyncMock.mock.calls.find(([args]) =>
+      (args as string[]).includes('add')
+    )?.[1] as { preferWslDirectGit?: boolean } | undefined
+    expect(addOptions).toBeDefined()
+    expect(addOptions?.preferWslDirectGit).toBeUndefined()
+  })
+
   it('benchmarks concurrent status burst subprocess pressure', async () => {
     const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
     if (!benchPath) {
@@ -1594,7 +1611,7 @@ describe('getStatus', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/prompts'],
-      { cwd: '/repo' }
+      { cwd: '/repo', preferWslDirectGit: true }
     )
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })

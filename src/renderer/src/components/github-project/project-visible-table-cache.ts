@@ -1,4 +1,4 @@
-import type { GitHubProjectTable } from '../../../../shared/github-project-types'
+import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 
 export type CachedVisibleProjectTable = {
   cacheKey: string

@@ -1,5 +1,6 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
@@ -34,10 +35,26 @@ export function resolveWindowsShiftEnterEncoding(
 /** Resolves only pane-keyed evidence so a split sibling cannot inherit tab ownership. */
 export function resolveWindowsShiftEnterEncodingForPane(
   state: WindowsShiftEnterPaneState,
-  paneKey: string
+  paneKey: string,
+  terminalTitle?: string
 ): WindowsShiftEnterEncoding {
-  return resolveWindowsShiftEnterEncoding({
+  const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+  const encoding = resolveWindowsShiftEnterEncoding({
     foreground: state.paneForegroundAgentByPaneKey[paneKey],
     launchAgentType: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
   })
+  if (
+    encoding === 'csi-u' ||
+    !terminalTitle ||
+    foreground?.routingTrusted === true ||
+    foreground?.routingRevoked === true ||
+    foreground?.shellForeground === true
+  ) {
+    return encoding
+  }
+  // Why: strict pane-local titles recover Pi/Droid through process-scan gaps without overriding process or shell proof.
+  const titleAgent = resolveCommittedTitleAgentType(terminalTitle)
+  return titleAgent
+    ? (TUI_AGENT_CONFIG[titleAgent].windowsShiftEnterEncoding ?? 'alt-enter')
+    : 'alt-enter'
 }

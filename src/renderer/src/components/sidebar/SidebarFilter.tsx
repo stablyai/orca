@@ -31,6 +31,7 @@ import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import { translate } from '@/i18n/i18n'
 
 type SidebarFilterProps = {
@@ -111,15 +112,19 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
+  // Why counted: turning the exemption off is the only way that row narrows the
+  // list — but only while its parent row is on, which is also when it renders.
+  const hasSleepingExemptionFilter = isSleepingSweepExemptionNarrowingList(
+    showSleepingWorkspaces,
+    alwaysShowDefaultBranchWorkspace
+  )
   const hasAnyFilter =
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
     hideAutomationGeneratedWorkspaces ||
     hideCliCreatedWorkspaces ||
     hideDetachedHeadWorkspaces ||
-    // Why counted: turning the exemption off is the only way this row narrows
-    // the list, so the badge and Reset filters must both notice it.
-    !alwaysShowDefaultBranchWorkspace ||
+    hasSleepingExemptionFilter ||
     hasRepoFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
@@ -127,7 +132,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     (hideCliCreatedWorkspaces ? 1 : 0) +
     (hideDetachedHeadWorkspaces ? 1 : 0) +
-    (alwaysShowDefaultBranchWorkspace ? 0 : 1) +
+    (hasSleepingExemptionFilter ? 1 : 0) +
     selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
@@ -221,20 +226,24 @@ const SidebarFilter = React.memo(function SidebarFilter({
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
           shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
         />
-        <FilterToggleRow
-          indented
-          icon={<GitBranch className="size-3.5" />}
-          label={translate(
-            'auto.components.sidebar.SidebarFilter.keepDefaultBranch',
-            'Except default branch'
-          )}
-          ariaLabel={translate(
-            'auto.components.sidebar.SidebarFilter.keepDefaultBranchAria',
-            'Keep the default branch visible while hiding sleeping workspaces'
-          )}
-          checked={alwaysShowDefaultBranchWorkspace}
-          onChange={setAlwaysShowDefaultBranchWorkspace}
-        />
+        {/* Why gated: the exemption only has an effect while sleeping workspaces
+            are being swept, so it stays hidden until its parent row is on. */}
+        {!showSleepingWorkspaces && (
+          <FilterToggleRow
+            indented
+            icon={<GitBranch className="size-3.5" />}
+            label={translate(
+              'auto.components.sidebar.SidebarFilter.keepDefaultBranch',
+              'Except default branch'
+            )}
+            ariaLabel={translate(
+              'auto.components.sidebar.SidebarFilter.keepDefaultBranchAria',
+              'Keep the default branch visible while hiding sleeping workspaces'
+            )}
+            checked={alwaysShowDefaultBranchWorkspace}
+            onChange={setAlwaysShowDefaultBranchWorkspace}
+          />
+        )}
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
           label={translate(

@@ -52,7 +52,8 @@ function isolatedScanRoots(root: string) {
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
-    jcodeSessionsDir: join(root, 'jcode-sessions')
+    jcodeSessionsDir: join(root, 'jcode-sessions'),
+    primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }
 

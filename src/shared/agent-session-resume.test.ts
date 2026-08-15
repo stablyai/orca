@@ -20,6 +20,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('omp')).toBe(true)
   })
 
+  it('treats Prime Agent as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('prime-agent')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -40,6 +44,11 @@ describe('agent session resume metadata', () => {
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
     ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }],
+    [
+      'prime-agent',
+      { session_id: 'prime-session', session_file: '/tmp/prime-session.jsonl' },
+      { key: 'session_id', id: 'prime-session', transcriptPath: '/tmp/prime-session.jsonl' }
+    ],
     ['jcode', { session_id: 'session_jc_1' }, { key: 'session_id', id: 'session_jc_1' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
@@ -61,6 +70,11 @@ describe('agent session resume metadata', () => {
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],
     ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']],
+    [
+      'prime-agent',
+      { key: 'session_id', id: 's1', transcriptPath: '/tmp/prime-session.jsonl' },
+      ['prime-agent', '--resume', '/tmp/prime-session.jsonl']
+    ],
     ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
@@ -91,6 +105,7 @@ describe('agent session resume metadata', () => {
     const second = { key: 'session_id' as const, id: 'session-1', transcriptPath: '/tmp/second' }
 
     expect(agentProviderSessionsEqual('pi', first, second)).toBe(false)
+    expect(agentProviderSessionsEqual('prime-agent', first, second)).toBe(false)
     expect(agentProviderSessionsEqual('claude', first, second)).toBe(true)
   })
 

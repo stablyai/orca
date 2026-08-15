@@ -1,4 +1,5 @@
-import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { translate } from '@/i18n/i18n'
 
@@ -30,11 +31,15 @@ function formatBehindBaseTitle(count: number, baseRef: string): string {
       )
 }
 
+// Why: ahead/behind carry no color of their own. Green and red are reserved for
+// the line-total chip that sits beside them — an `↑1` in added-green next to
+// `+1,114` reads as one quantity when they count different things (commits vs
+// lines). The ↑/↓ glyph already carries direction.
 export type SourceControlBranchContextStat = {
   key: string
   label: string
   title?: string
-  tone: 'default' | 'ahead' | 'behind' | 'muted'
+  tone: 'default' | 'muted'
 }
 
 export function resolveSourceControlDisplayedBaseRef(
@@ -111,7 +116,7 @@ export function buildSourceControlBranchContextStats({
         key: 'upstream-ahead',
         label: `↑${upstreamStatus.ahead}`,
         title: formatAheadOfBaseTitle(upstreamStatus.ahead, upstreamLabel),
-        tone: 'ahead'
+        tone: 'muted'
       })
     }
     if (upstreamStatus.behind > 0) {
@@ -119,7 +124,7 @@ export function buildSourceControlBranchContextStats({
         key: 'upstream-behind',
         label: `↓${upstreamStatus.behind}`,
         title: formatBehindBaseTitle(upstreamStatus.behind, upstreamLabel),
-        tone: 'behind'
+        tone: 'muted'
       })
     }
   }
@@ -139,7 +144,7 @@ export function buildSourceControlBranchContextStats({
         key: 'compare-ahead',
         label: `↑${commitsAhead}`,
         title: formatAheadOfBaseTitle(commitsAhead, baseLabel),
-        tone: 'ahead'
+        tone: 'muted'
       })
     }
   }

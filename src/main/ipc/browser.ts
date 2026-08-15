@@ -23,12 +23,13 @@ import type {
   BrowserExtractHoverResult
 } from '../../shared/browser-grab-types'
 import type {
-  BrowserCookieImportResult,
   BrowserCertificateProceedResult,
+  BrowserCookieImportResult,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserViewportOverride
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
@@ -255,8 +256,10 @@ export function registerBrowserHandlers(): void {
     // with a new webContentsId. The bridge must destroy the old session's
     // proxy (its webContents is gone) and let the next command recreate it.
     const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
+    const profile = browserSessionRegistry.getProfile(args.sessionProfileId ?? 'default')
     const registered = browserManager.registerGuest({
       ...args,
+      userAgentMode: profile?.userAgentMode,
       rendererWebContentsId: event.sender.id
     })
     if (!registered) {
@@ -584,12 +587,17 @@ export function registerBrowserHandlers(): void {
     'browser:session:createProfile',
     (
       event,
-      args: { scope: BrowserSessionProfileScope; label: string }
+      args: {
+        scope: BrowserSessionProfileScope
+        label: string
+      } & BrowserSessionProfileCreateOptions
     ): BrowserSessionProfile | null => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
-      return browserSessionRegistry.createProfile(args.scope, args.label)
+      return browserSessionRegistry.createProfile(args.scope, args.label, {
+        userAgentMode: args.userAgentMode
+      })
     }
   )
 

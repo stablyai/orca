@@ -11,6 +11,7 @@ import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 import { RichMarkdownAnnotationOverlay } from './RichMarkdownAnnotationOverlay'
 import { RichMarkdownReviewNoteLayer } from './RichMarkdownReviewNoteLayer'
 import { RichMarkdownReviewRailActions } from './RichMarkdownReviewRailActions'
+import { RichMarkdownTableControls } from './RichMarkdownTableControls'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
 import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
@@ -18,7 +19,7 @@ import type { NotesSendMenuScope } from './NotesSendMenu'
 import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
   event: React.MouseEvent<HTMLDivElement>,
@@ -217,6 +218,7 @@ export function RichMarkdownEditorSurface({
             }}
           >
             <EditorContent editor={editor} />
+            <RichMarkdownTableControls editor={editor} scrollContainerRef={scrollContainerRef} />
             {reviewRailVisible && notePositions.length > 0 ? (
               <RichMarkdownReviewNoteLayer
                 positions={notePositions}

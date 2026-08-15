@@ -15,7 +15,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
-import type { ClaudeManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')

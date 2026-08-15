@@ -5,8 +5,7 @@ const homeSource = readFileSync(new URL('../app/index.tsx', import.meta.url), 'u
 
 describe('Home host edit navigation wiring', () => {
   it('uses the cold-navigator-safe edit transition', () => {
-    expect(homeSource).toMatch(
-      /onEdit:\s*\(hostId\)\s*=>\s*navigateToMobileHostEdit\(router,\s*hostId\)/
-    )
+    expect(homeSource).toMatch(/const openMobileHostEdit = useOpenMobileHostEdit\(\)/)
+    expect(homeSource).toMatch(/onEdit:\s*openMobileHostEdit/)
   })
 })

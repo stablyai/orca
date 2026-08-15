@@ -1,6 +1,7 @@
 import type { OrchestrationDb } from '../../orchestration/db'
 import { isFederationEffectUnknown } from './orchestration-federation-effects'
 import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
 
 export function failFederatedAttachmentWithReceipt(args: {
   db: OrchestrationDb
@@ -9,6 +10,7 @@ export function failFederatedAttachmentWithReceipt(args: {
   failedStage: string
   error: unknown
   setup: WorkerSetupReceipt
+  launch: OrchestrationWorkerLaunchReceipt
 }): unknown {
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isFederationEffectUnknown(args.error, args.failedStage)
@@ -26,6 +28,7 @@ export function failFederatedAttachmentWithReceipt(args: {
     failedStage: args.failedStage,
     lastError: reason,
     setup: args.setup,
+    launch: args.launch,
     effects: JSON.parse(attachment.effects) as unknown[],
     residualResources: JSON.parse(attachment.residual_resources) as unknown[]
   }

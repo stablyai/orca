@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as UpdaterModule from './updater'
 import type * as RecoveryModule from './linux-package-update-recovery'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 
 type RevalidationVerdict = Awaited<
   ReturnType<typeof RecoveryModule.revalidateLinuxPackageForInstall>
@@ -159,6 +159,12 @@ const { getLinuxRootPackageTypeMock, recordUpdaterLifecycleMock } = vi.hoisted((
   recordUpdaterLifecycleMock: vi.fn()
 }))
 
+// Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
+const PRE_COMMIT_INSTALL_FAILURE =
+  process.platform === 'darwin'
+    ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    : 'Could not start the update installer. Orca remains open.'
+
 // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
 vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: getLinuxRootPackageTypeMock
@@ -295,6 +301,7 @@ describe('updater', () => {
 
   it.each([
     ['hourly', 'v1.4.160-hourly.202607281400', 'Hourly builds are produced only for macOS.'],
+    ['daily', 'v1.4.160-daily.202607281300', 'Daily builds are produced only for macOS.'],
     ['adhoc', 'v1.4.160-adhoc.20260728140533', 'Adhoc builds are produced only for macOS.']
   ] as const)(
     'uses the display label in the mac-only %s pinned-build error',
@@ -1829,10 +1836,8 @@ describe('updater', () => {
         state: 'error',
         // Why: a pre-commit install failure is not fixed by restarting, so the copy must not
         // suggest it — except on macOS, where quitting does re-stage a Squirrel update.
-        message:
-          process.platform === 'darwin'
-            ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
-            : 'Could not start the update installer. Orca remains open.'
+        // The updater's own text is appended because it is the only record of why the install never ran.
+        message: `${PRE_COMMIT_INSTALL_FAILURE} (No update filepath provided, can't quit and install)`
       })
     )
   })
@@ -3911,11 +3916,7 @@ describe('updater', () => {
     const lastStatus = (send: ReturnType<typeof vi.fn>): UpdateStatus | undefined =>
       send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
 
-    // Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
-    const PRE_COMMIT_FAILURE_MESSAGE =
-      process.platform === 'darwin'
-        ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
-        : 'Could not start the update installer. Orca remains open.'
+    const PRE_COMMIT_FAILURE_MESSAGE = PRE_COMMIT_INSTALL_FAILURE
     const AGENT_STDERR =
       'pkexec: Error executing command as another user: No authentication agent found.'
 
@@ -4081,7 +4082,7 @@ describe('updater', () => {
 
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: PRE_COMMIT_FAILURE_MESSAGE
+        message: `${PRE_COMMIT_FAILURE_MESSAGE} (${EXIT_127})`
       })
       expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
         'linux_package_install_failed',

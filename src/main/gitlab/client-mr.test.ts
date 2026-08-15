@@ -398,10 +398,22 @@ describe('gitlab client — MR operations', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         [
           'api',
-          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1'
+          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true'
         ],
         { cwd: '/repo' }
       )
+    })
+
+    // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
+    // recheck request the row can sit at `unchecked` forever and the sidebar merge button — which
+    // gates on MERGEABLE — never becomes available.
+    it('asks GitLab to recheck merge status on the branch lookup', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      await getMergeRequestForBranch('/repo', 'feature/recheck')
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      expect(callArgs[1]).toContain('with_merge_status_recheck=true')
     })
 
     it('uses legacy pipeline payloads when branch MR lists omit head_pipeline', async () => {
@@ -898,6 +910,57 @@ describe('gitlab client — MR operations', () => {
       const result = await listMergeRequests('/repo', 'opened')
       expect(result.error?.type).toBe('permission_denied')
       expect(result.items).toEqual([])
+    })
+
+    // Why: the title carries a classifier keyword, so this also pins that a wrapped payload stays
+    // out of the substring matcher — classifying it would swap the body for "check your connection".
+    it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ data: [{ iid: 7, title: 'fix network timeout' }] }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.type).toBe('unknown')
+      expect(result.error?.message).toContain('fix network timeout')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    it('reports the body instead of ".map is not a function" when the cwd fallback returns a non-array', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: [], total: 0 })
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.message).toContain('{"data":[],"total":0}')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    // Why: the whole point of surfacing the body — a GitLab error envelope now
+    // classifies like any other glab failure instead of collapsing to 'unknown'.
+    it('classifies a GitLab error envelope returned on exit 0', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ message: '403 Forbidden' }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.type).toBe('permission_denied')
+    })
+
+    // Why: the sibling title matches an earlier classifier branch than the envelope does, so this
+    // fails if the payload leaks into classification instead of only the envelope's own message.
+    it('classifies an error envelope by its message, not its sibling payload', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({
+          message: '404 Project Not Found',
+          data: [{ iid: 7, title: '403 forbidden in CI' }]
+        }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.error?.type).toBe('not_found')
     })
   })
 

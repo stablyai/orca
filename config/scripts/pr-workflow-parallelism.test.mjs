@@ -8,6 +8,7 @@ const dependencyAction = parse(
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 const shellContractFiles = [
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
@@ -55,18 +56,36 @@ describe('PR workflow parallelism', () => {
     }
   })
 
-  it('runs real-zsh coverage once outside the general shards', () => {
+  it('runs real-shell coverage once outside the general shards', () => {
     const shellStep = workflow.jobs.shell_contracts.steps.find(
       (step) => step.name === 'Test real shell contracts'
     )
     const shellInstall = workflow.jobs.shell_contracts.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+    // Why parsed rather than substring-matched: the step name changes as shells are
+    // added, and `includes('fish')` would also match a comment or a longer package.
+    const aptPackages = (step) =>
+      (step.run?.match(/apt-get install[^\n]*/)?.[0] ?? '')
+        .split(/\s+/)
+        .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
+        .filter((token) => !token.startsWith('-'))
+    const jobsInstallingPackages = Object.entries(workflow.jobs)
+      .filter(([, job]) => (job.steps ?? []).some((step) => aptPackages(step).length > 0))
+      .map(([name]) => name)
 
-    expect(workflow.jobs.test.steps.some((step) => step.name === 'Install zsh')).toBe(false)
-    expect(workflow.jobs.shell_contracts.steps.some((step) => step.name === 'Install zsh')).toBe(
-      true
-    )
+    expect(shellStep).toBeDefined()
+    expect(shellInstall).toBeDefined()
+    expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
+    // Why the whole workflow, not just the general shards: any other lane installing
+    // these shells would silently start running the real-shell tests twice.
+    expect(jobsInstallingPackages).toEqual(['shell_contracts'])
+    // Why each shell is asserted: the live tests skip themselves when the binary is
+    // missing, so a dropped package silently empties this lane instead of failing it.
+    const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
+    for (const shell of ['zsh', 'fish']) {
+      expect(shellPackages).toContain(shell)
+    }
     expect(shellInstall.with['native-runtime']).toBe('node')
     for (const testFile of nativeShellContractFiles) {
       expect(shellStep.run).toContain(testFile)
@@ -95,6 +114,24 @@ describe('PR workflow parallelism', () => {
     ).toBe('pnpm run build:web-from-renderer')
     expect(packageJson.scripts['build:desktop']).toContain('pnpm run build:web-from-renderer')
     expect(packageJson.scripts['build:release']).toContain('pnpm run build:web-from-renderer')
+  })
+
+  it('smokes managed-hook companions under their supported Node 18 runtime', () => {
+    const steps = workflow.jobs.managed_hook_node18.steps
+    const installIndex = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
+    const node18Index = steps.findIndex(
+      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
+    )
+    const smokeIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
+    )
+
+    expect(installIndex).toBeLessThan(buildIndex)
+    expect(buildIndex).toBeLessThan(node18Index)
+    expect(node18Index).toBeLessThan(smokeIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {
@@ -178,8 +215,14 @@ describe('PR workflow parallelism', () => {
       'git_compatibility',
       'shell_contracts',
       'test',
+      'managed_hook_node18',
       'package',
       'package_windows'
     ])
+    const verifyStep = workflow.jobs.verify.steps.find(
+      (step) => step.name === 'Require successful checks'
+    )
+    expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
+    expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
   })
 })

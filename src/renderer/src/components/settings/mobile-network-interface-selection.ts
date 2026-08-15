@@ -1,8 +1,12 @@
-import { isTailnetIPv4Address } from '../../../../shared/tailnet-address'
+import {
+  isVirtualBridgeInterface,
+  selectAutoAdvertisedPairingAddress
+} from '../../../../shared/pairing-address-auto-selection'
 
 export type MobileNetworkInterface = {
   name: string
   address: string
+  hasDefaultRoute?: boolean
 }
 
 export function selectRefreshedNetworkAddress(
@@ -11,22 +15,27 @@ export function selectRefreshedNetworkAddress(
   // Why: callers that explicitly know the user picked a manual address
   // (not an OS-enumerated one) pass this so the refresh path keeps their
   // selection instead of snapping back to a tailnet/LAN fallback.
-  currentAddressIsManual: boolean = false
+  currentAddressIsManual: boolean = false,
+  currentAddressWasExplicitlySelected: boolean = false
 ): string | undefined {
-  // Why: an empty refresh result usually means discovery is transiently
-  // unavailable, not that the user wants to drop their selection. Keep the
-  // manual address so a recovering discovery doesn't clobber it.
+  // Why: transient discovery failure must not clobber a deliberate user choice.
   if (interfaces.length === 0) {
-    return currentAddressIsManual ? currentAddress : undefined
+    return currentAddressIsManual || currentAddressWasExplicitlySelected
+      ? currentAddress
+      : undefined
   }
+  if (currentAddressIsManual) {
+    return currentAddress
+  }
+  const currentInterface = interfaces.find((iface) => iface.address === currentAddress)
   if (
-    currentAddress &&
-    (currentAddressIsManual || interfaces.some((iface) => iface.address === currentAddress))
+    currentInterface &&
+    (currentAddressWasExplicitlySelected ||
+      !isVirtualBridgeInterface(currentInterface.name, currentInterface.hasDefaultRoute))
   ) {
     return currentAddress
   }
-  return (
-    interfaces.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
-    interfaces[0]!.address
-  )
+  // Why: shared with main so the picker never shows a default the QR didn't advertise. Undefined on
+  // a bridge-only host: Relay pairs without a direct address rather than offering an unreachable one.
+  return selectAutoAdvertisedPairingAddress(interfaces)
 }

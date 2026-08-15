@@ -1,27 +1,23 @@
-/* eslint-disable max-lines -- Why: this store owns OpenCode analytics persistence, scan policy, and renderer query semantics. Keeping range/scope queries next to scan persistence prevents UI totals from drifting from the SQLite projection. */
+/* eslint-disable max-lines -- Why: OpenCode cost normalization and range, scope, and breakdown policies remain one cohesive store. */
 import { app } from 'electron'
 import { join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
   OpenCodeUsageDailyPoint,
   OpenCodeUsageRange,
-  OpenCodeUsageScanState,
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
-import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { OPENCODE_USAGE_SCHEMA_VERSION, openCodeUsageProvider } from './opencode-usage-provider'
+import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 
 const SCHEMA_VERSION = OPENCODE_USAGE_SCHEMA_VERSION
-const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
 
@@ -70,47 +66,6 @@ function getOpenCodeUsageFile(): string {
   return _openCodeUsageFile
 }
 
-function getRangeCutoff(range: OpenCodeUsageRange): string | null {
-  if (range === 'all') {
-    return null
-  }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getLocalDay(timestamp: string): string | null {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
-  const rows = [...worktreesByRepo.entries()]
-    .flatMap(([repoId, worktrees]) =>
-      worktrees.map((worktree) =>
-        JSON.stringify({
-          repoId,
-          worktreeId: worktree.worktreeId,
-          path: worktree.path,
-          displayName: worktree.displayName
-        })
-      )
-    )
-    .sort()
-  return JSON.stringify(rows)
-}
-
 function addCost(left: number | null, right: number | null): number | null {
   if (left === null && right === null) {
     return null
@@ -148,62 +103,22 @@ function normalizeSessionCost(
   }
 }
 
-export class OpenCodeUsageStore {
-  private state: OpenCodeUsagePersistedState
-  private readonly store: Store
-  private scanPromise: Promise<void> | null = null
-  // Why: the multi-MB usage JSON must not block the Electron main thread; the writer serializes
-  // writes and vetoes superseded renames.
-  private readonly writer = new UsageCacheSnapshotWriter('[opencode-usage]', getOpenCodeUsageFile)
-
-  constructor(store: Store) {
-    this.store = store
-    this.state = this.load()
-  }
-
-  private load(): OpenCodeUsagePersistedState {
-    try {
-      const usageFile = getOpenCodeUsageFile()
-      if (!existsSync(usageFile)) {
-        return getDefaultState()
-      }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as OpenCodeUsagePersistedState
-      return normalizePersistedState({
-        ...getDefaultState(),
-        ...parsed,
-        scanState: {
-          ...getDefaultState().scanState,
-          ...parsed.scanState
-        }
-      })
-    } catch (error) {
-      console.error('[opencode-usage] Failed to load persisted state, starting fresh:', error)
-      return getDefaultState()
-    }
-  }
-
-  private writeToDisk(): Promise<void> {
-    // Pretty-print preserved: humans inspect this analytics cache on disk.
-    return this.writer.write(() => JSON.stringify(this.state, null, 2))
-  }
-
-  /** Await queued cache writes so quit does not drop the final snapshot. */
-  flush(): Promise<void> {
-    return this.writer.flush()
-  }
-
-  async setEnabled(enabled: boolean): Promise<OpenCodeUsageScanState> {
-    this.state.scanState.enabled = enabled
-    await this.writeToDisk()
-    return this.getScanState()
-  }
-
-  getScanState(): OpenCodeUsageScanState {
-    return {
-      ...this.state.scanState,
-      isScanning: this.scanPromise !== null,
-      hasAnyOpenCodeData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
-    }
+export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
+  'processedDatabases',
+  OpenCodeUsagePersistedState,
+  'hasAnyOpenCodeData'
+> {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+    super(store, {
+      logTag: '[opencode-usage]',
+      resolveCacheFile: getOpenCodeUsageFile,
+      createDefaultState: getDefaultState,
+      normalizeState: normalizePersistedState,
+      sourceKey: 'processedDatabases',
+      dataPresenceKey: 'hasAnyOpenCodeData',
+      jsonIndent: 2,
+      scan: openCodeUsageProvider.scan
+    })
   }
 
   getSnapshot(
@@ -219,63 +134,6 @@ export class OpenCodeUsageStore {
       projectBreakdown: this.buildBreakdown(scope, range, 'project'),
       recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
-  }
-
-  async refresh(force = false): Promise<OpenCodeUsageScanState> {
-    if (!this.state.scanState.enabled) {
-      return this.getScanState()
-    }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
-    if (!force && this.state.scanState.lastScanCompletedAt) {
-      const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
-        return this.getScanState()
-      }
-    }
-    await this.runScan()
-    return this.getScanState()
-  }
-
-  private async runScan(): Promise<void> {
-    if (this.scanPromise) {
-      await this.scanPromise
-      return
-    }
-
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-    // Why no write here: persisting scan-start would rewrite the whole cache before a single result
-    // changed. The completion/failure write below persists the same fields.
-
-    this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await openCodeUsageProvider.scan(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint
-            ? this.state.processedDatabases
-            : []
-        )
-        this.state.processedDatabases = result.processedDatabases
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
-        this.state.scanState.lastScanError = null
-        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
-        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
-        await this.writeToDisk().catch(() => {})
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
-      }
-    })()
-
-    await this.scanPromise
   }
 
   async getSummary(
@@ -479,7 +337,7 @@ export class OpenCodeUsageStore {
     scope: OpenCodeUsageScope,
     range: OpenCodeUsageRange
   ): OpenCodeUsageDailyAggregate[] {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((row) => {
       if (scope === 'orca' && !row.worktreeId) {
         return false
@@ -492,23 +350,18 @@ export class OpenCodeUsageStore {
   }
 
   private getFilteredSessions(scope: OpenCodeUsageScope, range: OpenCodeUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
       if (scope === 'orca' && !session.primaryWorktreeId) {
         return false
       }
       if (cutoff) {
-        const day = getLocalDay(session.lastTimestamp)
+        const day = getLocalUsageDay(session.lastTimestamp)
         if (!day || day < cutoff) {
           return false
         }
       }
       return true
     })
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    return getWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
   }
 }

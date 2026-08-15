@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import type { CustomPet } from '../../shared/types'
+import type { CustomPet } from '../../shared/pet-types'
 import {
   applyCodexPetDefaults,
   readWebpDimensionsFromBuffer,

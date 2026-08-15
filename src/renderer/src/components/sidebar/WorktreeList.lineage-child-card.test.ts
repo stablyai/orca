@@ -2,15 +2,13 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type {
-  FolderWorkspace,
-  ProjectGroup,
-  Repo,
-  Worktree,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type * as WorktreeListModule from './WorktreeList'
+import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/sidebar-row-reveal-ancestors'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
 const mockStore = vi.hoisted(() => ({
@@ -23,7 +21,6 @@ type WorktreeListComponent = React.ComponentType<{
 }>
 
 let WorktreeList: WorktreeListComponent
-let getPinnedWorktreeRevealCollapsedGroupKeys: typeof WorktreeListModule.getPinnedWorktreeRevealCollapsedGroupKeys
 
 function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   return {
@@ -201,35 +198,11 @@ vi.mock('./WorktreeTitleInlineRename', () => ({
     )
 }))
 
-vi.mock('./WorktreeActivityStatusIndicator', () => ({
-  WorktreeActivityStatusIndicator: () => React.createElement('span', { 'data-status-dot': true })
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetId,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetId: string
-    targetLabel: string
-  }) =>
-    React.createElement('aside', {
-      'data-lineage-ssh-dialog': open ? 'open' : 'closed',
-      'data-ssh-status': status,
-      'data-ssh-target-id': targetId,
-      'data-ssh-target-label': targetLabel
-    })
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -854,7 +827,6 @@ describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     const module = await import('./WorktreeList')
     WorktreeList = module.default as WorktreeListComponent
-    getPinnedWorktreeRevealCollapsedGroupKeys = module.getPinnedWorktreeRevealCollapsedGroupKeys
   }, 60_000)
 
   it('renders project group headers when repos import before worktree rows load', async () => {

@@ -93,10 +93,12 @@ import {
 } from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
+  beginGitHubChecksTabDetails,
   createGitHubChecksTabState,
+  resetGitHubChecksTabForSource,
   resolveGitHubChecksTabState,
+  settleGitHubChecksTabDetails,
   toggleGitHubChecksTabExpandedKey,
-  updateGitHubChecksTabDetails,
   updateGitHubChecksTabLocalChecks,
   type CheckDetailsLoadState
 } from '@/components/github-checks-tab-state'
@@ -113,10 +115,12 @@ import {
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
-  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
-} from '@/lib/pr-comment-audience'
+} from '../../../shared/pr-comment-audience'
+import {
+  getPRCommentAudienceEmptyLabel,
+  getPrCommentAudienceFilters
+} from '@/lib/pr-comment-audience-labels'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupCount,
@@ -124,11 +128,13 @@ import {
   getPRCommentGroupRoot,
   groupPRComments,
   isResolvedPRCommentGroup,
+  type PRCommentGroup
+} from '../../../shared/pr-comment-groups'
+import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_AUTHOR_CLASS,
-  PR_COMMENT_RESOLVED_CONTAINER_CLASS,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+  PR_COMMENT_RESOLVED_CONTAINER_CLASS
+} from '@/lib/pr-comment-resolution-classes'
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
@@ -141,6 +147,7 @@ import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
@@ -170,8 +177,8 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/pull-request-merge-methods'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   findGithubIssueWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
@@ -179,22 +186,22 @@ import {
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 import type {
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
+  PRComment
+} from '../../../shared/github/comment-types'
+import type {
+  GitHubAssignableUser,
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubPRFileViewedState,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
-  GitHubIssueTimelineItem,
-  GitHubIssueTimelineTarget,
-  GitHubAssignableUser,
-  GitHubPRMergeMethod,
-  GitBranchChangeEntry,
-  GitDiffResult,
-  PRCheckDetail,
-  PRComment
-} from '../../../shared/types'
+  GitHubPRMergeMethod
+} from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
@@ -210,6 +217,7 @@ import {
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page-github-status-actions'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page-github-dialog-state-authority'
 import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
 import {
   getCheckConclusion,
@@ -1232,7 +1240,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
     invalidateWorkItemDetailsCacheByMatch(payload)
   })
 }
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
     workItemDetailsCacheEventUnsub?.()
@@ -2834,6 +2842,14 @@ function PRActionsPanel({
     }
     const previousState = localState
     setStatePending(true)
+    // Why: without registry authority a search-lagged Tasks refetch silently
+    // reverts this row to its pre-mutation state (STA-3343).
+    const authority = assertTaskPageGitHubDialogStateAuthority({
+      repoId: item.repoId,
+      itemId: item.id,
+      state: nextState,
+      sourceContext
+    })
     applyStatePatch(nextState)
     try {
       await runPullRequestStateUpdate({
@@ -2853,7 +2869,9 @@ function PRActionsPanel({
       )
       onMutated()
     } catch (err) {
-      applyStatePatch(previousState)
+      if (authority.revert()) {
+        applyStatePatch(previousState)
+      }
       toast.error(
         err instanceof Error
           ? err.message
@@ -2913,6 +2931,13 @@ function PRActionsPanel({
         toast.error(result.error)
         return
       }
+      // Why: merge is confirmed here; hold 'merged' against search-lagged refetches.
+      assertTaskPageGitHubDialogStateAuthority({
+        repoId: item.repoId,
+        itemId: item.id,
+        state: 'merged',
+        sourceContext
+      })
       applyStatePatch('merged')
       if (mergeTarget.kind === 'environment') {
         notifyWorkItemDetailsMutation(
@@ -3197,19 +3222,46 @@ function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const [refreshing, setRefreshing] = useState(false)
-  const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
-  const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
   const mountedRef = useMountedRef()
-  const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
+  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
+  const nextCheckDetailsRequestIdRef = useRef(0)
+  const checkDetailsContextKey = [
+    sourceContext ? getTaskSourceCacheScope(sourceContext) : 'local',
+    repoId ?? item.repoId ?? '',
+    repoPath ?? '',
+    prRepo ? githubRepoIdentityKey(prRepo) : '',
+    item.id,
+    item.number,
+    headSha ?? ''
+  ].join('\0')
+  const [checksState, setChecksState] = useState(() =>
+    createGitHubChecksTabState(checks, checkDetailsContextKey)
+  )
+  const resolvedChecksState = resolveGitHubChecksTabState(
+    checksState,
+    checks,
+    checkDetailsContextKey
+  )
+  const committedChecksContextOwnerRef = useRef(resolvedChecksState.contextOwner)
+  const nextChecksRefreshRequestIdRef = useRef(0)
+  const activeChecksRefreshRequestIdRef = useRef<number | null>(null)
+  const [refreshingOwner, setRefreshingOwner] = useState<{
+    contextOwner: object
+    requestId: number
+  } | null>(null)
+  const refreshing = refreshingOwner?.contextOwner === resolvedChecksState.contextOwner
+  const [rerunningOwner, setRerunningOwner] = useState<object | null>(null)
+  const rerunning = rerunningOwner === resolvedChecksState.contextOwner
+  useLayoutEffect(() => {
+    committedChecksContextOwnerRef.current = resolvedChecksState.contextOwner
+  }, [resolvedChecksState.contextOwner])
   if (resolvedChecksState !== checksState) {
     // Why: a parent check refresh replaces the source list; reset local state before stale rows/details can paint.
     setChecksState(resolvedChecksState)
   }
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
-  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const sorted = sortChecksBySeverity(list)
@@ -3240,72 +3292,107 @@ function ChecksTab({
             : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
-  const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
-    if (!canUseChecksRepoContext) {
-      toast.error(
-        translate(
-          'auto.components.GitHubItemDialog.e7007aa1d8',
-          'Unable to refresh checks without a repository path.'
+  const handleRefresh = useCallback(
+    async (expectedContextOwner?: object): Promise<PRCheckDetail[] | null> => {
+      if (!canUseChecksRepoContext) {
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.e7007aa1d8',
+            'Unable to refresh checks without a repository path.'
+          )
         )
-      )
-      return null
-    }
-    setRefreshing(true)
-    try {
-      const nextChecks = (await (runtimeHost
-        ? callRuntimeRpc<PRCheckDetail[]>(
-            { kind: 'environment', environmentId: runtimeHost.environmentId },
-            'github.prChecks',
-            {
-              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+        return null
+      }
+      const refreshContextOwner = expectedContextOwner ?? committedChecksContextOwnerRef.current
+      if (committedChecksContextOwnerRef.current !== refreshContextOwner) {
+        return null
+      }
+      const refreshRequestId = ++nextChecksRefreshRequestIdRef.current
+      activeChecksRefreshRequestIdRef.current = refreshRequestId
+      setRefreshingOwner({ contextOwner: refreshContextOwner, requestId: refreshRequestId })
+      try {
+        const nextChecks = (await (runtimeHost
+          ? callRuntimeRpc<PRCheckDetail[]>(
+              { kind: 'environment', environmentId: runtimeHost.environmentId },
+              'github.prChecks',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                headSha,
+                prRepo,
+                noCache: true
+              },
+              { timeoutMs: 30_000 }
+            )
+          : window.api.gh.prChecks({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
               prNumber: item.number,
               headSha,
               prRepo,
               noCache: true
-            },
-            { timeoutMs: 30_000 }
+            }))) as PRCheckDetail[]
+        if (
+          !mountedRef.current ||
+          committedChecksContextOwnerRef.current !== refreshContextOwner ||
+          activeChecksRefreshRequestIdRef.current !== refreshRequestId
+        ) {
+          return null
+        }
+        setChecksState((current) =>
+          current.contextOwner === refreshContextOwner
+            ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
+            : current
+        )
+        onChecksUpdated(nextChecks)
+        return nextChecks
+      } catch (err) {
+        if (
+          mountedRef.current &&
+          committedChecksContextOwnerRef.current === refreshContextOwner &&
+          activeChecksRefreshRequestIdRef.current === refreshRequestId
+        ) {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
           )
-        : window.api.gh.prChecks({
-            repoPath: repoPath ?? '',
-            repoId: repoId ?? undefined,
-            sourceContext,
-            prNumber: item.number,
-            headSha,
-            prRepo,
-            noCache: true
-          }))) as PRCheckDetail[]
-      setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
-      onChecksUpdated(nextChecks)
-      return nextChecks
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
-      )
-      return null
-    } finally {
-      setRefreshing(false)
-    }
-  }, [
-    canUseChecksRepoContext,
-    headSha,
-    item.number,
-    item.repoId,
-    onChecksUpdated,
-    runtimeHost,
-    prRepo,
-    repoId,
-    repoPath,
-    sourceContext
-  ])
+        }
+        return null
+      } finally {
+        if (activeChecksRefreshRequestIdRef.current === refreshRequestId) {
+          activeChecksRefreshRequestIdRef.current = null
+        }
+        if (mountedRef.current) {
+          setRefreshingOwner((current) =>
+            current?.requestId === refreshRequestId ? null : current
+          )
+        }
+      }
+    },
+    [
+      canUseChecksRepoContext,
+      headSha,
+      item.number,
+      item.repoId,
+      mountedRef,
+      onChecksUpdated,
+      runtimeHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
+  )
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
       if (!canUseChecksRepoContext || rerunning) {
         return
       }
-      setRerunning(true)
+      const rerunContextOwner = committedChecksContextOwnerRef.current
+      setRerunningOwner(rerunContextOwner)
       try {
         const result = runtimeHost
           ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
@@ -3329,6 +3416,9 @@ function ChecksTab({
               failedOnly,
               prRepo
             })
+        if (!mountedRef.current || committedChecksContextOwnerRef.current !== rerunContextOwner) {
+          return
+        }
         if (!result.ok) {
           toast.error(result.error)
           return
@@ -3338,15 +3428,19 @@ function ChecksTab({
             ? translate('auto.components.GitHubItemDialog.ddafe851e1', 'Check rerun requested')
             : translate('auto.components.GitHubItemDialog.e463ec935f', 'Check reruns requested')
         )
-        await handleRefresh()
+        await handleRefresh(rerunContextOwner)
       } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.GitHubItemDialog.9e7c221b8d', 'Failed to rerun checks')
-        )
+        if (mountedRef.current && committedChecksContextOwnerRef.current === rerunContextOwner) {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate('auto.components.GitHubItemDialog.9e7c221b8d', 'Failed to rerun checks')
+          )
+        }
       } finally {
-        setRerunning(false)
+        if (mountedRef.current) {
+          setRerunningOwner((current) => (current === rerunContextOwner ? null : current))
+        }
       }
     },
     [
@@ -3355,6 +3449,7 @@ function ChecksTab({
       headSha,
       item.number,
       item.repoId,
+      mountedRef,
       prRepo,
       runtimeHost,
       rerunning,
@@ -3423,77 +3518,74 @@ function ChecksTab({
     }
   }, [failedChecks.length, fixingChecks, item, list, repoId])
 
-  const handleToggleCheckDetails = useCallback(
-    (check: PRCheckDetail): void => {
-      const key = getCheckDetailsKey(check)
-      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
-      if (
-        !canUseChecksRepoContext ||
-        detailsByCheckKey[key] ||
-        (!check.checkRunId && !check.workflowRunId && !check.url)
-      ) {
+  const requestCheckDetails = useCallback(
+    (check: PRCheckDetail, key: string): void => {
+      if (!canUseChecksRepoContext || (!check.checkRunId && !check.workflowRunId && !check.url)) {
         return
       }
-      setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, {
-          loading: true,
-          details: null,
-          error: null
-        })
-      )
-      const detailsRequest = runtimeHost
-        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
-            { kind: 'environment', environmentId: runtimeHost.environmentId },
-            'github.prCheckDetails',
-            {
-              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+      const requestId = ++nextCheckDetailsRequestIdRef.current
+      const commit = (next: Omit<CheckDetailsLoadState, 'requestId'>): void => {
+        if (!mountedRef.current) {
+          return
+        }
+        setChecksState((current) => settleGitHubChecksTabDetails(current, key, requestId, next))
+      }
+      setChecksState((current) => beginGitHubChecksTabDetails(current, key, requestId))
+      const detailsRequest = withGitHubCheckDetailsTimeout((signal) =>
+        runtimeHost
+          ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
+              { kind: 'environment', environmentId: runtimeHost.environmentId },
+              'github.prCheckDetails',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                checkRunId: check.checkRunId,
+                workflowRunId: check.workflowRunId,
+                checkName: check.name,
+                url: check.url,
+                prRepo
+              },
+              { timeoutMs: 30_000, signal }
+            )
+          : window.api.gh.prCheckDetails({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
               checkRunId: check.checkRunId,
               workflowRunId: check.workflowRunId,
               checkName: check.name,
               url: check.url,
               prRepo
-            },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.prCheckDetails({
-            repoPath: repoPath ?? '',
-            repoId: repoId ?? undefined,
-            sourceContext,
-            checkRunId: check.checkRunId,
-            workflowRunId: check.workflowRunId,
-            checkName: check.name,
-            url: check.url,
-            prRepo
-          })
+            })
+      )
       void detailsRequest
         .then((details) => {
-          if (!mountedRef.current) {
-            return
-          }
-          setChecksState((current) =>
-            updateGitHubChecksTabDetails(current, key, {
-              loading: false,
-              details,
-              error: details ? null : 'No inline details are available for this check.'
-            })
-          )
+          commit({
+            loading: false,
+            details,
+            error: details
+              ? null
+              : translate(
+                  'auto.components.GitHubItemDialog.e15a8b77ef',
+                  'No inline details are available for this check.'
+                )
+          })
         })
         .catch((err) => {
-          if (!mountedRef.current) {
-            return
-          }
-          setChecksState((current) =>
-            updateGitHubChecksTabDetails(current, key, {
-              loading: false,
-              details: null,
-              error: err instanceof Error ? err.message : 'Failed to load check details.'
-            })
-          )
+          commit({
+            loading: false,
+            details: null,
+            error:
+              err instanceof Error
+                ? err.message
+                : translate(
+                    'auto.components.GitHubItemDialog.e45324fbed',
+                    'Failed to load check details.'
+                  )
+          })
         })
     },
     [
       canUseChecksRepoContext,
-      detailsByCheckKey,
       item.repoId,
       mountedRef,
       runtimeHost,
@@ -3502,6 +3594,18 @@ function ChecksTab({
       repoPath,
       sourceContext
     ]
+  )
+
+  const handleToggleCheckDetails = useCallback(
+    (check: PRCheckDetail): void => {
+      const key = getCheckDetailsKey(check)
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
+      if (detailsByCheckKey[key]) {
+        return
+      }
+      requestCheckDetails(check, key)
+    },
+    [detailsByCheckKey, requestCheckDetails]
   )
 
   const refreshAction = (
@@ -3697,7 +3801,7 @@ function ChecksTab({
 
     return (
       <div className="mx-2 mb-2 mt-1 min-w-0 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
-        {state?.loading ? (
+        {state?.loading && !state.error ? (
           <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
             {translate('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
@@ -3728,7 +3832,27 @@ function ChecksTab({
               )}
             </div>
 
-            {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
+            {state?.error && (
+              <div role="alert" className="flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 break-words text-[12px] text-destructive">
+                  {state.error}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0"
+                  disabled={state.loading}
+                  aria-busy={state.loading}
+                  onClick={() => requestCheckDetails(check, getCheckDetailsKey(check))}
+                >
+                  <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
+                  {state.loading
+                    ? translate('githubChecks.retrying', 'Retrying…')
+                    : translate('auto.components.GitHubItemDialog.dcb3c546fe', 'Retry')}
+                </Button>
+              </div>
+            )}
 
             {hasOutput && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70 px-2.5 py-2">
@@ -4175,6 +4299,9 @@ function GHEditSection({
         return
       }
       const prevState = localState
+      // Why: without registry authority a search-lagged Tasks refetch silently
+      // reverts this row to its pre-mutation state (STA-3343).
+      let authority: { revert: () => boolean } | null = null
       run('state', {
         mutate: () =>
           runIssueUpdate({
@@ -4189,14 +4316,22 @@ function GHEditSection({
                 : { state: newState }
           }),
         onOptimistic: () => {
+          authority = assertTaskPageGitHubDialogStateAuthority({
+            repoId: item.repoId,
+            itemId: item.id,
+            state: newState,
+            sourceContext
+          })
           onStateChange(newState)
           patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
-          onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
-          patchProjectRowIfNeeded({ state: prevState })
+          if (authority?.revert()) {
+            onStateChange(prevState)
+            patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
+            patchProjectRowIfNeeded({ state: prevState })
+          }
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('github-tasks')

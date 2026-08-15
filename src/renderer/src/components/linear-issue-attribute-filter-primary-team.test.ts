@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from './linear-issue-attribute-filter-primary-team'
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
 const teams: LinearTeam[] = [
   { id: 't-b', name: 'Backend', key: 'BE' },

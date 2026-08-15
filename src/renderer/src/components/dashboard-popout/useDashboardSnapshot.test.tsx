@@ -4,6 +4,10 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload
+} from '../../../../shared/agent-status-types'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -35,6 +39,9 @@ function snapshot(cards: DashboardCard[]): DashboardSnapshot {
 }
 
 let apply: (next: DashboardSnapshot) => void
+let applyStatus: (next: AgentStatusIpcPayload) => void
+let applyClear: (next: AgentStatusClearIpcPayload) => void
+const requestSnapshot = vi.fn(async () => {})
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
   return {
@@ -62,7 +69,17 @@ describe('useDashboardSnapshot', () => {
           apply = cb
           return () => {}
         },
-        requestSnapshot: vi.fn(async () => {})
+        requestSnapshot
+      },
+      agentStatus: {
+        onSet: (cb: (next: AgentStatusIpcPayload) => void) => {
+          applyStatus = cb
+          return () => {}
+        },
+        onClear: (cb: (next: AgentStatusClearIpcPayload) => void) => {
+          applyClear = cb
+          return () => {}
+        }
       }
     }
     ;(document as unknown as { startViewTransition: unknown }).startViewTransition =
@@ -139,5 +156,86 @@ describe('useDashboardSnapshot', () => {
     act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
     act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: {} }))
     expect(result.current.repoIconsByRepoId).toEqual({})
+  })
+
+  it('applies known hook status without requesting a rebuilt snapshot', () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ statusUpdatedAt: 100 })])))
+    requestSnapshot.mockClear()
+
+    act(() =>
+      applyStatus({
+        paneKey: 'pk',
+        state: 'blocked',
+        prompt: 'Choose',
+        connectionId: null,
+        receivedAt: 300,
+        stateStartedAt: 250
+      })
+    )
+
+    expect(requestSnapshot).not.toHaveBeenCalled()
+    expect(result.current.cards[0]).toMatchObject({
+      bucket: 'attention',
+      task: 'Choose',
+      statusUpdatedAt: 300
+    })
+  })
+
+  it('trailing-debounces an unknown-pane burst into one topology refresh', () => {
+    vi.useFakeTimers()
+    renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({})])))
+    requestSnapshot.mockClear()
+
+    act(() => {
+      for (let index = 0; index < 10; index += 1) {
+        applyStatus({
+          paneKey: `unknown-${index}`,
+          state: 'working',
+          prompt: '',
+          connectionId: null,
+          receivedAt: 300 + index,
+          stateStartedAt: 250 + index
+        })
+        vi.advanceTimersByTime(40)
+      }
+      applyClear({ paneKey: 'pk' })
+      vi.advanceTimersByTime(249)
+    })
+
+    expect(requestSnapshot).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1))
+    expect(requestSnapshot).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('refreshes within the max wait while unknown events continue', () => {
+    vi.useFakeTimers()
+    renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({})])))
+    requestSnapshot.mockClear()
+
+    const unknown = (index: number): void =>
+      applyStatus({
+        paneKey: `unknown-${index}`,
+        state: 'working',
+        prompt: '',
+        connectionId: null,
+        receivedAt: 300 + index,
+        stateStartedAt: 250 + index
+      })
+    act(() => {
+      unknown(0)
+      for (let index = 1; index <= 4; index += 1) {
+        vi.advanceTimersByTime(200)
+        unknown(index)
+      }
+    })
+    expect(requestSnapshot).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(200))
+    expect(requestSnapshot).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 })

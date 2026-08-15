@@ -11,6 +11,7 @@ const LOCAL_MAC: DashboardCardTerminalInput = {
   hostPlatform: 'darwin',
   localWindowsConpty: false,
   windowsShiftEnterEncoding: 'alt-enter',
+  ctrlEnterCsiU: false,
   kittyKeyboardAdvertised: true
 }
 
@@ -73,6 +74,7 @@ describe('resolvePreviewShortcutAction', () => {
         hostPlatform: 'win32',
         localWindowsConpty: true,
         windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: false
       }
     })
@@ -94,6 +96,7 @@ describe('resolvePreviewShortcutAction', () => {
         hostPlatform: 'win32',
         localWindowsConpty: false,
         windowsShiftEnterEncoding: 'csi-u',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: true
       }
     })
@@ -103,6 +106,44 @@ describe('resolvePreviewShortcutAction', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', shiftKey: true }), contextFor())
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
+
+  it('protects local ConPTY shells while preserving trusted Ctrl+Enter consumers', () => {
+    const conpty = contextFor({
+      clientPlatform: 'win32',
+      terminalInput: {
+        hostPlatform: 'win32',
+        localWindowsConpty: true,
+        windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
+        kittyKeyboardAdvertised: false
+      }
+    })
+    expect(
+      resolvePreviewShortcutAction(keydown({ key: 'Enter', ctrlKey: true }), {
+        ...conpty,
+        kittyKeyboardActive: () => true
+      })
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+    expect(resolvePreviewShortcutAction(keydown({ key: 'Enter', ctrlKey: true }), conpty)).toEqual({
+      type: 'sendInput',
+      data: '\r'
+    })
+    expect(
+      resolvePreviewShortcutAction(
+        keydown({ key: 'Enter', ctrlKey: true }),
+        contextFor({
+          clientPlatform: 'win32',
+          terminalInput: {
+            hostPlatform: 'win32',
+            localWindowsConpty: true,
+            windowsShiftEnterEncoding: 'alt-enter',
+            ctrlEnterCsiU: true,
+            kittyKeyboardAdvertised: false
+          }
+        })
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
   })
 
   it('reports pane-scoped chords so the caller can swallow them', () => {

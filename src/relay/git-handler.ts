@@ -19,6 +19,11 @@ import {
   type GitExec
 } from './git-handler-ops'
 import {
+  branchDiffEntryAtPinnedOids,
+  isFullGitObjectId,
+  parseOptionalBranchDiffHeadOid
+} from './git-handler-branch-diff-ops'
+import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
   computeSubmoduleRangeEntries,
@@ -56,7 +61,7 @@ import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-st
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
-import type { GitPushTarget } from '../shared/types'
+import type { GitPushTarget } from '../shared/worktree/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -89,6 +94,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
@@ -298,6 +304,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    invalidateGitBranchLineTotalInFlight()
     clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
@@ -1146,6 +1153,7 @@ export class GitHandler {
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+    const headOid = parseOptionalBranchDiffHeadOid(params)
     const options = {
       includePatch: params.includePatch as boolean | undefined,
       filePath: params.filePath as string | undefined,
@@ -1156,18 +1164,36 @@ export class GitHandler {
         'branchDiff',
         worktreePath,
         baseRef,
+        headOid ?? null,
         options.includePatch ?? null,
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () =>
-        branchDiffEntries(
+      () => {
+        if (
+          headOid &&
+          isFullGitObjectId(baseRef) &&
+          options.includePatch === true &&
+          typeof options.filePath === 'string' &&
+          options.filePath.length > 0
+        ) {
+          return branchDiffEntryAtPinnedOids(
+            this.gitBuffer.bind(this),
+            worktreePath,
+            baseRef,
+            headOid,
+            options.filePath,
+            options.oldPath
+          )
+        }
+        return branchDiffEntries(
           this.git.bind(this),
           this.gitBuffer.bind(this),
           worktreePath,
           baseRef,
           options
         )
+      }
     )
     return this.maybeStreamResponse(result, params, context)
   }

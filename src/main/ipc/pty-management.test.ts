@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
-const { handleMock, removeHandlerMock, getDaemonProviderMock, restartDaemonMock } = vi.hoisted(
-  () => ({
-    handleMock: vi.fn(),
-    removeHandlerMock: vi.fn(),
-    getDaemonProviderMock: vi.fn(),
-    restartDaemonMock: vi.fn()
-  })
-)
+const {
+  handleMock,
+  removeHandlerMock,
+  getDaemonProviderMock,
+  restartDaemonMock,
+  getCurrentDaemonMacTccAttributionHealthMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  getDaemonProviderMock: vi.fn(),
+  restartDaemonMock: vi.fn(),
+  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown')
+}))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
@@ -16,7 +21,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: getDaemonProviderMock,
-  restartDaemon: restartDaemonMock
+  restartDaemon: restartDaemonMock,
+  getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 
 // Why: the handler uses `provider instanceof DaemonPtyRouter` to branch
@@ -140,6 +146,8 @@ describe('pty:management IPC handlers', () => {
   beforeEach(() => {
     getDaemonProviderMock.mockReset()
     restartDaemonMock.mockReset()
+    getCurrentDaemonMacTccAttributionHealthMock.mockReset()
+    getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('unknown')
   })
 
   afterEach(() => {
@@ -453,6 +461,36 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.success).toBe(false)
       expect(current.listSessions).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('macTccAttribution', () => {
+    it('reports the daemon attribution health', async () => {
+      getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('severed')
+
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = (await handlers['pty:management:macTccAttribution']({})) as {
+        health: string
+      }
+
+      expect(result.health).toBe('severed')
+    })
+
+    it('fails open to unknown when the probe throws', async () => {
+      getCurrentDaemonMacTccAttributionHealthMock.mockRejectedValue(new Error('no pid record'))
+
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = (await handlers['pty:management:macTccAttribution']({})) as {
+        health: string
+      }
+
+      expect(result.health).toBe('unknown')
     })
   })
 

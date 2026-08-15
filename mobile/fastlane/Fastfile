@@ -2,8 +2,9 @@
 #
 # Builds the prebuilt iOS workspace, signs it with the distribution identity
 # imported into the CI keychain plus an explicit App Store provisioning profile
-# fetched via the App Store Connect API key, then uploads the .ipa to
-# TestFlight. All Apple credentials come from CI env vars
+# fetched via the App Store Connect API key, uploads the .ipa, then distributes
+# the processed build to external TestFlight testers. Credentials come from CI
+# env vars
 # (see .github/workflows/mobile-ios-release.yml) so nothing secret lives in the
 # repo.
 #
@@ -30,6 +31,7 @@ SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
 DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS = 20 * 60
 
 # App Store version states in which the version "train" is terminally closed to
 # new TestFlight build uploads (altool rejects with 90186 "train ... is
@@ -74,6 +76,11 @@ def current_mobile_version(config)
   config.fetch("expo").fetch("version")
 end
 
+def testflight_changelog
+  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
+end
+
 # True when either state field reports a terminally closed train. `respond_to?`
 # guards the newer field, which older spaceship versions do not define.
 def closed_state?(app_store_version)
@@ -110,11 +117,6 @@ rescue StandardError => error
   # degraded run must be visible rather than buried.
   UI.error("Could not determine closed App Store versions (#{error.message}); assuming open and proceeding.")
   nil
-end
-
-def testflight_changelog
-  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
-  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
 end
 
 platform :ios do
@@ -178,8 +180,8 @@ platform :ios do
     UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
   end
 
-  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
-  lane :release do
+  desc "Build, sign, and upload Orca Mobile to App Store Connect / TestFlight"
+  lane :build_and_upload do
     api_key = app_store_connect_api_key_from_env
 
     team_id = ENV.fetch("APPLE_TEAM_ID")
@@ -221,15 +223,59 @@ platform :ios do
 
     upload_to_testflight(
       api_key: api_key,
-      # Why: fastlane can only assign external TestFlight groups after Apple
-      # finishes processing the uploaded build.
+      # Distribution runs separately so a processing timeout can be retried
+      # against this exact build without uploading another binary.
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+    )
+  end
+
+  desc "Wait for and distribute an uploaded build to external TestFlight testers"
+  lane :distribute_testflight do |options|
+    version = options[:version].to_s.strip
+    build_number = options[:build_number].to_s.strip
+    UI.user_error!("version is required") if version.empty?
+    UI.user_error!("build_number is required") if build_number.empty?
+
+    api_key = app_store_connect_api_key_from_env
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("Could not find App Store Connect app #{BUNDLE_ID}") unless app
+
+    available_groups = app.get_beta_groups.map(&:name)
+    missing_groups = TESTFLIGHT_GROUPS - available_groups
+    unless missing_groups.empty?
+      UI.user_error!(
+        "Missing TestFlight group(s): #{missing_groups.join(', ')}. " \
+        "Create them in App Store Connect or update TESTFLIGHT_GROUPS.",
+      )
+    end
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      # distribute_only means there is no local .ipa to sniff, so fastlane would
+      # otherwise fall through to an interactive platform prompt and crash in CI.
+      app_platform: "ios",
+      app_version: version,
+      build_number: build_number,
+      distribute_only: true,
       skip_waiting_for_build_processing: false,
+      wait_processing_timeout_duration: TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS,
       distribute_external: true,
       groups: TESTFLIGHT_GROUPS,
       notify_external_testers: true,
-      # Why: fastlane requires release notes when distributing to external
-      # TestFlight testers, even for CI-triggered smoke releases.
       changelog: testflight_changelog,
+    )
+  end
+
+  desc "Build, upload, and distribute Orca Mobile to external TestFlight testers"
+  lane :release do
+    build_and_upload
+
+    config = load_mobile_app_config
+    distribute_testflight(
+      version: current_mobile_version(config),
+      build_number: config.fetch("expo").fetch("ios").fetch("buildNumber"),
     )
   end
 end

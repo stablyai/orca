@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { createServer, connect, type Server } from 'node:net'
 import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import type { SocketProbeOutcome } from './daemon-endpoint-probe'
 import {
   checkDaemonHealth,
   E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
@@ -168,10 +171,6 @@ describe('daemon health', () => {
   })
 
   it('does not unlink a live socket when the pid file does not match this daemon', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
     const server = createServer((socket) => socket.end())
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -183,7 +182,9 @@ describe('daemon health', () => {
     writeFileSync(getDaemonPidPath(dir), String(process.pid), { mode: 0o600 })
 
     try {
-      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(false)
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
+        killed: false
+      })
       await expect(canConnect(socketPath)).resolves.toBe(true)
     } finally {
       await closeServer(server)
@@ -201,7 +202,8 @@ describe('parseDaemonPidFile', () => {
       appVersion: null,
       launchNonce: null,
       linuxStartTicks: null,
-      bootId: null
+      bootId: null,
+      spawnerExecPath: null
     })
   })
 
@@ -219,7 +221,8 @@ describe('parseDaemonPidFile', () => {
       appVersion: '1.2.3',
       launchNonce: null,
       linuxStartTicks: null,
-      bootId: null
+      bootId: null,
+      spawnerExecPath: null
     })
   })
 
@@ -248,7 +251,8 @@ describe('parseDaemonPidFile', () => {
       appVersion: null,
       launchNonce: null,
       linuxStartTicks: null,
-      bootId: null
+      bootId: null,
+      spawnerExecPath: null
     })
   })
 
@@ -263,7 +267,8 @@ describe('parseDaemonPidFile', () => {
       appVersion: null,
       launchNonce: null,
       linuxStartTicks: null,
-      bootId: null
+      bootId: null,
+      spawnerExecPath: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
@@ -272,7 +277,8 @@ describe('parseDaemonPidFile', () => {
       appVersion: null,
       launchNonce: null,
       linuxStartTicks: null,
-      bootId: null
+      bootId: null,
+      spawnerExecPath: null
     })
   })
 
@@ -346,9 +352,6 @@ describe('startTimeMatches', () => {
   })
 
   it('returns false for start times outside tolerance', () => {
-    if (process.platform === 'win32') {
-      return
-    }
     const actual = getProcessStartedAtMs(process.pid)
     if (actual === null) {
       return
@@ -410,10 +413,6 @@ describe('killStaleDaemon pid identity guards', () => {
   })
 
   it('does not SIGTERM when the saved startedAtMs mismatches the current process', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
     // Why: seed a pid file that claims the daemon is `process.pid` (us) but
     // was started 1 hour ago. Our real start time is "now," so startTimeMatches
     // returns false and isDaemonProcess rejects. killStaleDaemon must not call
@@ -430,7 +429,9 @@ describe('killStaleDaemon pid identity guards', () => {
     // signal is sent.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
-      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(false)
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
+        killed: false
+      })
       const terminationSignals = killSpy.mock.calls.filter(
         ([, sig]) => sig === 'SIGTERM' || sig === 'SIGKILL'
       )
@@ -439,4 +440,150 @@ describe('killStaleDaemon pid identity guards', () => {
       killSpy.mockRestore()
     }
   })
+})
+
+describe('killStaleDaemon ownership decisions', () => {
+  let dir: string
+  let socketPath: string
+  let tokenPath: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-health-kill-test-'))
+    socketPath = daemonTestSocketPath(dir)
+    tokenPath = join(dir, 'daemon.token')
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  function listenOnSocketPath(server: Server, path: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(path, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+  }
+
+  it.each<{ outcome: SocketProbeOutcome; liveOwnerSurvived: boolean }>([
+    { outcome: 'connected', liveOwnerSurvived: true },
+    { outcome: 'refused', liveOwnerSurvived: false },
+    { outcome: 'missing', liveOwnerSurvived: false },
+    { outcome: 'unknown', liveOwnerSurvived: false }
+  ])(
+    'reports liveOwnerSurvived=$liveOwnerSurvived for a $outcome endpoint',
+    async ({ outcome, liveOwnerSurvived }) => {
+      const probeEndpoint = vi.fn(async () => outcome)
+
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, { probeEndpoint })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived })
+      expect(probeEndpoint).toHaveBeenCalledOnce()
+      expect(probeEndpoint).toHaveBeenCalledWith(socketPath)
+    }
+  )
+
+  it('preserves a daemon that cannot be proven dead', async () => {
+    const record = serializeDaemonPidFile({
+      pid: process.pid,
+      startedAtMs: null,
+      launchNonce: 'live-owner'
+    })
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    })
+
+    try {
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+          probeEndpoint: async () => 'unknown'
+        })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+      expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(record)
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
+  it('removes a malformed pid record', async () => {
+    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
+
+    await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+      probeEndpoint: async () => 'missing'
+    })
+
+    expect(existsSync(getDaemonPidPath(dir))).toBe(false)
+  })
+
+  it('removes a legacy bare-integer pid record', async () => {
+    writeFileSync(getDaemonPidPath(dir), String(999_999), { mode: 0o600 })
+
+    await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+      probeEndpoint: async () => 'missing'
+    })
+
+    expect(existsSync(getDaemonPidPath(dir))).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    "leaves a replacement's pid record after killing the recorded owner",
+    async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          '-e',
+          "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1000)",
+          'daemon-entry',
+          socketPath,
+          tokenPath
+        ],
+        { stdio: ['ignore', 'pipe', 'ignore'] }
+      )
+      // The handler must exist before SIGTERM to hold the fencing window open.
+      await new Promise<void>((resolve, reject) => {
+        child.once('error', reject)
+        child.stdout?.once('data', () => resolve())
+      })
+      const childPid = child.pid as number
+      const childExited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+      writeFileSync(
+        getDaemonPidPath(dir),
+        serializeDaemonPidFile({ pid: childPid, startedAtMs: null, launchNonce: 'daemon-a' }),
+        { mode: 0o600 }
+      )
+
+      const replacementRecord = serializeDaemonPidFile({
+        pid: process.pid,
+        startedAtMs: 2_000,
+        launchNonce: 'daemon-b'
+      })
+      const replacement = createServer((socket) => socket.end())
+      const handover = setTimeout(() => {
+        void listenOnSocketPath(replacement, socketPath).then(() => {
+          writeFileSync(getDaemonPidPath(dir), replacementRecord, { mode: 0o600 })
+        })
+      }, 300)
+
+      try {
+        await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
+          killed: true,
+          liveOwnerSurvived: true
+        })
+        expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(replacementRecord)
+        await expect(canConnect(socketPath)).resolves.toBe(true)
+      } finally {
+        clearTimeout(handover)
+        try {
+          process.kill(childPid, 'SIGKILL')
+        } catch {
+          // Already gone.
+        }
+        await childExited
+        await closeServer(replacement)
+      }
+    }
+  )
 })
