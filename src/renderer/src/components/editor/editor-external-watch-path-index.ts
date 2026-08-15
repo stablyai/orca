@@ -4,6 +4,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import {
   getLocalWindowsWslPathIdentity,
+  isCaseInsensitiveRuntimeRoot,
   normalizeRuntimePathForComparison,
   type LocalWindowsWslPathIdentity
 } from '../../../../shared/cross-platform-path'
@@ -112,11 +113,15 @@ class IndexedOpenFileLookup {
   readonly indexedOpenFiles = new Map<string, IndexedOpenFile>()
   readonly hasCombinedDiffConsumer: boolean
 
+  // Why: a drive/UNC root folds case and separators, so a tab opened as `C:\r\a.ts` must still match a `c:/r/a.ts` watcher event; case-sensitive roots (WSL, POSIX, SSH) keep literal keys.
+  private readonly foldsDirectKeys: boolean
+
   constructor(
     openFiles: OpenFile[],
     scope: WatchScope,
     private readonly allowAliases: boolean
   ) {
+    this.foldsDirectKeys = isCaseInsensitiveRuntimeRoot(scope.worktreePath)
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
@@ -148,7 +153,7 @@ class IndexedOpenFileLookup {
       const identity = pathIdentity(file.filePath, allowAliases)
       const indexedFile = { file, index, identity }
       this.indexedOpenFiles.set(file.id, indexedFile)
-      addToListMap(this.directEditors, file.filePath, indexedFile)
+      addToListMap(this.directEditors, this.directKey(file.filePath, identity), indexedFile)
       if (allowAliases) {
         addToListMap(this.aliasEditors, identity.aliasComparisonPath, indexedFile)
         if (identity.isWslUnc) {
@@ -159,6 +164,10 @@ class IndexedOpenFileLookup {
     this.hasCombinedDiffConsumer = hasCombinedDiffConsumer
   }
 
+  private directKey(rawPath: string, identity: LocalWindowsWslPathIdentity): string {
+    return this.foldsDirectKeys ? identity.normalizedPath : rawPath
+  }
+
   matchingOpenFiles(change: IndexedExternalWatchChange): OpenFile[] {
     const aliases = !this.allowAliases
       ? []
@@ -166,7 +175,7 @@ class IndexedOpenFileLookup {
         ? (this.aliasEditors.get(change.identity.aliasComparisonPath) ?? [])
         : (this.wslAliasEditors.get(change.identity.aliasComparisonPath) ?? [])
     return collectMatchingFiles(
-      this.directEditors.get(change.absolutePath) ?? [],
+      this.directEditors.get(this.directKey(change.absolutePath, change.identity)) ?? [],
       aliases,
       this.diffsByRelativePath.get(change.relativePath) ?? []
     )
