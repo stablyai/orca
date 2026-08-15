@@ -632,6 +632,14 @@ describe('Store', () => {
       status: 'completed',
       workspaceId: 'wt1',
       usage: null,
+      completionAttribution: {
+        kind: 'exact_provider_session',
+        provider: 'claude',
+        providerSessionKey: 'session_id',
+        providerSessionId: 'sess-primary',
+        terminalPtyId: 'pty-run',
+        terminalPaneKey: paneKey
+      },
       error: null
     })
 
@@ -643,7 +651,15 @@ describe('Store', () => {
     expect(persisted).toMatchObject({
       terminalSessionId: 'tab-1',
       terminalPaneKey: paneKey,
-      terminalPtyId: 'pty-run'
+      terminalPtyId: 'pty-run',
+      completionAttribution: {
+        kind: 'exact_provider_session',
+        provider: 'claude',
+        providerSessionKey: 'session_id',
+        providerSessionId: 'sess-primary',
+        terminalPtyId: 'pty-run',
+        terminalPaneKey: paneKey
+      }
     })
   })
 })

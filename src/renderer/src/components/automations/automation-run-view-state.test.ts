@@ -49,6 +49,7 @@ function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
     terminalSessionId: 'tab-1',
     terminalPaneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
     terminalPtyId: 'pty-1',
+    completionAttribution: null,
     outputSnapshot: null,
     precheckResult: null,
     usage: null,

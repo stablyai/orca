@@ -1212,6 +1212,10 @@ function backfillLegacyAutomationContexts(
       next.terminalPtyId = null
       changed = true
     }
+    if (!Object.hasOwn(next, 'completionAttribution')) {
+      next.completionAttribution = null
+      changed = true
+    }
     return next
   })
   if (!changed) {
@@ -5557,6 +5561,7 @@ export class Store {
       terminalSessionId: null,
       terminalPaneKey: null,
       terminalPtyId: null,
+      completionAttribution: null,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
@@ -5601,6 +5606,9 @@ export class Store {
       terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
         ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
         : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
+      completionAttribution: Object.hasOwn(result, 'completionAttribution')
+        ? (result.completionAttribution ?? null)
+        : (current.completionAttribution ?? null),
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),

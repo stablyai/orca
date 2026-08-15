@@ -20,6 +20,7 @@ function run(): AutomationRun {
     terminalSessionId: 'tab-1',
     terminalPaneKey: PANE,
     terminalPtyId: 'pty-1',
+    completionAttribution: null,
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
