@@ -3511,6 +3511,18 @@
             "stoppingLabel": "更新を停止しています",
             "stoppingTooltip": "スキルの更新を停止しています…",
             "stoppingAria": "スキルの更新を停止しています。クリックすると詳細を開きます。"
+          },
+          "CaffeinateStatusSegment": {
+            "on": "オン",
+            "auto": "Agent",
+            "off": "オフ",
+            "active": "アクティブ",
+            "inactive": "非アクティブ",
+            "ariaLabel": "スリープ防止, {{status}}",
+            "title": "スリープ防止",
+            "onDescription": "このコンピューターを継続的にスリープさせない",
+            "autoDescription": "Agent の作業中はスリープさせない",
+            "offDescription": "通常のシステムスリープ動作を許可"
           }
         }
       },
@@ -9160,7 +9172,10 @@
         "agent-awake-copy": {
           "e5995ce268": "Agent 作業中はコンピュータを起きたままにする",
           "95d3031db2": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。蓋を閉じたときの動作は、このデバイスの電源設定に従います。",
-          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。"
+          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。",
+          "modeTitle": "コンピューターをスリープさせない",
+          "modeDescriptionWindows": "オン、Agent、オフから選択。Agent モードは Agent の作業中はスリープしません。蓋を閉じたときの動作はこのデバイスの電源設定に従います。",
+          "modeDescriptionDefault": "オン、Agent、オフから選択。Agent モードは Agent の作業中はスリープしません。Orca は電源ポリシーに従い、蓋を閉じたときもこのデバイスのスリープを防ぎます。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",

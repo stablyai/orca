@@ -3511,6 +3511,18 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "Stopping the skill update…",
             "stoppingAria": "Stopping the skill update. Click to open details."
+          },
+          "CaffeinateStatusSegment": {
+            "on": "켜기",
+            "auto": "에이전트",
+            "off": "끄기",
+            "active": "활성",
+            "inactive": "비활성",
+            "ariaLabel": "절전 모드 방지, {{status}}",
+            "title": "절전 모드 방지",
+            "onDescription": "이 컴퓨터를 계속 켜둡니다",
+            "autoDescription": "에이전트가 작업하는 동안 켜둡니다",
+            "offDescription": "정상적인 시스템 절전 동작 허용"
           }
         }
       },
@@ -9123,7 +9135,10 @@
         "agent-awake-copy": {
           "e5995ce268": "agents 작업 중 컴퓨터를 깨어 있게 유지",
           "95d3031db2": "agents가 작업하는 동안 이 컴퓨터와 디스플레이를 깨어 있게 유지합니다. 뚜껑을 닫을 때의 동작은 이 기기의 전원 설정을 따릅니다.",
-          "a42f6fbdd8": "agents가 작업하는 동안 이 컴퓨터와 디스플레이를 깨어 있게 유지합니다. Orca는 전원 정책에 따라 뚜껑이 닫혀 있을 때도 이 기기를 깨어 있게 유지하도록 요청합니다."
+          "a42f6fbdd8": "agents가 작업하는 동안 이 컴퓨터와 디스플레이를 깨어 있게 유지합니다. Orca는 전원 정책에 따라 뚜껑이 닫혀 있을 때도 이 기기를 깨어 있게 유지하도록 요청합니다.",
+          "modeTitle": "컴퓨터 절전 모드 방지",
+          "modeDescriptionWindows": "켜기, 에이전트 또는 끄기를 선택하세요. 에이전트 모드는 에이전트가 작업하는 동안 켜둡니다. 덮개를 닫을 때의 동작은 이 장치의 전원 설정을 따릅니다.",
+          "modeDescriptionDefault": "켜기, 에이전트 또는 끄기를 선택하세요. 에이전트 모드는 에이전트가 작업하는 동안 켜둡니다. Orca는 전원 정책에 따라 덮개를 닫을 때도 이 장치를 켜두도록 요청합니다."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 상태 훅",

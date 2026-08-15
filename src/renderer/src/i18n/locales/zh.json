@@ -3523,6 +3523,18 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "正在停止技能更新…",
             "stoppingAria": "正在停止技能更新。点击查看详情。"
+          },
+          "CaffeinateStatusSegment": {
+            "on": "开启",
+            "auto": "智能体",
+            "off": "关闭",
+            "active": "活跃",
+            "inactive": "未活跃",
+            "ariaLabel": "保持唤醒, {{status}}",
+            "title": "保持唤醒",
+            "onDescription": "持续保持此电脑唤醒",
+            "autoDescription": "智能体工作时保持唤醒",
+            "offDescription": "允许正常的系统休眠行为"
           }
         }
       },
@@ -9135,7 +9147,10 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "保持电脑唤醒",
+          "modeDescriptionWindows": "选择开启、智能体或关闭。智能体模式在智能体工作时保持唤醒；合盖行为遵循此设备的电源设置。",
+          "modeDescriptionDefault": "选择开启、智能体或关闭。智能体模式在智能体工作时保持唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
