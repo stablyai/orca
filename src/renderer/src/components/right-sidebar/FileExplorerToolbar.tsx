@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 type FileExplorerToolbarProps = {
   repoName: string
   worktreePath: string
+  worktreeId?: string | null
   connectionId?: string | null
   refresh: {
     isRefreshing: boolean
@@ -35,6 +36,7 @@ type FileExplorerToolbarProps = {
 export function FileExplorerToolbar({
   repoName,
   worktreePath,
+  worktreeId,
   connectionId,
   refresh,
   canRefresh,
@@ -172,6 +174,7 @@ export function FileExplorerToolbar({
           <DropdownMenuSeparator />
           <WorktreeOpenInMenuItems
             worktreePath={worktreePath}
+            worktreeId={worktreeId ?? undefined}
             connectionId={connectionId}
             labelPrefix="Open in "
           />

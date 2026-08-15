@@ -209,6 +209,10 @@ export type GlobalSettings = {
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Last launcher chosen from a workspace "Open in" menu; used by the keyboard shortcut. */
+  lastOpenInTargetId?: string
+  /** Per-workspace launcher choices, falling back to lastOpenInTargetId. */
+  lastOpenInTargetIdByWorktree?: Record<string, string>
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean

@@ -672,6 +672,7 @@ function FileExplorerFiles(): React.JSX.Element {
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
+          worktreeId={activeWorktreeId}
           connectionId={activeRepo?.connectionId ?? null}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}

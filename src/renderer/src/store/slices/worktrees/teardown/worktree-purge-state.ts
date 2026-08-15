@@ -1,9 +1,42 @@
 import type { AppState } from '../../../types'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
+
+export function pruneLastOpenInTargetsForWorktrees(
+  settings: GlobalSettings | null,
+  worktreeIds: Iterable<string>
+): GlobalSettings | null {
+  if (!settings?.lastOpenInTargetIdByWorktree) {
+    return settings
+  }
+  let changed = false
+  const nextByWorktree = { ...settings.lastOpenInTargetIdByWorktree }
+  for (const worktreeId of worktreeIds) {
+    if (worktreeId in nextByWorktree) {
+      delete nextByWorktree[worktreeId]
+      changed = true
+    }
+  }
+  return changed ? { ...settings, lastOpenInTargetIdByWorktree: nextByWorktree } : settings
+}
+
+export function persistPrunedLastOpenInTargetsForWorktrees(
+  getState: () => AppState,
+  settingsBeforePrune: GlobalSettings | null,
+  worktreeIds: Iterable<string>
+): void {
+  const prunedSettings = pruneLastOpenInTargetsForWorktrees(settingsBeforePrune, worktreeIds)
+  if (prunedSettings === settingsBeforePrune) {
+    return
+  }
+  void getState().updateSettings({
+    lastOpenInTargetIdByWorktree: prunedSettings?.lastOpenInTargetIdByWorktree ?? {}
+  })
+}
 
 export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
   const worktreeIdSet = new Set(worktreeIds)
@@ -187,6 +220,7 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     activeFileId: activeFileCleared ? null : s.activeFileId,
     activeBrowserTabId: removedActive ? null : s.activeBrowserTabId,
     activeTabId: activeTabCleared ? null : s.activeTabId,
-    activeTabType: removedActive || activeFileCleared ? 'terminal' : s.activeTabType
+    activeTabType: removedActive || activeFileCleared ? 'terminal' : s.activeTabType,
+    settings: pruneLastOpenInTargetsForWorktrees(s.settings, worktreeIdSet)
   }
 }

@@ -2,9 +2,12 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
+  getDefaultWorktreeOpenInEntry,
+  getFocusedWorktreeId,
   getWorktreeOpenInEntries,
   getOpenInEntryAvailability,
   getLocalFileManagerLabel,
+  openFocusedWorktreeInLastOpenInTarget,
   openOpenInAppsSettings,
   openWorktreePath,
   WorktreeOpenInSubMenu
@@ -21,14 +24,21 @@ const {
   openInFileManagerMock,
   openSettingsPageMock,
   openSettingsTargetMock,
-  toastErrorMock
+  toastErrorMock,
+  updateSettingsMock
 } = vi.hoisted(() => ({
   mockState: {
     settings: {
       activeRuntimeEnvironmentId: null as string | null,
-      openInApplications: [] as { id: string; label: string; command: string }[]
-    }
+      openInApplications: [] as { id: string; label: string; command: string }[],
+      lastOpenInTargetId: undefined as string | undefined,
+      lastOpenInTargetIdByWorktree: undefined as Record<string, string> | undefined
+    },
+    activeWorktreeId: null as string | null,
+    repos: [] as { id: string; connectionId?: string | null }[],
+    worktrees: [] as { id: string; repoId: string; path: string }[]
   },
+  updateSettingsMock: vi.fn(),
   openInExternalEditorMock: vi.fn(),
   openInFileManagerMock: vi.fn(),
   openSettingsPageMock: vi.fn(),
@@ -49,6 +59,12 @@ vi.mock('@/store', () => {
     {
       getState: () => ({
         settings: mockState.settings,
+        activeWorktreeId: mockState.activeWorktreeId,
+        repos: mockState.repos,
+        allWorktrees: () => mockState.worktrees,
+        getKnownWorktreeById: (id: string) =>
+          mockState.worktrees.find((worktree) => worktree.id === id),
+        updateSettings: updateSettingsMock,
         openSettingsPage: openSettingsPageMock,
         openSettingsTarget: openSettingsTargetMock
       })
@@ -88,7 +104,11 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+    mockState.activeWorktreeId = null
+    mockState.repos = []
+    mockState.worktrees = []
     toastErrorMock.mockReset()
+    updateSettingsMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
     openSettingsPageMock.mockReset()
@@ -183,6 +203,87 @@ describe('WorktreeOpenInMenu', () => {
         'File Manager'
       ).map((entry) => entry.label)
     ).toEqual(['VS Code', 'Cursor', 'Zed', 'File Manager'])
+  })
+
+  it('resolves per-worktree Open in target before global and fallback targets', () => {
+    const entries = getWorktreeOpenInEntries(
+      [
+        { id: 'vscode', label: 'VS Code', command: 'code' },
+        { id: 'zed', label: 'Zed', command: 'zed' }
+      ],
+      'Finder'
+    )
+
+    expect(
+      getDefaultWorktreeOpenInEntry({
+        entries,
+        settings: {
+          lastOpenInTargetId: 'vscode',
+          lastOpenInTargetIdByWorktree: { 'wt-1': 'zed' }
+        },
+        worktreeId: 'wt-1'
+      })?.label
+    ).toBe('Zed')
+    expect(
+      getDefaultWorktreeOpenInEntry({
+        entries,
+        settings: { lastOpenInTargetId: 'missing' },
+        worktreeId: 'wt-2'
+      })?.label
+    ).toBe('VS Code')
+  })
+
+  it('opens the focused worktree using the remembered target', async () => {
+    mockState.settings = {
+      activeRuntimeEnvironmentId: null,
+      openInApplications: [{ id: 'zed', label: 'Zed', command: 'zed' }],
+      lastOpenInTargetIdByWorktree: { 'wt-1': 'zed' }
+    }
+    mockState.activeWorktreeId = 'wt-1'
+    mockState.repos = [{ id: 'repo-1', connectionId: null }]
+    mockState.worktrees = [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp/workspace' }]
+
+    await openFocusedWorktreeInLastOpenInTarget(null)
+
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/workspace',
+      command: 'zed',
+      connectionId: null
+    })
+    expect(updateSettingsMock).toHaveBeenCalledWith({
+      lastOpenInTargetId: 'zed',
+      lastOpenInTargetIdByWorktree: { 'wt-1': 'zed' }
+    })
+  })
+
+  it('reads a focused worktree id from row DOM', () => {
+    const target = {
+      closest: (selector: string) =>
+        selector === '[data-worktree-id]'
+          ? {
+              getAttribute: (name: string) => (name === 'data-worktree-id' ? 'wt-focused' : null)
+            }
+          : null
+    }
+
+    expect(getFocusedWorktreeId(target as unknown as EventTarget)).toBe('wt-focused')
+  })
+
+  it('does not fall back to the active workspace when an explicit fallback id is unknown', async () => {
+    mockState.settings = {
+      activeRuntimeEnvironmentId: null,
+      openInApplications: [{ id: 'zed', label: 'Zed', command: 'zed' }]
+    }
+    mockState.activeWorktreeId = 'wt-1'
+    mockState.repos = [{ id: 'repo-1', connectionId: null }]
+    mockState.worktrees = [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp/workspace' }]
+
+    const opened = await openFocusedWorktreeInLastOpenInTarget(null, {
+      fallbackWorktreeId: 'global-floating-terminal'
+    })
+
+    expect(opened).toBe(false)
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
   })
 
   it('opens settings at the Open In Apps section', () => {

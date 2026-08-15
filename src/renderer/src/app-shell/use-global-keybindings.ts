@@ -18,6 +18,8 @@ import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
 } from '../components/right-sidebar/file-search-include-pattern'
+import { openFocusedWorktreeInLastOpenInTarget } from '@/components/sidebar/WorktreeOpenInMenu'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import {
@@ -248,6 +250,17 @@ export function useGlobalKeybindings(args: {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
         }
+      }
+
+      if (matchShortcut('workspace.openInLastApp') && activeView !== 'settings') {
+        input.preventDefault()
+        notifyTerminalCapture('workspace.openInLastApp')
+        void openFocusedWorktreeInLastOpenInTarget(input.target, {
+          fallbackWorktreeId: isFloatingWorkspacePanelFocused()
+            ? FLOATING_TERMINAL_WORKTREE_ID
+            : undefined
+        })
+        return
       }
     }
 

@@ -890,6 +890,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             <>
               <WorktreeOpenInSubMenu
                 worktreePath={worktree.path}
+                worktreeId={worktree.id}
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />

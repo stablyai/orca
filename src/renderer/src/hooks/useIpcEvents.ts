@@ -12,6 +12,7 @@ import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
+import { openFocusedWorktreeInLastOpenInTarget } from '@/components/sidebar/WorktreeOpenInMenu'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
@@ -117,6 +118,7 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
@@ -1392,6 +1394,22 @@ export function useIpcEvents(): void {
           }
           store.setSidebarOpen(true)
           window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+        })
+      )
+    }
+
+    if (window.api.ui.onOpenWorkspaceInLastApp) {
+      unsubs.push(
+        window.api.ui.onOpenWorkspaceInLastApp(() => {
+          const store = useAppStore.getState()
+          if (store.activeView === 'settings') {
+            return
+          }
+          void openFocusedWorktreeInLastOpenInTarget(document.activeElement, {
+            fallbackWorktreeId: isFloatingWorkspacePanelFocused()
+              ? FLOATING_TERMINAL_WORKTREE_ID
+              : undefined
+          })
         })
       )
     }

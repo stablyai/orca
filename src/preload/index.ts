@@ -3624,6 +3624,11 @@ const api = {
       ipcRenderer.on('ui:openWorkspaceBoard', listener)
       return () => ipcRenderer.removeListener('ui:openWorkspaceBoard', listener)
     },
+    onOpenWorkspaceInLastApp: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openWorkspaceInLastApp', listener)
+      return () => ipcRenderer.removeListener('ui:openWorkspaceInLastApp', listener)
+    },
     onOpenTasks: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openTasks', listener)

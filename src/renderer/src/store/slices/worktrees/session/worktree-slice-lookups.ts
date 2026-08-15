@@ -3,7 +3,10 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
-import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
+import {
+  buildWorktreePurgeState,
+  persistPrunedLastOpenInTargetsForWorktrees
+} from '../teardown/worktree-purge-state'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -69,13 +72,15 @@ export function createGetKnownWorktreeById(
 
 export function createPurgeWorktreeTerminalState(
   set: WorktreeSliceSet,
-  _get: WorktreeSliceGet
+  get: WorktreeSliceGet
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
   return (worktreeIds: string[]) => {
     const purgeableWorktreeIds = worktreeIds.filter((id) => id !== FLOATING_TERMINAL_WORKTREE_ID)
     if (purgeableWorktreeIds.length === 0) {
       return
     }
+    const settingsBeforePrune = get().settings
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
+    persistPrunedLastOpenInTargetsForWorktrees(get, settingsBeforePrune, purgeableWorktreeIds)
   }
 }

@@ -37,6 +37,7 @@ import {
   isRuntimeSelectorNotFoundError
 } from '../listing/runtime-worktree-rpc-errors'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
+import { persistPrunedLastOpenInTargetsForWorktrees } from './worktree-purge-state'
 
 export function createRemoveWorktree(
   set: WorktreeSliceSet,
@@ -235,7 +236,9 @@ export function createRemoveWorktree(
 
       // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
       disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
+      const settingsBeforePrune = get().settings
       applyRemoveWorktreeSuccessState(set, worktreeId, tabIds)
+      persistPrunedLastOpenInTargetsForWorktrees(get, settingsBeforePrune, [worktreeId])
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
       // Why: PR/commit-message generation records are keyed by worktree; prune to the surviving set so they don't leak.
       const liveWorktreeKeys = new Set(
