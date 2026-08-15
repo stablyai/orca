@@ -7,7 +7,7 @@ import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 // oxfmt-ignore
-import { extractOnlyCookedEchoSafeQueryReplies, isTerminalQueryReply } from './terminal-query-reply'
+import { answerEachCookedEchoSafeQueryReply, extractOnlyCookedEchoSafeQueryReplies, isTerminalQueryReply } from './terminal-query-reply'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -95,11 +95,14 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  // Live replies are accepted only when a matching observed query supplies provenance.
+  // A reply-only batch is one synthetic xterm payload. Try every part so one stale
+  // part cannot short-circuit later claims; if any part has provenance, consume the
+  // whole batch so unmatched stale siblings cannot overtake a deferred safe write.
+  // Wholly unprovenanced payloads remain ordinary input (including modified F3).
   // oxfmt-ignore
   answerLiveQueryReply(reply: string): boolean {
     const replies = extractOnlyCookedEchoSafeQueryReplies(reply)
-    return !this.closed && (replies ? replies.every((part) => this.delivery.answerLive(part)) : isTerminalQueryReply(reply) && this.delivery.answerLive(reply))
+    return !this.closed && (replies ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answerLive(part)) : isTerminalQueryReply(reply) && this.delivery.answerLive(reply))
   }
 
   drainAndClose(): number {

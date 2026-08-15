@@ -37,8 +37,12 @@ function createMockSubprocess() {
       return resumeCalls
     },
     foregroundProcess: null as string | null,
+    rawForegroundProcess: null as string | null,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
+    },
+    getRawForegroundProcess(): string | null {
+      return this.rawForegroundProcess
     },
     write(data: string) {
       written.push(data)
@@ -303,6 +307,22 @@ describe('Session', () => {
       session.write('ls\n')
       expect(subprocess.written).toEqual(['ls\n'])
     })
+
+    it('writes a live query reply under the stable raw foreground across enrichment', async () => {
+      createSession({ ownerBackend: 'posix-pty' })
+      subprocess.rawForegroundProcess = 'node'
+      subprocess.foregroundProcess = 'node'
+      const reply = '\x1b]11;rgb:00/00/00\x07'
+
+      // Query observed before async foreground enrichment resolves.
+      subprocess.simulateData('\x1b]11;?\x07')
+      // Enrichment now reports the derived agent identity; the raw read stays 'node'.
+      subprocess.foregroundProcess = 'codex'
+
+      session.write(reply)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subprocess.written).toEqual([reply])
+    })
   })
 
   describe('emulator does not reply to terminal queries', () => {
@@ -378,12 +398,27 @@ describe('Session', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
 
+      // Why: a live reply only bypasses the startup queue once its query was observed.
+      subprocess.simulateData('\x1b[?996n')
       session.write(reply)
       await vi.advanceTimersByTimeAsync(0)
       expect(subprocess.written).toEqual([reply])
 
       await vi.advanceTimersByTimeAsync(100)
       expect(subprocess.written).toEqual([reply, 'codex\n'])
+    })
+
+    it('queues an unprovenanced reply as startup input until readiness timeout', async () => {
+      const reply = '\x1b[?997;1n'
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+      session.write('codex\n')
+
+      session.write(reply)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subprocess.written).toEqual([])
+
+      await vi.advanceTimersByTimeAsync(100)
+      expect(subprocess.written).toEqual(['codex\n', reply])
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {

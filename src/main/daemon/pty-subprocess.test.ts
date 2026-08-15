@@ -700,6 +700,33 @@ describe('createPtySubprocess', () => {
     }
   })
 
+  it('keeps the raw node-pty foreground stable while the enriched identity transitions', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('codex')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getRawForegroundProcess?.()).toBe('node')
+      expect(handle.getForegroundProcess()).toBe('node')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+      // Reply ownership keeps reading the raw wrapper even after enrichment.
+      expect(handle.getRawForegroundProcess?.()).toBe('node')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('serves the resolved agent identity past the cache TTL while a wrapper holds the foreground', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
@@ -728,6 +755,40 @@ describe('createPtySubprocess', () => {
       expect(handle.getForegroundProcess()).toBe('grok')
     } finally {
       vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('treats a direct POSIX shell foreground as authoritative over a fresh agent cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('codex')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      await Promise.resolve()
+      await Promise.resolve()
+      // The fresh derived identity is served while node-pty still reports the wrapper.
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      // node-pty now directly reports the shell: the immediate read must win
+      // over the still-fresh cache, or a delayed reply would be misattributed
+      // and written into the shell prompt.
+      proc.process = 'zsh'
+      expect(handle.getForegroundProcess()).toBe('zsh')
+      expect(handle.getForegroundProcess()).toBe('zsh')
+    } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }

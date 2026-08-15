@@ -206,6 +206,31 @@ describe('pty input write queue', () => {
     ])
   })
 
+  it('keeps a CPR reply atomic beside a keystroke under a parked drain', async () => {
+    const { writes, pendingYields, queue } = createParkedQueue()
+
+    // Park the drain mid-chunk so the reply and keystroke arrive together while
+    // it cannot run; a merged payload would lose the reply boundary entirely.
+    expect(queue.enqueue('pty-1', 'z'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2))).toBe(true)
+    await Promise.resolve()
+    expect(pendingYields).toHaveLength(1)
+
+    expect(queue.enqueueQueryReply('pty-1', '\x1b[1;2R')).toBe(true)
+    expect(queue.enqueue('pty-1', 'k')).toBe(true)
+
+    await releaseNextWrite(writes, pendingYields)
+    await releaseNextWrite(writes, pendingYields)
+    await releaseNextWrite(writes, pendingYields)
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data).join('')).toBe(
+      `${'z'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2)}\x1b[1;2Rk`
+    )
+    expect(writes.at(-2)?.data).toBe('\x1b[1;2R')
+    expect(writes.at(-1)?.data).toBe('k')
+    expect(writes.some((write) => write.data === '\x1b[1;2Rk')).toBe(false)
+  })
+
   it('bounds an OSC 10/11 reply flood and drains a following keystroke', async () => {
     const { writes, pendingYields, queue } = createParkedQueue()
     const replies: string[] = []
@@ -523,6 +548,74 @@ describe('pty input write queue', () => {
     expect(afterPrompt).not.toContain(reply)
     ingress.drainAndClose()
     vi.useRealTimers()
+  })
+
+  it('host does not raw-write a partially proven pre-coalesced reply pair', async () => {
+    // One observed private-DSR query proves only one of two coalesced replies, and
+    // the host intercept must not raw-write the proven one a second time (#13137).
+    vi.useFakeTimers()
+    const reply = mode2031SequenceFor('dark')
+    const caretEcho = (data: string): string => data.replaceAll('\x1b', '^[')
+    const masterWrites: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    let ingress!: PtyStartupIngress
+    ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => {
+        masterWrites.push(data)
+        ingress.accept(caretEcho(data))
+      },
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    ingress.accept('\x1b[?996n')
+    emissions.length = 0
+
+    // Same intercept shape as LocalPtyProvider.write / Session.write / relay writeData.
+    const hostWrite = (_id: string, data: string): void => {
+      if (ingress.answerLiveQueryReply(data)) {
+        return
+      }
+      masterWrites.push(`RAW:${data}`)
+      ingress.accept(caretEcho(data))
+    }
+
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: hostWrite
+    })
+
+    // A fast theme flip coalesces both replies before the queue sees them; every
+    // query-reply enqueue is atomic, so the pre-coalesced batch travels as one reply write.
+    expect(queue.enqueueQueryReply('pty-1', reply + reply)).toBe(true)
+    await queue.waitForDrain()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // The proven reply is written once; its stale sibling is neither duplicated nor leaked.
+    expect(masterWrites).toEqual([reply])
+    const visible = emissions.map((emission) => emission.data).join('')
+    expect(visible).toBe('')
+    expect(visible).not.toContain(reply)
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
+  it('keeps a pre-coalesced cooked-safe reply pair atomic beside a keystroke', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const reply = mode2031SequenceFor('dark')
+    const batch = reply + reply
+
+    // The pair is not itself a single cooked-safe reply, so it used to fall into
+    // the ordinary path and glue onto the keystroke as one mixed host payload.
+    expect(needsCookedEchoSafeQueryReply(batch)).toBe(false)
+    expect(queue.enqueueQueryReply('pty-1', batch)).toBe(true)
+    expect(queue.enqueue('pty-1', 'k')).toBe(true)
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([
+      { id: 'pty-1', data: batch },
+      { id: 'pty-1', data: 'k' }
+    ])
   })
 
   it('clear() drops pending input that has not been written yet', async () => {

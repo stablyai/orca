@@ -56,6 +56,9 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** Dead-guarded raw node-pty foreground, unenriched and uncached. Stable
+   *  terminal-reply ownership only — never use for identity display. */
+  getRawForegroundProcess?(): string | null
   /** Await process-table evidence captured after this confirmation request. */
   confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the host skips its stdin fallback write. */
@@ -201,7 +204,10 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission),
       ...(echoProbe ? { echoProbe } : {}),
-      readForegroundProcess: () => this.subprocess.getForegroundProcess()
+      // Why: reply ownership must ride the stable raw identity; the enriched
+      // foreground can flip to a derived agent name mid-reply and drop a write.
+      readForegroundProcess: () =>
+        this.subprocess.getRawForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
     })
     if (this._shellState === 'pending') {
       this.shellPromptReadinessProbe = createShellPromptReadinessProbe({

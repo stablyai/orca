@@ -1,11 +1,52 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import {
+  classifyTerminalQueryReplyIdentity,
   extractOnlyCookedEchoSafeQueryReplies,
   isTerminalQueryReply,
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
 import { shouldInjectQueryReplyForOwner } from './terminal-query-owner'
+
+describe('classifyTerminalQueryReplyIdentity', () => {
+  it('refines wire-correlatable reply identities', () => {
+    // Standard vs private (DECXCPR) CPR.
+    expect(classifyTerminalQueryReplyIdentity('\x1b[12;34R')).toBe('cpr-standard')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[?12;5R')).toBe('cpr-private')
+    // DA1 (reply carries ?), DA2 (>), DA3 (=).
+    expect(classifyTerminalQueryReplyIdentity('\x1b[?1;2c')).toBe('device-attributes-1')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[>0;276;0c')).toBe('device-attributes-2')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[=65;1;2;3;4c')).toBe('device-attributes-3')
+    // Window reports: reply's first parameter names the queried selector.
+    expect(classifyTerminalQueryReplyIdentity('\x1b[4;768;1024t')).toBe('window-report-14')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[6;16;8t')).toBe('window-report-16')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[8;24;80t')).toBe('window-report-18')
+    // DECRPM: private marker + mode parameter.
+    expect(classifyTerminalQueryReplyIdentity('\x1b[?25;1$y')).toBe('mode-report-private-25')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[4;1$y')).toBe('mode-report-ansi-4')
+    // OSC color slots; other slots keep the broad identity.
+    expect(classifyTerminalQueryReplyIdentity('\x1b]10;rgb:aa/aa/aa\x07')).toBe('osc-10')
+    expect(classifyTerminalQueryReplyIdentity('\x1b]11;rgb:bb/bb/bb\x1b\\')).toBe('osc-11')
+    expect(classifyTerminalQueryReplyIdentity('\x1b]4;rgb:cc/cc/cc\x07')).toBe('osc-color')
+    // DCS DECRQSS vs XTVERSION.
+    expect(classifyTerminalQueryReplyIdentity('\x1bP1$r0m\x1b\\')).toBe('dcs-decrqss')
+    expect(classifyTerminalQueryReplyIdentity('\x1bP0$r\x1b\\')).toBe('dcs-decrqss')
+    expect(classifyTerminalQueryReplyIdentity('\x1bP>|Orca 1.4\x1b\\')).toBe('dcs-xtversion')
+  })
+
+  it('keeps broad identities where the grammar cannot correlate more narrowly', () => {
+    expect(classifyTerminalQueryReplyIdentity('\x1b[0n')).toBe('dsr')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[?997;1n')).toBe('private-dsr')
+    expect(classifyTerminalQueryReplyIdentity('\x1b[?3u')).toBe('kitty-flags')
+  })
+
+  it('does not classify ordinary input as any reply identity', () => {
+    expect(classifyTerminalQueryReplyIdentity('\x1b[A')).toBeNull()
+    expect(classifyTerminalQueryReplyIdentity('\x1b[1;2P')).toBeNull()
+    expect(classifyTerminalQueryReplyIdentity('\x1b[97;5u')).toBeNull()
+    expect(classifyTerminalQueryReplyIdentity('\x1b]11;rgb:aa/aa/aa')).toBeNull()
+  })
+})
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {

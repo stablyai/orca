@@ -1156,14 +1156,18 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
-  write(id: string, data: string): void {
+  write(id: string, data: string): boolean {
     const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
     const ingress = startupIngressByPty.get(id)
     // Match synthetic replies to observed queries before treating ambiguous bytes as input.
     if (ingress?.answerLiveQueryReply(data)) {
-      return
+      return true
     }
-    proc?.write(data)
+    proc.write(data)
+    return true
   }
   resize(id: string, cols: number, rows: number): void {
     ptyProcesses.get(id)?.resize(cols, rows)

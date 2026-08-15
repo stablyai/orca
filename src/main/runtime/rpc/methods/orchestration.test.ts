@@ -294,6 +294,25 @@ describe('orchestration RPC methods', () => {
 
       await fenced
     })
+
+    it('fences an unbound direct waiter when its pane creates a Run', async () => {
+      setup(false)
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(coordinatorPaneKey)
+      const directWait = call('orchestration.check', {
+        terminal: 'term_coord',
+        wait: true,
+        timeoutMs: 5_000
+      })
+      const fenced = expect(directWait).rejects.toMatchObject({ code: 'consumer_fenced' })
+      await Promise.resolve()
+
+      await call('orchestration.runCreate', {
+        objective: 'Claim the direct mailbox',
+        from: 'term_coord'
+      })
+
+      await fenced
+    })
   })
 
   describe('orchestration.send', () => {
@@ -312,6 +331,33 @@ describe('orchestration RPC methods', () => {
       expect(result.message.from_handle).toBe('term_coord')
       expect(result.message.run_id).toBe(activeRunId)
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalled()
+    })
+
+    it('wakes the Run mailbox after canonicalizing an old coordinator recipient', async () => {
+      setup()
+      const remintedPaneKey = 'tab_reminted:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_reminted'
+          ? remintedPaneKey
+          : handle === 'term_coord'
+            ? coordinatorPaneKey
+            : null
+      )
+      db.bindRun({
+        runId: activeRunId!,
+        coordinatorHandle: 'term_reminted',
+        coordinatorPaneKey: remintedPaneKey
+      })
+      const waiting = runtime.waitForMessage(`run:${activeRunId}`, { timeoutMs: 5_000 })
+
+      const result = (await call('orchestration.send', {
+        from: 'term_reminted',
+        to: 'term_coord',
+        subject: 'late completion'
+      })) as { message: { to_handle: string } }
+
+      expect(result.message.to_handle).toBe(`run:${activeRunId}`)
+      await expect(waiting).resolves.toBe('notified')
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -1223,6 +1269,67 @@ describe('orchestration RPC methods', () => {
       expect(first.count).toBe(1)
       expect(peeked).toMatchObject({ acknowledged: first.deliveryId, count: 0 })
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(0)
+    })
+
+    it('peeks an old unread Run row beyond the newest history page', async () => {
+      setup()
+      const unread = db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'old unread',
+        runId: activeRunId
+      })
+      for (let index = 0; index < 100; index += 1) {
+        const read = db.insertMessage({
+          from: 'worker',
+          to: `run:${activeRunId}`,
+          subject: `new read ${index}`,
+          runId: activeRunId
+        })
+        db.markAsRead([read.id])
+      }
+
+      const peeked = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        peek: true
+      })) as { messages: { id: string }[]; count: number }
+      const delivered = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { messages: { id: string }[]; count: number }
+
+      expect(peeked).toMatchObject({ count: 1, messages: [{ id: unread.id }] })
+      expect(delivered).toMatchObject({ count: 1, messages: [{ id: unread.id }] })
+    })
+
+    it('waits for a filtered Run peek without consuming the arrival', async () => {
+      setup()
+      let arrivedId = ''
+      const waitSpy = vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        arrivedId = db.insertMessage({
+          from: 'worker',
+          to: `run:${activeRunId}`,
+          subject: 'peeked completion',
+          type: 'worker_done',
+          runId: activeRunId
+        }).id
+        return 'notified'
+      })
+
+      const peeked = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        peek: true,
+        wait: true,
+        types: 'worker_done',
+        timeoutMs: 100
+      })) as { messages: { id: string }[]; count: number }
+
+      expect(peeked).toMatchObject({ count: 1, messages: [{ id: arrivedId }] })
+      expect(waitSpy).toHaveBeenCalledWith(
+        `run:${activeRunId}`,
+        expect.objectContaining({ typeFilter: ['worker_done'] })
+      )
+      expect(db.getMessageById(arrivedId)?.read).toBe(0)
+      expect(db.getUnreadMessages(`run:${activeRunId}`, ['worker_done'])).toHaveLength(1)
     })
 
     it('reconciles worker_done returned by a waiting manual check', async () => {

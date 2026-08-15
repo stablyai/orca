@@ -1082,6 +1082,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     shellPathEnv: env.PATH,
     ...(slavePath ? { slavePath } : {}),
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
+    getRawForegroundProcess: () => {
+      // Why: reply ownership reads the live node-pty foreground; the enriched
+      // identity below can lag or flip to a derived agent name mid-reply.
+      if (dead) {
+        return null
+      }
+      try {
+        return getFallbackForegroundProcess()
+      } catch {
+        return null
+      }
+    },
     getForegroundProcess: () => {
       // Why: node-pty's `.process` reports the live foreground name but reads a recycled pid on a reaped pty, so bail when dead.
       if (dead) {
@@ -1100,6 +1112,21 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         }
         scheduleAgentForegroundRefresh(fallbackProcess)
         const now = Date.now()
+        // Why: on POSIX node-pty's process read reports the live foreground
+        // process group, so a directly-observed shell is authoritative evidence
+        // no agent owns the tty — a stale derived identity must not keep
+        // swallowing delayed replies into the shell prompt. Windows ConPTY
+        // still reports the shell while an agent child runs, so the cache
+        // stays authoritative there.
+        if (
+          process.platform !== 'win32' &&
+          fallbackProcess !== null &&
+          isShellProcess(fallbackProcess) &&
+          !getActiveStartupAgentForeground(now)
+        ) {
+          cachedAgentForeground = null
+          return fallbackProcess
+        }
         if (
           cachedAgentForeground &&
           now - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS

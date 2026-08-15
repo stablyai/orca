@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -29,6 +29,10 @@ import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handl
 
 const tempDirs: string[] = []
 
+function nodeCommand(scriptPath: string): string {
+  return `"${process.execPath}" "${scriptPath}"`
+}
+
 beforeEach(() => {
   handlers.clear()
   handleMock.mockReset()
@@ -47,7 +51,7 @@ afterEach(() => {
   }
 })
 
-it('removes the hidden SSH target when recipe context is unavailable', async () => {
+it('removes the hidden SSH target when provider cleanup cannot start', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
   tempDirs.push(userDataPath)
   getPathMock.mockReturnValue(userDataPath)
@@ -79,7 +83,68 @@ it('removes the hidden SSH target when recipe context is unavailable', async () 
   expect(cleaned).toMatchObject({
     status: 'cleanup_failed',
     cleanupStatus: 'failed',
+    connectionMode: undefined,
     sshTargetId: undefined
   })
   expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledWith('runtime-ssh-missing-context')
+})
+
+it('stops in-flight cleanup and retains the runtime for retry', async () => {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  const repoPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-repo-'))
+  tempDirs.push(userDataPath, repoPath)
+  getPathMock.mockReturnValue(userDataPath)
+  const destroyPath = join(repoPath, 'destroy.js')
+  const destroyStartedPath = join(repoPath, 'destroy-started.txt')
+  writeFileSync(
+    destroyPath,
+    `require('fs').writeFileSync(${JSON.stringify(destroyStartedPath)}, 'yes'); setInterval(() => {}, 1000)`
+  )
+  upsertEphemeralVmRuntime(userDataPath, {
+    id: 'runtime-stop',
+    recipeId: 'cloud-sandbox',
+    recipe: {
+      id: 'cloud-sandbox',
+      name: 'Cloud Sandbox',
+      create: 'unused',
+      destroy: nodeCommand(destroyPath)
+    },
+    repoId: 'repo-1',
+    status: 'running',
+    cleanupStatus: 'not_started',
+    createdAt: 1,
+    updatedAt: 1,
+    recipeResult: {
+      schemaVersion: 1,
+      connection: {
+        type: 'ssh',
+        projectRoot: '/workspace/repo',
+        target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+      }
+    }
+  })
+  registerEphemeralVmRuntimeHandlers({
+    getRepo: vi.fn(() => ({
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+  } as never)
+
+  const cleanup = handlers.get('ephemeralVm:cleanup')?.(null, {
+    runtimeId: 'runtime-stop'
+  }) as Promise<{ status: string }>
+  await vi.waitFor(() => expect(existsSync(destroyStartedPath)).toBe(true))
+  const stopped = await handlers.get('ephemeralVm:stopCleanup')?.(null, {
+    runtimeId: 'runtime-stop'
+  })
+
+  expect(stopped).toMatchObject({
+    status: 'cleanup_failed',
+    cleanupStatus: 'failed',
+    cleanupLastError: 'Cleanup stopped by user.'
+  })
+  await expect(cleanup).resolves.toMatchObject({ status: 'cleanup_failed' })
 })

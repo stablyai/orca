@@ -27,20 +27,28 @@ const ESC = String.fromCharCode(0x1b)
 // byte order is still preserved (the immediate path flushes pending input
 // first), it just skips input-intent/activity bookkeeping. Harmless, so we
 // keep the reply grammar complete rather than special-casing it.
-const CPR_OR_DSR_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]$')
-const DEVICE_ATTRIBUTES_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
+const CPR_STANDARD_RE = new RegExp('^\\u001b\\[[0-9;]*R$')
+const CPR_PRIVATE_RE = new RegExp('^\\u001b\\[\\?[0-9;]*R$')
+const DSR_RE = new RegExp('^\\u001b\\[[0-9;]*n$')
+const PRIVATE_DSR_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n$')
+// DA1's reply carries `?` (CSI ? 1 ; 2 c); DA2/DA3 replies carry `>` / `=`.
+const DA1_RE = new RegExp('^\\u001b\\[\\??[0-9;]*c$')
+const DA2_RE = new RegExp('^\\u001b\\[[>][0-9;]*c$')
+const DA3_RE = new RegExp('^\\u001b\\[[=][0-9;]*c$')
 // 4/6 = pixel-size reports, 8 = text-area size in characters (answer to CSI 18t).
-const WINDOW_SIZE_REPORT_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t$')
-// `?` optional: private-mode reports carry it (DECRPM), ANSI-mode reports don't.
-const DECRPM_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y$')
+const WINDOW_SIZE_REPORT_RE = new RegExp('^\\u001b\\[([468]);[0-9]+;[0-9]+t$')
+// Capture the mode parameter(s): `?` optional — private-mode reports carry it
+// (DECRPM), ANSI-mode reports don't.
+const DECRPM_RE = new RegExp('^\\u001b\\[\\??([0-9;]*)\\$y$')
 // Kitty keyboard protocol flags report: CSI ? flags u. The `?` distinguishes it
 // from kitty-protocol *keystrokes* (CSI code;mods u), which must stay batched.
 const KITTY_FLAGS_RE = new RegExp('^\\u001b\\[\\?[0-9]+u$')
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
-const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)$')
+const OSC_RESPONSE_RE = new RegExp('^\\u001b\\]([0-9]+);[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)$')
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
-const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+const DCS_DECRQSS_RE = new RegExp('^\\u001bP[01]\\$r[^\\u001b]*\\u001b\\\\$')
+const DCS_XTVERSION_RE = new RegExp('^\\u001bP>\\|[^\\u001b]*\\u001b\\\\$')
 // Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
 // Prefix form peels consecutive replies out of one coalesced payload.
 const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
@@ -60,35 +68,123 @@ export type TerminalQueryReplyKind =
   | 'osc-color'
   | 'dcs-report'
 
-export function classifyTerminalQueryReply(data: string): TerminalQueryReplyKind | null {
+/**
+ * Selector-aware reply identity. Reply grammars that echo the query's own
+ * selector (CPR private marker, DA level, window report number, DECRPM mode
+ * parameter + private marker, OSC 10/11 slot, DCS variant) correlate a reply
+ * back to exactly the query that elicited it, so a stale reply from owner A
+ * cannot be misattributed to owner B's later query of a different selector.
+ * Grammars whose replies cannot name their query (DSR, private DSR, kitty
+ * flags, non-color OSC slots) keep a single broad identity.
+ */
+export type TerminalQueryReplyIdentity =
+  | 'cpr-standard'
+  | 'cpr-private'
+  | 'device-attributes-1'
+  | 'device-attributes-2'
+  | 'device-attributes-3'
+  | 'window-report-14'
+  | 'window-report-16'
+  | 'window-report-18'
+  | `mode-report-${'private' | 'ansi'}-${string}`
+  | 'osc-10'
+  | 'osc-11'
+  | 'osc-color'
+  | 'dcs-decrqss'
+  | 'dcs-xtversion'
+  | 'dsr'
+  | 'private-dsr'
+  | 'kitty-flags'
+
+/**
+ * Refines a reply to the identity its eliciting query must also produce.
+ * Same matching surface as {@link classifyTerminalQueryReply}.
+ */
+export function classifyTerminalQueryReplyIdentity(
+  data: string
+): TerminalQueryReplyIdentity | null {
   if (data.length < 3 || data[0] !== ESC) {
     return null
   }
-  if (CPR_OR_DSR_RE.test(data)) {
-    if (data.endsWith('R')) {
-      return 'cpr'
-    }
-    return data.startsWith(`${ESC}[?`) ? 'private-dsr' : 'dsr'
+  if (CPR_STANDARD_RE.test(data)) {
+    return 'cpr-standard'
   }
-  if (DEVICE_ATTRIBUTES_RE.test(data)) {
-    return 'device-attributes'
+  if (CPR_PRIVATE_RE.test(data)) {
+    return 'cpr-private'
   }
-  if (WINDOW_SIZE_REPORT_RE.test(data)) {
-    return 'window-report'
+  if (DSR_RE.test(data)) {
+    return 'dsr'
   }
-  if (DECRPM_RE.test(data)) {
-    return 'mode-report'
+  if (PRIVATE_DSR_RE.test(data)) {
+    return 'private-dsr'
+  }
+  if (DA1_RE.test(data)) {
+    return 'device-attributes-1'
+  }
+  if (DA2_RE.test(data)) {
+    return 'device-attributes-2'
+  }
+  if (DA3_RE.test(data)) {
+    return 'device-attributes-3'
+  }
+  const window = WINDOW_SIZE_REPORT_RE.exec(data)
+  if (window?.[1]) {
+    const selector = window[1] === '4' ? 14 : window[1] === '6' ? 16 : 18
+    return `window-report-${selector}`
+  }
+  const mode = DECRPM_RE.exec(data)
+  if (mode?.[1] !== undefined) {
+    const privateMarker = data.startsWith(`${ESC}[?`)
+    const parameter = mode[1].split(';')[0] ?? ''
+    return `mode-report-${privateMarker ? 'private' : 'ansi'}-${parameter}`
   }
   if (KITTY_FLAGS_RE.test(data)) {
     return 'kitty-flags'
   }
-  if (OSC_RESPONSE_RE.test(data)) {
-    return 'osc-color'
+  const osc = OSC_RESPONSE_RE.exec(data)
+  if (osc?.[1]) {
+    const slot = Number(osc[1])
+    return slot === 10 ? 'osc-10' : slot === 11 ? 'osc-11' : 'osc-color'
   }
-  if (DCS_RESPONSE_RE.test(data)) {
-    return 'dcs-report'
+  if (DCS_DECRQSS_RE.test(data)) {
+    return 'dcs-decrqss'
+  }
+  if (DCS_XTVERSION_RE.test(data)) {
+    return 'dcs-xtversion'
   }
   return null
+}
+
+export function classifyTerminalQueryReply(data: string): TerminalQueryReplyKind | null {
+  const identity = classifyTerminalQueryReplyIdentity(data)
+  if (!identity) {
+    return null
+  }
+  if (identity === 'cpr-standard' || identity === 'cpr-private') {
+    return 'cpr'
+  }
+  if (identity === 'dsr') {
+    return 'dsr'
+  }
+  if (identity === 'private-dsr') {
+    return 'private-dsr'
+  }
+  if (identity.startsWith('device-attributes-')) {
+    return 'device-attributes'
+  }
+  if (identity.startsWith('window-report-')) {
+    return 'window-report'
+  }
+  if (identity.startsWith('mode-report-')) {
+    return 'mode-report'
+  }
+  if (identity === 'kitty-flags') {
+    return 'kitty-flags'
+  }
+  if (identity === 'osc-10' || identity === 'osc-11' || identity === 'osc-color') {
+    return 'osc-color'
+  }
+  return 'dcs-report'
 }
 
 /**

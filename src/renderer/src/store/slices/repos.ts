@@ -3602,12 +3602,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
+      const runtimeSshTargetId = ownerRepo.connectionId
       // Why: an SSH per-workspace-env's workspace is the repo's main worktree, so removal routes here; tear down its ephemeral runtime first so it doesn't leak.
-      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
-        await cleanupEphemeralVmRuntimesForDeleted({
+      if (runtimeSshTargetId && isRuntimeOwnedSshTargetId(runtimeSshTargetId)) {
+        const cleanup = await cleanupEphemeralVmRuntimesForDeleted({
           workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+          runtimeOwnedSshTargetIds: [runtimeSshTargetId]
         })
+        if (cleanup.retainedSshTargetIds.includes(runtimeSshTargetId)) {
+          throw new Error('The cloud VM could not be destroyed. Retry cleanup before removing it.')
+        }
       }
       // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))

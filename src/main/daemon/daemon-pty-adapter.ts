@@ -7,6 +7,7 @@ import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
 import {
   getMacDaemonSystemResolverHealth,
   getMacDaemonTccAttributionHealth,
+  isDaemonStaleForCurrentBundle,
   parseDaemonPidFile,
   type ParsedDaemonPid
 } from './daemon-health'
@@ -143,11 +144,15 @@ export type DaemonPtyAdapterOptions = {
   runtimeDir?: string
   /** Current packaged version, or null for unpackaged builds. */
   packagedAppVersion?: string | null
-  /** Forks a fresh daemon after endpoint death or a confirmed resolver-health replacement. */
+  /** Forks a fresh daemon after endpoint death or a confirmed health replacement. */
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
 }
 
-export type DaemonRespawnReason = 'daemon_died' | 'unhealthy_resolver' | 'severed_tcc_attribution'
+export type DaemonRespawnReason =
+  | 'daemon_died'
+  | 'unhealthy_resolver'
+  | 'stale_bundle'
+  | 'severed_tcc_attribution'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity
@@ -241,6 +246,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private respawnAdoptionClosed = false
   // Why: concurrent spawn() calls hitting a dead daemon would each fork their own; this promise coalesces respawns so only the first forks and the rest await it.
   private respawnPromise: Promise<void> | null = null
+  private staleBundleReplacementPromise: Promise<void> | null = null
   private writeRecoveryPromise: Promise<void> | null = null
   private writeRecoveryAttempted = false
   private dataListeners: ((payload: {
@@ -358,7 +364,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
-    this.packagedAppVersion = opts.packagedAppVersion === undefined ? null : opts.packagedAppVersion
+    this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
     this.supportsProducerFlowControl = this.protocolVersion >= 19
@@ -530,6 +536,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     if (opts.isNewSession) {
       await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()
+      await this.replaceStaleBundleDaemonBeforeNewPty()
       await this.replaceSeveredMacTccDaemonBeforeNewPty()
     }
 
@@ -1064,7 +1071,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
-  write(id: string, data: string): void {
+  write(id: string, data: string): boolean {
+    const recoverable = this.prepareWrite(id)
+    return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
+  }
+
+  async writeWithSettlement(id: string, data: string): Promise<boolean> {
+    const recoverable = this.prepareWrite(id)
+    return this.finishWrite(
+      id,
+      await this.client.notifyWithSettlement('write', { sessionId: id, data }),
+      recoverable
+    )
+  }
+
+  private prepareWrite(id: string): boolean {
     this.markSessionDirty(id)
     // Why recoverable and not just active: rejecting a write asks the pane to remount,
     // which only helps if this endpoint can come back. A legacy adapter has no respawn,
@@ -1080,12 +1101,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.reconnectAfterWriteFailure()
       throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
     }
-    const delivered = this.client.notify('write', { sessionId: id, data })
+    return recoverable
+  }
+
+  private finishWrite(id: string, delivered: boolean, recoverable: boolean): boolean {
     if (!delivered && recoverable) {
       this.sessionsAwaitingDaemonRecovery.add(id)
       this.reconnectAfterWriteFailure()
       throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
     }
+    return delivered
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -2669,6 +2694,60 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.respawnPromise
   }
 
+  /** Replace a stale packaged daemon only after its live sessions drain. */
+  private async replaceStaleBundleDaemonBeforeNewPty(): Promise<void> {
+    if (!this.respawnFn || !this.runtimeDir || !this.packagedAppVersion) {
+      return
+    }
+    if (!this.staleBundleReplacementPromise) {
+      this.staleBundleReplacementPromise = this.replaceStaleBundleDaemonOnce(
+        this.runtimeDir,
+        this.packagedAppVersion
+      ).finally(() => {
+        this.staleBundleReplacementPromise = null
+      })
+    }
+    await this.staleBundleReplacementPromise
+  }
+
+  private async replaceStaleBundleDaemonOnce(
+    runtimeDir: string,
+    packagedAppVersion: string
+  ): Promise<void> {
+    const stale = await isDaemonStaleForCurrentBundle(
+      runtimeDir,
+      this.socketPath,
+      this.tokenPath,
+      packagedAppVersion,
+      this.protocolVersion
+    )
+    if (!stale) {
+      return
+    }
+
+    const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
+    const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+    if (daemonLiveSessionCount === null || liveSessionCount > 0) {
+      console.warn(
+        daemonLiveSessionCount === null
+          ? '[daemon] Packaged daemon is stale - preserving it because live session state could not be verified'
+          : `[daemon] Packaged daemon is stale - preserving it because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+      )
+      return
+    }
+
+    this.fanoutSyntheticExits(-1)
+    if (!this.respawnPromise) {
+      this.respawnPromise = this.doRespawn(
+        '[daemon] Packaged daemon is stale - respawning from the current app bundle',
+        'stale_bundle'
+      ).finally(() => {
+        this.respawnPromise = null
+      })
+    }
+    await this.respawnPromise
+  }
+
   /** Replace a TCC-severed daemon only after its live sessions drain. */
   private async replaceSeveredMacTccDaemonBeforeNewPty(): Promise<void> {
     // Why no platform gate: getMacDaemonTccAttributionHealth returns 'unknown' off macOS.
@@ -2680,7 +2759,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.runtimeDir,
       this.socketPath,
       this.tokenPath,
-      this.packagedAppVersion,
       this.protocolVersion
     )
     if (health !== 'severed') {

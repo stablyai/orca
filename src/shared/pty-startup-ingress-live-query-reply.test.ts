@@ -215,6 +215,31 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('consumes a reply-only batch when exactly one private-DSR part is proven', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    let ingress: PtyStartupIngress | undefined
+    ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => {
+        writes.push(data)
+        ingress?.accept(POSIX_CSI_COOKED_ECHO(data))
+      },
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    // One observed private-DSR query proves only one of the two coalesced replies.
+    ingress.accept('\x1b[?996n')
+    const coalesced = COLOR_SCHEME_REPLY + COLOR_SCHEME_REPLY
+    emissions.length = 0
+    expect(ingress.answerLiveQueryReply(coalesced)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([COLOR_SCHEME_REPLY])
+    expect(visible(emissions)).toBe('')
+    ingress.drainAndClose()
+  })
+
   it('preserves identical replies after a quiet CSI write', async () => {
     vi.useFakeTimers()
     const writes: string[] = []
@@ -292,6 +317,40 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('swallows a delayed OSC 10 reply from owner A once owner B asks OSC 11', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    let foreground = 'gh'
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => foreground
+    })
+
+    // Owner A asks both OSC 10 and OSC 11 via `?;?`; the replies can arrive
+    // much later, after ownership has moved on.
+    ingress.accept('\x1b]10;?;?\x07')
+    foreground = 'node'
+    // Owner B then asks only OSC 11, retiring just that identity from A's
+    // dual query and leaving A's OSC 10 claim intact.
+    ingress.accept('\x1b]11;?\x07')
+
+    const delayedOsc10 = '\x1b]10;rgb:00/00/00\x07'
+    expect(ingress.answerLiveQueryReply(delayedOsc10)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([])
+    vi.advanceTimersByTime(200)
+    expect(writes).toEqual([])
+
+    // Owner B's own in-order OSC 11 reply is still delivered.
+    const osc11 = '\x1b]11;rgb:11/11/11\x07'
+    expect(ingress.answerLiveQueryReply(osc11)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([osc11])
+    ingress.drainAndClose()
+  })
+
   it.each([
     ['CPR', '\x1b[6n', '\x1b[12;34R'],
     ['DA', '\x1b[c', '\x1b[?1;2c'],
@@ -326,6 +385,24 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
       readForegroundProcess: () => 'zsh'
     })
 
+    expect(ingress.answerLiveQueryReply('\x1b[1;2R')).toBe(false)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('does not consume Shift-F3 after the stale CPR claim expires', () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => writes.push(data),
+      onEmission: () => {},
+      readForegroundProcess: () => 'zsh'
+    })
+
+    ingress.accept('\x1b[6n')
+    vi.advanceTimersByTime(5_000 + 1)
+    // The expired claim must leave the Shift-F3 keystroke unclaimed for the host.
     expect(ingress.answerLiveQueryReply('\x1b[1;2R')).toBe(false)
     expect(writes).toEqual([])
     ingress.drainAndClose()

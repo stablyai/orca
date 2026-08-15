@@ -6544,13 +6544,14 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith("claude 'say test'\r")
   })
 
-  it('arms draft observation after a provider-owned SSH startup succeeds', async () => {
+  it('keeps the 8s fallback after a provider-owned non-Codex startup succeeds', async () => {
+    vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-    const transport = createMockTransport('pty-codex')
+    const transport = createMockTransport('pty-droid')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
-      return 'pty-ssh-codex'
+      return 'pty-ssh-droid'
     })
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -6559,31 +6560,36 @@ describe('connectPanePty', () => {
       repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
       sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
     }
-    const prompt = 'https://linear.app/stably/issue/STA-4067'
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+    const prompt = 'Review the linked work item'
 
     connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
       createDeps({
         startup: {
-          command: 'codex',
-          launchAgent: 'codex',
+          command: 'droid',
+          launchAgent: 'droid',
           launchConfig: { agentArgs: '', agentEnv: {} },
           launchToken: 'launch-token-ssh',
           draftPrompt: prompt
         }
       }) as never
     )
+    await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
-    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
+    await vi.advanceTimersByTimeAsync(7900)
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(100)
     await flushAsyncTicks()
 
     expect(createdTransportOptions[0]?.commandDelivery).toBe('provider')
-    expect(transport.sendInput).not.toHaveBeenCalledWith('codex\r')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('droid\r')
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(`\x1b[200~${prompt}\x1b[201~`)
   })
 
-  it('orders a startup draft behind existing user input when Codex renders its composer', async () => {
+  it('waits past 8s for a cold Codex composer and preserves input ordering', async () => {
+    vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
 
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -6611,8 +6617,10 @@ describe('connectPanePty', () => {
         draftPrompt: 'https://github.com/stablyai/orca/issues/42'
       }
     })
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
 
     connectPanePty(pane as never, manager as never, deps as never)
+    await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
 
@@ -6628,6 +6636,8 @@ describe('connectPanePty', () => {
       }
     ).mock.calls[0]?.[0]('USER_DRAFT')
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
