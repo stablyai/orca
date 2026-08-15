@@ -94,6 +94,7 @@ export function attachMainWindowServices(
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume
+    getSelectedKimiHomePath?: () => string | null
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
@@ -129,6 +130,7 @@ export function attachMainWindowServices(
     store,
     {
       prepareCodexSessionResume: options?.prepareCodexSessionResume,
+      getSelectedKimiHomePath: options?.getSelectedKimiHomePath,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,

@@ -3268,6 +3268,19 @@
           "TabBarQuickCommandHostLoadStatus": {
             "82e294f3ca": "Host unavailable",
             "7c129b08ff": "Loading host…"
+          },
+          "CodexLaunchAccountMenu": {
+            "sshUnsupported": "Account selection is unavailable for SSH workspaces.",
+            "runtimeUnsupported": "This runtime only supports Current default. Update or restart Orca to select an account.",
+            "loadFailed": "Could not load Codex accounts.",
+            "title": "Launch Codex in a new terminal",
+            "trigger": "Launch Codex with an account",
+            "currentDefault": "Current default",
+            "loading": "Loading Codex accounts…",
+            "retry": "Retry",
+            "codex": "Codex",
+            "currentDefaultDescription": "Follow the account currently selected for this runtime",
+            "systemLogin": "System Codex login"
           }
         }
       },
@@ -3807,6 +3820,12 @@
           "ae255c3dba": "n/a",
           "247c93ca92": "• inferred pricing",
           "8a6655f7a2": " • Last scan error: {{value0}}",
+          "accountLabel": "Account",
+          "accountAll": "All accounts",
+          "accountSystem": "System Codex login",
+          "accountUnattributed": "Unattributed",
+          "accountDeleted": "Deleted account ({{value0}})",
+          "accountManaged": "Account {{value0}}",
           "rangeLast7Days": "Last 7 days",
           "rangeLast30Days": "Last 30 days",
           "rangeLast90Days": "Last 90 days",
@@ -8000,7 +8019,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "7a13e76a8d": "Kimi Accounts",
+            "51c5c4546d": "Import and switch between isolated Kimi Code credential homes."
           }
         },
         "advanced": {
@@ -10736,6 +10757,32 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "KimiAccountsSection": {
+          "usageLoading": "Loading usage…",
+          "usageUnavailable": "Usage unavailable",
+          "8c3ea0c4de": "Kimi",
+          "669b65ef25": "Keep separate Kimi Code credentials in Orca-managed homes.",
+          "94ef38fe29": "Kimi Accounts",
+          "271d3f21b7": "Import config.toml and credentials from an existing Kimi Code home. Sessions and logs stay in the original home.",
+          "8fdf12d92a": "Account label",
+          "e9c5a73d12": "Kimi does not expose a stable account email here, so this label identifies the saved login.",
+          "99743f7be2": "Work or Personal",
+          "signingIn": "Signing in…",
+          "signIn": "Sign in",
+          "1ab6e84634": "Importing…",
+          "6613d80a55": "Choose home…",
+          "42fd0923b8": "System default",
+          "34a8524e96": "Use the current KIMI_CODE_HOME or ~/.kimi-code.",
+          "d4f6feeb1b": "Active",
+          "47606f877d": "Use",
+          "797390b07e": "Loading accounts…",
+          "c91036794c": "Orca-managed Kimi home",
+          "214d83fdea": "Remove Kimi account",
+          "f8e0f92e83": "Remove Kimi Account?",
+          "b2767a4027": "Orca will delete only this managed copy of the Kimi config and credentials. The original home and the system default remain unchanged.",
+          "6fe23e65cd": "Cancel",
+          "03ca5c8176": "Remove"
         }
       },
       "right": {

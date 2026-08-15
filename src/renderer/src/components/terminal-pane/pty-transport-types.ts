@@ -13,6 +13,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ProviderAccountRef } from '../../../../shared/provider-account-ref'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
@@ -234,6 +235,7 @@ export type IpcPtyTransportOptions = {
   agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
+  providerAccountRef?: ProviderAccountRef
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null

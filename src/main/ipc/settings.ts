@@ -52,7 +52,18 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  // Provider account rosters and selections are main-owned. Dedicated account
+  // handlers validate ownership and return path-free summaries.
+  delete sanitizedArgs.kimiManagedAccounts
+  delete sanitizedArgs.activeKimiManagedAccountId
   return sanitizedArgs
+}
+
+function sanitizeRendererSettingsSnapshot(settings: GlobalSettings): GlobalSettings {
+  return {
+    ...settings,
+    kimiManagedAccounts: []
+  }
 }
 
 // Why: fields that appear in the View > Appearance submenu need the menu
@@ -87,13 +98,13 @@ export function registerSettingsHandlers(
       const isOrigin =
         originWebContentsId !== undefined && window.webContents.id === originWebContentsId
       if (!window.isDestroyed() && !isOrigin) {
-        window.webContents.send('settings:changed', updates)
+        window.webContents.send('settings:changed', sanitizeRendererSettingsUpdate(updates))
       }
     }
   })
 
   ipcMain.handle('settings:get', () => {
-    return store.getSettings()
+    return sanitizeRendererSettingsSnapshot(store.getSettings())
   })
 
   ipcMain.handle(
@@ -105,7 +116,7 @@ export function registerSettingsHandlers(
         { prBotAuthorOverrides: next },
         { notifyListeners: true, originWebContentsId: event.sender.id }
       )
-      return store.getSettings()
+      return sanitizeRendererSettingsSnapshot(store.getSettings())
     }
   )
 
@@ -115,7 +126,7 @@ export function registerSettingsHandlers(
   // synchronously or pre-hydration bindings would always pick main authority
   // (terminal-side-effect-authority.md, migration switch).
   ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = store.getSettings()
+    event.returnValue = sanitizeRendererSettingsSnapshot(store.getSettings())
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -276,7 +287,7 @@ export function registerSettingsHandlers(
       })
     }
 
-    return result
+    return sanitizeRendererSettingsSnapshot(result)
   })
 
   ipcMain.handle(
@@ -289,9 +300,11 @@ export function registerSettingsHandlers(
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =
         requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
-      return store.updateSettings(
-        { activeRuntimeEnvironmentId: environmentId },
-        { notifyListeners: true, originWebContentsId: event.sender.id }
+      return sanitizeRendererSettingsSnapshot(
+        store.updateSettings(
+          { activeRuntimeEnvironmentId: environmentId },
+          { notifyListeners: true, originWebContentsId: event.sender.id }
+        )
       )
     }
   )

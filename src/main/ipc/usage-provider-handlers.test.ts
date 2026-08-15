@@ -50,16 +50,23 @@ describe('usage provider IPC handlers', () => {
     call('claudeUsage', 'getDaily', { scope: 'orca', range: '90d' })
     call('claudeUsage', 'getBreakdown', { scope: 'all', range: 'all', kind: 'model' })
     call('claudeUsage', 'getRecentSessions', { scope: 'orca', range: '30d', limit: 4 })
+    call('codexUsage', 'getSnapshot', {
+      scope: 'orca',
+      range: '30d',
+      limit: 7,
+      accountFilter: { kind: 'system' }
+    })
 
     expect(claudeUsage.getScanState).toHaveBeenCalledWith()
     expect(codexUsage.getScanState).toHaveBeenCalledWith()
     expect(openCodeUsage.getScanState).toHaveBeenCalledWith()
     expect(claudeUsage.setEnabled).toHaveBeenCalledWith(true)
     expect(claudeUsage.refresh.mock.calls).toEqual([[false], [true]])
-    expect(claudeUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7)
-    expect(claudeUsage.getSummary).toHaveBeenCalledWith('all', '7d')
-    expect(claudeUsage.getDaily).toHaveBeenCalledWith('orca', '90d')
-    expect(claudeUsage.getBreakdown).toHaveBeenCalledWith('all', 'all', 'model')
-    expect(claudeUsage.getRecentSessions).toHaveBeenCalledWith('orca', '30d', 4)
+    expect(claudeUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7, undefined)
+    expect(claudeUsage.getSummary).toHaveBeenCalledWith('all', '7d', undefined)
+    expect(claudeUsage.getDaily).toHaveBeenCalledWith('orca', '90d', undefined)
+    expect(claudeUsage.getBreakdown).toHaveBeenCalledWith('all', 'all', 'model', undefined)
+    expect(claudeUsage.getRecentSessions).toHaveBeenCalledWith('orca', '30d', 4, undefined)
+    expect(codexUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7, { kind: 'system' })
   })
 })

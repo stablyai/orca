@@ -12,6 +12,7 @@ export type RateLimitSlice = {
   consumeCodexRateLimitResetCredit: () => Promise<void>
   fetchInactiveClaudeAccountUsage: () => Promise<void>
   fetchInactiveCodexAccountUsage: () => Promise<void>
+  fetchInactiveKimiAccountUsage: () => Promise<void>
   setRateLimitsFromPush: (state: RateLimitState) => void
 }
 
@@ -30,7 +31,8 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
+    inactiveCodexAccounts: [],
+    inactiveKimiAccounts: []
   },
 
   fetchRateLimits: async () => {
@@ -143,6 +145,14 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       await window.api.rateLimits.fetchInactiveCodexAccounts()
     } catch (error) {
       console.error('Failed to fetch inactive Codex account usage:', error)
+    }
+  },
+
+  fetchInactiveKimiAccountUsage: async () => {
+    try {
+      await window.api.rateLimits.fetchInactiveKimiAccounts()
+    } catch (error) {
+      console.error('Failed to fetch inactive Kimi account usage:', error)
     }
   },
 

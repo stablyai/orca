@@ -29,6 +29,7 @@ export function createUsageEventAggregation<
   function createEmptySession(event: TEvent): UsageSession<TMetric> {
     return {
       sessionId: event.sessionId,
+      ...(event.accountId !== undefined ? { accountId: event.accountId } : {}),
       firstTimestamp: event.timestamp,
       lastTimestamp: event.timestamp,
       primaryModel: event.model,
@@ -53,6 +54,7 @@ export function createUsageEventAggregation<
   function createEmptyDailyAggregate(event: TEvent): UsageDailyAggregate<TMetric> {
     return {
       day: event.day,
+      ...(event.accountId !== undefined ? { accountId: event.accountId } : {}),
       model: event.model,
       projectKey: event.projectKey,
       projectLabel: event.projectLabel,

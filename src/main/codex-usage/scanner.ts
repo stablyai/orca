@@ -7,6 +7,7 @@ import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import { getCodexSessionAccountId } from '../codex/codex-session-account-registry'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
 import {
@@ -527,8 +528,10 @@ export async function attributeCodexUsageEvent(
     }
   }
 
+  const accountId = getCodexSessionAccountId(event.sessionId)
   return {
     ...event,
+    ...(accountId !== undefined ? { accountId } : {}),
     day,
     projectKey,
     projectLabel,
@@ -755,7 +758,14 @@ export async function scanCodexUsageFiles(
       previous.mtimeMs === fileInfo.mtimeMs &&
       previous.size === fileInfo.size &&
       Array.isArray(previous.ownedEventKeys) &&
-      typeof previous.hasDeferredClaims === 'boolean'
+      typeof previous.hasDeferredClaims === 'boolean' &&
+      previous.sessions.every((session) => {
+        const currentAccountId = getCodexSessionAccountId(session.sessionId)
+        // Why: the bounded launch registry may eventually evict an old
+        // session. Preserve its cached snapshot; only new positive evidence
+        // should invalidate an otherwise unchanged rollout.
+        return currentAccountId === undefined || session.accountId === currentAccountId
+      })
     if (canReuse) {
       reusedByPath.set(filePath, previous)
     } else {

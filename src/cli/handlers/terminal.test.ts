@@ -4,6 +4,7 @@ import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
+import { AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 describe('terminal close CLI', () => {
   afterEach(() => {
@@ -133,5 +134,201 @@ describe('terminal send CLI', () => {
       interrupt: false,
       client: { id: 'orca-cli', type: 'desktop' }
     })
+  })
+})
+
+describe('terminal create account selection', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('resolves a canonical UUID and sends only the structured account launch', async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === 'status.get') {
+        return { result: { capabilities: [AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY] } }
+      }
+      if (method === 'accounts.list') {
+        return {
+          result: {
+            codex: {
+              accounts: [
+                {
+                  id: 'account-a',
+                  email: 'user@example.com',
+                  managedHomeRuntime: 'wsl',
+                  wslDistro: 'Ubuntu'
+                }
+              ],
+              activeAccountId: null
+            }
+          }
+        }
+      }
+      return {
+        result: {
+          disposition: 'created',
+          terminal: { handle: 'term-account-a', worktreeId: 'worktree-1', title: null }
+        }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal create']({
+      flags: new Map([
+        ['worktree', 'id:worktree-1'],
+        ['agent', 'codex'],
+        ['account', 'account-a']
+      ]),
+      client: { call, isRemote: false } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('accounts.list', { refreshUsage: false })
+    expect(call).toHaveBeenCalledWith(
+      'terminal.createAgentSession',
+      expect.objectContaining({
+        clientOperationId: expect.stringMatching(/^\d+-[a-f0-9]{32}$/),
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerAccountRef: {
+          provider: 'codex',
+          accountId: 'account-a',
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        },
+        presentation: 'background'
+      })
+    )
+    expect(call).not.toHaveBeenCalledWith('terminal.create', expect.anything())
+  })
+
+  it('selects an explicit WSL system account without listing managed homes', async () => {
+    const call = vi.fn(async (method: string) =>
+      method === 'status.get'
+        ? { result: { capabilities: [AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY] } }
+        : {
+            result: {
+              disposition: 'created',
+              terminal: { handle: 'term-system', worktreeId: 'worktree-1', title: null }
+            }
+          }
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal create']({
+      flags: new Map([
+        ['worktree', 'id:worktree-1'],
+        ['agent', 'codex'],
+        ['account', 'system'],
+        ['account-runtime', 'wsl'],
+        ['wsl-distro', 'Ubuntu']
+      ]),
+      client: { call, isRemote: false } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).not.toHaveBeenCalledWith('accounts.list', expect.anything())
+    expect(call).toHaveBeenCalledWith(
+      'terminal.createAgentSession',
+      expect.objectContaining({
+        providerAccountRef: {
+          provider: 'codex',
+          accountId: null,
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        }
+      })
+    )
+  })
+
+  it('fails before account lookup or launch when the runtime lacks the capability', async () => {
+    const call = vi.fn().mockResolvedValue({ result: { capabilities: [] } })
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([
+          ['worktree', 'id:worktree-1'],
+          ['agent', 'codex'],
+          ['account', 'account-a']
+        ]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('does not support account-scoped agent launches')
+
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).not.toHaveBeenCalledWith('terminal.createAgentSession', expect.anything())
+  })
+
+  it('does not accept an email or deleted UUID as an account selector', async () => {
+    const call = vi.fn(async (method: string) =>
+      method === 'status.get'
+        ? { result: { capabilities: [AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY] } }
+        : { result: { codex: { accounts: [], activeAccountId: null } } }
+    )
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([
+          ['worktree', 'id:worktree-1'],
+          ['agent', 'codex'],
+          ['account', 'user@example.com']
+        ]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('Unknown Codex account UUID')
+
+    expect(call).not.toHaveBeenCalledWith('terminal.createAgentSession', expect.anything())
+  })
+
+  it('rejects a valueless account flag instead of silently creating a default terminal', async () => {
+    const call = vi.fn()
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([['account', true]]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('Missing required --account')
+
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when a managed WSL account has no distribution', async () => {
+    const call = vi.fn(async (method: string) =>
+      method === 'status.get'
+        ? { result: { capabilities: [AGENT_SESSION_ACCOUNT_REF_RUNTIME_CAPABILITY] } }
+        : {
+            result: {
+              codex: {
+                accounts: [
+                  { id: 'broken-wsl', email: 'user@example.com', managedHomeRuntime: 'wsl' }
+                ],
+                activeAccountId: null
+              }
+            }
+          }
+    )
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([
+          ['agent', 'codex'],
+          ['account', 'broken-wsl']
+        ]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('has no WSL distribution')
+
+    expect(call).not.toHaveBeenCalledWith('terminal.createAgentSession', expect.anything())
   })
 })

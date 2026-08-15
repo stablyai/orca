@@ -89,4 +89,17 @@ describe('KimiHookService', () => {
     const afterRemove = readFileSync(configPath(), 'utf-8')
     expect(afterRemove).toBe(userConfig)
   })
+
+  it('installs into an explicitly selected managed home', () => {
+    const managedHome = join(home, 'managed-kimi-home')
+    const service = new KimiHookService()
+
+    expect(service.install(managedHome).state).toBe('installed')
+
+    expect(readFileSync(join(managedHome, 'config.toml'), 'utf-8')).toContain(
+      'orca-managed-kimi-hooks'
+    )
+    expect(service.getStatus(managedHome).state).toBe('installed')
+    expect(service.getStatus().state).toBe('not_installed')
+  })
 })

@@ -9,6 +9,13 @@
 
 export type UsageProviderId = 'claude' | 'codex' | 'opencode' | `plugin:${string}`
 
+/** Optional provider-account snapshot carried by usage records and rollups. */
+export type UsageProviderAccountId = string | null
+export type UsageProviderAccountAttribution = {
+  /** Managed account id, null for provider system default, absent when unknown. */
+  accountId?: UsageProviderAccountId
+}
+
 /** Scan input. Distinct from `UsageWorktreeRef` in usage-worktree-metadata, which lacks `repoId`. */
 export type UsageScanWorktreeRef = {
   repoId: string

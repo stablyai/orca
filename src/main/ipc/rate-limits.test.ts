@@ -47,7 +47,8 @@ function makeService(): {
     consumeCodexRateLimitResetCredit,
     setPollingInterval: vi.fn(() => Promise.resolve()),
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
-    fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
+    fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve()),
+    fetchInactiveKimiAccountsOnOpen: vi.fn(() => Promise.resolve())
   }
   return {
     service: service as unknown as RateLimitService,
@@ -78,6 +79,7 @@ describe('registerRateLimitHandlers', () => {
     expect(ipcState.handleHandlers.has('rateLimits:refresh')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshMiniMax')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshGrok')).toBe(true)
+    expect(ipcState.handleHandlers.has('rateLimits:fetchInactiveKimiAccounts')).toBe(true)
   })
 
   it('registers a refreshGrok channel that delegates to refreshGrok()', async () => {

@@ -25,6 +25,7 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/c
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export type RuntimeGenerateCommitMessageResult =
@@ -691,14 +692,17 @@ export async function generateRuntimeCommitMessage(
 
 export async function discoverRuntimeCommitMessageModels(
   context: RuntimeGitContext,
-  agentId: string
+  agentId: string,
+  ptyId?: string
 ): Promise<RuntimeDiscoverCommitMessageModelsResult> {
   const target = getActiveRuntimeTarget(context.settings)
+  const remotePty = ptyId ? parseRemoteRuntimePtyId(ptyId) : null
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.discoverCommitMessageModels({
       agentId,
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...(!remotePty && ptyId ? { ptyId } : {})
     }) as Promise<RuntimeDiscoverCommitMessageModelsResult>
   }
   return callRuntimeRpc<RuntimeDiscoverCommitMessageModelsResult>(
@@ -707,6 +711,7 @@ export async function discoverRuntimeCommitMessageModels(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       agentId,
+      ...(ptyId ? { ptyId: remotePty?.handle ?? ptyId } : {}),
       ...(context.settings?.agentCmdOverrides
         ? { agentCmdOverrides: context.settings.agentCmdOverrides }
         : {})
