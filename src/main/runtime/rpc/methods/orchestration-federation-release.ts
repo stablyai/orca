@@ -87,21 +87,56 @@ async function releaseRemoteAttachmentOnce(args: {
     }
   }
   const resource = requested.resource
-  const terminal = await runtime.showTerminal(resource.terminal_handle).catch(() => null)
+  let terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>>
+  try {
+    terminal = await runtime.showTerminal(resource.terminal_handle)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    if (terminalObservationProvesAbsence(reason)) {
+      if (args.mode === 'recovery') {
+        const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+        return {
+          dispatchId,
+          state: 'retained',
+          reason: 'identity_unproven',
+          processAction: 'none',
+          archive: archiveSummary(retained)
+        }
+      }
+      const unknown = db.markWorkerTerminalReleaseUnknown(
+        resource.id,
+        'The exact remote terminal is absent; whether its process exited cannot be proven.'
+      )
+      return {
+        dispatchId,
+        state: 'release_unknown',
+        processAction: 'none',
+        archive: archiveSummary(unknown),
+        lastError: unknown.release_error ?? undefined
+      }
+    }
+    return {
+      dispatchId,
+      state: 'release_pending',
+      processAction: 'none',
+      archive: archiveSummary(resource),
+      lastError: reason
+    }
+  }
   if (
-    !terminal ||
     !db.isRemoteAttachmentProcessCurrent({
       dispatchId,
       paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
       processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
     })
   ) {
+    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
-      state: 'release_pending',
+      state: 'retained',
+      reason: 'identity_unproven',
       processAction: 'none',
-      archive: archiveSummary(resource),
-      lastError: 'The exact remote terminal is not currently observable.'
+      archive: archiveSummary(retained)
     }
   }
 
@@ -199,4 +234,8 @@ function markRemoteAttachmentReleased(
       { kind: 'terminal', role: 'agent', action: 'released', id: terminalHandle }
     ]
   })
+}
+
+function terminalObservationProvesAbsence(reason: string): boolean {
+  return /terminal_(?:handle_stale|not_found|gone)/i.test(reason)
 }

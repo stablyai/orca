@@ -20,6 +20,7 @@ import {
 } from './orchestration-worker-launch-preferences'
 import {
   resolveBoundedWorkerControls,
+  resolveWorkerDeadlineAt,
   validateFederatedWorkerStartPlacement
 } from './orchestration-worker-start-validation'
 import {
@@ -59,7 +60,11 @@ export async function startFederatedWorker(args: {
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const controls = resolveBoundedWorkerControls(params, params.agent as TuiAgent)
-  const deadlineAt = new Date(Date.now() + params.maxRuntimeMs).toISOString()
+  const deadlineAt = resolveWorkerDeadlineAt({
+    db,
+    retryOf: params.retryOf,
+    maxRuntimeMs: params.maxRuntimeMs
+  })
   const bounded = {
     deadlineAt,
     budget: controls.budget,

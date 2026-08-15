@@ -22,7 +22,8 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import {
   prepareLocalWorkerStart,
-  resolveBoundedWorkerControls
+  resolveBoundedWorkerControls,
+  resolveWorkerDeadlineAt
 } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
@@ -63,7 +64,11 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
       const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
       const controls = resolveBoundedWorkerControls(params, agent as TuiAgent)
-      const deadlineAt = new Date(Date.now() + params.maxRuntimeMs).toISOString()
+      const deadlineAt = resolveWorkerDeadlineAt({
+        db,
+        retryOf: params.retryOf,
+        maxRuntimeMs: params.maxRuntimeMs
+      })
       const bounded = {
         deadlineAt,
         budget: controls.budget,

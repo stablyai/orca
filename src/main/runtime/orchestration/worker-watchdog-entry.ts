@@ -149,14 +149,22 @@ export function runWorkerWatchdog(
         return
       }
       if (!terminationTriggered && platform !== 'win32' && sweepDetachedDescendants) {
+        // A POSIX parent exit reparents detached descendants before another PPID snapshot can
+        // prove whether a child was created after the latest poll. Sweep every process we did
+        // observe, but fail closed instead of publishing authoritative natural-exit evidence.
+        treeKillUnknown = true
         void (async () => {
           const snapshot =
             (await descendantPollPromise?.catch(() => null)) ?? latestDescendantSnapshot
+          if (terminationTriggered && !descendantCleanupComplete) {
+            deferredClose = { exitCode, signal }
+            return
+          }
           if (!snapshot || snapshot.descendants.length === 0) {
             finish(exitCode, signal)
             return
           }
-          treeKillUnknown = descendantSnapshotHasAmbiguousIdentity(snapshot)
+          treeKillUnknown ||= descendantSnapshotHasAmbiguousIdentity(snapshot)
           const signalled = await signalLiveDescendants(snapshot, 'SIGTERM').catch(() => 0)
           if (signalled === 0) {
             finish(exitCode, signal)
@@ -236,7 +244,7 @@ export function runWorkerWatchdog(
           }
           const snapshot = await captureDescendants(providerPid).catch(() => null)
           if (snapshot) {
-            treeKillUnknown = descendantSnapshotHasAmbiguousIdentity(snapshot)
+            treeKillUnknown ||= descendantSnapshotHasAmbiguousIdentity(snapshot)
             terminateDescendants(snapshot)
           }
           try {

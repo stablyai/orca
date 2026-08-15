@@ -1,7 +1,7 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { DispatchBudgetInput } from '../../orchestration/db'
+import type { DispatchBudgetInput, OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from './orchestration-federation-start-schema'
 import {
@@ -30,6 +30,21 @@ export type BoundedWorkerControls = {
     provider: TuiAgent
     enforcement: 'environment' | 'environment_and_cli' | 'adapter'
   }
+}
+
+export function resolveWorkerDeadlineAt(args: {
+  db: Pick<OrchestrationDb, 'getWorkerDispatch'>
+  retryOf?: string
+  maxRuntimeMs: number
+  now?: () => number
+}): string {
+  if (args.retryOf) {
+    const prior = args.db.getWorkerDispatch(args.retryOf)
+    if (prior) {
+      return prior.deadline_at
+    }
+  }
+  return new Date((args.now ?? Date.now)() + args.maxRuntimeMs).toISOString()
 }
 
 export function resolveBoundedWorkerControls(
@@ -151,6 +166,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
   runtime: OrcaRuntimeService
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
+  rejectSupervisedTerminalReuse(params)
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (createsWorktree && (!params.name || !params.repo)) {
     throw new OrchestrationError(

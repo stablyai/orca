@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChildProcess, spawn } from 'node:child_process'
+import type { DescendantSnapshot } from '../../pty-descendant-termination'
 import {
   runWorkerWatchdog,
   workerProcessGroupTarget,
@@ -272,6 +273,58 @@ describe('worker watchdog process ownership', () => {
     child.emit('close', 0, null)
     await expect(pending).resolves.toMatchObject({ stop: 'tree_kill_unknown' })
   })
+
+  it('fails closed when a natural exit has no authoritative final descendant snapshot', async () => {
+    const child = new FakeChild()
+    const pending = runWorkerWatchdog(request('2026-08-15T01:00:00.000Z'), {
+      platform: 'darwin',
+      spawnImpl: spawnFake(child),
+      captureDescendantsImpl: vi.fn(async () => ({
+        rootPgid: 4242,
+        capturedAtMs: Date.now(),
+        descendants: []
+      })),
+      writeSentinelImpl: vi.fn()
+    })
+    await Promise.resolve()
+
+    child.emit('close', 0, null)
+    await expect(pending).resolves.toMatchObject({ stop: 'tree_kill_unknown' })
+  })
+
+  it('does not leave a competing deadline cleanup armed while natural close waits for a poll', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime('2026-08-15T00:00:00.000Z')
+    const child = new FakeChild()
+    let resolvePoll!: (snapshot: DescendantSnapshot) => void
+    const pendingPoll = new Promise<DescendantSnapshot>((resolve) => {
+      resolvePoll = resolve
+    })
+    const captureDescendants = vi.fn().mockReturnValueOnce(pendingPoll).mockResolvedValue({
+      rootPgid: null,
+      capturedAtMs: Date.now(),
+      descendants: []
+    })
+    const killImpl = vi.fn()
+    const pending = runWorkerWatchdog(request(), {
+      platform: 'darwin',
+      spawnImpl: spawnFake(child),
+      captureDescendantsImpl: captureDescendants,
+      terminateDescendantsImpl: vi.fn(),
+      forceTerminateDescendantsImpl: vi.fn(async () => 0),
+      killImpl,
+      writeSentinelImpl: vi.fn()
+    })
+
+    child.emit('close', 0, null)
+    await vi.advanceTimersByTimeAsync(1_000)
+    resolvePoll({ rootPgid: 4242, capturedAtMs: Date.now(), descendants: [] })
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(WORKER_WATCHDOG_CLEANUP_GRACE_MS)
+
+    await expect(pending).resolves.toMatchObject({ stop: 'tree_kill_unknown' })
+    expect(killImpl).not.toHaveBeenCalledWith(-4242, 'SIGKILL')
+  })
 })
 
 describe('worker watchdog entry resolution', () => {
@@ -435,7 +488,7 @@ describe('worker watchdog entry resolution', () => {
         })
         expect(JSON.parse(readFileSync(sentinelPath, 'utf8'))).toMatchObject({
           dispatchId: 'ctx_watchdog_natural_descendant',
-          stop: 'natural'
+          stop: 'tree_kill_unknown'
         })
         await vi.waitFor(() => expect(() => process.kill(detachedChildPid, 0)).toThrow(), {
           timeout: 5_000,

@@ -4180,11 +4180,15 @@ export class OrchestrationDb {
         if (
           !priorReservation ||
           priorReservation.group_id !== params.budget.group ||
-          priorWorker.max_review_cycles !== params.budget.maxReviewCycles
+          priorWorker.max_runtime_ms !== params.budget.maxRuntimeMs ||
+          priorWorker.max_requests !== params.budget.maxRequests ||
+          priorWorker.request_cap_enforcement !== params.budget.requestCapEnforcement ||
+          priorWorker.max_review_cycles !== params.budget.maxReviewCycles ||
+          priorWorker.deadline_at !== params.deadlineAt
         ) {
           throw new OrchestrationError(
             'dispatch_budget_conflict',
-            `Retry ${params.retryOf} must preserve its Dispatch group and review-cycle maximum.`
+            `Retry ${params.retryOf} must preserve its Dispatch group, runtime, request, enforcement, review, and absolute deadline limits.`
           )
         }
         const expectedReviewCycle =

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveBoundedWorkerControls } from './orchestration-worker-start-validation'
+import {
+  prepareFederationAttachmentWorkerStart,
+  resolveBoundedWorkerControls,
+  resolveWorkerDeadlineAt
+} from './orchestration-worker-start-validation'
 
 const budget = {
   dispatchGroup: 'leaf-workers',
@@ -26,5 +30,28 @@ describe('bounded worker leaf validation', () => {
       provider: agent,
       enforcement: 'environment_and_cli'
     })
+  })
+
+  it('reuses the prior absolute deadline for a retry', () => {
+    expect(
+      resolveWorkerDeadlineAt({
+        db: {
+          getWorkerDispatch: () => ({ deadline_at: '2026-08-15T00:00:10.000Z' }) as never
+        },
+        retryOf: 'ctx_prior',
+        maxRuntimeMs: 7_200_000,
+        now: () => Date.parse('2026-08-15T00:00:09.000Z')
+      })
+    ).toBe('2026-08-15T00:00:10.000Z')
+  })
+
+  it('rejects supervised terminal reuse at the worker-server attachment boundary', () => {
+    expect(() =>
+      prepareFederationAttachmentWorkerStart({
+        params: { terminal: 'term_existing' } as never,
+        createsWorktree: false,
+        runtime: {} as never
+      })
+    ).toThrow('always creates a fresh bounded process')
   })
 })

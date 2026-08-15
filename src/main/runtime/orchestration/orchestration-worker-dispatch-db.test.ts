@@ -422,6 +422,68 @@ describe('OrchestrationDb worker Dispatch state', () => {
     ).toBe('starting')
   })
 
+  it('requires retries to preserve runtime, request, enforcement, and deadline limits', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'immutable retry budget' })
+    const firstBudget = {
+      group: 'immutable-retry',
+      index: 1,
+      maxDispatches: 4,
+      maxRuntimeMs: 1_000,
+      maxRequests: 1,
+      requestCapEnforcement: 'prompt_only' as const,
+      maxReviewCycles: 0,
+      leaf: true as const
+    }
+    const first = d.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      budget: firstBudget,
+      deadlineAt: '2099-01-01T00:00:01.000Z'
+    })
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+
+    for (const mismatch of [
+      { maxRuntimeMs: 7_200_000 },
+      { maxRequests: 100 },
+      { requestCapEnforcement: 'hard' as const }
+    ]) {
+      expect(() =>
+        d.createStartingWorkerDispatch({
+          taskId: task.id,
+          retryOf: first.dispatch.id,
+          startOptions: {},
+          budget: { ...firstBudget, ...mismatch, index: 2 },
+          deadlineAt: '2099-01-01T00:00:01.000Z'
+        })
+      ).toThrow('must preserve')
+    }
+    expect(() =>
+      d.createStartingWorkerDispatch({
+        taskId: task.id,
+        retryOf: first.dispatch.id,
+        startOptions: {},
+        budget: { ...firstBudget, index: 2 },
+        deadlineAt: '2099-01-01T00:00:02.000Z'
+      })
+    ).toThrow('must preserve')
+
+    expect(
+      d.createStartingWorkerDispatch({
+        taskId: task.id,
+        retryOf: first.dispatch.id,
+        startOptions: {},
+        budget: { ...firstBudget, index: 2 },
+        deadlineAt: '2099-01-01T00:00:01.000Z'
+      }).worker
+    ).toMatchObject({
+      deadline_at: '2099-01-01T00:00:01.000Z',
+      max_runtime_ms: 1_000,
+      max_requests: 1,
+      request_cap_enforcement: 'prompt_only'
+    })
+  })
+
   it('treats abandon of a superseded Dispatch as a no-op', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'stale abandon' })

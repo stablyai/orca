@@ -208,7 +208,7 @@ For a supported per-invocation Claude or Codex launch, pass an opaque provider m
 
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
-orca orchestration worker-start --task <task_id> --worktree current --agent pi --model kimi-coding/k3 --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
+orca orchestration worker-start --task <task_id> --worktree current --agent codex --model gpt-5.6-codex --effort high --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 ```
 
 `--effort` requires `--model`. A connected worker server must advertise launch-preference support before Orca forwards either option.
