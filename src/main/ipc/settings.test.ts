@@ -125,7 +125,46 @@ describe('registerSettingsHandlers', () => {
 
     const event = { returnValue: undefined as unknown }
     listener(event)
-    expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
+    expect(event.returnValue).toEqual({
+      terminalMainSideEffectAuthority: false,
+      kimiManagedAccounts: [],
+      commandCodeManagedAccounts: []
+    })
+  })
+
+  it('keeps managed provider credential paths out of settings IPC', async () => {
+    const persisted = {
+      kimiManagedAccounts: [{ id: 'kimi-a', managedHomePath: '/secret/kimi' }],
+      activeKimiManagedAccountId: 'kimi-a',
+      commandCodeManagedAccounts: [
+        { id: 'command-a', managedAuthPath: '/secret/command-code/auth.json' }
+      ],
+      activeCommandCodeManagedAccountId: 'command-a'
+    }
+    store.getSettings.mockReturnValue(persisted)
+    store.updateSettings.mockReturnValue(persisted)
+    registerSettingsHandlers(store as never)
+
+    const getHandler = handleMock.mock.calls.find((call) => call[0] === 'settings:get')?.[1] as (
+      event: typeof settingsInvokeEvent
+    ) => unknown
+    expect(getHandler(settingsInvokeEvent)).toMatchObject({
+      kimiManagedAccounts: [],
+      commandCodeManagedAccounts: [],
+      activeKimiManagedAccountId: 'kimi-a',
+      activeCommandCodeManagedAccountId: 'command-a'
+    })
+    expect(JSON.stringify(getHandler(settingsInvokeEvent))).not.toContain('/secret/')
+
+    const setHandler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: Record<string, unknown>
+    ) => Promise<unknown>
+    await setHandler(settingsInvokeEvent, persisted)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ originWebContentsId: 1 })
+    )
   })
 
   it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
@@ -199,7 +238,7 @@ describe('registerSettingsHandlers', () => {
       (call) => call[0] === 'settings:set-active-runtime-environment-preference'
     )?.[1] as (event: typeof settingsInvokeEvent, args: { environmentId: string | null }) => unknown
 
-    expect(handler(settingsInvokeEvent, { environmentId: '  windows-2  ' })).toEqual({
+    expect(handler(settingsInvokeEvent, { environmentId: '  windows-2  ' })).toMatchObject({
       activeRuntimeEnvironmentId: 'windows-2'
     })
     expect(store.updateSettings).toHaveBeenCalledWith(
@@ -239,7 +278,7 @@ describe('registerSettingsHandlers', () => {
       { prBotAuthorOverrides: ['alice', 'bob'] },
       { notifyListeners: true, originWebContentsId: 1 }
     )
-    expect(result).toEqual({ prBotAuthorOverrides: ['alice', 'bob'] })
+    expect(result).toMatchObject({ prBotAuthorOverrides: ['alice', 'bob'] })
   })
 
   it('registers settings:previewWarpThemeImport handler', () => {

@@ -222,11 +222,13 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl']
   },
   kimi: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(resolveKimiSessionsDir(options.kimiSessionsDir), wslHomeDirs, [
+    rootDirs: (options, wslHomeDirs) => [
+      ...sessionRootDirs(resolveKimiSessionsDir(options.kimiSessionsDir), wslHomeDirs, [
         '.kimi-code',
         'sessions'
       ]),
+      ...(options.additionalKimiSessionsDirs ?? [])
+    ],
     extensions: ['.json'],
     // Why: each Kimi session is <sessions>/wd_*/session_*/state.json; match
     // only those (not the sibling agents/*/wire.jsonl transcripts).

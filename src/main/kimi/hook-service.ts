@@ -35,12 +35,12 @@ import {
 // Why: match the CLI's `KIMI_CODE_HOME ?? ~/.kimi-code` resolution (also used by
 // kimi-fetcher.ts and the AI Vault session scanner) so hooks land in the same
 // home Kimi reads at launch.
-function getKimiHome(): string {
-  return process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
+function getKimiHome(homeOverride?: string): string {
+  return homeOverride?.trim() || process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
 }
 
-function getConfigPath(): string {
-  return join(getKimiHome(), 'config.toml')
+function getConfigPath(homeOverride?: string): string {
+  return join(getKimiHome(homeOverride), 'config.toml')
 }
 
 // Always a POSIX `.sh` script: Kimi runs hook commands through its shell, which
@@ -168,8 +168,8 @@ export class KimiHookService {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
   }
 
-  getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  getStatus(homeOverride?: string): AgentHookInstallStatus {
+    const configPath = getConfigPath(homeOverride)
     const text = readConfigToml(configPath)
     if (text === null) {
       return {
@@ -184,8 +184,8 @@ export class KimiHookService {
     return buildStatus(readManagedKimiHookEvents(text, isManagedCommand), configPath)
   }
 
-  install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  install(homeOverride?: string): AgentHookInstallStatus {
+    const configPath = getConfigPath(homeOverride)
     const text = readConfigToml(configPath)
     if (text === null) {
       return {
@@ -201,7 +201,7 @@ export class KimiHookService {
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
     writeConfigToml(configPath, applyManagedKimiHooks(text, command))
-    return this.getStatus()
+    return this.getStatus(homeOverride)
   }
 
   // Why: install Orca's managed Kimi hooks on a remote box over SFTP, mirroring
@@ -240,8 +240,8 @@ export class KimiHookService {
     }
   }
 
-  remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  remove(homeOverride?: string): AgentHookInstallStatus {
+    const configPath = getConfigPath(homeOverride)
     const text = readConfigToml(configPath)
     if (text === null) {
       return {
@@ -256,7 +256,7 @@ export class KimiHookService {
     if (changed) {
       writeConfigToml(configPath, nextText)
     }
-    return this.getStatus()
+    return this.getStatus(homeOverride)
   }
 }
 

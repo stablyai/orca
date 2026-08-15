@@ -96,6 +96,52 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsKimiSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.7a13e76a8d', 'Kimi Accounts'),
+    description: translate(
+      'auto.components.settings.accounts.search.51c5c4546d',
+      'Import and switch between isolated Kimi Code credential homes.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.74ca3f7c5a', 'kimi'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.7118d2f908',
+        'credentials'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.163d7840f2', 'import')
+    ]
+  }
+])
+
+export const getAccountsCommandCodeSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.commandCodeTitle',
+      'Command Code Accounts'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.commandCodeDescription',
+      'Import and switch between saved Command Code credentials.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCodeKeyword',
+        'command code'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.7118d2f908',
+        'credentials'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.163d7840f2', 'import')
+    ]
+  }
+])
+
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -216,6 +262,8 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
+  ...getAccountsKimiSearchEntries(),
+  ...getAccountsCommandCodeSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),

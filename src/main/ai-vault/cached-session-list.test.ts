@@ -15,6 +15,7 @@ vi.mock('../wsl', () => ({
 }))
 
 import {
+  configureAiVaultSessionSources,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
   resetAiVaultSessionListCacheForTests
@@ -75,5 +76,21 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     expect(cached.scannedAt).toBe('scan-A')
     expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards managed Kimi homes as additional session roots', async () => {
+    configureAiVaultSessionSources({
+      getAdditionalKimiHomePaths: () => ['/managed/kimi/home']
+    })
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
+
+    await listAiVaultSessions()
+
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalKimiSessionsDirs: ['/managed/kimi/home/sessions']
+      }),
+      expect.any(AbortSignal)
+    )
   })
 })

@@ -28,6 +28,9 @@ export function registerRateLimitHandlers(
   ipcMain.handle('rateLimits:fetchInactiveCodexAccounts', () =>
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
+  ipcMain.handle('rateLimits:fetchInactiveKimiAccounts', () =>
+    rateLimits.fetchInactiveKimiAccountsOnOpen()
+  )
   ipcMain.handle('rateLimits:refreshMiniMax', () => rateLimits.refresh())
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
 }

@@ -202,6 +202,9 @@ import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-st
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { isProviderAccountRef, type ProviderAccountRef } from '../../shared/provider-account-ref'
+import { applyKimiManagedHomeToLaunchEnv } from '../kimi-accounts/launch-environment'
+import { applyCommandCodeManagedCredentialToLaunchEnv } from '../command-code-accounts/launch-environment'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -1243,6 +1246,7 @@ export type CodexHomeLaunchContext = {
   workspacePath?: string
   launchAgent?: TuiAgent
   unavailableManagedHomePath?: string
+  providerAccountRef?: ProviderAccountRef
 }
 
 export type GetSelectedCodexHomePath = (
@@ -1250,6 +1254,8 @@ export type GetSelectedCodexHomePath = (
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
 ) => string | null
+export type GetSelectedKimiHomePath = () => string | null
+export type GetSelectedCommandCodeApiKey = () => string | null
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
@@ -2372,6 +2378,8 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume
+    getSelectedKimiHomePath?: GetSelectedKimiHomePath
+    getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -4629,6 +4637,22 @@ export function registerPtyHandlers(
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
+      env = applyKimiManagedHomeToLaunchEnv({
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedManagedHomePath: options?.getSelectedKimiHomePath
+      })
+      env = applyCommandCodeManagedCredentialToLaunchEnv({
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedApiKey: options?.getSelectedCommandCodeApiKey
+      })
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID
         ? env[resolvePathEnvKey(env, process.platform)]
         : undefined
@@ -4646,13 +4670,15 @@ export function registerPtyHandlers(
                       codexSelectionTarget,
                       getSelectedCodexHomePath?.(codexSelectionTarget, env, {
                         workspacePath: cwd,
-                        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+                        providerAccountRef: args.providerAccountRef
                       }) ?? null
                     )
                   )
                 : (getSelectedCodexHomePath?.(codexSelectionTarget, env, {
                     workspacePath: cwd,
-                    launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                    launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+                    providerAccountRef: args.providerAccountRef
                   }) ?? null)
             )
           : null
@@ -4671,7 +4697,8 @@ export function registerPtyHandlers(
               codexSelectionTarget,
               getSelectedCodexHomePath?.(codexSelectionTarget, env, {
                 workspacePath: cwd,
-                launchAgent: 'codex'
+                launchAgent: 'codex',
+                providerAccountRef: args.providerAccountRef
               }) ?? null
             ),
           resolveAfterUnavailable: (unavailableManagedHomePath) =>
@@ -4680,6 +4707,7 @@ export function registerPtyHandlers(
               getSelectedCodexHomePath?.(codexSelectionTarget, env, {
                 workspacePath: cwd,
                 launchAgent: 'codex',
+                providerAccountRef: args.providerAccountRef,
                 unavailableManagedHomePath
               }) ?? null
             )
@@ -5247,7 +5275,7 @@ export function registerPtyHandlers(
           ptyId: result.id,
           isDaemonHostSpawn,
           isReattach: result.isReattach === true,
-          pinnedByResume: codexResumeHomeSelected,
+          pinnedByResume: codexResumeHomeSelected || args.providerAccountRef !== undefined,
           launchCodexHomePath: selectedCodexHomePath,
           launchEnv: args.env,
           target: codexSelectionTarget,
@@ -5893,6 +5921,7 @@ export function registerPtyHandlers(
         resumeProviderSession?: AgentProviderSessionMetadata
         launchToken?: unknown
         launchAgent?: TuiAgent
+        providerAccountRef?: unknown
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
@@ -5953,6 +5982,23 @@ export function registerPtyHandlers(
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
         await startupPromise
+      }
+      const providerAccountRef =
+        args.providerAccountRef === undefined
+          ? undefined
+          : isProviderAccountRef(args.providerAccountRef)
+            ? args.providerAccountRef
+            : (() => {
+                throw new Error('Invalid provider account reference')
+              })()
+      if (
+        providerAccountRef &&
+        (args.launchAgent !== 'codex' || providerAccountRef.provider !== 'codex')
+      ) {
+        throw new Error('agent_session_account_agent_mismatch')
+      }
+      if (providerAccountRef && args.connectionId) {
+        throw new Error('agent_session_account_runtime_mismatch')
       }
       let cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
       let prevalidatedCwd: string | undefined
@@ -6320,6 +6366,22 @@ export function registerPtyHandlers(
         // Why: declared after the strip so a local-provider spawn cannot capture the
         // pre-strip env — only the daemon branch below re-derives this from baseEnv.
         let env: Record<string, string> | undefined = baseEnv
+        env = applyKimiManagedHomeToLaunchEnv({
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedManagedHomePath: options?.getSelectedKimiHomePath
+        })
+        env = applyCommandCodeManagedCredentialToLaunchEnv({
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedApiKey: options?.getSelectedCommandCodeApiKey
+        })
         let selectedCodexHomePath =
           !preAdoptedStablePane && !args.connectionId
             ? getCompatibleSelectedCodexHomePath(
@@ -6330,13 +6392,15 @@ export function registerPtyHandlers(
                         codexSelectionTarget,
                         getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
                           workspacePath: cwd,
-                          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+                          providerAccountRef
                         }) ?? null
                       )
                     )
                   : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
                       workspacePath: cwd,
-                      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+                      providerAccountRef
                     }) ?? null)
               )
             : null
@@ -6351,7 +6415,8 @@ export function registerPtyHandlers(
                 codexSelectionTarget,
                 getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
                   workspacePath: cwd,
-                  launchAgent: 'codex'
+                  launchAgent: 'codex',
+                  providerAccountRef
                 }) ?? null
               ),
             resolveAfterUnavailable: (unavailableManagedHomePath) =>
@@ -6360,6 +6425,7 @@ export function registerPtyHandlers(
                 getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
                   workspacePath: cwd,
                   launchAgent: 'codex',
+                  providerAccountRef,
                   unavailableManagedHomePath
                 }) ?? null
               )
@@ -6756,7 +6822,7 @@ export function registerPtyHandlers(
           ptyId: result.id,
           isDaemonHostSpawn,
           isReattach: result.isReattach === true,
-          pinnedByResume: codexResumeHomeSelected,
+          pinnedByResume: codexResumeHomeSelected || providerAccountRef !== undefined,
           launchCodexHomePath: selectedCodexHomePath,
           launchEnv: baseEnv,
           target: codexSelectionTarget,
@@ -7843,6 +7909,8 @@ export function registerHeadlessPtyRuntime(
   store?: Store,
   prepareCodexSessionResume?: PrepareCodexSessionResume,
   lifecycle?: {
+    getSelectedKimiHomePath?: GetSelectedKimiHomePath
+    getSelectedCommandCodeApiKey?: GetSelectedCommandCodeApiKey
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }

@@ -18,34 +18,36 @@ type CatalogEnrichmentEntry = {
   listeners: Set<(models: CatalogModel[]) => void>
 }
 
-const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
+const enrichmentByScope = new Map<string, CatalogEnrichmentEntry>()
 
-function enrichmentKey(agent: AgentType, hostKey: string): string {
-  return JSON.stringify([agent, hostKey])
+function enrichmentKey(agent: AgentType, hostKey: string, ptyId?: string): string {
+  return JSON.stringify([agent, hostKey, ptyId ?? null])
 }
 
 export function readNativeChatEnrichedModels(
   agent: AgentType,
-  hostKey: string
+  hostKey: string,
+  ptyId?: string
 ): CatalogModel[] | null {
-  const models = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.models
+  const models = enrichmentByScope.get(enrichmentKey(agent, hostKey, ptyId))?.models
   return models ? [...models] : null
 }
 
 export function subscribeNativeChatEnrichedModels(
   agent: AgentType,
   hostKey: string,
-  listener: (models: CatalogModel[]) => void
+  listener: (models: CatalogModel[]) => void,
+  ptyId?: string
 ): () => void {
-  const key = enrichmentKey(agent, hostKey)
-  const entry = enrichmentByAgentHost.get(key) ?? {
+  const key = enrichmentKey(agent, hostKey, ptyId)
+  const entry = enrichmentByScope.get(key) ?? {
     agent,
     state: 'idle' as const,
     models: null,
     listeners: new Set<(models: CatalogModel[]) => void>()
   }
   entry.listeners.add(listener)
-  enrichmentByAgentHost.set(key, entry)
+  enrichmentByScope.set(key, entry)
   return () => entry.listeners.delete(listener)
 }
 
@@ -58,7 +60,7 @@ export function resolveNativeChatLaunchSessionOptions(
     return values
   }
   let probed = false
-  for (const entry of enrichmentByAgentHost.values()) {
+  for (const entry of enrichmentByScope.values()) {
     if (entry.agent === agent && entry.models) {
       probed = true
       if (entry.models.some((model) => model.id === values.model)) {
@@ -72,14 +74,15 @@ export function resolveNativeChatLaunchSessionOptions(
 export function ensureNativeChatModelEnrichment(args: {
   agent: AgentType
   hostKey: string
+  ptyId?: string
   discover: () => Promise<readonly CatalogModel[] | null>
 }): void {
   const catalog = getAgentSessionOptionCatalog(args.agent)
   if (!catalog?.listModels) {
     return
   }
-  const key = enrichmentKey(args.agent, args.hostKey)
-  const existing = enrichmentByAgentHost.get(key)
+  const key = enrichmentKey(args.agent, args.hostKey, args.ptyId)
+  const existing = enrichmentByScope.get(key)
   if (existing?.state === 'pending' || existing?.state === 'settled') {
     return
   }
@@ -90,10 +93,10 @@ export function ensureNativeChatModelEnrichment(args: {
     listeners: new Set()
   }
   entry.state = 'pending'
-  enrichmentByAgentHost.set(key, entry)
+  enrichmentByScope.set(key, entry)
 
   // Why: model discovery must never delay rendering or launching; the seed is
-  // immediately usable while this once-per-host probe runs in the background.
+  // immediately usable while this once-per-discovery-scope probe runs in the background.
   void args
     .discover()
     .then((discovered) => {
@@ -102,7 +105,7 @@ export function ensureNativeChatModelEnrichment(args: {
         return
       }
       entry.models =
-        args.agent === 'claude'
+        args.agent === 'claude' || args.agent === 'codex'
           ? [...discovered]
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
@@ -117,5 +120,5 @@ export function ensureNativeChatModelEnrichment(args: {
 }
 
 export function clearNativeChatModelEnrichmentForTests(): void {
-  enrichmentByAgentHost.clear()
+  enrichmentByScope.clear()
 }

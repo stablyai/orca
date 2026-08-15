@@ -371,10 +371,12 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // still pass if OrcaRuntimeService stopped forwarding the codex-home source.
     // Construct the real runtime to lock that cross-layer wiring in place.
     const runtime = new OrcaRuntimeService(null, undefined, {
-      getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
+      getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home'],
+      getAdditionalAiVaultKimiHomePaths: () => ['/ctor/kimi/home']
     })
     await runtime.listAiVaultSessions({})
     const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
+    expect(options.additionalKimiSessionsDirs).toContain('/ctor/kimi/home/sessions')
   })
 })

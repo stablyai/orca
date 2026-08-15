@@ -1,3 +1,5 @@
+import type { UsageProviderAccountAttribution } from './usage-provider-contract'
+
 /**
  * Record shapes every event-based usage provider (Codex, OpenCode, future plugin sources)
  * rolls up to. Each provider carries exactly one extra metric alongside the token counters —
@@ -5,7 +7,7 @@
  * of forcing a nullable union onto both.
  */
 
-export type UsageAttributedEventFields = {
+export type UsageAttributedEventFields = UsageProviderAccountAttribution & {
   sessionId: string
   timestamp: string
   model: string | null
@@ -59,7 +61,7 @@ export type UsageLocationModelBreakdown<TMetric> = {
   totalTokens: number
 } & TMetric
 
-export type UsageSession<TMetric> = {
+export type UsageSession<TMetric> = UsageProviderAccountAttribution & {
   sessionId: string
   firstTimestamp: string
   lastTimestamp: string
@@ -80,7 +82,7 @@ export type UsageSession<TMetric> = {
   locationModelBreakdown: UsageLocationModelBreakdown<TMetric>[]
 } & TMetric
 
-export type UsageDailyAggregate<TMetric> = {
+export type UsageDailyAggregate<TMetric> = UsageProviderAccountAttribution & {
   day: string
   model: string | null
   projectKey: string
@@ -104,8 +106,15 @@ export type UsageMetricFold<TEvent, TMetric> = {
 
 export function usageDailyAggregateKey(record: {
   day: string
+  accountId?: string | null
   model: string | null
   projectKey: string
 }): string {
-  return [record.day, record.model ?? 'unknown', record.projectKey].join('::')
+  const accountKey =
+    record.accountId === undefined
+      ? 'unattributed'
+      : record.accountId === null
+        ? 'system'
+        : `managed:${record.accountId}`
+  return [record.day, accountKey, record.model ?? 'unknown', record.projectKey].join('::')
 }

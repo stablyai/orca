@@ -1,6 +1,16 @@
 export type CodexUsageScope = 'orca' | 'all'
 export type CodexUsageRange = '7d' | '30d' | '90d' | 'all'
 export type CodexUsageBreakdownKind = 'model' | 'project'
+export type CodexUsageAccountFilter =
+  | { kind: 'all' }
+  | { kind: 'system' }
+  | { kind: 'unattributed' }
+  | { kind: 'managed'; accountId: string }
+
+export type CodexUsageAccountOption =
+  | { kind: 'system' }
+  | { kind: 'unattributed' }
+  | { kind: 'managed'; accountId: string; workspaceLabel: string | null; deleted: boolean }
 
 export type CodexUsageScanState = {
   enabled: boolean
@@ -52,6 +62,7 @@ export type CodexUsageBreakdownRow = {
 
 export type CodexUsageSessionRow = {
   sessionId: string
+  accountId?: string | null
   lastActiveAt: string
   durationMinutes: number
   projectLabel: string
@@ -67,6 +78,7 @@ export type CodexUsageSessionRow = {
 
 export type CodexUsageSnapshot = {
   scanState: CodexUsageScanState
+  accountOptions?: CodexUsageAccountOption[]
   summary: CodexUsageSummary
   daily: CodexUsageDailyPoint[]
   modelBreakdown: CodexUsageBreakdownRow[]

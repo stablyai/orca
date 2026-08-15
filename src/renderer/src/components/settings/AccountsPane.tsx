@@ -48,11 +48,15 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsKimiSearchEntries,
+  getAccountsCommandCodeSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { KimiAccountsSection } from './KimiAccountsSection'
+import { CommandCodeAccountsSection } from './CommandCodeAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1947,6 +1951,18 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    !isRemoteAccountScope &&
+    !isWebClientLocation() &&
+    accountRuntime.runtime === 'host' &&
+    matchesSettingsSearch(searchQuery, getAccountsKimiSearchEntries()) ? (
+      <KimiAccountsSection key="kimi" />
+    ) : null,
+    !isRemoteAccountScope &&
+    !isWebClientLocation() &&
+    accountRuntime.runtime === 'host' &&
+    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries()) ? (
+      <CommandCodeAccountsSection key="command-code" />
     ) : null
   ].filter(Boolean)
 

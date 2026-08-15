@@ -900,6 +900,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     minimaxCredentials: createMiniMaxCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
+    kimiAccounts: createAccountsApi(),
+    commandCodeAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
@@ -3163,7 +3165,8 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
+    inactiveCodexAccounts: [],
+    inactiveKimiAccounts: []
   }
   return {
     get: () => Promise.resolve(empty),
@@ -3175,6 +3178,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
+    fetchInactiveKimiAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
     refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
@@ -3213,6 +3217,8 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    login: () => Promise.resolve(empty),
+    import: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),

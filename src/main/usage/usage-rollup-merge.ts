@@ -38,6 +38,12 @@ export function mergeUsageSessions<TMetric extends object>(
     existing.totalReasoningOutputTokens += session.totalReasoningOutputTokens
     existing.totalTokens += session.totalTokens
     fold(existing, session)
+    if (existing.accountId !== session.accountId) {
+      // Why: conflicting provider evidence cannot be represented by a single
+      // session-level filter. Fail closed to unattributed instead of assigning
+      // the combined historical usage to either account.
+      delete existing.accountId
+    }
 
     for (const location of session.locationBreakdown) {
       const existingLocation =

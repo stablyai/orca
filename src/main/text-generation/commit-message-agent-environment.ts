@@ -5,6 +5,10 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
+  prepareForCodexPtyLaunch?: (
+    ptyId: string,
+    target?: CommitMessageAgentRuntimeTarget
+  ) => string | null | undefined
   prepareForClaudeLaunch?: (
     target?: CommitMessageAgentRuntimeTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -86,7 +90,8 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
 export async function prepareLocalCommitMessageAgentEnv(
   agentId: string,
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
-  target?: CommitMessageAgentRuntimeTarget
+  target?: CommitMessageAgentRuntimeTarget,
+  ptyId?: string
 ): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
   // Why: a non-null result short-circuits the resolvers below, so any agent added
   // to prepareShellConfigDirEnv must not also need a Codex/Claude-style resolver.
@@ -99,8 +104,19 @@ export async function prepareLocalCommitMessageAgentEnv(
   }
 
   try {
-    if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch(target)
+    if (
+      agentId === 'codex' &&
+      (resolvers.prepareForCodexLaunch || (ptyId && resolvers.prepareForCodexPtyLaunch))
+    ) {
+      // Why: undefined means this runtime cannot scope the probe (old host or an
+      // unrecorded PTY); null is an authoritative real-home route.
+      const scopedCodexHomePath = ptyId
+        ? resolvers.prepareForCodexPtyLaunch?.(ptyId, target)
+        : undefined
+      const codexHomePath =
+        scopedCodexHomePath !== undefined
+          ? scopedCodexHomePath
+          : (resolvers.prepareForCodexLaunch?.(target) ?? null)
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null

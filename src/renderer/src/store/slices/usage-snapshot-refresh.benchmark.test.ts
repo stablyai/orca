@@ -65,6 +65,7 @@ function createSummary(totalTokens: number): CodexUsageSummary {
 function createSnapshot(totalTokens: number, scanState = createScanState()): CodexUsageSnapshot {
   return {
     scanState,
+    accountOptions: [],
     summary: createSummary(totalTokens),
     daily: [
       {

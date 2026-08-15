@@ -32,6 +32,8 @@ const {
   registerAiVaultHandlersMock,
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
+  registerKimiAccountHandlersMock,
+  registerCommandCodeAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
@@ -97,6 +99,8 @@ const {
   registerAiVaultHandlersMock: vi.fn(),
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
+  registerKimiAccountHandlersMock: vi.fn(),
+  registerCommandCodeAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
@@ -311,6 +315,14 @@ vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
 
+vi.mock('./kimi-accounts', () => ({
+  registerKimiAccountHandlers: registerKimiAccountHandlersMock
+}))
+
+vi.mock('./command-code-accounts', () => ({
+  registerCommandCodeAccountHandlers: registerCommandCodeAccountHandlersMock
+}))
+
 vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
@@ -415,6 +427,8 @@ describe('registerCoreHandlers', () => {
     registerAiVaultHandlersMock.mockReset()
     registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
+    registerKimiAccountHandlersMock.mockReset()
+    registerCommandCodeAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
@@ -454,11 +468,14 @@ describe('registerCoreHandlers', () => {
     const codexUsage = { marker: 'codexUsage' }
     const openCodeUsage = { marker: 'openCodeUsage' }
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
+    const kimiAccounts = { marker: 'kimiAccounts' }
+    const commandCodeAccounts = { marker: 'commandCodeAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
     const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
+    const getAdditionalAiVaultKimiHomePaths = vi.fn(() => ['/runtime/kimi/home'])
 
     registerCoreHandlers(
       store as never,
@@ -468,6 +485,8 @@ describe('registerCoreHandlers', () => {
       codexUsage as never,
       openCodeUsage as never,
       codexAccounts as never,
+      kimiAccounts as never,
+      commandCodeAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
       null,
@@ -476,7 +495,11 @@ describe('registerCoreHandlers', () => {
       agentAwakeService as never,
       undefined,
       undefined,
-      { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
+      {
+        getAdditionalAiVaultCodexHomePaths,
+        getAdditionalAiVaultKimiHomePaths,
+        onBeforeRelaunch
+      }
     )
 
     const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
@@ -497,6 +520,8 @@ describe('registerCoreHandlers', () => {
       codexAccounts,
       expect.any(Function)
     )
+    expect(registerKimiAccountHandlersMock).toHaveBeenCalledWith(kimiAccounts, rateLimits)
+    expect(registerCommandCodeAccountHandlersMock).toHaveBeenCalledWith(commandCodeAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
       getPtyIdForPaneKey: expect.any(Function)
     })
@@ -543,6 +568,7 @@ describe('registerCoreHandlers', () => {
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
       expect.objectContaining({
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
+        getAdditionalKimiHomePaths: getAdditionalAiVaultKimiHomePaths,
         getActiveRuntimeAiVaultHostInfos: expect.any(Function),
         scanRuntimeAiVaultSessions: expect.any(Function),
         prepareRuntimeSessionResume: expect.any(Function)
@@ -627,6 +653,8 @@ describe('registerCoreHandlers', () => {
     const codexUsage2 = { marker: 'codexUsage2' }
     const openCodeUsage2 = { marker: 'openCodeUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
+    const kimiAccounts2 = { marker: 'kimiAccounts2' }
+    const commandCodeAccounts2 = { marker: 'commandCodeAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
 
@@ -638,6 +666,8 @@ describe('registerCoreHandlers', () => {
       codexUsage2 as never,
       openCodeUsage2 as never,
       codexAccounts2 as never,
+      kimiAccounts2 as never,
+      commandCodeAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
       42

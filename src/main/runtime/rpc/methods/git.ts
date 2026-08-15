@@ -299,7 +299,8 @@ export const GIT_METHODS: RpcMethod[] = [
           ? {
               agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
             }
-          : {}
+          : {},
+        params.ptyId
       )
   }),
   defineMethod({
