@@ -318,6 +318,48 @@ describe('RepositoryHostSetupsSection', () => {
     expect(currentSetup?.textContent).not.toContain('Ready')
   })
 
+  it('keeps same-id setups on different hosts distinct in the current-row UI', () => {
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    const remoteRepo = makeRepo({
+      id: 'remote-repo',
+      displayName: 'Orca',
+      path: '/srv/orca',
+      executionHostId: 'runtime:hub'
+    })
+    useAppStore.setState({
+      repos: [localRepo, remoteRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'shared-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        }),
+        makeSetup({
+          id: 'shared-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: 'runtime:hub',
+          path: '/srv/orca'
+        })
+      ]
+    })
+
+    renderSection(remoteRepo, 'shared-setup')
+
+    const currentSetups = container.querySelectorAll('[data-current="true"]')
+    expect(currentSetups).toHaveLength(1)
+    expect(currentSetups[0]?.textContent).toContain('/srv/orca')
+    expect(currentSetups[0]?.textContent).not.toContain('/Users/alice/orca')
+    expect(findButton('Open')).toBeTruthy()
+  })
+
   it('shows HUB-local setups as disconnected when their owning runtime is unreachable', () => {
     const remoteRepo = makeRepo({
       id: 'remote-repo',
@@ -404,7 +446,10 @@ describe('RepositoryHostSetupsSection', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'gpu-setup',
+      hostId: 'runtime:gpu'
+    })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
   })

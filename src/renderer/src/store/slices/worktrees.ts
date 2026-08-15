@@ -1750,11 +1750,11 @@ async function purgeOrphanedRuntimeSshProjects(
   )
   const orphanedSetupIds = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
-    .map((setup) => setup.id)
+    .map((setup) => ({ id: setup.id, hostId: setup.hostId }))
   const purgedRepoIds = new Set<string>()
-  for (const setupId of orphanedSetupIds) {
+  for (const { id: setupId, hostId } of orphanedSetupIds) {
     try {
-      const result = await get().deleteProjectHostSetup({ setupId })
+      const result = await get().deleteProjectHostSetup({ setupId, hostId })
       if (result?.repo) {
         purgedRepoIds.add(result.repo.id)
       }

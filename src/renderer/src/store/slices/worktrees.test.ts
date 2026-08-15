@@ -5687,7 +5687,10 @@ describe('removeWorktree state cleanup', () => {
 
     // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'setup-runtime-ssh' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'setup-runtime-ssh',
+      hostId: 'ssh:runtime-ssh-orca-1'
+    })
   })
 
   it('cleans up editorDrafts for files in the removed worktree', async () => {

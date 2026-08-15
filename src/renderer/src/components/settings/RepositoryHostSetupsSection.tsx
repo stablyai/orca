@@ -57,6 +57,10 @@ function setupsByOwnedExecutionHost(
   return [...byHost.values()]
 }
 
+function getProjectHostSetupIdentity(setup: Pick<ProjectHostSetup, 'hostId' | 'id'>): string {
+  return JSON.stringify([setup.hostId, setup.id])
+}
+
 export function RepositoryHostSetupsSection({
   repo,
   selectedProjectSetupId,
@@ -134,7 +138,10 @@ export function RepositoryHostSetupsSection({
     hostOptions
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
-  const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
+  const selectedProjectHostSetupIdentity = selectedProjectHostSetup
+    ? getProjectHostSetupIdentity(selectedProjectHostSetup)
+    : undefined
+  const [deletingSetupIdentity, setDeletingSetupIdentity] = useState<string | null>(null)
   const projectId = selectedProjectHostSetup?.projectId
   // Why: the single project pane switches host in place — set the ephemeral
   // per-project selection instead of navigating to a separate repo section.
@@ -177,13 +184,13 @@ export function RepositoryHostSetupsSection({
                 {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
               </span>
               <Select
-                value={selectedProjectHostSetup?.id}
-                onValueChange={(setupId) => {
-                  if (setupId === selectedProjectHostSetup?.id) {
+                value={selectedProjectHostSetupIdentity}
+                onValueChange={(setupIdentity) => {
+                  if (setupIdentity === selectedProjectHostSetupIdentity) {
                     return
                   }
                   const setup = switchableProjectHostSetups.find(
-                    (candidate) => candidate.id === setupId
+                    (candidate) => getProjectHostSetupIdentity(candidate) === setupIdentity
                   )
                   if (setup) {
                     selectSetup(setup)
@@ -195,7 +202,10 @@ export function RepositoryHostSetupsSection({
                 </SelectTrigger>
                 <SelectContent>
                   {switchableProjectHostSetups.map((setup) => (
-                    <SelectItem key={setup.id} value={setup.id}>
+                    <SelectItem
+                      key={getProjectHostSetupIdentity(setup)}
+                      value={getProjectHostSetupIdentity(setup)}
+                    >
                       <span className="block min-w-0 truncate">
                         {hostOptionById.get(setup.executionHostId ?? setup.hostId)?.label ??
                           getExecutionHostLabel(setup.executionHostId ?? setup.hostId)}
@@ -216,6 +226,7 @@ export function RepositoryHostSetupsSection({
       </div>
       <div className="divide-y divide-border rounded-md border border-border">
         {projectHostSetups.map((setup) => {
+          const setupIdentity = getProjectHostSetupIdentity(setup)
           const executionHost = parseExecutionHostId(setup.executionHostId ?? setup.hostId)
           const transportHost = parseExecutionHostId(setup.hostId)
           const runtimeOwnerEnvironmentId =
@@ -303,12 +314,12 @@ export function RepositoryHostSetupsSection({
                   }
                 )
               : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
-          const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
+          const isCurrentSetup = setupIdentity === selectedProjectHostSetupIdentity
           const canOpenSetup = setup.repoId.trim().length > 0
-          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+          const canRemoveSetup = !canOpenSetup && deletingSetupIdentity !== setupIdentity
           return (
             <div
-              key={setup.id}
+              key={setupIdentity}
               data-current={isCurrentSetup ? 'true' : undefined}
               className={cn(
                 'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
@@ -364,9 +375,9 @@ export function RepositoryHostSetupsSection({
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
-                    setDeletingSetupId(null)
+                    setDeletingSetupIdentity(setupIdentity)
+                    await deleteProjectHostSetup({ setupId: setup.id, hostId: setup.hostId })
+                    setDeletingSetupIdentity(null)
                   }}
                 >
                   {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
