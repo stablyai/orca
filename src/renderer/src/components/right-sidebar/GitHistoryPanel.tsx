@@ -17,6 +17,13 @@ import {
   type GitHistoryCommitAction
 } from './GitHistoryCommitContextMenu'
 import type { SourceControlRowOpenEvent } from './source-control-split-open'
+import {
+  clampSourceControlHistoryHeight,
+  getSessionSourceControlHistoryHeight,
+  MAX_SOURCE_CONTROL_HISTORY_HEIGHT as MAX_GIT_HISTORY_PANEL_HEIGHT,
+  MIN_SOURCE_CONTROL_HISTORY_HEIGHT as MIN_GIT_HISTORY_PANEL_HEIGHT,
+  setSessionSourceControlHistoryHeight
+} from './source-control-history-layout'
 import { translate } from '@/i18n/i18n'
 
 export type GitHistoryPanelState =
@@ -24,9 +31,6 @@ export type GitHistoryPanelState =
   | { status: 'refreshing' | 'ready'; result: GitHistoryResult; error?: string }
   | { status: 'error'; result?: GitHistoryResult; error: string }
 
-const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
-const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
-const MAX_GIT_HISTORY_PANEL_HEIGHT = 520
 const MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT = '33vh'
 
 type GitHistoryResizeSession = {
@@ -37,7 +41,7 @@ type GitHistoryResizeSession = {
 }
 
 function clampGitHistoryPanelHeight(height: number): number {
-  return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
+  return clampSourceControlHistoryHeight(height)
 }
 
 export function GitHistoryPanel({
@@ -82,7 +86,14 @@ export function GitHistoryPanel({
 
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
-  const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
+  const [panelHeight, setPanelHeightState] = useState(() => getSessionSourceControlHistoryHeight())
+  const setPanelHeight = useCallback((value: number | ((prev: number) => number)): void => {
+    setPanelHeightState((prev) => {
+      const next = clampGitHistoryPanelHeight(typeof value === 'function' ? value(prev) : value)
+      setSessionSourceControlHistoryHeight(next)
+      return next
+    })
+  }, [])
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
