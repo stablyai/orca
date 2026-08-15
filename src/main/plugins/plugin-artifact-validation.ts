@@ -12,6 +12,7 @@ const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
 const PLUGIN_AGENT_PROFILE_MAX_BYTES = 1024 * 1024
+export const PLUGIN_ICON_THEME_MAX_BYTES = 1024 * 1024
 
 type DeclaredArtifact =
   | { label: string; path: string; kind: 'file'; maxBytes: number }
@@ -62,6 +63,12 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
       path: agent.path,
       kind: 'file' as const,
       maxBytes: PLUGIN_AGENT_PROFILE_MAX_BYTES
+    })),
+    ...manifest.contributes.iconThemes.map((iconTheme) => ({
+      label: `icon theme "${iconTheme.id}"`,
+      path: iconTheme.path,
+      kind: 'file' as const,
+      maxBytes: PLUGIN_ICON_THEME_MAX_BYTES
     }))
   ]
 }

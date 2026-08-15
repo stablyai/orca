@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "id": "demo-file-icons",
+  "publisher": "orca-samples",
+  "name": "Demo File Icons",
+  "version": "1.0.0",
+  "description": "Sample file-icon theme showing how a plugin can restyle explorer and editor-tab icons.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "demo",
+        "label": "Demo Icons",
+        "path": "icon-theme.json"
+      }
+    ]
+  },
+  "capabilities": []
+}

@@ -176,11 +176,11 @@ vi.mock('@/lib/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
 
-vi.mock('@/lib/file-type-icons', () => ({
-  getFileTypeIcon: () =>
-    function FileIcon(props: Record<string, unknown>) {
-      return { type: 'FileIcon', props }
-    }
+// This suite walks the element tree by hand, so the icon must not use hooks.
+vi.mock('@/components/file-icons/ThemedFileIcon', () => ({
+  ThemedFileIcon: function ThemedFileIcon(props: Record<string, unknown>) {
+    return { type: 'FileIcon', props }
+  }
 }))
 
 vi.mock('@/store/selectors', () => ({

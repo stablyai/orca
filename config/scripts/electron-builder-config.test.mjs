@@ -67,7 +67,9 @@ describe('electron-builder config', () => {
       'examples/plugins/hostile-panel/panel.html',
       'examples/plugins/hostile-panel/orca-plugin.json',
       'examples/plugins/hello-orca/main.mjs',
-      'examples/plugins/hello-orca/orca-plugin.json'
+      'examples/plugins/hello-orca/orca-plugin.json',
+      'examples/plugins/demo-file-icons/orca-plugin.json',
+      'examples/plugins/demo-file-icons/icons/typescript.svg'
     ]) {
       expect(packs(authoringOnly)).toBe(false)
     }

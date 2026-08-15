@@ -15,6 +15,7 @@ type ContributionValidationManifest = {
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
     agents: PathContribution[]
+    iconThemes: IdentifiedContribution[]
   }
   capabilities: { kind: string }[]
 }
@@ -44,7 +45,7 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands'] as const) {
+  for (const path of ['panels', 'commands', 'iconThemes'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,

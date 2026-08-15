@@ -602,6 +602,7 @@ const api = {
   plugins: {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
     listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+    listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
     consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
       ipcRenderer.invoke('plugins:consent', args),
     setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>
