@@ -2956,21 +2956,24 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           resolveStream = resolve
         })
         const subscriptionId = `${params.terminal}:${clientId}`
+        const cleanup = (): void => {
+          closed = true
+          runtime.handleMobileUnsubscribe(ptyId, clientId)
+          emit({ type: 'end' })
+          resolveStream()
+        }
         // Why: chat needs the input-floor ack without registering a view subscriber or transporting duplicate PTY output.
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            closed = true
-            runtime.handleMobileUnsubscribe(ptyId, clientId)
-            emit({ type: 'end' })
-            resolveStream()
-          },
-          connectionId
-        )
+        runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+        const cleanupOwnIfCurrent = (): void => {
+          // Why: a stale exit-waiter from a pre-reconnect connection must not kill the rebind's live replacement stream.
+          if (runtime.getSubscriptionCleanup(subscriptionId) === cleanup) {
+            runtime.cleanupSubscription(subscriptionId)
+          }
+        }
         void runtime
           .waitForTerminal(params.terminal, { condition: 'exit', signal })
-          .then(() => runtime.cleanupSubscription(subscriptionId))
-          .catch(() => runtime.cleanupSubscription(subscriptionId))
+          .then(cleanupOwnIfCurrent)
+          .catch(cleanupOwnIfCurrent)
         try {
           // Why: a lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
           await runtime.handleMobileSubscribe(ptyId, clientId, undefined)
@@ -3005,22 +3008,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           resolveStream = resolve
         })
         // Why: register before viewport/snapshot awaits so a socket close can't orphan the stream listeners or its remote-desktop width floor.
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            closed = true
-            outputBatcher?.flush()
-            outputBatcher?.dispose()
-            unsubscribeData()
-            unsubscribeFit()
-            if (registeredRemoteDesktopDriver && clientId) {
-              runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
-            }
-            emit({ type: 'end' })
-            resolveStream()
-          },
-          connectionId
-        )
+        const cleanup = (): void => {
+          closed = true
+          outputBatcher?.flush()
+          outputBatcher?.dispose()
+          unsubscribeData()
+          unsubscribeFit()
+          if (registeredRemoteDesktopDriver && clientId) {
+            runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+          }
+          emit({ type: 'end' })
+          resolveStream()
+        }
+        runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
         try {
           if (clientId && params.client && params.viewport) {
             registeredRemoteDesktopDriver = true
@@ -3089,10 +3089,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             })
           })
           // Why: bind the exit-waiter to the connection signal so socket close/error removes it instead of leaking until real exit.
+          const cleanupOwnIfCurrent = (): void => {
+            // Why: a stale exit-waiter from a pre-reconnect connection must not kill the rebind's live replacement stream.
+            if (runtime.getSubscriptionCleanup(subscriptionId) === cleanup) {
+              runtime.cleanupSubscription(subscriptionId)
+            }
+          }
           void runtime
             .waitForTerminal(params.terminal, { condition: 'exit', signal })
-            .then(() => runtime.cleanupSubscription(subscriptionId))
-            .catch(() => runtime.cleanupSubscription(subscriptionId))
+            .then(cleanupOwnIfCurrent)
+            .catch(cleanupOwnIfCurrent)
           await streamClosed
         } catch (error) {
           runtime.cleanupSubscription(subscriptionId)
@@ -3131,32 +3137,35 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       })
       // Why: register cleanup before any await so a mid-subscribe disconnect still removes mobile presence; client-scoped ids also allow parallel desktop subscribers.
       const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
-      runtime.registerSubscriptionCleanup(
-        subscriptionId,
-        () => {
-          outputBatcher?.flush()
-          outputBatcher?.dispose()
-          closed = true
-          unsubscribeData()
-          unsubscribeResize()
-          unsubscribeFit()
-          unregisterBinaryHandler()
-          abortRendererMountWait()
-          if (isMobile && clientId) {
-            runtime.handleMobileUnsubscribe(ptyId, clientId)
-          } else if (registeredRemoteDesktopDriver && clientId) {
-            runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
-          }
-          emit({ type: 'end' })
-          resolveStream()
-        },
-        connectionId
-      )
+      const cleanup = (): void => {
+        outputBatcher?.flush()
+        outputBatcher?.dispose()
+        closed = true
+        unsubscribeData()
+        unsubscribeResize()
+        unsubscribeFit()
+        unregisterBinaryHandler()
+        abortRendererMountWait()
+        if (isMobile && clientId) {
+          runtime.handleMobileUnsubscribe(ptyId, clientId)
+        } else if (registeredRemoteDesktopDriver && clientId) {
+          runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+        }
+        emit({ type: 'end' })
+        resolveStream()
+      }
+      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+      const cleanupOwnIfCurrent = (): void => {
+        // Why: a stale exit-waiter from a pre-reconnect connection must not kill the rebind's live replacement stream.
+        if (runtime.getSubscriptionCleanup(subscriptionId) === cleanup) {
+          runtime.cleanupSubscription(subscriptionId)
+        }
+      }
       // Why: bind the exit-waiter to the connection signal so socket close/error removes it instead of leaking until real exit.
       void runtime
         .waitForTerminal(params.terminal, { condition: 'exit', signal })
-        .then(() => runtime.cleanupSubscription(subscriptionId))
-        .catch(() => runtime.cleanupSubscription(subscriptionId))
+        .then(cleanupOwnIfCurrent)
+        .catch(cleanupOwnIfCurrent)
       const sendFrame = (
         opcode: TerminalStreamOpcode,
         payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
