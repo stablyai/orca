@@ -11819,6 +11819,8 @@
             "panel": {
               "content": {
                 "3916814392": "behind (base commit:",
+                "oneBehind": "1 commit behind (base commit: {{baseCommit}})",
+                "manyBehind": "{{count}} commits behind (base commit: {{baseCommit}})",
                 "755be805f6": "No comments",
                 "751f7c6e5c": "Showing first 100 comments per source",
                 "94557d68e2": "Comments",

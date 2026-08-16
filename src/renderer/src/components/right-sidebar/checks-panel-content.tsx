@@ -170,14 +170,20 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
-        {pr.conflictSummary!.commitsBehind}{' '}
-        {translate('auto.components.right.sidebar.checks.panel.content.6fa7f8723f', 'commit')}
-        {pr.conflictSummary!.commitsBehind === 1 ? '' : 's'}{' '}
-        {translate(
-          'auto.components.right.sidebar.checks.panel.content.3916814392',
-          'behind (base commit:'
-        )}{' '}
-        <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
+        {pr.conflictSummary!.commitsBehind === 1
+          ? translate(
+              'auto.components.right.sidebar.checks.panel.content.oneBehind',
+              '1 commit behind (base commit: {{baseCommit}})',
+              { baseCommit: pr.conflictSummary!.baseCommit }
+            )
+          : translate(
+              'auto.components.right.sidebar.checks.panel.content.manyBehind',
+              '{{count}} commits behind (base commit: {{baseCommit}})',
+              {
+                count: pr.conflictSummary!.commitsBehind,
+                baseCommit: pr.conflictSummary!.baseCommit
+              }
+            )}
       </div>
       <div className="mt-2 flex items-center gap-2">
         <Files className="size-3.5 shrink-0 text-muted-foreground" />
