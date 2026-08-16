@@ -16,5 +16,6 @@ export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> 
   'dsh-tui': ['node_modules/@deepseek-harness-tui/dsh-tui/'],
   // Why: the dsb npm shim executes a Node script under its own package.
   dsb: ['node_modules/@innocarpe/deepseek-build/'],
-  'deepseek-build': ['node_modules/@innocarpe/deepseek-build/']
+  'deepseek-build': ['node_modules/@innocarpe/deepseek-build/'],
+  bob: ['node_modules/bobshell/']
 }
