@@ -35,6 +35,7 @@ import {
   isCommandOnPath,
   shellQuote
 } from '../ipc/preflight-command-exec'
+import { excludeMisidentifiedAgents } from './preflight-agent-identity-exclusion'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -149,7 +150,10 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
+    return excludeMisidentifiedAgents(
+      resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl'),
+      (command, args) => execCommandInWsl(wslTarget, [command, ...args].map(shellQuote).join(' '))
+    )
   }
 
   const probeCommands = getTuiAgentDetectionProbeCommands(
@@ -171,10 +175,9 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
-  return resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    foundCommands,
-    process.platform
+  return excludeMisidentifiedAgents(
+    resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, process.platform),
+    (command, args) => execLocalPreflightCommand(command, [...args])
   )
 }
 

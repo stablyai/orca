@@ -463,6 +463,8 @@ describe('Store', () => {
     const migrated = await createStore()
     expect(migrated.getSettings().disabledTuiAgents).toEqual(['bob'])
     expect(migrated.getSettings().bobDefaultDisabledMigrated).toBe(true)
+    // Why: the migration schedules a debounced write that would otherwise clobber the opt-in fixture below.
+    migrated.flush()
 
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
