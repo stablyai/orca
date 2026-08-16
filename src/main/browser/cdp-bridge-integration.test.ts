@@ -23,7 +23,7 @@ vi.mock('../git/worktree', () => ({
 }))
 
 import { BrowserManager } from './browser-manager'
-import { CdpBridge } from './cdp-bridge'
+import { BrowserError, CdpBridge } from './cdp-bridge'
 import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
@@ -278,6 +278,7 @@ describe('Browser automation pipeline (integration)', () => {
 
   const GUEST_WC_ID = 5001
   const RENDERER_WC_ID = 1
+  const PASSTHROUGH = Symbol('passthrough')
 
   beforeEach(async () => {
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
@@ -327,6 +328,61 @@ describe('Browser automation pipeline (integration)', () => {
       ...(params ? { params } : {})
     })
     return response
+  }
+
+  function interceptCdp(
+    handler: (method: string, params?: Record<string, unknown>) => unknown
+  ): void {
+    const sendCommand = activeGuestHarness.sendCommandMock as ReturnType<typeof vi.fn>
+    const previous = sendCommand.getMockImplementation() as (
+      method: string,
+      params?: Record<string, unknown>
+    ) => Promise<unknown>
+    sendCommand.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
+      const result = handler(method, params)
+      return result === PASSTHROUGH ? await previous(method, params) : result
+    })
+  }
+
+  function evaluateInteractabilityCall(
+    params: Record<string, unknown> | undefined,
+    options?: {
+      disabled?: boolean
+      editable?: boolean
+      readOnly?: boolean
+      shadowRoot?: boolean
+      obscured?: boolean
+    }
+  ): { result: { value: string } } {
+    const declaration = String(params?.functionDeclaration)
+    const compile = new Function('getComputedStyle', `return (${declaration})`)
+    const check = compile(() => ({
+      display: 'block',
+      visibility: 'visible',
+      pointerEvents: 'auto'
+    })) as (this: Record<string, unknown>, ...args: unknown[]) => string
+    const other = {}
+    const target: Record<string, unknown> = {
+      disabled: options?.disabled ?? false,
+      inert: false,
+      readOnly: options?.readOnly ?? false,
+      hidden: false,
+      type: options?.editable ? 'text' : 'button',
+      tagName: options?.editable ? 'INPUT' : 'BUTTON',
+      value: '',
+      select: options?.editable ? () => undefined : undefined,
+      isContentEditable: false,
+      getAttribute: () => null,
+      contains: () => false
+    }
+    const ownerDocument = {
+      elementFromPoint: () => (options?.obscured ? other : target)
+    }
+    target.ownerDocument = ownerDocument
+    target.getRootNode = () =>
+      options?.shadowRoot ? { elementFromPoint: () => target } : ownerDocument
+    const values = ((params?.arguments ?? []) as { value: unknown }[]).map(({ value }) => value)
+    return { result: { value: check.call(target, ...values) } }
   }
 
   // ── Snapshot ──
@@ -393,6 +449,153 @@ describe('Browser automation pipeline (integration)', () => {
     const res = await rpc('browser.click', { element: '@e999' })
     expect(res.ok).toBe(false)
     expect((res.error as { code: string }).code).toBe('browser_ref_not_found')
+  })
+
+  it('classifies a missing layout box as browser_element_not_interactable', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not compute box model.')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('preserves CDP transport errors while reading the layout box', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new BrowserError('browser_cdp_error', 'CDP transport failed')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_cdp_error')
+  })
+
+  it('does not misclassify unknown getBoxModel protocol errors', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not find node with given id')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('runtime_error')
+  })
+
+  it('rejects zero-size pointer targets', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) =>
+      method === 'DOM.getBoxModel'
+        ? { model: { content: [100, 200, 100, 200, 100, 250, 100, 250] } }
+        : PASSTHROUGH
+    )
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it.each([
+    ['browser.click', { element: '@e1' }],
+    ['browser.check', { element: '@e1', checked: true }]
+  ])('rejects disabled pointer targets for %s', async (method, params) => {
+    await rpc('browser.snapshot')
+    interceptCdp((cdpMethod, cdpParams) => {
+      if (
+        cdpMethod === 'Runtime.callFunctionOn' &&
+        String(cdpParams?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(cdpParams, { disabled: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc(method, params)
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it.each([
+    ['browser.hover', { element: '@e1' }],
+    ['browser.drag', { from: '@e1', to: '@e1' }]
+  ])('allows disabled pointer targets for %s', async (method, params) => {
+    await rpc('browser.snapshot')
+    interceptCdp((cdpMethod, cdpParams) => {
+      if (
+        cdpMethod === 'Runtime.callFunctionOn' &&
+        String(cdpParams?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(cdpParams, { disabled: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc(method, params)
+
+    expect(res.ok).toBe(true)
+    if (method === 'browser.drag') {
+      const scrollCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
+        ([name, args]) =>
+          name === 'Runtime.callFunctionOn' &&
+          String(args?.functionDeclaration).includes('scrollIntoView')
+      )
+      expect(scrollCalls).toHaveLength(2)
+    }
+  })
+
+  it('rejects pointer targets obscured at their center', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('elementFromPoint')
+      ) {
+        expect(((params?.arguments ?? []) as unknown[]).slice(0, 2)).toEqual([
+          { value: 200 },
+          { value: 225 }
+        ])
+        return evaluateInteractabilityCall(params, { obscured: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('accepts a pointer target reached through its shadow root hit test', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method !== 'Runtime.callFunctionOn' ||
+        !String(params?.functionDeclaration).includes('elementFromPoint')
+      ) {
+        return PASSTHROUGH
+      }
+      return evaluateInteractabilityCall(params, { obscured: true, shadowRoot: true })
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(true)
   })
 
   // ── Navigation ──
@@ -468,11 +671,73 @@ describe('Browser automation pipeline (integration)', () => {
   it('fills an input by ref', async () => {
     await rpc('browser.goto', { url: 'https://search.example.com' })
     await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params, { editable: true })
+      }
+      return PASSTHROUGH
+    })
 
     // @e2 should be the textbox "Search query" on the search page
     const res = await rpc('browser.fill', { element: '@e2', value: 'hello world' })
     expect(res.ok).toBe(true)
     expect((res.result as { filled: string }).filled).toBe('@e2')
+  })
+
+  it('rejects fill when the input has no layout box', async () => {
+    await rpc('browser.goto', { url: 'https://search.example.com' })
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not compute box model.')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e2', value: 'hidden' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('rejects fill when the input is readonly', async () => {
+    await rpc('browser.goto', { url: 'https://search.example.com' })
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params, { readOnly: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e2', value: 'readonly' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('rejects fill on a non-editable element', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params)
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e1', value: 'not editable' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
   })
 
   it('chunks large browser fill text before CDP insertText', async () => {

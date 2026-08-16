@@ -60,13 +60,93 @@ export class BrowserError extends Error {
   }
 }
 
+function isMissingLayoutBoxError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /could not compute box model|node does not have a layout object/i.test(message)
+}
+
+type ElementActionabilityRequirements = {
+  pointerCenter?: { cx: number; cy: number }
+  requireEnabled?: boolean
+  requireEditable?: boolean
+}
+
+type CdpBoxModel = {
+  content?: number[]
+  padding?: number[]
+  border?: number[]
+}
+
+type IframeOwnerGeometry = {
+  backendNodeId: number
+  contentQuad: number[]
+  parentSessionId: string | null
+  viewportHeight: number
+  viewportWidth: number
+}
+
+function isUsableBoxQuad(quad: number[] | undefined): quad is number[] {
+  if (!quad || quad.length < 8 || !quad.slice(0, 8).every(Number.isFinite)) {
+    return false
+  }
+  let twiceArea = 0
+  for (let index = 0; index < 4; index++) {
+    const next = (index + 1) % 4
+    twiceArea += quad[index * 2] * quad[next * 2 + 1] - quad[next * 2] * quad[index * 2 + 1]
+  }
+  return Math.abs(twiceArea) > 1e-6
+}
+
+// Why: projective unit-square mapping keeps perspective iframe coordinates aligned.
+function mapViewportPointToQuad(
+  quad: number[],
+  x: number,
+  y: number,
+  viewportWidth: number,
+  viewportHeight: number
+): { cx: number; cy: number } | null {
+  const horizontalRatio = x / viewportWidth
+  const verticalRatio = y / viewportHeight
+  const [x0, y0, x1, y1, x2, y2, x3, y3] = quad
+  const deltaX1 = x1 - x2
+  const deltaX2 = x3 - x2
+  const deltaX3 = x0 - x1 + x2 - x3
+  const deltaY1 = y1 - y2
+  const deltaY2 = y3 - y2
+  const deltaY3 = y0 - y1 + y2 - y3
+  const determinant = deltaX1 * deltaY2 - deltaX2 * deltaY1
+  if (Math.abs(determinant) <= 1e-9) {
+    return null
+  }
+  const projectiveX = (deltaX3 * deltaY2 - deltaX2 * deltaY3) / determinant
+  const projectiveY = (deltaX1 * deltaY3 - deltaX3 * deltaY1) / determinant
+  const denominator = projectiveX * horizontalRatio + projectiveY * verticalRatio + 1
+  if (Math.abs(denominator) <= 1e-9) {
+    return null
+  }
+  const cx =
+    ((x1 - x0 + projectiveX * x1) * horizontalRatio +
+      (x3 - x0 + projectiveY * x3) * verticalRatio +
+      x0) /
+    denominator
+  const cy =
+    ((y1 - y0 + projectiveX * y1) * horizontalRatio +
+      (y3 - y0 + projectiveY * y3) * verticalRatio +
+      y0) /
+    denominator
+  return Number.isFinite(cx) && Number.isFinite(cy) ? { cx, cy } : null
+}
+
 type TabState = {
   navigationId: string | null
   snapshotResult: SnapshotResult | null
   debuggerAttached: boolean
   debuggerDetachListener: (() => void) | null
-  debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
+  debuggerMessageListener:
+    | ((_event: unknown, method: string, params: unknown, sessionId?: string) => void)
+    | null
   iframeSessions: Map<string, string>
+  iframeParentSessions: Map<string, string | null>
   // Why: capture state is per-tab so one tab's console/network events don't pollute another's buffer.
   capturing: boolean
   consoleLog: BrowserConsoleEntry[]
@@ -177,7 +257,11 @@ export class CdpBridge {
       const refSender = this.senderForRef(guest, node)
 
       await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        pointerCenter: localCenter,
+        requireEnabled: true
+      })
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
       // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
@@ -210,7 +294,10 @@ export class CdpBridge {
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
       await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        pointerCenter: localCenter
+      })
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
@@ -231,9 +318,20 @@ export class CdpBridge {
       const toSender = this.senderForRef(guest, toNode)
 
       await this.scrollIntoView(fromSender, fromNode.backendDOMNodeId)
-      const fromLocal = await this.getElementCenter(fromSender, fromNode.backendDOMNodeId)
+      const fromLocal = await this.getElementCenter(
+        fromSender,
+        fromNode.backendDOMNodeId,
+        fromElement
+      )
+      await this.assertElementInteractable(fromSender, fromNode.backendDOMNodeId, fromElement, {
+        pointerCenter: fromLocal
+      })
       const from = await this.getPageCoordinates(guest, fromNode, fromLocal.cx, fromLocal.cy)
-      const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
+      await this.scrollIntoView(toSender, toNode.backendDOMNodeId)
+      const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId, toElement)
+      await this.assertElementInteractable(toSender, toNode.backendDOMNodeId, toElement, {
+        pointerCenter: toLocal
+      })
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
       // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
@@ -310,6 +408,13 @@ export class CdpBridge {
 
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
+      await this.scrollIntoView(refSender, node.backendDOMNodeId)
+      // Why: fill has no pointer step, so use the center lookup only as a layout-box gate.
+      await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        requireEnabled: true,
+        requireEditable: true
+      })
 
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
@@ -458,7 +563,11 @@ export class CdpBridge {
 
       if (currentState.value !== checked) {
         await this.scrollIntoView(refSender, node.backendDOMNodeId)
-        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+        await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+          pointerCenter: localCenter,
+          requireEnabled: true
+        })
         const { cx, cy } = await this.getPageCoordinates(
           guest,
           node,
@@ -1091,6 +1200,7 @@ export class CdpBridge {
         debuggerDetachListener: null,
         debuggerMessageListener: null,
         iframeSessions: new Map(),
+        iframeParentSessions: new Map(),
         capturing: false,
         consoleLog: [],
         networkLog: [],
@@ -1145,23 +1255,6 @@ export class CdpBridge {
       )
     }
 
-    const sender = this.makeCdpSender(guest)
-    await sender('Page.enable')
-    await sender('DOM.enable')
-    await sender('Network.enable')
-
-    // Why: OOPIF iframes are invisible to the parent CDP session; flatten:true gives each a targetable sessionId.
-    await sender('Target.setAutoAttach', {
-      autoAttach: true,
-      waitForDebuggerOnStart: false,
-      flatten: true
-    })
-
-    // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
-    await sender('Page.addScriptToEvaluateOnNewDocument', {
-      source: ANTI_DETECTION_SCRIPT
-    })
-
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
     this.removeDebuggerListeners(guest, state)
 
@@ -1169,10 +1262,16 @@ export class CdpBridge {
       state.debuggerAttached = false
       state.snapshotResult = null
       state.iframeSessions.clear()
+      state.iframeParentSessions.clear()
       this.removeDebuggerListeners(guest, state)
     }
 
-    const messageListener = (_event: unknown, method: string, params: unknown): void => {
+    const messageListener = (
+      _event: unknown,
+      method: string,
+      params: unknown,
+      parentSessionId?: string
+    ): void => {
       if (method === 'Page.frameNavigated') {
         state.snapshotResult = null
         state.navigationId = null
@@ -1196,9 +1295,17 @@ export class CdpBridge {
           | undefined
         if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
           state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
+          state.iframeParentSessions.set(p.sessionId, parentSessionId || null)
           guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
           guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
           guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
+          guest.debugger
+            .sendCommand(
+              'Target.setAutoAttach',
+              { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
+              p.sessionId
+            )
+            .catch(() => {})
         }
       }
       if (method === 'Target.detachedFromTarget') {
@@ -1207,6 +1314,7 @@ export class CdpBridge {
           for (const [frameId, sid] of state.iframeSessions) {
             if (sid === p.sessionId) {
               state.iframeSessions.delete(frameId)
+              state.iframeParentSessions.delete(p.sessionId)
               break
             }
           }
@@ -1315,6 +1423,30 @@ export class CdpBridge {
     guest.debugger.on('detach', detachListener)
     guest.debugger.on('message', messageListener)
 
+    const sender = this.makeCdpSender(guest)
+    try {
+      await sender('Page.enable')
+      await sender('DOM.enable')
+      await sender('Network.enable')
+
+      // Why: the listener must be live before auto-attach emits events for already-loaded OOPIFs.
+      await sender('Target.setAutoAttach', {
+        autoAttach: true,
+        waitForDebuggerOnStart: false,
+        flatten: true
+      })
+
+      // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
+      await sender('Page.addScriptToEvaluateOnNewDocument', {
+        source: ANTI_DETECTION_SCRIPT
+      })
+    } catch (error) {
+      state.iframeSessions.clear()
+      state.iframeParentSessions.clear()
+      this.removeDebuggerListeners(guest, state)
+      throw error
+    }
+
     state.debuggerAttached = true
   }
 
@@ -1406,83 +1538,265 @@ export class CdpBridge {
     })
   }
 
-  private async getElementCenter(
+  private async assertElementInteractable(
     sender: CdpCommandSender,
-    backendNodeId: number
-  ): Promise<{ cx: number; cy: number }> {
-    const { model } = (await sender('DOM.getBoxModel', { backendNodeId })) as {
-      model: { content: number[] }
+    backendNodeId: number,
+    ref: string,
+    requirements: ElementActionabilityRequirements = {}
+  ): Promise<void> {
+    const { nodeId } = (await sender('DOM.requestNode', { backendNodeId })) as { nodeId: number }
+    const { object } = (await sender('DOM.resolveNode', { nodeId })) as {
+      object: { objectId: string }
     }
-    const [x1, y1, , , x3, y3] = model.content
-    return { cx: (x1 + x3) / 2, cy: (y1 + y3) / 2 }
+    const { result, exceptionDetails } = (await sender('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `function(cx, cy, requireEnabled, requireEditable) {
+        if (!this || typeof this !== 'object') return 'missing';
+        if (requireEnabled && (this.disabled === true || (typeof this.matches === 'function' && this.matches(':disabled')))) return 'disabled';
+        if (requireEnabled) {
+          let current = this;
+          while (current) {
+            if (current.inert === true) return 'disabled';
+            if (typeof current.getAttribute === 'function' && current.getAttribute('aria-disabled')?.toLowerCase() === 'true') return 'disabled';
+            const assignedSlot = current.assignedSlot;
+            if (assignedSlot) {
+              current = assignedSlot;
+              continue;
+            }
+            if (current.parentElement) {
+              current = current.parentElement;
+              continue;
+            }
+            const root = typeof current.getRootNode === 'function' ? current.getRootNode() : null;
+            current = root?.host && root.host !== current ? root.host : null;
+          }
+        }
+        if (requireEditable) {
+          const tag = typeof this.tagName === 'string' ? this.tagName.toLowerCase() : '';
+          const type = typeof this.type === 'string' ? this.type.toLowerCase() : '';
+          const nonTextInput = /^(button|checkbox|color|file|hidden|image|radio|range|reset|submit)$/;
+          const editable = this.isContentEditable === true || tag === 'textarea' || (tag === 'input' && !nonTextInput.test(type));
+          if (!editable) return 'not-editable';
+        }
+        if (requireEditable && (this.readOnly === true || (typeof this.getAttribute === 'function' && this.getAttribute('aria-readonly')?.toLowerCase() === 'true'))) return 'readonly';
+        if (this.hidden === true || this.type === 'hidden') return 'hidden';
+        const style = getComputedStyle(this);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return 'hidden';
+        if (typeof cx === 'number' && typeof cy === 'number') {
+          const root = typeof this.getRootNode === 'function' ? this.getRootNode() : null;
+          const hitTester = root && typeof root.elementFromPoint === 'function' ? root : this.ownerDocument;
+          const hit = hitTester.elementFromPoint(cx, cy);
+          let current = hit;
+          while (current && current !== this) {
+            if (current.assignedSlot) {
+              current = current.assignedSlot;
+              continue;
+            }
+            if (current.parentElement) {
+              current = current.parentElement;
+              continue;
+            }
+            const currentRoot = typeof current.getRootNode === 'function' ? current.getRootNode() : null;
+            current = currentRoot?.host && currentRoot.host !== current ? currentRoot.host : null;
+          }
+          if (current !== this) return 'obscured';
+        }
+        return '';
+      }`,
+      arguments: [
+        { value: requirements.pointerCenter?.cx ?? null },
+        { value: requirements.pointerCenter?.cy ?? null },
+        { value: requirements.requireEnabled === true },
+        { value: requirements.requireEditable === true }
+      ],
+      returnByValue: true
+    })) as { result?: { value?: unknown }; exceptionDetails?: unknown }
+    if (exceptionDetails) {
+      throw new BrowserError('browser_cdp_error', `Could not check element ${ref} interactability.`)
+    }
+    const reason = typeof result?.value === 'string' ? result.value : ''
+    if (reason === 'disabled') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref} is disabled and cannot be interacted with.`
+      )
+    }
+    if (reason === 'hidden' || reason === 'missing') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref} is not visible for interaction. Re-snapshot or scroll it into view.`
+      )
+    }
+    if (reason === 'readonly') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref} is readonly and cannot be filled.`
+      )
+    }
+    if (reason === 'not-editable') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref} is not an editable input.`
+      )
+    }
+    if (reason === 'obscured') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref} cannot receive pointer input at its center. Re-snapshot and pick an unobscured control.`
+      )
+    }
   }
 
-  // Why: cross-origin iframes report iframe-local coords, but Input events use parent-page space; add the iframe offset.
-  private async getIframeOffset(
+  private async getElementCenter(
+    sender: CdpCommandSender,
+    backendNodeId: number,
+    ref?: string
+  ): Promise<{ cx: number; cy: number }> {
+    const model = await this.getElementBoxModel(
+      sender,
+      backendNodeId,
+      `Element ${ref ?? 'ref'} has no layout box. Re-snapshot and pick a visible control.`
+    )
+    const quad = [model?.content, model?.padding, model?.border].find(isUsableBoxQuad)
+    if (!quad) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Element ${ref ?? 'ref'} has zero size and cannot be interacted with.`
+      )
+    }
+    const xs = [quad[0], quad[2], quad[4], quad[6]]
+    const ys = [quad[1], quad[3], quad[5], quad[7]]
+    return {
+      cx: xs.reduce((sum, value) => sum + value, 0) / xs.length,
+      cy: ys.reduce((sum, value) => sum + value, 0) / ys.length
+    }
+  }
+
+  private async getElementBoxModel(
+    sender: CdpCommandSender,
+    backendNodeId: number,
+    missingLayoutMessage: string
+  ): Promise<CdpBoxModel> {
+    try {
+      const { model } = (await sender('DOM.getBoxModel', { backendNodeId })) as {
+        model: CdpBoxModel
+      }
+      return model
+    } catch (error) {
+      if (error instanceof BrowserError || !isMissingLayoutBoxError(error)) {
+        throw error
+      }
+      throw new BrowserError('browser_element_not_interactable', missingLayoutMessage)
+    }
+  }
+
+  private async getIframeOwnerGeometry(
     guest: Electron.WebContents,
     sessionId: string
-  ): Promise<{ offsetX: number; offsetY: number }> {
+  ): Promise<IframeOwnerGeometry> {
     const tabId = this.resolveTabId(guest.id)
     const state = this.getOrCreateTabState(tabId)
-    const parentSender = this.makeCdpSender(guest)
-
-    for (const [targetId, sid] of state.iframeSessions) {
-      if (sid === sessionId) {
-        try {
-          // Why: match the iframe's target URL against DOM iframe src to pick the right element on multi-iframe pages.
-          const { targetInfo } = (await parentSender('Target.getTargetInfo', {
-            targetId
-          })) as { targetInfo: { url?: string } }
-
-          const targetUrl = targetInfo?.url
-
-          const { result } = (await parentSender('Runtime.evaluate', {
-            expression: `(() => {
-              const frames = document.querySelectorAll('iframe, frame');
-              const rects = [];
-              for (const f of frames) {
-                const rect = f.getBoundingClientRect();
-                rects.push({ x: rect.x, y: rect.y, src: f.src || '' });
-              }
-              return JSON.stringify(rects);
-            })()`,
-            returnByValue: true
-          })) as { result: { value: string } }
-
-          const rects = JSON.parse(result.value) as { x: number; y: number; src: string }[]
-
-          // Match by URL first (reliable for cross-origin iframes)
-          if (targetUrl) {
-            for (const rect of rects) {
-              if (rect.src === targetUrl) {
-                return { offsetX: rect.x, offsetY: rect.y }
-              }
-            }
-            // Why: iframe may redirect after load so src differs from target URL; match by origin as a fallback.
-            try {
-              const targetOrigin = new URL(targetUrl).origin
-              for (const rect of rects) {
-                if (rect.src && new URL(rect.src).origin === targetOrigin) {
-                  return { offsetX: rect.x, offsetY: rect.y }
-                }
-              }
-            } catch {
-              // URL parsing failed — fall through
-            }
-          }
-
-          // Fallback: if only one iframe exists, use its position
-          if (rects.length === 1) {
-            return { offsetX: rects[0].x, offsetY: rects[0].y }
-          }
-        } catch {
-          // Can't determine offset, return zero (best effort)
-        }
-        break
-      }
+    if (
+      ![...state.iframeSessions.values()].includes(sessionId) ||
+      !state.iframeParentSessions.has(sessionId)
+    ) {
+      throw new BrowserError(
+        'browser_stale_ref',
+        "The element's iframe is no longer attached. Run 'orca snapshot' to get fresh refs."
+      )
     }
+    const parentSessionId = state.iframeParentSessions.get(sessionId) ?? null
+    const parentSender = this.makeCdpSender(guest, parentSessionId ?? undefined)
+    const childSender = this.makeCdpSender(guest, sessionId)
+    const [{ frameTree }, { cssLayoutViewport }] = (await Promise.all([
+      childSender('Page.getFrameTree'),
+      childSender('Page.getLayoutMetrics')
+    ])) as [
+      {
+        frameTree?: { frame?: { id?: string } }
+      },
+      {
+        cssLayoutViewport?: { clientWidth?: number; clientHeight?: number }
+      }
+    ]
+    const frameId = frameTree?.frame?.id
+    if (!frameId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        'Could not resolve the iframe coordinate space. Re-snapshot and retry.'
+      )
+    }
+    const { backendNodeId } = (await parentSender('DOM.getFrameOwner', { frameId })) as {
+      backendNodeId?: number
+    }
+    if (!backendNodeId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        'Could not resolve the iframe owner. Re-snapshot and retry.'
+      )
+    }
+    const model = await this.getElementBoxModel(
+      parentSender,
+      backendNodeId,
+      'The iframe has no layout box. Re-snapshot and retry.'
+    )
+    const content = model?.content
+    const viewportWidth = cssLayoutViewport?.clientWidth
+    const viewportHeight = cssLayoutViewport?.clientHeight
+    if (
+      !isUsableBoxQuad(content) ||
+      !Number.isFinite(viewportWidth) ||
+      !Number.isFinite(viewportHeight) ||
+      !viewportWidth ||
+      !viewportHeight ||
+      viewportWidth <= 0 ||
+      viewportHeight <= 0
+    ) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        'The iframe has no usable layout box. Re-snapshot and retry.'
+      )
+    }
+    return {
+      backendNodeId,
+      contentQuad: content,
+      parentSessionId,
+      viewportHeight,
+      viewportWidth
+    }
+  }
 
-    return { offsetX: 0, offsetY: 0 }
+  private async assertIframeReceivesPointer(
+    sender: CdpCommandSender,
+    backendNodeId: number,
+    cx: number,
+    cy: number
+  ): Promise<void> {
+    const { object } = (await sender('DOM.resolveNode', { backendNodeId })) as {
+      object?: { objectId?: string }
+    }
+    if (!object?.objectId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        'Could not resolve the iframe owner. Re-snapshot and retry.'
+      )
+    }
+    const { result } = (await sender('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `function(cx, cy) {
+        const root = typeof this.getRootNode === 'function' ? this.getRootNode() : this.ownerDocument;
+        const hit = root && typeof root.elementFromPoint === 'function' ? root.elementFromPoint(cx, cy) : null;
+        return hit === this || (hit && typeof this.contains === 'function' && this.contains(hit));
+      }`,
+      arguments: [{ value: cx }, { value: cy }],
+      returnByValue: true
+    })) as { result?: { value?: unknown } }
+    if (result?.value !== true) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        'The iframe is covered at the target point. Re-snapshot and pick an unobscured control.'
+      )
+    }
   }
 
   // Why: Input.dispatchMouseEvent uses parent-page coords, so translate iframe-local coords for iframe elements.
@@ -1495,8 +1809,36 @@ export class CdpBridge {
     if (!refEntry.sessionId) {
       return { cx: localCx, cy: localCy }
     }
-    const { offsetX, offsetY } = await this.getIframeOffset(guest, refEntry.sessionId)
-    return { cx: localCx + offsetX, cy: localCy + offsetY }
+    let cx = localCx
+    let cy = localCy
+    let sessionId: string | null = refEntry.sessionId
+    while (sessionId) {
+      const geometry = await this.getIframeOwnerGeometry(guest, sessionId)
+      const parentPoint = mapViewportPointToQuad(
+        geometry.contentQuad,
+        cx,
+        cy,
+        geometry.viewportWidth,
+        geometry.viewportHeight
+      )
+      if (!parentPoint) {
+        throw new BrowserError(
+          'browser_element_not_interactable',
+          'The iframe transform cannot be mapped safely. Re-snapshot and retry.'
+        )
+      }
+      const { cx: nextCx, cy: nextCy } = parentPoint
+      await this.assertIframeReceivesPointer(
+        this.makeCdpSender(guest, geometry.parentSessionId ?? undefined),
+        geometry.backendNodeId,
+        nextCx,
+        nextCy
+      )
+      cx = nextCx
+      cy = nextCy
+      sessionId = geometry.parentSessionId
+    }
+    return { cx, cy }
   }
 
   // Why: nth-index disambiguates duplicate role+name matches so recovery hits the original element, not the first match.

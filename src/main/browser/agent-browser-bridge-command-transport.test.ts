@@ -157,6 +157,35 @@ describe('AgentBrowserBridge', () => {
     await expect(bridge.click('@e1')).rejects.toThrow('Element not found')
   })
 
+  it.each([
+    'Element is not visible',
+    'Element is not enabled',
+    'Element is not editable',
+    'Element is read only',
+    'Element has zero size',
+    'Element cannot be interacted with',
+    'Another element is covering the target element'
+  ])('maps agent-browser interactability errors: %s', async (message) => {
+    failWith(message)
+    await expect(bridge.click('@e1')).rejects.toMatchObject({
+      code: 'browser_element_not_interactable',
+      message
+    })
+  })
+
+  it.each([
+    'Error: read-only file system',
+    'Application state is not visible',
+    'Preview is not editable',
+    'Buffer has zero size'
+  ])('keeps unrelated failures generic: %s', async (message) => {
+    failWith(message)
+    await expect(bridge.click('@e1')).rejects.toMatchObject({
+      code: 'browser_error',
+      message
+    })
+  })
+
   it('keeps CDP discovery failures generic while the tab session is still live', async () => {
     failWith(CDP_DISCOVERY_FAILURE)
     await expect(bridge.snapshot()).rejects.toMatchObject({

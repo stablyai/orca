@@ -261,6 +261,13 @@ function classifyErrorCode(message: string): string {
   if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
     return 'browser_stale_ref'
   }
+  if (
+    /\belement(?: exists but)? (?:is )?(?:not interactable|not visible|not enabled|not editable|disabled|read[ -]?only)|\belement (?:has )?(?:zero size|no layout box)|\belement cannot be interacted with|\banother element is covering the target element/i.test(
+      message
+    )
+  ) {
+    return 'browser_element_not_interactable'
+  }
   return 'browser_error'
 }
 

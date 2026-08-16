@@ -372,6 +372,7 @@ Common recoveries:
 
 - `browser_no_tab`: open a tab with `orca tab create --url <url> --json`.
 - `browser_stale_ref`: run `orca snapshot --json` and retry with fresh refs.
+- `browser_element_not_interactable`: re-snapshot, scroll, or choose another visible, enabled ref; do not busy-retry the same action.
 - `browser_tab_not_found`: run `orca tab list --json` before switching or closing.
 
 ## Next Action
