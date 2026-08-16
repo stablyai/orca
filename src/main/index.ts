@@ -71,6 +71,8 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/startup-notification-registration'
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
+import { SkillCloudService } from './skills/skill-cloud-service'
+import { recoverPendingSkillTransactions } from './skills/skill-transaction-startup-recovery'
 import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import {
@@ -180,6 +182,8 @@ import {
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
+import { parseSkillShareId } from '../shared/skill-share-link'
+import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -396,6 +400,7 @@ const expectedRendererReload = createWebContentsTimedFlag()
 const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
+const skillShareDeepLinks = new SkillShareDeepLinkState()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -696,12 +701,25 @@ function focusExistingWindow(): void {
 }
 
 function requestDesktopActivation(argv: readonly string[] = []): void {
+  skillShareDeepLinks.capture(argv, (shareId) => {
+    mainWindow?.webContents.send('ui:openSkillShare', shareId)
+  })
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
   }
   desktopActivationGate.requestActivation()
 }
+
+app.on('open-url', (event, url) => {
+  if (!parseSkillShareId(url)) {
+    return
+  }
+  event.preventDefault()
+  requestDesktopActivation([url])
+})
+
+skillShareDeepLinks.capture(process.argv)
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
@@ -887,6 +905,10 @@ ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', () =>
 ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
   pendingOpenSettings.matches(event.sender.id, { consume: true })
 )
+
+ipcMain.handle('ui:consumePendingSkillShare', () => {
+  return skillShareDeepLinks.consume()
+})
 
 ipcMain.handle(
   'app:startupDiagnostic',
@@ -2368,6 +2390,21 @@ void app.whenReady().then(async () => {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  const skillTransactionRecovery = recoverPendingSkillTransactions(
+    join(app.getPath('userData'), 'skill-installs')
+  )
+  void skillTransactionRecovery
+    .then((report) => {
+      if (report.scanned || report.failures.length || report.truncated) {
+        console.info('[skills] startup transaction recovery:', {
+          scanned: report.scanned,
+          recovered: report.recovered,
+          failures: report.failures.map((failure) => failure.code),
+          truncated: report.truncated
+        })
+      }
+    })
+    .catch((error) => console.warn('[skills] startup transaction recovery failed:', error))
   // Why: cohort-classifier reads repo count synchronously at every emit, so hydrate it here — before any IPC handler or window can trigger track().
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
@@ -2559,7 +2596,8 @@ void app.whenReady().then(async () => {
       }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
-    orchestrationEnvironmentTransport
+    orchestrationEnvironmentTransport,
+    skillTransactionRecovery
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
@@ -2665,6 +2703,7 @@ void app.whenReady().then(async () => {
       isArtifactSharingEnabled(store?.getSettings())
     )
   )
+  runtimeService.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.

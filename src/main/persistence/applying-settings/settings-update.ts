@@ -70,6 +70,9 @@ export function updateSettings(
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }
+  if ('agentSkillSharingEnabled' in updates) {
+    sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
+  }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }

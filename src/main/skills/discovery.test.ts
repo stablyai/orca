@@ -204,7 +204,11 @@ describe('skill discovery', () => {
     await writeFile(join(codexSkills, 'review', 'SKILL.md'), '# review')
     await mkdir(join(home, '.agents'), { recursive: true })
     // Shared root is a symlink onto the Codex root: one canonical file, two roots.
-    await symlink(codexSkills, join(home, '.agents', 'skills'), 'dir')
+    await symlink(
+      codexSkills,
+      join(home, '.agents', 'skills'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
 
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
@@ -223,7 +227,11 @@ describe('skill discovery', () => {
     await writeFile(join(claudeSkills, 'orchestration', 'SKILL.md'), '# orchestration')
     // `npx skills add --global` links a provider home onto an existing install.
     await mkdir(join(home, '.grok'), { recursive: true })
-    await symlink(claudeSkills, join(home, '.grok', 'skills'), 'dir')
+    await symlink(
+      claudeSkills,
+      join(home, '.grok', 'skills'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
 
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
@@ -285,7 +293,16 @@ describe('skill discovery', () => {
         '/home/test/.omp/agent/skills',
         '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
-        '/home/test/.cursor/skills'
+        '/home/test/.cursor/skills',
+        '/home/test/.factory/skills',
+        '/home/test/.continue/skills',
+        '/home/test/.trae-cn/skills',
+        '/home/test/.augment/skills',
+        '/workspace/current/.factory/skills',
+        '/workspace/current/.continue/skills',
+        '/workspace/current/.trae/skills',
+        '/workspace/current/.grok/skills',
+        '/workspace/current/.augment/skills'
       ])
     )
     // Why: these live outside ~/.agents/skills, so they must carry the shared

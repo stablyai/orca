@@ -125,7 +125,11 @@ function readAnnotationObjects(
     const raw = view.byteArray(valueRva)
     if (raw) {
       // Annotation strings are not NUL-terminated; trim a trailing one anyway.
-      into[name] = raw.toString('utf8').replace(/\0+$/, '')
+      let value = raw.toString('utf8')
+      while (value.endsWith('\0')) {
+        value = value.slice(0, -1)
+      }
+      into[name] = value
     }
   }
 }
