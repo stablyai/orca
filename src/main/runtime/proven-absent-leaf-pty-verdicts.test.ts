@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES,
   PROVEN_ABSENT_LEAF_PTY_TTL_MS,
-  pruneProvenAbsentLeafPtyVerdicts
+  pruneProvenAbsentLeafPtyVerdicts,
+  recordProvenAbsentLeafPtyVerdict
 } from './proven-absent-leaf-pty-verdicts'
 
 describe('pruneProvenAbsentLeafPtyVerdicts', () => {
@@ -32,5 +33,22 @@ describe('pruneProvenAbsentLeafPtyVerdicts', () => {
     // Newest timestamps survive (lowest i in this construction).
     expect(map.has('pty-0')).toBe(true)
     expect(map.has('pty-25')).toBe(false)
+  })
+
+  it('enforces the capacity immediately after every verdict write', () => {
+    const map = new Map<string, number>()
+    const maxEntries = 16
+    for (let index = 0; index < maxEntries + 10; index += 1) {
+      recordProvenAbsentLeafPtyVerdict(
+        map,
+        `pty-${index}`,
+        100_000 + index,
+        PROVEN_ABSENT_LEAF_PTY_TTL_MS,
+        maxEntries
+      )
+      expect(map.size).toBeLessThanOrEqual(maxEntries)
+    }
+    expect(map.has('pty-0')).toBe(false)
+    expect(map.has('pty-25')).toBe(true)
   })
 })

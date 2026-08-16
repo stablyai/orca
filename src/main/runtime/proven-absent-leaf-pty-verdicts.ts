@@ -4,7 +4,7 @@
  */
 
 export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
-/** Soft cap after TTL prune — guards long-lived runtimes with many unique dead ids. */
+/** Capacity after TTL prune — bounds long-lived runtimes with many unique dead ids. */
 export const PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES = 256
 
 /** Delete expired timestamp entries; if still over max, drop oldest first. */
@@ -27,4 +27,16 @@ export function pruneProvenAbsentLeafPtyVerdicts(
   for (let i = 0; i < excess; i += 1) {
     map.delete(oldestFirst[i]![0])
   }
+}
+
+/** Record a verdict and restore the TTL/cap invariants before returning. */
+export function recordProvenAbsentLeafPtyVerdict(
+  map: Map<string, number>,
+  ptyId: string,
+  now: number = Date.now(),
+  ttlMs: number = PROVEN_ABSENT_LEAF_PTY_TTL_MS,
+  maxEntries: number = PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES
+): void {
+  map.set(ptyId, now)
+  pruneProvenAbsentLeafPtyVerdicts(map, now, ttlMs, maxEntries)
 }

@@ -1015,7 +1015,8 @@ import {
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   PROVEN_ABSENT_LEAF_PTY_TTL_MS,
-  pruneProvenAbsentLeafPtyVerdicts
+  pruneProvenAbsentLeafPtyVerdicts,
+  recordProvenAbsentLeafPtyVerdict
 } from './proven-absent-leaf-pty-verdicts'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
@@ -16629,7 +16630,7 @@ export class OrcaRuntimeService {
         if ((await probeLiveness(ptyId)) !== false) {
           return false
         }
-        this.provenAbsentLeafPtyVerdicts.set(ptyId, Date.now())
+        recordProvenAbsentLeafPtyVerdict(this.provenAbsentLeafPtyVerdicts, ptyId)
         return true
       } catch {
         // Why: a failed probe is unknown, and unknown never rejects a write.

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES } from './proven-absent-leaf-pty-verdicts'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/types'
 
@@ -189,6 +190,27 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     )
 
     expect(probe).toHaveBeenCalledTimes(1)
+  })
+
+  it('caps the proven-absent cache after every unique probe completion', async () => {
+    const probe = vi.fn(async () => false)
+    const { runtime } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
+    const verdicts = Reflect.get(runtime, 'provenAbsentLeafPtyVerdicts') as Map<string, number>
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(100_000)
+
+    try {
+      for (let index = 0; index <= PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES; index += 1) {
+        publishLeafGraph(runtime, `pty-${index}`)
+        const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+        await expect(runtime.sendTerminal(terminals[0].handle, { text: 'ping' })).rejects.toThrow(
+          'terminal_not_writable'
+        )
+        expect(verdicts.size).toBeLessThanOrEqual(PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES)
+      }
+    } finally {
+      nowSpy.mockRestore()
+    }
+    expect(probe).toHaveBeenCalledTimes(PROVEN_ABSENT_LEAF_PTY_MAX_ENTRIES + 1)
   })
 
   it('drops the cached absent verdict once the provider re-learns the id', async () => {
