@@ -161,4 +161,29 @@ describe('terminal agent send guard', () => {
     expect(isTerminalForegroundStatusUnavailable).toHaveBeenCalledWith('terminal-1')
     expect(sendTerminal).not.toHaveBeenCalled()
   })
+
+  it('bounds the final foreground-status probe', async () => {
+    vi.useFakeTimers()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: false,
+        status: null
+      }),
+      isTerminalForegroundStatusUnavailable: vi.fn().mockReturnValue(new Promise(() => {})),
+      sendTerminal: vi.fn()
+    })
+    const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
+      guardedSendRequest()
+    )
+
+    await vi.advanceTimersByTimeAsync(2_100)
+
+    await expect(responsePromise).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, refusedReason: 'status-unavailable' } }
+    })
+  })
 })
