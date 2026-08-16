@@ -1,10 +1,6 @@
 import type { TuiAgent } from './tui-agent'
-import {
-  getTuiAgentDetectCommands,
-  TUI_AGENT_CONFIG,
-  type TuiAgentConfig,
-  type TuiAgentDetectionRuntime
-} from './tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { TuiAgentConfig, TuiAgentDetectionRuntime } from './tui-agent-config-types'
 
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
