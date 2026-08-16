@@ -77,6 +77,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (skillsHelp) {
     return skillsHelp
   }
+  if (commandPath[0] === 'terminal' && flag === 'terminal') {
+    return '--terminal <selector> Runtime handle or stable pty:<ptyId> from terminal list'
+  }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }

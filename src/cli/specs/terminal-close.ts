@@ -6,7 +6,7 @@ export const TERMINAL_CLOSE_COMMAND_SPEC: CommandSpec = {
   destructive: true,
   summary: 'Close one terminal, its whole tab, or every terminal in a workspace',
   usage:
-    'orca terminal close ([--terminal <handle>] [--tab] | --worktree <selector> --all) [--json]',
+    'orca terminal close ([--terminal <handle> | --terminal pty:<ptyId>] [--tab] | --worktree <selector> --all) [--json]',
   allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab', 'worktree', 'all'],
   notes: [
     'Without --all, closes one terminal pane/session; add --tab to close its whole tab.',
