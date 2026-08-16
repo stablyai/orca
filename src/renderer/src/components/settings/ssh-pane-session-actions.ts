@@ -2,6 +2,25 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { terminateSshSessionsWithReconnect } from './ssh-session-termination'
+import type { SshTerminateSessionsResult } from '../../../../shared/ssh-terminate-sessions-result'
+
+export function formatSshTerminateSessionsNotice(
+  result: SshTerminateSessionsResult
+): string | null {
+  if (result.abandonedUnreachable === 1) {
+    return translate(
+      'auto.components.settings.SshPane.abandonedUnreachableOne',
+      '1 abandoned remote session was not killed — reconnect to terminate it.'
+    )
+  }
+  return result.abandonedUnreachable > 1
+    ? translate(
+        'auto.components.settings.SshPane.abandonedUnreachableMany',
+        '{{value0}} abandoned remote sessions were not killed — reconnect to terminate them.',
+        { value0: result.abandonedUnreachable }
+      )
+    : null
+}
 
 function recordSshInteraction(): void {
   useAppStore.getState().recordFeatureInteraction('ssh')
@@ -38,23 +57,9 @@ export async function terminateSshTargetSessions(targetId: string): Promise<void
     const result = await terminateSshSessionsWithReconnect(targetId)
     // Why (#12661): offline expired-only terminate is local cleanup only — not a remote kill.
     // Translate here (not in shared) so catalogs extract the notice like other SshPane toasts.
-    if (result.abandonedUnreachable === 1) {
-      toast.warning(
-        translate(
-          'auto.components.settings.SshPane.abandonedUnreachableOne',
-          '1 abandoned remote session was not killed — reconnect to terminate it.'
-        )
-      )
-      return
-    }
-    if (result.abandonedUnreachable > 1) {
-      toast.warning(
-        translate(
-          'auto.components.settings.SshPane.abandonedUnreachableMany',
-          '{{value0}} abandoned remote sessions were not killed — reconnect to terminate them.',
-          { value0: result.abandonedUnreachable }
-        )
-      )
+    const notice = formatSshTerminateSessionsNotice(result)
+    if (notice) {
+      toast.warning(notice)
       return
     }
     toast.success(

@@ -8,15 +8,3 @@ export type SshTerminateSessionsResult = {
    */
   abandonedUnreachable: number
 }
-
-export function formatSshTerminateSessionsNotice(
-  result: SshTerminateSessionsResult
-): string | null {
-  if (result.abandonedUnreachable <= 0) {
-    return null
-  }
-  const n = result.abandonedUnreachable
-  return n === 1
-    ? '1 abandoned remote session was not killed — reconnect to terminate it.'
-    : `${n} abandoned remote sessions were not killed — reconnect to terminate them.`
-}
