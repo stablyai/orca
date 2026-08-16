@@ -27,6 +27,13 @@ export const BrowserClientPageRendererRequest = z.discriminatedUnion('type', [
 ])
 export type BrowserClientPageRendererRequest = z.infer<typeof BrowserClientPageRendererRequest>
 
+export const BrowserClientPageRendererOutcome = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('mounted'), webContentsId: WebContentsId }),
+  z.object({ type: z.literal('retired') }),
+  z.object({ type: z.literal('failed'), errorCode: Identity })
+])
+export type BrowserClientPageRendererOutcome = z.infer<typeof BrowserClientPageRendererOutcome>
+
 const RendererReplyBase = RendererRequestBase.pick({ requestId: true, page: true })
 
 export const BrowserClientPageRendererReply = z.discriminatedUnion('type', [

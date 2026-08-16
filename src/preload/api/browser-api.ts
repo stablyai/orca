@@ -30,8 +30,17 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride
 } from '../../shared/browser-workspace-types'
+import type {
+  BrowserClientPageRendererOutcome,
+  BrowserClientPageRendererRequest
+} from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
+  onClientPageRendererRequest?: (
+    callback: (
+      request: BrowserClientPageRendererRequest
+    ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
+  ) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string

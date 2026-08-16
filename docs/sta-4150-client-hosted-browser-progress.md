@@ -36,12 +36,15 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest reviewed stack tip: commit `fe6b420d0c` on
-  `sta-4150-browser-electron-page-commands`, draft PR
-  [#14566](https://github.com/stablyai/orca/pull/14566).
+- Latest locally reviewed stack tip: commit `b49d3bd020` on
+  `sta-4150-browser-client-page-renderer-registry`, draft PR
+  [#14596](https://github.com/stablyai/orca/pull/14596); CI is running.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
-- Current development branch: `sta-4150-browser-client-page-mount-bridge`, draft PR
-  [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566.
+- Published bridge branch: `sta-4150-browser-client-page-mount-bridge` locally rebased to
+  `830cb95c25`, draft PR [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566;
+  its prior head passed every substantive job while GitHub's aggregate `verify` remained queued.
+- Published renderer-registry branch: `sta-4150-browser-client-page-renderer-registry`, draft PR
+  [#14596](https://github.com/stablyai/orca/pull/14596), stacked on #14578.
 - Feature state: **production-inert and not user-visible**. No capability advertisement, default
   client placement, live page registration, or server-placement migration is enabled.
 - Design evidence: `remote-browser-client-hosting.md`, SHA-256
@@ -56,31 +59,33 @@ Old clients and callers that omit placement must retain current server-hosted be
 All entries below remain staged and reviewable; do not merge or mark ready as part of autonomous
 ownership.
 
-| PR                                                    | Stage            | What it establishes                                                       |
-| ----------------------------------------------------- | ---------------- | ------------------------------------------------------------------------- |
-| [#14440](https://github.com/stablyai/orca/pull/14440) | Contracts        | Optional host/tunnel contracts without advertisement                      |
-| [#14470](https://github.com/stablyai/orca/pull/14470) | Paired tunnel    | Dedicated paired browser tunnel                                           |
-| [#14484](https://github.com/stablyai/orca/pull/14484) | Host lease       | Exact lease authority and generations                                     |
-| [#14493](https://github.com/stablyai/orca/pull/14493) | Admission        | Bounded browser-host admission                                            |
-| [#14495](https://github.com/stablyai/orca/pull/14495) | Route budgets    | Bounded tunnel resources                                                  |
-| [#14504](https://github.com/stablyai/orca/pull/14504) | Memory           | Host/process tunnel memory accounting                                     |
-| [#14507](https://github.com/stablyai/orca/pull/14507) | Reconnect        | Fenced tunnel generation replacement                                      |
-| [#14513](https://github.com/stablyai/orca/pull/14513) | Execution host   | Exact native/SSH execution-host routes                                    |
-| [#14516](https://github.com/stablyai/orca/pull/14516) | Partitions       | Route/profile-scoped Electron sessions                                    |
-| [#14517](https://github.com/stablyai/orca/pull/14517) | Guest quarantine | Blank, popup-denied WebContents admission                                 |
-| [#14518](https://github.com/stablyai/orca/pull/14518) | Release barrier  | Route policy held through destruction                                     |
-| [#14519](https://github.com/stablyai/orca/pull/14519) | Crash fencing    | Guest/renderer process-loss retirement                                    |
-| [#14520](https://github.com/stablyai/orca/pull/14520) | Renderer owner   | Prepared pages fenced to one renderer                                     |
-| [#14529](https://github.com/stablyai/orca/pull/14529) | Placement        | Runtime-owned client page placement                                       |
-| [#14531](https://github.com/stablyai/orca/pull/14531) | Host selection   | Capability-qualified client placement                                     |
-| [#14536](https://github.com/stablyai/orca/pull/14536) | Replacement      | Exact retirement before placement replacement                             |
-| [#14539](https://github.com/stablyai/orca/pull/14539) | Retirement       | Two-phase page-retirement settlement                                      |
-| [#14544](https://github.com/stablyai/orca/pull/14544) | Page commands    | Optional, negotiated create/navigate contracts                            |
-| [#14550](https://github.com/stablyai/orca/pull/14550) | Dispatch         | Bounded FIFO/dedupe/replay command handling                               |
-| [#14553](https://github.com/stablyai/orca/pull/14553) | Results          | Exact authenticated result admission                                      |
-| [#14557](https://github.com/stablyai/orca/pull/14557) | Transport        | Same-socket command/result settlement                                     |
-| [#14558](https://github.com/stablyai/orca/pull/14558) | Lifecycle        | Lease plus command-dispatch composition                                   |
-| [#14566](https://github.com/stablyai/orca/pull/14566) | Electron main    | Route, partition, blank mount, exact guest claim, navigation, and cleanup |
+| PR                                                    | Stage             | What it establishes                                                       |
+| ----------------------------------------------------- | ----------------- | ------------------------------------------------------------------------- |
+| [#14440](https://github.com/stablyai/orca/pull/14440) | Contracts         | Optional host/tunnel contracts without advertisement                      |
+| [#14470](https://github.com/stablyai/orca/pull/14470) | Paired tunnel     | Dedicated paired browser tunnel                                           |
+| [#14484](https://github.com/stablyai/orca/pull/14484) | Host lease        | Exact lease authority and generations                                     |
+| [#14493](https://github.com/stablyai/orca/pull/14493) | Admission         | Bounded browser-host admission                                            |
+| [#14495](https://github.com/stablyai/orca/pull/14495) | Route budgets     | Bounded tunnel resources                                                  |
+| [#14504](https://github.com/stablyai/orca/pull/14504) | Memory            | Host/process tunnel memory accounting                                     |
+| [#14507](https://github.com/stablyai/orca/pull/14507) | Reconnect         | Fenced tunnel generation replacement                                      |
+| [#14513](https://github.com/stablyai/orca/pull/14513) | Execution host    | Exact native/SSH execution-host routes                                    |
+| [#14516](https://github.com/stablyai/orca/pull/14516) | Partitions        | Route/profile-scoped Electron sessions                                    |
+| [#14517](https://github.com/stablyai/orca/pull/14517) | Guest quarantine  | Blank, popup-denied WebContents admission                                 |
+| [#14518](https://github.com/stablyai/orca/pull/14518) | Release barrier   | Route policy held through destruction                                     |
+| [#14519](https://github.com/stablyai/orca/pull/14519) | Crash fencing     | Guest/renderer process-loss retirement                                    |
+| [#14520](https://github.com/stablyai/orca/pull/14520) | Renderer owner    | Prepared pages fenced to one renderer                                     |
+| [#14529](https://github.com/stablyai/orca/pull/14529) | Placement         | Runtime-owned client page placement                                       |
+| [#14531](https://github.com/stablyai/orca/pull/14531) | Host selection    | Capability-qualified client placement                                     |
+| [#14536](https://github.com/stablyai/orca/pull/14536) | Replacement       | Exact retirement before placement replacement                             |
+| [#14539](https://github.com/stablyai/orca/pull/14539) | Retirement        | Two-phase page-retirement settlement                                      |
+| [#14544](https://github.com/stablyai/orca/pull/14544) | Page commands     | Optional, negotiated create/navigate contracts                            |
+| [#14550](https://github.com/stablyai/orca/pull/14550) | Dispatch          | Bounded FIFO/dedupe/replay command handling                               |
+| [#14553](https://github.com/stablyai/orca/pull/14553) | Results           | Exact authenticated result admission                                      |
+| [#14557](https://github.com/stablyai/orca/pull/14557) | Transport         | Same-socket command/result settlement                                     |
+| [#14558](https://github.com/stablyai/orca/pull/14558) | Lifecycle         | Lease plus command-dispatch composition                                   |
+| [#14566](https://github.com/stablyai/orca/pull/14566) | Electron main     | Route, partition, blank mount, exact guest claim, navigation, and cleanup |
+| [#14578](https://github.com/stablyai/orca/pull/14578) | Renderer bridge   | Exact main-frame mount and retire IPC admission                           |
+| [#14596](https://github.com/stablyai/orca/pull/14596) | Renderer registry | Bounded document-owned blank guest retention and lifecycle                |
 
 ## Current stage: exact renderer bridge
 
@@ -149,6 +154,16 @@ Post-rebase rerun on 2026-08-14:
 - Rebuilt the paired web bundle; an isolated headless `orca serve` plus separate paired Electron
   web client passed its host-owned ACK-starvation and recovery journey.
 
+Final pre-publish rebase on 2026-08-14:
+
+- Fetched `origin/main@9bb8836bb6`, cascade-rebased all 25 stack branches without conflict, and
+  retained a local safety pointer at `sta-4150-stack-pre-origin-9bb-20260814`.
+- `git range-diff` marked all 26 patches identical before this ledger-only amend.
+- The current stage then passed 12 files / 199 tests, full node/CLI/web typecheck and lint, the
+  Electron build, paired-web projection, formatting, changed-code quality, and diff checks.
+- A fresh open-PR scan found only the 24 existing Jinwoo-owned STA-4150 draft layers and no newer
+  competing implementation.
+
 Before publishing this stage:
 
 - [x] Run the final full typecheck, native/type-aware audits, max-lines ratchet, formatting, and
@@ -159,7 +174,51 @@ Before publishing this stage:
 - [x] Push and open a draft PR stacked on #14566.
 - [ ] Monitor required CI and fix any actionable failure.
 - [x] Attach the PR and post one concise Linear checkpoint while keeping STA-4150 In Progress.
-- [ ] Update the Orca worktree comment with the published checkpoint.
+- [x] Update the Orca worktree comment with the published checkpoint.
+
+## Current local stage: retained renderer registry
+
+The parent failed because no preload request consumer or renderer-owned retained page surface
+existed. The current uncommitted candidate remains production-inert and adds:
+
+- A top-frame-only preload listener installed before the renderer subscriber, with a bounded
+  512-request queue, fixed timeout, immediate overflow failure, latest-subscriber fencing, and
+  outcomes bound to the exact admitted request identity and operation.
+- A non-React document-level retained host keyed by exact partition, page ID, and page generation.
+  It creates only `about:blank`, omits `allowpopups`, shares concurrent exact mounts, never
+  reparents a live webview, and bounds 256 total plus 64 per partition.
+- Exact attachment, delayed `getWebContentsId`, DOM-ready fallback, retirement, guest destruction,
+  renderer-process loss, and denied-attachment settlement with a renderer memory profile.
+- A paired-web guard, so browser clients without Electron remain unchanged.
+
+Current evidence:
+
+- Baseline: both new modules were absent and the two initial suites failed to import.
+- Deterministic plus real Electron gate: 12 files / 199 tests pass locally.
+- The first Electron candidate failed because `getWebContentsId()` was transiently unavailable at
+  `did-attach`; DOM-ready retry fixed it. The second failed because a denied pre-attach
+  `destroyed` event released state without rejecting the mount; exact destruction settlement fixed
+  it.
+- A later deterministic sequence proved early `did-attach` cancelled the deadline before a guest
+  ID existed and retirement released that observed guest without destruction; the registry now
+  keeps the deadline through valid identity and holds observed attachment until `destroyed`.
+- Fresh review caught cached guest-ID re-advertisement after the guest became unreadable; an exact
+  live-ID comparison now fences that incarnation until destruction instead.
+- A throwing renderer reply transport previously produced an unhandled rejection after local
+  settlement; reply construction and send failure are now contained while main retains its timeout.
+- Electron 43.1.0 now proves a positive guest ID matching `did-attach-webview`, actual main-frame
+  reply admission, a connected offscreen retained host, exact destruction on retirement, and
+  immediate fail-closed cleanup for an unprepared partition.
+- Full node/CLI/web typecheck, lint and native/type-aware audits, the 85-gate reliability manifest,
+  changed-code quality, max-lines, formatting, diff checks, and rebuilt desktop/web artifacts pass.
+- The broad browser/window/preload/renderer suite passed 137 files / 1,533 tests with one
+  intentional skip before the final focused lifecycle hardening; the exact changed path then
+  passed the 12-file / 199-test gate.
+- Three fresh read-only reviews found no security blocker. Their lifecycle/resource findings
+  reproduced and fixed premature deadline cancellation, observed-guest release, stale cached-ID
+  advertisement, and unhandled reply-transport rejection. Remaining notes are fail-closed
+  activation caveats: missing-destruction capacity retention, conservative transient-ID fencing,
+  and live Electron/cross-platform soak.
 
 ## Acceptance matrix
 
@@ -168,7 +227,7 @@ Before publishing this stage:
 | Negotiated client-host and tunnel contracts                        | Partial                   | Schemas/RPC methods exist; runtime capabilities are intentionally not advertised                                  |
 | Runtime placement, leases, authority epochs, host/page generations | Partial                   | Deterministic registries exist; normal browser creation does not call them                                        |
 | Main browser-host registry                                         | Partial                   | Route Session, guest, command executor, and exact renderer bridge exist; no production lease/executor composition |
-| Renderer-owned retained webview registry and surface               | Missing                   | Existing local registry is not authority/page scoped and no client-host IPC consumer exists                       |
+| Renderer-owned retained webview registry and surface               | Partial                   | Local exact-tuple preload/registry stage passes deterministic and Electron proof; no BrowserPane adoption exists  |
 | Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                     |
 | SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                         |
 | Agent/CLI routing by placement                                     | Missing                   | Only create/navigate command foundations exist; public browser methods still use current server behavior          |
@@ -186,9 +245,8 @@ Before publishing this stage:
 
 ## Remaining implementation order
 
-1. Finish and publish the exact renderer bridge stage.
-2. Add the renderer authority/page-keyed registry and preload consumer. Mount blank in a stable
-   retained viewport; never use webview reparenting as display behavior.
+1. Finish bridge PR #14578 CI and fix any actionable failure.
+2. Finish validation/review and publish the local renderer registry stage as a draft stack layer.
 3. Compose one environment-scoped `PairedRuntimeBrowserClientHost` with the command executor,
    exact route resolver, current renderer bridge, shutdown, and page retirement.
 4. Add inventory/reclaim/restore/close reconciliation before recovering ambiguous slots or routes.
@@ -238,6 +296,18 @@ Latest reviewed stage (#14566):
   consumer or production caller, so there is no client-hosted page or network-containment UI
   claim to render yet; rendered proof remains mandatory once that surface exists.
 
+Current local renderer-registry stage:
+
+- Focused reliability: 12 files / 199 tests, including one isolated real-Electron lifecycle.
+- Broad regression: 137 files / 1,533 tests passed with one intentional skip before the final
+  focused lifecycle hardening.
+- Full node/CLI/web typecheck, lint/audits, the 85-gate reliability manifest, changed-code quality,
+  max-lines, formatting, diff checks, Electron build, and paired-web projection pass.
+- Electron 43.1.0 proves exact main-frame IPC settlement, blank retained guest attachment, delayed
+  guest-ID readiness, denial cleanup, and destruction without reparenting.
+- No capability, remote field, placement publication, production executor caller, BrowserPane
+  adoption, navigation target, server/offscreen behavior, or paired-web behavior is activated.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -251,6 +321,12 @@ topology, versions, and explicit gaps at every later checkpoint.
   checkpoints.
 - Pushed the renderer-bridge branch, opened draft PR #14578 on #14566, attached it to STA-4150,
   and posted one concise checkpoint. The ticket remains In Progress.
+- Rebased and pushed all 24 published branches onto `origin/main@e2d309e9cd`; the patch series was
+  identical by `git range-diff`, and the rewritten #14578 CI run is in progress.
+- Rebased all 25 branches onto `origin/main@9bb8836bb6`, confirmed all 26 patches identical before
+  the ledger-only amend, and pushed them with lease checks.
+- Opened draft PR #14596 on #14578 for the renderer registry; its CI run is in progress. No PR was
+  merged or marked ready.
 
 ## Completion rule
 
