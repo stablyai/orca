@@ -18,8 +18,8 @@ description: >-
 
 Use `op` when a task needs a credential and the user keeps secrets in 1Password. Secrets
 stay in the vault; commands receive them just-in-time. On the user's desktop, `op`
-authorizes through the 1Password app (a biometric prompt the user answers) — never ask the
-user to paste a secret into the terminal instead.
+authorizes through the 1Password app (a system-authentication prompt the user answers) —
+never ask the user to paste a secret into the terminal instead.
 
 Check availability with `op --version`. If `op` is missing, point the user at
 https://developer.1password.com/docs/cli/get-started/ and stop; do not install it yourself
@@ -41,7 +41,9 @@ authoritative for flags — do not guess flags from memory.
   understands the output will contain plaintext secrets.
 - **Secret references are safe to commit** (`op://vault/item/field` is a pointer, not a
   secret). Files produced by `op inject`, `op read`, or `op document get` are secrets —
-  before writing one, confirm the destination with the user, make sure it is gitignored,
+  before writing one, confirm the destination with the user, make sure it is untracked
+  (`.gitignore` does not cover a path Git already tracks — check with `git ls-files
+  --error-unmatch <path>` and refuse a tracked destination, or write outside the worktree),
   restrict permissions (`chmod 600`), and treat it as disposable: delete it when the task
   that needed it is done.
 - **Never put a secret value in command-line arguments.** Argv is visible to other
@@ -65,8 +67,9 @@ Chained commands must stay inside `op run`: `op run -- sh -c 'cmd1 && cmd2'`.
 op inject -i .env.tpl -o .env
 ```
 
-Commit the template (references only); ensure the output file is gitignored before
-writing it.
+Commit the template (references only); before writing, confirm the output path is
+untracked (`git ls-files --error-unmatch .env` must fail) and gitignored — gitignoring an
+already-tracked file does not untrack it.
 
 ## Discover the right reference
 
@@ -107,13 +110,14 @@ provider-rotate-command >"$key_file"
 test -s "$key_file"   # fail closed: never submit an empty password
 op item get "Service X" --vault Dev --format json \
   | jq --rawfile secret "$key_file" '
-      if (($secret | rtrimstr("\n") | length) == 0) then
-        error("provider returned an empty password")
-      elif ([.fields[] | select(.id == "password")] | length) != 1 then
-        error("expected exactly one password field")
-      else
-        (.fields[] | select(.id == "password") | .value) = ($secret | rtrimstr("\n"))
-      end' \
+      ($secret | sub("[\r\n]+$"; "")) as $clean
+      | if ($clean | length) == 0 then
+          error("provider returned an empty password")
+        elif ([.fields[] | select(.id == "password")] | length) != 1 then
+          error("expected exactly one password field")
+        else
+          (.fields[] | select(.id == "password") | .value) = $clean
+        end' \
   | op item edit "Service X" --vault Dev
 ```
 
