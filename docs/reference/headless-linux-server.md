@@ -196,10 +196,10 @@ other remote; open projects and terminals against it as usual.
 
 ### Mobile and web clients
 
-- **Mobile**: open Orca Mobile → add / pair host → scan or paste the same
-  pairing URL the server printed. Pairing is relay- or LAN-backed depending on
-  the offer; keep the server reachable at the advertised endpoint while pairing
-  completes.
+- **Mobile**: start `orca serve` with `--mobile-pairing`, then open Orca
+  Mobile → add / pair host → scan or paste the mobile-scoped pairing URL.
+  Pairing is relay- or LAN-backed depending on the offer; keep the server
+  reachable at the advertised endpoint while pairing completes.
 - **Web client**: the ready JSON includes `pairing.webClientUrl` when the
   server can mint one. Open that URL in a browser on a machine that can reach
   the advertised endpoint. It is also a credential for the duration of the
@@ -246,7 +246,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20 --json
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
@@ -336,7 +336,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20 --json
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
