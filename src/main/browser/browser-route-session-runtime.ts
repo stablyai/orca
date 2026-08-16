@@ -40,7 +40,8 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
 export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegistry({
   getPartitionForSession: (routeSession) =>
     browserRouteSessionRegistry.getPartitionForSession(routeSession),
-  getPreparedPageAuthority: (page) => browserRouteSessionRegistry.getPreparedPageAuthority(page)
+  getPreparedPageAuthority: (page) => browserRouteSessionRegistry.getPreparedPageAuthority(page),
+  retirePreparedPage: (page) => browserRouteSessionRegistry.retirePreparedPage(page)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 

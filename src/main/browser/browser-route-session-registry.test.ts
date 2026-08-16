@@ -240,6 +240,35 @@ describe('BrowserRouteSessionRegistry', () => {
     await expect(prepare(registry)).rejects.toThrow('browser_route_partition_page_retiring')
   })
 
+  it('lets an exact lifecycle event begin the same fenced page retirement', async () => {
+    const { registry, retirements } = createHarness({ retirementSettled: false })
+    const handle = await prepare(registry)
+    const pageAuthority = registry.getPreparedPageAuthority({
+      partition: handle.partition,
+      browserPageId: 'page-a',
+      pageHostGeneration: 1
+    })
+
+    expect(
+      registry.retirePreparedPage({
+        partition: handle.partition,
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        pageAuthority: pageAuthority ?? Symbol('missing')
+      })
+    ).toBe(true)
+    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
+    expect(retirements).toHaveLength(1)
+    expect(
+      registry.retirePreparedPage({
+        partition: handle.partition,
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        pageAuthority: pageAuthority ?? Symbol('missing')
+      })
+    ).toBe(false)
+  })
+
   it('never allowlists a partition whose proxy resolves direct or elsewhere', async () => {
     const { dependencies, registry } = createHarness({ resolvedProxy: 'DIRECT' })
 

@@ -15,7 +15,8 @@ function createHarness(options: { maxGuests?: number } = {}) {
   const routeSession = { marker: 'route-session' } as unknown as Session
   let prepared = true
   let pageAuthority = Symbol('page-authority')
-  const registry = new BrowserRouteWebContentsRegistry({
+  let registry: BrowserRouteWebContentsRegistry
+  registry = new BrowserRouteWebContentsRegistry({
     getPartitionForSession: (session) => (session === routeSession ? partition : null),
     getPreparedPageAuthority: (input) =>
       prepared &&
@@ -24,6 +25,14 @@ function createHarness(options: { maxGuests?: number } = {}) {
       input.pageHostGeneration === page.pageHostGeneration
         ? pageAuthority
         : null,
+    retirePreparedPage: (input) => {
+      if (input.pageAuthority !== pageAuthority) {
+        return false
+      }
+      prepared = false
+      registry.retirePageAuthority({ ...input, onRetired: vi.fn() })
+      return true
+    },
     maxGuests: options.maxGuests
   })
   return {
@@ -34,6 +43,7 @@ function createHarness(options: { maxGuests?: number } = {}) {
       prepared = value
     },
     replaceAuthority: () => {
+      prepared = true
       pageAuthority = Symbol('replacement-page-authority')
     }
   }
@@ -197,7 +207,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
   })
 
   it('rejects page conflicts and stale destroyed callbacks cannot retire a replacement', () => {
-    const { registry, routeSession } = createHarness()
+    const { registry, replaceAuthority, routeSession } = createHarness()
     const first = createGuest({ session: routeSession })
     registry.attachGuest(first.guest)
     expect(registry.registerGuest(page)).toBe(true)
@@ -207,6 +217,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
     expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(false)
 
     first.destroy()
+    replaceAuthority()
     expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(true)
     first.emit('destroyed')
     expect(registry.grantNavigation({ ...page, webContentsId: 42 })).toBe(true)
@@ -358,6 +369,41 @@ describe('BrowserRouteWebContentsRegistry', () => {
 
     guest.destroy()
     expect(retired).toHaveBeenCalledOnce()
+  })
+
+  it('retires the exact page authority when its guest process exits', () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+
+    guest.emit('render-process-gone', {}, { reason: 'crashed' })
+
+    expect(guest.guest.close).toHaveBeenCalledOnce()
+    expect(registry.grantNavigation(page)).toBe(false)
+    const navigation = navigationEvent()
+    guest.emit('will-navigate', navigation, 'https://example.com/')
+    expect(navigation.preventDefault).toHaveBeenCalledOnce()
+  })
+
+  it('retires every page owned by a crashed host renderer', () => {
+    const { registry, routeSession } = createHarness()
+    const first = createGuest({ session: routeSession })
+    const unregisteredSibling = createGuest({ id: 42, session: routeSession })
+    const unrelated = createGuest({ id: 43, rendererWebContentsId: 12, session: routeSession })
+    registry.attachGuest(first.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+    registry.attachGuest(unregisteredSibling.guest)
+    registry.attachGuest(unrelated.guest)
+
+    registry.retireRenderer(page.rendererWebContentsId)
+
+    expect(first.guest.close).toHaveBeenCalledOnce()
+    expect(unregisteredSibling.guest.close).toHaveBeenCalledOnce()
+    expect(unrelated.guest.close).not.toHaveBeenCalled()
+    expect(registry.grantNavigation(page)).toBe(false)
   })
 
   it('fails closed when Electron guest inspection races destruction', () => {

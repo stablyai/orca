@@ -13,9 +13,13 @@ export type BrowserRoutePageGuestIdentity = BrowserRoutePageIdentity &
     rendererWebContentsId: number
   }>
 
-export type BrowserRoutePageAuthorityRetirement = BrowserRoutePageIdentity &
+export type BrowserRoutePageAuthority = BrowserRoutePageIdentity &
   Readonly<{
     pageAuthority: symbol
+  }>
+
+export type BrowserRoutePageAuthorityRetirement = BrowserRoutePageAuthority &
+  Readonly<{
     onRetired: () => void
   }>
 
@@ -34,4 +38,11 @@ export function isValidBrowserRoutePageIdentity(value: BrowserRoutePageIdentity)
 
 export function browserRoutePageKey(page: BrowserRoutePageIdentity): string {
   return JSON.stringify([page.partition, page.browserPageId, page.pageHostGeneration])
+}
+
+export function browserRouteLogicalPageKey(
+  browserPageId: string,
+  pageHostGeneration: number
+): string {
+  return JSON.stringify([browserPageId, pageHostGeneration])
 }

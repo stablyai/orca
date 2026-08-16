@@ -3,12 +3,15 @@ import {
   type BrowserRoutePartitionIdentity,
   type DerivedBrowserRoutePartition
 } from './browser-route-identity'
-import type { BrowserRoutePageAuthorityRetirement } from './browser-route-page-authority'
+import {
+  browserRouteLogicalPageKey as pageKey,
+  isValidBrowserRoutePageIdentity,
+  type BrowserRoutePageAuthority,
+  type BrowserRoutePageAuthorityRetirement
+} from './browser-route-page-authority'
 
 const DEFAULT_MAX_LIVE_PARTITIONS = 64
 const DEFAULT_MAX_PAGES_PER_PARTITION = 64
-const MAX_PAGE_ID_LENGTH = 256
-const MAX_PAGE_HOST_GENERATION = 0xffff_ffff
 const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
 
 export type BrowserRouteElectronSession = {
@@ -95,10 +98,23 @@ export class BrowserRouteSessionRegistry {
     pageHostGeneration: number
   }): symbol | null {
     const state = this.live.get(input.partition)
-    if (!state || !isValidPageIdentity(input.browserPageId, input.pageHostGeneration)) {
+    if (!state || !isValidBrowserRoutePageIdentity(input)) {
       return null
     }
     return state.pageTokens.get(pageKey(input.browserPageId, input.pageHostGeneration)) ?? null
+  }
+
+  retirePreparedPage(input: BrowserRoutePageAuthority): boolean {
+    if (!isValidBrowserRoutePageIdentity(input) || typeof input.pageAuthority !== 'symbol') {
+      return false
+    }
+    const state = this.live.get(input.partition)
+    const key = pageKey(input.browserPageId, input.pageHostGeneration)
+    if (!state || state.pageTokens.get(key) !== input.pageAuthority) {
+      return false
+    }
+    this.beginPageRetirement(state, key, input)
+    return true
   }
 
   async preparePage(input: {
@@ -230,30 +246,36 @@ export class BrowserRouteSessionRegistry {
     state.pageTokens.set(key, token)
     return {
       partition: state.partition,
-      release: () => {
-        if (state.pageTokens.get(key) !== token) {
-          return
-        }
-        state.pageTokens.delete(key)
-        state.pageRetirements.set(key, token)
-        let retired = false
-        try {
-          retired = this.dependencies.retirePageAuthority({
-            partition: state.partition,
-            browserPageId,
-            pageHostGeneration,
-            pageAuthority: token,
-            onRetired: () => this.completePageRetirement(state, key, token)
-          })
-        } catch {
-          // Keep route policy installed until exact guest destruction can be confirmed.
-        }
-        if (retired && state.pageRetirements.get(key) === token) {
-          state.pageRetirements.delete(key)
-        }
-        this.finalizePartitionIfIdle(state)
-      }
+      release: () =>
+        void this.retirePreparedPage({
+          partition: state.partition,
+          browserPageId,
+          pageHostGeneration,
+          pageAuthority: token
+        })
     }
+  }
+
+  private beginPageRetirement(
+    state: PreparedPartition,
+    key: string,
+    page: BrowserRoutePageAuthority
+  ): void {
+    state.pageTokens.delete(key)
+    state.pageRetirements.set(key, page.pageAuthority)
+    let retired = false
+    try {
+      retired = this.dependencies.retirePageAuthority({
+        ...page,
+        onRetired: () => this.completePageRetirement(state, key, page.pageAuthority)
+      })
+    } catch {
+      // Keep route policy installed until exact guest destruction can be confirmed.
+    }
+    if (retired && state.pageRetirements.get(key) === page.pageAuthority) {
+      state.pageRetirements.delete(key)
+    }
+    this.finalizePartitionIfIdle(state)
   }
 
   private completePageRetirement(state: PreparedPartition, key: string, token: symbol): void {
@@ -295,22 +317,13 @@ function sameProxyEndpoint(left: ProxyEndpoint, right: ProxyEndpoint): boolean {
 }
 
 function assertPageIdentity(browserPageId: string, pageHostGeneration: number): void {
-  if (!isValidPageIdentity(browserPageId, pageHostGeneration)) {
+  if (
+    !isValidBrowserRoutePageIdentity({
+      partition: 'route',
+      browserPageId,
+      pageHostGeneration
+    })
+  ) {
     throw new Error('browser_route_partition_page_invalid')
   }
-}
-
-function isValidPageIdentity(browserPageId: string, pageHostGeneration: number): boolean {
-  return (
-    typeof browserPageId === 'string' &&
-    browserPageId.length > 0 &&
-    browserPageId.length <= MAX_PAGE_ID_LENGTH &&
-    Number.isInteger(pageHostGeneration) &&
-    pageHostGeneration >= 1 &&
-    pageHostGeneration <= MAX_PAGE_HOST_GENERATION
-  )
-}
-
-function pageKey(browserPageId: string, pageHostGeneration: number): string {
-  return JSON.stringify([browserPageId, pageHostGeneration])
 }

@@ -654,6 +654,7 @@ export function createMainWindow(
   }
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
+    browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()

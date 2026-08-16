@@ -13,11 +13,25 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../browser/browser-route-session-runtime', async () => {
+  const harness = await import('./createMainWindow-test-harness')
+  return {
+    browserRouteSessionRegistry: { isAllowedPartition: harness.routePartitionAllowedMock },
+    browserRouteWebContentsRegistry: {
+      attachGuest: harness.attachRouteGuestMock,
+      retireRenderer: harness.retireRouteRendererMock
+    }
+  }
+})
 
 import { createMainWindow, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
-import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import {
+  browserWindowMock,
+  resetMainWindowMocks,
+  retireRouteRendererMock
+} from './createMainWindow-test-harness'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
@@ -29,6 +43,7 @@ describe('createMainWindow', () => {
   it('clears the quit latch when the renderer prevents unload', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 71,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -115,6 +130,7 @@ describe('createMainWindow', () => {
         exitCode: 5
       } as never
     )
+    expect(retireRouteRendererMock).toHaveBeenCalledWith(71)
     const preventDefault = vi.fn()
     windowHandlers.close({ preventDefault } as never)
 
