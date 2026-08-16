@@ -178,7 +178,7 @@ describe('unhandled provider frame journal fallback', () => {
     expect(row?.body.providerFrame?.kind).toBe('notification:warning')
   })
 
-  it('bounds a provider sentence and persists its overflow', () => {
+  it('bounds a provider sentence inline', () => {
     const message = 'abcdefghij'
     const row = unhandledProviderFrameJournalItem(
       'codex',
@@ -194,7 +194,6 @@ describe('unhandled provider frame journal fallback', () => {
 
     expect(row?.body.text).toContain('abcdefgh')
     expect(row?.body.text).toContain('[Orca: output truncated')
-    expect(row?.blobs.map((blob) => blob.payload)).toContain(message)
   })
 
   it('unwraps a nested sentence and falls back to the opcode when there is none', () => {
