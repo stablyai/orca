@@ -296,21 +296,50 @@ describe('orca root help', () => {
     await main(['--help'], '/tmp/repo')
     const rootHelp = String(logSpy.mock.calls[0][0])
 
-    // Why: whole groups were served but invisible in `orca --help` (#13201).
-    expect(rootHelp).toContain('Agent Hooks:')
-    expect(rootHelp).toContain('agent hooks status')
-    expect(rootHelp).toContain('Artifacts:')
-    expect(rootHelp).toContain('artifacts list')
-    expect(rootHelp).toContain('artifacts share')
-    expect(rootHelp).toContain('claude-teams')
-    expect(rootHelp).toContain('cookie get')
-    expect(rootHelp).toContain('geolocation')
-    expect(rootHelp).toContain('viewport')
-    expect(rootHelp).toContain('intercept enable')
-    expect(rootHelp).toContain('capture start')
-    expect(rootHelp).toContain('full-screenshot')
-    expect(rootHelp).toContain('emulator devices')
-    expect(rootHelp).toContain('emulator logcat')
+    // Why: each served entry was independently invisible in `orca --help` (#13201).
+    const expectedEntryPrefixes = [
+      '  claude-teams ',
+      'Agent Hooks:',
+      '  agent hooks status ',
+      '  agent hooks on ',
+      '  agent hooks off ',
+      'Artifacts:',
+      '  artifacts list ',
+      '  artifacts share ',
+      '  artifacts update ',
+      '  artifacts unshare ',
+      '  artifacts delete ',
+      'Mobile Emulator (iOS Simulator / Android):',
+      '  emulator devices ',
+      '  emulator shutdown ',
+      '  emulator install ',
+      '  emulator launch ',
+      '  emulator permissions ',
+      '  emulator ax ',
+      '  emulator logcat ',
+      '  select-all ',
+      '  full-screenshot ',
+      '  pdf ',
+      '  cookie get ',
+      '  cookie set ',
+      '  cookie delete ',
+      '  geolocation ',
+      '  viewport ',
+      '  intercept enable ',
+      '  intercept disable ',
+      '  intercept list ',
+      '  capture start ',
+      '  capture stop ',
+      '  console ',
+      '  network '
+    ]
+    const rootHelpLines = rootHelp.split('\n')
+    for (const prefix of expectedEntryPrefixes) {
+      expect(
+        rootHelpLines.some((line) => line.startsWith(prefix)),
+        `missing root-help entry: ${prefix.trim()}`
+      ).toBe(true)
+    }
     logSpy.mockRestore()
   })
 
