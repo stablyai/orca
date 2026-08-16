@@ -4,15 +4,15 @@ import {
   scheduleNextFrame,
   type TerminalImeInputContextRefocusScheduler
 } from './terminal-ime-input-context-refresh'
+import { isHTMLElement, isNode } from '../../lib/cross-realm-dom-predicates'
 
 export type TerminalInputFocusSync = (focused: boolean) => void
 export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+  return isHTMLElement(target) && target.classList.contains('xterm-helper-textarea')
 }
-
 export function setRegularTerminalInputFocusAttribute(focused: boolean): void {
   if (typeof document === 'undefined') {
     return
@@ -158,8 +158,4 @@ function syncFocusAfterFailedReclaim(
   if (!isXtermHelperTextarea(activeElement)) {
     syncFocused(false)
   }
-}
-
-function isNode(value: EventTarget | null): value is Node {
-  return typeof Node !== 'undefined' && value instanceof Node
 }

@@ -1,3 +1,4 @@
+import type { AuxWindowBounds } from './aux-window'
 import type { ExecutionHostId } from './execution-host'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
@@ -72,6 +73,13 @@ export type WorkspaceSessionState = {
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
+  /** Tab groups that were detached into their own OS window at shutdown, so
+   *  the windows reopen on restart. Absent in sessions written by older
+   *  builds — hydration treats that as "nothing detached". */
+  detachedGroupIds?: string[]
+  /** Last known screen bounds of each detached group's window, so a restored
+   *  window reappears where the user left it. */
+  auxWindowBoundsByGroupId?: Record<string, AuxWindowBounds>
   /** SSH target IDs that were connected at shutdown. Used on startup to
    *  auto-reconnect before attempting remote PTY reattach. */
   activeConnectionIdsAtShutdown?: string[]

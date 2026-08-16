@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { isNode } from '../../lib/cross-realm-dom-predicates'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -99,7 +100,7 @@ export function useTerminalContextMenuTrigger({
       return
     }
     const target = event.target
-    if (!(target instanceof Node)) {
+    if (!isNode(target)) {
       event.preventDefault()
       contextPaneIdRef.current = null
       return

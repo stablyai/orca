@@ -71,8 +71,9 @@ export function guardRunningTerminalClose(params: {
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
+  dialogContainer?: HTMLElement | null
 }): void {
-  const { terminalTabId, tabLabel, onClose, onCancel } = params
+  const { terminalTabId, tabLabel, onClose, onCancel, dialogContainer } = params
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId)
@@ -104,7 +105,8 @@ export function guardRunningTerminalClose(params: {
       tabLabel,
       copyKind,
       onConfirm: onClose,
-      ...(onCancel ? { onCancel } : {})
+      ...(onCancel ? { onCancel } : {}),
+      ...(dialogContainer ? { dialogContainer } : {})
     })
     // Why: only once the prompt is actually up — if either call above throws, the close must
     // still be free to fall through and happen.

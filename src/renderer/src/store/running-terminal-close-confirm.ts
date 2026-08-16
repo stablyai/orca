@@ -9,6 +9,7 @@ export type RunningTerminalCloseConfirmRequest = {
   copyKind: CloseTerminalDialogCopyKind
   onConfirm: () => void
   onCancel?: () => void
+  dialogContainer?: HTMLElement | null
 }
 
 export type RunningTerminalCloseConfirmState = {

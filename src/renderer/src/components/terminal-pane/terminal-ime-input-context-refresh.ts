@@ -1,3 +1,4 @@
+import { isHTMLElement } from '../../lib/cross-realm-dom-predicates'
 export type TerminalImeInputContextRefocusScheduler = (callback: () => void) => void
 
 export type TerminalImeInputContextRefreshOptions = {
@@ -12,7 +13,7 @@ export type TerminalImeInputContextRefreshOptions = {
 const refreshingHelpers = new WeakSet<HTMLElement>()
 
 export function isTerminalImeInputContextRefreshing(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && refreshingHelpers.has(target)
+  return isHTMLElement(target) && refreshingHelpers.has(target)
 }
 
 function isMacUserAgent(): boolean {

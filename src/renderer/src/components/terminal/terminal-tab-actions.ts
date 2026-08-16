@@ -55,6 +55,8 @@ export function closeTerminalTab(
     precomputedCloseState?: PrecomputedTerminalCloseState
     onClosed?: () => void
     onCancel?: () => void
+    dialogContainer?: HTMLElement | null
+    preserveOpenerSelection?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -109,7 +111,8 @@ export function closeTerminalTab(
         isPinned: true,
         tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
         onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
-        ...(options?.onCancel ? { onCancel: options.onCancel } : {})
+        ...(options?.onCancel ? { onCancel: options.onCancel } : {}),
+        ...(options?.dialogContainer ? { dialogContainer: options.dialogContainer } : {})
       })
       return
     }
@@ -125,7 +128,8 @@ export function closeTerminalTab(
       // Why: re-enter instead of continuing inline so pinned/route/precomputed state is
       // re-validated against fresh state after an arbitrarily long dialog.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
-      ...(options?.onCancel ? { onCancel: options.onCancel } : {})
+      ...(options?.onCancel ? { onCancel: options.onCancel } : {}),
+      ...(options?.dialogContainer ? { dialogContainer: options.dialogContainer } : {})
     })
     return
   }
@@ -211,7 +215,7 @@ export function closeTerminalTab(
         ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
         : {})
     })
-    if (state.activeWorktreeId === owningWorktreeId) {
+    if (state.activeWorktreeId === owningWorktreeId && !options?.preserveOpenerSelection) {
       // Why: only deactivate the worktree when no tabs of any kind remain.
       // Editor files are a separate tab type; closing the last terminal tab
       // should switch to the editor view instead of tearing down the workspace.
@@ -233,7 +237,11 @@ export function closeTerminalTab(
     return
   }
 
-  if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
+  if (
+    state.activeWorktreeId === owningWorktreeId &&
+    terminalTabId === state.activeTabId &&
+    !options?.preserveOpenerSelection
+  ) {
     const currentIndex = currentTerminalTabIds?.indexOf(terminalTabId) ?? -1
     const nextTabId = precomputedCloseState
       ? precomputedCloseState.nextTerminalTabId

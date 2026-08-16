@@ -152,9 +152,16 @@ function orderByMru(
 export function buildRecentTabSwitcherModel(
   state: RecentTabSwitchingState,
   worktreeId: string,
-  mode: CtrlTabOrderMode
+  mode: CtrlTabOrderMode,
+  groupId?: string
 ): RecentTabSwitcherModel | null {
-  const visibleEntries = getActiveTabNavOrder(state, worktreeId)
+  const navigationState = groupId
+    ? {
+        ...state,
+        activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [worktreeId]: groupId }
+      }
+    : state
+  const visibleEntries = getActiveTabNavOrder(navigationState, worktreeId)
   if (visibleEntries.length <= 1) {
     return null
   }
@@ -174,8 +181,8 @@ export function buildRecentTabSwitcherModel(
       return [item.key, item] as const
     })
   )
-  const activeKey = getActiveVisibleTabKey(state, worktreeId, visibleEntries)
-  const group = findActiveGroup(state, worktreeId)
+  const activeKey = getActiveVisibleTabKey(navigationState, worktreeId, visibleEntries)
+  const group = findActiveGroup(navigationState, worktreeId)
   const orderedItems =
     mode === 'mru'
       ? orderByMru(visibleEntries, itemByKey, group, activeKey)

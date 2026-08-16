@@ -39,6 +39,7 @@ import {
   EMPTY_TAB_RESULTS
 } from './tab-create-entry-empty-options'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
+import { activeElementFor } from '@/lib/cross-realm-dom-predicates'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
   return <TabBarCreateEntrySession key={String(props.menuOpen)} {...props} />
@@ -126,7 +127,7 @@ function TabBarCreateEntrySession({
       const firstItem = menu.querySelector(
         '[role="menuitem"]:not([data-disabled]):not([aria-disabled="true"])'
       )
-      if (firstItem && document.activeElement === firstItem) {
+      if (firstItem && activeElementFor(firstItem) === firstItem) {
         event.preventDefault()
         event.stopPropagation()
         input.focus()

@@ -6,6 +6,7 @@ import type {
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { splitManagedPane } from './pane-split-close'
+import { isHTMLElement } from '../cross-realm-dom-predicates'
 
 export type SplitPaneAroundLeafIdsOptions = {
   ratio?: number
@@ -136,7 +137,7 @@ function placeCreatedPaneBeforeSource(
   }
   const divider = Array.from(split.children).find(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.classList.contains('pane-divider')
+      isHTMLElement(child) && child.classList.contains('pane-divider')
   )
   if (!divider) {
     return false

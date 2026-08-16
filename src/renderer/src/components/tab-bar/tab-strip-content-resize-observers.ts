@@ -1,3 +1,4 @@
+import { isHTMLElement } from '../../lib/cross-realm-dom-predicates'
 export function bindTabStripContentResizeObservers(
   strip: HTMLElement,
   onResize: () => void
@@ -8,7 +9,7 @@ export function bindTabStripContentResizeObservers(
     resizeObserver.disconnect()
     resizeObserver.observe(strip)
     for (const child of strip.children) {
-      if (child instanceof HTMLElement) {
+      if (isHTMLElement(child)) {
         resizeObserver.observe(child)
       }
     }

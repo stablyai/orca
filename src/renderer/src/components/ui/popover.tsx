@@ -5,6 +5,7 @@ import { Popover as PopoverPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 import { updatePopoverContentRef } from './popover-content-ref'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -30,6 +31,7 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const auxContainer = useAuxWindowContainer()
   const wheelFrameIdsRef = React.useRef<Set<number>>(new Set())
 
   const cancelWheelFrames = React.useCallback(() => {
@@ -88,7 +90,7 @@ function PopoverContent({
   )
 
   return (
-    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
+    <PopoverPrimitive.Portal container={portalContainer ?? auxContainer ?? undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

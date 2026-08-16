@@ -32,6 +32,8 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
+    detachedGroupIds: [],
+    auxWindowBoundsByGroupId: {},
     ...overrides
   }
 }

@@ -206,7 +206,7 @@ import {
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
 function isInsideNativeChatRoot(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
+  return isElement(target) && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
 }
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
@@ -248,6 +248,12 @@ import {
 } from './regular-terminal-focus-ownership'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import {
+  activeElementFor,
+  isElement,
+  isHTMLElement,
+  isNode
+} from '../../lib/cross-realm-dom-predicates'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1515,7 +1521,7 @@ function TerminalPane(
     if (!applied) {
       restoreExpandedLayoutFrom(snapshots)
       const root = containerRef.current?.firstElementChild
-      if (root instanceof HTMLElement) {
+      if (isHTMLElement(root)) {
         // Why: Activity requested an exact pane; if it can't be resolved, fail closed rather than show the whole split terminal.
         snapshots.set(root, { display: root.style.display, flex: root.style.flex })
         root.style.display = 'none'
@@ -1823,7 +1829,7 @@ function TerminalPane(
     const onPointerDown = (event: PointerEvent): void => {
       releaseTerminalFocusForOutsidePointerDown({
         container,
-        activeElement: document.activeElement,
+        activeElement: activeElementFor(container),
         pointerTarget: event.target,
         syncFocused
       })
@@ -1832,7 +1838,7 @@ function TerminalPane(
       // Why: webview/browser handoff keeps the helper textarea focused, so clear only the main-process mirror and let guest focus proceed.
       releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
-        activeElement: document.activeElement,
+        activeElement: activeElementFor(container),
         syncFocused
       })
     }
@@ -1841,7 +1847,7 @@ function TerminalPane(
       if (
         resyncTerminalFocusForWindowFocus({
           container,
-          activeElement: document.activeElement,
+          activeElement: activeElementFor(container),
           syncFocused,
           releasedHelper: releasedHelperOnWindowBlur
         })
@@ -1850,10 +1856,8 @@ function TerminalPane(
       }
     }
 
-    if (
-      isXtermHelperTextarea(document.activeElement) &&
-      container.contains(document.activeElement)
-    ) {
+    const activeInPaneDocument = activeElementFor(container)
+    if (isXtermHelperTextarea(activeInPaneDocument) && container.contains(activeInPaneDocument)) {
       syncFocused(true)
     }
     container.addEventListener('focusin', onFocusIn)
@@ -2002,7 +2006,7 @@ function TerminalPane(
         useAppStore.getState(),
         worktreeId
       )
-      const activeElementAtDispatch = document.activeElement
+      const activeElementAtDispatch = activeElementFor(container)
       void pasteTerminalClipboard({
         readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -2032,7 +2036,7 @@ function TerminalPane(
     const onKeyPaste = (e: KeyboardEvent): void => {
       const target = e.target
       if (
-        (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+        (isElement(target) && target.closest('[data-terminal-search-root]')) ||
         isInsideNativeChatRoot(target)
       ) {
         return
@@ -2090,7 +2094,7 @@ function TerminalPane(
     const onPaste = (e: ClipboardEvent): void => {
       const target = e.target
       if (
-        (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+        (isElement(target) && target.closest('[data-terminal-search-root]')) ||
         isInsideNativeChatRoot(target)
       ) {
         return
@@ -2126,9 +2130,9 @@ function TerminalPane(
     }
 
     const onAppMenuPaste = (event: Event): void => {
-      const activeElementAtDispatch = document.activeElement
+      const activeElementAtDispatch = activeElementFor(container)
       if (
-        !(activeElementAtDispatch instanceof Element) ||
+        !isElement(activeElementAtDispatch) ||
         !container.contains(activeElementAtDispatch) ||
         activeElementAtDispatch.closest('[data-terminal-search-root]') ||
         isInsideNativeChatRoot(activeElementAtDispatch)
@@ -2167,9 +2171,9 @@ function TerminalPane(
     }
 
     const onAppMenuSelectionAction = (event: Event): void => {
-      const activeElement = document.activeElement
+      const activeElement = activeElementFor(container)
       if (
-        !(activeElement instanceof Element) ||
+        !isElement(activeElement) ||
         !container.contains(activeElement) ||
         isEditableTarget(activeElement) ||
         activeElement.closest('[data-terminal-search-root]') ||
@@ -2225,8 +2229,9 @@ function TerminalPane(
     const onPointerDown = (event: PointerEvent): void => {
       clearTerminalTabUnread(tabId)
       clearWorktreeUnread(worktreeId)
-      const paneElement =
-        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
+      const paneElement = isElement(event.target)
+        ? event.target.closest('.pane[data-leaf-id]')
+        : null
       const leafId = paneElement?.getAttribute('data-leaf-id')
       if (leafId) {
         clearTerminalPaneUnread(makePaneKey(tabId, leafId))
@@ -2409,7 +2414,7 @@ function TerminalPane(
     const markPointerBlurIntent = (event: PointerEvent): void => {
       const input = renameInputRef.current
       const target = event.target
-      if (input && target instanceof Node && input.contains(target)) {
+      if (input && isNode(target) && input.contains(target)) {
         return
       }
       renameUserRequestedBlurCommitRef.current = true
@@ -2523,7 +2528,7 @@ function TerminalPane(
           renameSessionIdRef.current === sessionId &&
           renamingPaneId === paneId &&
           renameInputRef.current === input &&
-          document.activeElement === input
+          activeElementFor(input) === input
         ) {
           renameBlurCommitEnabledRef.current = true
         }
@@ -2668,7 +2673,7 @@ function TerminalPane(
 
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
-      if (!(target instanceof Element)) {
+      if (!isElement(target)) {
         return false
       }
       if (target.closest('[data-terminal-search-root]')) {

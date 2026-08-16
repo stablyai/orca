@@ -223,7 +223,7 @@ function moveFocusToRendererIfWebviewOwnsFocus(webview: Electron.WebviewTag): bo
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     return false
   }
-  const activeElement = document.activeElement as HTMLElement | null
+  const activeElement = webview.ownerDocument.activeElement as HTMLElement | null
   if (!activeElement) {
     return false
   }

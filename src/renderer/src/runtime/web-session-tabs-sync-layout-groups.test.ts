@@ -248,6 +248,92 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(editorTab).toMatchObject({ id: 'host-readme-unified', groupId: 'group-editor' })
   })
 
+  it('reattaches a remote group when its snapshot adds nonterminal content', () => {
+    const localTerminalTab: Tab = {
+      id: 'local-terminal',
+      entityId: 'local-terminal',
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'Terminal',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        detachedGroupIds: ['host-group-1'],
+        auxWindowBoundsByGroupId: {
+          'host-group-1': { x: 10, y: 20, width: 800, height: 600 }
+        },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: localTerminalTab.entityId,
+              ptyId: 'local-pty',
+              worktreeId: WT,
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        unifiedTabsByWorktree: { [WT]: [localTerminalTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: localTerminalTab.id,
+              tabOrder: [localTerminalTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'markdown',
+            id: 'host-readme-unified',
+            title: 'README.md',
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: '/repo/README.md',
+            sourceFilePath: '/repo/README.md',
+            sourceRelativePath: 'README.md',
+            documentVersion: 'file:/repo/README.md'
+          }
+        ],
+        {
+          activeTabId: 'host-readme-unified',
+          activeTabType: 'markdown',
+          tabGroups: [
+            {
+              id: 'host-group-1',
+              activeTabId: 'host-readme-unified',
+              tabOrder: ['host-readme-unified']
+            }
+          ]
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.detachedGroupIds).toEqual([])
+    expect(patch.auxWindowBoundsByGroupId).toBeUndefined()
+    expect(patch.groupsByWorktree?.[WT]?.[0]?.tabOrder).toContain('host-readme-unified')
+  })
+
   it('preserves local browser position when appending a new remote terminal', () => {
     const firstTerminalId = toWebTerminalSurfaceTabId('host-tab-1')
     const secondTerminalId = toWebTerminalSurfaceTabId('host-tab-2')

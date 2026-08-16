@@ -17,7 +17,9 @@ vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       recordFeatureInteraction: recordFeatureInteractionMock,
-      setTabGroupSplitRatio: setTabGroupSplitRatioMock
+      setTabGroupSplitRatio: setTabGroupSplitRatioMock,
+      detachedGroupIds: [],
+      unifiedTabsByWorktree: {}
     })
 }))
 

@@ -39,8 +39,9 @@ export function guardPinnedTabClose(params: {
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
+  dialogContainer?: HTMLElement | null
 }): void {
-  const { isPinned, tabLabel, onClose, onCancel } = params
+  const { isPinned, tabLabel, onClose, onCancel, dialogContainer } = params
   if (!isPinned) {
     onClose()
     return
@@ -55,6 +56,7 @@ export function guardPinnedTabClose(params: {
   state.requestPinnedTabCloseConfirm({
     tabLabel,
     onConfirm: onClose,
-    ...(onCancel ? { onCancel } : {})
+    ...(onCancel ? { onCancel } : {}),
+    ...(dialogContainer ? { dialogContainer } : {})
   })
 }

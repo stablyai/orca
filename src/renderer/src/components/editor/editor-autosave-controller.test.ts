@@ -137,7 +137,9 @@ function makeSessionReadyState(): Partial<AppState> {
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
-    defaultTerminalTabsAppliedByWorktreeId: {}
+    defaultTerminalTabsAppliedByWorktreeId: {},
+    detachedGroupIds: [],
+    auxWindowBoundsByGroupId: {}
   } as Partial<AppState>
 }
 

@@ -13,6 +13,7 @@ import {
   isTerminalScrollIntentRebuildInFlight,
   onTerminalScrollIntentBufferRebuildComplete
 } from './terminal-scroll-intent-rebuild'
+import { isElement } from '../cross-realm-dom-predicates'
 
 const XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES = [
   'xterm-viewport',
@@ -24,7 +25,7 @@ const XTERM_SCROLL_INTENT_POINTER_TARGET_SELECTOR = XTERM_SCROLL_INTENT_POINTER_
 ).join(',')
 
 function isTerminalScrollIntentPointerTarget(target: EventTarget | null): target is Element {
-  if (typeof Element === 'undefined' || !(target instanceof Element)) {
+  if (typeof Element === 'undefined' || !isElement(target)) {
     return false
   }
   // xterm's custom scrollbar uses separate thumb/track nodes from the viewport.

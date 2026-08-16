@@ -13,6 +13,9 @@ const storeState = vi.hoisted(
     retainedAgentsByPaneKey: Record<string, unknown>
     renamingTabId: string | null
     keybindings: Record<string, unknown>
+    detachedGroupIds: string[]
+    detachTabGroup: () => void
+    reattachTabGroup: () => void
     repos: unknown[]
     setRenamingTabId: ReturnType<typeof vi.fn>
     terminalLayoutsByTabId: Record<string, unknown>
@@ -25,6 +28,9 @@ const storeState = vi.hoisted(
     retainedAgentsByPaneKey: {},
     renamingTabId: null as string | null,
     keybindings: {},
+    detachedGroupIds: [],
+    detachTabGroup: vi.fn(),
+    reattachTabGroup: vi.fn(),
     repos: [],
     setRenamingTabId: vi.fn((tabId: string | null) => {
       storeState.renamingTabId = tabId
@@ -74,6 +80,9 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ExternalLink: function ExternalLink(props: Record<string, unknown>) {
+    return { type: 'ExternalLink', props }
+  },
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }
   },

@@ -12,6 +12,7 @@ import type { AppState } from '@/store/types'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
+import { isHTMLElement } from './cross-realm-dom-predicates'
 export {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -214,17 +215,17 @@ export function isFloatingWorkspacePanelFocused(
   doc: Pick<Document, 'activeElement'> | null = typeof document === 'undefined' ? null : document
 ): boolean {
   const active = doc?.activeElement
-  return active instanceof HTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  return isHTMLElement(active) && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
 // Event-target-aware panel membership (vs isFloatingWorkspacePanelFocused which reads only activeElement).
 // Used for routing ownership when activeElement is transiently body/null during blur/IME churn (F6/F7).
 export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  return isHTMLElement(target) && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
 export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!isHTMLElement(target)) {
     return false
   }
   if (target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) === null) {

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Window } from 'happy-dom'
 import { describe, expect, it } from 'vitest'
 import {
   installTerminalImeCompositionTracker,
@@ -56,6 +57,31 @@ describe('installTerminalImeCompositionTracker', () => {
     harness.composition('compositionupdate', 'ni')
     harness.composition('compositionupdate', '')
     expect(harness.tracker.isActive()).toBe(true)
+  })
+
+  it('handles an empty compositionupdate from a detached window realm', () => {
+    const childWindow = new Window()
+    const element = childWindow.document.createElement('div') as unknown as HTMLElement
+    const tracker = installTerminalImeCompositionTracker(element)
+    try {
+      const composition = (type: string, data: string): void => {
+        const event = new childWindow.CompositionEvent(type, { bubbles: true })
+        Object.defineProperties(event, {
+          data: { value: data },
+          view: { value: childWindow }
+        })
+        element.dispatchEvent(event as unknown as Event)
+      }
+
+      composition('compositionstart', '')
+      composition('compositionupdate', '')
+      composition('compositionend', '')
+
+      expect(tracker.isCandidateKeyGuardActive()).toBe(true)
+    } finally {
+      tracker.dispose()
+      childWindow.close()
+    }
   })
 
   it('clears on compositionend', () => {

@@ -7,15 +7,18 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildPersistedBrowserPagesByWorkspace,
-  buildPersistedBrowserTabsByWorktree,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import {
+  buildPersistedBrowserPagesByWorkspace,
+  buildPersistedBrowserTabsByWorktree
+} from './workspace-session-persisted-browser-collections'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildDetachedPaneSessionData } from './workspace-session-detached-panes'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -136,6 +139,9 @@ export function buildWorkspaceSessionPatch(
     ] as const)
   ) {
     Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
+  }
+  if (hasAnyChangedField(changed, ['detachedGroupIds', 'auxWindowBoundsByGroupId'] as const)) {
+    Object.assign(patch, buildDetachedPaneSessionData(snapshot))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)

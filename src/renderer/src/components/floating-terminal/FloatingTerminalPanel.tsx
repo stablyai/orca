@@ -119,6 +119,7 @@ import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { activeElementFor, isHTMLElement, isNode } from '../../lib/cross-realm-dom-predicates'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 const NO_ACTIVITY_TERMINAL_PORTALS = []
 
@@ -164,7 +165,7 @@ type FloatingTerminalPanelBoundsState = {
 }
 
 function isFloatingTerminalDragTarget(target: EventTarget): boolean {
-  return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
+  return !(isHTMLElement(target) && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
 }
 
 function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
@@ -1060,10 +1061,10 @@ export function FloatingTerminalPanel({
   }, [activeGroup, closeFloatingItems])
 
   const focusPanelForShortcuts = useCallback((preserveExistingPanelFocus = true) => {
-    const active = document.activeElement
+    const active = activeElementFor(panelRef.current)
     if (
       preserveExistingPanelFocus &&
-      active instanceof HTMLElement &&
+      isHTMLElement(active) &&
       active.closest('[data-floating-terminal-panel]') !== null
     ) {
       // Why: dragging the titlebar while xterm/editor already has focus should
@@ -1415,7 +1416,7 @@ export function FloatingTerminalPanel({
       }
       const target = event.target
       if (
-        !(target instanceof HTMLElement) ||
+        !isHTMLElement(target) ||
         (target !== panelRef.current &&
           target.closest(FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR) === null)
       ) {
@@ -1442,8 +1443,8 @@ export function FloatingTerminalPanel({
 
     const isPanelFocused = (): boolean => {
       const panel = panelRef.current
-      const active = document.activeElement
-      return Boolean(panel && active instanceof HTMLElement && panel.contains(active))
+      const active = activeElementFor(panel)
+      return Boolean(panel && isHTMLElement(active) && panel.contains(active))
     }
 
     const handleFloatingPanelKeyDown = (event: KeyboardEvent): void => {
@@ -1631,14 +1632,14 @@ export function FloatingTerminalPanel({
 
     const handleOutsidePointerDown = (event: PointerEvent): void => {
       const panel = panelRef.current
-      if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
+      if (!panel || !isNode(event.target) || panel.contains(event.target)) {
         return
       }
       reportFloatingFocus(null, true)
       // Cancel any pending emptying-close reclaim: an outside pointer-down is a genuine ownership release.
       clearFloatingPanelReclaimIntent()
-      const active = document.activeElement
-      if (active instanceof HTMLElement && panel.contains(active)) {
+      const active = activeElementFor(panel)
+      if (isHTMLElement(active) && panel.contains(active)) {
         // Why: regular tab strip items are non-focusable, so clicking them can
         // leave xterm's hidden textarea focused unless we explicitly release it.
         active.blur()
@@ -1646,9 +1647,9 @@ export function FloatingTerminalPanel({
     }
     const handleWindowBlur = (): void => {
       const panel = panelRef.current
-      const active = document.activeElement
+      const active = activeElementFor(panel)
       reclaimTerminalInputOnWindowFocusRef.current = null
-      if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
+      if (!panel || !isHTMLElement(active) || !panel.contains(active)) {
         return
       }
       // Why: browser webviews focus out-of-process and do not emit renderer
@@ -1675,10 +1676,10 @@ export function FloatingTerminalPanel({
       }
       reclaimTerminalInputOnWindowFocusRef.current = null
       const panel = panelRef.current
-      const active = document.activeElement
+      const active = activeElementFor(panel)
       if (
         panel &&
-        active instanceof HTMLElement &&
+        isHTMLElement(active) &&
         panel.contains(active) &&
         isFloatingWorkspaceTerminalInputTarget(active)
       ) {

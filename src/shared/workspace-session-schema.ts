@@ -12,6 +12,7 @@
  * Only a payload that is not a session at all falls back to defaults.
  */
 import { z } from 'zod'
+import { detachedPaneSessionFields } from './workspace-session-detached-panes-schema'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
@@ -283,6 +284,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'activeGroupIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string())
   ),
+  ...detachedPaneSessionFields,
   activeConnectionIdsAtShutdown: salvagedOptional(
     'activeConnectionIdsAtShutdown',
     salvagingArray(z.string())

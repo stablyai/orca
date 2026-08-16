@@ -6,6 +6,7 @@ import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -42,10 +43,11 @@ function CommandDialog({
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
+  const auxContainer = useAuxWindowContainer()
 
   return (
     <DialogPrimitive.Root {...props}>
-      <DialogPrimitive.Portal>
+      <DialogPrimitive.Portal container={auxContainer ?? undefined}>
         <DialogPrimitive.Overlay
           // Why: matches the DialogOverlay recipe — deeper scrim + 2px backdrop
           // blur so the dark canvas lifts off the command palette. A flat

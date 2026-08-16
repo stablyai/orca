@@ -410,6 +410,9 @@ export type GlobalSettings = {
   /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
+  /** Detach a tab group into its own OS window. Off by default while the
+   *  aux window still lacks a native context menu and menu-driven paste. */
+  experimentalDetachedPanes?: boolean
   experimentalAgentDashboardPopout?: boolean
   /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
   experimentalAgentDashboardMode?: AgentDashboardMode

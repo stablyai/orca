@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { isNode } from '../../lib/cross-realm-dom-predicates'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -62,7 +63,7 @@ function getOwnerDocument(target: EventTarget | null): Document {
   if (target instanceof Document) {
     return target
   }
-  if (target instanceof Node) {
+  if (isNode(target)) {
     return target.ownerDocument ?? document
   }
   return document

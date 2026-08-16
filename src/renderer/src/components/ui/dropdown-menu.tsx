@@ -3,6 +3,7 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -11,7 +12,14 @@ function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrim
 function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
-  return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
+  const auxContainer = useAuxWindowContainer()
+  return (
+    <DropdownMenuPrimitive.Portal
+      data-slot="dropdown-menu-portal"
+      {...props}
+      container={props.container ?? auxContainer ?? undefined}
+    />
+  )
 }
 
 function DropdownMenuTrigger({
@@ -26,8 +34,9 @@ function DropdownMenuContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={auxContainer ?? undefined}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
@@ -203,8 +212,9 @@ function DropdownMenuSubContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={auxContainer ?? undefined}>
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(

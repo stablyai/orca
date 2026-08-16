@@ -6,6 +6,7 @@ import {
   type KeybindingOverrides,
   type PhysicalModifierToken
 } from '../../../shared/keybindings'
+import { isHTMLElement } from './cross-realm-dom-predicates'
 
 // Partial<> on the key/modifier fields so a synthetic double-tap input (which
 // carries no key/modifier flags) satisfies this shape; target stays required.
@@ -34,7 +35,7 @@ export function isFloatingWorkspacePanelShortcutTarget(
   target: EventTarget | null,
   panelRoot: HTMLElement | null = null
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!isHTMLElement(target)) {
     return false
   }
   return (

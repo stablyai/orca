@@ -6,6 +6,7 @@ import {
   type ImeReleaseKeyEvent
 } from './terminal-ime-kitty-commit-encoding'
 import { getLayoutCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
+import { isHTMLTextAreaElement, isInputEvent } from '../../lib/cross-realm-dom-predicates'
 
 // Why: a plain printable keydown never produces terminal bytes. Bytes for
 // printable characters come only from the `input` event, which on macOS *is*
@@ -311,7 +312,7 @@ export function installTerminalImeNativeTextForwarder(args: {
   }
 
   const forwardCommittedText = (event: Event): void => {
-    if (!(event instanceof InputEvent)) {
+    if (!isInputEvent(event)) {
       return
     }
     // Why: an accepted composition transaction already owns its commit; letting
@@ -350,7 +351,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     }
     event.stopImmediatePropagation()
     // Clear the helper textarea so the committed text doesn't accumulate.
-    if (event.target instanceof HTMLTextAreaElement) {
+    if (isHTMLTextAreaElement(event.target)) {
       event.target.value = ''
     }
   }

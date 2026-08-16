@@ -60,6 +60,8 @@ function createSnapshot(
     groupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
+    detachedGroupIds: [],
+    auxWindowBoundsByGroupId: {},
     sshConnectionStates: new Map(),
     repos: [],
     worktreesByRepo: {},
@@ -306,6 +308,31 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.activeGroupIdByWorktree?.['wt-1']).toBe('group-left')
   })
 
+  it('persists detached IDs and live bounds in incremental patches', () => {
+    const bounds = { x: 10, y: 20, width: 900, height: 600 }
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        detachedGroupIds: ['group-1'],
+        auxWindowBoundsByGroupId: { 'group-1': bounds }
+      }),
+      ['detachedGroupIds']
+    )
+
+    expect(patch).toEqual({
+      detachedGroupIds: ['group-1'],
+      auxWindowBoundsByGroupId: { 'group-1': bounds }
+    })
+  })
+
+  it('keeps detached-state clearing keys in incremental patches', () => {
+    const patch = buildWorkspaceSessionPatch(createSnapshot(), ['auxWindowBoundsByGroupId'])
+
+    expect(Object.hasOwn(patch, 'detachedGroupIds')).toBe(true)
+    expect(Object.hasOwn(patch, 'auxWindowBoundsByGroupId')).toBe(true)
+    expect(patch.detachedGroupIds).toBeUndefined()
+    expect(patch.auxWindowBoundsByGroupId).toBeUndefined()
+  })
+
   it('persists default terminal tab idempotency marker changes', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true } }),
@@ -319,7 +346,11 @@ describe('buildWorkspaceSessionPatch', () => {
 
   it('keeps default terminal tab marker clearing keys in patches', () => {
     const patch = buildWorkspaceSessionPatch(
-      createSnapshot({ defaultTerminalTabsAppliedByWorktreeId: {} }),
+      createSnapshot({
+        defaultTerminalTabsAppliedByWorktreeId: {},
+        detachedGroupIds: [],
+        auxWindowBoundsByGroupId: {}
+      }),
       ['defaultTerminalTabsAppliedByWorktreeId']
     )
 

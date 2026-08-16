@@ -191,6 +191,89 @@ describe('Cmd+J lifted creation actions', () => {
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
+  it('does not change global selection when creating a native background-worktree terminal', async () => {
+    delete pairedWebFlag.__ORCA_WEB_CLIENT__
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      activeTabId: 'main-tab',
+      activeTabType: 'browser',
+      repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [
+          makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' }),
+          makeWorktree({ id: 'wt-2', repoId: TEST_REPO.id, hostId: 'local' })
+        ]
+      },
+      groupsByWorktree: {
+        ...store.getState().groupsByWorktree,
+        'wt-2': [{ id: 'group-2', worktreeId: 'wt-2', activeTabId: null, tabOrder: [] }]
+      },
+      activeGroupIdByWorktree: {
+        ...store.getState().activeGroupIdByWorktree,
+        'wt-2': 'group-2'
+      }
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-2', 'wt-2')
+
+    expect(store.getState().tabsByWorktree['wt-2']).toHaveLength(1)
+    expect(store.getState()).toMatchObject({
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'main-tab',
+      activeTabType: 'browser'
+    })
+  })
+
+  it('does not select a background worktree during web-runtime terminal creation', async () => {
+    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      activeTabId: 'main-tab',
+      activeTabType: 'browser',
+      worktreesByRepo: {
+        [TEST_REPO.id]: [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: TEST_REPO.id,
+            hostId: 'runtime:runtime-1',
+            runtimeOwnerEnvironmentId: 'runtime-1'
+          }),
+          makeWorktree({
+            id: 'wt-2',
+            repoId: TEST_REPO.id,
+            hostId: 'runtime:runtime-1',
+            runtimeOwnerEnvironmentId: 'runtime-1'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        ...store.getState().groupsByWorktree,
+        'wt-2': [{ id: 'group-2', worktreeId: 'wt-2', activeTabId: null, tabOrder: [] }]
+      },
+      activeGroupIdByWorktree: {
+        ...store.getState().activeGroupIdByWorktree,
+        'wt-2': 'group-2'
+      }
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-2', 'wt-2')
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-2',
+      environmentId: 'runtime-1',
+      targetGroupId: 'group-2',
+      activate: false,
+      selectWorktree: false
+    })
+    expect(store.getState()).toMatchObject({
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'main-tab',
+      activeTabType: 'browser'
+    })
+  })
+
   it('does not create a local folder terminal while paired ownership is unresolved', async () => {
     const folderId = 'folder-1'
     const workspaceKey = folderWorkspaceKey(folderId)

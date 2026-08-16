@@ -1,19 +1,20 @@
 import { PRIMARY_SELECTION_MAX_LENGTH } from './primary-selection'
+import { isElement, isHTMLInputElement, isHTMLTextAreaElement } from './cross-realm-dom-predicates'
 
 const TEXT_INPUT_TYPES = new Set(['', 'email', 'password', 'search', 'tel', 'text', 'url'])
 
 function isTextInputElement(element: Element): element is HTMLInputElement {
-  return element instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(element.type)
+  return isHTMLInputElement(element) && TEXT_INPUT_TYPES.has(element.type)
 }
 
 export function isPrimarySelectionTextControl(
   element: Element
 ): element is HTMLInputElement | HTMLTextAreaElement {
-  return isTextInputElement(element) || element instanceof HTMLTextAreaElement
+  return isTextInputElement(element) || isHTMLTextAreaElement(element)
 }
 
 function readTextControlSelection(element: HTMLInputElement | HTMLTextAreaElement): string | null {
-  if (element instanceof HTMLInputElement && element.type === 'password') {
+  if (isHTMLInputElement(element) && element.type === 'password') {
     return null
   }
 
@@ -53,12 +54,13 @@ function getRangeTextLengthUpTo(range: Range, maxLength: number): number {
     return length > maxLength
   }
 
-  if (root.nodeType === Node.TEXT_NODE) {
+  if (root.nodeType === 3) {
     addTextNode(root as Text)
     return length
   }
 
-  const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const showText = ownerDocument.defaultView?.NodeFilter.SHOW_TEXT ?? 4
+  const walker = ownerDocument.createTreeWalker(root, showText)
   let node = walker.nextNode()
   while (node) {
     if (addTextNode(node as Text)) {
@@ -80,8 +82,8 @@ function selectionTextLengthExceeds(selection: Selection, maxLength: number): bo
   return false
 }
 
-function readDocumentSelection(): string | null {
-  const selection = window.getSelection()
+function readDocumentSelection(sourceDocument: Document): string | null {
+  const selection = sourceDocument.getSelection()
   if (!selection || selection.isCollapsed) {
     return null
   }
@@ -92,9 +94,11 @@ function readDocumentSelection(): string | null {
   return text.length > 0 ? text : null
 }
 
-export function readCurrentPrimarySelectionText(): string | null {
-  const activeElement = document.activeElement
-  if (activeElement instanceof Element) {
+export function readCurrentPrimarySelectionText(
+  sourceDocument: Document = document
+): string | null {
+  const activeElement = sourceDocument.activeElement
+  if (isElement(activeElement)) {
     const textControl = activeElement.closest('input, textarea')
     if (textControl && isPrimarySelectionTextControl(textControl)) {
       const text = readTextControlSelection(textControl)
@@ -104,5 +108,5 @@ export function readCurrentPrimarySelectionText(): string | null {
     }
   }
 
-  return readDocumentSelection()
+  return readDocumentSelection(sourceDocument)
 }

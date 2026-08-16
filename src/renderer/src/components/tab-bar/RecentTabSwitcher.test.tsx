@@ -214,4 +214,24 @@ describe('RecentTabSwitcher', () => {
       root.unmount()
     })
   })
+
+  it('preserves the main-window active-view guard for DOM Ctrl+Tab', async () => {
+    const store = makeStore()
+    store.activeView = 'settings'
+    getStateMock.mockReturnValue(store)
+    const { root } = await renderSwitcher()
+    const terminal = appendTerminalTextarea()
+
+    await dispatchKeyboard(terminal.input, 'keydown', {
+      key: 'Tab',
+      code: 'Tab',
+      ctrlKey: true
+    })
+
+    expect(document.body.querySelector('[role="listbox"]')).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

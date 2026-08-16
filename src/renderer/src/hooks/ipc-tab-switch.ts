@@ -17,25 +17,36 @@ type CycleContext = {
   groupTabIdInNav: string | null
 }
 
+type TabCycleTarget = { worktreeId: string; groupId?: string }
+
 /**
  * Shared setup for the type-scoped and across-all-types tab-cycle actions.
  * Returns null when there is no active worktree or the visible nav has at most
  * one tab (nothing to cycle).
  */
-function resolveCycleContext(): CycleContext | null {
+function resolveCycleContext(target?: TabCycleTarget, allowSingle = false): CycleContext | null {
   const store = useAppStore.getState()
-  const worktreeId = store.activeWorktreeId
+  const worktreeId = target?.worktreeId ?? store.activeWorktreeId
   if (!worktreeId) {
     return null
   }
   // Why: walk the active group's visible order so drag-reordered tabs cycle
   // in the sequence the user sees. See getActiveTabNavOrder for the stale
   // legacy-order bug this replaces.
-  const allTabIds = getActiveTabNavOrder(store, worktreeId)
-  if (allTabIds.length <= 1) {
+  const navigationState = target?.groupId
+    ? {
+        ...store,
+        activeGroupIdByWorktree: {
+          ...store.activeGroupIdByWorktree,
+          [worktreeId]: target.groupId
+        }
+      }
+    : store
+  const allTabIds = getActiveTabNavOrder(navigationState, worktreeId)
+  if (allTabIds.length <= (allowSingle ? 0 : 1)) {
     return null
   }
-  const activeGroupId = store.activeGroupIdByWorktree[worktreeId]
+  const activeGroupId = target?.groupId ?? store.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
     ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
     : undefined
@@ -93,8 +104,8 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
  * Extracted from useIpcEvents to keep file size under the max-lines lint threshold.
  * Returns true if a tab switch occurred, false otherwise.
  */
-export function handleSwitchTab(direction: number): boolean {
-  const ctx = resolveCycleContext()
+export function handleSwitchTab(direction: number, target?: TabCycleTarget): boolean {
+  const ctx = resolveCycleContext(target)
   if (!ctx) {
     return false
   }
@@ -124,8 +135,8 @@ export function handleSwitchTab(direction: number): boolean {
  * inverse via the seed migration (see PR #1281 for the original type-scope
  * rationale). Returns true if a tab switch occurred, false otherwise.
  */
-export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
-  const ctx = resolveCycleContext()
+export function handleSwitchTabAcrossAllTypes(direction: number, target?: TabCycleTarget): boolean {
+  const ctx = resolveCycleContext(target)
   if (!ctx) {
     return false
   }
@@ -150,8 +161,8 @@ export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
  * Handle Ctrl+Tab MRU quick-toggle across every visible tab in the active group.
  * Returns true if a tab switch occurred, false otherwise.
  */
-export function handleSwitchRecentTab(): boolean {
-  const ctx = resolveCycleContext()
+export function handleSwitchRecentTab(target?: TabCycleTarget): boolean {
+  const ctx = resolveCycleContext(target)
   if (!ctx) {
     return false
   }
@@ -159,7 +170,7 @@ export function handleSwitchRecentTab(): boolean {
   if (!groupTabIdInNav) {
     return false
   }
-  const groupId = store.activeGroupIdByWorktree[worktreeId]
+  const groupId = target?.groupId ?? store.activeGroupIdByWorktree[worktreeId]
   const group = groupId
     ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
     : undefined
@@ -188,26 +199,29 @@ export function handleSwitchRecentTab(): boolean {
  * Handle Ctrl+PageUp/PageDown switching across terminal tabs only.
  * Returns true if a terminal tab switch occurred, false otherwise.
  */
-export function handleSwitchTerminalTab(direction: number): boolean {
-  const store = useAppStore.getState()
-  const worktreeId = store.activeWorktreeId
-  if (!worktreeId) {
+export function handleSwitchTerminalTab(direction: number, target?: TabCycleTarget): boolean {
+  const ctx = resolveCycleContext(target, true)
+  if (!ctx) {
     return false
   }
+  const { store, allTabIds, groupTabIdInNav } = ctx
   // Why: reuse the same visible-order source as handleSwitchTab so drag-reordered
   // tabs still cycle in the sequence shown in the active tab strip.
-  const terminalTabs = getActiveTabNavOrder(store, worktreeId).filter(
-    (entry) => entry.type === 'terminal'
-  )
+  const terminalTabs = allTabIds.filter((entry) => entry.type === 'terminal')
   if (terminalTabs.length === 0) {
     return false
   }
-  const currentId = getActiveEntityIdForTabType(
-    store.activeTabType,
-    store.activeTabId,
-    store.activeFileId,
-    store.activeBrowserTabId
-  )
+  const activeGroupTab = groupTabIdInNav
+    ? terminalTabs.find((tab) => tab.tabId === groupTabIdInNav)?.id
+    : undefined
+  const currentId =
+    activeGroupTab ??
+    getActiveEntityIdForTabType(
+      store.activeTabType,
+      store.activeTabId,
+      store.activeFileId,
+      store.activeBrowserTabId
+    )
   // Why: when an editor/browser tab is active, jump to the first terminal on
   // forward navigation instead of skipping to index 1.
   const idx = terminalTabs.findIndex((t) => t.id === currentId)

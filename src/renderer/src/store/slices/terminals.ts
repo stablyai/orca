@@ -635,7 +635,10 @@ export type TerminalSlice = {
       forceHostRuntime?: boolean
     }
   ) => TerminalTab
-  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewTerminalTabInActiveWorkspace: (
+    groupId: string,
+    worktreeIdOverride?: string
+  ) => Promise<void>
   closeTab: (
     tabId: string,
     opts?: {
@@ -1500,12 +1503,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return tab
   },
 
-  openNewTerminalTabInActiveWorkspace: async (groupId) => {
+  openNewTerminalTabInActiveWorkspace: async (groupId, worktreeIdOverride) => {
     const state = get()
-    const worktreeId = state.activeWorktreeId
+    const worktreeId = worktreeIdOverride ?? state.activeWorktreeId
     if (!worktreeId) {
       return
     }
+    const activate = state.activeWorktreeId === worktreeId
     const workspaceScope = parseWorkspaceKey(worktreeId)
     const worktreeRoute =
       worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
@@ -1523,16 +1527,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreeId,
         environmentId: runtimeEnvironmentId,
         targetGroupId: groupId,
-        activate: true
+        activate,
+        ...(activate ? {} : { selectWorktree: false })
       })
       return
     }
     if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       return
     }
-    const terminal = get().createTab(worktreeId, groupId)
-    get().setActiveTab(terminal.id)
-    get().setActiveTabType('terminal')
+    const terminal = get().createTab(worktreeId, groupId, undefined, { activate })
+    if (activate) {
+      get().setActiveTab(terminal.id)
+      get().setActiveTabType('terminal')
+    }
     const latest = get()
     const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
     const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
@@ -1552,7 +1559,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
     // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
     get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
-    focusTerminalTabSurface(terminal.id)
+    if (activate) {
+      focusTerminalTabSurface(terminal.id)
+    }
   },
 
   closeTab: (tabId, opts) => {

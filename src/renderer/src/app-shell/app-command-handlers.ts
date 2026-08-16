@@ -14,6 +14,12 @@ import type {
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+import { isHTMLElement } from '@/lib/cross-realm-dom-predicates'
+import {
+  auxiliaryTerminalShortcutTarget,
+  resolveTerminalShortcutTabId,
+  type TerminalShortcutTarget
+} from '@/components/terminal/aux-pane-shortcut-target'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -29,6 +35,7 @@ export type ShortcutDispatchInput = {
   target: EventTarget | null
   defaultPrevented: boolean
   preventDefault: () => void
+  stopImmediatePropagation?: () => void
 }
 
 export type AppShortcutActions = ReturnType<typeof useAppShortcutActions>
@@ -65,7 +72,7 @@ export function useAppShortcutActions() {
 }
 
 export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+  return isHTMLElement(target) && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
 }
@@ -80,7 +87,8 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
-  keybindingContext: KeybindingContext = 'app'
+  keybindingContext: KeybindingContext = 'app',
+  shortcutTarget: TerminalShortcutTarget | null = null
 ): Map<KeybindingActionId, () => boolean> {
   const {
     activeView,
@@ -95,6 +103,7 @@ export function createAppCommandHandlers(
     workspaceChromeActive
   } = state
   const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+  const auxiliaryShortcutTarget = auxiliaryTerminalShortcutTarget(shortcutTarget)
   const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
   const claim = (actionId: KeybindingActionId, run: () => void): boolean => {
     input?.preventDefault()
@@ -168,15 +177,18 @@ export function createAppCommandHandlers(
       'tab.rename',
       () => {
         const store = useAppStore.getState()
+        const targetTabId = auxiliaryShortcutTarget
+          ? resolveTerminalShortcutTabId(auxiliaryShortcutTarget, store)
+          : store.activeTabId
         if (
-          !workspaceChromeActive ||
+          (!auxiliaryShortcutTarget && !workspaceChromeActive) ||
           floatingWorkspaceFocused ||
-          store.activeTabType !== 'terminal' ||
-          !store.activeTabId
+          (!auxiliaryShortcutTarget && store.activeTabType !== 'terminal') ||
+          !targetTabId
         ) {
           return false
         }
-        return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+        return claim('tab.rename', () => store.setRenamingTabId(targetTabId))
       }
     ],
     [
