@@ -35,6 +35,10 @@ describe('classifyExternalAppUrl', () => {
       ok: false,
       reason: 'denied'
     })
+    expect(classifyExternalAppUrl('vbscript:msgbox(1)')).toEqual({
+      ok: false,
+      reason: 'denied'
+    })
     expect(classifyExternalAppUrl('file:///etc/passwd')).toEqual({
       ok: false,
       reason: 'denied'
@@ -61,6 +65,13 @@ describe('classifyExternalAppUrl', () => {
     expect(classifyExternalAppUrl('')).toEqual({ ok: false, reason: 'invalid' })
     expect(classifyExternalAppUrl('not a url')).toEqual({ ok: false, reason: 'invalid' })
   })
+
+  it('rejects uppercase custom schemes', () => {
+    expect(classifyExternalAppUrl('Error://example')).toEqual({
+      ok: false,
+      reason: 'unsupported'
+    })
+  })
 })
 
 describe('TERMINAL_WEB_AND_APP_URL_REGEX', () => {
@@ -72,8 +83,14 @@ describe('TERMINAL_WEB_AND_APP_URL_REGEX', () => {
 
   it('does not linkify denied schemes', () => {
     const text =
-      'file:///etc/passwd javascript:alert(1) chrome://settings data:text/html,hi smb://host/share jnlp://x/app.jnlp'
+      'file:///etc/passwd javascript:alert(1) vbscript://msgbox chrome://settings data:text/html,hi smb://host/share jnlp://x/app.jnlp'
     const matches = text.match(new RegExp(TERMINAL_WEB_AND_APP_URL_REGEX.source, 'g'))
     expect(matches).toBeNull()
+  })
+
+  it('does not linkify uppercase custom schemes', () => {
+    expect(
+      'Error://example'.match(new RegExp(TERMINAL_WEB_AND_APP_URL_REGEX.source, 'g'))
+    ).toBeNull()
   })
 })

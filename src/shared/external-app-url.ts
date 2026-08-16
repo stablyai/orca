@@ -50,6 +50,10 @@ export function classifyExternalAppUrl(rawUrl: string): ExternalAppUrlClassifica
   if (!trimmed) {
     return { ok: false, reason: 'invalid' }
   }
+  const rawScheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)?.[1]
+  if (rawScheme && !/^(?:https?)$/i.test(rawScheme) && rawScheme !== rawScheme.toLowerCase()) {
+    return { ok: false, reason: 'unsupported' }
+  }
   let parsed: URL
   try {
     parsed = new URL(trimmed)
