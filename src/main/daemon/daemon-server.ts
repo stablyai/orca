@@ -17,7 +17,7 @@ import {
   startDaemonStreamBacklogProbe
 } from './daemon-stream-backlog-probe'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -86,7 +86,9 @@ export type DaemonServerOptions = {
     env?: Record<string, string>
     command?: string
     shellOverride?: string
-  }) => SubprocessHandle
+    isCanceled?: () => boolean
+    // Async production spawns and sync test stubs share this boundary.
+  }) => SubprocessHandle | Promise<SubprocessHandle>
 }
 
 type ConnectedClient = {
@@ -98,9 +100,11 @@ type ConnectedClient = {
 
 type PendingPtySpawnPreparation = {
   canceled: boolean
+  cancelTimer?: ReturnType<typeof setTimeout>
   // Why: preparations are keyed by sessionId, but a control-socket close must
   // cancel only the disconnecting client's preps, not another client's (F4).
   clientId: string
+  requestId: string
 }
 
 type PendingShutdownReply = {
@@ -900,10 +904,25 @@ export class DaemonServer {
     this.pendingShutdownReplies.set(key, { start })
   }
 
-  private async preparePtySpawnUnlessCanceled(sessionId: string, clientId: string): Promise<void> {
+  private async preparePtySpawnUnlessCanceled(
+    sessionId: string,
+    clientId: string,
+    requestId: string,
+    cancelAfterMs: unknown
+  ): Promise<PendingPtySpawnPreparation> {
     const preparation: PendingPtySpawnPreparation = {
       canceled: false,
-      clientId
+      clientId,
+      requestId
+    }
+    if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
+      preparation.cancelTimer = setTimeout(
+        () => {
+          preparation.canceled = true
+        },
+        Math.min(Number(cancelAfterMs), 300_000)
+      )
+      preparation.cancelTimer.unref()
     }
     const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
     pending.add(preparation)
@@ -914,23 +933,48 @@ export class DaemonServer {
       if (preparation.canceled) {
         throw new TerminalAttachCanceledError(sessionId)
       }
-    } finally {
-      pending.delete(preparation)
-      if (pending.size === 0) {
-        this.pendingPtySpawnPreparations.delete(sessionId)
-      }
+      return preparation
+    } catch (error) {
+      this.finishPtySpawnPreparation(sessionId, preparation)
+      throw error
     }
   }
 
-  private cancelPendingPtySpawnPreparations(sessionId: string): boolean {
+  private finishPtySpawnPreparation(
+    sessionId: string,
+    preparation: PendingPtySpawnPreparation
+  ): void {
+    if (preparation.cancelTimer) {
+      clearTimeout(preparation.cancelTimer)
+    }
+    const pending = this.pendingPtySpawnPreparations.get(sessionId)
+    pending?.delete(preparation)
+    if (pending?.size === 0) {
+      this.pendingPtySpawnPreparations.delete(sessionId)
+    }
+  }
+
+  private cancelPendingPtySpawnPreparations(
+    sessionId: string,
+    request?: { clientId: string; requestId?: string }
+  ): boolean {
     const pending = this.pendingPtySpawnPreparations.get(sessionId)
     if (!pending) {
       return false
     }
+    let canceled = false
     for (const preparation of pending) {
+      if (
+        request &&
+        (preparation.clientId !== request.clientId ||
+          (request.requestId !== undefined && preparation.requestId !== request.requestId))
+      ) {
+        continue
+      }
       preparation.canceled = true
+      canceled = true
     }
-    return true
+    return canceled
   }
 
   private cancelAllPendingPtySpawnPreparations(): void {
@@ -1033,6 +1077,7 @@ export class DaemonServer {
         this.createOrAttachInFlight++
         let routedSessionId = p.sessionId
         let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
+        let spawnPreparation: PendingPtySpawnPreparation | null = null
         try {
           if (
             p.agentSessionEnsure !== undefined &&
@@ -1042,7 +1087,12 @@ export class DaemonServer {
             throw new Error('agent_session_identity_required')
           }
           if (!attachOnly) {
-            await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+            spawnPreparation = await this.preparePtySpawnUnlessCanceled(
+              p.sessionId,
+              clientId,
+              request.id,
+              p.cancelAfterMs
+            )
           }
           if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
             throw new Error('Multiple terminal history seed sources')
@@ -1075,6 +1125,7 @@ export class DaemonServer {
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
             ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
+            ...(spawnPreparation ? { isCanceled: () => spawnPreparation?.canceled === true } : {}),
             onSessionResolved: (sessionId) => {
               routedSessionId = sessionId
             },
@@ -1121,6 +1172,9 @@ export class DaemonServer {
             }
           })
         } finally {
+          if (spawnPreparation) {
+            this.finishPtySpawnPreparation(p.sessionId, spawnPreparation)
+          }
           this.createOrAttachInFlight--
           this.reevaluateIdleShutdown()
         }
@@ -1163,8 +1217,14 @@ export class DaemonServer {
       }
 
       case 'cancelCreateOrAttach':
-        this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
-        return {}
+        return {
+          canceled: this.cancelPendingPtySpawnPreparations(request.payload.sessionId, {
+            clientId,
+            ...(typeof request.payload.requestId === 'string'
+              ? { requestId: request.payload.requestId }
+              : {})
+          })
+        }
 
       case 'closeStartupQueryAuthority':
         return {

@@ -1,116 +1,25 @@
-/* oxlint-disable max-lines */
-import { HeadlessEmulator } from './headless-emulator'
+import { isValidPtySize } from './daemon-pty-size'
+import { SessionOutputPlane, type AttachedClient } from './session-output-plane'
+import { SessionProducerPause } from './session-producer-pause'
+import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import {
-  installDeviceAttributesResponder,
-  STARTUP_DA1_RESPONSE,
-  StartupDeviceAttributesQueryFilter
-} from './startup-device-attributes-responder'
-import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
-import { PostReadyFlushGate } from './post-ready-flush-gate'
-import {
-  createShellStartupOutputScanState,
-  drainShellStartupOutputScanState,
-  scanShellStartupOutput,
-  type ShellStartupOutputScanState
-} from '../shell-startup-output-scanner'
-import {
-  createShellPromptReadinessProbe,
-  type ShellPromptReadinessProbe
-} from '../shell-prompt-readiness-probe'
-import { isPowerShellProcess } from '../../shared/shell-process-detection'
-import { killWithDescendantSweep } from '../pty-descendant-termination'
-import type { TuiAgent } from '../../shared/types'
+  SessionTerminationController,
+  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
+} from './session-termination-controller'
+import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import type { SubprocessHandle } from './session-subprocess-handle'
+import type { SessionOptions } from './session-options'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
-import {
-  PtyStartupIngress,
-  type PtyIngressEmission,
-  type PtyStartupIngressIntent
-} from '../../shared/pty-startup-ingress'
+import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import type {
-  PendingOutputRecord,
   SessionState,
   ShellReadyState,
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
-import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
-
-const SHELL_READY_TIMEOUT_MS = 15_000
-// Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
-export const CODEX_SHELL_READY_TIMEOUT_MS = 300
-const KILL_TIMEOUT_MS = 5_000
-export const IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
-export const SESSION_FORCE_KILL_RETRY_MS = 250
-const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
-// Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
-// overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
-const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
-// Why: pause is a fire-and-forget notify, so a resume can be lost (main crash, dropped socket); a lost
-// resume must never wedge a shell, so auto-resume after this window — a still-flooded main re-pauses.
-export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
-
-export type SubprocessHandle = {
-  pid: number
-  /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
-   *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
-  getForegroundProcess(): string | null
-  /** Await process-table evidence captured after this confirmation request. */
-  confirmForegroundProcess?(): Promise<string | null>
-  /** True when shell launch args already delivered the startup command, so the host skips its stdin fallback write. */
-  startupCommandDeliveredInShellArgs?: boolean
-  /** Shell the subprocess actually spawned, after fallbacks. The host reconciles the caller's shell-ready
-   *  assumption against it so a fallback shell without a ready marker never gates startup commands. */
-  shellPath?: string
-  shellCwd?: string
-  shellPathEnv?: string
-  /** Slave device path, so startup replies can read the line discipline's ECHO bit before
-   *  writing. Absent on handles with no POSIX slave to read (ConPTY, tests). */
-  slavePath?: string
-  write(data: string): void
-  resize(cols: number, rows: number): void
-  /** Stop reading the PTY fd (node-pty pause()) so a flooding child blocks on write. Optional:
-   *  handles that cannot pause omit it and flow control degrades to a no-op. */
-  pause?(): void
-  resume?(): void
-  /** Resync the native PTY's screen state after a frontend clear. No-op except on Windows/ConPTY,
-   *  where a stale cursor row makes the next prompt repaint below a blank gap. */
-  clear?(): void
-  kill(): void
-  forceKill(): void
-  signal(sig: string): void
-  onData(cb: (data: string) => void): void
-  onExit(cb: (code: number) => void): void
-  /** Release the native PTY handle via node-pty's destroy(). Idempotent; safe to call after exit. */
-  dispose(): void
-}
-
-export type SessionOptions = {
-  sessionId: string
-  cols: number
-  rows: number
-  terminalHandle?: string
-  launchAgent?: TuiAgent
-  subprocess: SubprocessHandle
-  shellReadySupported: boolean
-  shellReadyTimeoutMs?: number
-  historySeedChunks?: readonly string[]
-  scrollback?: number
-  wslDistro?: string
-  // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
-  // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
-  onExit?: (code: number) => void
-  startupIngress?: PtyStartupIngressIntent
-  ownerBackend?: PtyOwnerBackend
-}
-
-type AttachedClient = {
-  token: symbol
-  onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  onExit: (code: number, incarnationId: string) => void
-}
 
 export class Session {
   readonly sessionId: string
@@ -119,34 +28,14 @@ export class Session {
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
   private _state: SessionState = 'running'
-  private _shellState: ShellReadyState
   private _exitCode: number | null = null
-  private _isTerminating = false
   private _disposed = false
-  private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
-  private attachedClients: AttachedClient[] = []
-  private preReadyStdinQueue: string[] = []
-  private releaseStartupDeviceAttributesResponder: (() => void) | null = null
-  private startupDeviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
-  private shellStartupOutputScanState: ShellStartupOutputScanState | null = null
-  private shellStartupPid: number | null = null
-  private shellPromptReadinessProbe: ShellPromptReadinessProbe | null = null
-  private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
-  private killTimer: ReturnType<typeof setTimeout> | null = null
-  private postReadyFlushGate: PostReadyFlushGate
-  private pendingOutputRecords: PendingOutputRecord[] = []
-  private pendingOutputBytes = 0
-  private pendingOutputOverflowed = false
-  private pendingOutputSeq = 0
-  private outputSequence = 0
-  private producerPaused = false
-  private producerPauseFailsafeTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly _historySeeded: boolean | undefined
-  private forceKillSent = false
-  private subprocessDisposed = false
-  private readonly physicalExit = new PhysicalExitTracker()
+  private readonly output: SessionOutputPlane
+  private readonly producerPause: SessionProducerPause
+  private readonly shellReady: SessionShellReadyBarrier
+  private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
 
   constructor(opts: SessionOptions) {
@@ -156,63 +45,42 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
-    const size = normalizePtySize(opts.cols, opts.rows)
-    this.emulator = new HeadlessEmulator({
-      cols: size.cols,
-      rows: size.rows,
+    this.output = new SessionOutputPlane({
+      cols: opts.cols,
+      rows: opts.rows,
       scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro
-      // No onData: the daemon emulator must never reply to query sequences — the renderer's xterm is
-      // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
-      // The one exception is DA1 while the shell-ready barrier holds (below): the renderer's reply
-      // would be queued behind the marker it is needed to produce, so it cannot be authoritative there.
+      wslDistro: opts.wslDistro,
+      historySeedChunks: opts.historySeedChunks
     })
-    // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
-    // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
-    // chunks could not land either — and writing them past a dropped chunk would seed a torn stream.
-    this._historySeeded =
-      opts.historySeedChunks === undefined
-        ? undefined
-        : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
+    this.producerPause = new SessionProducerPause(this.subprocess)
+    this.termination = new SessionTerminationController({
+      sessionId: this.sessionId,
+      subprocess: this.subprocess,
+      launchAgent: this.launchAgent,
+      isExited: () => this._state === 'exited',
+      releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
+    })
 
-    if (opts.shellReadySupported) {
-      this._shellState = 'pending'
-      this.shellStartupOutputScanState = createShellStartupOutputScanState()
-      // Why: `write` queues everything until the ready marker, including the renderer's DA1
-      // reply — and a shell that withholds its first prompt until DA1 is answered (fish) then
-      // never emits the marker that would release it. Answer from the daemon, past the queue.
-      this.releaseStartupDeviceAttributesResponder = installDeviceAttributesResponder({
-        parser: this.emulator.responderParser,
-        response: STARTUP_DA1_RESPONSE,
-        reply: (data) => this.subprocess.write(data)
-      })
-      this.startupDeviceAttributesQueryFilter = new StartupDeviceAttributesQueryFilter()
-      this.shellReadyTimer = setTimeout(() => {
-        this.onShellReadyTimeout()
-      }, opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
-    } else {
-      this._shellState = 'unsupported'
-    }
+    this.shellReady = new SessionShellReadyBarrier({
+      sessionId: this.sessionId,
+      subprocess: this.subprocess,
+      responderParser: this.output.responderParser,
+      shellReadySupported: opts.shellReadySupported,
+      shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
+      installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
+      releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
+      acceptStartupIngress: (data) => this.startupIngress.accept(data)
+    })
 
-    this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
     const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.emitSubprocessOutput(emission),
+      onEmission: (emission) => this.output.emit(emission),
       ...(echoProbe ? { echoProbe } : {})
     })
-    if (this._shellState === 'pending') {
-      this.shellPromptReadinessProbe = createShellPromptReadinessProbe({
-        slavePath: this.subprocess.slavePath,
-        shellPath: this.subprocess.shellPath,
-        shellCwd: this.subprocess.shellCwd,
-        shellPathEnv: this.subprocess.shellPathEnv,
-        getShellPid: () => this.shellStartupPid,
-        onPromptReady: () => this.onShellPromptReady()
-      })
-    }
+    this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))
   }
@@ -222,11 +90,11 @@ export class Session {
   }
 
   get shellState(): ShellReadyState {
-    return this._shellState
+    return this.shellReady.state
   }
 
   get historySeeded(): boolean | undefined {
-    return this._historySeeded
+    return this.output.historySeeded
   }
 
   get exitCode(): number | null {
@@ -239,23 +107,17 @@ export class Session {
 
   /** A viewing client is attached; a dropped transport must clear this or pause/resume semantics leak. */
   get hasAttachedClients(): boolean {
-    return this.attachedClients.length > 0
+    return this.output.hasAttachedClients
   }
 
   get isTerminating(): boolean {
-    return this._isTerminating
+    return this.termination.isTerminating
   }
 
   /** Claims termination synchronously so attach/re-entry cannot race async
    * teardown preparation. Returns false when another owner already claimed it. */
   beginTermination(): boolean {
-    if (this._state === 'exited' || this._isTerminating) {
-      return false
-    }
-    this._isTerminating = true
-    // Why: a paused child can be blocked inside write(); resume before any async snapshot so it handles termination promptly.
-    this.releaseProducerPause({ resume: true })
-    return true
+    return this.termination.beginTermination()
   }
 
   get pid(): number {
@@ -277,8 +139,7 @@ export class Session {
 
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
-    if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
-      this.preReadyStdinQueue.push(data)
+    if (this.shellReady.tryEnqueue(data)) {
       return
     }
 
@@ -292,9 +153,7 @@ export class Session {
     if (!isValidPtySize(cols, rows)) {
       return
     }
-    this.emulator.resize(cols, rows)
-    // Why: the record stream must mirror the emulator's apply order, or cold-restore replay reflows at the wrong point.
-    this.recordPendingOutput({ kind: 'resize', cols, rows })
+    this.output.resize(cols, rows)
     this.subprocess.resize(cols, rows)
   }
 
@@ -304,182 +163,67 @@ export class Session {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPaused = true
-    this.subprocess.pause?.()
-    if (this.producerPauseFailsafeTimer) {
-      clearTimeout(this.producerPauseFailsafeTimer)
-    }
-    this.producerPauseFailsafeTimer = setTimeout(() => {
-      this.producerPauseFailsafeTimer = null
-      this.producerPaused = false
-      this.subprocess.resume?.()
-    }, PRODUCER_PAUSE_FAILSAFE_MS)
+    this.producerPause.pause()
   }
 
   resumeProducer(): void {
-    this.releaseProducerPause({ resume: true })
-  }
-
-  private releaseProducerPause(opts: { resume: boolean }): void {
-    if (this.producerPauseFailsafeTimer) {
-      clearTimeout(this.producerPauseFailsafeTimer)
-      this.producerPauseFailsafeTimer = null
-    }
-    if (!this.producerPaused) {
-      return
-    }
-    this.producerPaused = false
-    if (opts.resume) {
-      this.subprocess.resume?.()
-    }
+    this.producerPause.release({ resume: true })
   }
 
   kill(): void {
-    if (!this.beginTermination()) {
-      return
-    }
-    if (!this.launchAgent) {
-      this.signalTerminationRoot()
-    } else {
-      // Why: agent tool children live in detached process groups a dying shell's SIGHUP never reaches, so sweep them.
-      void Promise.resolve(
-        killWithDescendantSweep(
-          this.subprocess.pid,
-          () => {
-            this.signalTerminationRoot()
-          },
-          {
-            // Why: if the root exits during ps its PID can be recycled; never apply that stale snapshot to a different process tree.
-            ownsRoot: () => this.isAlive
-          }
-        )
-      ).catch((error) => {
-        if (this.isAlive) {
-          this.resetTerminationAfterSignalFailure()
-        }
-        console.warn('[Session] descendant-aware graceful kill failed:', error)
-      })
-    }
-    this.scheduleForceDisposeFallback()
+    this.termination.kill()
   }
 
   /** Signals a root whose descendant snapshot has completed. */
   signalTerminationRoot(): void {
-    if (this._state === 'exited') {
-      return
-    }
-    try {
-      this.subprocess.kill()
-    } catch (error) {
-      // Why: a rejected signal is not termination; reopen the session so a later retry can still target the live child.
-      this.resetTerminationAfterSignalFailure()
-      throw error
-    }
+    this.termination.signalTerminationRoot()
   }
 
   /** Starts the graceful-kill deadline when a coordinator owns the snapshot-first portion of teardown. */
   scheduleForceDisposeFallback(): void {
-    if (this.killTimer) {
-      return
-    }
-    this.armForceKillFallback(KILL_TIMEOUT_MS, SESSION_FORCE_KILL_MAX_ATTEMPTS)
-  }
-
-  private resetTerminationAfterSignalFailure(): void {
-    this._isTerminating = false
-    if (this.killTimer) {
-      clearTimeout(this.killTimer)
-      this.killTimer = null
-    }
-  }
-
-  private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {
-    this.killTimer = setTimeout(() => {
-      this.killTimer = null
-      if (this._state !== 'exited') {
-        try {
-          this.requestForceKill()
-        } catch (error) {
-          console.warn('[Session] failed to force-kill terminating subprocess:', error)
-          // Why: a transient SIGKILL rejection must not consume the only fallback owner after graceful shutdown returned.
-          if (attemptsRemaining > 1) {
-            this.armForceKillFallback(SESSION_FORCE_KILL_RETRY_MS, attemptsRemaining - 1)
-          }
-        }
-      }
-    }, delayMs)
+    this.termination.scheduleForceDisposeFallback()
   }
 
   async forceKillAndWaitForExit(
     timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
   ): Promise<void> {
-    if (this._state === 'exited') {
-      return
-    }
-    if (!this._isTerminating) {
-      this._isTerminating = true
-      this.releaseProducerPause({ resume: true })
-    }
-    // Why: escalate a graceful termination now; waiting for the 5s timer would spend most of the physical-exit budget.
-    await this.requestForceKillWithRetry()
-    await this.waitForPhysicalExit(timeoutMs)
+    await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
   signal(sig: string): void {
-    if (this._state === 'exited') {
-      return
-    }
-    this.subprocess.signal(sig)
+    this.termination.signal(sig)
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    const token = Symbol('attach')
-    this.attachedClients.push({ token, ...client })
-    return token
+    return this.output.attachClient(client)
   }
 
   detachClient(token: symbol): void {
-    const idx = this.attachedClients.findIndex((c) => c.token === token)
-    if (idx !== -1) {
-      this.attachedClients.splice(idx, 1)
-    }
+    this.output.detachClient(token)
     // Why: with no attached client nobody will send resumePty, so a paused shell would wedge until the failsafe; resume eagerly.
-    if (this.attachedClients.length === 0) {
-      this.releaseProducerPause({ resume: true })
+    if (!this.output.hasAttachedClients) {
+      this.producerPause.release({ resume: true })
     }
   }
 
   detachAllClients(): void {
-    this.attachedClients.length = 0
-    this.releaseProducerPause({ resume: true })
+    this.output.clearClients()
+    this.producerPause.release({ resume: true })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
-    if (this._disposed) {
-      return null
-    }
-    return { ...this.emulator.getSnapshot(opts), outputSequence: this.outputSequence }
+    return this.output.getSnapshot(opts)
   }
 
   getPartialEscapeTailAnsi(): string {
-    if (this._disposed) {
-      return ''
-    }
-    return this.emulator.partialEscapeTailAnsi
+    return this.output.getPartialEscapeTailAnsi()
   }
 
-  // Why: returns the size the PTY actually applied (emulator dims) so the renderer can detect a
-  // resize dropped here (exited/disposed/invalid) instead of trusting its last-requested size.
   getAppliedSize(): { cols: number; rows: number } | null {
-    if (this._disposed) {
-      return null
-    }
-    return this.emulator.getAppliedSize()
+    return this.output.getAppliedSize()
   }
 
-  /** Drains records accumulated since the last take. When includeSnapshot is set it serializes in
-   *  the same turn so no PTY data lands between drain and snapshot (which would replay twice on cold restore). */
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
@@ -489,27 +233,13 @@ export class Session {
     }
     const releasedHeldBytes =
       includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
-    const records = this.pendingOutputRecords
-    const overflowed = this.pendingOutputOverflowed
-    this.pendingOutputRecords = []
-    this.pendingOutputBytes = 0
-    this.pendingOutputOverflowed = false
-    this.pendingOutputSeq += 1
-    return {
-      records: includeSnapshot
-        ? releasedHeldBytes
-          ? [{ kind: 'output', data: releasedHeldBytes }]
-          : []
-        : records,
-      ...(includeSnapshot ? { drainedRecords: records } : {}),
-      seq: this.pendingOutputSeq,
-      overflowed,
-      snapshot: includeSnapshot ? this.getSnapshot() : null
-    }
+    return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
+      this.getSnapshot()
+    )
   }
 
   getCwd(): string | null {
-    return this.emulator.getCwd()
+    return this.output.getCwd()
   }
 
   getForegroundProcess(): string | null {
@@ -524,36 +254,17 @@ export class Session {
     if (this._disposed) {
       return
     }
-    this.emulator.clearScrollback()
-    this.recordPendingOutput({ kind: 'clear' })
+    this.output.clearScrollback()
     this.subprocess.clear?.()
-    this.#nudgePowerShellPromptRepaint()
-  }
-
-  /** Why: ConPTY's buffer clear leaves PSReadLine's cached cursor row stale, so the next prompt
-   *  repaints below a blank gap; a form feed (Ctrl+L) forces a repaint at the true origin. Gated to a
-   *  PowerShell foreground (else a running command/TUI gets a stray 0x0C) and an empty prompt (PSReadLine
-   *  repaints pending input at a stale cached row ConPTY's fixed viewport doesn't track). */
-  #nudgePowerShellPromptRepaint(): void {
-    if (process.platform !== 'win32') {
-      return
-    }
-    // Why: before shell-ready, write() would queue this form feed behind the startup command and
-    // fire it later when the gates below are stale; the nudge is cosmetic, so skip rather than defer.
-    if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
-      return
-    }
-    if (!isPowerShellProcess(this.subprocess.getForegroundProcess())) {
-      return
-    }
-    if (!this.emulator.isCursorOnEmptyPromptLine()) {
-      return
-    }
-    this.subprocess.write('\x0c')
+    nudgePowerShellPromptRepaint({
+      subprocess: this.subprocess,
+      isGatingWrites: this.shellReady.isGatingWrites,
+      isCursorOnEmptyPromptLine: () => this.output.isCursorOnEmptyPromptLine()
+    })
   }
 
   prepareForFinalSnapshot(): string {
-    const held = this.releaseHeldShellReadyBytes()
+    const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
     return held
   }
@@ -565,11 +276,11 @@ export class Session {
 
     // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
     // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
-    this.releaseStartupDeviceAttributes()
-    this.releaseHeldShellReadyBytes()
+    this.shellReady.releaseDeviceAttributes()
+    this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
-    const wasTerminating = this._isTerminating && this._state !== 'exited'
-    const clientsToNotify = wasTerminating ? this.attachedClients.slice() : []
+    const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
+    const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
       try {
         this.subprocess.forceKill()
@@ -577,16 +288,15 @@ export class Session {
         /* child may already be gone */
       }
       this._exitCode = -1
-      this._isTerminating = false
+      this.termination.clearTerminating()
     }
 
     this.#teardownSubprocess()
     this._state = 'exited'
 
-    this.attachedClients = []
-    this.preReadyStdinQueue = []
-    this.postReadyFlushGate.clear()
-    this.emulator.dispose()
+    this.output.clearClients()
+    this.shellReady.clearPendingWrites()
+    this.output.disposeEmulator()
 
     for (const client of clientsToNotify) {
       client.onExit(-1, this.incarnationId)
@@ -617,269 +327,52 @@ export class Session {
       return
     }
     this._disposed = true
+    this.output.markDisposed()
     // Why: never leave a paused fd behind on teardown; the handle's dead-guard makes this a no-op once the child is reaped.
-    this.releaseProducerPause({ resume: true })
-    if (this.killTimer) {
-      clearTimeout(this.killTimer)
-      this.killTimer = null
-    }
-    if (this.shellReadyTimer) {
-      clearTimeout(this.shellReadyTimer)
-      this.shellReadyTimer = null
-    }
-    this.shellPromptReadinessProbe?.dispose()
-    this.shellPromptReadinessProbe = null
-    this.shellStartupOutputScanState = null
-    this.preReadyStdinQueue = []
-    this.postReadyFlushGate.clear()
-    this.disposeSubprocessHandle()
-  }
-
-  private disposeSubprocessHandle(): void {
-    if (this.subprocessDisposed) {
-      return
-    }
-    this.subprocessDisposed = true
-    try {
-      this.subprocess.dispose()
-    } catch (err) {
-      // Why: dispose() should never throw, but if it does, callers must still complete their own cleanup (fanout, map removal).
-      console.warn('[Session] subprocess.dispose() threw:', err)
-    }
-  }
-
-  private recordPendingOutput(record: PendingOutputRecord): void {
-    if (this.pendingOutputOverflowed) {
-      return
-    }
-    const bytes = record.kind === 'output' ? record.data.length : 8
-    if (this.pendingOutputBytes + bytes > PENDING_OUTPUT_MAX_BYTES) {
-      this.pendingOutputRecords = []
-      this.pendingOutputBytes = 0
-      this.pendingOutputOverflowed = true
-      return
-    }
-    // Why: coalesce the thousands of tiny TUI chunks per tick to keep take RPC/log frames compact; 64KB cap bounds append cost.
-    const last = this.pendingOutputRecords.at(-1)
-    if (record.kind === 'output' && last?.kind === 'output' && last.data.length < 64 * 1024) {
-      last.data += record.data
-    } else {
-      this.pendingOutputRecords.push(record)
-    }
-    this.pendingOutputBytes += bytes
+    this.producerPause.release({ resume: true })
+    this.termination.cancelForceKillFallback()
+    this.shellReady.dispose()
+    this.termination.disposeSubprocessHandle()
   }
 
   private handleSubprocessData(data: string): void {
     if (this._disposed) {
       return
     }
-
-    let releaseStartupDeviceAttributes = false
-    if (this._shellState === 'pending' && this.shellStartupOutputScanState) {
-      const scanned = scanShellStartupOutput(this.shellStartupOutputScanState, data)
-      data = scanned.output
-      if (scanned.shellPid) {
-        this.shellStartupPid = scanned.shellPid
-      }
-      if (scanned.ready) {
-        this.transitionToReady(scanned.postMarkerBytesObserved)
-        releaseStartupDeviceAttributes = true
-      }
-    } else {
-      this.postReadyFlushGate.notifyData()
-    }
-
-    this.startupIngress.accept(data)
-    if (this._shellState === 'pending' && data.length > 0) {
-      this.shellPromptReadinessProbe?.notifyOutput(data)
-    }
-    if (releaseStartupDeviceAttributes) {
-      this.releaseStartupDeviceAttributes()
-    }
-  }
-
-  private emitSubprocessOutput(emission: PtyIngressEmission): void {
-    let { data } = emission
-    const rawLength = emission.rawEndSeq - emission.rawStartSeq
-    // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
-    this.outputSequence += rawLength
-    if (data.length > 0) {
-      this.emulator.write(data)
-      data = this.startupDeviceAttributesQueryFilter?.accept(data) ?? data
-    }
-    if (data.length > 0) {
-      this.recordPendingOutput({ kind: 'output', data })
-    }
-
-    // Broadcast to attached clients
-    for (const client of this.attachedClients) {
-      if (emission.transformed || rawLength !== data.length) {
-        client.onData(data, rawLength, true, this.outputSequence)
-      } else {
-        client.onData(data)
-      }
-    }
+    this.shellReady.ingestSubprocessData(data)
   }
 
   private handleSubprocessExit(code: number): void {
-    this.physicalExit.markExited()
+    this.termination.markPhysicalExit()
     if (this._disposed) {
       return
     }
 
-    this.releaseStartupDeviceAttributes()
-    this.shellPromptReadinessProbe?.dispose()
-    this.shellPromptReadinessProbe = null
-    this.releaseHeldShellReadyBytes()
+    this.shellReady.releaseDeviceAttributes()
+    this.shellReady.disposePromptReadinessProbe()
+    this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
     this._exitCode = code
     this._state = 'exited'
-    this._isTerminating = false
+    this.termination.clearTerminating()
     // Why resume:false — the child is reaped (nothing to unblock); only the failsafe timer must not outlive the session.
-    this.releaseProducerPause({ resume: false })
+    this.producerPause.release({ resume: false })
 
-    if (this.killTimer) {
-      clearTimeout(this.killTimer)
-      this.killTimer = null
-    }
-    if (this.shellReadyTimer) {
-      clearTimeout(this.shellReadyTimer)
-      this.shellReadyTimer = null
-    }
-    this.postReadyFlushGate.clear()
+    this.termination.cancelForceKillFallback()
+    this.shellReady.clearReadyTimer()
+    this.shellReady.clearFlushGate()
 
     // Why: release the ptmx fd here or node-pty's _socket leaks the master fd until GC (docs/fix-pty-fd-leak.md).
     // Not via #teardownSubprocess: it flips `_disposed`, short-circuiting the later Session.dispose() reaper.
-    this.disposeSubprocessHandle()
+    this.termination.disposeSubprocessHandle()
 
-    for (const client of this.attachedClients) {
-      client.onExit(code, this.incarnationId)
-    }
+    this.output.broadcastExit(code, this.incarnationId)
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)
   }
 
-  private releaseHeldShellReadyBytes(): string {
-    if (!this.shellStartupOutputScanState) {
-      return ''
-    }
-    const heldBytes = drainShellStartupOutputScanState(this.shellStartupOutputScanState)
-    this.shellStartupOutputScanState = null
-    // Why: scanning strips marker bytes before fan-out; if readiness never completes, release any held prefix before timeout/exit discards it.
-    this.startupIngress.accept(heldBytes)
-    return heldBytes
-  }
-
   closeStartupQueryAuthority(): number {
     return this.startupIngress.closeQueryAuthority()
-  }
-
-  /** Hands DA1 back to the renderer once the barrier is done, however it ended. */
-  private releaseStartupDeviceAttributes(): void {
-    this.releaseStartupDeviceAttributesResponder?.()
-    this.releaseStartupDeviceAttributesResponder = null
-    const pending = this.startupDeviceAttributesQueryFilter?.release() ?? ''
-    this.startupDeviceAttributesQueryFilter = null
-    if (pending.length === 0) {
-      return
-    }
-    this.recordPendingOutput({ kind: 'output', data: pending })
-    for (const client of this.attachedClients) {
-      client.onData(pending, 0, true, this.outputSequence)
-    }
-  }
-
-  private transitionToReady(postMarkerBytesObserved = false): void {
-    this._shellState = 'ready'
-    this.shellStartupOutputScanState = null
-    this.shellPromptReadinessProbe?.dispose()
-    this.shellPromptReadinessProbe = null
-    if (this.shellReadyTimer) {
-      clearTimeout(this.shellReadyTimer)
-      this.shellReadyTimer = null
-    }
-    if (this.preReadyStdinQueue.length === 0) {
-      return
-    }
-    this.postReadyFlushGate.arm(postMarkerBytesObserved)
-  }
-
-  private onShellReadyTimeout(): void {
-    this.shellReadyTimer = null
-    if (this._shellState !== 'pending') {
-      return
-    }
-    this._shellState = 'timed_out'
-    this.shellPromptReadinessProbe?.dispose()
-    this.shellPromptReadinessProbe = null
-    this.releaseStartupDeviceAttributes()
-    this.releaseHeldShellReadyBytes()
-    this.flushPreReadyQueue()
-  }
-
-  private onShellPromptReady(): void {
-    if (this._shellState !== 'pending') {
-      return
-    }
-    console.warn(
-      `[Session] ${this.sessionId}: shell-ready wrapper was replaced before its marker; releasing at the identified shell prompt. OSC 133 integration may be unavailable.`
-    )
-    this.releaseHeldShellReadyBytes()
-    this.transitionToReady(true)
-    this.releaseStartupDeviceAttributes()
-  }
-
-  private flushPreReadyQueue(): void {
-    const queued = this.preReadyStdinQueue
-    this.preReadyStdinQueue = []
-    for (const data of queued) {
-      this.subprocess.write(data)
-    }
-  }
-
-  private requestForceKill(): void {
-    if (this._state === 'exited' || this.forceKillSent) {
-      return
-    }
-    this.forceKillSent = true
-    try {
-      this.subprocess.forceKill()
-    } catch (error) {
-      this.forceKillSent = false
-      throw error
-    }
-  }
-
-  private async requestForceKillWithRetry(): Promise<void> {
-    let lastError: unknown
-    for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
-      try {
-        this.requestForceKill()
-        return
-      } catch (error) {
-        lastError = error
-      }
-      if (attempt + 1 < SESSION_FORCE_KILL_MAX_ATTEMPTS) {
-        try {
-          await this.physicalExit.waitForExit(
-            SESSION_FORCE_KILL_RETRY_MS,
-            () => new Error(`Retrying force-kill for PTY ${this.sessionId}`)
-          )
-          return
-        } catch {
-          // The bounded waiter detached; retry the still-owned subprocess.
-        }
-      }
-    }
-    throw lastError
-  }
-
-  private waitForPhysicalExit(timeoutMs: number): Promise<void> {
-    // Why: timed-out destructive retries must detach from an unkillable child, else each retry stays retained until it exits.
-    return this.physicalExit.waitForExit(
-      timeoutMs,
-      () => new Error(`Timed out waiting for PTY process exit: ${this.sessionId}`)
-    )
   }
 }

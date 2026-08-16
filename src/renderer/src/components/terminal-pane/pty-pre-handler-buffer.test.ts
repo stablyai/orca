@@ -8,7 +8,8 @@ import {
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit,
   discardPreHandlerPtyState,
-  hasPreHandlerPtyExit
+  hasPreHandlerPtyExit,
+  replayPreHandlerPtyData
 } from './pty-pre-handler-buffer'
 
 const RESCAN_PTY_ID = 'pty-pre-handler-rescan'
@@ -51,6 +52,22 @@ describe('pre-handler PTY buffer', () => {
     const drained: string[] = []
     drainPreHandlerPtyData(RESCAN_PTY_ID, (data) => drained.push(data))
     expect(drained).toHaveLength(4_096)
+  })
+
+  it('replays startup bytes without consuming the primary handler drain', () => {
+    bufferPreHandlerPtyData(RESCAN_PTY_ID, 'composer frame')
+    bufferPreHandlerPtyData(RESCAN_PTY_ID, '\x1b[?2004h')
+    const observer = vi.fn()
+    const primary = vi.fn()
+
+    replayPreHandlerPtyData(RESCAN_PTY_ID, observer)
+    drainPreHandlerPtyData(RESCAN_PTY_ID, primary)
+
+    expect(observer.mock.calls).toEqual([['composer frame'], ['\x1b[?2004h']])
+    expect(primary.mock.calls).toEqual([
+      ['composer frame', undefined],
+      ['\x1b[?2004h', undefined]
+    ])
   })
 
   it('does not shift the live array while trimming a capped backlog', () => {

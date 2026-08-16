@@ -1,4 +1,5 @@
 import { parsePairingCode } from './pairing'
+import { stripCredentialsFromMessage } from './git-remote-error'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeConnection,
@@ -38,7 +39,7 @@ export function redactEphemeralVmRecipeDiagnosticText(text: string): string {
   if (!text) {
     return text
   }
-  return text
+  return stripCredentialsFromMessage(text)
     .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'orca://pair?code=[redacted]')
     .replace(
       /("(?:pairingCode|deviceToken|publicKeyB64|token|secret|password|apiKey|accessToken|identityFile|identityAgent|proxyCommand)"\s*:\s*)"[^"]*"/gi,

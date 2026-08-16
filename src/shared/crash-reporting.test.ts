@@ -59,6 +59,17 @@ describe('crash-reporting shared helpers', () => {
     )
   })
 
+  it('preserves the failing CHECK at the end of a long fatal line', () => {
+    const fatalLine = `[FATAL:node.cc(123)] ${'context '.repeat(80)}Check failed: !is_detached_.`
+
+    const sanitized = String(
+      sanitizeCrashReportDetails({ minidumpCheckMessage: fatalLine }).minidumpCheckMessage
+    )
+
+    expect(sanitized.length).toBeGreaterThan(240)
+    expect(sanitized).toContain('Check failed: !is_detached_.')
+  })
+
   it('sanitizes breadcrumb data and caps to the latest thirty entries', () => {
     const breadcrumbs = sanitizeCrashReportBreadcrumbs(
       Array.from({ length: 32 }, (_, index) => ({
@@ -131,6 +142,41 @@ describe('crash-reporting shared helpers', () => {
     expect(text).toContain('[redacted-path]')
     expect(text).not.toContain('Route:')
     expect(text).not.toContain('\nURL:')
+  })
+
+  it('names the failing CHECK above the details block', () => {
+    const fatalLine =
+      '[8104:1234:0815/143022.123456:FATAL:render_frame_impl.cc(4821)] Check failed: !is_detached_.'
+    const report: CrashReportRecord = {
+      id: 'crash-check',
+      createdAt: '2026-08-15T01:00:00.000Z',
+      status: 'pending',
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'crashed',
+      // The bare STATUS_BREAKPOINT this ticket is about.
+      exitCode: -2147483645,
+      appVersion: '1.4.183',
+      platform: 'win32',
+      osRelease: '10.0.19045',
+      arch: 'x64',
+      electronVersion: '43.1.0',
+      chromeVersion: '150.0.7871.47',
+      details: {
+        minidumpCheckMessage: fatalLine,
+        minidumpFaultingModule: 'chrome_elf.dll',
+        minidumpFaultingModuleOffset: '0x1234'
+      },
+      breadcrumbs: []
+    }
+
+    const text = formatCrashReportText(report)
+
+    // Why: Chromium logs the source basename, not a path, so the fatal line has
+    // to survive path redaction intact or the check is unnameable again.
+    expect(text).toContain(`Check failure: ${fatalLine}`)
+    expect(text).toContain('Faulting module: chrome_elf.dll+0x1234')
+    expect(text.indexOf('Check failure:')).toBeLessThan(text.indexOf('Details:'))
   })
 
   it('caps formatted reports to the crash endpoint limit', () => {

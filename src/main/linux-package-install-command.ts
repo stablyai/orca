@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import path from 'node:path'
-import type { LinuxRootPackageType } from '../shared/types'
+import type { LinuxRootPackageType } from '../shared/update-status-types'
 
 // Why: an absolute but user-writable PATH entry must never be treated as a trusted package manager.
 const TRUSTED_EXECUTABLE_DIRECTORIES = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']

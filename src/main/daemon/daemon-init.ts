@@ -15,18 +15,9 @@ import {
   unlinkOwnedDaemonPidFile,
   type DaemonLauncher,
   type DaemonPidFile,
-  type DaemonLaunchMode,
   type DaemonProcessHandle
 } from './daemon-spawner'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
-import { endpointIsProvenDead, probeSocketConnect } from './daemon-endpoint-probe'
-import {
-  OCCUPANCY_CONNECT_BUDGET_MS,
-  OCCUPANCY_REQUEST_BUDGET_MS,
-  raiseOccupancyWithProcessEvidence,
-  resolveDaemonOccupancy,
-  type DaemonOccupancy
-} from './daemon-occupancy'
 import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
@@ -36,17 +27,15 @@ import {
   PROTOCOL_VERSION,
   type ListSessionsResult
 } from './types'
+import { getMacDaemonSystemResolverHealth, checkDaemonHealth } from './daemon-health'
 import {
-  getMacDaemonSystemResolverHealth,
   getMacDaemonTccAttributionHealth,
-  getDaemonLaunchIdentity,
-  checkDaemonHealth,
-  isDaemonStaleForCurrentBundle,
-  killStaleDaemon,
-  readVerifiedDaemonPid,
-  parseDaemonPidFile,
   type MacDaemonTccAttributionHealth
-} from './daemon-health'
+} from './daemon-tcc-attribution'
+import { getDaemonLaunchIdentity } from './daemon-pid-identity'
+import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
+import { killStaleDaemon } from './daemon-stale-kill'
+import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
   materializeRelocatedDaemonHost,
@@ -80,47 +69,8 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
-/**
- * Ceiling on the whole failed-health classification — every probe, the grace window, the
- * identity check and the process-table read together — enforced at runtime rather than
- * summed by hand.
- *
- * Why enforced: startup fails open at 60s by abandoning the daemon provider outright, and
- * ensureRunning() is not abortable, so overrunning costs the app its daemon *and* still kills
- * the incumbent. Four separate reviews found a term missing from the hand-written sum that
- * was supposed to prevent that — the launcher's own adoption connect, an identity probe, an
- * endpoint probe, a doubled evidence deadline. A budget that has to be remembered is a budget
- * that will be wrong, so the code now spends against a clock and stops when it runs out.
- *
- * The remainder of the fail-open window belongs to what follows a replace verdict: the kill
- * ladder and the daemon fork.
- */
-export const WEDGED_DAEMON_CLASSIFICATION_BUDGET_MS = 34_000
-
-/**
- * The clock the identity re-check and process-table read need, checked *after* the probes
- * rather than withheld from them.
- *
- * It used to be a reservation, and that was backwards: withholding twelve seconds starved the
- * one probe whose answer can still restore full daemon mode, since only a counted reply reaches
- * preserveDaemon(). With the reservation in place the "patient" ask resolved to exactly the
- * cheap ask's four seconds.
- *
- * Do not read the demotion as "the evidence read is cosmetic" — an earlier version of this
- * comment said that and it was wrong twice over. The read decides the verdict wherever the
- * unknown hold declines to: it has no endpointIsProvenDead check and no health !== 'rejected'
- * check, so evidence is what holds a daemon whose socket entry vanished, and what holds a
- * hello-rejected daemon that is still hosting agents. Skipping it on a spent clock therefore
- * withdraws real protection, not a log line; the gate is set so that only probes which already
- * consumed the budget can trigger it.
- *
- * So the evidence read is opportunistic now. If the probes used the clock, it is skipped and
- * the verdict stays 'unknown' — which holds the daemon exactly as an evidence-raised
- * 'occupied' would have. Nothing is lost but a more precise log line.
- *
- * Zero on Windows, which runs neither step.
- */
-export const CLASSIFICATION_EVIDENCE_MIN_MS = process.platform === 'win32' ? 0 : 12_000
+// Why: extra hello+listSessions probes (~5s each) giving a wedged-but-connectable daemon ~60s grace to answer and keep its live sessions before a permanent wedge (#8689) is replaced; raise only alongside the fail-open cap.
+export const WEDGED_DAEMON_GRACE_RETRIES = 11
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
@@ -222,10 +172,27 @@ function probeSocket(socketPath: string): Promise<boolean> {
   })
 }
 
+async function getAliveDaemonSessionCount(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<number | null> {
+  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
+  try {
+    await client.ensureConnected()
+    const result = await client.request<ListSessionsResult>('listSessions', undefined)
+    return result.sessions.filter((session) => session.isAlive).length
+  } catch {
+    return null
+  } finally {
+    client.disconnect()
+  }
+}
+
 function createPreservedDaemonHandle(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION,
-  mode?: DaemonLaunchMode
+  mode?: 'degraded-new-pty-fallback'
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
     shutdown: async () => {
@@ -452,30 +419,19 @@ function isNoSuchProcessError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
 }
 
-/** How a preserve decision reads in a log line, from either evidence source. */
-function describeOccupancy(occupancy: DaemonOccupancy): string {
-  if (occupancy.liveSessions === null) {
-    return 'live session state could not be verified'
-  }
-  return `it owns ${occupancy.liveSessions} live session${occupancy.liveSessions === 1 ? '' : 's'}`
-}
-
-/** IPC only: these callers run against a daemon that just answered a health check. */
-function resolveOccupancyOverIpc(socketPath: string, tokenPath: string): Promise<DaemonOccupancy> {
-  return resolveDaemonOccupancy({ socketPath, tokenPath, recordedPid: null })
-}
-
 async function shouldPreserveDaemonWithLiveSessions(
   socketPath: string,
   tokenPath: string,
   replacementLabel: string
 ): Promise<boolean> {
-  const occupancy = await resolveOccupancyOverIpc(socketPath, tokenPath)
-  if (occupancy.state === 'empty') {
+  const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+  if (liveSessionCount === 0) {
     return false
   }
   console.warn(
-    `[daemon] Preserving daemon ${replacementLabel} because ${describeOccupancy(occupancy)}`
+    liveSessionCount === null
+      ? `[daemon] Preserving daemon ${replacementLabel} because live session state could not be verified`
+      : `[daemon] Preserving daemon ${replacementLabel} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
   )
   return true
 }
@@ -503,9 +459,6 @@ function createOutOfProcessLauncher(
       | {
           reason: Parameters<typeof trackDaemonReplaced>[0]
           liveSessionCount: number | null
-          /** Rendered once the outcome is known; only the health-check branch announces. */
-          verdict?: string
-          announce?: boolean
         }
       | undefined
     let confirmedReplacement = false
@@ -513,35 +466,17 @@ function createOutOfProcessLauncher(
       socketPath,
       tokenPath
     })
-    // Why the clock starts before the adoption connect: that connect is on the classification
-    // path and uses the non-shared five-seconds-per-step default, so it was the fourth term to
-    // go missing from the sum this replaces. A ceiling that starts after part of the work is
-    // the same fiction in a new place.
-    const classificationDeadline = Date.now() + WEDGED_DAEMON_CLASSIFICATION_BUDGET_MS
-    const classificationRemainingMs = (): number => Math.max(0, classificationDeadline - Date.now())
     try {
       // Why: acquire the full pair before control-only probes so an expired inherited deadline can't fire in the probe-to-adoption gap.
-      // Capped: this only acquires a lease that preserveDaemon() re-establishes anyway, and a
-      // daemon that accepts the socket but never answers hello would otherwise spend the whole
-      // classification clock here, leaving nothing for the probes that protect its sessions.
-      await adoptionClient.ensureConnectedWithin(
-        Math.min(OCCUPANCY_CONNECT_BUDGET_MS, classificationRemainingMs())
-      )
+      await adoptionClient.ensureConnected()
       await reconcileDaemonPidOwnership(adoptionClient, pidPath)
     } catch {
       adoptionClient.disconnect()
       adoptionClient = null
     }
-    /**
-     * Keep the incumbent without talking to it. No adoption, so no lease: the lease only
-     * cancels an adoption watchdog, which cannot fire on a daemon that owns sessions.
-     */
-    const holdIncumbentDaemon = (): DaemonProcessHandle => {
-      adoptionClient?.disconnect()
-      adoptionClient = null
-      return createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, 'held')
-    }
-    const preserveDaemon = async (mode?: DaemonLaunchMode): Promise<DaemonProcessHandle> => {
+    const preserveDaemon = async (
+      mode?: 'degraded-new-pty-fallback'
+    ): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
       return holdDaemonAdoptionLease(
@@ -558,17 +493,19 @@ function createOutOfProcessLauncher(
       if (health === 'healthy') {
         const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
         if (resolverHealth === 'unhealthy') {
-          const occupancy = await resolveOccupancyOverIpc(socketPath, tokenPath)
-          if (occupancy.state !== 'empty') {
+          const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+          if (liveSessionCount !== 0) {
             console.warn(
-              `[daemon] Preserving daemon with unavailable macOS system resolver because ${describeOccupancy(occupancy)}`
+              liveSessionCount === null
+                ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
+                : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
             )
             return preserveDaemon()
           }
           console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
           pendingReplacement = {
             reason: 'unhealthy_resolver',
-            liveSessionCount: 0
+            liveSessionCount
           }
           confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
             .cleaned
@@ -614,18 +551,17 @@ function createOutOfProcessLauncher(
             const attributionHealth = await getMacDaemonTccAttributionHealth(
               runtimeDir,
               socketPath,
-              tokenPath,
-              app.isPackaged ? app.getVersion() : null
+              tokenPath
             )
             if (attributionHealth === 'severed') {
               // Why: replacing with live sessions would kill them; Settings → Developer
               // Permissions surfaces the Manage Sessions → Restart remedy instead.
-              const occupancy = await resolveOccupancyOverIpc(socketPath, tokenPath)
-              if (occupancy.state === 'empty') {
+              const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+              if (liveSessionCount === 0) {
                 console.warn(
                   '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
                 )
-                pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount: 0 }
+                pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
                 confirmedReplacement = (
                   await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
                 ).cleaned
@@ -639,141 +575,47 @@ function createOutOfProcessLauncher(
           }
         }
       } else {
-        // Why: a busy machine can time out the health check on a live daemon; re-verify what
-        // it is hosting before killing its sessions.
-        //
-        // No recordedPid: this loop waits for *IPC* to recover, and the process table cannot
-        // change its answer within a grace window, so scanning it every pass would multiply
-        // the launch budget for an answer we already have. It is read once, after the wait.
-        // Every probe spends the shared clock, minus what the evidence read still needs, so no
-        // probe can eat the reserve however long the daemon takes to answer.
-        const probeBudgetMs = (): number => classificationRemainingMs()
-        const askDaemonWhatItHosts = (connectBudgetMs: number): Promise<DaemonOccupancy> =>
-          resolveDaemonOccupancy({
-            socketPath,
-            tokenPath,
-            recordedPid: null,
-            budgetMs: probeBudgetMs(),
-            connectBudgetMs
-          })
-        // Why the tolerant question goes first: this path is only reached because a 3s health
-        // check timed out, so a cheap probe re-asks on a stricter budget than the one that
-        // triaged the daemon here and can only ever agree with it. The patient ask is the only
-        // one that can disagree, and asking it last meant asking it with the clock already
-        // spent. It gets every millisecond the answer itself does not still need, and never
-        // less than the cheap ask would have had.
-        const patientConnectBudgetMs = (): number =>
-          Math.max(OCCUPANCY_CONNECT_BUDGET_MS, probeBudgetMs() - OCCUPANCY_REQUEST_BUDGET_MS)
-        let occupancy = await askDaemonWhatItHosts(patientConnectBudgetMs())
-        // Why there is no retry loop here any more. Cheap retries used to follow this ask, but
-        // the arithmetic makes them unreachable at every ceiling, not just this one:
-        //
-        //   remaining = B - E - max(CONNECT, (B - E) - REQUEST) = REQUEST, whenever B - E > CONNECT + REQUEST
-        //
-        // The patient connect takes every millisecond the answer does not need, so what is left
-        // after it is always exactly OCCUPANCY_REQUEST_BUDGET_MS — never enough to fund another
-        // ask. Raising the budget donates the increase to the same connect and changes nothing.
-        // Funding a real retry needs ~71s of classification, kill ladder and fork against a 60s
-        // fail-open, so the loop cannot be bought back at any price.
-        //
-        // One shape did reach it, and the earlier claim that none could was wrong: a connect
-        // that fails *fast* leaves the budget nearly whole, and while a refused or missing
-        // endpoint is caught by the proven-dead guard, the EPERM/EMFILE class reads 'unknown'
-        // and would have passed. Dropping it costs that case a retry — which retrying was never
-        // going to fix, because an fd-exhausted or permission-denied connect fails the same way
-        // the second time, and recover() puts the daemon back into full service on the next
-        // spawn once the condition clears.
-        //
-        // Nothing is lost by dropping it: a 4s retry cannot reach a daemon that needs longer
-        // than 4s to answer, which is the whole wedge population, while this one ask waits ~12s.
-        // The only case a retry caught and this does not is a daemon that recovers within a few
-        // seconds of being asked — and DegradedDaemonFreshSpawnRouter.recover() already restores
-        // it to full daemon service on the next spawn, off the startup clock entirely.
-        // Do not delete this because 'unknown' and 'occupied' both hold — twice reviewed, twice
-        // proposed for removal, and it regresses both times. The occupied branch below has no
-        // endpointIsProvenDead check and the unknown hold does, so this read is the only thing
-        // standing between a kill and a daemon whose socket entry vanished (a tmp reaper, a
-        // failed publish) while it still hosts live agents: without it that reads as
-        // unknown + proven-dead and falls through to killStaleDaemon.
-        //
-        // The children scan earns its keep for the same reason in reverse: a verified-live pid
-        // alone would also hold a *childless* daemon whose socket vanished, which is the one
-        // #8689 case we can still safely replace.
-        //
-        // The evidence that separates a wedged daemon still hosting terminals from one with
-        // nothing left to lose (#8689). Read once IPC has had its full chance, and only when
-        // it never answered — both because it costs a process scan, and because identity has
-        // to be re-verified first: the grace window is long enough for the daemon to die and
-        // its pid to be recycled, and the evidence would then describe a stranger's children.
-        const evidencePid =
-          occupancy.state === 'unknown' &&
-          process.platform !== 'win32' &&
-          classificationRemainingMs() >= CLASSIFICATION_EVIDENCE_MIN_MS
-            ? ((await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath))?.pid ?? null)
-            : null
-        occupancy = await raiseOccupancyWithProcessEvidence(occupancy, evidencePid)
-        if (occupancy.state === 'occupied') {
-          const owned =
-            occupancy.liveSessions === null
-              ? 'live terminal processes'
-              : `${occupancy.liveSessions} live session${occupancy.liveSessions === 1 ? '' : 's'}`
-
-          // Why this comes first: adoption opens a hello, and neither of these daemons can
-          // complete one — 'rejected' answered and refused, and a count only the process table
-          // could supply means nothing answered across the whole grace window. `health` is a
-          // reading from before that window, so it cannot overrule them. Attempting adoption
-          // anyway throws, and the throw costs the app its daemon entirely.
-          if (health === 'rejected' || occupancy.liveSessions === null) {
-            console.warn(
-              `[daemon] DEGRADED MODE: holding a daemon that cannot be adopted (health=${health}) but still owns ${owned}. Killing it would end them; fresh terminals run on the local provider WITHOUT daemon persistence until it recovers or you restart it (Manage Sessions → Restart).`
-            )
-            return holdIncumbentDaemon()
-          }
+        // Why: a busy machine can time out the health check on a live daemon; re-verify with a session list before killing its sessions.
+        let liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+        // Why: a wedged-but-connectable daemon (Windows update relaunch) may still own live sessions, so grace-retry before replacing; a permanent wedge (#8689) exhausts the grace, and 'rejected' skips it (handshake refused = never adoptable).
+        let graceRetry = 0
+        while (
+          liveSessionCount === null &&
+          health !== 'rejected' &&
+          graceRetry < WEDGED_DAEMON_GRACE_RETRIES &&
+          (await probeSocket(socketPath))
+        ) {
+          liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+          graceRetry++
+        }
+        if (liveSessionCount !== null && liveSessionCount > 0) {
           if (health === 'pty-spawn-unhealthy') {
-            // It answered listSessions just now, so it is adoptable — it simply cannot open
-            // new PTYs.
             console.warn(
-              `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${owned}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
+              `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
             )
             return preserveDaemon('degraded-new-pty-fallback')
           }
           console.warn(
-            `[daemon] Preserving daemon that failed the health check because it owns ${owned}`
+            `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
           )
           return preserveDaemon()
         }
-        // 'unknown' is not permission to kill. Everything above has failed to establish what
-        // this daemon is hosting, and killing it on that basis is what destroyed live agents.
-        // Bounded classification cannot be made safe by budgeting — matching main's tolerance
-        // for one ask costs more clock than the 60s fail-open leaves — so the residual stops
-        // being lethal instead. Being wrong now costs a degraded session, not an agent.
-        //
-        // Two exclusions, both about not holding something that can never be recovered:
-        //   - a proven-dead endpoint is a cold start or a corpse; there is nothing to hold, and
-        //     holding would hand every first launch a provider pointed at no daemon. Read fresh
-        //     here rather than reused, because the daemon can die during the grace window.
-        //   - 'rejected' answered and refused the handshake, so it can never be adopted and its
-        //     sessions can never be reattached. Holding one is permanently degraded for nothing.
-        if (
-          occupancy.state === 'unknown' &&
-          health !== 'rejected' &&
-          !endpointIsProvenDead(await probeSocketConnect(socketPath))
-        ) {
+        // Why: the sibling replace branches announce themselves, but this one used
+        // to kill a daemon silently — leaving no way to tell a replacement apart
+        // from an adoption after the fact. A cold start also lands here with
+        // nothing to replace, so only speak up once something actually answered:
+        // a probe that returned a count, a socket that survived a grace retry, or
+        // a refused hello.
+        if (liveSessionCount !== null || graceRetry > 0 || health === 'rejected') {
           console.warn(
-            `[daemon] DEGRADED MODE: holding an unreachable daemon (health=${health}); its session state could not be verified, and replacing it would end any terminals it still owns. Fresh terminals run on the local provider WITHOUT daemon persistence until it recovers or you restart it (Manage Sessions → Restart). If a restart does not clear this, something other than an Orca daemon is holding the endpoint — quit and relaunch.`
+            `[daemon] Replacing daemon that failed the health check (health=${health}, liveSessions=${liveSessionCount ?? 'unverifiable'}, graceRetries=${graceRetry})`
           )
-          return holdIncumbentDaemon()
         }
-        // Why: a cold start reaches this same fall-through with nothing to replace, so stay
-        // quiet unless something actually answered — a verified count, a socket that survived
-        // a grace retry, or a refused hello.
-        // Why: telemetry gates on confirmedReplacement below — the post-kill truth — so a
-        // cold start that killed nothing never reports a replacement.
+        // Why: unlike the log above, telemetry gates on confirmedReplacement below — the
+        // post-kill truth — so a cold start that killed nothing never reports a replacement.
         pendingReplacement = {
           reason: 'failed_health_check',
-          liveSessionCount: occupancy.liveSessions,
-          verdict: `health=${health}, occupancy=${occupancy.state}`,
-          announce: occupancy.state === 'empty' || health === 'rejected'
+          liveSessionCount
         }
       }
 
@@ -792,24 +634,11 @@ function createOutOfProcessLauncher(
         try {
           return await preserveDaemon('degraded-new-pty-fallback')
         } catch {
-          // Why: adoption needs a hello, which is exactly what a daemon wedged enough to be
-          // preserved cannot answer. A still-listening endpoint means it is wedged, not gone,
-          // so keep a lease-free handle: the lease only cancels the adoption watchdog, which
-          // cannot fire on a daemon that still owns sessions, and throwing here would cost the
-          // app its daemon handle — taking Manage Sessions → Restart down with it.
-          if (!endpointIsProvenDead(await probeSocketConnect(socketPath))) {
-            return createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, 'held')
-          }
           // It died between the probe and the adoption; the endpoint is genuinely free now.
           throw new DaemonEndpointOwnershipError(
             'Daemon replacement aborted: the existing daemon could not be confirmed stopped'
           )
         }
-      }
-      if (pendingReplacement?.verdict && (pendingReplacement.announce || killOutcome.killed)) {
-        console.warn(
-          `[daemon] Replacing daemon that failed the health check (${pendingReplacement.verdict})`
-        )
       }
       confirmedReplacement = killOutcome.killed || confirmedReplacement
       // Why: rank by how well each reason is evidenced. A confirmed kill whose reason positively
@@ -1081,9 +910,6 @@ function createOutOfProcessLauncher(
         try {
           return await preserveDaemon('degraded-new-pty-fallback')
         } catch {
-          // Why not hold here, unlike the failed-health path: that one declined to kill
-          // because it had proof of live work. This one arrives with occupancy unknown or
-          // empty, so holding would swallow a real launch failure to protect nothing.
           // It stopped answering between the probe and the adoption; report the launch failure.
         }
       }
@@ -1121,7 +947,8 @@ export async function initDaemonPtyProvider(
       socketPath: info.socketPath,
       tokenPath: info.tokenPath,
       pidPath: getDaemonPidPath(runtimeDir),
-      profileScope: runtimeDir
+      profileScope: runtimeDir,
+      runtimeDir
     })
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
@@ -1133,6 +960,8 @@ export async function initDaemonPtyProvider(
     tokenPath: info.tokenPath,
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
@@ -1147,9 +976,9 @@ export async function initDaemonPtyProvider(
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver') {
+      } else {
         // Must reach the launcher below without an await in between; see the consume site.
-        attributedReplaceReason = 'unhealthy_resolver'
+        attributedReplaceReason = reason
       }
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
@@ -1160,17 +989,12 @@ export async function initDaemonPtyProvider(
   let routedAdapter: DaemonProvider = newAdapter
   try {
     // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
-    // Why skipped when held: we deliberately never talked to that daemon, so there is no
-    // handshake to complete and no temporary lease to hand over. Attempting one would throw
-    // and abort init, leaving the app with no spawner — and restartDaemon() throws without one.
-    if (launchMode !== 'held') {
-      await newAdapter.establishLifecycleLease()
-      releaseDaemonAdoptionLease(newSpawner.getHandle())
-    }
+    await newAdapter.establishLifecycleLease()
+    releaseDaemonAdoptionLease(newSpawner.getHandle())
 
     legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
     routedAdapter =
-      launchMode === 'degraded-new-pty-fallback' || launchMode === 'held'
+      launchMode === 'degraded-new-pty-fallback'
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
@@ -1252,8 +1076,7 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
   return getMacDaemonTccAttributionHealth(
     runtimeDir,
     getDaemonSocketPath(runtimeDir),
-    getDaemonTokenPath(runtimeDir),
-    app.isPackaged ? app.getVersion() : null
+    getDaemonTokenPath(runtimeDir)
   )
 }
 
@@ -1373,6 +1196,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     tokenPath: info.tokenPath,
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the
@@ -1386,9 +1211,9 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         if (!restartInFlight) {
           trackDaemonRetired('died_respawn')
         }
-      } else if (reason === 'unhealthy_resolver') {
+      } else {
         // Must reach the launcher below without an await in between; see the consume site.
-        attributedReplaceReason = 'unhealthy_resolver'
+        attributedReplaceReason = reason
       }
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
@@ -1591,6 +1416,7 @@ export async function createLegacyDaemonAdapters(
         tokenPath,
         pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
         profileScope: runtimeDir,
+        runtimeDir,
         protocolVersion,
         historyPath
       })

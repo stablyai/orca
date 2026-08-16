@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { mergeExternalWorktreeInboxPaths } from '../../../../shared/external-worktree-inbox'
 import { translate } from '@/i18n/i18n'
 

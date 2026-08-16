@@ -14,6 +14,9 @@ const sshDockerRunner = readFileSync(
 const filterStep = prWorkflow.jobs['e2e-paths'].steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
+const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
+  (step) => step.name === 'Check VM runtime rollback compatibility'
+)
 const verifyStep = prWorkflow.jobs.verify.steps.find(
   (step) => step.name === 'Require successful checks'
 )
@@ -75,7 +78,11 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
-    expect(changedRun.run).toContain('pnpm run test:e2e "${TEST_FILES[@]}" --workers=1')
+    expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
+    expect(changedRun.run).toContain('E2E_PROJECT_ARGS+=(--project=electron-headful)')
+    expect(changedRun.run).toContain(
+      'pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"'
+    )
   })
 
   it('keeps startup-exec live parity in the isolated SSH lane', () => {
@@ -116,5 +123,12 @@ describe('PR E2E gate contract', () => {
   it('scopes detection to the PR range so base drift cannot false-trigger', () => {
     expect(filterStep.run).toContain('--merge-base "$BASE" "$HEAD"')
     expect(filterStep.run).toContain('set -euo pipefail')
+  })
+
+  it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
+    expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
+    expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
+    expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
+    expect(filterStep.run).toContain('ephemeral-vm-recipes|orca-yaml-hook-types')
   })
 })

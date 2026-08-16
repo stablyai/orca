@@ -29,8 +29,9 @@ import { translateLocalExecutionHostLabel } from '../sidebar/host-section-rows'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { OrcaHooks, Repo } from '../../../../shared/types'
-import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import {
   buildAutomationRrule,
   isValidAutomationCronSchedule,

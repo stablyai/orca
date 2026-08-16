@@ -1,5 +1,8 @@
 // Real-binary coverage: the fingerprint's whole job is to predict what `git worktree list` would
 // report, so a mocked filesystem would only prove the assumptions, not the Git layout they model.
+// Also listed in pr.yml's Windows boundary step: reading Git's admin layout directly depends on
+// Windows path resolution, CRLF in `HEAD`/`gitdir`/`commondir`, and whether `worktree move`/`lock`
+// and deleting a live checkout behave as they do on POSIX. The Linux shards cannot reach any of it.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

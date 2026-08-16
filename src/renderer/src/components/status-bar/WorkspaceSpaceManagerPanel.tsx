@@ -29,7 +29,10 @@ import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
-import type { GitStatusResult, Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
@@ -84,7 +87,7 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',
@@ -969,8 +972,24 @@ function BreakdownList({
     )
   }
 
-  const maxChildSize = getLargestWorkspaceSpaceItemSize(worktree.topLevelItems)
+  const maxChildSize = Math.max(
+    getLargestWorkspaceSpaceItemSize(worktree.topLevelItems),
+    worktree.omittedTopLevelSizeBytes
+  )
   const topLevelItemCount = worktree.topLevelItems.length + worktree.omittedTopLevelItemCount
+  const omittedItem: WorkspaceSpaceItem | null =
+    worktree.omittedTopLevelItemCount > 0
+      ? {
+          name: translate(
+            'components.status.bar.workspaceSpace.otherTopLevelItems',
+            'Other top-level items ({{value0}})',
+            { value0: worktree.omittedTopLevelItemCount }
+          ),
+          path: '',
+          kind: 'other',
+          sizeBytes: worktree.omittedTopLevelSizeBytes
+        }
+      : null
   return (
     <div className="min-h-72 rounded-lg border border-border/70 bg-background/35">
       <div className="border-b border-border/60 px-4 py-3">
@@ -1007,7 +1026,7 @@ function BreakdownList({
               )}
           </span>
         </div>
-      ) : worktree.topLevelItems.length === 0 ? (
+      ) : topLevelItemCount === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
           {translate(
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.16988df079',
@@ -1020,6 +1039,7 @@ function BreakdownList({
             {worktree.topLevelItems.slice(0, 12).map((item) => (
               <BreakdownRow key={`${item.path}:${item.name}`} item={item} maxSize={maxChildSize} />
             ))}
+            {omittedItem ? <BreakdownRow item={omittedItem} maxSize={maxChildSize} /> : null}
           </div>
         </div>
       )}

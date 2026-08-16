@@ -1,12 +1,14 @@
 import { basename } from 'node:path'
+import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence'
-import type { Repo, WorktreeMeta } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
   type WorkspaceCleanupCandidate
 } from '../../shared/workspace-cleanup'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
   getNewestWorkspaceCleanupDiffCommentAt,
   getWorkspaceCleanupInactivityReasonsForWorkspace,
@@ -17,17 +19,24 @@ export function synthesizeDisconnectedSshCleanupCandidates(
   store: Store,
   repo: Repo,
   scannedAt: number,
-  targetWorktreeId?: string
+  targetWorktreeIds?: ReadonlySet<string>,
+  includeAllWorkspaces = false
 ): WorkspaceCleanupCandidate[] {
   const repoWorktreePrefix = `${repo.id}::`
-  if (targetWorktreeId) {
-    if (!targetWorktreeId.startsWith(repoWorktreePrefix)) {
-      return []
-    }
-    // Why: focused delete preflight names one workspace already; walking all
+  if (targetWorktreeIds) {
+    const candidates: WorkspaceCleanupCandidate[] = []
+    // Why: targeted refreshes name their workspaces already; walking all
     // persisted metadata is unnecessary for disconnected SSH repos.
-    const meta = store.getWorktreeMeta(targetWorktreeId)
-    return meta ? [createDisconnectedSshCandidate(repo, scannedAt, targetWorktreeId, meta)] : []
+    for (const worktreeId of targetWorktreeIds) {
+      if (!worktreeId.startsWith(repoWorktreePrefix)) {
+        continue
+      }
+      const meta = store.getWorktreeMeta(worktreeId)
+      if (meta) {
+        candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
+      }
+    }
+    return candidates
   }
 
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -37,7 +46,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
       continue
     }
     const meta = allMeta[worktreeId]
-    if (!meta || !isWorkspaceInactiveForCleanup(meta, scannedAt)) {
+    if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
     candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
@@ -51,7 +60,7 @@ function createDisconnectedSshCandidate(
   worktreeId: string,
   meta: WorktreeMeta
 ): WorkspaceCleanupCandidate {
-  const parsed = splitWorktreeId(worktreeId)
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const path = parsed?.worktreePath ?? worktreeId
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(meta, scannedAt)
   return applyWorkspaceCleanupPolicy({
@@ -59,6 +68,7 @@ function createDisconnectedSshCandidate(
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
+    executionHostId: normalizeExecutionHostId(meta.hostId) ?? getRepoExecutionHostId(repo),
     displayName: meta.displayName || basename(path),
     branch: basename(path),
     path,

@@ -1,11 +1,12 @@
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import { getDefaultWslDistro, getWslHome, parseWslPath, toLinuxPath } from '../wsl'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
 import { discoverSkillsInWsl } from './skill-discovery-wsl'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { stablePathId } from './skill-discovery-sources'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { SkillScanCoalescer } from './skill-scan-coalescer'
+import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
 
 // Why: on WSL the unit of cost is the wsl.exe boot plus one `find` per skill, so
 // the whole result is what must be shared. The native path shares at root level
@@ -87,33 +88,68 @@ function repoDigest(repos: readonly Repo[]): string {
 }
 
 // Keys use exact paths — lowercasing would alias two roots that are distinct on Linux.
-function scanKey(target: ResolvedSkillDiscoveryTarget, repos: readonly Repo[]): string {
-  return target.kind === 'wsl'
-    ? `wsl\0${target.distro}\0${target.homeDir}\0${target.cwd}`
-    : `native\0${target.cwd ?? ''}\0${target.cwd ? '' : repoDigest(repos)}`
+function scanKey(
+  target: ResolvedSkillDiscoveryTarget,
+  repos: readonly Repo[],
+  providerRootOverrides: SkillProviderRootOverrides | undefined
+): string {
+  const providerRoots = stablePathId(
+    Object.entries(providerRootOverrides ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([provider, root]) => `${provider}\0${root}`)
+      .join('\0')
+  )
+  const targetKey =
+    target.kind === 'wsl'
+      ? `wsl\0${target.distro}\0${target.homeDir}\0${target.cwd}`
+      : `native\0${target.cwd ?? ''}\0${target.cwd ? '' : repoDigest(repos)}`
+  return `${targetKey}\0${providerRoots}`
 }
 
 export async function discoverSkillsOnTarget(
   target: ResolvedSkillDiscoveryTarget,
   repos: readonly Repo[],
-  options: { refresh?: boolean } = {}
+  options: { refresh?: boolean; providerRootOverrides?: SkillProviderRootOverrides } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
-  const outcome = await targetScans.run(
-    scanKey(target, repos),
-    { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
-    async () => {
-      if (target.kind === 'wsl') {
-        return discoverSkillsInWsl({
-          distro: target.distro,
-          homeDir: target.homeDir,
-          cwd: target.cwd
-        })
+  try {
+    const outcome = await targetScans.run(
+      scanKey(target, repos, options.providerRootOverrides),
+      { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
+      async () => {
+        if (target.kind === 'wsl') {
+          return discoverSkillsInWsl({
+            distro: target.distro,
+            homeDir: target.homeDir,
+            cwd: target.cwd,
+            providerRootOverrides: options.providerRootOverrides
+          })
+        }
+        return target.cwd
+          ? discoverSkills({
+              repos: [],
+              cwd: target.cwd,
+              refresh,
+              providerRootOverrides: options.providerRootOverrides
+            })
+          : discoverSkills({
+              repos: [...repos],
+              refresh,
+              providerRootOverrides: options.providerRootOverrides
+            })
       }
-      return target.cwd
-        ? discoverSkills({ repos: [], cwd: target.cwd, refresh })
-        : discoverSkills({ repos: [...repos], refresh })
+    )
+    return outcome.value
+  } catch (error) {
+    if (!isSkillRootUnavailableError(error)) {
+      throw error
     }
-  )
-  return outcome.value
+    // Why not an empty result: this layer scans whole targets, so it has no
+    // partial answer to degrade to, and returning zero skills would read as
+    // "nothing is installed" and re-offer installs for skills that are present.
+    // An error keeps the picker's retry affordance and says something true.
+    throw new Error('Skill discovery is still reading a slow location. Try again.', {
+      cause: error
+    })
+  }
 }

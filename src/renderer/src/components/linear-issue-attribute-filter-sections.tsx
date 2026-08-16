@@ -11,7 +11,7 @@ import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   canonicalizeLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import { getLinearPriorityLabel } from './task-page-localized-options'
 
 export type LinearIssueFilterSectionKey = 'status' | 'priority' | 'assignee' | 'labels'

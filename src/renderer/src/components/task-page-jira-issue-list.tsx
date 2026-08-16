@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { cn } from '@/lib/utils'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
 
 export type TaskPageJiraIssueSection = {
   key: string

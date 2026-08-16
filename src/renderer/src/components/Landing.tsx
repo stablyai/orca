@@ -3,7 +3,7 @@ import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   dismissPreflightIssue,
   githubProjectKeys,

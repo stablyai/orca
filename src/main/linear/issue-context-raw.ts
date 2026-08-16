@@ -2,7 +2,7 @@ import type {
   LinearCollectionMeta,
   LinearIssueSummary,
   LinearSearchIssueSummary
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 
 export type RawIssueResponse = {
   issue?: RawIssue | null

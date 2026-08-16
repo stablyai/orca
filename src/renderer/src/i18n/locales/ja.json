@@ -206,6 +206,7 @@
         },
         "editor": {
           "dcb521ed29": "このファイルは競合状態にありますが、編集できる作業ツリーファイルがありません。",
+          "conflictPlaceholderGuidance": "Git で競合を解決するか、いずれかの側を復元してから開き直してください。",
           "51f15c37d3": "ディレクトリを開けません: {{value0}}",
           "f2e00db373": "ファイルが見つかりません: {{value0}}",
           "checkRunDetailsUnavailable": "このチェックの詳細はありません。",
@@ -1252,6 +1253,7 @@
         "519c3587f3": "プロジェクトに追加",
         "openAttachedWorkspace": "Issue にリンクされたワークスペースを開く",
         "openWorkspace": "ワークスペースを開く",
+        "openOnLinear": "Linear で開く",
         "moreWorkspaceActions": "Issue ワークスペースのその他の操作",
         "startNewWorkspace": "新規ワークスペースを開始",
         "workspaceSection": "ワークスペース",
@@ -2882,7 +2884,7 @@
             "removedBody": "このワークスペースの SSH ホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
             "removeWorkspaceButton": "ワークスペースを削除"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "リモートランタイムに再接続中",
             "disconnectedTitle": "リモートランタイムが切断されました",
             "retryingBody": "Orca は最大1分間再試行します。接続が復元されると、このターミナルが再開されます。",
@@ -3159,7 +3161,7 @@
             "67c4ecda49": "このターミナルを強制終了します。ペイン内の保存されていない作業はすべて失われます。これを元に戻すことはできません。",
             "4bb076fa89": "強制終了",
             "996295bff2": "孤立したターミナル",
-            "92924a14e3": "非アクティブなワークスペースを確認 ({{value0}})",
+            "92924a14e3": "ワークスペースをクリーンアップ",
             "27a74f91f0": "現在何も実行されていません",
             "1b24a32d3a": "メモリ",
             "298f4be7f2": "CPU",
@@ -4707,7 +4709,9 @@
           "noneFound": "Orca 以外のワークツリーは見つかりませんでした",
           "tryDifferentSearch": "別の名前またはパスをお試しください。",
           "disableSource": "ソースを無効にするとワークツリーを個別に管理できます。",
-          "appearWhenDetected": "Orca が新しいワークツリーを検出すると、ここに表示されます。"
+          "appearWhenDetected": "Orca が新しいワークツリーを検出すると、ここに表示されます。",
+          "openGlobalSettings": "グローバル設定で管理",
+          "globalSettingsSources": "これらのソースにはグローバル設定があり、ここで上書きできます:"
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
@@ -4719,15 +4723,21 @@
           "duplicatePath": "この場所は既に一覧にあります。",
           "limit": "別の場所を追加する前にカスタムの場所を削除してください。",
           "sources": "ソース",
-          "sourcesDescription": "有効なソースの現在および今後のワークツリーがサイドバーに表示されます。",
+          "sourcesDescription": "表示に設定したソースの現在および今後のワークツリーがサイドバーに表示されます。",
           "found": "{{value0}} 件検出",
           "remove": "{{value0}} を削除",
           "removeLocation": "カスタムの場所を削除",
-          "toggle": "{{value0}} の現在および今後のワークツリーを表示",
           "addLocation": "場所を追加",
           "worktreeRoot": "ワークツリールート",
           "add": "追加",
-          "rootHelp": "Orca はこのフォルダー配下のワークツリーを認識します。"
+          "rootHelp": "Orca はこのフォルダー配下のワークツリーを認識します。",
+          "visibility": "{{value0}} の表示設定",
+          "show": "表示",
+          "hide": "非表示",
+          "overridingGlobal": "グローバル設定を上書き中: {{value0}}",
+          "projectOnly": "このプロジェクトにのみ追加されています。",
+          "useGlobalFor": "{{value0}} にグローバル設定を使用",
+          "useGlobal": "グローバルを使用"
         },
         "add": {
           "repo": {
@@ -5063,14 +5073,7 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
-          "d9f7b2a14c": "{{value0}} の外部で作成された新規ワークツリーを折りたたむ",
-          "e2c4a8d91f": "{{value0}} の外部で作成された新規ワークツリーを展開",
-          "7c4e9b2a81": "外部で作成された新規ワークツリー",
           "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
-          "4d7a1c9e53": "これらのワークツリーは Orca の外部で作成されました。",
-          "8b3f2e1d74": "インポート",
-          "1c9e7a4b28": "非表示のままにする",
-          "6f2d8c1e95": "すべてインポート",
           "c3e8a1f4b2": "今後表示しない"
         },
         "newExternalWorktreesInboxActions": {
@@ -5983,7 +5986,11 @@
           "5567191a6e": "ブラウズ",
           "0e9fc0eadc": "ワークスペースディレクトリ",
           "e2955d9ccb": "新規ワークスペースを作成する場所を構成します。",
-          "7511097c5d": "ワークスペース"
+          "7511097c5d": "ワークスペース",
+          "externalWorktrees": "外部ワークツリー",
+          "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。",
+          "show": "表示",
+          "hide": "非表示"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "変更を適用する",
@@ -6683,7 +6690,14 @@
           "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
           "hostStateDisconnected": "切断済み",
           "hostStateUnknown": "不明",
-          "nestedHostLabel": "{{value1}} 経由の {{value0}}"
+          "nestedHostLabel": "{{value1}} 経由の {{value0}}",
+          "externalWorktrees": "外部ワークツリー",
+          "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
+          "externalWorktreesInherited": "グローバル設定を使用中: {{value0}}",
+          "show": "表示",
+          "hide": "非表示",
+          "externalWorktreesGlobal": "グローバルデフォルト: {{value0}}",
+          "useGlobal": "グローバル設定を使用"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
@@ -8304,7 +8318,9 @@
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
             "editorFontFamily": "エディターフォント",
-            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。"
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。",
+            "externalWorktrees": "外部ワークツリー",
+            "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。"
           }
         },
         "git": {
@@ -8788,6 +8804,8 @@
             "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。",
             "projectRuntime": "プロジェクトのランタイム",
             "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
+            "externalWorktrees": "外部ワークツリー",
+            "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
             "clone": "clone",
             "apfs": "apfs"
@@ -8813,6 +8831,9 @@
               "4575341c77": "ローカルデスクトップを選択するか、保存されたリモート Orca サーバーを追加するか、ペアリング URL を生成します。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
         "shortcuts": {
           "search": {
@@ -10142,6 +10163,11 @@
           "setupRecipe": "クラウドプロバイダー用の環境レシピをセットアップします。",
           "createWorkspace": "ワークスペースを作成し、「実行先」でそのレシピを選択します。",
           "openSetup": "環境レシピをセットアップ"
+        },
+        "GlobalWorktreeVisibilitySourcesSetting": {
+          "saveFailed": "表示設定のデフォルトを保存できませんでした。",
+          "updateServer": "ソースのデフォルトを設定するには、このサーバーを更新してください。",
+          "updateServerDefaults": "表示のデフォルトを設定するには、このサーバーを更新してください。"
         }
       },
       "right": {
@@ -14372,6 +14398,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
+          "ultra": "ウルトラ",
           "on": "オン",
           "off": "オフ"
         },
@@ -14510,14 +14537,12 @@
     },
     "map": {
       "host": {
-        "all": "すべてのホスト",
         "local": "ローカル",
         "ssh": "SSH",
         "wsl": "WSL",
         "remote": "リモート"
       },
       "liveContainmentMap": "ライブ包含マップ",
-      "hostFilter": "ホストフィルター",
       "empty": "現在のフィルターに一致する Agent はありません。",
       "canvasLabel": "プロジェクト、ワークスペース、Agent の入れ子マップ",
       "zoomOut": "ズームアウト",
