@@ -18,6 +18,7 @@ function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionIn
     hasUnresolvedConflicts: false,
     isCommitting: false,
     isRemoteOperationActive: false,
+    hasHeadCommit: true,
     upstreamStatus: undefined,
     ...overrides
   }
@@ -95,6 +96,23 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.commit_amend.disabled).toBe(true)
     expect(byKind.commit_amend.title).toBe('Resolve conflicts before amending')
+  })
+
+  it('disables commit_amend when HEAD is unborn even with staged files', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        hasHeadCommit: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(false)
+    expect(byKind.commit_amend.disabled).toBe(true)
+    expect(byKind.commit_amend.title).toBe('Make an initial commit before amending')
   })
 
   it('enables commit actions when staged files also have unstaged changes', () => {

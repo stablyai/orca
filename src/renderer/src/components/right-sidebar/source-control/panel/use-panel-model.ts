@@ -100,7 +100,8 @@ export function useSourceControlPanelModel() {
     isCreatingPr,
     hostedReviewReviewLabel: hostedReviewCreateCopy.reviewLabel,
     conflictOperation,
-    effectiveBaseRef
+    effectiveBaseRef,
+    hasHeadCommit: Boolean(activeWorktree?.head?.trim())
   })
   const actionDispatch = useSourceControlActionDispatch({
     createPrHeaderAction: actionModel.createPrHeaderAction,

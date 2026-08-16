@@ -37,6 +37,7 @@ export type DropdownActionContext = {
   canCommit: boolean
   stagedCount: number
   hasUnresolvedConflicts: boolean
+  hasHeadCommit: boolean
 }
 
 export function deriveDropdownActionContext(inputs: DropdownActionInputs): DropdownActionContext {
@@ -56,7 +57,8 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
-    isPullRequestOperationActive = false
+    isPullRequestOperationActive = false,
+    hasHeadCommit = true
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -138,6 +140,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     commitDisabledReason,
     canCommit,
     stagedCount,
-    hasUnresolvedConflicts
+    hasUnresolvedConflicts,
+    hasHeadCommit
   }
 }

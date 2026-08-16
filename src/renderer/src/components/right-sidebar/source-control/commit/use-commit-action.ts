@@ -176,6 +176,10 @@ export function useSourceControlCommitAction({
     if (!target) {
       return false
     }
+    // Why: an unborn HEAD has nothing to amend — `git commit --amend --no-edit` would fail with "You have nothing to amend."
+    if (!activeWorktree?.head?.trim()) {
+      return false
+    }
     if (stagedCount === 0 || unresolvedConflictCount > 0 || conflictOperation !== 'unknown') {
       return false
     }
@@ -221,6 +225,7 @@ export function useSourceControlCommitAction({
     }
   }, [
     activeRepoSettings,
+    activeWorktree?.head,
     activeWorktreeId,
     beginGitBranchCompareRequest,
     commitInFlightRef,

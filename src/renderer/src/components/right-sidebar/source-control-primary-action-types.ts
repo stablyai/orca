@@ -51,6 +51,9 @@ export type PrimaryActionInputs = {
   // Why: branch-compare counts feed Create Review intent eligibility and
   // force-push labels; publishing itself can push the current HEAD even at 0.
   branchCommitsAhead?: number
+  // Why: an unborn HEAD (no commits yet) has nothing to amend. Default true so
+  // callers that don't know omit the guard rather than blocking amend wrongly.
+  hasHeadCommit?: boolean
   // Why: detached HEAD can look like an unpublished branch from upstream
   // status alone, but it has no branch ref that Publish Branch can push.
   hasCurrentBranch?: boolean

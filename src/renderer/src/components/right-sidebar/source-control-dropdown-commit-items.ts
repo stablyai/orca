@@ -29,6 +29,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     canCommit,
     stagedCount,
     hasUnresolvedConflicts,
+    hasHeadCommit,
     conflictOperation
   } = ctx
 
@@ -119,12 +120,15 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
 
   // Why: amend reuses the last commit message (--no-edit), so it doesn't require hasMessage.
   // A merge/rebase/cherry-pick can stay active after conflicts resolve, so gate on conflictOperation too.
+  // An unborn HEAD has nothing to amend — git rejects it with "You have nothing to amend."
   const amendDisabledReason: string | null =
     hasUnresolvedConflicts || conflictOperation !== 'unknown'
       ? 'Resolve conflicts before amending'
-      : stagedCount === 0
-        ? 'Stage at least one file to amend'
-        : null
+      : !hasHeadCommit
+        ? 'Make an initial commit before amending'
+        : stagedCount === 0
+          ? 'Stage at least one file to amend'
+          : null
   const commitAmend: DropdownItem = {
     kind: 'commit_amend',
     label: translate(
