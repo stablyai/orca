@@ -1,9 +1,17 @@
-import type { PtyDataEvent } from '../../types'
-import type { HerdrPtyBinding, HerdrPtyTarget } from './herdr-pty-types'
-import { HerdrRuntimeManager, type HerdrLivePaneListener } from './herdr-runtime-manager'
+import { randomUUID } from 'node:crypto'
+import { herdrSessionNameForProject } from '../../../../shared/herdr-session-identity'
+import type { PtyDataEvent, PtySpawnResult } from '../../types'
+import { assertHerdrMigrationReady } from './herdr-pty-types'
+import type { HerdrPtyBinding, HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
+import type { PtySpawnOptions } from '../../types'
+import {
+  HerdrRuntimeManager,
+  type HerdrLivePaneListener,
+  type HerdrSurfaceSync
+} from './herdr-runtime-manager'
 import { bindController, detachBinding } from './herdr-pty-provider-binding'
 import { disposeProvider } from './herdr-pty-provider-lifecycle'
-import { waitForFirstHerdrFrame } from './herdr-pty-codec'
+import { decodeHerdrPtyId, waitForFirstHerdrFrame } from './herdr-pty-codec'
 import type { HerdrHostTransport, HerdrTerminalFrame } from './herdr-runtime-contract'
 
 export function getRuntime(
@@ -11,7 +19,8 @@ export function getRuntime(
   managers: Map<string, HerdrRuntimeManager>,
   transportForTarget: (target: HerdrPtyTarget) => HerdrHostTransport,
   sharedName: (() => string | undefined) | undefined,
-  onLivePaneIds?: HerdrLivePaneListener
+  onLivePaneIds?: HerdrLivePaneListener,
+  surfaceSync?: HerdrSurfaceSync
 ): {
   manager: HerdrRuntimeManager
   transport: HerdrHostTransport
@@ -19,7 +28,7 @@ export function getRuntime(
   const transport = transportForTarget(target)
   let manager = managers.get(target.identity.hostId)
   if (!manager) {
-    manager = new HerdrRuntimeManager(transport, sharedName, onLivePaneIds)
+    manager = new HerdrRuntimeManager(transport, sharedName, onLivePaneIds, surfaceSync)
     managers.set(target.identity.hostId, manager)
   }
   return { manager, transport }
@@ -104,6 +113,78 @@ export function emitHerdrPtyReplay(
 ): void {
   for (const listener of listeners) {
     listener(payload)
+  }
+}
+
+export async function attachHerdrPty(args: {
+  id: string
+  bindings: Map<string, HerdrPtyBinding>
+  resolveTarget: (
+    opts: PtySpawnOptions,
+    identity: HerdrPtyIdentity
+  ) => Promise<HerdrPtyTarget | null>
+  runtimeFor: (target: HerdrPtyTarget) => {
+    manager: HerdrRuntimeManager
+    transport: HerdrHostTransport
+  }
+  sharedName?: () => string | undefined
+  bind: (
+    input: Omit<HerdrPtyBinding, 'sequenceChars' | 'snapshot' | 'detached' | 'unsubscribe'>
+  ) => HerdrPtyBinding
+  waitForFirstFrame: (binding: HerdrPtyBinding) => Promise<{ data: string } | null>
+  emitReplay: (payload: { id: string; data: string }) => void
+}): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
+  if (args.bindings.has(args.id)) {
+    return
+  }
+  const identity = decodeHerdrPtyId(args.id)
+  if (!identity) {
+    throw new Error(`Invalid herdr PTY ID: ${args.id}`)
+  }
+  const target = await args.resolveTarget(
+    {
+      cols: 80,
+      rows: 24,
+      sessionId: args.id,
+      worktreeId: identity.worktreeId,
+      tabId: identity.tabId,
+      paneKey: `${identity.tabId}:${identity.leafId}`
+    },
+    identity
+  )
+  if (!target) {
+    throw new Error(`Cannot resolve persisted Herdr PTY ${args.id}`)
+  }
+  await assertHerdrMigrationReady(target)
+  const runtime = args.runtimeFor(target)
+  await runtime.manager.reconcileProjectHost(target.graph)
+  const controller = await runtime.manager.controlProjectPane(target.project, identity.leafId, {
+    cols: 80,
+    rows: 24
+  })
+  await target.activateHerdr?.()
+  const sessionName = herdrSessionNameForProject(target.project, args.sharedName?.())
+  const paneId =
+    runtime.manager.getPaneId(sessionName, identity.projectId, identity.leafId) ?? identity.paneId
+  if (!paneId) {
+    controller.release()
+    throw new Error(`Herdr pane is not reconciled: ${identity.leafId}`)
+  }
+  const binding = args.bind({
+    id: args.id,
+    controller,
+    transport: runtime.transport,
+    identity,
+    paneId,
+    sessionName,
+    incarnationId: randomUUID(),
+    cwd: '',
+    cols: 80,
+    rows: 24
+  })
+  const firstFrame = await args.waitForFirstFrame(binding)
+  if (firstFrame) {
+    args.emitReplay({ id: args.id, data: firstFrame.data })
   }
 }
 

@@ -17,6 +17,8 @@ import { herdrServerEnvironment } from './herdr-session-process'
 import { resolveHerdrBinarySource, resolveHerdrExecutable } from './herdr-binary-source'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import { DEFAULT_HERDR_SESSION_NAME } from './herdr-transport-factory'
+import { presentHerdrImportedSurface } from './herdr-orca-surface-present'
+import type { HerdrImportedSurface } from './herdr-orca-surface-import'
 
 export type HerdrLocalTransportKind = 'socket' | 'cli'
 
@@ -92,7 +94,19 @@ export function createLocalHerdrPtyProvider(
       return transport
     },
     createLocalHerdrPtyTargetResolver(store),
-    () => store.getSettings().herdrSessionName
+    () => store.getSettings().herdrSessionName,
+    {
+      persist: (surface: HerdrImportedSurface) => {
+        store.persistPtyBinding({
+          worktreeId: surface.worktreeId,
+          tabId: surface.tabId,
+          leafId: surface.leafId,
+          ptyId: surface.ptyId,
+          ...(surface.cwd ? { startupCwd: surface.cwd } : {})
+        })
+      },
+      present: presentHerdrImportedSurface
+    }
   )
 }
 
@@ -117,7 +131,18 @@ export function createSshHerdrPtyProvider(
   return new HerdrPtyProvider(
     () => transport,
     createHerdrPtyTargetResolver(store, toSshExecutionHostId(targetId)),
-    () => store.getSettings().herdrSessionName
+    () => store.getSettings().herdrSessionName,
+    {
+      persist: (surface: HerdrImportedSurface) => {
+        store.persistPtyBinding({
+          worktreeId: surface.worktreeId,
+          tabId: surface.tabId,
+          leafId: surface.leafId,
+          ptyId: surface.ptyId,
+          ...(surface.cwd ? { startupCwd: surface.cwd } : {})
+        })
+      }
+    }
   )
 }
 

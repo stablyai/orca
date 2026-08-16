@@ -98,7 +98,7 @@ function transport(closeBeforeFrame = false) {
           }
         }
       }
-      if (method === 'pane.close' || method === 'pane.send_keys') {
+      if (method === 'pane.close' || method === 'pane.send_keys' || method === 'agent.start') {
         return { id: method, result: { type: 'ok' } }
       }
       throw new Error(`unexpected method ${method}`)
@@ -235,6 +235,34 @@ describe('HerdrPtyProvider', () => {
       }
     )
     expect(host.value.controlTerminal).toHaveBeenCalled()
+  })
+
+  it('starts a stock Herdr agent instead of writing a shell command', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      launchAgent: 'claude',
+      command: 'claude'
+    })
+
+    expect(host.requestMock).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'agent.start',
+      expect.objectContaining({
+        kind: 'claude',
+        pane_id: 'p1'
+      })
+    )
   })
 
   it('rejects a controller that closes before producing its first frame', async () => {

@@ -8,7 +8,7 @@ import type {
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import { HerdrSocketConnection, type HerdrSocketConnectionOptions } from './herdr-socket-connection'
 import { HerdrSocketEventConnection } from './herdr-socket-events'
-import { createHerdrSocketTerminalController } from './herdr-socket-terminal-control'
+import { createStockHerdrTerminalController } from './herdr-terminal-observe'
 import type {
   EventMatch,
   HerdrSocketEvent,
@@ -107,9 +107,10 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     target: string,
     options: HerdrTerminalControlOptions
   ): HerdrTerminalController {
-    return createHerdrSocketTerminalController(target, options, {
+    return createStockHerdrTerminalController(sessionName, target, options, {
+      commandFor: this.options.commandFor,
       request: (method, params) => this.raw(sessionName, method, params),
-      subscribeEvents: (listener) => this.onEvent(listener)
+      onEvent: (listener) => this.onEvent(listener)
     })
   }
 

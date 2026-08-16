@@ -24,6 +24,12 @@ import { ensureTabLayout } from './herdr-tab-layout'
 import { collectHerdrPaneIds } from './herdr-layout-reconcile'
 import type { LayoutNode } from './herdr-socket-types'
 import type { HerdrBindingAgentState } from './herdr-pty-binding-queries'
+import {
+  claimAndPresentHerdrSurfaces,
+  collectUnboundHerdrSurfaces,
+  type HerdrImportedSurface,
+  type HerdrSurfacePresenter
+} from './herdr-orca-surface-import'
 
 export type HerdrAgentRollup = {
   agents: HerdrBindingAgentState[]
@@ -59,6 +65,11 @@ const RECONCILE_EVENT_KINDS = new Set([
 
 export type HerdrLivePaneListener = (sessionName: string, paneIds: ReadonlySet<string>) => void
 
+export type HerdrSurfaceSync = {
+  persist: (surface: HerdrImportedSurface) => void
+  present?: HerdrSurfacePresenter
+}
+
 function graphKey(sessionName: string, projectId: string): string {
   return `${sessionName}\n${projectId}`
 }
@@ -74,7 +85,8 @@ export class HerdrRuntimeManager {
     private readonly transport: HerdrHostTransport,
     // Live store-backed shared session name; read per call because settings can change while the manager is cached.
     private readonly sharedName?: () => string | undefined,
-    private readonly onLivePaneIds?: HerdrLivePaneListener
+    private readonly onLivePaneIds?: HerdrLivePaneListener,
+    private readonly surfaceSync?: HerdrSurfaceSync
   ) {}
 
   getPaneId(sessionName: string, projectId: string, leafId: string): string | null {
@@ -130,6 +142,7 @@ export class HerdrRuntimeManager {
         snapshot
       )
       this.publishLivePaneIds(sessionName, snapshot)
+      await this.importUnboundSurfaces(sessionName, [graph], snapshot)
       return snapshot
     })
   }
@@ -197,7 +210,44 @@ export class HerdrRuntimeManager {
         )
       }
       this.publishLivePaneIds(sessionName, snapshot)
+      await this.importUnboundSurfaces(sessionName, graphs, snapshot)
     })
+  }
+
+  private async importUnboundSurfaces(
+    sessionName: string,
+    graphs: HerdrProjectHostGraph[],
+    snapshot: HerdrSessionSnapshot
+  ): Promise<void> {
+    if (!this.surfaceSync) {
+      return
+    }
+    for (const graph of graphs) {
+      const surfaces = collectUnboundHerdrSurfaces(
+        sessionName,
+        graph,
+        snapshot,
+        this.paneIdsBySessionAndBinding
+      )
+      if (surfaces.length === 0) {
+        continue
+      }
+      await claimAndPresentHerdrSurfaces(
+        this.transport,
+        sessionName,
+        graph.project.id,
+        snapshot,
+        surfaces,
+        this.surfaceSync.persist,
+        this.surfaceSync.present
+      )
+      rememberOrcaPaneBindings(
+        this.paneIdsBySessionAndBinding,
+        sessionName,
+        graph.project.id,
+        snapshot
+      )
+    }
   }
 
   dispose(): void {

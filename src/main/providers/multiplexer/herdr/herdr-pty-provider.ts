@@ -44,10 +44,12 @@ import {
   emitHerdrPtyData,
   emitHerdrPtyExit,
   emitHerdrPtyReplay,
-  killAllHerdrBindings
+  killAllHerdrBindings,
+  attachHerdrPty
 } from './herdr-pty-provider-runtime'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
-import type { HerdrRuntimeManager } from './herdr-runtime-manager'
+import type { HerdrRuntimeManager, HerdrSurfaceSync } from './herdr-runtime-manager'
+import { startHerdrAgentIfRequested } from './herdr-agent-kind'
 export { decodeHerdrPtyId } from './herdr-pty-codec'
 export type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
 
@@ -75,7 +77,8 @@ export class HerdrPtyProvider implements IPtyProvider {
   constructor(
     transportForTarget: (target: HerdrPtyTarget) => HerdrHostTransport,
     resolveTarget: HerdrPtyTargetResolver,
-    sharedName?: () => string | undefined
+    sharedName?: () => string | undefined,
+    private readonly surfaceSync?: HerdrSurfaceSync
   ) {
     this.transportForTarget = transportForTarget
     this.resolveTarget = resolveTarget
@@ -98,8 +101,6 @@ export class HerdrPtyProvider implements IPtyProvider {
       target.identity.projectId,
       target.identity.leafId
     )
-    // Why: a leaf that reconciled without a pane must recreate the terminal
-    // instead of failing the spawn (and the tab with it).
     if (!paneId) {
       const worktree = target.graph.worktrees[0]
       paneId = await runtime.manager.materializeLeafPane(
@@ -118,11 +119,6 @@ export class HerdrPtyProvider implements IPtyProvider {
     const resolvedPaneId =
       paneId ??
       runtime.manager.getPaneId(sessionName, target.identity.projectId, target.identity.leafId)
-    // Why: an attach fence compares the encoded id against the persisted
-    // owner. A stale identity whose pane no longer reconciles (e.g. a binding
-    // from before pane tokens were persisted) must signal "gone" so the caller
-    // retires the owner and falls back to a fresh spawn instead of failing the
-    // fence forever.
     const staleAttach =
       opts.attachOnly === true &&
       persistedIdentity !== null &&
@@ -154,9 +150,17 @@ export class HerdrPtyProvider implements IPtyProvider {
       rows: opts.rows
     })
     const firstFrame = await this.waitForFirstFrame(binding)
-    if (!opts.sessionId && opts.command) {
-      controller.write(`${opts.command}\r`)
-    }
+    await startHerdrAgentIfRequested({
+      sessionId: opts.sessionId,
+      launchAgent: opts.launchAgent,
+      command: opts.command,
+      sessionName,
+      leafId: target.identity.leafId,
+      paneId: resolvedPaneId,
+      request: async (name, method, params) =>
+        unwrapHerdrResponse(await runtime.transport.request(name, method, params)),
+      writeCommand: (text) => controller.write(text)
+    })
     return {
       id,
       isReattach: !!opts.sessionId,
@@ -172,59 +176,16 @@ export class HerdrPtyProvider implements IPtyProvider {
   }
 
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
-    if (this.bindings.has(id)) {
-      return
-    }
-    const identity = decodeHerdrPtyId(id)
-    if (!identity) {
-      throw new Error(`Invalid herdr PTY ID: ${id}`)
-    }
-
-    const target = await this.resolveTarget(
-      {
-        cols: 80,
-        rows: 24,
-        sessionId: id,
-        worktreeId: identity.worktreeId,
-        tabId: identity.tabId,
-        paneKey: `${identity.tabId}:${identity.leafId}`
-      },
-      identity
-    )
-    if (!target) {
-      throw new Error(`Cannot resolve persisted Herdr PTY ${id}`)
-    }
-    await assertHerdrMigrationReady(target)
-    const runtime = this.runtimeFor(target)
-    await runtime.manager.reconcileProjectHost(target.graph)
-    const controller = await runtime.manager.controlProjectPane(target.project, identity.leafId, {
-      cols: 80,
-      rows: 24
-    })
-    await target.activateHerdr?.()
-    const sessionName = herdrSessionNameForProject(target.project, this.sharedName?.())
-    const paneId =
-      runtime.manager.getPaneId(sessionName, identity.projectId, identity.leafId) ?? identity.paneId
-    if (!paneId) {
-      controller.release()
-      throw new Error(`Herdr pane is not reconciled: ${identity.leafId}`)
-    }
-    const binding = this.bindController({
+    return attachHerdrPty({
       id,
-      controller,
-      transport: runtime.transport,
-      identity,
-      paneId,
-      sessionName,
-      incarnationId: randomUUID(),
-      cwd: '',
-      cols: 80,
-      rows: 24
+      bindings: this.bindings,
+      resolveTarget: this.resolveTarget,
+      runtimeFor: (target) => this.runtimeFor(target),
+      sharedName: this.sharedName,
+      bind: (input) => this.bindController(input),
+      waitForFirstFrame: (binding) => this.waitForFirstFrame(binding),
+      emitReplay: (payload) => this.emitReplay(payload)
     })
-    const firstFrame = await this.waitForFirstFrame(binding)
-    if (firstFrame) {
-      this.emitReplay({ id, data: firstFrame.data })
-    }
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
@@ -446,7 +407,8 @@ export class HerdrPtyProvider implements IPtyProvider {
       this.managers,
       this.transportForTarget,
       this.sharedName,
-      this.livePaneListener
+      this.livePaneListener,
+      this.surfaceSync
     )
   }
 
