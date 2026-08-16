@@ -255,7 +255,7 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
       {error ? (
         <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>
       ) : null}
-      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {showSection('instructions') && (
           <ContextSection
             title={translate(

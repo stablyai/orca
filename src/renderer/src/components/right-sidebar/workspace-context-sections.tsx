@@ -57,7 +57,10 @@ export function McpFilesBody({ report, showMissing }: SectionBodyProps): React.J
                   >
                     {server.name}
                   </span>
-                  <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+                  <span
+                    className="ml-auto min-w-0 max-w-[60%] truncate font-mono text-[10px] text-muted-foreground"
+                    title={server.transport === 'http' ? server.url : server.command}
+                  >
                     {server.transport === 'http'
                       ? (server.url ?? server.transport)
                       : (server.command ?? server.transport)}

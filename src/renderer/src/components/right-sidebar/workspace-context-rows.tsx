@@ -98,7 +98,7 @@ export function ContextRow({
           {primary}
         </span>
         {meta ? (
-          <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          <span className="ml-auto min-w-0 max-w-[50%] shrink-0 truncate text-[10px] tabular-nums text-muted-foreground">
             {meta}
           </span>
         ) : null}
