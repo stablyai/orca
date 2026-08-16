@@ -137,10 +137,11 @@ function optionalStringList(value: unknown, fieldName: string): string[] | undef
   if (value === undefined) {
     return undefined
   }
-  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item.trim())) {
+  const items = Array.isArray(value) ? Array.from(value) : null
+  if (!items || !items.every((item) => typeof item === 'string' && item.trim())) {
     throw new Error(`Invalid ${fieldName}`)
   }
-  const normalized = value.map((item) => item.trim())
+  const normalized = items.map((item) => item.trim())
   return normalized.length > 0 ? normalized : undefined
 }
 

@@ -5670,6 +5670,19 @@ export default function TaskPage(): React.JSX.Element {
     setPlaneIssuePage(visiblePlaneIssuePage)
   }, [planeIssueLoadingTargetPage, planeIssuePage, visiblePlaneIssuePage])
 
+  const selectedPlaneEstimatePointValue = useMemo(() => {
+    if (planeEstimatePoint === 'all') {
+      return undefined
+    }
+    for (const estimate of planeEstimates) {
+      const point = estimate.points?.find((item) => item.id === planeEstimatePoint)
+      if (point?.value !== undefined && point.value !== null) {
+        return point.value
+      }
+    }
+    return undefined
+  }, [planeEstimatePoint, planeEstimates])
+
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
       return null
@@ -8160,14 +8173,20 @@ export default function TaskPage(): React.JSX.Element {
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!planeStatusReady) {
+      void checkPlaneConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkPlaneConnection,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,
     linearStatusContextKey,
     linearStatusReady,
+    planeStatusContextKey,
+    planeStatusReady,
     providerRuntimeContextKey,
     preflightStatusContextKey,
     preflightStatusChecked,
@@ -8853,7 +8872,7 @@ export default function TaskPage(): React.JSX.Element {
       cycleId: planeCycleId === 'all' ? undefined : planeCycleId,
       moduleId: planeModuleId === 'all' ? undefined : planeModuleId,
       typeId: planeTypeId === 'all' ? undefined : planeTypeId,
-      estimatePoint: planeEstimatePoint === 'all' ? undefined : planeEstimatePoint,
+      estimatePoint: selectedPlaneEstimatePointValue,
       orderBy: planeOrderBy
     }
     const querySignature = JSON.stringify({
@@ -8938,6 +8957,7 @@ export default function TaskPage(): React.JSX.Element {
     planePriorities,
     planeProjectIds,
     planeRefreshNonce,
+    selectedPlaneEstimatePointValue,
     planeStateGroups,
     planeStateIds,
     planeTaskSourceContext,
@@ -10584,7 +10604,7 @@ export default function TaskPage(): React.JSX.Element {
                           { id: 'all', label: 'All estimates' },
                           ...planeEstimates.flatMap((estimate) =>
                             (estimate.points ?? []).map((point) => ({
-                              id: String(point.value),
+                              id: point.id,
                               label: `${estimate.name}: ${point.key ?? point.description ?? point.value ?? point.id}`
                             }))
                           )
