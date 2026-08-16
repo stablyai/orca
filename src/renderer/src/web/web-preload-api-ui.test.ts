@@ -607,6 +607,53 @@ describe('web UI preload API', () => {
     )
   })
 
+  it('forwards only workspace identity for paired agent context inspection', async () => {
+    const calls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, params })
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              target: { kind: 'native-host', homeDir: '/home/u', cwd: '/repo/worktree' },
+              instructionFiles: [],
+              mcpFiles: [],
+              hookFiles: [],
+              plugins: [],
+              scannedAt: 1
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.agentContext.inspect({
+        cwd: '/repo/worktree',
+        worktreeId: 'wt-1',
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        projectRuntime: {
+          status: 'resolved',
+          runtime: { kind: 'wsl', distro: 'Ubuntu' }
+        } as never
+      })
+    ).resolves.toMatchObject({ target: { cwd: '/repo/worktree' } })
+    expect(calls).toEqual([
+      { method: 'agentContext.inspect', params: { cwd: '/repo/worktree', worktreeId: 'wt-1' } }
+    ])
+  })
+
   it('rejects paired web skill discovery failures instead of returning an empty scan', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

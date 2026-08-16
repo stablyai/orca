@@ -8,6 +8,7 @@ import type {
 } from './api/agent-account-api'
 import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
+import type { AgentContextApi } from './api/agent-context-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
 import type {
   ClaudeUsageApi,
@@ -115,6 +116,7 @@ export type PreloadApi = {
   computerUsePermissions: ComputerUsePermissionsApi
   shell: ShellApi
   skills: SkillsApi
+  agentContext: AgentContextApi
   pet: PetApi
   browser: BrowserApi
   emulator: EmulatorApi

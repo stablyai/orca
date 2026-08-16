@@ -11631,7 +11631,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "agentContext": "Agent context"
           },
           "right": {
             "panel": {
@@ -14923,6 +14924,48 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "WorkspaceContextPanel": {
+          "noWorkspace": "Select a workspace to see the context its agents load.",
+          "title": "Agent context",
+          "refresh": "Refresh",
+          "showMissing": "Show locations that were checked but empty",
+          "instructions": "Instructions",
+          "noInstructions": "No instruction files found for this workspace.",
+          "ruleCount": "{{value0}} rules",
+          "missing": "not found",
+          "skills": "Skills",
+          "scanning": "Scanning…",
+          "noSkills": "No skills discovered.",
+          "mcp": "MCP servers",
+          "noMcp": "No MCP config files found.",
+          "invalid": "invalid",
+          "hooks": "Hooks",
+          "invalidSettings": "Invalid settings file",
+          "noHooksInFile": "No hooks",
+          "noHooks": "No agent hooks configured.",
+          "plugins": "Plugins",
+          "noPlugins": "No enabled plugins found.",
+          "enabled": "enabled",
+          "disabled": "disabled",
+          "scopeProject": "Workspace",
+          "scopeAncestor": "Parent folder",
+          "scopeHome": "User",
+          "filterAll": "All",
+          "filterMcp": "MCP",
+          "filterLabel": "Filter sections",
+          "scopeAriaLabel": "Agent context scope",
+          "viewOptions": "Agent context view options",
+          "agents": "Agents",
+          "selectAllAgents": "Select all",
+          "clearAgents": "Clear",
+          "resetView": "Reset view",
+          "unavailableSsh": "Agent context is not available for SSH workspaces yet.",
+          "unavailableRuntime": "Waiting for the runtime that owns this workspace.",
+          "hiddenByFilter": "Hidden by the current filter.",
+          "hostWsl": "{{value0}} · WSL {{value1}}",
+          "hostTitle": "Read on the host that runs this workspace",
+          "openNotAuthorized": "Couldn't open {{value0}} — path not authorized."
         }
       },
       "link": {

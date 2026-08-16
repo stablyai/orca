@@ -131,6 +131,7 @@ import type {
   ShellOpenLocalPathResult
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { AgentContextInspectTarget, AgentContextReport } from '../shared/agent-context'
 import type {
   SkillFreshnessInventory,
   SkillUpdateRun,
@@ -2548,6 +2549,11 @@ const api = {
       ipcRenderer.on('skills:updateRun', listener)
       return () => ipcRenderer.removeListener('skills:updateRun', listener)
     }
+  },
+
+  agentContext: {
+    inspect: (target?: AgentContextInspectTarget): Promise<AgentContextReport> =>
+      ipcRenderer.invoke('agentContext:inspect', target)
   },
 
   pet: {

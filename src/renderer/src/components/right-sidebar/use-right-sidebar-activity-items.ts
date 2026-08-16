@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { BookOpenText, Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -103,6 +103,12 @@ export function useRightSidebarActivityItems({
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
         shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
         gitOnly: true
+      },
+      {
+        id: 'agent-context',
+        icon: BookOpenText,
+        title: translate('auto.components.right.sidebar.index.agentContext', 'Agent context'),
+        shortcut: ''
       },
       {
         id: 'ports',
