@@ -4592,7 +4592,9 @@ export class OrchestrationDb {
 
     if (status === 'completed') {
       this.promoteReadyTasks(id)
-      this.completeActiveDispatchForTask(id)
+    }
+    if (status === 'completed' || status === 'failed') {
+      this.settleActiveDispatchForTask(id, status)
     }
 
     return this.getTask(id)
@@ -7360,13 +7362,24 @@ export class OrchestrationDb {
   }
 
   completeActiveDispatchForTask(taskId: string): void {
+    this.settleActiveDispatchForTask(taskId, 'completed')
+  }
+
+  private settleActiveDispatchForTask(taskId: string, status: 'completed' | 'failed'): void {
     const active = this.db
       .prepare(
         "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
       )
       .get(taskId) as DispatchContextRow | undefined
     if (active) {
-      this.completeDispatch(active.id)
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = ?, completed_at = datetime('now'),
+               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+           WHERE id = ?`
+        )
+        .run(status, active.id)
     }
   }
 

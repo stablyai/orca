@@ -172,18 +172,30 @@ describe('orchestration RPC methods', () => {
       expect(result.task.result).toBe('{"ok": true}')
     })
 
-    it('completion frees the active dispatch context', async () => {
-      setup()
-      const task = db.createTask({ spec: 'work' })
-      db.createDispatchContext(task.id, 'term_a')
+    it.each(['completed', 'failed'] as const)(
+      '%s frees the active dispatch context',
+      async (status) => {
+        setup()
+        const task = db.createTask({ spec: 'work' })
+        db.createDispatchContext(task.id, 'term_a')
 
-      await call('orchestration.taskUpdate', {
-        id: task.id,
-        status: 'completed'
-      })
+        const result = (await call('orchestration.taskUpdate', {
+          id: task.id,
+          status
+        })) as { task: { status: string } }
 
-      expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
-    })
+        expect(result.task.status).toBe(status)
+        expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+        expect(db.getDispatchContext(task.id)).toMatchObject({
+          status,
+          completed_at: expect.any(String),
+          capability_revoked_at: expect.any(String)
+        })
+
+        const next = db.createTask({ spec: 'next' })
+        expect(() => db.createDispatchContext(next.id, 'term_a')).not.toThrow()
+      }
+    )
 
     it('throws on nonexistent task', async () => {
       setup()
