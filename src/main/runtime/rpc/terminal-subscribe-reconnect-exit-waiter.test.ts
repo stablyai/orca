@@ -143,15 +143,12 @@ describe('terminal subscribe reconnect exit-waiter', () => {
 
     // The old setup fails after the rebind; its error cleanup must not touch the live stream.
     rejectFirstSubscribe!(new Error('pty gone'))
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await first
 
     expect(runtime.cleanupSubscription).not.toHaveBeenCalled()
     expect(cleanups.get('terminal-1:phone-1')).toBe(liveCleanup)
 
     runtime.cleanupSubscription('terminal-1:phone-1')
-    await first
     await second
   })
 })
