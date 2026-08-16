@@ -16,6 +16,7 @@ import {
   createHookListenerState,
   getEndpointFileName,
   hasCodexParentTranscript,
+  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   isNewTurnEvent,
@@ -99,6 +100,11 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import {
+  advanceCodexSubagentPollPlan,
+  INITIAL_CODEX_SUBAGENT_POLL_PLAN,
+  type CodexSubagentPollPlan
+} from './codex-subagent-poll-policy'
 
 export type { AgentHookSource }
 
@@ -191,7 +197,6 @@ type RetiredPaneFence = {
 const LAST_STATUS_FILE_NAME = 'last-status.json'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
-const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
@@ -1535,7 +1540,8 @@ export class AgentHookServer {
 
   private scheduleCodexSubagentPoll(
     source: AgentHookSource,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    plan: CodexSubagentPollPlan = INITIAL_CODEX_SUBAGENT_POLL_PLAN
   ): void {
     // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
     if (source !== 'codex') {
@@ -1568,8 +1574,12 @@ export class AgentHookServer {
             payload
           })
         : original
-      this.scheduleCodexSubagentPoll(source, next)
-    }, CODEX_SUBAGENT_POLL_MS)
+      // Why: inactive empty rosters only need late-rollout grace; the next Codex hook restores active polling.
+      const quiet =
+        !hasCodexTranscriptSubagents(this.state, original.paneKey) &&
+        (payload.state !== 'working' || original.hookEventName === 'SessionStart')
+      this.scheduleCodexSubagentPoll(source, next, advanceCodexSubagentPollPlan(plan, quiet))
+    }, plan.delayMs)
     this.codexSubagentPollTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
       timer.unref()
