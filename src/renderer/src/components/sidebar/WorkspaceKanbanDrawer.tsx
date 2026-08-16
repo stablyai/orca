@@ -49,7 +49,8 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
-import type { WorkspaceStatus, Worktree, WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'

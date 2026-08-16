@@ -1,23 +1,20 @@
 /* eslint-disable max-lines -- Why: default persisted settings live in one schema-shaped object so migrations and tests compare against one source of truth. */
-import type {
-  GlobalSettings,
-  NotificationSettings,
-  OnboardingChecklistState,
-  OnboardingState,
-  PersistedState,
-  PersistedUIState,
-  RepoHookSettings,
-  WorkspaceSessionState,
-  AgentActivityDisplayMode
-} from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { NotificationSettings } from './notification-settings-types'
+import type { OnboardingChecklistState, OnboardingState } from './onboarding-state-types'
+import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { PersistedState } from './persisted-state-types'
+import type { PersistedUIState } from './persisted-ui-state-types'
+import type { AgentActivityDisplayMode } from './ui-chrome-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
-import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
+import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
@@ -44,7 +41,7 @@ export {
   getWorktreeCardModeUpdates,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
-} from './worktree-card-properties'
+} from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -174,6 +171,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
+    worktreeVisibilityDefaults: { external: 'hide' },
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -205,6 +203,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
@@ -279,7 +278,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showAutomationsButton: true,
     artifactsEnabled: true,
     artifactSharingEnabled: false,
+    agentSkillSharingEnabled: false,
     showArtifactsButton: false,
+    showSkillsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
@@ -430,6 +431,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     projectGroups: [],
     folderWorkspaces: [],
     sparsePresetsByRepo: {},
+    retiredWorktreeNamesByRepo: {},
+    retiredWorktreeNamesByNamespace: {},
     worktreeMeta: {},
     worktreeLineageById: {},
     workspaceLineageByChildKey: {},

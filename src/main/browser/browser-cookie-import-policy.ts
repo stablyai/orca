@@ -1,6 +1,7 @@
-import type { Cookie, Cookies, Session } from 'electron'
+import type { Cookie, Cookies } from 'electron'
 import { parse as parseDomain } from 'psl'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+// Why: type-only, so this does not create a runtime cycle with the clear module.
+import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -66,10 +67,9 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 // its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
 // users actually asked for.
 const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
-const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
+export const NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS = NON_TRANSPLANTABLE_DOMAINS.map(
   (root) => `https://${root}`
 )
-const COOKIE_CLEAR_CONCURRENCY = 8
 
 export function isNonTransplantableCookieDomain(domain: string): boolean {
   const normalized = normalizeCookieDomain(domain)
@@ -159,7 +159,7 @@ function overlapsImportedDomain(
   return domainSuffixes(domain).some((suffix) => scopes.descendantRoots.has(suffix))
 }
 
-function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
+export function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
   try {
     const url = new URL(`${cookie.secure ? 'https' : 'http'}://${domain}/`)
     url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
@@ -169,146 +169,102 @@ function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
   }
 }
 
-export async function restoreImportedDomainCookies(
-  store: Pick<Cookies, 'set'>,
-  cookies: readonly Cookie[]
-): Promise<void> {
-  const failures: unknown[] = []
-  for (const cookie of cookies) {
-    try {
-      const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-      const url = domain ? cookieRemovalUrl(cookie, domain) : null
-      if (!url) {
-        continue
-      }
-      await store.set({
-        url,
-        name: cookie.name,
-        value: cookie.value,
-        ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
-        ...(cookie.path ? { path: cookie.path } : {}),
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        ...(cookie.expirationDate ? { expirationDate: cookie.expirationDate } : {})
-      })
-    } catch (err) {
-      failures.push(err)
-    }
-  }
-  if (failures.length > 0) {
-    throw new AggregateError(failures, 'Could not restore replaced cookies')
-  }
+// Why (STA-4097): 'set' stays out so the partition-dropping reconstruction cannot return.
+// Undoing a removal is only possible through CDP identities, which carry partitionKey.
+export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
+  snapshotClearIdentities(
+    cookies: readonly { cookie: Cookie; url: string }[]
+  ): Promise<CookieClearIdentity[]>
+  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
 }
 
-// Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.
-export type CookieClearSession = {
-  cookies: Pick<Cookies, 'get' | 'remove'>
-  clearData: Session['clearData']
+export type ReplacedImportedDomainCookies = {
+  removed: Cookie[]
+  identities: CookieClearIdentity[]
 }
 
-// Why: Electron cannot round-trip partition identity, so excluded cookies must never be removed.
-// Why (STA-4061): the same gap forbids rolling a partial clear back. cookies.get() omits
-// partitionKey and cookies.set() silently drops it, so every reconstruction is a coin flip that
-// can downgrade a partitioned (CHIPS) cookie into an unpartitioned one — and nothing in the
-// snapshot says which cookies are at risk. A partially cleared jar is a retryable import failure;
-// a downgraded cookie is unrecoverable auth-state corruption that survives restart.
-// Why (STA-4065): the exclusion is module state rather than a parameter so the predicate and the
-// origins the bulk clear preserves cannot drift apart — a caller-supplied predicate that disagreed
-// with NON_TRANSPLANTABLE_DOMAINS would silently delete a cookie the bulk call is meant to keep.
-export async function removeTransplantableCookies(
-  targetSession: CookieClearSession
-): Promise<void> {
-  const store = targetSession.cookies
-  const initialCookies = await store.get({})
-  if (initialCookies.length === 0) {
-    return
-  }
+function replaceRemovalKey(url: string, name: string): string {
+  return JSON.stringify([url, name])
+}
 
-  // Why (STA-4065): measured on Electron 43, excludeOrigins preserves the whole registrable
-  // family — host, leading-dot, subdomain, and partitioned Google cookies — so one call replaces a
-  // remove() per cookie even when the jar holds cookies to keep. That is the ordinary case here:
-  // this import exists for Google, so a Google cookie is usually present.
-  try {
-    await targetSession.clearData({
-      dataTypes: ['cookies'],
-      excludeOrigins: NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS
-    })
-    return
-  } catch {
-    // Why: a rejected bulk clear can still have changed the jar, so the fallback must act on the
-    // survivors rather than stale removal coordinates from before the attempt.
-  }
-
-  const existingCookies = await store.get({})
-  const removableGroups = new Map<string, { cookie: Cookie; url: string }[]>()
-  for (const cookie of existingCookies) {
-    if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
-      continue
-    }
-    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-    const url = domain ? cookieRemovalUrl(cookie, domain) : null
-    if (!url) {
-      continue
-    }
-    const key = JSON.stringify([url, cookie.name])
-    const group = removableGroups.get(key) ?? []
-    group.push({ cookie, url })
-    removableGroups.set(key, group)
-  }
-
-  const results = await mapSettledWithConcurrency(
-    [...removableGroups.values()],
-    COOKIE_CLEAR_CONCURRENCY,
-    async (group) => {
-      // Why: identical removal coordinates must stay ordered instead of racing.
-      for (const { cookie, url } of group) {
-        await store.remove(url, cookie.name)
-      }
-    }
+function assertIdentitiesCoverRemovable(
+  removable: readonly { cookie: Cookie; url: string }[],
+  identities: readonly CookieClearIdentity[]
+): void {
+  const covered = new Set(
+    identities.map((identity) => replaceRemovalKey(identity.url, identity.name))
   )
-  const failures = results.flatMap((result) =>
-    result.status === 'rejected' ? [result.reason] : []
-  )
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures,
-      'Could not clear existing cookies; the session was left partially cleared'
-    )
+  for (const item of removable) {
+    if (!covered.has(replaceRemovalKey(item.url, item.cookie.name))) {
+      throw new Error('Could not replace existing cookies; the session was left unchanged')
+    }
   }
 }
 
 export async function replaceCookiesForImportedDomains(
-  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+  store: ImportedDomainReplaceStore,
   importedDomains: readonly string[]
-): Promise<Cookie[]> {
+): Promise<ReplacedImportedDomainCookies> {
   const scopes = importedDomainScopes(importedDomains)
   if (scopes.exact.size === 0) {
-    return []
+    return { removed: [], identities: [] }
   }
 
+  // Why (STA-4170): the removal plan is fixed here, beside the identities that can undo it, so
+  // the restorable set always equals the mutated set. Re-reading the jar later would widen the
+  // removal past what the snapshot can restore.
   const existingCookies = await store.get({})
-  const removedCookies: Cookie[] = []
+  const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of existingCookies) {
     const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
     if (!domain || !overlapsImportedDomain(cookie, domain, scopes)) {
       continue
     }
     const url = cookieRemovalUrl(cookie, domain)
-    if (!url) {
-      continue
+    if (url) {
+      removable.push({ cookie, url })
+    }
+  }
+  if (removable.length === 0) {
+    return { removed: [], identities: [] }
+  }
+
+  // Why: snapshotting before the first removal is what makes the rollback lossless; an
+  // incomplete snapshot aborts while the session is still untouched.
+  const identities = await store.snapshotClearIdentities(removable)
+  assertIdentitiesCoverRemovable(removable, identities)
+  const identitiesByKey = new Map<string, CookieClearIdentity[]>()
+  for (const identity of identities) {
+    const key = replaceRemovalKey(identity.url, identity.name)
+    const group = identitiesByKey.get(key) ?? []
+    group.push(identity)
+    identitiesByKey.set(key, group)
+  }
+
+  const removed: Cookie[] = []
+  // Why: one remove(url, name) deletes every cookie at that coordinate, partitioned twins
+  // included, so the rollback set is tracked per coordinate rather than per cookie.
+  const attemptedKeys = new Set<string>()
+  const attemptedIdentities: CookieClearIdentity[] = []
+  for (const { cookie, url } of removable) {
+    const key = replaceRemovalKey(url, cookie.name)
+    if (!attemptedKeys.has(key)) {
+      attemptedKeys.add(key)
+      attemptedIdentities.push(...(identitiesByKey.get(key) ?? []))
     }
     try {
       await store.remove(url, cookie.name)
-      removedCookies.push(cookie)
+      removed.push(cookie)
     } catch (err) {
       try {
-        await restoreImportedDomainCookies(store, removedCookies)
+        // Why: the failing coordinate is included because a rejected remove cannot prove the
+        // cookie survived; restoring a live cookie rewrites the value it was snapshotted with.
+        await store.restoreClearIdentities(attemptedIdentities.toReversed())
       } catch (restoreError) {
         throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
       }
       throw err
     }
   }
-  return removedCookies
+  return { removed, identities }
 }

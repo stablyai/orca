@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, WorkspaceSessionState } from '../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -372,6 +373,30 @@ describe('remote runtime terminal split authority', () => {
       SPLIT_PTY_ID,
       expect.objectContaining({ deadlineMs: expect.any(Number) })
     )
+    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
+  })
+
+  it('preserves the split error when kill and retirement throw', async () => {
+    const harness = createHarness(false, {
+      deferReveal: true,
+      includePairedSnapshot: true,
+      sourceIncarnationId: 'projected-before',
+      stopAndWaitResult: false
+    })
+    harness.kill.mockImplementation(() => {
+      throw new Error('kill failed')
+    })
+    harness.retireRejectedPty.mockImplementation(() => {
+      throw new Error('retire failed')
+    })
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.revealTerminalSession).toHaveBeenCalledOnce())
+    harness.replaceSourceIncarnation('projected-after')
+    harness.resolveReveal()
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
     expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
   })

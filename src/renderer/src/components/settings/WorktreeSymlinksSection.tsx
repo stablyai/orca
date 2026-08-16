@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Folder, Link2, Plus, X } from 'lucide-react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'

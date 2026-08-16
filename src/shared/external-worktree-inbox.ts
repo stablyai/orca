@@ -1,5 +1,7 @@
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
-import type { DetectedWorktree, DetectedWorktreeListResult, Repo } from './types'
+import type { WorktreeVisibilityDefaults } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from './worktree/types'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -103,7 +105,10 @@ export function hasCompletedInitialExternalWorktreeImportPrompt(
   return typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number'
 }
 
-export function shouldOfferNewExternalWorktreeInbox(repo: Repo): boolean {
+export function shouldOfferNewExternalWorktreeInbox(
+  repo: Repo,
+  defaults?: WorktreeVisibilityDefaults
+): boolean {
   if (isExternalWorktreeDiscoverySuppressed(repo)) {
     return false
   }
@@ -111,16 +116,20 @@ export function shouldOfferNewExternalWorktreeInbox(repo: Repo): boolean {
     return false
   }
   return (
-    effectiveExternalWorktreeVisibility(repo, isLegacyRepoForExternalWorktreeVisibility(repo)) ===
-    'hide'
+    effectiveExternalWorktreeVisibility(
+      repo,
+      isLegacyRepoForExternalWorktreeVisibility(repo),
+      defaults
+    ) === 'hide'
   )
 }
 
 export function getNewExternalWorktreeInboxWorktrees(
   detected: DetectedWorktreeListResult | undefined,
-  repo: Repo
+  repo: Repo,
+  defaults?: WorktreeVisibilityDefaults
 ): DetectedWorktree[] {
-  if (!shouldOfferNewExternalWorktreeInbox(repo)) {
+  if (!shouldOfferNewExternalWorktreeInbox(repo, defaults)) {
     return []
   }
   const baseline = new Set(

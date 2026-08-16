@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // run6-review-pr-11959 repro: leaf.connected mirrors the graph (`ptyId !== null`),
 // so a restored leaf whose PTY no provider owns must be demoted from the
@@ -143,23 +143,6 @@ describe('listTerminals liveness truth for restored leaves', () => {
     expect(terminals).toHaveLength(1)
     expect(terminals[0]).toMatchObject({
       ptyId: 'pty-just-spawned',
-      connected: true,
-      writable: true
-    })
-  })
-
-  it('keeps a leaf connected when the snapshot missed it but provider liveness is unknown', async () => {
-    const runtime = makeRuntimeWithLeaf({
-      leafPtyId: 'pty-provider-disconnected',
-      controllerSessions: [],
-      hasPty: () => null
-    })
-
-    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-
-    expect(terminals).toHaveLength(1)
-    expect(terminals[0]).toMatchObject({
-      ptyId: 'pty-provider-disconnected',
       connected: true,
       writable: true
     })

@@ -15,7 +15,7 @@ import {
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 const SOURCE = 'repo-a::/repo-a'
 const TARGET = 'repo-b::/repo-b'
@@ -313,6 +313,80 @@ describe('restored editor owner reparent', () => {
     })
     expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledOnce()
     expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledWith(TARGET)
+  })
+
+  it('repairs a duplicate migrated tab id held by a non-selected destination group', () => {
+    const oldId = openRestoredSource()
+    const movedTabId = useAppStore.getState().unifiedTabsByWorktree[SOURCE]![0]!.id
+    const keptFileId = useAppStore.getState().openFile(
+      {
+        filePath: '/repo-b/docs/other.md',
+        relativePath: 'docs/other.md',
+        worktreeId: TARGET,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const keptTab = useAppStore
+      .getState()
+      .unifiedTabsByWorktree[TARGET]!.find((tab) => tab.entityId === keptFileId)!
+    useAppStore.setState((state) => ({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [TARGET]: [
+          { ...keptTab, groupId: 'other-group' },
+          // A stale duplicate carrying the id the source tab keeps through the move.
+          { ...keptTab, id: movedTabId, groupId: 'other-group' }
+        ]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        [TARGET]: [
+          {
+            id: 'target-group',
+            worktreeId: TARGET,
+            activeTabId: null,
+            tabOrder: [],
+            recentTabIds: []
+          },
+          {
+            id: 'other-group',
+            worktreeId: TARGET,
+            activeTabId: movedTabId,
+            tabOrder: [keptTab.id, movedTabId],
+            recentTabIds: [keptTab.id, movedTabId]
+          }
+        ]
+      },
+      layoutByWorktree: {
+        ...state.layoutByWorktree,
+        [TARGET]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'target-group' },
+          second: { type: 'leaf', groupId: 'other-group' }
+        }
+      },
+      activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [TARGET]: 'target-group' }
+    }))
+
+    expect(reparent(oldId).ok).toBe(true)
+
+    const next = useAppStore.getState()
+    const groups = next.groupsByWorktree[TARGET]!
+    const otherGroup = groups.find((group) => group.id === 'other-group')!
+    expect(otherGroup).toMatchObject({
+      activeTabId: keptTab.id,
+      tabOrder: [keptTab.id],
+      recentTabIds: [keptTab.id]
+    })
+    expect(groups.find((group) => group.id === 'target-group')?.tabOrder).toContain(movedTabId)
+    // The migrated id survives exactly once, in the group that now owns the tab.
+    expect(next.unifiedTabsByWorktree[TARGET]!.filter((tab) => tab.id === movedTabId)).toHaveLength(
+      1
+    )
   })
 
   it('persists and restores the destination owner and dirty hot-exit draft', () => {

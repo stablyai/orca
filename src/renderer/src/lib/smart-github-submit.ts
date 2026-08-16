@@ -1,11 +1,12 @@
-import type { GitHubWorkItem, GitPushTarget } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitPushTarget } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export type SmartGitHubSubmitIntent =
   | {

@@ -12,9 +12,10 @@ const mocks = vi.hoisted(() => {
         path: string
         displayName: string
         isMainWorktree: boolean
+        hostId?: string
       }
     >(),
-    repos: [] as { id: string; displayName: string }[],
+    repos: [] as { id: string; displayName: string; connectionId?: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
     clearWorktreeDeleteState: vi.fn((worktreeId: string) => {
@@ -88,6 +89,7 @@ function setWorktrees(
     path?: string
     displayName?: string
     isMainWorktree?: boolean
+    hostId?: string
   }[]
 ): void {
   mocks.state.worktreeMap = new Map(
@@ -99,7 +101,8 @@ function setWorktrees(
         repoId: worktree.repoId ?? 'repo-1',
         path: worktree.path ?? `/workspaces/${worktree.id}`,
         displayName: worktree.displayName ?? worktree.id,
-        isMainWorktree: worktree.isMainWorktree ?? false
+        isMainWorktree: worktree.isMainWorktree ?? false,
+        ...(worktree.hostId ? { hostId: worktree.hostId } : {})
       }
     ])
   )
@@ -493,7 +496,33 @@ describe('delete worktree flow', () => {
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
     expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
       repoId: 'repo-1',
-      displayName: 'orca'
+      displayName: 'orca',
+      hostId: 'local'
+    })
+  })
+
+  it('routes primary workspace removal to its exact SSH host', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([
+      {
+        id: 'main',
+        repoId: 'repo-1',
+        displayName: 'main',
+        isMainWorktree: true,
+        hostId: 'ssh:runtime-ssh-one'
+      }
+    ])
+    mocks.state.repos = [
+      { id: 'repo-1', displayName: 'local orca' },
+      { id: 'repo-1', displayName: 'provisioned orca', connectionId: 'runtime-ssh-one' }
+    ]
+
+    runWorktreeDelete('main')
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
+      repoId: 'repo-1',
+      displayName: 'provisioned orca',
+      hostId: 'ssh:runtime-ssh-one'
     })
   })
 

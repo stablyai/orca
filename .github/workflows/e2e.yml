@@ -240,8 +240,16 @@ jobs:
             echo "Changed startup-readiness specs are owned by the dedicated live lane."
             exit 0
           fi
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 \
-            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts'; then
+            E2E_ENV+=(ORCA_E2E_SSH_DOCKER=1)
+          fi
+          E2E_PROJECT_ARGS=()
+          if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
+            E2E_PROJECT_ARGS+=(--project=electron-headful)
+          fi
+          xvfb-run --auto-servernum env "${E2E_ENV[@]}" \
+            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
         if: failure()

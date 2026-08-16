@@ -1,17 +1,14 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  Repo,
-  SetupSplitDirection,
-  Tab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  TuiAgent,
-  Worktree,
-  WorkspaceKey,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -42,14 +39,14 @@ import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
-} from '../../../../shared/worktree-id'
+} from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
@@ -3859,7 +3856,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         rowHydrationByWorktree
           .map(([worktreeId, hydration]) => [worktreeId, hydration.rows] as const)
-          .filter(([, tabs]) => tabs.length > 0)
+          .filter(
+            ([worktreeId, tabs]) =>
+              tabs.length > 0 || session.tabsByWorktree[worktreeId]?.length === 0
+          )
       )
       const releasedPtyIdsByTabId = new Map<string, Set<string>>(
         rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.releasedPtyIdsByTabId])

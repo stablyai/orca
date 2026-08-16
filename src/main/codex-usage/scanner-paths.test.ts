@@ -35,9 +35,9 @@ vi.mock('node:os', async () => {
 import {
   getCodexSessionDirectories,
   getCodexSessionsDirectory,
-  listCodexSessionFiles,
-  scanCodexUsageFiles
-} from './scanner'
+  listCodexSessionFiles
+} from './codex-session-file-discovery'
+import { scanCodexUsageFiles } from './scanner'
 
 const originalCodexHome = process.env.CODEX_HOME
 let fakeHomeDir: string

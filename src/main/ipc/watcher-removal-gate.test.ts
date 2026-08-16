@@ -6,7 +6,7 @@ import {
   TerminalRemovalInProgressError,
   WatcherRemovalInProgressError
 } from './watcher-removal-gate'
-import { isWorktreeRemovalFenceError } from '../../shared/worktree-removal-fence-error'
+import { isWorktreeRemovalFenceError } from '../../shared/worktree/removal-fence-error'
 
 describe('watcher removal gate', () => {
   it('waits for an existing install and rejects later equivalent-path installs', async () => {

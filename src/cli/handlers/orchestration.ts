@@ -32,6 +32,7 @@ import {
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
+import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -397,14 +398,13 @@ function callMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
   const requestId = getOptionalStringFlag(flags, 'retry-request')
-  if (!requestId) {
-    return options
+  const result = requestId
+    ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
+    : options
       ? client.call<TResult>(method, params, options)
       : client.call<TResult>(method, params)
-  }
-  return client.call<TResult>(method, params, {
-    ...options,
-    orchestrationRequestId: requestId
+  return result.catch((error) => {
+    throw orchestrationMutationRecoveryError(error)
   })
 }
 

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -109,6 +109,11 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  requestHostRpc?: (
+    method: string,
+    params: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<unknown>
   /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
@@ -123,11 +128,11 @@ export type IPtyProvider = {
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
-  /** Three-valued: null means the provider cannot see this id right now — absence is unproven, never dead. */
-  hasPty?: (id: string) => boolean | null
+  hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): void
+  write(id: string, data: string): boolean | void
+  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a

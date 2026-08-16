@@ -1,4 +1,7 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -26,19 +29,7 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
-
-/**
- * Whether a worktree represents the repo's default-branch row that the
- * "Hide Default Branch Workspace" setting targets. Folder-mode projects are
- * main worktrees with branch === '' and are intentionally preserved.
- *
- * Why a shared helper: this predicate gates visibility in both the sidebar
- * pipeline (computeVisibleWorktreeIds) and the Cmd+J jump palette. Keeping
- * the definition in one place prevents the two surfaces from drifting.
- */
-export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
-  return worktree.isMainWorktree && worktree.branch.trim() !== ''
-}
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).

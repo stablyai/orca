@@ -5,17 +5,26 @@ import {
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
+/**
+ * `fallbackMs: null` waits indefinitely. A newline arriving late still arrives, so a timer is
+ * right for it; a cursor chord arriving mid-preedit reproduces the corruption the wait exists to
+ * prevent, and a conversion can hold its candidate window open for seconds. Dropping the chord
+ * costs one keypress, firing early costs a mangled line.
+ */
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
   send: () => void,
-  options?: { fallbackMs?: number }
+  options?: { fallbackMs?: number | null }
 ): void {
   if (!terminalElement) {
     window.setTimeout(send, 0)
     return
   }
 
-  const fallbackMs = options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
+  const fallbackMs =
+    options?.fallbackMs === null
+      ? null
+      : (options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
   let done = false
 
   const finish = (): void => {
@@ -28,7 +37,9 @@ export function sendTerminalInputAfterComposition(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
     )
-    window.clearTimeout(fallbackTimer)
+    if (fallbackTimer !== undefined) {
+      window.clearTimeout(fallbackTimer)
+    }
     // xterm flushes the committed glyph after compositionend.
     window.setTimeout(send, 0)
   }
@@ -42,7 +53,7 @@ export function sendTerminalInputAfterComposition(
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
   terminalElement.addEventListener('compositionend', onCompositionEnd)
   terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd)
-  const fallbackTimer = window.setTimeout(finish, fallbackMs)
+  const fallbackTimer = fallbackMs === null ? undefined : window.setTimeout(finish, fallbackMs)
 }
 
 export type TerminalImeDeferredNewlineSender = {

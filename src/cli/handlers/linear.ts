@@ -19,8 +19,8 @@ import type {
   LinearTeamListResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult
-} from '../../shared/linear-agent-access'
-import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
+import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'

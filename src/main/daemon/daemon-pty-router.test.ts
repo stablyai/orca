@@ -76,6 +76,7 @@ function createAdapter(
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
+    writeWithSettlement: vi.fn(async () => true),
     resize: vi.fn(),
     setPtyBackgrounded: vi.fn(),
     getBufferSnapshot: vi.fn(async () => null),
@@ -408,7 +409,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
   })
 
-  it('preserves older session owners and routes new sessions to v33', async () => {
+  it('preserves older session owners and routes new sessions to v35', async () => {
     const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
     const legacyV30 = createAdapter(
       'v30',
@@ -423,27 +424,52 @@ describe('DaemonPtyRouter', () => {
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
     const legacyV32 = createAdapter('v32', ['v32-session'], undefined, 32)
-    const router = new DaemonPtyRouter({ current, legacy: [legacyV30, legacyV31, legacyV32] })
+    const legacyV33 = createAdapter('v33', ['v33-session'], undefined, 33)
+    const legacyV34 = createAdapter('v34', ['v34-session'], undefined, 34)
+    const router = new DaemonPtyRouter({
+      current,
+      legacy: [legacyV30, legacyV31, legacyV32, legacyV33, legacyV34]
+    })
 
     await router.discoverLegacySessions()
 
     await router.spawn({ sessionId: 'v30-session', cols: 80, rows: 24 })
     await router.spawn({ sessionId: 'v31-session', cols: 80, rows: 24 })
     await router.spawn({ sessionId: 'v32-session', cols: 80, rows: 24 })
+    await router.spawn({ sessionId: 'v33-session', cols: 80, rows: 24 })
+    await router.spawn({ sessionId: 'v34-session', cols: 80, rows: 24 })
     const fresh = await router.spawn({ cols: 80, rows: 24 })
     router.write('v30-session', 'old-v30\n')
     router.write('v31-session', 'old-v31\n')
     router.write('v32-session', 'old-v32\n')
+    router.write('v33-session', 'old-v33\n')
+    router.write('v34-session', 'old-v34\n')
     router.write(fresh.id, 'new\n')
 
     expect(legacyV30.spawn).toHaveBeenCalledWith({ sessionId: 'v30-session', cols: 80, rows: 24 })
     expect(legacyV31.spawn).toHaveBeenCalledWith({ sessionId: 'v31-session', cols: 80, rows: 24 })
     expect(legacyV32.spawn).toHaveBeenCalledWith({ sessionId: 'v32-session', cols: 80, rows: 24 })
+    expect(legacyV33.spawn).toHaveBeenCalledWith({ sessionId: 'v33-session', cols: 80, rows: 24 })
+    expect(legacyV34.spawn).toHaveBeenCalledWith({ sessionId: 'v34-session', cols: 80, rows: 24 })
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacyV30.write).toHaveBeenCalledWith('v30-session', 'old-v30\n')
     expect(legacyV31.write).toHaveBeenCalledWith('v31-session', 'old-v31\n')
     expect(legacyV32.write).toHaveBeenCalledWith('v32-session', 'old-v32\n')
+    expect(legacyV33.write).toHaveBeenCalledWith('v33-session', 'old-v33\n')
+    expect(legacyV34.write).toHaveBeenCalledWith('v34-session', 'old-v34\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('routes settlement-aware writes to the owning daemon generation', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    vi.mocked(legacy.writeWithSettlement).mockResolvedValue(false)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.writeWithSettlement('legacy-session', 'pointer')).resolves.toBe(false)
+    expect(legacy.writeWithSettlement).toHaveBeenCalledWith('legacy-session', 'pointer')
+    expect(current.writeWithSettlement).not.toHaveBeenCalled()
   })
 
   it('routes background hints and authoritative snapshots to the session owner', async () => {
@@ -527,33 +553,6 @@ describe('DaemonPtyRouter', () => {
 
     expect(router.hasPty('legacy-session')).toBe(false)
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
-  })
-
-  // Why: an unreachable generation cannot certify that another generation's session
-  // is gone — collapsing its null to false hands a respawn a fabricated death.
-  it('answers unknown when any adapter cannot see the session', () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy')
-    legacy.hasPty = vi.fn(() => null)
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    expect(router.hasPty('unmapped-session')).toBe(null)
-  })
-
-  it('does not report terminal_gone for inspection when an adapter cannot answer', async () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy')
-    legacy.hasPty = vi.fn(() => null)
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    await expect(router.inspectProcess('unmapped-session')).resolves.toEqual({
-      foregroundProcess: null,
-      hasChildProcesses: false
-    })
-
-    // Unproven routes must not be memoized as an owner.
-    const unanimous = new DaemonPtyRouter({ current: createAdapter('c2'), legacy: [] })
-    await expect(unanimous.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
   })
 
   it('discovers an unmapped live session from one coalesced inventory', async () => {
