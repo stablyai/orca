@@ -16710,6 +16710,22 @@
           "rebasing": "Rebasing",
           "cherryPicking": "Cherry-picking"
         }
+      },
+      "editor": {
+        "CombinedDiffViewer": {
+          "openDiff": "Open diff",
+          "openInEditor": "Open in editor"
+        },
+        "editorLabels": {
+          "conflictReview": "Conflict Review",
+          "allChanges": "All Changes",
+          "uncommittedChanges": "Uncommitted Changes",
+          "branchChanges": "Branch Changes ({{baseRef}})",
+          "stagedDiff": "staged diff",
+          "diff": "diff",
+          "branchDiff": "branch diff",
+          "commitDiff": "commit diff"
+        }
       }
     }
   },

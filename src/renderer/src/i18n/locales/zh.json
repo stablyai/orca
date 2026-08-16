@@ -4220,7 +4220,7 @@
           "08c78441b7": "模型",
           "a4738de041": "项目",
           "d97bdf6e27": "最后活跃",
-          "81817a641a": "此范围内的最新本地 OpenCode 会话。",
+          "81817a641a": "此范围内的最新本地 OpenCode 会话",
           "4799177b1c": "最近的会话",
           "1e5d410df0": "事件",
           "bc0cb89901": "会话 •",
@@ -4228,14 +4228,14 @@
           "0f0a1684bb": "按项目",
           "a15206a63a": "顶级型号：",
           "040c044d39": "按型号",
-          "e5bb23d85e": "助手消息录制时，成本来自本地 OpenCode 数据库。",
+          "e5bb23d85e": "当助理消息记录了一条时，成本数据将从本地 OpenCode 数据库中获取",
           "15c34d4b08": "记录成本",
           "7e9433469a": "会话/活动",
           "5a65d68b77": "推理输出",
           "603504ee3b": "缓存输入",
           "7aa4d8ce35": "输出 token",
           "d637a892ed": "输入 token",
-          "bb6363e08c": "尚未找到此范围的本地 OpenCode 用法。",
+          "bb6363e08c": "尚未在此作用域内找到任何本地 OpenCode 的使用情况",
           "f04131b3be": "启用 OpenCode 使用情况分析",
           "603cd138dc": "刷新",
           "bed558df0b": "刷新 OpenCode 使用情况",
@@ -4244,7 +4244,7 @@
           "01583b30aa": "筛选条件",
           "230d6de108": "OpenCode 使用选项",
           "bea80ceae0": "OpenCode 使用情况跟踪",
-          "b8b3522436": "读取本地 OpenCode 使用日志以显示 token、模型和会话统计信息。",
+          "b8b3522436": "读取本地 OpenCode 使用日志以显示 Token、模型和会话统计信息",
           "144a6050e9": "所有本地 OpenCode 使用情况",
           "e04c58327c": "仅 Orca 工作树",
           "362231082f": "未知",
@@ -4361,14 +4361,14 @@
               "57d1448ef8": "启用",
               "f6df0d7d6d": "更多的",
               "1dd166c920": "较少的",
-              "52d9221dc0": "近期 token 活动热图",
+              "52d9221dc0": "近期 Token 活动热图",
               "c424eb3f8e": "最好的：",
-              "f28ff1f852": "近期 Claude、Codex 和 OpenCode 的综合 token 活动",
+              "f28ff1f852": "近期综合 Token 活动",
               "69e2b50427": "每日强度",
-              "3a795542fa": "综合 token 分布",
+              "3a795542fa": "综合 Token 分布",
               "e65084cb4b": "推理",
-              "3bc4a01b24": "汇总已启用提供商的输入、输出和缓存 token",
-              "4ff104da47": "token 分布",
+              "3bc4a01b24": "已启用提供商的输入、输出和缓存 Token 汇总",
+              "4ff104da47": "Token 分布",
               "0015facc1f": "缓存",
               "7f270458af": "输出",
               "9365b14a4e": "新输入",
@@ -4436,8 +4436,8 @@
           "69c020eddc": "编辑预设",
           "bd6cec2056": "新的",
           "e28dd2f0e9": "名称为必填项。",
-          "42742b6c47": "名称不得超过 80 个字符。",
-          "2106b565ae": "\"{{name}}\" 已存在。"
+          "42742b6c47": "名称不得超过 80 个字符",
+          "2106b565ae": "\"{{name}}\" 已存在"
         }
       },
       "source": {
@@ -6023,7 +6023,7 @@
           "3d245ef7d9": "Codex 报告此登录已过时",
           "589eba1eee": "需要重新授权",
           "e74831fb6b": "当前",
-          "b4c9450319": "{{value0}} 没有受管理的 Codex 账户。Orca 将使用该环境的系统默认 Codex 登录，直到您在此处添加一个",
+          "b4c9450319": "{{value0}} 没有受管理的 Codex 账户，Orca 将使用该环境的系统默认 Codex 登录，直到您在此处添加一个",
           "93c47b333a": "需要登录",
           "f2a265f8c7": "系统默认",
           "b0e948a4f9": "添加账户",
@@ -6031,10 +6031,10 @@
           "94d351af4a": "账户",
           "d0d53b7eb0": "管理 Orca 使用哪个 Codex 账户进行实时速率限制提取",
           "3180536c7a": "Codex 账户",
-          "340d6f7a85": "每个账户在 Orca 中都保留自己的本地登录上下文。账户身份验证保留在此设备上",
+          "340d6f7a85": "每个账户在 Orca 中都保留自己的本地登录上下文，账户身份验证保留在此设备上",
           "cedfab35ab": "Orca 可使用系统默认 Codex 登录，仅当你需要在 Orca 中快速切换账户时才添加账户",
           "ef91cfa06b": "Codex",
-          "3fe7862418": "{{value0}} 没有受管理的 Claude 账户。Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个",
+          "3fe7862418": "{{value0}} 没有受管理的 Claude 账户，Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个",
           "3455cf43fa": "Claude 登录",
           "fcc4093fc1": "使用您当前 {{value0}} Codex 登录名",
           "79e484c3b2": "用于共享 Claude 身份验证文件的可选账户切换器",
@@ -6042,7 +6042,7 @@
           "72b36ea174": "Orca 可使用系统默认 Claude 登录，仅当你需要快速切换且不想迁移聊天会话时才添加账户",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 账户更新失败",
-          "b15ce90870": "{{value0}} → {{value1}}。继续旧会话前请重启实时 Claude 终端",
+          "b15ce90870": "{{value0}} → {{value1}}，继续旧会话前请重启实时 Claude 终端",
           "f921d32606": "Claude 账户已更新。",
           "5bf8764953": "Codex 账户更新失败",
           "9baf45d071": "当前设备",
@@ -6058,8 +6058,8 @@
           "b8c2905c2b": "无法加载 Codex 账户",
           "fd62f37c24": "Codex 报告此 {{value0}} 登录信息已过期",
           "b10cb4f696": "添加",
-          "e4a28e8894": "Codex 报告 {{value0}} 登录需要重新登录。在开始新的 Codex 会话之前再次登录",
-          "75ca9b718e": "Codex 报告活动账户需要重新登录。在开始新的 Codex 会话之前重新对其进行身份验证",
+          "e4a28e8894": "Codex 报告 {{value0}} 登录需要重新登录，在开始新的 Codex 会话之前再次登录",
+          "75ca9b718e": "Codex 报告活动账户需要重新登录，在开始新的 Codex 会话之前重新对其进行身份验证",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "用你已有的",
           "e05d0ff737": "使用您当前 {{value0}} Claude 登录名",
@@ -6105,25 +6105,25 @@
           "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量",
           "remoteServerFallback": "远程服务器",
           "loadAccountsFailed": "无法加载提供商账户",
-          "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户",
+          "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户，请在该服务器上添加或重新验证账户",
           "accountScopePrefix": "账户范围",
           "accountScopeRemoteServerUnnamed": "远程服务器",
-          "remoteScopeLocalAccountsKept": "本机账户不受影响。将默认运行时切回本地桌面即可查看",
+          "remoteScopeLocalAccountsKept": "本机账户不受影响，将默认运行时切回本地桌面即可查看",
           "remoteScopeAuthContext": "每个账户在 {{value0}} 上保留自己的登录上下文",
-          "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户",
-          "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户",
+          "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户，它使用其系统默认的 Claude 登录；请在该服务器上添加账户",
+          "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户，它使用其系统默认的 Codex 登录；请在该服务器上添加账户",
           "codexSystemDefaultCustomProvider": "自定义提供商 — 不跟踪使用情况",
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息",
-          "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置。请恢复该文件以恢复同步",
-          "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置。同步文件夹完成下载前出现这种情况是正常的",
-          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限",
+          "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置，请恢复该文件以恢复同步",
+          "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置，同步文件夹完成下载前出现这种情况是正常的",
+          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置，请检查该文件的权限",
           "92f4238f1a": "WSL"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
           "87a2cb2ac8": "Orca 在启动时应用此网络模式",
           "89958d7edf": "需要重新启动",
-          "b3ad629640": "仅当企业 VPN 或代理因 HTTP/2 协议错误而中断更新下载时使用。重启后会影响所有 Electron 网络",
+          "b3ad629640": "仅当企业 VPN 或代理因 HTTP/2 协议错误而中断更新下载时使用，重启后会影响所有 Electron 网络",
           "6627e75c92": "解释 HTTP/1.1 兼容性",
           "e9506d3377": "HTTP/1.1 兼容性",
           "8b7a8df299": "支持故障排除的低级解决方法",
@@ -6327,7 +6327,7 @@
           "b468f46726": "upstream/main",
           "80f7c82303": ")或完整的参考(例如",
           "915ad97875": "upstream",
-          "a5c16712c1": "已检测多个遥控器。输入远程名称(例如",
+          "a5c16712c1": "已检测多个遥控器，输入远程名称(例如",
           "9a14ec7400": "选择下面的一个基础分支",
           "086ce7f369": "跟随主分支 ({{value0}})",
           "2f3cda96f5": "固定此仓库",
@@ -6342,7 +6342,7 @@
           "d4ddcd0056": "保存",
           "37a30c5bfd": "https://google.com",
           "c6cbd1c105": "主页已保存。",
-          "6a37540f4b": "创建新浏览器选项卡时打开的 URL。留空以打开空白选项卡",
+          "6a37540f4b": "创建新浏览器选项卡时打开的 URL，留空以打开空白选项卡",
           "70224e37b1": "默认主页"
         },
         "BrowserPane": {
@@ -6646,13 +6646,13 @@
             "title": "新卡片样式",
             "toggleLabel": "切换新卡片样式"
           },
-          "ca2219fe5e": "右下角显示小动画宠物；可在状态栏菜单选择角色或上传图片，也可随时隐藏",
+          "ca2219fe5e": "右下角显示小动画宠物，可在状态栏菜单选择角色或上传图片，也可随时隐藏",
           "dd6f0a1d45": "宠物",
           "0e89a574ae": "右下角漂浮的动画宠物",
           "nativeChat": {
             "title": "Chat UI",
             "description": "预览受支持的代理终端会话的桌面聊天界面",
-            "copy": "添加可从受支持的代理终端窗格切换的 Chat UI 视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段",
+            "copy": "添加可从受支持的代理终端窗格切换的 Chat UI 视图，在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段",
             "toggleLabel": "切换 Chat UI",
             "defaultTitle": "默认视图",
             "defaultCopy": "选择如何打开受支持代理的新终端标签页",
@@ -6663,7 +6663,7 @@
           "agentDashboard": {
             "title": "代理仪表盘",
             "description": "用于监控跨工作树的代理的看板，支持窗口内或弹出窗口显示",
-            "copy": "在左侧边栏添加代理仪表盘入口。监控需要你处理、正在工作或已完成的代理，并可选择显示空闲代理",
+            "copy": "在左侧边栏添加代理仪表盘入口，监控需要你处理、正在工作或已完成的代理，并可选择显示空闲代理",
             "toggleLabel": "切换代理仪表盘",
             "modeLabel": "打开方式",
             "modeCopy": "将仪表盘显示为侧边栏旁的窗口内看板，或单独的弹出窗口",
@@ -6798,7 +6798,7 @@
           "824b98a0d9": "在删除自动化及其运行历史记录之前显示确认信息",
           "ea98373cd8": "删除自动化之前询问",
           "d2dd2ca2e3": "在删除自动化及其运行历史记录之前显示确认对话框",
-          "28bc3d085e": "从上下文菜单中删除工作区之前显示确认信息。失败的删除仍然会出现强制删除后备",
+          "28bc3d085e": "从上下文菜单中删除工作区之前显示确认信息，失败的删除仍然会出现强制删除后备",
           "9f380934cf": "删除工作区之前询问",
           "5734db82af": "删除工作区之前显示确认对话框",
           "4fbf910ded": "在以仓库命名的子文件夹内创建工作区",
@@ -6810,7 +6810,7 @@
           "7511097c5d": "工作区",
           "31e300af1c": "删除 Artifacts 前询问",
           "fb29a73a17": "删除已分享的 Artifact 并断开其公开链接前显示确认对话框",
-          "bf46474e33": "删除已分享的 Artifact 前显示确认。持有其公开链接的任何人都将失去访问权限"
+          "bf46474e33": "删除已分享的 Artifact 前显示确认，持有其公开链接的任何人都将失去访问权限"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "应用更改",
@@ -6906,7 +6906,7 @@
           "stagedFirst": "已暂存优先",
           "untrackedFirst": "未跟踪优先",
           "compareAgainstUpstreamTitle": "默认对比基准",
-          "compareAgainstUpstreamDescription": "选择源代码管理比较已提交变更时的默认基准；无上游时回退到仓库默认分支。可在各 worktree 的 Git 面板单独更改",
+          "compareAgainstUpstreamDescription": "选择源代码管理比较已提交变更时的默认基准，无上游时回退到仓库默认分支。可在各 worktree 的 Git 面板单独更改",
           "compareBaseRepositoryDefault": "仓库默认",
           "compareBaseBranchUpstream": "分支上游"
         },
@@ -6917,7 +6917,7 @@
           "3e9e827ca5": "隐藏实验"
         },
         "InputPane": {
-          "db15068196": "Linux / macOS 默认启用；Linux 用系统选择剪贴板，其他平台用私有缓冲",
+          "db15068196": "Linux / macOS 默认启用，Linux 用系统选择剪贴板，其他平台用私有缓冲",
           "ad31c3c5fb": "单击鼠标中键从所选内容粘贴"
         },
         "IntegrationsPane": {
@@ -7129,7 +7129,7 @@
           "668016be7a": "在您的计算机和手机上",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "安装",
-          "9fc5d203ff": "手机直接连接本机；跨网络时请将电脑与手机置于同一私有覆盖网络，再用所选地址生成二维码",
+          "9fc5d203ff": "手机直接连接本机，跨网络时请将电脑与手机置于同一私有覆盖网络，再用所选地址生成二维码",
           "39fad211d9": "使用尾网连接 Wi-Fi 外部",
           "a9db5d771d": "刷新网络接口",
           "b2c384cfd6": "没有找到接口",
@@ -7140,7 +7140,7 @@
         },
         "MobilePane": {
           "dd3cd78d04": "使用 Orca 手机端 扫描",
-          "35100bca5d": "手机使用终端时会缩小适配屏幕；离开时可保持手机尺寸或恢复桌面尺寸。也可在横幅上手动恢复",
+          "35100bca5d": "手机使用终端时会缩小适配屏幕，离开时可保持手机尺寸或恢复桌面尺寸，也可在横幅上手动恢复",
           "ee56f1c7e4": "当您离开手机应用程序时",
           "3939fd062c": "撤销设备会立即断开连接",
           "254a6d09e4": "配对",
@@ -7312,7 +7312,7 @@
           "e3970bbbf5": "由于设置了 CI 环境变量，遥测被禁用。取消设置并重新启动",
           "fe904ac984": "共享匿名使用数据",
           "77410e0566": "隐私政策",
-          "8bfdd23a88": "帮助我们弄清楚下一步要构建什么。 Orca 会发送匿名计数，记录您使用的功能以及出现故障的位置",
+          "8bfdd23a88": "帮助我们弄清楚下一步要构建什么，Orca 会发送匿名计数，记录您使用的功能以及出现故障的位置",
           "afec8b03be": "ci"
         },
         "QuickCommandsList": {
@@ -7668,7 +7668,7 @@
           "serverDisconnected": "已断开连接",
           "disconnectedServer": "已断开与 {{value0}} 的连接",
           "connectToRemoteServers": "连接到远程服务器",
-          "connectToRemoteServersHelp": "配对另一个 Orca 运行时，然后在此处连接或断开连接。仅当你想更改默认主机时，才使用高级 > 活动服务器",
+          "connectToRemoteServersHelp": "配对另一个 Orca 运行时，然后在此处连接或断开连接，仅当你想更改默认主机时，才使用高级 > 活动服务器",
           "activeServerRowHelp": "用于通过服务器路由的项目、终端和提供商检查的活动服务器",
           "disconnect": "断开连接",
           "connect": "连接",
@@ -7882,8 +7882,8 @@
           "0f55c6f15c": "快捷键冲突时，选择由 Orca 还是当前终端优先处理"
         },
         "ShortcutsPane": {
-          "4b7ae34062": "直接地。",
-          "38e86e206a": "直观地自定义快捷键或编辑",
+          "4b7ae34062": "",
+          "38e86e206a": "自定义或编辑快捷键",
           "47f8f7aef9": "键盘快捷键",
           "f0b35b0b2e": "当终端或 TUI 具有键盘焦点时禁用",
           "5c65d5db9d": "终端优先",
@@ -8106,7 +8106,7 @@
           "linearDescription": "连接 Linear、安装代理技能并将其显示在任务中",
           "jiraDescription": "连接 Jira Cloud 或自托管 Jira 并将其显示在任务中",
           "setupTitle": "任务管理设置",
-          "setupDescription": "集中完成提供商连接与显示设置；Linear 还需代理技能。请至少保留一个可见提供商",
+          "setupDescription": "集中完成提供商连接与显示设置，Linear 还需代理技能。请至少保留一个可见提供商",
           "incompleteBannerTitle": "部分可见提供商仍需设置",
           "incompleteBannerBody": "隐藏不用的提供商，或展开卡片完成其中的步骤",
           "providersDescription": "每张卡片会引导你完成连接与任务显示；Linear 还包括技能设置",
@@ -8241,9 +8241,9 @@
           "348246b06f": "false",
           "5936387ddd": "自动",
           "adbafefe56": "风俗",
-          "16753eea48": "右键单击粘贴剪贴板。 Ctrl+右键单击打开上下文菜单",
+          "16753eea48": "右键单击粘贴剪贴板，Ctrl+右键单击打开上下文菜单",
           "9c178cf8aa": "右键单击粘贴",
-          "af0c3b6e39": "右键单击将剪贴板粘贴到终端中。使用 Ctrl+右键单击打开上下文菜单",
+          "af0c3b6e39": "右键单击将剪贴板粘贴到终端中，使用 Ctrl+右键单击打开上下文菜单",
           "29154326bb": "开",
           "ab20575a8a": "关",
           "ab3a1f9068": "wsl.exe",
@@ -8390,7 +8390,7 @@
           "8f4d2a51d7": "离线",
           "d504ab05f0": "流媒体",
           "fbe5990716": "选择型号",
-          "e24f7d43d2": "选择语音模型，本地模型离线运行；云模型需要 API 密钥",
+          "e24f7d43d2": "选择语音模型，本地模型离线运行，云模型需要 API 密钥",
           "174da92062": "保持",
           "118b3c2dee": "切换",
           "901985625d": "切换",
@@ -8812,7 +8812,7 @@
             "4fda4fb066": "网址",
             "0dbb1eaf4e": "主页",
             "291f480a5e": "家",
-            "a942905148": "创建新浏览器选项卡时打开的 URL。留空以打开空白选项卡",
+            "a942905148": "创建新浏览器选项卡时打开的 URL，留空以打开空白选项卡",
             "c3903322d2": "默认主页",
             "19ea5607cf": "本地主机工作区标签",
             "4e0fdf0a3f": "将工作区端口打开为特定于工作区的 Orca localhost URL，便于区分浏览器标签页"
@@ -9266,7 +9266,7 @@
             "e5cd0e7a46": "选择",
             "e25165320e": "编辑",
             "b51d47ceb7": "输入",
-            "874d88f4a6": "Linux / macOS 默认启用；Linux 用系统选择剪贴板，其他平台用私有缓冲",
+            "874d88f4a6": "Linux / macOS 默认启用，Linux 用系统选择剪贴板，其他平台用私有缓冲",
             "d952ce9b46": "单击鼠标中键从所选内容粘贴"
           }
         },
@@ -10101,15 +10101,15 @@
         },
         "agent-awake-copy": {
           "e5995ce268": "代理工作时保持电脑唤醒",
-          "95d3031db2": "在代理工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置",
-          "a42f6fbdd8": "在代理工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒",
+          "95d3031db2": "在代理工作时保持此电脑和显示器唤醒，合盖行为遵循此设备的电源设置",
+          "a42f6fbdd8": "在代理工作时保持此电脑和显示器唤醒，Orca 还会根据电源策略，在合盖时请求此设备保持唤醒",
           "modeTitle": "保持电脑唤醒",
-          "modeDescriptionWindows": "选择开、代理工作时自动，或关。合盖行为遵循此设备的电源设置",
-          "modeDescriptionDefault": "选择开、代理工作时自动，或关。合盖时 Orca 也会请求此设备保持唤醒，仍受其电源策略约束"
+          "modeDescriptionWindows": "选择开、代理工作时自动，或关，合盖行为遵循此设备的电源设置",
+          "modeDescriptionDefault": "选择开、代理工作时自动，或关，合盖时 Orca 也会请求此设备保持唤醒，仍受其电源策略约束"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "代理状态钩子",
-          "a68a642835": "在 Orca 中显示工作中、等待中和完成状态。关闭后将移除 Orca 管理的钩子并停止重新安装"
+          "a68a642835": "在 Orca 中显示工作中、等待中和完成状态，关闭后将移除 Orca 管理的钩子并停止重新安装"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自动生成标签页标题",
@@ -10256,10 +10256,10 @@
         },
         "settingOwnership": {
           "clientDefault": "客户端默认",
-          "sourceControlAiDefaults": "方案、提示和托管评审默认值由此客户端共享；模型选择和发现则限定在代理运行的主机内",
+          "sourceControlAiDefaults": "方案、提示和托管评审默认值由此客户端共享，模型选择和发现则限定在代理运行的主机内",
           "projectOnThisHost": "此主机上的项目",
           "repositorySourceControlAi": "这些覆盖项应用于此项目设置，并继承客户端的源代码管理 AI 默认值，直至自定义",
-          "agentLaunchDefaults": "默认代理、命令覆盖、CLI 参数与启动环境为客户端偏好；远程启动仍会校验主机可用性",
+          "agentLaunchDefaults": "默认代理、命令覆盖、CLI 参数与启动环境为客户端偏好，远程启动仍会校验主机可用性",
           "clientDefaultProjectScopes": "客户端默认 + 项目范围",
           "terminalQuickCommands": "命令保存在此客户端，然后限定为全局或某项目设置，以便从所选终端上下文运行",
           "hostOverride": "主机覆盖",
@@ -10453,7 +10453,7 @@
           "copiedCleanupPayload": "已复制清理载荷。",
           "copyCleanupFailed": "无法复制清理命令",
           "title": "临时 VM 运行时",
-          "description": "由环境模板创建的运行时归工作区所有。崩溃、创建失败或手动恢复后，请清理过期条目",
+          "description": "由环境模板创建的运行时归工作区所有，崩溃、创建失败或手动恢复后，请清理过期条目",
           "refresh": "刷新临时 VM 运行时",
           "loading": "正在检查临时 VM 运行时…",
           "empty": "没有需要清理的临时 VM 运行时",
@@ -10467,7 +10467,7 @@
           "cloudVmTitle": "云虚拟机运行时",
           "cloudVmRefresh": "刷新云虚拟机运行时",
           "cloudVmLoading": "正在检查云虚拟机运行时…",
-          "cloudVmEmptyWithSetup": "还没有云虚拟机运行时。请在创建工作区时使用环境模板来创建"
+          "cloudVmEmptyWithSetup": "还没有云虚拟机运行时，请在创建工作区时使用环境模板来创建"
         },
         "ephemeralVms": {
           "search": {
@@ -10877,8 +10877,8 @@
         },
         "PluginsSettingsSection": {
           "systemLabel": "插件系统",
-          "systemDescription": "发现已安装插件并单独启用；未经启用不会运行。工作进程在本机执行",
-          "featureOff": "开启插件系统以查看和管理已安装的插件。任何已安装的内容将保留在磁盘上，并在系统关闭时保持禁用",
+          "systemDescription": "发现已安装插件并单独启用，未经启用不会运行，工作进程在本机执行",
+          "featureOff": "开启插件系统以查看和管理已安装的插件，任何已安装的内容将保留在磁盘上，并在系统关闭时保持禁用",
           "loading": "正在加载插件…",
           "noInstalledResultsTitle": "没有匹配的插件",
           "noInstalledResults": "没有已安装的插件匹配此搜索",
@@ -11125,7 +11125,7 @@
           "enableStepDescription": "打开上方的\"允许发布公开 Artifact 链接\"",
           "allowPublishing": "允许发布公开 Artifact 链接",
           "allowPublishingWebDescription": "仅桌面端。请在主机设备上打开 设置 → Artifacts 以更改此设置",
-          "allowPublishingDescription": "将 HTML / Markdown 发布为公开链接；删除前现有链接仍有效",
+          "allowPublishingDescription": "将 HTML / Markdown 发布为公开链接，删除前现有链接仍有效",
           "howToDescriptionDisabled": "在上方启用 Artifact 分享，以将 HTML 或 Markdown 文件发布为公开链接",
           "allowPublishingSearchDescription": "允许 Orca 将 HTML 和 Markdown 文件发布为公开链接"
         },
@@ -11220,8 +11220,8 @@
               "envManaged": "通过环境变量配置。取消设置 ORCA_BITBUCKET_* 变量以在 Orca 中管理此凭证。",
               "storedAuthFailed": "保存的 Bitbucket 凭据无法进行身份验证。编辑它，或检查令牌是否仍然具有拉取请求访问权限。",
               "storedCredential": "保存在本机上的 Orca 中。 ORCA_BITBUCKET_* 环境变量在设置时优先。",
-              "notConfigured": "将 Bitbucket Cloud 帐户与 Atlassian API 令牌或访问令牌连接。 ORCA_BITBUCKET_* 环境变量也起作用并且优先。",
-              "disconnectFailed": "无法删除保存的 Bitbucket 凭据。"
+              "notConfigured": "将 Bitbucket Cloud 帐户与 Atlassian API 令牌或访问令牌连接， ORCA_BITBUCKET_* 环境变量也起作用并且优先",
+              "disconnectFailed": "无法删除保存的 Bitbucket 凭据"
             }
           }
         },
@@ -15356,7 +15356,7 @@
           "1b0d6965fa": "当前默认值"
         },
         "AgentSettingsDialog": {
-          "50cdb57c03": "管理 AI 代理、设置默认值并自定义命令。",
+          "50cdb57c03": "管理 AI 代理、设置默认值并自定义命令",
           "fc0268e4ed": "代理"
         }
       },
@@ -15368,7 +15368,7 @@
           "8de7c5beaa": "终端不可用",
           "866083500b": "拖动以调整大小",
           "443690186e": "调整活动线程列表的大小",
-          "7cd632006b": "没有代理活动与这些筛选条件匹配。",
+          "7cd632006b": "没有代理活动与这些筛选条件匹配",
           "a2b4437bfb": "{{value0}} 活动",
           "023ff75afe": "标记全部已读",
           "f70e4bec47": "紧凑模式",
@@ -15385,8 +15385,8 @@
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
-          "22b22034bc": "独立终端在活动中不可用。",
-          "afdc2139a8": "代理终端关闭。在此工作区中打开一个新终端以继续。"
+          "22b22034bc": "独立终端在活动中不可用",
+          "afdc2139a8": "代理终端关闭。在此工作区中打开一个新终端以继续"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未读",

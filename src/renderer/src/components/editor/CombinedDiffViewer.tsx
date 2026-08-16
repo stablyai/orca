@@ -2062,7 +2062,15 @@ export default function CombinedDiffViewer({
                         toggleSection={toggleSection}
                         openSection={openSection}
                         openSectionTitle={
-                          isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                          isAllMode || isBranchMode || isCommitMode
+                            ? translate(
+                                'renderer.components.editor.CombinedDiffViewer.openDiff',
+                                'Open diff'
+                              )
+                            : translate(
+                                'renderer.components.editor.CombinedDiffViewer.openInEditor',
+                                'Open in editor'
+                              )
                         }
                         onOpenPreview={
                           canOpenDiffSectionPreviewToSide({
