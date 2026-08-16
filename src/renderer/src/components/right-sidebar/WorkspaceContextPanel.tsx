@@ -5,6 +5,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -219,32 +220,31 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
       <div className="border-b border-border px-3 py-1.5">
         <ContextScopeSwitch scope={scope} onScopeChange={setScope} />
       </div>
-      <div
-        role="tablist"
+      <ToggleGroup
+        type="single"
+        spacing={1}
+        value={filter}
+        onValueChange={(value) => {
+          if (value) {
+            setFilter(value as SectionFilter)
+          }
+        }}
         aria-label={translate(
           'auto.components.rightSidebar.WorkspaceContextPanel.filterLabel',
           'Filter sections'
         )}
-        className="flex flex-wrap gap-1 border-b border-border px-3 py-1.5"
+        className="w-full flex-wrap justify-start rounded-none border-b border-border px-3 py-1.5"
       >
         {SECTION_FILTERS.map((key) => (
-          <button
+          <ToggleGroupItem
             key={key}
-            type="button"
-            role="tab"
-            aria-selected={filter === key}
-            onClick={() => setFilter(key)}
-            className={cn(
-              'rounded-md px-2 py-0.5 text-[11px] transition-colors',
-              filter === key
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-            )}
+            value={key}
+            className="h-6 min-h-6 min-w-0 rounded-md border-0 px-2 text-[11px] font-normal text-muted-foreground shadow-none hover:bg-accent/60 hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
           >
             {sectionFilterLabel(key)}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
       {error ? (
         <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>
       ) : null}

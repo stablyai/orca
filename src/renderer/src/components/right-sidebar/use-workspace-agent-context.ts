@@ -63,8 +63,13 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
   const mountedRef = useMountedRef()
   const latestKeyRef = useRef(discoveryTargetKey)
   latestKeyRef.current = discoveryTargetKey
+  // Why: the effect keys on the serialised target, so the live objects travel
+  // by ref instead of being (unstable) dependencies.
+  const targetsRef = useRef({ runtimeTarget, discoveryTarget })
+  targetsRef.current = { runtimeTarget, discoveryTarget }
 
   useEffect(() => {
+    const { runtimeTarget, discoveryTarget } = targetsRef.current
     if (!runtimeTarget || !discoveryTarget) {
       setKeyedReport(null)
       setLoading(false)
@@ -90,13 +95,13 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
           setLoading(false)
         }
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runtimeTarget/discoveryTarget are folded into discoveryTargetKey
   }, [discoveryTargetKey, generation, mountedRef])
 
+  const refreshSkills = skillState.refresh
   const refresh = useCallback(() => {
     setGeneration((current) => current + 1)
-    void skillState.refresh()
-  }, [skillState])
+    void refreshSkills()
+  }, [refreshSkills])
 
   return {
     worktreeId,

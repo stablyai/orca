@@ -170,6 +170,29 @@ export function selectSkillsForAgents(
   return skills.filter((skill) => agents.some((agent) => skillBelongsToAgent(skill, agent, owners)))
 }
 
+type ReportRow = { agents: AgentType[]; scope: AgentContextScope }
+
+/** Every row of every kind, in one list, for filters and rollups that treat them alike. */
+function reportRows(report: AgentContextReport | null): ReportRow[] {
+  if (!report) {
+    return []
+  }
+  return [...report.instructionFiles, ...report.mcpFiles, ...report.hookFiles, ...report.plugins]
+}
+
+function filterReportRows(
+  report: AgentContextReport,
+  keep: (row: ReportRow) => boolean
+): AgentContextReport {
+  return {
+    ...report,
+    instructionFiles: report.instructionFiles.filter(keep),
+    mcpFiles: report.mcpFiles.filter(keep),
+    hookFiles: report.hookFiles.filter(keep),
+    plugins: report.plugins.filter(keep)
+  }
+}
+
 /** The report narrowed to rows any of the given agents reads; `null` returns it unchanged. */
 export function filterReportByAgents(
   report: AgentContextReport | null,
@@ -178,22 +201,21 @@ export function filterReportByAgents(
   if (!report || !agents) {
     return report
   }
-  const reads = (row: { agents: AgentType[] }): boolean =>
-    row.agents.some((agent) => agents.includes(agent))
-  return {
-    ...report,
-    instructionFiles: report.instructionFiles.filter(reads),
-    mcpFiles: report.mcpFiles.filter(reads),
-    hookFiles: report.hookFiles.filter(reads),
-    plugins: report.plugins.filter(reads)
-  }
+  return filterReportRows(report, (row) => row.agents.some((agent) => agents.includes(agent)))
 }
 
 /** Where a row comes from: the workspace tree (and its parents) or the user's home. */
 export type ContextScopeFilter = 'workspace' | 'user' | 'all'
 
 function scopeMatches(scope: AgentContextScope, filter: ContextScopeFilter): boolean {
-  return filter === 'all' || (filter === 'user') === (scope === 'home')
+  switch (filter) {
+    case 'all':
+      return true
+    case 'user':
+      return scope === 'home'
+    default:
+      return scope === 'project' || scope === 'ancestor'
+  }
 }
 
 export function filterReportByScope(
@@ -203,14 +225,7 @@ export function filterReportByScope(
   if (!report || filter === 'all') {
     return report
   }
-  const inScope = (row: { scope: AgentContextScope }): boolean => scopeMatches(row.scope, filter)
-  return {
-    ...report,
-    instructionFiles: report.instructionFiles.filter(inScope),
-    mcpFiles: report.mcpFiles.filter(inScope),
-    hookFiles: report.hookFiles.filter(inScope),
-    plugins: report.plugins.filter(inScope)
-  }
+  return filterReportRows(report, (row) => scopeMatches(row.scope, filter))
 }
 
 /** Repo skills belong to the workspace; home, plugin and bundled skills belong to the user. */
@@ -221,7 +236,8 @@ export function selectSkillsForScope(
   if (filter === 'all') {
     return [...skills]
   }
-  return skills.filter((skill) => (filter === 'workspace') === (skill.sourceKind === 'repo'))
+  const wantRepo = filter === 'workspace'
+  return skills.filter((skill) => (skill.sourceKind === 'repo') === wantRepo)
 }
 
 /** Every agent that reads at least one row or owns at least one skill root here. */
@@ -231,12 +247,7 @@ export function agentsInContext(
   sources: readonly SkillDiscoverySource[]
 ): AgentType[] {
   const agents = new Set<AgentType>()
-  for (const row of [
-    ...(report?.instructionFiles ?? []),
-    ...(report?.mcpFiles ?? []),
-    ...(report?.hookFiles ?? []),
-    ...(report?.plugins ?? [])
-  ]) {
+  for (const row of reportRows(report)) {
     for (const agent of row.agents) {
       agents.add(agent)
     }
