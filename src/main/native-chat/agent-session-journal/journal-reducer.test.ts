@@ -123,6 +123,22 @@ describe('ordering', () => {
     expect(items[1]?.recovered).toBe(true)
   })
 
+  it('pins observedAt to creation so a revision cannot relocate the row', () => {
+    // Clients sort the timeline by observedAt. The provider echoing a send revises
+    // the submission row; if that advanced the timestamp the user's own bubble
+    // would sort below rows that landed while the turn was in flight.
+    const state = fold([
+      { kind: 'item', itemId: 'send', revision: 0, body: userText('ok thanks'), ...base(1) },
+      { kind: 'item', itemId: 'frame', revision: 1, body: text('warning'), ...base(2) },
+      { kind: 'item', itemId: 'send', revision: 1, body: userText('ok thanks'), ...base(3) }
+    ])
+    const items = renderJournalState(state).items
+    expect(items.map((item) => item.itemId)).toEqual(['send', 'frame'])
+    expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
+    // The revision still lands — only its ordering keys are ignored.
+    expect(items[0]?.revision).toBe(1)
+  })
+
   it('never collapses two items that carry identical text', () => {
     const state = fold([
       { kind: 'item', itemId: 'a', revision: 1, body: text('run the tests'), ...base(1) },

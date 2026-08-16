@@ -167,4 +167,25 @@ describe('unhandled provider frame journal fallback', () => {
     ).not.toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:future/event', {})).not.toBeNull()
   })
+
+  it('leads with the provider sentence instead of naming the opcode', () => {
+    const row = unhandledProviderFrameJournalItem('codex', 'notification:warning', {
+      message: 'Your plan limit resets in 2 hours.'
+    })
+    expect(row?.body.text).toBe('Your plan limit resets in 2 hours.')
+    // The raw frame stays available behind the row's disclosure.
+    expect(row?.body.providerFrame?.kind).toBe('notification:warning')
+  })
+
+  it('unwraps a nested sentence and falls back to the opcode when there is none', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'notification:warning', {
+        warning: { text: 'Sandbox is degraded.' }
+      })?.body.text
+    ).toBe('Sandbox is degraded.')
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'notification:future/event', { count: 3 })?.body
+        .text
+    ).toBe('codex \u00b7 notification:future/event')
+  })
 })
