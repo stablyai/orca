@@ -148,6 +148,8 @@ export type RuntimePtyController = {
     data: string,
     inputKind: TerminalInputKind
   ): WriteSettlement | Promise<WriteSettlement>
+  /** Renderer-accepted keystrokes only (`writePtyInput`); orchestration pointer writes must not stamp this. */
+  lastUserInputAt?(ptyId: string): number | undefined
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
   kill(ptyId: string): boolean
