@@ -11620,7 +11620,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "agentContext": "Agent context"
           },
           "right": {
             "panel": {
@@ -14912,6 +14913,34 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "WorkspaceContextPanel": {
+          "noWorkspace": "Select a workspace to see the context its agents load.",
+          "hostLocal": "This host",
+          "title": "Agent context",
+          "refresh": "Refresh",
+          "showMissing": "Show locations that were checked but empty",
+          "instructions": "Instructions",
+          "noInstructions": "No instruction files found for this workspace.",
+          "ruleCount": "{{value0}} rules",
+          "missing": "not found",
+          "skills": "Skills",
+          "scanning": "Scanning…",
+          "noSkills": "No skills discovered.",
+          "mcp": "MCP servers",
+          "noMcp": "No MCP config files found.",
+          "invalid": "invalid",
+          "hooks": "Hooks",
+          "invalidSettings": "Invalid settings file",
+          "noHooksInFile": "No hooks",
+          "noHooks": "No agent hooks configured.",
+          "plugins": "Plugins",
+          "noPlugins": "No plugin settings found.",
+          "enabled": "enabled",
+          "disabled": "disabled",
+          "scopeProject": "Workspace",
+          "scopeAncestor": "Parent folder",
+          "scopeHome": "User"
         }
       },
       "link": {

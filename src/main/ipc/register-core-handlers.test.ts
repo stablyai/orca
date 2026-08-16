@@ -226,6 +226,10 @@ vi.mock('./skills', () => ({
   registerSkillsHandlers: registerSkillsHandlersMock
 }))
 
+vi.mock('./agent-context', () => ({
+  registerAgentContextHandlers: vi.fn()
+}))
+
 vi.mock('./workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))

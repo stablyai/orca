@@ -45,6 +45,7 @@ import type {
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { AgentContextReport } from '../../../shared/agent-context'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
@@ -915,6 +916,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     updater: createUpdaterApi(),
     shell: createShellApi(),
     skills: createSkillsApi(),
+    agentContext: createAgentContextApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: {
@@ -3133,6 +3135,13 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     acknowledgeUpdateRun: () => Promise.resolve(),
     getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
     onUpdateRun: () => () => {}
+  }
+}
+
+function createAgentContextApi(): NonNullable<Partial<PreloadApi>['agentContext']> {
+  return {
+    inspect: (target) =>
+      callRuntimeResult<AgentContextReport>('agentContext.inspect', target, 15_000)
   }
 }
 

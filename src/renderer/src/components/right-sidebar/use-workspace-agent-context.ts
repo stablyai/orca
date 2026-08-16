@@ -1,0 +1,100 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AgentContextReport } from '../../../../shared/agent-context'
+import type { DiscoveredSkill, SkillDiscoveryTarget } from '../../../../shared/skills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import { useInstalledAgentSkillNames } from '@/hooks/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { inspectAgentContextForRuntimeTarget } from '@/runtime/runtime-agent-context-client'
+import { useActiveWorktree } from '@/store/selectors'
+
+export type WorkspaceAgentContextState = {
+  worktreeId: string | null
+  worktreePath: string | null
+  report: AgentContextReport | null
+  loading: boolean
+  error: string | null
+  skills: readonly DiscoveredSkill[]
+  skillsLoading: boolean
+  refresh: () => void
+}
+
+/**
+ * Agent context (instruction files, MCP, hooks, plugins) plus discovered skills
+ * for the active worktree, read on the host that runs its agents.
+ */
+export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
+  const worktree = useActiveWorktree()
+  const worktreeId = worktree?.id ?? null
+  const worktreePath = worktree?.path ?? null
+  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const { discoveryTarget: projectDiscoveryTarget } = useActiveProjectSkillRuntime()
+
+  const discoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
+    () =>
+      worktreePath
+        ? { ...projectDiscoveryTarget, cwd: worktreePath, worktreeId: worktreeId ?? undefined }
+        : undefined,
+    [projectDiscoveryTarget, worktreeId, worktreePath]
+  )
+  // Why: the target's identity churns with store writes; key effects on content.
+  const discoveryTargetKey = JSON.stringify([runtimeTarget, discoveryTarget])
+
+  const skillState = useInstalledAgentSkillNames([], {
+    enabled: Boolean(discoveryTarget),
+    discoveryTarget
+  })
+
+  const [report, setReport] = useState<AgentContextReport | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [generation, setGeneration] = useState(0)
+  const mountedRef = useMountedRef()
+  const latestKeyRef = useRef(discoveryTargetKey)
+  latestKeyRef.current = discoveryTargetKey
+
+  useEffect(() => {
+    if (!runtimeTarget || !discoveryTarget) {
+      setReport(null)
+      setLoading(false)
+      setError(null)
+      return
+    }
+    const requestKey = discoveryTargetKey
+    setLoading(true)
+    setError(null)
+    void inspectAgentContextForRuntimeTarget(runtimeTarget, discoveryTarget)
+      .then((next) => {
+        if (mountedRef.current && latestKeyRef.current === requestKey) {
+          setReport(next)
+        }
+      })
+      .catch((cause: unknown) => {
+        if (mountedRef.current && latestKeyRef.current === requestKey) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current && latestKeyRef.current === requestKey) {
+          setLoading(false)
+        }
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runtimeTarget/discoveryTarget are folded into discoveryTargetKey
+  }, [discoveryTargetKey, generation, mountedRef])
+
+  const refresh = useCallback(() => {
+    setGeneration((current) => current + 1)
+    void skillState.refresh()
+  }, [skillState])
+
+  return {
+    worktreeId,
+    worktreePath,
+    report,
+    loading,
+    error,
+    skills: skillState.skills,
+    skillsLoading: skillState.loading,
+    refresh
+  }
+}
