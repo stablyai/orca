@@ -10217,6 +10217,120 @@
       "demotionRule": "Keep experimental or demote if either Electron journey flakes without a product or harness defect, if local worker-start can return before tab materialization without an explicit reveal warning, if focus moves to the worker, if restart or workspace re-entry spawns/resumes/duplicates/interferes with the worker, if retained output becomes unreadable, or if pane-stable delivery reads the wrong mailbox."
     },
     {
+      "id": "orchestration.dispatch-show-run-isolation",
+      "title": "Dispatch inspection preserves same-host Run isolation",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "cli-rpc-sqlite-run-authority",
+      "surfaces": [
+        "orchestration dispatch-show",
+        "paired CLI",
+        "headless server",
+        "terminal task-link navigation"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "ssh", "remote-runtime"],
+      "coverageNotes": "A deterministic SQLite/RPC oracle covers same-Run, foreign, absent, malformed, stale, settled, concurrent, rebound, mixed-version, and persisted Run-mismatch cases. A compiled CLI journey repeats same/foreign/absent reads through the pairing transport against an isolated headless host. Federation, folder-placement, and SSH provider contracts cover the unchanged topology seams.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4531",
+        "https://github.com/stablyai/orca/issues/14898",
+        "https://github.com/stablyai/orca/pull/14900"
+      ],
+      "invariant": "An identified orchestration caller can inspect only a Task and Dispatch whose persisted Run matches its current Run. Foreign and absent identifiers are indistinguishable, the lookup never mutates stored rows, and identity-free trusted renderer navigation remains available for local or paired desktop task links.",
+      "oracle": "Create two Runs with independent stable pane identities, Tasks, and Dispatches. Require same-Run reads to return the exact Dispatch; foreign and absent reads to return the same empty result; foreign and absent preambles to fail with the same code and message; malformed or unbound callers to fail closed; settled rows to remain readable; concurrent callers and deterministic rebinding to use current authority; a task/dispatch Run mismatch to return empty from both Runs; and all persisted rows to remain byte-identical. Repeat same/foreign/absent reads through the compiled CLI over a real pairing connection to an isolated headless host.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts src/cli/handlers/orchestration-dispatch-show-scope.test.ts src/shared/orchestration-rpc-contract.test.ts --reporter=dot",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+        "src/cli/handlers/orchestration-dispatch-show-scope.test.ts",
+        "src/shared/orchestration-rpc-contract.test.ts",
+        "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "assertions": [
+            "same-Run reads return the exact Dispatch while foreign and absent reads are identical",
+            "foreign and absent preamble failures are indistinguishable",
+            "persisted task/dispatch Run mismatch cannot cross either Run boundary",
+            "unknown and stale callers fail closed without inspecting a Task",
+            "settlement, concurrent callers, coordinator rebinding, and old-client attestation preserve Run authority",
+            "authorization reads leave Task and Dispatch rows unchanged"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts",
+          "assertions": [
+            "two compiled CLI callers retain independent real terminal identities over pairing",
+            "a paired headless host returns each caller's own Dispatch",
+            "foreign and absent paired CLI reads return the same empty result",
+            "a denied read does not change the owning Run's subsequent result"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "result": "failed",
+          "durationSeconds": 1,
+          "summary": "The byte-identical nine-case oracle passed 2/9 on latest main 9e3e583a83 and failed all seven authority-boundary cases; disabling only the candidate's final Run-scoped lookup passed 8/9 but exposed the persisted task/dispatch Run mismatch."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "The final candidate passed all nine deterministic cases, including unchanged-row snapshots, indistinguishable foreign/absent results, stale identities, settlement, concurrency, rebinding, mixed-version evidence, and persisted Run mismatch."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 17,
+          "summary": "One isolated headless-host journey passed through the real pairing transport and compiled CLI with two terminal identities and independent Runs."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "deterministic runtime contracts plus one paired headless-host CLI journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic oracle and paired headless-host journey pass locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical oracle is red 7/9 on latest main, red 1/9 with the original boundary-only design, and green 9/9 with the authoritative Task-plus-Dispatch Run-scoped lookup."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Dispatch inspection adds one primary-key Task lookup and one task-indexed Dispatch lookup. It adds no polling, provider listing, process inspection, subprocess, renderer fanout, or terminal I/O."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history on macOS, Linux, and Windows.",
+        "Add physical Windows, WSL, and Docker SSH paired CLI evidence if a provider-specific authority path is introduced."
+      ],
+      "knownGaps": [
+        "The live paired journey ran on macOS; Linux, Windows, WSL, and physical SSH rely on provider-neutral runtime contracts in this change.",
+        "The paired journey uses a headless host; the separate headed CLI/RPC reproduction covers visible desktop terminals but not a second paired desktop window."
+      ],
+      "demotionRule": "Keep experimental or demote if foreign and absent responses diverge, a stale caller resolves a Run, a task/dispatch Run mismatch returns metadata, or the focused oracle flakes without a product or harness defect."
+    },
+    {
       "id": "orchestration.context-only-dispatch-release",
       "title": "Manual Dispatch release fences assignments without stopping unsupervised terminals",
       "maturity": "experimental",
