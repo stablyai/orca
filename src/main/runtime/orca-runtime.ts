@@ -12937,6 +12937,10 @@ export class OrcaRuntimeService {
     }
   }
 
+  getSubscriptionCleanup(subscriptionId: string): (() => void | Promise<void>) | undefined {
+    return this.subscriptionCleanups.get(subscriptionId)
+  }
+
   cleanupSubscription(subscriptionId: string): void {
     void this.cleanupSubscriptionAndWait(subscriptionId).catch((error) => {
       console.error(`[runtime] subscription cleanup failed for ${subscriptionId}:`, error)

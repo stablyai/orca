@@ -256,6 +256,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const controller = new AbortController()
+      const registeredCleanups = new Map<string, () => void>()
       let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -271,7 +272,10 @@ describe('terminal subscribe buffering', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn(),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          registeredCleanups.set(id, cleanup)
+        }),
+        getSubscriptionCleanup: vi.fn((id: string) => registeredCleanups.get(id)),
         cleanupSubscription: vi.fn(),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
