@@ -532,7 +532,7 @@ Validation and review:
 | Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                     |
 | SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                         |
 | Agent/CLI routing by placement                                     | Missing                   | Only create/navigate command foundations exist; public browser methods still use current server behavior          |
-| Inventory/reconciliation after ambiguous outcomes and restart      | Partial                   | Planner, authenticated inventory, and reconnect lifetime exist; plan execution and restart recovery remain        |
+| Inventory/reconciliation after ambiguous outcomes and restart      | Partial                   | Planner, authenticated inventory, and bounded executor exist; concrete adapters and restart recovery remain       |
 | Independent bounded control/tunnel/mirror/binary channels          | Partial                   | Control and tunnel are separate/bounded; mirror and large-result paths are incomplete                             |
 | Mixed client/server compatibility                                  | Partial                   | Optional/capability-gated contracts and cross-version tests exist; activated rolling-upgrade behavior is unproven |
 | Local pointer/keyboard/chrome with no runtime round trip           | Missing                   | Requires the renderer surface and interaction-owner fencing                                                       |
@@ -548,8 +548,8 @@ Validation and review:
 
 1. Monitor #14754 CI without merging or marking it ready; the current-main type-aware warning is
    upstream and must not be folded into this browser stage.
-2. Execute the pinned reclaim/restore/close reconciliation plan against authenticated runtime
-   intent and the preserved reconnect inventory before recovering ambiguous slots or routes.
+2. Bind the bounded reconciliation executor to authenticated runtime intent and preserved reconnect
+   inventory with exact generation-fenced reclaim, close, and restore adapters.
 3. Add optional placement to logical session-tab publication and renderer state. Follow
    `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
 4. Route create and every existing browser command by explicit placement. Never silently fall
@@ -691,6 +691,31 @@ Published terminal navigation-authority stage (#14754):
   folder/worktree behavior, UI, or server-hosted browser behavior changes. The stage remains
   production-inert and needs live activation/topology evidence later.
 
+Published reconciliation-execution stage (#14756):
+
+- Baseline: the deterministic executor oracle failed because no module executed the immutable
+  reconciliation plan; the planner could describe retain/reclaim/close/restore work but had no
+  proof barrier, timeout, cancellation, or bounded scheduler.
+- Candidate: reclaim and close actions run with configurable concurrency capped at 16 and an
+  action deadline capped at 60 seconds. Every independent phase-one action is attempted, while any
+  rejection, timeout, or abort blocks all restores and requires a fresh authenticated plan.
+- Close-then-restore pages cannot restore until their exact close and every other phase-one action
+  settle positively. Action callbacks receive an abort signal, late rejections remain handled, and
+  no mutation is retried automatically.
+- Focused planner/executor coverage passes 2 files / 45 tests. The affected placement, lease,
+  reconnect, command, route, and RPC package passes 18 files / 212 tests; mixed-version terminal
+  wire passes 5/5; the 87-gate reliability manifest includes the executor.
+- Node/CLI/web typecheck, changed-code quality, max-lines, localization, skill-manifest, formatting,
+  and diff checks pass. Full lint reaches only the known upstream-main type-aware warning at
+  `config/scripts/pr-test-loc-summary.test.mjs:88`; the native audit and all later subchecks pass.
+- Fresh lifecycle, resource, security, mobile-compatibility, and cross-platform review found no
+  actionable issue. Work is bounded to at most 256 planner actions and 16 active callbacks, timers
+  and parent-abort listeners are cleaned on success/failure/timeout, and no path, shell, dependency,
+  network, persisted-state, exchanged-field, capability, publication, UI, or placement behavior is
+  changed. Concrete adapters must fence late mutation by exact authority generation before use.
+- Draft PR [#14756](https://github.com/stablyai/orca/pull/14756) stacks on #14754 and remains draft.
+  GitHub auto-attached it to STA-4150; the ticket remains In Progress.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -760,6 +785,11 @@ topology, versions, and explicit gaps at every later checkpoint.
   changed, and no PR was merged or marked ready.
 - GitHub auto-attached #14754 to STA-4150. Posted exactly one navigation-fence checkpoint comment
   (`6ea865bf-8003-435a-8600-9ec11fd21577`) and kept the ticket In Progress.
+- Pushed `sta-4150-browser-page-reconciliation-execution` with a must-not-exist lease and opened
+  draft PR [#14756](https://github.com/stablyai/orca/pull/14756) on #14754. No prior stack branch
+  changed, and no PR was merged or marked ready.
+- GitHub auto-attached #14756 to STA-4150. Posted exactly one reconciliation-executor checkpoint
+  comment (`3957ea40-a9e2-4b25-9197-2f972166f47b`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule
