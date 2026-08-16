@@ -1200,6 +1200,7 @@ export class BrowserManager {
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
     }
+    this.reapplyViewportOverrideAfterDebuggerAttach(guest)
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserTabId)
 
     this.setupContextMenu(browserTabId, guest)
@@ -1304,6 +1305,7 @@ export class BrowserManager {
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
+    this.reapplyViewportOverrideAfterDebuggerAttach(guest)
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
   }
 

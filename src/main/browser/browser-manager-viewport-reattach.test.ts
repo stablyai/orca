@@ -101,4 +101,78 @@ describe('browserManager viewport debugger reattachment', () => {
       expect.anything()
     )
   })
+
+  it('restores the standing viewport when a registered webview guest is replaced', async () => {
+    const oldGuest = makeGuest(4252)
+    const newGuest = makeGuest(4253)
+    webContentsFromIdMock.mockReturnValue(oldGuest.guest)
+    browserManager.attachGuestPolicies(oldGuest.guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'tab-replaced-webview',
+      webContentsId: oldGuest.guest.id as number,
+      rendererWebContentsId
+    })
+    await browserManager.setViewportOverride('tab-replaced-webview', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 3,
+      mobile: true
+    })
+
+    webContentsFromIdMock.mockReturnValue(newGuest.guest)
+    browserManager.attachGuestPolicies(newGuest.guest as never)
+    newGuest.debuggerSendCommand.mockClear()
+    browserManager.registerGuest({
+      browserPageId: 'tab-replaced-webview',
+      webContentsId: newGuest.guest.id as number,
+      rendererWebContentsId
+    })
+    await flushViewportOps()
+
+    expect(newGuest.debuggerSendCommand).toHaveBeenCalledWith(
+      'Emulation.setDeviceMetricsOverride',
+      {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 3,
+        mobile: true
+      }
+    )
+  })
+
+  it('restores the standing viewport when an offscreen guest is replaced', async () => {
+    const oldGuest = makeGuest(4254)
+    const newGuest = makeGuest(4255)
+    ;(oldGuest.guest.getType as ReturnType<typeof vi.fn>).mockReturnValue('window')
+    ;(newGuest.guest.getType as ReturnType<typeof vi.fn>).mockReturnValue('window')
+    webContentsFromIdMock.mockReturnValue(oldGuest.guest)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'tab-replaced-offscreen',
+      webContentsId: oldGuest.guest.id as number
+    })
+    await browserManager.setViewportOverride('tab-replaced-offscreen', {
+      width: 1280,
+      height: 720,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+
+    webContentsFromIdMock.mockReturnValue(newGuest.guest)
+    newGuest.debuggerSendCommand.mockClear()
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'tab-replaced-offscreen',
+      webContentsId: newGuest.guest.id as number
+    })
+    await flushViewportOps()
+
+    expect(newGuest.debuggerSendCommand).toHaveBeenCalledWith(
+      'Emulation.setDeviceMetricsOverride',
+      {
+        width: 1280,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: false
+      }
+    )
+  })
 })
