@@ -49,6 +49,43 @@ describe('browser client-host control protocol', () => {
     ).toMatchObject({ authorityEpoch: 'epoch-a', browserHostGeneration: 1 })
   })
 
+  it('decodes an exact SSH provider authority without changing native v1 attaches', () => {
+    const authority = {
+      authorityRuntimeId: 'runtime-a',
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1
+    }
+    expect(
+      BrowserNetworkTunnelAttachParams.parse({
+        ...authority,
+        executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
+      })
+    ).toEqual({
+      ...authority,
+      executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
+    })
+    expect(
+      BrowserNetworkTunnelAttachParams.parse({
+        ...authority,
+        executionHost: {
+          kind: 'ssh',
+          targetId: 'target-a',
+          providerEpoch: 'provider-epoch-a',
+          connectionGeneration: 2
+        }
+      })
+    ).toEqual({
+      ...authority,
+      executionHost: {
+        kind: 'ssh',
+        targetId: 'target-a',
+        providerEpoch: 'provider-epoch-a',
+        connectionGeneration: 2
+      }
+    })
+  })
+
   it('rejects invalid server-owned route generations', () => {
     expect(() => BrowserNetworkTunnelEvent.parse({ type: 'ready', tunnelGeneration: 0 })).toThrow()
     expect(BrowserNetworkTunnelEvent.parse({ type: 'ready', tunnelGeneration: 3 })).toEqual({

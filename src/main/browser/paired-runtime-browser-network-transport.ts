@@ -1,6 +1,7 @@
 import {
   BrowserNetworkTunnelEvent,
-  type BrowserHostLeaseAuthority
+  type BrowserHostLeaseAuthority,
+  type BrowserNetworkExecutionHost
 } from '../../shared/browser-client-host-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import {
@@ -11,6 +12,7 @@ import {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
@@ -22,7 +24,7 @@ const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
 type PairedRuntimeBrowserNetworkTransportOptions = {
   pairing: PairingOffer
   lease: BrowserHostLeaseAuthority
-  executionHostRevision: number
+  executionHost: BrowserNetworkExecutionHost
   timeoutMs: number
   subscription?: RemoteRuntimeSubscriptionOptions
   outboundMemory: BrowserNetworkTunnelOutboundMemoryLease
@@ -96,11 +98,7 @@ export class PairedRuntimeBrowserNetworkTransport {
         'network.browserTunnel',
         {
           ...this.options.lease,
-          executionHost: {
-            kind: 'native',
-            runtimeId: this.options.lease.authorityRuntimeId,
-            revision: this.options.executionHostRevision
-          }
+          executionHost: this.options.executionHost
         },
         this.options.timeoutMs,
         {
@@ -166,7 +164,10 @@ export class PairedRuntimeBrowserNetworkTransport {
           clientCapabilities: [
             ...(this.options.subscription?.clientCapabilities ?? []),
             BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-            BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+            BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+            ...(this.options.executionHost.kind === 'native'
+              ? []
+              : [BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY])
           ]
         }
       )

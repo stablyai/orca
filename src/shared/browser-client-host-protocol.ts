@@ -34,12 +34,28 @@ export const BrowserHostLeaseAuthority = z.object({
 
 export type BrowserHostLeaseAuthority = z.infer<typeof BrowserHostLeaseAuthority>
 
+const BrowserNetworkNativeExecutionHost = z.object({
+  kind: z.literal('native'),
+  runtimeId: Identity,
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+})
+
+const BrowserNetworkSshExecutionHost = z.object({
+  kind: z.literal('ssh'),
+  targetId: Identity,
+  providerEpoch: Identity,
+  connectionGeneration: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+})
+
+export const BrowserNetworkExecutionHost = z.discriminatedUnion('kind', [
+  BrowserNetworkNativeExecutionHost,
+  BrowserNetworkSshExecutionHost
+])
+
+export type BrowserNetworkExecutionHost = z.infer<typeof BrowserNetworkExecutionHost>
+
 export const BrowserNetworkTunnelAttachParams = BrowserHostLeaseAuthority.extend({
-  executionHost: z.object({
-    kind: z.literal('native'),
-    runtimeId: Identity,
-    revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-  })
+  executionHost: BrowserNetworkExecutionHost
 })
 
 export const BrowserNetworkTunnelEvent = z.discriminatedUnion('type', [

@@ -1,4 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { BrowserExecutionHostGrantRegistry } from './browser-execution-host-grant-registry'
+import {
+  createBrowserHostFence,
+  type BrowserHostFence,
+  type BrowserHostFenceReason
+} from './browser-host-lease-fence'
 
 const MAX_GENERATION = 0xffff_ffff
 const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
@@ -29,18 +35,12 @@ export type BrowserHostLeaseIdentity = Pick<
   'authorityEpoch' | 'browserHostClientId' | 'browserHostGeneration' | 'pairedDeviceId'
 >
 
-type FenceReason = 'replaced' | 'released' | 'lease_released' | 'lease_replaced'
-
-type Fence = {
-  promise: Promise<FenceReason>
-  resolve: (reason: FenceReason) => void
-}
-
 type LeaseState = {
   token: symbol
   lease: BrowserHostLease
-  fence: Fence
+  fence: BrowserHostFence
   routes: Set<RouteState>
+  executionHostGrants: BrowserExecutionHostGrantRegistry
 }
 
 type RouteState = {
@@ -48,18 +48,19 @@ type RouteState = {
   lease: LeaseState
   key: string
   tunnelGeneration: number
-  fence: Fence
+  fence: BrowserHostFence
+  releaseGrantLink?: () => void
 }
 
 export type BrowserHostLeaseHandle = Readonly<{
   lease: BrowserHostLease
-  whenFenced: Promise<FenceReason>
+  whenFenced: Promise<BrowserHostFenceReason>
   release: () => void
 }>
 
 export type BrowserTunnelLeaseHandle = Readonly<{
   tunnelGeneration: number
-  whenFenced: Promise<FenceReason>
+  whenFenced: Promise<BrowserHostFenceReason>
   release: () => void
 }>
 
@@ -107,8 +108,9 @@ export class BrowserHostLeaseRegistry {
         pairedDeviceId: input.pairedDeviceId,
         hostCapabilities: Object.freeze([...input.hostCapabilities])
       }),
-      fence: createFence(),
-      routes: new Set()
+      fence: createBrowserHostFence(),
+      routes: new Set(),
+      executionHostGrants: new BrowserExecutionHostGrantRegistry()
     }
     this.leasesByClientId.set(input.browserHostClientId, state)
     return {
@@ -136,6 +138,10 @@ export class BrowserHostLeaseRegistry {
   }
 
   requireLease(identity: BrowserHostLeaseIdentity): BrowserHostLease {
+    return this.requireLeaseState(identity).lease
+  }
+
+  private requireLeaseState(identity: BrowserHostLeaseIdentity): LeaseState {
     if (identity.authorityEpoch !== this.authorityEpoch) {
       throw new Error('browser_host_lease_stale')
     }
@@ -149,7 +155,23 @@ export class BrowserHostLeaseRegistry {
     ) {
       throw new Error('browser_host_lease_stale')
     }
-    return state.lease
+    return state
+  }
+
+  grantExecutionHost(identity: BrowserHostLeaseIdentity, executionHostKey: string) {
+    return this.requireLeaseState(identity).executionHostGrants.grant(executionHostKey)
+  }
+
+  requireExecutionHost(identity: BrowserHostLeaseIdentity, executionHostKey: string): void {
+    this.requireLeaseState(identity).executionHostGrants.require(executionHostKey)
+  }
+
+  linkExecutionHostGrant(
+    identity: BrowserHostLeaseIdentity,
+    executionHostKey: string,
+    onRevoked: () => void
+  ): () => void {
+    return this.requireLeaseState(identity).executionHostGrants.link(executionHostKey, onRevoked)
   }
 
   placeServerPage(browserPageId: string): RuntimeBrowserPlacement {
@@ -183,7 +205,8 @@ export class BrowserHostLeaseRegistry {
   }
 
   openTunnel(
-    identity: BrowserHostLeaseIdentity & { executionHostKey: string }
+    identity: BrowserHostLeaseIdentity & { executionHostKey: string },
+    options?: { requireExecutionHostGrant?: boolean }
   ): BrowserTunnelLeaseHandle {
     this.requireLease(identity)
     const lease = this.leasesByClientId.get(identity.browserHostClientId)!
@@ -198,7 +221,12 @@ export class BrowserHostLeaseRegistry {
       lease,
       key,
       tunnelGeneration,
-      fence: createFence()
+      fence: createBrowserHostFence()
+    }
+    if (options?.requireExecutionHostGrant) {
+      state.releaseGrantLink = lease.executionHostGrants.link(identity.executionHostKey, () =>
+        this.fenceRoute(state, 'released')
+      )
     }
     lease.routes.add(state)
     this.routesByKey.set(key, state)
@@ -238,7 +266,7 @@ export class BrowserHostLeaseRegistry {
     }
   }
 
-  private fenceLease(state: LeaseState, reason: FenceReason): void {
+  private fenceLease(state: LeaseState, reason: BrowserHostFenceReason): void {
     if (this.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
       return
     }
@@ -246,10 +274,13 @@ export class BrowserHostLeaseRegistry {
     for (const route of state.routes) {
       this.fenceRoute(route, reason === 'replaced' ? 'lease_replaced' : 'lease_released')
     }
+    state.executionHostGrants.clear()
     state.fence.resolve(reason)
   }
 
-  private fenceRoute(state: RouteState, reason: FenceReason): void {
+  private fenceRoute(state: RouteState, reason: BrowserHostFenceReason): void {
+    state.releaseGrantLink?.()
+    state.releaseGrantLink = undefined
     state.lease.routes.delete(state)
     if (this.routesByKey.get(state.key)?.token === state.token) {
       this.routesByKey.delete(state.key)
@@ -291,22 +322,4 @@ export function getBrowserHostLeaseRegistry(runtime: {
     registries.set(runtime, registry)
   }
   return registry
-}
-
-function createFence(): Fence {
-  let settled = false
-  let settle = (_reason: FenceReason): void => {}
-  const promise = new Promise<FenceReason>((resolve) => {
-    settle = resolve
-  })
-  return {
-    promise,
-    resolve: (reason) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      settle(reason)
-    }
-  }
 }

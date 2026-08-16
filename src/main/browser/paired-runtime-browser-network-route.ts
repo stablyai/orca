@@ -1,4 +1,7 @@
-import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type {
+  BrowserHostLeaseAuthority,
+  BrowserNetworkExecutionHost
+} from '../../shared/browser-client-host-protocol'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
@@ -15,6 +18,7 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   pairing: PairingOffer
   lease: BrowserHostLeaseAuthority
   executionHostRevision: number
+  executionHost?: BrowserNetworkExecutionHost
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
   outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
@@ -112,7 +116,11 @@ export class PairedRuntimeBrowserNetworkRoute {
     const transport = new PairedRuntimeBrowserNetworkTransport({
       pairing: this.options.pairing,
       lease: this.options.lease,
-      executionHostRevision: this.options.executionHostRevision,
+      executionHost: this.options.executionHost ?? {
+        kind: 'native',
+        runtimeId: this.options.lease.authorityRuntimeId,
+        revision: this.options.executionHostRevision
+      },
       timeoutMs: this.options.timeoutMs ?? 15_000,
       subscription: this.options.subscription,
       outboundMemory,

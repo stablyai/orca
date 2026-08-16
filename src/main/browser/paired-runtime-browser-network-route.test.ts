@@ -6,6 +6,7 @@ import {
   decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
@@ -306,6 +307,34 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
+  it('negotiates execution-host routing only for an SSH descriptor', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const executionHost = {
+      kind: 'ssh' as const,
+      targetId: 'target-a',
+      providerEpoch: 'provider-epoch-a',
+      connectionGeneration: 2
+    }
+    const route = createRoute({ executionHost })
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    await starting
+
+    expect(attempts[0]).toMatchObject({
+      method: 'network.browserTunnel',
+      params: { ...lease, executionHost },
+      options: {
+        clientCapabilities: [
+          'browser.clientHost.v1',
+          'network.browserTunnel.v1',
+          'network.browserTunnel.executionHosts.v1'
+        ]
+      }
+    })
+    await route.close()
+  })
+
   it('ignores late callbacks from a superseded transport', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute()
@@ -476,6 +505,7 @@ function createRoute(
     outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
     maxStreamIdsPerTunnel?: number
     subscription?: RemoteRuntimeSubscriptionOptions
+    executionHost?: BrowserNetworkExecutionHost
   } = {}
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({

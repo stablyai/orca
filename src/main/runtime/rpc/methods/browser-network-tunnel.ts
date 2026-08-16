@@ -1,9 +1,14 @@
-import { connect } from 'node:net'
 import { BrowserNetworkTunnelSession } from '../../../browser/browser-network-tunnel-session'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
+import {
+  browserNetworkExecutionHostKey,
+  resolveNativeBrowserNetworkExecutionRoute,
+  type BrowserNetworkExecutionRouteResolver
+} from '../../../browser/browser-network-execution-route'
 import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry'
@@ -12,7 +17,8 @@ import { defineStreamingMethod, type RpcAnyMethod } from '../core'
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
 export function createBrowserNetworkTunnelMethods(
-  memoryBudgets: BrowserNetworkTunnelOutboundMemoryBudgetRegistry = outboundMemoryBudgets
+  memoryBudgets: BrowserNetworkTunnelOutboundMemoryBudgetRegistry = outboundMemoryBudgets,
+  resolveExecutionRoute: BrowserNetworkExecutionRouteResolver = resolveBrowserNetworkExecutionRoute
 ): RpcAnyMethod[] {
   return [
     defineStreamingMethod({
@@ -47,14 +53,14 @@ export function createBrowserNetworkTunnelMethods(
         if (!clientCapabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
           throw new Error('browser_client_host_capability_required')
         }
+        if (
+          params.executionHost.kind !== 'native' &&
+          !clientCapabilities.includes(BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY)
+        ) {
+          throw new Error('browser_tunnel_execution_hosts_capability_required')
+        }
         if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
           throw new Error('browser_tunnel_identity_mismatch')
-        }
-        if (
-          params.executionHost.runtimeId !== runtime.getRuntimeId() ||
-          params.executionHost.revision !== runtime.getStartedAt()
-        ) {
-          throw new Error('browser_tunnel_execution_host_mismatch')
         }
 
         const leaseRegistry = getBrowserHostLeaseRegistry(runtime)
@@ -63,20 +69,69 @@ export function createBrowserNetworkTunnelMethods(
           browserHostClientId: params.browserHostClientId,
           browserHostGeneration: params.browserHostGeneration,
           pairedDeviceId,
-          executionHostKey: `native:${params.executionHost.runtimeId}:${params.executionHost.revision}`
+          executionHostKey: browserNetworkExecutionHostKey(params.executionHost)
         }
         leaseRegistry.requireLease(tunnelIdentity)
+        if (params.executionHost.kind !== 'native') {
+          leaseRegistry.requireExecutionHost(tunnelIdentity, tunnelIdentity.executionHostKey)
+        }
+        if (signal?.aborted) {
+          return
+        }
+        const executionRouteAbort = new AbortController()
+        const abortExecutionRoute = (): void => executionRouteAbort.abort()
+        const unlinkExecutionGrant =
+          params.executionHost.kind === 'native'
+            ? () => {}
+            : leaseRegistry.linkExecutionHostGrant(
+                tunnelIdentity,
+                tunnelIdentity.executionHostKey,
+                abortExecutionRoute
+              )
+        signal?.addEventListener('abort', abortExecutionRoute, { once: true })
         const outboundMemory = memoryBudgets.acquire(
           `${pairedDeviceId}:${params.browserHostClientId}`
         )
         if (!outboundMemory) {
+          unlinkExecutionGrant()
+          signal?.removeEventListener('abort', abortExecutionRoute)
           throw new Error('browser_tunnel_memory_admission_failed')
+        }
+        let executionRoute
+        try {
+          executionRoute = await resolveExecutionRoute({
+            executionHost: params.executionHost,
+            runtimeId: runtime.getRuntimeId(),
+            runtimeRevision: runtime.getStartedAt(),
+            signal: executionRouteAbort.signal
+          })
+          if (executionRoute.key !== tunnelIdentity.executionHostKey || !executionRoute.isValid()) {
+            await executionRoute.close()
+            throw new Error('browser_tunnel_execution_host_stale')
+          }
+          if (signal?.aborted) {
+            outboundMemory.release()
+            await executionRoute.close()
+            return
+          }
+        } catch (error) {
+          outboundMemory.release()
+          throw publicExecutionRouteError(error)
+        } finally {
+          unlinkExecutionGrant()
+          signal?.removeEventListener('abort', abortExecutionRoute)
         }
         let route: ReturnType<ReturnType<typeof getBrowserHostLeaseRegistry>['openTunnel']>
         try {
-          route = leaseRegistry.openTunnel(tunnelIdentity)
+          route = leaseRegistry.openTunnel(tunnelIdentity, {
+            requireExecutionHostGrant: params.executionHost.kind !== 'native'
+          })
         } catch (error) {
-          outboundMemory.release()
+          try {
+            outboundMemory.release()
+          } finally {
+            await executionRoute.close()
+          }
           throw error
         }
 
@@ -86,6 +141,18 @@ export function createBrowserNetworkTunnelMethods(
         })
         let session: BrowserNetworkTunnelSession | null = null
         let unregisterBinary = (): void => {}
+        let executionRouteClose: Promise<void> | null = null
+        const closeExecutionRoute = (): Promise<void> => {
+          if (!executionRouteClose) {
+            try {
+              executionRouteClose = Promise.resolve(executionRoute.close())
+            } catch (error) {
+              executionRouteClose = Promise.reject(error)
+            }
+            void executionRouteClose.catch(() => {})
+          }
+          return executionRouteClose
+        }
         let cleaned = false
         const cleanup = (): void => {
           if (cleaned) {
@@ -96,18 +163,32 @@ export function createBrowserNetworkTunnelMethods(
             unregisterBinary()
           } finally {
             try {
-              session?.close()
+              const activeSession = session
+              session = null
+              activeSession?.close()
             } finally {
-              outboundMemory.release()
-              route.release()
+              try {
+                outboundMemory.release()
+              } finally {
+                try {
+                  route.release()
+                } finally {
+                  void closeExecutionRoute()
+                }
+              }
             }
           }
         }
-        const subscriptionId = `browser-network-tunnel:${connectionId}`
+        const subscriptionId = JSON.stringify([
+          'browser-network-tunnel',
+          connectionId,
+          params.browserHostClientId,
+          tunnelIdentity.executionHostKey
+        ])
         try {
           session = new BrowserNetworkTunnelSession({
             tunnelGeneration: route.tunnelGeneration,
-            connect: (target) => connect({ ...target, allowHalfOpen: true }),
+            connect: executionRoute.connect,
             sendBinary: (bytes) => sendBinary(bytes) !== false,
             claimAggregateRetainedBytes: outboundMemory.claimApplicationBytes,
             onClose: () => {
@@ -119,10 +200,11 @@ export function createBrowserNetworkTunnelMethods(
             }
           })
           void route.whenFenced.then(() => session?.close())
+          void executionRoute.whenInvalidated?.then(() => session?.close())
           unregisterBinary = registerBinaryMessageHandler((bytes) => session?.handleBinary(bytes))
           runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
           signal?.addEventListener('abort', cleanup, { once: true })
-          if (signal?.aborted) {
+          if (signal?.aborted || !executionRoute.isValid()) {
             cleanup()
             return
           }
@@ -130,12 +212,51 @@ export function createBrowserNetworkTunnelMethods(
           await closed
         } finally {
           signal?.removeEventListener('abort', cleanup)
-          cleanup()
+          try {
+            cleanup()
+          } finally {
+            await closeExecutionRoute().catch(() => {})
+          }
         }
       }
     })
   ]
 }
 
+const PUBLIC_EXECUTION_ROUTE_ERRORS = new Set([
+  'browser_tunnel_execution_host_mismatch',
+  'browser_tunnel_execution_host_stale',
+  'browser_tunnel_execution_host_unavailable'
+])
+
+function publicExecutionRouteError(error: unknown): Error {
+  if (error instanceof Error && PUBLIC_EXECUTION_ROUTE_ERRORS.has(error.message)) {
+    return error
+  }
+  return new Error('browser_tunnel_execution_host_unavailable', { cause: error })
+}
+
 // Why: tests inject this until a live lease and server-owned route generation authorize TCP opens.
 export const BROWSER_NETWORK_TUNNEL_METHODS = createBrowserNetworkTunnelMethods()
+
+async function resolveBrowserNetworkExecutionRoute(
+  context: Parameters<BrowserNetworkExecutionRouteResolver>[0]
+) {
+  if (context.executionHost.kind === 'native') {
+    return resolveNativeBrowserNetworkExecutionRoute(context)
+  }
+  const [{ getSshConnectionManager }, authority, sshRoute] = await Promise.all([
+    import('../../../ipc/ssh'),
+    import('../../../ssh/ssh-provider-authority'),
+    import('../../../browser/ssh-browser-network-execution-route')
+  ])
+  const connectionManager = getSshConnectionManager()
+  if (!connectionManager) {
+    throw new Error('browser_tunnel_execution_host_unavailable')
+  }
+  return sshRoute.resolveSshBrowserNetworkExecutionRoute(context, {
+    connectionManager,
+    isCurrentAuthority: authority.isCurrentSshProviderAuthority,
+    registerAuthorityAbort: authority.registerSshProviderRequestAbort
+  })
+}

@@ -224,4 +224,71 @@ describe('BrowserHostLeaseRegistry', () => {
     await expect(replacementRoute.whenFenced).resolves.toBe('lease_released')
     expect(() => leases.openTunnel(identity)).toThrow('browser_host_lease_required')
   })
+
+  it('grants one exact execution host without letting old cleanup remove a replacement', async () => {
+    const leases = registry()
+    const host = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+    const identity = {
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1,
+      pairedDeviceId: 'device-a'
+    }
+    const first = leases.grantExecutionHost(identity, 'ssh:target-a')
+    const replacement = leases.grantExecutionHost(identity, 'ssh:target-a')
+    const route = leases.openTunnel(
+      { ...identity, executionHostKey: 'ssh:target-a' },
+      { requireExecutionHostGrant: true }
+    )
+
+    first.release()
+    expect(() => leases.requireExecutionHost(identity, 'ssh:target-a')).not.toThrow()
+    expect(() => leases.requireExecutionHost(identity, 'ssh:target-b')).toThrow(
+      'browser_tunnel_execution_host_not_granted'
+    )
+    replacement.release()
+    await expect(route.whenFenced).resolves.toBe('released')
+    expect(() => leases.requireExecutionHost(identity, 'ssh:target-a')).toThrow(
+      'browser_tunnel_execution_host_not_granted'
+    )
+    host.release()
+  })
+
+  it('invalidates execution-host grants with their exact lease generation', () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+    const firstIdentity = {
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1,
+      pairedDeviceId: 'device-a'
+    }
+    const oldGrant = leases.grantExecutionHost(firstIdentity, 'ssh:target-a')
+
+    leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+
+    expect(() => leases.requireExecutionHost(firstIdentity, 'ssh:target-a')).toThrow(
+      'browser_host_lease_stale'
+    )
+    oldGrant.release()
+    first.release()
+    expect(() =>
+      leases.requireExecutionHost({ ...firstIdentity, browserHostGeneration: 2 }, 'ssh:target-a')
+    ).toThrow('browser_tunnel_execution_host_not_granted')
+  })
 })
