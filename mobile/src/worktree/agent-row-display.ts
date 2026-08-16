@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { translate } from '../../../src/renderer/src/i18n/i18n'
 
 // Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
 // 30 min). Defined locally rather than imported because a runtime-value import
@@ -36,17 +37,17 @@ export function agentDotState(
 export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
-      return 'Working'
+      return translate('auto.mobile.src.worktree.agent.row.display.working', 'Working')
     case 'blocked':
-      return 'Blocked'
+      return translate('auto.mobile.src.worktree.agent.row.display.blocked', 'Blocked')
     case 'waiting':
-      return 'Waiting for input'
+      return translate('auto.mobile.src.worktree.agent.row.display.waiting', 'Waiting for input')
     case 'interrupted':
-      return 'Interrupted'
+      return translate('auto.mobile.src.worktree.agent.row.display.interrupted', 'Interrupted')
     case 'done':
-      return 'Done'
+      return translate('auto.mobile.src.worktree.agent.row.display.done', 'Done')
     case 'idle':
-      return 'Idle'
+      return translate('auto.mobile.src.worktree.agent.row.display.idle', 'Idle')
   }
 }
 
