@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   buildAgentFeatureSkillInstallCommand,
-  buildUnattendedAgentFeatureSkillInstallCommand
+  buildUnattendedAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillUpdateCommand
 } from '../../../../shared/agent-feature-install-commands'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
 import { useAppStore } from '@/store'
@@ -184,6 +185,22 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(
       buildSkillCommandForRuntime(
         'npx skills update orchestration --global',
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
+  })
+
+  it('reinstalls unattended Windows-host skill updates after the npx preflight', () => {
+    const installCommand = buildUnattendedAgentFeatureSkillInstallCommand(['orchestration'])
+    const updateCommand = buildUnattendedAgentFeatureSkillUpdateCommand('orchestration')
+
+    expect(
+      buildSkillCommandForRuntime(
+        updateCommand,
         {
           runtime: 'host',
           label: 'Windows'
