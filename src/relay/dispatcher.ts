@@ -209,10 +209,17 @@ export class RelayDispatcher {
   }
 
   onRequest(method: string, handler: MethodHandler): void {
+    // Map.set would silently overwrite a prior handler — fail loudly instead.
+    if (this.requestHandlers.has(method)) {
+      throw new Error(`Request handler already registered: ${method}`)
+    }
     this.requestHandlers.set(method, handler)
   }
 
   onNotification(method: string, handler: NotificationHandler): void {
+    if (this.notificationHandlers.has(method)) {
+      throw new Error(`Notification handler already registered: ${method}`)
+    }
     this.notificationHandlers.set(method, handler)
   }
 
