@@ -90,6 +90,8 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
 
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
+  private recoveryPath: MobileConnectionPath | null = null
+  private generation = 1
 
   constructor(state: ConnectionState, path: MobileConnectionPath) {
     super(state)
@@ -102,10 +104,18 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
       throw new Error(`replacement session ${session.getState()}`)
     }
     this.path = path
+    this.recoveryPath = null
+    this.generation += 1
     this.publishState('connected')
   })
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
   getActivePath = () => this.path
+  getPendingPath = () => this.recoveryPath
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+    this.recoveryPath = path
+  })
+  onConnectionPathChange = vi.fn(() => () => {})
+  getGeneration = () => this.generation
 }
 
 const relay = {

@@ -35,13 +35,6 @@ export type CookieClearStore = Pick<Cookies, 'get' | 'remove'> & {
   restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
 }
 
-// Why (STA-4300): the import writes go through this store, and 'set' stays out of it for the same
-// reason it stays out of the clear path — cookies.set() drops partitionKey silently, so a CHIPS
-// cookie imported through it is downgraded on the success path with nothing to report it.
-export type CookieImportWriteStore = Pick<Cookies, 'get' | 'remove'> & {
-  writeCookieIdentity(identity: CookieClearIdentity): Promise<void>
-}
-
 // Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.
 export type CookieClearSession = {
   cookies: Pick<Cookies, 'get' | 'remove'>

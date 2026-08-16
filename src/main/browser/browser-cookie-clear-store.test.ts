@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Cookie } from 'electron'
 import {
-  cdpSetCookieParamsFromIdentity,
+  cdpRestoreParamsFromIdentity,
   cookieClearIdentitiesFromCdp
 } from './browser-cookie-clear-store'
 
@@ -37,7 +37,7 @@ describe('cookie clear CDP identities', () => {
         partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
       })
     ])
-    expect(cdpSetCookieParamsFromIdentity(identities[0])).toEqual(
+    expect(cdpRestoreParamsFromIdentity(identities[0])).toEqual(
       expect.objectContaining({
         name: 'chips-auth',
         sameSite: 'None',
@@ -72,8 +72,8 @@ describe('cookie clear CDP identities', () => {
       expect.objectContaining({ value: 'host', domain: 'example.com', hostOnly: true }),
       expect.objectContaining({ value: 'domain', domain: '.example.com', hostOnly: false })
     ])
-    expect(cdpSetCookieParamsFromIdentity(identities[0])).not.toHaveProperty('domain')
-    expect(cdpSetCookieParamsFromIdentity(identities[1])).toHaveProperty('domain', '.example.com')
+    expect(cdpRestoreParamsFromIdentity(identities[0])).not.toHaveProperty('domain')
+    expect(cdpRestoreParamsFromIdentity(identities[1])).toHaveProperty('domain', '.example.com')
   })
 
   it('indexes CDP cookies once instead of rescanning the jar for every cookie', () => {
@@ -99,7 +99,7 @@ describe('cookie clear CDP identities', () => {
 
   it('does not turn an unspecified SameSite policy into explicit Lax', () => {
     expect(
-      cdpSetCookieParamsFromIdentity({
+      cdpRestoreParamsFromIdentity({
         url: 'https://example.com/',
         name: 'unspecified',
         value: 'value',

@@ -56,9 +56,7 @@ describe('MimoCodeHookService buildPtyEnv', () => {
 
     const orcaPlugin = join(overlayHome, 'config', 'plugins', 'orca-mimocode-status.js')
     expect(existsSync(orcaPlugin)).toBe(true)
-    const pluginSource = readFileSync(orcaPlugin, 'utf8')
-    expect(pluginSource).toContain('/hook/mimo-code')
-    expect(pluginSource).not.toContain('post("SessionStart"')
+    expect(readFileSync(orcaPlugin, 'utf8')).toContain('/hook/mimo-code')
 
     expect(
       readFileSync(join(mimocodeHome, 'config', 'plugins', 'orca-mimocode-status.js'), 'utf8')

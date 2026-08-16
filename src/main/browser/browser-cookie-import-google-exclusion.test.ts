@@ -40,10 +40,6 @@ vi.mock('./browser-cookie-clear-store', () => ({
   }) => ({
     get: (filter: object) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
-    // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
-    // a missing method cannot silently reroute every write down the rejected-cookie path.
-    writeCookieIdentity: (identity: Record<string, unknown>) =>
-      targetSession.cookies.set!(identity),
     snapshotClearIdentities: async (
       items: {
         cookie: {
@@ -221,8 +217,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
         remove: cookiesRemoveMock,
         set: cookiesSetMock
       },
-      clearData: clearDataMock,
-      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
+      clearData: clearDataMock
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   })

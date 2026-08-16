@@ -259,6 +259,9 @@ describe('Crashpad dump pruning', () => {
 
     await _pruneCrashpadDumpsForTest(16)
 
-    expect((await readdir(path.join(dumpDir, 'reports'))).sort()).toEqual(['middle.dmp', 'new.dmp'])
+    expect((await readdir(path.join(dumpDir, 'reports'))).sort()).toEqual([
+      'middle.dmp',
+      'new.dmp'
+    ])
   })
 })

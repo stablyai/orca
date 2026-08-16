@@ -1022,14 +1022,14 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, and stale-generation outcomes. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
       ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay.",
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts"
       ],
       "testFiles": [
         "mobile/src/transport/client-context.test.ts",
@@ -1041,12 +1041,16 @@
         "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
         "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
         "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/connection-health.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "mobile/src/transport/client-context.test.ts",
-          "assertions": ["a retired close-on-release owner closes an ownerless manual reconnect"]
+          "assertions": [
+            "a retired close-on-release owner closes an ownerless manual reconnect",
+            "a Relay recovery path change rerenders observers without a transport-state change"
+          ]
         },
         {
           "file": "mobile/src/transport/host-open-recovery.test.tsx",
@@ -1097,18 +1101,28 @@
         },
         {
           "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": ["a delivery-unknown mutation is not replayed onto a replacement Relay"]
+          "assertions": [
+            "a delivery-unknown mutation is not replayed onto a replacement Relay",
+            "Relay recovery path changes publish and remain pending between failed dials"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a Relay fallback pending over five failed Tailscale attempts remains neutral and omits the Tailscale hint",
+            "a prolonged Relay recovery escalates without reviving the Tailscale hint"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-14",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
           "durationSeconds": 0.74,
-          "summary": "Ten focused files passed 66 deterministic provider lifecycle, direct/Relay liveness, traffic, and delivery-ambiguity tests."
+          "summary": "Eleven focused files passed 84 deterministic provider lifecycle, path presentation, direct/Relay liveness, traffic, and delivery-ambiguity tests."
         }
       ],
       "runtimeBudget": {
