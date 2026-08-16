@@ -2,16 +2,12 @@ import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtim
 import type { RepoKind } from '../../shared/types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
-import {
-  getOptionalPositiveIntegerFlag,
-  getOptionalStringFlag,
-  getRequiredStringFlag
-} from '../flags'
+import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
-  const kind = getOptionalStringFlag(flags, 'kind')
+  const kind = flags.get('kind')
   if (kind === undefined) {
     return undefined
   }
