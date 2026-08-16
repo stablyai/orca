@@ -270,6 +270,8 @@ describe('worktree ownership classification', () => {
       workspaceDir: 'D:/orca/workspaces',
       nestWorkspaces: false,
       workspaceDirHistory: [
+        null as never,
+        undefined as never,
         { path: undefined as unknown as string, nestWorkspaces: false },
         { path: null as unknown as string, nestWorkspaces: true },
         { path: '', nestWorkspaces: false },
@@ -283,6 +285,31 @@ describe('worktree ownership classification', () => {
     expect(
       layouts.every((layout) => typeof layout.path === 'string' && layout.path.length > 0)
     ).toBe(true)
+  })
+
+  it('keeps valid workspace history when the current workspace path is corrupt (#14016)', () => {
+    const repo = makeRepo()
+    const settings = makeSettings({
+      workspaceDir: undefined as unknown as string,
+      workspaceDirHistory: [{ path: '/old/workspaces', nestWorkspaces: false }]
+    })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)).toEqual([
+      { path: '/old/workspaces', nestWorkspaces: false }
+    ])
+  })
+
+  it('ignores corrupt history entries when deriving WSL layout modes (#14016)', () => {
+    const repo = makeRepo({ path: '//wsl.localhost/Ubuntu/home/dev/repo' })
+    const settings = makeSettings({
+      workspaceDir: undefined as unknown as string,
+      workspaceDirHistory: [null as never, { path: '/old/workspaces', nestWorkspaces: false }]
+    })
+
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+    const wslRoot = '//wsl.localhost/Ubuntu/home/dev/orca/workspaces'
+    expect(layouts).toContainEqual({ path: wslRoot, nestWorkspaces: true })
+    expect(layouts).toContainEqual({ path: wslRoot, nestWorkspaces: false })
   })
 
   it('builds known layouts from large workspace history lists', () => {
