@@ -19,6 +19,10 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../browser/browser-route-session-runtime'
+import {
+  attachBrowserClientPageRenderer,
+  retireBrowserClientPageRenderer
+} from '../browser/browser-client-page-renderer-runtime'
 import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
@@ -62,6 +66,7 @@ import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
@@ -309,7 +314,8 @@ export function createMainWindow(
       webviewTag: true
     }
   })
-  const rendererWebContentsId = mainWindow.webContents.id
+  const rendererWebContents = mainWindow.webContents
+  const rendererWebContentsId = rendererWebContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
@@ -462,11 +468,6 @@ export function createMainWindow(
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })
 
-  installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
-  // Why: containment must be listening before any plugin panel frame is created,
-  // so register it with the window's other navigation policy.
-  registerPluginPanelNavigationGuard(mainWindow.webContents)
-
   const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
@@ -602,6 +603,27 @@ export function createMainWindow(
     shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
+  // Why: containment must be listening before any plugin panel frame is created.
+  registerPluginPanelNavigationGuard(rendererWebContents)
+  registerRendererDocumentNavigation(rendererWebContents, () => {
+    const frame = rendererWebContents.mainFrame
+    retireBrowserClientPageRenderer(rendererWebContents)
+    resetMarkdownEditorFocus()
+    resetTerminalInputFocus()
+    resetFloatingTerminalInputFocus()
+    resetShortcutRecorderFocus()
+    return () => {
+      if (
+        rendererProcessGone ||
+        rendererWebContents.isDestroyed() ||
+        rendererWebContents.mainFrame !== frame
+      ) {
+        return
+      }
+      attachBrowserClientPageRenderer(rendererWebContents)
+    }
+  })
+  installPrivilegedWindowNavigationPolicy(rendererWebContents)
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
   // Why: stop a deterministic per-load renderer fault from auto-reloading forever; breaker opens after too many recoveries in a rolling window.
   const rendererRecoveryCircuitBreaker = new RendererRecoveryCircuitBreaker({
@@ -654,6 +676,7 @@ export function createMainWindow(
   }
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
+    retireBrowserClientPageRenderer(rendererWebContents)
     browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
@@ -670,21 +693,15 @@ export function createMainWindow(
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {
+    retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
   })
-  mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) {
-      resetMarkdownEditorFocus()
-      resetTerminalInputFocus()
-      resetFloatingTerminalInputFocus()
-      resetShortcutRecorderFocus()
-    }
-  })
   mainWindow.webContents.on('did-finish-load', () => {
     rendererProcessGone = false
+    attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()
   })
 

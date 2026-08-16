@@ -23,13 +23,22 @@ vi.mock('../browser/browser-route-session-runtime', async () => {
     }
   }
 })
+vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+  const harness = await import('./createMainWindow-test-harness')
+  return {
+    attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
+    retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
+  }
+})
 
 import { createMainWindow, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
+  attachClientPageRendererMock,
   browserWindowMock,
   resetMainWindowMocks,
+  retireClientPageRendererMock,
   retireRouteRendererMock
 } from './createMainWindow-test-harness'
 
@@ -43,7 +52,6 @@ describe('createMainWindow', () => {
   it('clears the quit latch when the renderer prevents unload', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
-      id: 71,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -91,6 +99,7 @@ describe('createMainWindow', () => {
   it('allows close after the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 71,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -309,6 +318,8 @@ describe('createMainWindow', () => {
     windowHandlers.close({ preventDefault } as never)
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(retireClientPageRendererMock).toHaveBeenCalledWith(webContents)
+    expect(attachClientPageRendererMock).toHaveBeenCalledWith(webContents)
     expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
       isQuitting: true,
       requestId: expect.any(Number)
