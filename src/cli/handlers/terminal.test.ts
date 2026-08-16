@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from '../runtime-client'
 import { parseArgs } from '../args'
-import { printHelp } from '../help'
+import { formatCommandHelp, printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
@@ -57,7 +57,46 @@ describe('terminal close CLI', () => {
     printHelp(COMMAND_SPECS, ['terminal', 'close'])
 
     const help = String(log.mock.calls[0]?.[0])
-    expect(help).toContain('orca terminal close [--terminal <handle>] [--tab] [--json]')
+    expect(help).toContain(
+      'orca terminal close [--terminal <handle> | --terminal pty:<ptyId>] [--tab] [--json]'
+    )
     expect(help).toContain('durable persistence')
+  })
+})
+
+describe('terminal selector help', () => {
+  it.each(['show', 'read', 'send', 'wait', 'switch', 'close', 'rename', 'split'])(
+    'documents the stable pty selector for terminal %s',
+    (command) => {
+      const spec = COMMAND_SPECS.find(
+        (candidate) => candidate.path[0] === 'terminal' && candidate.path[1] === command
+      )
+
+      expect(spec).toBeDefined()
+      expect(spec!.usage).toContain('pty:<ptyId>')
+      expect(formatCommandHelp(spec!)).toContain(
+        '--terminal <selector> Runtime handle or stable pty:<ptyId>'
+      )
+    }
+  )
+
+  it('keeps orchestration terminal flags handle-only', () => {
+    const spec = COMMAND_SPECS.find(
+      (candidate) => candidate.path[0] === 'orchestration' && candidate.path[1] === 'check'
+    )
+
+    expect(spec).toBeDefined()
+    expect(formatCommandHelp(spec!)).not.toContain('pty:<ptyId>')
+  })
+
+  it('keeps root terminal usages synchronized', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printHelp(COMMAND_SPECS, [])
+
+    const help = String(log.mock.calls[0]?.[0])
+    for (const command of ['show', 'read', 'send', 'wait', 'split', 'switch', 'close']) {
+      expect(help).toMatch(new RegExp(`orca terminal ${command} .*pty:<ptyId>`))
+    }
   })
 })

@@ -238,15 +238,15 @@ Common Commands:
   orca file diff <path> [--staged] [--worktree <selector>] [--json]
   orca file open-changed [--mode edit|diff|both] [--worktree <selector>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]
-  orca terminal show [--terminal <handle>] [--json]
-  orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]
-  orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
-  orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
+  orca terminal show [--terminal <handle> | --terminal pty:<ptyId>] [--json]
+  orca terminal read [--terminal <handle> | --terminal pty:<ptyId>] [--cursor <n>] [--limit <n>] [--json]
+  orca terminal send [--terminal <handle> | --terminal pty:<ptyId>] [--text <text>] [--enter] [--interrupt] [--json]
+  orca terminal wait [--terminal <handle> | --terminal pty:<ptyId>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
   orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
-  orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
-  orca terminal switch [--terminal <handle>] [--json]
-  orca terminal close [--terminal <handle>] [--tab] [--json]
+  orca terminal split [--terminal <handle> | --terminal pty:<ptyId>] [--direction horizontal|vertical] [--json]
+  orca terminal switch [--terminal <handle> | --terminal pty:<ptyId>] [--json]
+  orca terminal close [--terminal <handle> | --terminal pty:<ptyId>] [--tab] [--json]
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
@@ -263,7 +263,7 @@ Common Commands:
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
-  --terminal <handle|pty:id> Runtime handle or stable \`pty:<ptyId>\` from \`orca terminal list --json\`
+  --terminal <selector>     Terminal commands accept a runtime handle or stable \`pty:<ptyId>\` from \`orca terminal list --json\`
   --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
@@ -427,6 +427,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (commandPath[0] === 'terminal' && flag === 'terminal') {
+    return '--terminal <selector> Runtime handle or stable pty:<ptyId> from terminal list'
+  }
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
   }
