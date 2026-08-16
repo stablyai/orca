@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostCommandResult
+} from '../../shared/browser-client-host-protocol'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type {
   RemoteRuntimeSubscription,
@@ -75,8 +79,8 @@ describe('PairedRuntimeBrowserHostLease', () => {
   })
 
   it('uses page commands only after the host echoes the requested protocol', async () => {
-    const { callbacks, close } = await subscribeLease()
-    const onPageCommand = vi.fn()
+    const { callbacks, close, sendRequest } = await subscribeLease()
+    const onPageCommand = vi.fn(() => ({ status: 'completed' as const }))
     const lease = createLease({ pageCommandProtocolVersion: 1, onPageCommand })
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
@@ -101,11 +105,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
       expect.any(Object),
       expect.any(Object)
     )
-    callbacks.current!.onResponse({
-      id: 'browser-host',
-      ok: true,
-      result: {
-        type: 'command',
+    callbacks.current!.onResponse(commandResponse())
+
+    expect(onPageCommand).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledOnce())
+    expect(sendRequest).toHaveBeenCalledWith(
+      'browser.clientHost.commandResult',
+      {
         pageCommandProtocolVersion: 1,
         authorityRuntimeId: 'runtime-a',
         authorityEpoch: 'epoch-a',
@@ -115,22 +121,164 @@ describe('PairedRuntimeBrowserHostLease', () => {
         pageHostGeneration: 1,
         commandSequence: 1,
         commandId: 'command-a',
-        command: {
-          type: 'createPage',
-          browserProfileId: 'default',
-          executionHostKey: 'native:runtime-a:1'
-        }
+        result: { status: 'completed' }
       },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-
-    expect(onPageCommand).toHaveBeenCalledOnce()
+      15_000
+    )
     expect(close).not.toHaveBeenCalled()
     await lease.close()
   })
 
+  it.each([
+    ['completed', { status: 'completed' } as const],
+    ['failed', { status: 'failed', errorCode: 'navigation_failed' } as const]
+  ])('submits a validated %s page command result', async (_caseName, result) => {
+    const { callbacks, close, sendRequest } = await subscribeLease()
+    const lease = createLease({
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => result
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    callbacks.current!.onResponse(commandResponse())
+
+    await vi.waitFor(() =>
+      expect(sendRequest).toHaveBeenCalledWith(
+        'browser.clientHost.commandResult',
+        expect.objectContaining({ result }),
+        15_000
+      )
+    )
+    expect(close).not.toHaveBeenCalled()
+    await lease.close()
+  })
+
+  it('accepts exact duplicate result acknowledgement without fencing the lease', async () => {
+    const { callbacks, close, sendRequest } = await subscribeLease()
+    sendRequest
+      .mockResolvedValueOnce(commandResultAck(true))
+      .mockResolvedValueOnce(commandResultAck(false))
+    const lease = createLease({
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => ({ status: 'completed' })
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    callbacks.current!.onResponse(commandResponse())
+    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(1))
+    callbacks.current!.onResponse(commandResponse())
+
+    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(2))
+    expect(close).not.toHaveBeenCalled()
+    await lease.close()
+  })
+
+  it.each([
+    [
+      'server rejection',
+      vi.fn().mockResolvedValue({
+        id: 'command-result',
+        ok: false,
+        error: { code: 'runtime_error', message: 'command result rejected' },
+        _meta: { runtimeId: 'runtime-a' }
+      }),
+      'command result rejected'
+    ],
+    [
+      'transport timeout',
+      vi.fn().mockRejectedValue(new Error('command result timed out')),
+      'command result timed out'
+    ],
+    [
+      'malformed acknowledgement',
+      vi.fn().mockResolvedValue({
+        id: 'command-result',
+        ok: true,
+        result: { accepted: 'yes' },
+        _meta: { runtimeId: 'runtime-a' }
+      }),
+      'Invalid browser host command result acknowledgement'
+    ],
+    [
+      'wrong runtime acknowledgement',
+      vi.fn().mockResolvedValue(commandResultAck(true, 'runtime-b')),
+      'Invalid browser host command result acknowledgement'
+    ]
+  ])('fails closed on %s', async (_caseName, sendRequest, expectedMessage) => {
+    const { callbacks, close } = await subscribeLease({ sendRequest })
+    const onError = vi.fn()
+    const lease = createLease({
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => ({ status: 'completed' }),
+      onError
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    callbacks.current!.onResponse(commandResponse())
+
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expectedMessage }))
+  })
+
+  it('fails closed when a v1 subscription lacks the same-socket request sender', async () => {
+    const { callbacks, close } = await subscribeLease({ sendRequest: undefined })
+    const onError = vi.fn()
+    const lease = createLease({
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => ({ status: 'completed' }),
+      onError
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+
+    await expect(starting).rejects.toThrow('Browser host command result transport unavailable')
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Browser host command result transport unavailable' })
+    )
+  })
+
+  it.each([
+    [
+      'throws',
+      'command handler threw',
+      () => {
+        throw new Error('command handler threw')
+      }
+    ],
+    [
+      'rejects',
+      'command handler rejected',
+      () => Promise.reject(new Error('command handler rejected'))
+    ]
+  ])('fails closed when the page command handler %s', async (_caseName, message, onPageCommand) => {
+    const { callbacks, close, sendRequest } = await subscribeLease()
+    const onError = vi.fn()
+    const lease = createLease({ pageCommandProtocolVersion: 1, onPageCommand, onError })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    callbacks.current!.onResponse(commandResponse())
+
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message }))
+  })
+
   it('rejects page commands when an old host did not negotiate them', async () => {
-    const { callbacks, close } = await subscribeLease()
+    const { callbacks, close } = await subscribeLease({ sendRequest: undefined })
     const onError = vi.fn()
     const onPageCommand = vi.fn()
     const lease = createLease({ pageCommandProtocolVersion: 1, onPageCommand, onError })
@@ -380,25 +528,42 @@ describe('PairedRuntimeBrowserHostLease', () => {
   })
 })
 
-async function subscribeLease(): Promise<{
+async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn> }): Promise<{
   callbacks: { current?: RemoteRuntimeSubscriptionCallbacks }
   close: ReturnType<typeof vi.fn>
+  sendRequest: ReturnType<typeof vi.fn>
 }> {
   const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
   const close = vi.fn()
+  const sendRequest =
+    options && 'sendRequest' in options
+      ? options.sendRequest
+      : vi.fn().mockResolvedValue(commandResultAck(true))
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
-      return { requestId: 'browser-host', close, sendBinary: () => false }
+      const subscription: RemoteRuntimeSubscription = {
+        requestId: 'browser-host',
+        close,
+        sendBinary: () => false,
+        ...(sendRequest
+          ? {
+              sendRequest: sendRequest as unknown as RemoteRuntimeSubscription['sendRequest']
+            }
+          : {})
+      }
+      return subscription
     }
   )
-  return { callbacks, close }
+  return { callbacks, close, sendRequest: sendRequest ?? vi.fn() }
 }
 
 function createLease(
   overrides: {
     onError?: (error: Error) => void
-    onPageCommand?: (command: unknown) => void | Promise<void>
+    onPageCommand?: (
+      command: BrowserClientHostCommandEvent
+    ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>
     pageCommandProtocolVersion?: 1
   } = {}
 ): PairedRuntimeBrowserHostLease {
@@ -409,4 +574,52 @@ function createLease(
     hostCapabilities: ['webview'],
     ...overrides
   })
+}
+
+function readyResponse(overrides: { pageCommandProtocolVersion?: 1 } = {}) {
+  return {
+    id: 'browser-host',
+    ok: true as const,
+    result: {
+      type: 'ready' as const,
+      authorityEpoch: 'epoch-a',
+      browserHostGeneration: 4,
+      ...overrides
+    },
+    _meta: { runtimeId: 'runtime-a' }
+  }
+}
+
+function commandResponse() {
+  return {
+    id: 'browser-host',
+    ok: true as const,
+    result: {
+      type: 'command' as const,
+      pageCommandProtocolVersion: 1 as const,
+      authorityRuntimeId: 'runtime-a',
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 4,
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      commandSequence: 1,
+      commandId: 'command-a',
+      command: {
+        type: 'createPage' as const,
+        browserProfileId: 'default',
+        executionHostKey: 'native:runtime-a:1'
+      }
+    },
+    _meta: { runtimeId: 'runtime-a' }
+  }
+}
+
+function commandResultAck(accepted: boolean, runtimeId = 'runtime-a') {
+  return {
+    id: 'command-result',
+    ok: true as const,
+    result: { accepted },
+    _meta: { runtimeId }
+  }
 }

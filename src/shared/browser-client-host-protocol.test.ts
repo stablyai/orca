@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BrowserClientHostAttachParams,
   BrowserClientHostCommandEvent,
+  BrowserClientHostCommandResultAck,
   BrowserClientHostCommandResultParams,
   BrowserClientHostEvent,
   BrowserClientHostLeaseEvent,
@@ -100,6 +101,10 @@ describe('browser client-host control protocol', () => {
         result: { status: 'completed' }
       })
     ).toMatchObject({ result: { status: 'completed' } })
+    expect(BrowserClientHostCommandResultAck.parse({ accepted: false })).toEqual({
+      accepted: false
+    })
+    expect(() => BrowserClientHostCommandResultAck.parse({ accepted: 'yes' })).toThrow()
   })
 
   it.each([

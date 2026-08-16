@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PairedRuntimeBrowserNetworkRoute } from '../browser/paired-runtime-browser-network-route'
 import { PairedRuntimeBrowserHostLease } from '../browser/paired-runtime-browser-host-lease'
 import { parsePairingCode } from '../../shared/pairing'
+import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { ALL_RPC_METHODS } from './rpc/methods'
@@ -21,6 +22,87 @@ afterEach(async () => {
 })
 
 describe('paired runtime browser network tunnel', () => {
+  it('returns page command results on the exact authenticated attach connection', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-command-'))
+    resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+    const runtime = new OrcaRuntimeService({} as never)
+    const rpc = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      methods: [...ALL_RPC_METHODS, ...BROWSER_CLIENT_HOST_METHODS]
+    })
+    await rpc.start()
+    resources.push(() => rpc.stop())
+
+    const offer = rpc.createPairingOffer({ name: 'browser-command', scope: 'runtime' })
+    if (!offer.available) {
+      throw new Error('Runtime pairing is unavailable')
+    }
+    const pairing = parsePairingCode(offer.pairingUrl)
+    if (!pairing?.pairedDeviceId) {
+      throw new Error('Runtime pairing identity is unavailable')
+    }
+    const errors: Error[] = []
+    const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
+    const hostLease = new PairedRuntimeBrowserHostLease({
+      pairing,
+      authorityRuntimeId: runtime.getRuntimeId(),
+      browserHostClientId: 'integration-browser-host',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      onPageCommand,
+      onError: (error) => errors.push(error)
+    })
+    await hostLease.start()
+    resources.push(() => hostLease.close())
+
+    const registry = getBrowserHostLeaseRegistry(runtime)
+    const attached = registry.select('integration-browser-host')
+    const settle = vi.spyOn(registry, 'settleClientPageCommand')
+    const grant = registry.grantExecutionHost(
+      {
+        authorityEpoch: attached.authorityEpoch,
+        browserHostClientId: attached.browserHostClientId,
+        browserHostGeneration: attached.browserHostGeneration,
+        pairedDeviceId: attached.pairedDeviceId
+      },
+      'native:integration'
+    )
+    resources.push(grant.release)
+    const placement = registry.placeClientPage('page-a', attached.browserHostClientId)
+    if (placement.kind !== 'client') {
+      throw new Error('Expected client browser placement')
+    }
+    const issued = registry.issueClientPageCommand(
+      {
+        authorityRuntimeId: attached.authorityRuntimeId,
+        authorityEpoch: attached.authorityEpoch,
+        browserPageId: 'page-a',
+        browserHostClientId: placement.browserHostClientId,
+        browserHostGeneration: placement.browserHostGeneration,
+        pageHostGeneration: placement.pageHostGeneration
+      },
+      {
+        type: 'createPage',
+        browserProfileId: 'default',
+        executionHostKey: 'native:integration'
+      }
+    )
+
+    await expect(issued.result).resolves.toEqual({ status: 'completed' })
+    expect(onPageCommand).toHaveBeenCalledWith(issued.event)
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: attached.connectionId,
+        pairedDeviceId: attached.pairedDeviceId
+      }),
+      expect.objectContaining({ commandId: issued.event.commandId })
+    )
+    expect(errors).toEqual([])
+  })
+
   it('loads an execution-host HTTP target through SOCKS and the dedicated E2EE socket', async () => {
     const destinationSockets = new Set<Socket>()
     const destination = createServer((socket) => {

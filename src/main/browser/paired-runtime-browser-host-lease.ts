@@ -1,6 +1,9 @@
 import {
   BrowserClientHostEvent,
+  BrowserClientHostCommandResult,
+  BrowserClientHostCommandResultAck,
   type BrowserClientHostCommandEvent,
+  type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { PairingOffer } from '../../shared/pairing'
@@ -18,7 +21,9 @@ type PairedRuntimeBrowserHostLeaseOptions = {
   browserHostClientId: string
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
-  onPageCommand?: (command: BrowserClientHostCommandEvent) => void | Promise<void>
+  onPageCommand?: (
+    command: BrowserClientHostCommandEvent
+  ) => BrowserClientHostCommandResultType | Promise<BrowserClientHostCommandResultType>
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
   onError?: (error: Error) => void
@@ -112,6 +117,10 @@ export class PairedRuntimeBrowserHostLease {
               parsed.data.pageCommandProtocolVersion !== pageCommandProtocolVersion
             ) {
               this.fail(new Error('Invalid browser host lease response'), rejectReady)
+              return
+            }
+            if (parsed.data.pageCommandProtocolVersion && !this.subscription?.sendRequest) {
+              this.fail(new Error('Browser host command result transport unavailable'), rejectReady)
               return
             }
             const authority = {
@@ -210,14 +219,52 @@ export class PairedRuntimeBrowserHostLease {
       return
     }
     try {
-      const delivered = this.options.onPageCommand(command)
-      if (delivered) {
-        void delivered.catch((error) =>
+      void Promise.resolve(this.options.onPageCommand(command))
+        .then((result) => this.submitPageCommandResult(command, result))
+        .catch((error) =>
           this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
         )
-      }
     } catch (error) {
       this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
+    }
+  }
+
+  private async submitPageCommandResult(
+    command: BrowserClientHostCommandEvent,
+    candidate: BrowserClientHostCommandResultType
+  ): Promise<void> {
+    if (this.closed) {
+      return
+    }
+    const result = BrowserClientHostCommandResult.parse(candidate)
+    const sendRequest = this.subscription?.sendRequest
+    if (!sendRequest) {
+      throw new Error('Browser host command result transport unavailable')
+    }
+    const response = await sendRequest(
+      'browser.clientHost.commandResult',
+      {
+        pageCommandProtocolVersion: command.pageCommandProtocolVersion,
+        authorityRuntimeId: command.authorityRuntimeId,
+        authorityEpoch: command.authorityEpoch,
+        browserHostClientId: command.browserHostClientId,
+        browserHostGeneration: command.browserHostGeneration,
+        browserPageId: command.browserPageId,
+        pageHostGeneration: command.pageHostGeneration,
+        commandSequence: command.commandSequence,
+        commandId: command.commandId,
+        result
+      },
+      this.options.timeoutMs ?? 15_000
+    )
+    if (!response.ok) {
+      throw new RemoteRuntimeClientError(response.error.code, response.error.message)
+    }
+    if (
+      response._meta.runtimeId !== command.authorityRuntimeId ||
+      !BrowserClientHostCommandResultAck.safeParse(response.result).success
+    ) {
+      throw new Error('Invalid browser host command result acknowledgement')
     }
   }
 

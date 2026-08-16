@@ -77,6 +77,11 @@ export type RemoteRuntimeSubscription = {
   requestId: string
   close: () => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  sendRequest?: (
+    method: string,
+    params: unknown,
+    timeoutMs: number
+  ) => Promise<RuntimeRpcResponse<unknown>>
 }
 
 export type RemoteRuntimeSubscriptionCallbacks<TResult = unknown> = {
@@ -109,6 +114,17 @@ export type RemoteRuntimeOutboundMemoryBudget = {
     readBufferedAmount: () => number
   ) => RemoteRuntimeOutboundSocketMemory | null
 }
+
+type PendingRemoteRuntimeSubscriptionRequest = {
+  resolve: (response: RuntimeRpcResponse<unknown>) => void
+  reject: (error: RemoteRuntimeClientError) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
+const MAX_PENDING_SUBSCRIPTION_REQUESTS = 32
+const SUBSCRIPTION_REQUEST_SOFT_CAP_BYTES = 1024 * 1024
+const SUBSCRIPTION_REQUEST_MAX_QUEUED_BYTES = 16 * 1024 * 1024
+const SUBSCRIPTION_REQUEST_MAX_QUEUED_FRAMES = 64
 
 export function sendRemoteRuntimeRequest<TResult>(
   pairing: PairingOffer,
@@ -554,13 +570,18 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     const sharedKey = deriveSharedKey(keyPair.secretKey, serverPublicKey)
     let state: HandshakeState = 'awaiting_ready'
     let settled = false
+    let closing = false
+    let terminalFailure = false
     let ws: WebSocket | null = null
     let liveness: RemoteRuntimeSocketLivenessMonitor | null = null
     let outboundSocketMemoryCloseSource: WebSocket | null = null
+    const pendingRequests = new Map<string, PendingRemoteRuntimeSubscriptionRequest>()
 
     const releaseOutboundQueueMemory = (): void => {
       sendQueue?.dispose()
       sendQueue = null
+      requestQueue?.dispose()
+      requestQueue = null
     }
 
     const releaseOutboundSocketMemory = (): void => {
@@ -627,6 +648,16 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }, timeoutMs)
 
     const close = (): void => {
+      if (closing) {
+        return
+      }
+      closing = true
+      rejectPendingRequests(
+        new RemoteRuntimeClientError(
+          'remote_runtime_unavailable',
+          'Remote runtime subscription closed before its request completed.'
+        )
+      )
       releaseOutboundQueueMemory()
       if (ws) {
         retainOutboundSocketMemoryUntilClose(ws)
@@ -645,23 +676,32 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     // drain as it clears; a wedged link (hard cap) fails the socket so the
     // renderer resubscribes and replays a fresh snapshot.
     let sendQueue: ReturnType<typeof createWsOutboundBackpressureQueue<Buffer>> | null = null
+    let requestQueue: ReturnType<typeof createWsOutboundBackpressureQueue<string>> | null = null
     let outboundSocketMemory: RemoteRuntimeOutboundSocketMemory | null = null
+    const ensureOutboundSocketMemory = (socket: WebSocket): boolean => {
+      const memoryBudget = options?.outboundMemoryBudget
+      if (!memoryBudget || outboundSocketMemory) {
+        return true
+      }
+      outboundSocketMemory = memoryBudget.registerBufferedAmount(() => socket.bufferedAmount)
+      if (outboundSocketMemory) {
+        return true
+      }
+      fail(
+        new RemoteRuntimeClientError(
+          'remote_runtime_unavailable',
+          'Remote Orca runtime outbound memory admission failed; reconnecting.'
+        )
+      )
+      return false
+    }
     const ensureSendQueue = (
       socket: WebSocket
     ): ReturnType<typeof createWsOutboundBackpressureQueue<Buffer>> | null => {
       if (!sendQueue) {
         const memoryBudget = options?.outboundMemoryBudget
-        if (memoryBudget && !outboundSocketMemory) {
-          outboundSocketMemory = memoryBudget.registerBufferedAmount(() => socket.bufferedAmount)
-          if (!outboundSocketMemory) {
-            fail(
-              new RemoteRuntimeClientError(
-                'remote_runtime_unavailable',
-                'Remote Orca runtime outbound memory admission failed; reconnecting.'
-              )
-            )
-            return null
-          }
+        if (!ensureOutboundSocketMemory(socket)) {
+          return null
         }
         sendQueue = createWsOutboundBackpressureQueue<Buffer>({
           send: (frame) => socket.send(frame, { binary: true }),
@@ -688,6 +728,41 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       return sendQueue
     }
 
+    const ensureRequestQueue = (
+      socket: WebSocket
+    ): ReturnType<typeof createWsOutboundBackpressureQueue<string>> | null => {
+      if (!requestQueue) {
+        const memoryBudget = options?.outboundMemoryBudget
+        if (!ensureOutboundSocketMemory(socket)) {
+          return null
+        }
+        requestQueue = createWsOutboundBackpressureQueue<string>({
+          send: (frame) => socket.send(frame),
+          byteLengthOf: (frame) => Buffer.byteLength(frame),
+          getBufferedAmount: () => socket.bufferedAmount,
+          isWritable: () => socket.readyState === WebSocket.OPEN,
+          onOverflow: () =>
+            fail(
+              new RemoteRuntimeClientError(
+                'remote_runtime_unavailable',
+                'Remote runtime subscription request buffer overflow; reconnecting.'
+              )
+            ),
+          softCapBytes: SUBSCRIPTION_REQUEST_SOFT_CAP_BYTES,
+          maxQueuedBytes: SUBSCRIPTION_REQUEST_MAX_QUEUED_BYTES,
+          maxQueuedFrames: SUBSCRIPTION_REQUEST_MAX_QUEUED_FRAMES,
+          canSend: (bytes, alreadyRetained) =>
+            outboundSocketMemory?.canSend(bytes, alreadyRetained) ?? true,
+          ...(memoryBudget
+            ? {
+                claimQueuedBytes: (bytes: number) => memoryBudget.claimQueuedBytes(bytes)
+              }
+            : {})
+        })
+      }
+      return requestQueue
+    }
+
     const sendBinary = (bytes: Uint8Array<ArrayBufferLike>): boolean => {
       if (
         !isRemoteRuntimeBinaryFrameWithinLimit(bytes) ||
@@ -706,10 +781,15 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       }
       settled = true
       clearTimeout(timeout)
-      resolve({ requestId, close, sendBinary })
+      resolve({ requestId, close, sendBinary, sendRequest })
     }
 
     const fail = (error: RemoteRuntimeClientError): void => {
+      if (terminalFailure || closing) {
+        return
+      }
+      terminalFailure = true
+      rejectPendingRequests(error)
       if (!settled) {
         settled = true
         clearTimeout(timeout)
@@ -723,6 +803,86 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       // and lets the IPC subscription registry drop its retained callbacks.
       closeSocketAfterCleanup()
       callbacks.onClose?.()
+    }
+
+    function rejectPendingRequests(error: RemoteRuntimeClientError): void {
+      for (const pending of pendingRequests.values()) {
+        clearTimeout(pending.timeout)
+        pending.reject(error)
+      }
+      pendingRequests.clear()
+    }
+
+    function sendRequest(
+      requestMethod: string,
+      requestParams: unknown,
+      requestTimeoutMs: number
+    ): Promise<RuntimeRpcResponse<unknown>> {
+      if (!isSafeTimerDelayMs(requestTimeoutMs)) {
+        return Promise.reject(
+          new RemoteRuntimeClientError(
+            'invalid_argument',
+            `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
+          )
+        )
+      }
+      const socket = ws
+      if (state !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN) {
+        return Promise.reject(
+          new RemoteRuntimeClientError(
+            'remote_runtime_unavailable',
+            'Remote runtime subscription is not writable.'
+          )
+        )
+      }
+      if (pendingRequests.size >= MAX_PENDING_SUBSCRIPTION_REQUESTS) {
+        return Promise.reject(
+          new RemoteRuntimeClientError(
+            'runtime_busy',
+            'Remote runtime subscription request capacity reached.'
+          )
+        )
+      }
+      const nestedRequestId = randomUUID()
+      let serialized: string
+      try {
+        serialized = serializeRemoteRuntimeRpcRequest({
+          requestId: nestedRequestId,
+          deviceToken: pairing.deviceToken,
+          method: requestMethod,
+          params: requestParams
+        })
+      } catch (error) {
+        return Promise.reject(
+          error instanceof RemoteRuntimeClientError
+            ? error
+            : new RemoteRuntimeClientError('invalid_argument', String(error))
+        )
+      }
+      const encrypted = encrypt(serialized, sharedKey)
+      return new Promise((resolveRequest, rejectRequest) => {
+        const timeout = setTimeout(() => {
+          fail(
+            new RemoteRuntimeClientError(
+              'runtime_timeout',
+              'Timed out waiting for a remote runtime subscription request.'
+            )
+          )
+        }, requestTimeoutMs)
+        pendingRequests.set(nestedRequestId, {
+          resolve: resolveRequest,
+          reject: rejectRequest,
+          timeout
+        })
+        if (!ensureRequestQueue(socket)?.enqueue(encrypted)) {
+          fail(
+            new RemoteRuntimeClientError(
+              'remote_runtime_unavailable',
+              'Remote runtime subscription request could not be queued.'
+            )
+          )
+        }
+      })
     }
 
     try {
@@ -757,6 +917,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     function onClose(code: number, reason: Buffer): void {
       clearTimeout(timeout)
       cleanupSocketListeners()
+      rejectPendingRequests(
+        new RemoteRuntimeClientError(
+          'remote_runtime_unavailable',
+          formatRemoteRuntimeCloseMessage(code, reason)
+        )
+      )
       if (!settled) {
         settled = true
         reject(
@@ -771,6 +937,9 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
+      if (closing) {
+        return
+      }
       liveness?.noteActivity()
       if (isBinary) {
         handleBinaryFrame(new Uint8Array(data as Buffer))
@@ -920,7 +1089,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       const response = parsed.data as RuntimeRpcResponse<TResult>
-      if (response.id !== requestId) {
+      if (response.id === requestId) {
+        callbacks.onResponse(response)
+        return
+      }
+      const pending = pendingRequests.get(response.id)
+      if (!pending) {
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
@@ -929,7 +1103,9 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         )
         return
       }
-      callbacks.onResponse(response)
+      pendingRequests.delete(response.id)
+      clearTimeout(pending.timeout)
+      pending.resolve(response)
     }
 
     function handleBinaryFrame(frame: Uint8Array<ArrayBufferLike>): void {
