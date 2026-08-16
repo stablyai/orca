@@ -6,8 +6,11 @@ import {
   findJiraCreateAllowedValue,
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload,
+  isJiraCreateMultiUserField,
   isVisibleJiraCreateField,
-  jiraCreateFieldNeedsAssignableUsersPicker
+  jiraCreateFieldNeedsAssignableUsersPicker,
+  parseJiraCreateMultiUserDraft,
+  toggleJiraCreateMultiUserDraft
 } from './task-page-jira-create-fields'
 import type { JiraCreateField } from '../../../shared/jira-types'
 
@@ -54,6 +57,58 @@ describe('jiraCreateFieldNeedsAssignableUsersPicker', () => {
     expect(jiraCreateFieldNeedsAssignableUsersPicker(field({ schema: { type: 'option' } }))).toBe(
       false
     )
+  })
+
+  it('requires the picker for a multi-user array field without allowed values', () => {
+    expect(
+      jiraCreateFieldNeedsAssignableUsersPicker(field({ schema: { type: 'array', items: 'user' } }))
+    ).toBe(true)
+  })
+
+  it('uses Jira-provided options when a multi-user array field has allowed values', () => {
+    expect(
+      jiraCreateFieldNeedsAssignableUsersPicker(
+        field({ schema: { type: 'array', items: 'user' }, allowedValues: [{ id: 'acc-1' }] })
+      )
+    ).toBe(false)
+  })
+
+  it('does not use the picker for non-user array fields', () => {
+    expect(
+      jiraCreateFieldNeedsAssignableUsersPicker(
+        field({ schema: { type: 'array', items: 'option' } })
+      )
+    ).toBe(false)
+  })
+})
+
+describe('isJiraCreateMultiUserField', () => {
+  it('detects only arrays of users', () => {
+    expect(isJiraCreateMultiUserField(field({ schema: { type: 'array', items: 'user' } }))).toBe(
+      true
+    )
+    expect(isJiraCreateMultiUserField(field({ schema: { type: 'array', items: 'option' } }))).toBe(
+      false
+    )
+    expect(isJiraCreateMultiUserField(field({ schema: { type: 'array' } }))).toBe(false)
+    expect(isJiraCreateMultiUserField(field({ schema: { type: 'user' } }))).toBe(false)
+    expect(isJiraCreateMultiUserField(field())).toBe(false)
+  })
+})
+
+describe('parseJiraCreateMultiUserDraft', () => {
+  it('splits on commas and drops blanks', () => {
+    expect(parseJiraCreateMultiUserDraft(' acc-1, acc-2 ,, ')).toEqual(['acc-1', 'acc-2'])
+    expect(parseJiraCreateMultiUserDraft('')).toEqual([])
+  })
+})
+
+describe('toggleJiraCreateMultiUserDraft', () => {
+  it('appends an unselected identifier and removes a selected one', () => {
+    expect(toggleJiraCreateMultiUserDraft('', 'acc-1')).toBe('acc-1')
+    expect(toggleJiraCreateMultiUserDraft('acc-1', 'acc-2')).toBe('acc-1,acc-2')
+    expect(toggleJiraCreateMultiUserDraft('acc-1,acc-2', 'acc-1')).toBe('acc-2')
+    expect(toggleJiraCreateMultiUserDraft('acc-1', 'acc-1')).toBe('')
   })
 })
 
@@ -182,6 +237,31 @@ describe('buildJiraCreateFieldValue', () => {
       name: 'username-1'
     })
   })
+
+  it('serializes each member of a multi-user field for Cloud and Server', () => {
+    const multiUserField = field({ schema: { type: 'array', items: 'user' } })
+    expect(buildJiraCreateFieldValue(multiUserField, 'account-1, account-2', 'cloud')).toEqual([
+      { id: 'account-1' },
+      { id: 'account-2' }
+    ])
+    expect(buildJiraCreateFieldValue(multiUserField, 'username-1, username-2', 'server')).toEqual([
+      { name: 'username-1' },
+      { name: 'username-2' }
+    ])
+  })
+
+  it('keeps Jira-provided options for a multi-user field with allowed values', () => {
+    const multiUserField = field({
+      schema: { type: 'array', items: 'user' },
+      allowedValues: [{ id: 'acc-1', name: 'Name 1' }]
+    })
+    expect(buildJiraCreateFieldValue(multiUserField, 'Name 1', 'cloud')).toEqual([{ id: 'acc-1' }])
+  })
+
+  it('leaves non-user array fields as raw strings', () => {
+    const arrayField = field({ schema: { type: 'array', items: 'string' } })
+    expect(buildJiraCreateFieldValue(arrayField, 'a, b', 'cloud')).toEqual(['a', 'b'])
+  })
 })
 
 describe('buildJiraCreateCustomFields', () => {
@@ -210,5 +290,26 @@ describe('buildJiraCreateCustomFields', () => {
     expect(buildJiraCreateCustomFields([userField], { reporter: 'username-1' }, 'server')).toEqual({
       reporter: { name: 'username-1' }
     })
+  })
+
+  it('passes the auth type through to multi-user field serialization', () => {
+    const participants = field({
+      key: 'customfield_participants',
+      schema: { type: 'array', items: 'user' }
+    })
+    expect(
+      buildJiraCreateCustomFields(
+        [participants],
+        { customfield_participants: 'account-1,account-2' },
+        'cloud'
+      )
+    ).toEqual({ customfield_participants: [{ id: 'account-1' }, { id: 'account-2' }] })
+    expect(
+      buildJiraCreateCustomFields(
+        [participants],
+        { customfield_participants: 'username-1,username-2' },
+        'server'
+      )
+    ).toEqual({ customfield_participants: [{ name: 'username-1' }, { name: 'username-2' }] })
   })
 })

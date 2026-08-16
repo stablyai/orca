@@ -470,8 +470,11 @@ import {
 import {
   buildJiraCreateCustomFields,
   getJiraCreateAllowedValueLabel,
+  isJiraCreateMultiUserField,
   isVisibleJiraCreateField,
-  jiraCreateFieldNeedsAssignableUsersPicker
+  jiraCreateFieldNeedsAssignableUsersPicker,
+  parseJiraCreateMultiUserDraft,
+  toggleJiraCreateMultiUserDraft
 } from '@/components/task-page-jira-create-fields'
 import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
 import { getPageNumbers } from '@/components/task-page-pagination-page-numbers'
@@ -13584,6 +13587,10 @@ export default function TaskPage(): React.JSX.Element {
               <div className="grid gap-3 sm:grid-cols-2">
                 {visibleJiraCreateFields.map((field) => {
                   const fieldValue = newJiraIssueCustomFieldValues[field.key] ?? ''
+                  const multiUserField = isJiraCreateMultiUserField(field)
+                  const selectedUserIds = multiUserField
+                    ? parseJiraCreateMultiUserDraft(fieldValue)
+                    : []
                   return (
                     <div key={field.key} className="flex min-w-0 flex-col gap-1">
                       <label className="text-[11px] font-medium text-muted-foreground">
@@ -13605,7 +13612,11 @@ export default function TaskPage(): React.JSX.Element {
                             >
                               {fieldValue ? (
                                 <span className="min-w-0 truncate">
-                                  {jiraCreateAssignableUserLabels[fieldValue] ?? fieldValue}
+                                  {multiUserField
+                                    ? selectedUserIds
+                                        .map((id) => jiraCreateAssignableUserLabels[id] ?? id)
+                                        .join(', ')
+                                    : (jiraCreateAssignableUserLabels[fieldValue] ?? fieldValue)}
                                 </span>
                               ) : (
                                 <span className="min-w-0 truncate text-muted-foreground">
@@ -13662,16 +13673,27 @@ export default function TaskPage(): React.JSX.Element {
                                       onSelect={() => {
                                         setNewJiraIssueCustomFieldValues((prev) => ({
                                           ...prev,
-                                          [field.key]: user.accountId
+                                          [field.key]: multiUserField
+                                            ? toggleJiraCreateMultiUserDraft(
+                                                prev[field.key] ?? '',
+                                                user.accountId
+                                              )
+                                            : user.accountId
                                         }))
-                                        setJiraCreateUserFieldPopoverKey(null)
+                                        if (!multiUserField) {
+                                          setJiraCreateUserFieldPopoverKey(null)
+                                        }
                                       }}
                                       className="items-center gap-2 px-3 py-2 text-xs"
                                     >
                                       <Check
                                         className={cn(
                                           'size-3.5 text-foreground',
-                                          user.accountId === fieldValue
+                                          (
+                                            multiUserField
+                                              ? selectedUserIds.includes(user.accountId)
+                                              : user.accountId === fieldValue
+                                          )
                                             ? 'opacity-100'
                                             : 'opacity-0'
                                         )}

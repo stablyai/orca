@@ -7,8 +7,38 @@ export function isVisibleJiraCreateField(field: JiraCreateField): boolean {
   return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)
 }
 
+/** Jira multi-user field: an array whose items are users (e.g. Request participants). */
+export function isJiraCreateMultiUserField(field: JiraCreateField): boolean {
+  return field.schema?.type === 'array' && field.schema.items === 'user'
+}
+
 export function jiraCreateFieldNeedsAssignableUsersPicker(field: JiraCreateField): boolean {
-  return field.schema?.type === 'user' && !field.allowedValues?.length
+  const isUserField = field.schema?.type === 'user' || isJiraCreateMultiUserField(field)
+  return isUserField && !field.allowedValues?.length
+}
+
+/** Multi-user drafts are stored as a comma-separated list of picked identifiers. */
+export function parseJiraCreateMultiUserDraft(draftValue: string): string[] {
+  return splitJiraCreateArrayDraft(draftValue)
+}
+
+export function toggleJiraCreateMultiUserDraft(draftValue: string, identifier: string): string {
+  const selected = parseJiraCreateMultiUserDraft(draftValue)
+  const next = selected.includes(identifier)
+    ? selected.filter((entry) => entry !== identifier)
+    : [...selected, identifier]
+  return next.join(',')
+}
+
+function splitJiraCreateArrayDraft(draftValue: string): string[] {
+  return draftValue
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function buildJiraCreateUserPayload(identifier: string, authType?: JiraAuthType) {
+  return authType === 'server' ? { name: identifier } : { id: identifier }
 }
 
 export function getJiraCreateAllowedValueLabel(
@@ -49,14 +79,14 @@ export function buildJiraCreateFieldValue(
     return undefined
   }
   if (field.schema?.type === 'array') {
-    const parts = trimmed
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
+    const parts = splitJiraCreateArrayDraft(trimmed)
     if (field.allowedValues?.length) {
       return parts.map((part) =>
         getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, part), part)
       )
+    }
+    if (isJiraCreateMultiUserField(field)) {
+      return parts.map((part) => buildJiraCreateUserPayload(part, authType))
     }
     return parts
   }
@@ -64,7 +94,7 @@ export function buildJiraCreateFieldValue(
     return getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, trimmed), trimmed)
   }
   if (field.schema?.type === 'user') {
-    return authType === 'server' ? { name: trimmed } : { id: trimmed }
+    return buildJiraCreateUserPayload(trimmed, authType)
   }
   if (field.schema?.type === 'number') {
     const numberValue = Number(trimmed)
