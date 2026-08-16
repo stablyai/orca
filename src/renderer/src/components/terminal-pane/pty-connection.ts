@@ -2067,9 +2067,13 @@ export function connectPanePty(
       tab?.launchAgent ??
       paneStartup?.launchAgent ??
       paneStartup?.initialAgentStatus?.agent ??
-      state.agentLaunchConfigByPaneKey[cacheKey]?.identity.agentType
+      state.agentLaunchConfigByPaneKey[cacheKey]?.identity?.agentType
     return isTuiAgent(candidate) ? candidate : null
   }
+  // Why: jcode themes itself; answering its OSC color burst can land before its
+  // composer is ready and render the reply as pre-typed text (bcaaddb45 skipped
+  // the main-side startup ingress, the renderer must skip the answer too).
+  const shouldAnswerPaneOscColorQueries = (): boolean => resolveExpectedLaunchTuiAgent() !== 'jcode'
   // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
   // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
   // even on a restore where no command-start read has recorded evidence yet.
@@ -3929,6 +3933,7 @@ export function connectPanePty(
     // (#7329), so send immediately.
     sendInput: sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
+    skipOscColorQueryReplies: !shouldAnswerPaneOscColorQueries(),
     ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
@@ -6518,7 +6523,7 @@ export function connectPanePty(
         hiddenStartupRendererQueryPending
       )
       hiddenStartupRendererQueryPending = extracted.pending
-      if (extracted.oscColorQueryData) {
+      if (extracted.oscColorQueryData && shouldAnswerPaneOscColorQueries()) {
         // Why: Codex's startup palette probe has a 100ms budget; answer hidden color queries immediately so scheduling/remote-input debounce (#7329) can't miss it.
         sendTerminalOscColorQueryReplies(
           extracted.oscColorQueryData,
@@ -6631,7 +6636,7 @@ export function connectPanePty(
         return
       }
       const extracted = extractHiddenStartupRendererQueryData(data, '')
-      if (extracted.oscColorQueryData) {
+      if (extracted.oscColorQueryData && shouldAnswerPaneOscColorQueries()) {
         sendTerminalOscColorQueryReplies(
           extracted.oscColorQueryData,
           pane.terminal,
@@ -7819,7 +7824,7 @@ export function connectPanePty(
           hiddenStartupRendererQuery: true
         })
       }
-      if (pendingForegroundQuery?.oscColorQueryData) {
+      if (pendingForegroundQuery?.oscColorQueryData && shouldAnswerPaneOscColorQueries()) {
         sendTerminalOscColorQueryReplies(
           pendingForegroundQuery.oscColorQueryData,
           pane.terminal,

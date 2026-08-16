@@ -13419,6 +13419,52 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
+  it('does not answer hidden Jcode startup color queries (composer-text leak guard)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: {
+          command: 'jcode',
+          launchAgent: 'jcode',
+          telemetry: {
+            agent_kind: 'jcode',
+            launch_source: 'tab_bar_quick_launch',
+            request_kind: 'new'
+          }
+        }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('\x1b]10;?\x1b\\\x1b]11;?\x1b\\startup frame\r\n')
+
+    expect(transport.sendInput).not.toHaveBeenCalledWith(
+      '\x1b]10;rgb:1111/1111/1111\x1b\\',
+      expect.anything()
+    )
+    expect(transport.sendInput).not.toHaveBeenCalledWith(
+      '\x1b]11;rgb:1111/1111/1111\x1b\\',
+      expect.anything()
+    )
+
+    binding.dispose()
+  })
+
   it('keeps hidden Grok telemetry startup output parsing briefly', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
