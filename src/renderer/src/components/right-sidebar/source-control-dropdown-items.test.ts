@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveDropdownItems,
-  type DropdownActionInputs,
-  type DropdownItem
-} from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
 import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus

@@ -3,7 +3,7 @@ import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { DaemonProtocolError } from './types'
 import {
   getMarkerlessShellLaunchConfig,
