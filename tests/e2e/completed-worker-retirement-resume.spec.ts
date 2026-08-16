@@ -20,6 +20,7 @@ import {
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../src/shared/runtime-types'
 import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
+import { callDispatchShowFromTrustedRenderer } from './orchestration-dispatch-presentation'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
 
@@ -292,9 +293,9 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await expect
       .poll(
         async () => {
-          const dispatch = await client.call<{ dispatch: { status: string } | null }>(
-            'orchestration.dispatchShow',
-            { task: task.result.task.id }
+          const dispatch = await callDispatchShowFromTrustedRenderer<{ status: string }>(
+            orcaPage,
+            task.result.task.id
           )
           const tasks = await client.call<{ tasks: { id: string; status: string }[] }>(
             'orchestration.taskList',

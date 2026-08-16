@@ -191,6 +191,12 @@ describe('orchestration.dispatchShow Run scope', () => {
 
     await expect(call({ task: task.id })).resolves.toEqual({ dispatch: null })
     await expect(call({ task: task.id }, callerContext('b'))).resolves.toEqual({ dispatch: null })
+    await expect(call({ task: task.id }, { runtime, trustedDesktopIpc: true })).resolves.toEqual({
+      dispatch: null
+    })
+    await expect(call({ task: task.id }, { runtime, clientKind: 'runtime' })).resolves.toEqual({
+      dispatch: null
+    })
     expect(snapshot([task.id], [dispatch.id])).toBe(before)
   })
 
@@ -258,6 +264,13 @@ describe('orchestration.dispatchShow Run scope', () => {
         launchToken: 'wrong-token'
       }
     }
+    const lookupSpies = [
+      vi.spyOn(db, 'getTask'),
+      vi.spyOn(db, 'getTaskForRun'),
+      vi.spyOn(db, 'getDispatchContext'),
+      vi.spyOn(db, 'getDispatchContextForRun'),
+      vi.spyOn(db, 'getDispatchContextForCallerIdentity')
+    ]
 
     const malformedForeign = await rejection({ task: task.id }, malformed)
     const malformedAbsent = await rejection({ task: 'task_absent' }, malformed)
@@ -266,6 +279,7 @@ describe('orchestration.dispatchShow Run scope', () => {
     expect(malformedForeign).toEqual(malformedAbsent)
     expect(staleForeign).toEqual(malformedForeign)
     expect(malformedForeign.code).toBe('run_required')
+    expect(lookupSpies.every((spy) => spy.mock.calls.length === 0)).toBe(true)
     expect(snapshot([task.id], [dispatch.id])).toBe(before)
   })
 

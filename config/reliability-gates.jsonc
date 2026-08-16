@@ -10233,27 +10233,32 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "A 12-case deterministic SQLite/RPC oracle covers same-Run, foreign, absent, malformed, stale, settled, spoofed-handle, independent-caller, rebound, mixed-version, exact-worker-identity, trusted-presentation, and persisted Run-mismatch behavior. A compiled CLI journey repeats same/foreign/absent reads with two attested terminal identities through the pairing transport against an isolated headless host. Provider-neutral contracts cover the unchanged folder, SSH, WSL, and federation routing seams without claiming live provider evidence.",
+      "coverageNotes": "A 12-case deterministic SQLite/RPC oracle covers same-Run, foreign, absent, malformed, stale, settled, spoofed-handle, independent-caller, rebound, mixed-version, exact-worker-identity, trusted-presentation, and persisted Run-mismatch behavior. A compiled CLI journey repeats same/foreign/absent reads with two attested terminal identities through the pairing transport against an isolated headless host. Existing worker visibility, restart recovery, and retirement journeys keep identity-free presentation on explicit trusted renderer IPC. Provider-neutral contracts cover the unchanged folder, SSH, WSL, and federation routing seams without claiming live provider evidence.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4531",
         "https://github.com/stablyai/orca/issues/14898",
         "https://github.com/stablyai/orca/pull/14900"
       ],
       "invariant": "A terminal-origin Dispatch inspection is authorized only by its launch-token and stable-pane attestation. A coordinator can inspect only its current Run, and a settled worker can inspect only the exact Dispatch whose persisted pane, process incarnation, and launch-token commitment match that attested identity. Caller-supplied handles never grant authority; foreign and absent identifiers are indistinguishable; authorization reads never mutate stored rows; and identity-free navigation is limited to trusted local IPC or paired desktop presentation.",
-      "oracle": "Create two Runs with independent attested pane/process/token identities, Tasks, and Dispatches. Require same-Run reads to return the exact Dispatch; foreign and absent reads to return the same empty result; foreign and absent preambles to fail with the same code and message; a spoofed handle to be ignored; malformed and stale evidence to fail before lookup; an attested caller with neither Run nor Dispatch to receive the absent shape; settled coordinator and exact-worker rows to remain readable; independent callers and deterministic rebinding to keep captured authority; a task/dispatch Run mismatch to return empty from both Runs; mixed-version params to use envelope attestation; trusted desktop presentation to remain explicit; and all persisted rows to remain byte-identical. Repeat same/foreign/absent reads through the compiled CLI over a real pairing connection to an isolated headless host.",
+      "oracle": "Create two Runs with independent attested pane/process/token identities, Tasks, and Dispatches. Require same-Run reads to return the exact Dispatch; foreign and absent reads to return the same empty result; foreign and absent preambles to fail with the same code and message; a spoofed handle to be ignored; malformed and stale evidence to fail before lookup; an attested caller with neither Run nor Dispatch to receive the absent shape; settled coordinator and exact-worker rows to remain readable; independent callers and deterministic rebinding to keep captured authority; a task/dispatch Run mismatch to return empty from both Runs; mixed-version params to use envelope attestation; trusted desktop presentation to remain explicit; and every targeted Task and Dispatch row to remain byte-identical. Repeat same/foreign/absent reads through the compiled CLI over a real pairing connection to an isolated headless host.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-compatibility-authority.test.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts src/cli/handlers/orchestration-dispatch-show-scope.test.ts src/shared/orchestration-rpc-contract.test.ts --reporter=dot",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec playwright test tests/e2e/orchestration-worker-terminal-visibility.spec.ts tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts tests/e2e/completed-worker-retirement-resume.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
         "src/main/runtime/orchestration-compatibility-authority.test.ts",
         "src/cli/handlers/orchestration-dispatch-show-scope.test.ts",
         "src/shared/orchestration-rpc-contract.test.ts",
-        "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts"
+        "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts",
+        "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+        "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+        "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+        "tests/e2e/completed-worker-retirement-resume.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -10277,6 +10282,30 @@
             "a paired headless host returns each caller's own Dispatch",
             "foreign and absent paired CLI reads return the same empty result",
             "a denied read does not change the owning Run's subsequent result"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+          "assertions": [
+            "trusted renderer presentation reads preserve Dispatch identity across workspace re-entry"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+          "assertions": [
+            "trusted renderer presentation reads preserve exact Dispatch identity across runtime restart"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+          "assertions": [
+            "trusted renderer presentation can inspect the Dispatch before missing-worker recovery"
+          ]
+        },
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.spec.ts",
+          "assertions": [
+            "trusted renderer presentation observes settled Dispatch status without changing lifecycle authority"
           ]
         }
       ],

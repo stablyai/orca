@@ -1765,7 +1765,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const ctx = task
         ? scopedRunId
           ? (callerDispatch ?? db.getDispatchContextForRun(task.id, scopedRunId))
-          : db.getDispatchContext(task.id)
+          : db.getDispatchContextForRun(task.id, task.run_id)
         : undefined
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
