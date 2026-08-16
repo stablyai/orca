@@ -40,12 +40,13 @@ describe('unhandled provider frame journal fallback', () => {
     ])
   })
 
-  it('turns an unserializable payload into an explicit visible value', () => {
-    const cyclic: { self?: unknown } = {}
-    cyclic.self = cyclic
+  it('turns an unserializable message-shaped payload into an explicit visible value', () => {
+    const cyclic: { warning?: unknown } = {}
+    cyclic.warning = cyclic
 
     const item = unhandledProviderFrameJournalItem('codex', 'frame', cyclic)
 
+    expect(item?.body.text).toBe('codex · frame')
     expect(item?.body.providerFrame?.payload.head).toContain('unserializable payload')
   })
 
@@ -175,6 +176,25 @@ describe('unhandled provider frame journal fallback', () => {
     expect(row?.body.text).toBe('Your plan limit resets in 2 hours.')
     // The raw frame stays available behind the row's disclosure.
     expect(row?.body.providerFrame?.kind).toBe('notification:warning')
+  })
+
+  it('bounds a provider sentence and persists its overflow', () => {
+    const message = 'abcdefghij'
+    const row = unhandledProviderFrameJournalItem(
+      'codex',
+      'notification:warning',
+      { message },
+      {
+        inlineHeadBytes: 8,
+        maxSessionBytes: 1024,
+        maxAppendsPerWindow: 10,
+        appendWindowMs: 1000
+      }
+    )
+
+    expect(row?.body.text).toContain('abcdefgh')
+    expect(row?.body.text).toContain('[Orca: output truncated')
+    expect(row?.blobs.map((blob) => blob.payload)).toContain(message)
   })
 
   it('unwraps a nested sentence and falls back to the opcode when there is none', () => {
