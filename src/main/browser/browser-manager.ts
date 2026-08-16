@@ -228,9 +228,8 @@ export class BrowserManager {
   private readonly rendererWebContentsIdByTabId = new Map<string, number>()
   // Why: serialize per-tab setViewportOverride so rapid toggles don't interleave CDP commands and leave emulation in a wrong state.
   private readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
-  // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
-  // can re-issue it against the target URL's identity.
-  private readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
+  // Why: debugger detach clears the full emulation state, so retain the standing preset for reattach.
+  private readonly viewportOverrideByTabId = new Map<string, BrowserViewportOverride>()
   // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
   // still reports the outgoing page until then. See resolveTabNavigationUrl.
   private readonly pendingNavigationByGuestId = new Map<number, PendingMainFrameNavigation>()
@@ -304,6 +303,7 @@ export class BrowserManager {
         if (!guest.debugger.isAttached()) {
           guest.debugger.attach('1.3')
         }
+        this.reapplyViewportOverrideAfterDebuggerAttach(guest)
         if (!injectAntiDetection) {
           return
         }
@@ -1042,14 +1042,25 @@ export class BrowserManager {
     browserTabId: string,
     url: string
   ): void {
-    const mobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
-    if (mobile === undefined) {
+    const override = this.viewportOverrideByTabId.get(browserTabId)
+    if (!override || this.userAgentModeByPageId.get(browserTabId) === 'native') {
       return
     }
     // Why: no queue needed — debugger.sendCommand dispatches in call order over one channel, so the
     // later-issued write wins. What matters is that both writers resolve the SAME host, which they
     // now do via the navigation target rather than the stale committed URL.
-    void this.sendViewportUserAgentOverride(guest, mobile, url).catch(() => {})
+    void this.sendViewportUserAgentOverride(guest, override.mobile, url).catch(() => {})
+  }
+
+  private reapplyViewportOverrideAfterDebuggerAttach(guest: Electron.WebContents): void {
+    const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+    if (!browserTabId) {
+      return
+    }
+    void this.enqueueViewportOperation(browserTabId, async () => {
+      const override = this.viewportOverrideByTabId.get(browserTabId)
+      return override ? this.doSetViewportOverrideImpl(browserTabId, override) : false
+    }).catch(() => {})
   }
 
   private async sendViewportUserAgentOverride(
@@ -1252,7 +1263,7 @@ export class BrowserManager {
     this.worktreeIdByTabId.delete(browserTabId)
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
-    this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+    this.viewportOverrideByTabId.delete(browserTabId)
     if (wcId !== undefined) {
       this.pendingNavigationByGuestId.delete(wcId)
     }
@@ -1321,7 +1332,7 @@ export class BrowserManager {
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
-    this.viewportUaOverrideMobileByTabId.clear()
+    this.viewportOverrideByTabId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.loadErrorsByGuestId.clear()
@@ -1610,11 +1621,18 @@ export class BrowserManager {
     browserTabId: string,
     override: BrowserViewportOverride | null
   ): Promise<boolean> {
+    return this.enqueueViewportOperation(browserTabId, () =>
+      this.doSetViewportOverrideImpl(browserTabId, override)
+    )
+  }
+
+  private async enqueueViewportOperation(
+    browserTabId: string,
+    operation: () => Promise<boolean>
+  ): Promise<boolean> {
     // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
     const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
-    const next = prev
-      .catch(() => {})
-      .then(() => this.doSetViewportOverrideImpl(browserTabId, override))
+    const next = prev.catch(() => {}).then(operation)
     this.viewportOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -1714,10 +1732,9 @@ export class BrowserManager {
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
+        this.viewportOverrideByTabId.set(browserTabId, { ...override })
         // Why: viewport sizing must not override a profile's explicit native-UA identity.
         if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
-          // Navigation must see the preset intent while the final CDP command is in flight.
-          this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
           // Why: same sender as the navigation path, so both resolve the tab's host identically.
           await this.sendViewportUserAgentOverride(guest, override.mobile)
         }
@@ -1727,15 +1744,15 @@ export class BrowserManager {
           enabled: false,
           maxTouchPoints: 0
         })
-        const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
+        const trackedOverride = this.viewportOverrideByTabId.get(browserTabId)
         // A navigation after this point must not re-install the override behind the clear.
-        this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+        this.viewportOverrideByTabId.delete(browserTabId)
         // Why: passing an empty string restores the session default UA.
         try {
           await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
         } catch (error) {
-          if (trackedMobile !== undefined) {
-            this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
+          if (trackedOverride) {
+            this.viewportOverrideByTabId.set(browserTabId, trackedOverride)
           }
           throw error
         }

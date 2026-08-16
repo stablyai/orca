@@ -223,10 +223,13 @@ describe('browserManager', () => {
       })
     })
 
-    it('reattaches a detached webview debugger before reapplying a standing UA override', async () => {
+    it('restores the full standing viewport override after debugger reattachment', async () => {
       vi.useFakeTimers()
       const { guest, debuggerAttach, debuggerIsAttached, debuggerOn, debuggerSendCommand } =
         makeGuest(4248)
+      debuggerAttach.mockImplementation(() => {
+        debuggerIsAttached.mockReturnValue(true)
+      })
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
       browserManager.registerGuest({
@@ -245,12 +248,27 @@ describe('browserManager', () => {
         | (() => void)
         | undefined
       expect(detachHandler).toBeTypeOf('function')
+      debuggerSendCommand.mockClear()
       debuggerIsAttached.mockReturnValue(false)
       detachHandler?.()
       vi.advanceTimersByTime(500)
-      expect(debuggerAttach).toHaveBeenCalledTimes(1)
+      await flushViewportOps()
 
-      debuggerIsAttached.mockReturnValue(true)
+      expect(debuggerAttach).toHaveBeenCalledTimes(1)
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
+        enabled: false,
+        maxTouchPoints: 0
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: GUEST_CLEAN_UA
+      })
+
       debuggerSendCommand.mockClear()
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
