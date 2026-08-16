@@ -71,6 +71,42 @@ describe('getUpstreamStatus', () => {
     )
   })
 
+  // Why: the benchmark above only runs under an env var, so this is the CI-enforced
+  // guard that the native/WSL path actually coalesces rather than fanning out.
+  it('shares one physical read across ten identical native callers', async () => {
+    let resolveSymbolicRef = (): void => {}
+    const symbolicRefGate = new Promise<void>((resolve) => {
+      resolveSymbolicRef = resolve
+    })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        await symbolicRefGate
+        return { stdout: 'main\n' }
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'origin/main\n' }
+      }
+      if (args[0] === 'rev-list') {
+        return { stdout: '0\t0\n' }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const reads = Array.from({ length: 10 }, () => getUpstreamStatus('/repo'))
+    resolveSymbolicRef()
+    const results = await Promise.all(reads)
+
+    expect(
+      gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')
+    ).toHaveLength(1)
+    expect(new Set(results).size).toBe(1)
+    // A settled lease is dropped, so the next read must issue fresh Git work.
+    await getUpstreamStatus('/repo')
+    expect(
+      gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')
+    ).toHaveLength(2)
+  })
+
   it('isolates physical reads by worktree, native or WSL host, and every target field', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'symbolic-ref') {
