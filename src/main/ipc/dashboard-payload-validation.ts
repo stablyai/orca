@@ -2,7 +2,8 @@ import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardRevealAgentArgs,
   type DashboardSleepWorkspaceArgs,
-  type DashboardSnapshot
+  type DashboardSnapshot,
+  type DashboardStopAgentArgs
 } from '../../shared/dashboard-snapshot'
 import { BoundedMap } from '../../shared/bounded-map'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
@@ -80,6 +81,20 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
         normalizeExecutionHostId(args.executionHostId) !== null)) &&
     isBoundedString(args.tabId, MAX_ID_LENGTH) &&
     (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH))
+  )
+}
+
+export function isDashboardStopAgentArgs(value: unknown): value is DashboardStopAgentArgs {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const args = value as Record<string, unknown>
+  return (
+    isBoundedString(args.paneKey, MAX_ID_LENGTH) &&
+    isBoundedString(args.worktreeId, MAX_ID_LENGTH) &&
+    isBoundedString(args.tabId, MAX_ID_LENGTH) &&
+    (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH)) &&
+    (args.ptyId === null || isBoundedString(args.ptyId, MAX_ID_LENGTH))
   )
 }
 

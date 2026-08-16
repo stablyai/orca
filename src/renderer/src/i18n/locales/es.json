@@ -14530,6 +14530,11 @@
     "total": "{{count}} total",
     "card": {
       "you": "You",
+      "stop": {
+        "action": "Detener agente",
+        "confirm": "¿Detener agente?",
+        "tooltip": "Detener agente: termina el proceso y cierra su terminal"
+      },
       "time": {
         "justNow": "ahora mismo",
         "minutes": "{{count}} min",

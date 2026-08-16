@@ -8,12 +8,13 @@ import {
   type DashboardSnapshot,
   type DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../shared/repo-icon'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { AgentKanbanCard } from './AgentKanbanCard'
+import { AgentKanbanColumn } from './AgentKanbanColumn'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
+import { stopNeedsDialog } from './AgentKanbanCardStopControl'
+import { AgentStopConfirmDialog } from './AgentStopConfirmDialog'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
 import {
   EMPTY_DASHBOARD_FILTERS,
@@ -59,19 +60,6 @@ function sleepWorkspaceViaPopoutRelay(args: DashboardSleepWorkspaceArgs): void {
   void window.api.dashboard.sleepWorkspace?.(args)
 }
 
-function bucketLabel(bucket: DashboardBucket): string {
-  switch (bucket) {
-    case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
-  }
-}
-
 function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, DashboardCard[]> {
   const grouped: Record<DashboardBucket, DashboardCard[]> = {
     attention: [],
@@ -88,52 +76,6 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
     grouped[bucket].sort((a, b) => b.stateChangedAt - a.stateChangedAt)
   }
   return grouped
-}
-
-function KanbanColumn({
-  bucket,
-  cards,
-  repoIconsByRepoId,
-  now,
-  onOpenTerminal
-}: {
-  bucket: DashboardBucket
-  cards: DashboardCard[]
-  repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
-  now: number
-  onOpenTerminal: (card: DashboardCard) => void
-}): React.JSX.Element {
-  return (
-    // Why: attention no longer tints the whole column — the cards inside carry
-    // their own state color, so a column border would double-signal it.
-    <section className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30">
-      <header className="flex items-center gap-2 px-3 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {bucketLabel(bucket)}
-        </span>
-        <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
-          {cards.length}
-        </span>
-      </header>
-      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        {cards.length === 0 ? (
-          <p className="px-1 py-2 text-[11px] text-muted-foreground">
-            {translate('dashboardPopout.bucket.empty', 'None')}
-          </p>
-        ) : (
-          cards.map((card) => (
-            <AgentKanbanCard
-              key={card.paneKey}
-              card={card}
-              repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
-              now={now}
-              onOpenTerminal={onOpenTerminal}
-            />
-          ))
-        )}
-      </div>
-    </section>
-  )
 }
 
 type AgentKanbanBoardProps = {
@@ -288,6 +230,45 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
+
+  // Stopping kills the agent's process in the main renderer, which owns the
+  // store and the terminal teardown. Still-running agents confirm through a
+  // dialog first; idle/done ones already confirmed inline on their card.
+  const [pendingStopPaneKey, setPendingStopPaneKey] = useState<string | null>(null)
+  const resolvedPendingStopCard = useMemo(() => {
+    if (!pendingStopPaneKey) {
+      return null
+    }
+    return snapshot.cards.find((card) => card.paneKey === pendingStopPaneKey) ?? null
+  }, [pendingStopPaneKey, snapshot.cards])
+  // ?. shields this from dev-HMR preload skew, same as the ack relay above.
+  const emitStop = useCallback((card: DashboardCard) => {
+    void window.api.dashboard.stopAgent?.({
+      paneKey: card.paneKey,
+      worktreeId: card.worktreeId,
+      tabId: card.tabId,
+      leafId: card.leafId,
+      ptyId: card.ptyId
+    })
+  }, [])
+  const handleStop = useCallback(
+    (card: DashboardCard) => {
+      if (stopNeedsDialog(card)) {
+        setPendingStopPaneKey(card.paneKey)
+        return
+      }
+      emitStop(card)
+    },
+    [emitStop]
+  )
+  const handleConfirmStop = useCallback(() => {
+    setPendingStopPaneKey(null)
+    if (resolvedPendingStopCard) {
+      emitStop(resolvedPendingStopCard)
+    }
+  }, [emitStop, resolvedPendingStopCard])
+  const handleCancelStop = useCallback(() => setPendingStopPaneKey(null), [])
+
   // Watching the open dialog counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {
@@ -394,13 +375,14 @@ export function AgentKanbanBoard({
               {/* Auto margins center the capped board and collapse during horizontal overflow. */}
               <div className="mx-auto flex w-full max-w-[1280px] gap-3">
                 {visibleBuckets.map((bucket) => (
-                  <KanbanColumn
+                  <AgentKanbanColumn
                     key={bucket}
                     bucket={bucket}
                     cards={grouped[bucket]}
                     repoIconsByRepoId={snapshot.repoIconsByRepoId}
                     now={now}
                     onOpenTerminal={handleOpenTerminal}
+                    onStop={handleStop}
                   />
                 ))}
               </div>
@@ -414,6 +396,11 @@ export function AgentKanbanBoard({
             onReveal={onRevealAgent}
           />
         ) : null}
+        <AgentStopConfirmDialog
+          card={resolvedPendingStopCard}
+          onCancel={handleCancelStop}
+          onConfirm={handleConfirmStop}
+        />
       </div>
     </TooltipProvider>
   )

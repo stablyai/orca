@@ -274,6 +274,41 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(sendToTrustedMock).toHaveBeenCalledWith('ui:sleepDashboardWorkspace', args)
   })
 
+  it('relays valid stop requests from only the popout, without raising the main window', () => {
+    const args = {
+      paneKey: 'tab1:leaf1',
+      worktreeId: 'w1',
+      tabId: 't1',
+      leafId: 'l1',
+      ptyId: 'pty1'
+    }
+
+    handlers.get('dashboardPopout:stopAgent')!({ sender: untrustedSender } as never, args)
+    handlers.get('dashboardPopout:stopAgent')!({ sender: popoutSender } as never, {
+      ...args,
+      paneKey: ''
+    })
+    expect(sendToTrustedMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:stopAgent')!({ sender: popoutSender } as never, args)
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:stopDashboardAgent', args)
+    // Stopping must not pull the user off the board.
+    expect(safelyRevealMock).not.toHaveBeenCalled()
+    expect(appMock.focus).not.toHaveBeenCalled()
+  })
+
+  it('accepts a stop request for a retained card with no live pane', () => {
+    const args = {
+      paneKey: 'tab1:leaf1',
+      worktreeId: 'w1',
+      tabId: 't1',
+      leafId: null,
+      ptyId: null
+    }
+
+    handlers.get('dashboardPopout:stopAgent')!({ sender: popoutSender } as never, args)
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:stopDashboardAgent', args)
+  })
   it('reveals an agent in only the trusted main window', () => {
     const main = makeWindow(mainSender)
     getTrustedWindowMock.mockReturnValue(main)

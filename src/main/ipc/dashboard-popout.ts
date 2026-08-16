@@ -16,7 +16,8 @@ import {
   isDashboardPaneKey,
   isDashboardRevealAgentArgs,
   isDashboardSleepWorkspaceArgs,
-  isDashboardSpawnAgentArgs
+  isDashboardSpawnAgentArgs,
+  isDashboardStopAgentArgs
 } from './dashboard-payload-validation'
 
 // The most recent snapshot the main renderer published, replayed to the popout
@@ -40,6 +41,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboardPopout:ackAgent')
   ipcMain.removeHandler('dashboardPopout:spawnAgent')
   ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
+  ipcMain.removeHandler('dashboardPopout:stopAgent')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -125,6 +127,20 @@ export function registerDashboardPopoutHandlers(
       return
     }
     sendToTrustedUIRenderer('ui:ackDashboardAgent', (args as { paneKey: string }).paneKey)
+  })
+
+  // Stop-from-board: the main renderer owns the terminal/pty teardown, so relay
+  // the request to it. Deliberately does NOT raise the main window — the whole
+  // point is clearing an agent without leaving the board.
+  ipcMain.handle('dashboardPopout:stopAgent', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardStopAgentArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:stopDashboardAgent', args)
   })
 
   // Click-to-focus: raise the main window and route it to the agent's pane.

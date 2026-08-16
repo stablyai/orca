@@ -10,7 +10,8 @@ import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
-  DashboardSpawnAgentArgs
+  DashboardSpawnAgentArgs,
+  DashboardStopAgentArgs
 } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2396,6 +2397,12 @@ const api = {
       ipcRenderer.on('ui:ackDashboardAgent', listener)
       return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
     },
+    onStopAgent: (callback: (args: DashboardStopAgentArgs) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, args: DashboardStopAgentArgs): void =>
+        callback(args)
+      ipcRenderer.on('ui:stopDashboardAgent', listener)
+      return () => ipcRenderer.removeListener('ui:stopDashboardAgent', listener)
+    },
     onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
         callback(args)
@@ -2429,6 +2436,8 @@ const api = {
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+    stopAgent: (args: DashboardStopAgentArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:stopAgent', args),
     spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>

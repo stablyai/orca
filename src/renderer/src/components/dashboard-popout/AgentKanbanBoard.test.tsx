@@ -24,23 +24,28 @@ vi.mock('./AgentKanbanCard', () => ({
     card,
     repoIcon,
     now,
-    onOpenTerminal
+    onOpenTerminal,
+    onStop
   }: {
     card: DashboardCard
     repoIcon?: RepoIcon | null
     now: number
     onOpenTerminal: (card: DashboardCard) => void
+    onStop: (card: DashboardCard) => void
   }) => (
-    <div
-      data-testid="card"
-      data-bucket={card.bucket}
-      data-unseen={card.unseen}
-      data-now={now}
-      data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
-      onClick={() => onOpenTerminal(card)}
-    >
-      {card.worktreeName}
-    </div>
+    <>
+      <div
+        data-testid="card"
+        data-bucket={card.bucket}
+        data-unseen={card.unseen}
+        data-now={now}
+        data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
+        onClick={() => onOpenTerminal(card)}
+      >
+        {card.worktreeName}
+      </div>
+      <button data-testid="stop-card" onClick={() => onStop(card)} />
+    </>
   )
 }))
 vi.mock('./AgentTerminalDialog', () => ({
@@ -71,6 +76,20 @@ vi.mock('./AgentTerminalDialog', () => ({
       <button data-testid="terminal-panel-close" onClick={() => onOpenChange(false)} />
     </div>
   )
+}))
+vi.mock('./AgentStopConfirmDialog', () => ({
+  AgentStopConfirmDialog: ({
+    card,
+    onConfirm
+  }: {
+    card: DashboardCard | null
+    onConfirm: () => void
+  }) =>
+    card ? (
+      <div data-testid="stop-dialog" data-pty-id={card.ptyId ?? undefined}>
+        <button data-testid="stop-confirm" onClick={onConfirm} />
+      </div>
+    ) : null
 }))
 
 function card(overrides: Partial<DashboardCard>): DashboardCard {
@@ -122,6 +141,7 @@ function renderBoard(
 }
 
 const ackAgent = vi.fn(async () => {})
+const stopAgent = vi.fn(async () => {})
 
 describe('AgentKanbanBoard', () => {
   beforeEach(async () => {
@@ -132,7 +152,7 @@ describe('AgentKanbanBoard', () => {
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     )
     // The board relays seen-acks through the dashboard preload API.
-    ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
+    ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent, stopAgent } }
   })
   afterEach(() => {
     cleanup()
@@ -560,6 +580,39 @@ describe('AgentKanbanBoard', () => {
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
+  })
+
+  it('re-resolves a pending stop against the live card before confirming', () => {
+    const agent = card({ paneKey: 'pk-stop', ptyId: 'pty-old', dotState: 'working' })
+    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+
+    fireEvent.click(screen.getByTestId('stop-card'))
+    expect(screen.getByTestId('stop-dialog').dataset.ptyId).toBe('pty-old')
+
+    const moved = { ...agent, ptyId: 'pty-new', leafId: 'leaf-new' }
+    rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
+    expect(screen.getByTestId('stop-dialog').dataset.ptyId).toBe('pty-new')
+
+    fireEvent.click(screen.getByTestId('stop-confirm'))
+    expect(stopAgent).toHaveBeenCalledWith({
+      paneKey: 'pk-stop',
+      worktreeId: 'w1',
+      tabId: 'tab1',
+      leafId: 'leaf-new',
+      ptyId: 'pty-new'
+    })
+  })
+
+  it('closes a pending stop when its card disappears', () => {
+    const agent = card({ paneKey: 'pk-gone', ptyId: 'pty-gone', dotState: 'working' })
+    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+
+    fireEvent.click(screen.getByTestId('stop-card'))
+    expect(screen.getByTestId('stop-dialog')).toBeInTheDocument()
+
+    rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [] }} />)
+    expect(screen.queryByTestId('stop-dialog')).not.toBeInTheDocument()
+    expect(stopAgent).not.toHaveBeenCalled()
   })
 
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {

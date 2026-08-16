@@ -143,12 +143,24 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    const weeklyIsAlreadyBucket = p.weekly
+      ? bucketSections.some(
+          (section) =>
+            section.window.windowMinutes === p.weekly?.windowMinutes &&
+            section.window.usedPercent === p.weekly?.usedPercent &&
+            section.window.resetsAt === p.weekly?.resetsAt
+        )
+      : false
     return [
       ...bucketSections,
-      {
-        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-        window: p.weekly
-      }
+      ...(weeklyIsAlreadyBucket
+        ? []
+        : [
+            {
+              label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
+              window: p.weekly
+            }
+          ])
     ]
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
