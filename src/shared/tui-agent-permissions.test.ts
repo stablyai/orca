@@ -50,6 +50,16 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
+  it('resolves Cursor --force as yolo', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'cursor',
+        agentArgs: YOLO_TUI_AGENT_ARGS.cursor,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+  })
+
   it('resolves one Codex yolo launch as yolo', () => {
     expect(
       resolveTuiAgentPermissionMode({

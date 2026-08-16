@@ -429,7 +429,7 @@ describe('Store', () => {
     expect(store.getSettings().agentDefaultArgs).toMatchObject({
       claude: '--dangerously-skip-permissions',
       codex: '--dangerously-bypass-approvals-and-sandbox',
-      cursor: '--yolo'
+      cursor: '--force'
     })
     expect(store.getSettings().agentDefaultEnv).toMatchObject({
       goose: { GOOSE_MODE: 'auto' }
@@ -482,6 +482,29 @@ describe('Store', () => {
       '--model opencode/gpt-5'
     )
     expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
+  })
+
+  it('rewrites persisted Cursor --yolo args to --force', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentYoloDefaultsMigrated: true,
+          agentDefaultArgs: {
+            cursor: '--yolo --model auto',
+            claude: '--dangerously-skip-permissions'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+    store.flush()
+
+    expect(store.getSettings().agentDefaultArgs?.cursor).toBe('--force --model auto')
+    expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.cursor).toBe(
+      '--force --model auto'
+    )
   })
 
   it('normalizes app icon on load and update', async () => {

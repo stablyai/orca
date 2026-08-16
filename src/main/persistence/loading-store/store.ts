@@ -1075,7 +1075,8 @@ export class Store {
         if (
           parsed.settings?.agentYoloDefaultsMigrated !== true ||
           hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
-          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo) ||
+          hasUnsupportedTuiAgentArgs('cursor', parsed.settings?.agentDefaultArgs?.cursor)
         ) {
           this.loadNeedsSave = true
         }

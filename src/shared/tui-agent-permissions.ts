@@ -18,7 +18,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   cline: '--auto-approve true',
   'command-code': '--yolo',
   continue: '--allow "*"',
-  cursor: '--yolo',
+  cursor: '--force',
   kimi: '--yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',

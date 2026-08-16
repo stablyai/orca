@@ -732,6 +732,21 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchConfig).toEqual({ agentCommand: 'claude', agentArgs: '', agentEnv: {} })
   })
 
+  it('rewrites persisted Cursor --yolo onto --force before launch', () => {
+    const agentDefaultArgs = normalizeTuiAgentArgsRecord({
+      cursor: '--yolo'
+    })
+    const plan = buildAgentStartupPlan({
+      agent: 'cursor',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('cursor', agentDefaultArgs),
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("cursor-agent '--force' 'fix it'")
+  })
+
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
     const agentDefaultArgs = normalizeTuiAgentArgsRecord({
       opencode: '--dangerously-skip-permissions'

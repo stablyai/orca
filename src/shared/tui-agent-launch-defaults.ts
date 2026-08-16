@@ -7,6 +7,12 @@ const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> =
   kilo: ['--dangerously-skip-permissions']
 }
 
+// Why: Cursor Agent renamed YOLO from --yolo to --force; persisted --yolo now exits unknown option.
+const RELOCATED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly { from: string; to: string }[]>> =
+  {
+    cursor: [{ from: '--yolo', to: '--force' }]
+  }
+
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = YOLO_TUI_AGENT_ARGS
 
 export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> =
@@ -20,17 +26,22 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
   if (typeof value !== 'string') {
     return false
   }
-  return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
+  if ((UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))) {
+    return true
+  }
+  return (RELOCATED_TUI_AGENT_ARGS[agent] ?? []).some(({ from }) => argPattern(from).test(value))
 }
 
 function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
-  const unsupportedArgs = UNSUPPORTED_TUI_AGENT_ARGS[agent]
-  if (!unsupportedArgs) {
-    return args.trim()
+  let next = args
+  for (const { from, to } of RELOCATED_TUI_AGENT_ARGS[agent] ?? []) {
+    next = next.replace(argPattern(from), `$1${to}`)
   }
   // Why: a few agents have removed, relocated, or never exposed Claude-style
   // skip-permission flags on the interactive TUI command Orca launches.
-  return unsupportedArgs.reduce((next, arg) => next.replace(argPattern(arg), ' '), args).trim()
+  return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? [])
+    .reduce((sanitized, arg) => sanitized.replace(argPattern(arg), ' '), next)
+    .trim()
 }
 
 export function normalizeTuiAgentArgsRecord(value: unknown): Partial<Record<TuiAgent, string>> {
