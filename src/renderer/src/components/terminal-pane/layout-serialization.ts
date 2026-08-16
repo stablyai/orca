@@ -6,7 +6,7 @@ import type {
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import { replayIntoTerminalAsync, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
@@ -150,6 +150,7 @@ export function restoreScrollbackBuffers(
   }
   const ALT_SCREEN_ON = '\x1b[?1049h'
   const ALT_SCREEN_OFF = '\x1b[?1049l'
+  const replayed: Promise<void>[] = []
   for (const [oldLeafId, buffer] of Object.entries(savedBuffers)) {
     const newPaneId = restoredPaneByLeafId.get(oldLeafId)
     if (newPaneId == null || !buffer) {
@@ -178,12 +179,14 @@ export function restoreScrollbackBuffers(
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {
-        // replayIntoTerminal: buffer queries (DA1/DECRQM/CPR) would auto-reply into the new shell's stdin. See replay-guard.ts.
-        replayIntoTerminal(pane, replayingPanesRef, buf, renderOptions)
+        // replayIntoTerminalAsync: buffer queries (DA1/DECRQM/CPR) would auto-reply into the new shell's stdin. See replay-guard.ts.
+        replayed.push(replayIntoTerminalAsync(pane, replayingPanesRef, buf, renderOptions))
         // Newline first so the new shell prompt doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
-        replayIntoTerminal(pane, replayingPanesRef, '\r\n', renderOptions)
+        replayed.push(replayIntoTerminalAsync(pane, replayingPanesRef, '\r\n', renderOptions))
         // Clear mode bits the buffer replayed: the fresh shell has no TUI to consume them. See POST_REPLAY_MODE_RESET.
-        replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET, renderOptions)
+        replayed.push(
+          replayIntoTerminalAsync(pane, replayingPanesRef, POST_REPLAY_MODE_RESET, renderOptions)
+        )
         // Why: connection resolution runs after layout replay; only fresh-shell paths move these rows into scrollback.
         restoredViewportBlankingPanesRef?.current.add(pane.id)
       }
@@ -195,6 +198,15 @@ export function restoreScrollbackBuffers(
         errorMessage: error instanceof Error ? error.message : String(error)
       })
     }
+  }
+  if (replayed.length > 0) {
+    // Why: scheduleRevealRepaint() on mount fires before this async scrollback
+    // replay finishes, so its double-rAF atlas reset misses chunks written
+    // after the window and leaves stale WebGL cells (#12047). Repaint again
+    // once every replay write has actually parsed.
+    void Promise.all(replayed).then(() => {
+      manager.scheduleRevealRepaint()
+    })
   }
 }
 

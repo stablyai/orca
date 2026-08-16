@@ -443,7 +443,8 @@ describe('restoreScrollbackBuffers', () => {
     }
     const manager = {
       getPanes: vi.fn(() => [pane]),
-      hasWebglRenderer: vi.fn(() => true)
+      hasWebglRenderer: vi.fn(() => true),
+      scheduleRevealRepaint: vi.fn()
     }
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
@@ -460,6 +461,46 @@ describe('restoreScrollbackBuffers', () => {
     expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
     expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
     expect(replayingPanesRef.current.size).toBe(0)
+  })
+
+  it('defers scheduleRevealRepaint until every replay write has actually parsed', async () => {
+    const callbacks: (() => void)[] = []
+    const pane = {
+      id: 1,
+      terminal: {
+        write: vi.fn((_data: string, callback?: () => void) => {
+          if (callback) {
+            callbacks.push(callback)
+          }
+        })
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      hasWebglRenderer: vi.fn(() => true),
+      scheduleRevealRepaint: vi.fn()
+    }
+    const replayingPanesRef = { current: new Map<number, number>() }
+    const restoredViewportBlankingPanesRef = { current: new Set<number>() }
+
+    restoreScrollbackBuffers(
+      manager as unknown as Parameters<typeof restoreScrollbackBuffers>[0],
+      { [LEAF_1]: 'restored output' },
+      new Map([[LEAF_1, 1]]),
+      replayingPanesRef,
+      restoredViewportBlankingPanesRef
+    )
+
+    // Why: the mount-time reveal repaint must not fire before scrollback has
+    // actually parsed (#12047) — only the fix's follow-up repaint should run.
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(callbacks.length).toBe(3)
+
+    callbacks.forEach((callback) => callback())
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
   })
 })
 
