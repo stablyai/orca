@@ -50,6 +50,44 @@ export function sanitizeWorktreeName(input: string): string {
   return sanitized
 }
 
+/**
+ * Sanitize a worktree name for use as a git branch name, preserving `/` as a
+ * segment separator. The directory name still uses sanitizeWorktreeName, so a
+ * name like `feature/foo` creates a flat `feature-foo` folder while the branch
+ * keeps the conventional `feature/foo` form.
+ */
+export function sanitizeWorktreeBranchName(input: string): string {
+  const sanitized = replaceKnownEmojiWithShortcodes(input)
+    .split('/')
+    .map(sanitizeBranchNameSegment)
+    .filter(Boolean)
+    .join('/')
+
+  if (!sanitized && containsEmoji(input)) {
+    return 'workspace'
+  }
+
+  if (!sanitized) {
+    throw new Error('Invalid worktree name')
+  }
+
+  return sanitized
+}
+
+function sanitizeBranchNameSegment(input: string): string {
+  return (
+    input
+      .trim()
+      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+      .replace(/-+/g, '-')
+      .replace(/\.{2,}/g, '.')
+      .replace(/^[.-]+|[.-]+$/g, '')
+      // Why: git check-ref-format rejects ref components ending in `.lock`,
+      // case-insensitively on Windows/macOS filesystems.
+      .replace(/\.lock$/i, '')
+  )
+}
+
 function containsEmoji(input: string): boolean {
   return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
     input

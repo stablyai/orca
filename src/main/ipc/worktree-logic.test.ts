@@ -2,6 +2,7 @@ import { posix, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   sanitizeWorktreeDisplayName,
   ensurePathWithinWorkspace,
   computeBranchName,
@@ -101,6 +102,58 @@ describe('sanitizeWorktreeName', () => {
 
   it('throws for whitespace-only name', () => {
     expect(() => sanitizeWorktreeName('   ')).toThrow('Invalid worktree name')
+  })
+})
+
+describe('sanitizeWorktreeBranchName', () => {
+  it('preserves the slash separator for conventional feature/name branches', () => {
+    expect(sanitizeWorktreeBranchName('feature/tti_fix_1440')).toBe('feature/tti_fix_1440')
+  })
+
+  it('leaves slash-free names identical to sanitizeWorktreeName', () => {
+    expect(sanitizeWorktreeBranchName('tti_fix_1440')).toBe('tti_fix_1440')
+    expect(sanitizeWorktreeBranchName('my feature')).toBe('my-feature')
+  })
+
+  it('sanitizes each slash-separated segment independently', () => {
+    expect(sanitizeWorktreeBranchName('feature/tti fix')).toBe('feature/tti-fix')
+    expect(sanitizeWorktreeBranchName('feat: 中文 (v2)')).toBe('feat-中文-v2')
+  })
+
+  it('drops empty segments from leading, trailing, or doubled slashes', () => {
+    expect(sanitizeWorktreeBranchName('/feature//tti/')).toBe('feature/tti')
+  })
+
+  it('collapses dot sequences per segment so traversal sequences cannot reach git', () => {
+    expect(sanitizeWorktreeBranchName('foo/../bar')).toBe('foo/bar')
+    expect(sanitizeWorktreeBranchName('a..b/c...d')).toBe('a.b/c.d')
+  })
+
+  it('strips leading dots per segment, which git check-ref-format rejects', () => {
+    expect(sanitizeWorktreeBranchName('feature/.hidden')).toBe('feature/hidden')
+  })
+
+  it('strips a trailing .lock suffix, which git reserves for ref lock files', () => {
+    expect(sanitizeWorktreeBranchName('feature/tti.lock')).toBe('feature/tti')
+    expect(sanitizeWorktreeBranchName('feature/tti.LOCK')).toBe('feature/tti')
+  })
+
+  it('preserves non-ASCII letters and numbers per segment', () => {
+    expect(sanitizeWorktreeBranchName('feature/中文')).toBe('feature/中文')
+  })
+
+  it('uses readable git-safe shortcodes for known emoji', () => {
+    expect(sanitizeWorktreeBranchName('feature/🚀')).toBe('feature/rocket')
+  })
+
+  it('uses a git-safe fallback for emoji newer than the shortcode catalog', () => {
+    expect(sanitizeWorktreeBranchName('\u{1faeb}')).toBe('workspace')
+  })
+
+  it('throws for empty or punctuation-only names', () => {
+    expect(() => sanitizeWorktreeBranchName('')).toThrow('Invalid worktree name')
+    expect(() => sanitizeWorktreeBranchName('///')).toThrow('Invalid worktree name')
+    expect(() => sanitizeWorktreeBranchName('!!!')).toThrow('Invalid worktree name')
   })
 })
 

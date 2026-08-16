@@ -1147,6 +1147,7 @@ import {
   isOrphanedWorktreeError,
   mergeWorktree,
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
@@ -24912,7 +24913,10 @@ export class OrcaRuntimeService {
     let effectiveRequestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
+    // Why: the branch keeps the user's `feature/...` convention; only the directory name is flattened.
+    const branchSafeName = sanitizeWorktreeBranchName(args.name)
     let effectiveSanitizedName = sanitizedName
+    let effectiveBranchName = branchSafeName
     // Why: explicit branches and non-username prefix modes never consume this
     // value; skipping the probes preserves the exact generated branch name.
     const username =
@@ -24994,6 +24998,9 @@ export class OrcaRuntimeService {
             retiredNameRegistry?.exhaustedTiers
           )
         : getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveBranchName = shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : getWorktreeCreateCandidate(branchSafeName, suffix)
       effectiveRequestedName = shouldRetireGeneratedName
         ? effectiveSanitizedName
         : args.name.trim()
@@ -25007,7 +25014,7 @@ export class OrcaRuntimeService {
         repo.path,
         selectedExistingLocalBranchName ??
           getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        effectiveSanitizedName,
+        effectiveBranchName,
         settings,
         username,
         localWorktreeGitOptions

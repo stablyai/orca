@@ -75,6 +75,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   sanitizeWorktreeDisplayName,
   computeValidatedBranchName,
   computeWorktreePath,
@@ -1539,7 +1540,10 @@ export async function createRemoteWorktree(
   const worktreePathSettings = getWorktreePathSettings(repo, settings)
   let effectiveRequestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+  // Why: the branch keeps the user's `feature/...` convention; only the directory name is flattened.
+  const branchSafeName = sanitizeWorktreeBranchName(args.name)
   let effectiveSanitizedName = sanitizedName
+  let effectiveBranchName = branchSafeName
   const requestedDisplayName = args.displayName
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
@@ -1609,6 +1613,9 @@ export async function createRemoteWorktree(
           retiredNameRegistry?.exhaustedTiers
         )
       : getWorktreeCreateCandidate(sanitizedName, suffix)
+    effectiveBranchName = shouldRetireGeneratedName
+      ? effectiveSanitizedName
+      : getWorktreeCreateCandidate(branchSafeName, suffix)
     effectiveRequestedName = shouldRetireGeneratedName
       ? effectiveSanitizedName
       : args.name.trim()
@@ -1623,7 +1630,7 @@ export async function createRemoteWorktree(
       repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-      effectiveSanitizedName,
+      effectiveBranchName,
       settings,
       username
     )
@@ -1998,6 +2005,8 @@ export async function createLocalWorktree(
 
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+  // Why: the branch keeps the user's `feature/...` convention; only the directory name is flattened.
+  const branchSafeName = sanitizeWorktreeBranchName(args.name)
   const requestedDisplayName = args.displayName
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
@@ -2160,6 +2169,7 @@ export async function createLocalWorktree(
 
   let effectiveRequestedName = requestedName
   let effectiveSanitizedName = sanitizedName
+  let effectiveBranchName = branchSafeName
   let branchName = ''
   let worktreePath = ''
 
@@ -2185,6 +2195,9 @@ export async function createLocalWorktree(
           retiredNameRegistry?.exhaustedTiers
         )
       : getWorktreeCreateCandidate(sanitizedName, suffix)
+    effectiveBranchName = shouldRetireGeneratedName
+      ? effectiveSanitizedName
+      : getWorktreeCreateCandidate(branchSafeName, suffix)
     effectiveRequestedName = shouldRetireGeneratedName
       ? effectiveSanitizedName
       : requestedName.trim()
@@ -2201,7 +2214,7 @@ export async function createLocalWorktree(
       selectedExistingLocalBranchName
         ? selectedExistingLocalBranchName
         : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-      effectiveSanitizedName,
+      effectiveBranchName,
       settings,
       username,
       localWorktreeGitOptions
