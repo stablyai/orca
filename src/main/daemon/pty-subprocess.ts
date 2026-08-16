@@ -18,6 +18,7 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
+import { resetLinuxPtyChildPriority } from '../pty/linux-pty-child-priority'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
@@ -579,6 +580,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    resetLinuxPtyChildPriority(proc.pid)
     args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
     return proc
   }

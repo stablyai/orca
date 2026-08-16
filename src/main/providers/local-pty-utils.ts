@@ -3,6 +3,7 @@ import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants }
 import { release } from 'node:os'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { resetLinuxPtyChildPriority } from '../pty/linux-pty-child-priority'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
@@ -224,6 +225,7 @@ function spawnWindowsFallbackChain(
         env,
         ...windowsConptyDllOptions()
       })
+      resetLinuxPtyChildPriority(proc.pid)
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
       )
@@ -265,15 +267,17 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   if (!primaryError) {
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
+      const proc = ptySpawn(wrapped.file, wrapped.args, {
+        name: termName,
+        cols,
+        rows,
+        cwd,
+        env,
+        ...windowsConptyDllOptions()
+      })
+      resetLinuxPtyChildPriority(proc.pid)
       return {
-        process: ptySpawn(wrapped.file, wrapped.args, {
-          name: termName,
-          cols,
-          rows,
-          cwd,
-          env,
-          ...windowsConptyDllOptions()
-        }),
+        process: proc,
         shellPath
       }
     } catch (err) {
@@ -312,6 +316,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           cwd,
           env
         })
+        resetLinuxPtyChildPriority(proc.pid)
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )
