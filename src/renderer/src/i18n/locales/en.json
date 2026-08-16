@@ -3701,6 +3701,11 @@
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
+          },
+          "LspStatusSegment": {
+            "starting": "Language server starting…",
+            "running": "Language server",
+            "badge": "LSP"
           }
         }
       },
