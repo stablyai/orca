@@ -41,6 +41,22 @@ function buildJiraCreateUserPayload(identifier: string, authType?: JiraAuthType)
   return authType === 'server' ? { name: identifier } : { id: identifier }
 }
 
+/** Server/DC user pickers take the username, so `name` wins over the option rule's `id`. */
+function buildJiraCreateUserFieldPayload(
+  field: JiraCreateField,
+  identifier: string,
+  authType?: JiraAuthType
+) {
+  const allowedValue = findJiraCreateAllowedValue(field, identifier)
+  if (authType === 'server' && allowedValue?.name) {
+    return { name: allowedValue.name }
+  }
+  if (allowedValue) {
+    return getJiraCreateOptionPayload(allowedValue, identifier)
+  }
+  return buildJiraCreateUserPayload(identifier, authType)
+}
+
 export function getJiraCreateAllowedValueLabel(
   value: NonNullable<JiraCreateField['allowedValues']>[number]
 ): string {
@@ -80,21 +96,22 @@ export function buildJiraCreateFieldValue(
   }
   if (field.schema?.type === 'array') {
     const parts = splitJiraCreateArrayDraft(trimmed)
+    // User arrays resolve ahead of the generic option rule.
+    if (isJiraCreateMultiUserField(field)) {
+      return parts.map((part) => buildJiraCreateUserFieldPayload(field, part, authType))
+    }
     if (field.allowedValues?.length) {
       return parts.map((part) =>
         getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, part), part)
       )
     }
-    if (isJiraCreateMultiUserField(field)) {
-      return parts.map((part) => buildJiraCreateUserPayload(part, authType))
-    }
     return parts
+  }
+  if (field.schema?.type === 'user') {
+    return buildJiraCreateUserFieldPayload(field, trimmed, authType)
   }
   if (field.allowedValues?.length) {
     return getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, trimmed), trimmed)
-  }
-  if (field.schema?.type === 'user') {
-    return buildJiraCreateUserPayload(trimmed, authType)
   }
   if (field.schema?.type === 'number') {
     const numberValue = Number(trimmed)

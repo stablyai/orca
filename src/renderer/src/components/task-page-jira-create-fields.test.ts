@@ -258,6 +258,37 @@ describe('buildJiraCreateFieldValue', () => {
     expect(buildJiraCreateFieldValue(multiUserField, 'Name 1', 'cloud')).toEqual([{ id: 'acc-1' }])
   })
 
+  it('sends the username for a Server user field whose allowed value also has an id', () => {
+    const userField = field({
+      schema: { type: 'user' },
+      allowedValues: [{ id: '10001', name: 'alice' }]
+    })
+    expect(buildJiraCreateFieldValue(userField, 'alice', 'server')).toEqual({ name: 'alice' })
+    expect(buildJiraCreateFieldValue(userField, '10001', 'server')).toEqual({ name: 'alice' })
+  })
+
+  it('sends usernames for a Server multi-user field whose allowed values also have ids', () => {
+    const multiUserField = field({
+      schema: { type: 'array', items: 'user' },
+      allowedValues: [
+        { id: '10001', name: 'alice' },
+        { id: '10002', name: 'bob' }
+      ]
+    })
+    expect(buildJiraCreateFieldValue(multiUserField, '10001, bob', 'server')).toEqual([
+      { name: 'alice' },
+      { name: 'bob' }
+    ])
+  })
+
+  it('falls back to the drafted identifier when a Server user is outside the allowed values', () => {
+    const userField = field({
+      schema: { type: 'user' },
+      allowedValues: [{ id: '10001', name: 'alice' }]
+    })
+    expect(buildJiraCreateFieldValue(userField, 'carol', 'server')).toEqual({ name: 'carol' })
+  })
+
   it('leaves non-user array fields as raw strings', () => {
     const arrayField = field({ schema: { type: 'array', items: 'string' } })
     expect(buildJiraCreateFieldValue(arrayField, 'a, b', 'cloud')).toEqual(['a', 'b'])
