@@ -5,7 +5,7 @@ import {
   reconcileSelectionKeys,
   reconcileSourceControlSelectionState,
   type FlatEntry
-} from './useSourceControlSelection'
+} from './source-control/listing/use-selection'
 
 function makeEntry(
   key: string,

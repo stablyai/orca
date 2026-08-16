@@ -30,7 +30,7 @@ import {
 } from './terminal-history-recovery-quarantine'
 import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 import type { HistoryReader } from './history-reader'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'

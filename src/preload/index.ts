@@ -165,33 +165,35 @@ import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace
 import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugResult,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefResult
+} from '../shared/github/project-result-types'
+import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
   GetProjectViewTableArgs,
-  GetProjectViewTableResult,
-  GitHubProjectCommentMutationResult,
-  GitHubProjectMutationResult,
   ListAccessibleProjectsArgs,
-  ListAccessibleProjectsResult,
   ListAssignableUsersBySlugArgs,
-  ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugArgs,
-  ListIssueTypesBySlugResult,
   ListLabelsBySlugArgs,
-  ListLabelsBySlugResult,
   ListProjectViewsArgs,
-  ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugArgs,
-  ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefArgs,
-  ResolveProjectRefResult,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../shared/github/project-types'
+} from '../shared/github/project-request-types'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,

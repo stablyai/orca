@@ -71,7 +71,7 @@ import {
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
+import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,

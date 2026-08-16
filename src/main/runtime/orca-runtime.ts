@@ -889,7 +889,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-types'
+} from '../../shared/github/project-request-types'
 import {
   getBaseRefDefault,
   getDefaultRemote,
@@ -923,23 +923,24 @@ import {
   removeWorktree
 } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { isENOENT, invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import {
-  createSetupRunnerScript,
-  getDefaultTabCommandTrustContent,
-  getDefaultTabsLaunch,
   getEffectiveHooks,
-  getEffectiveSetupRunPolicy,
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
   parseOrcaYaml,
-  readIssueCommand,
-  resolveSetupRunnerShell,
-  runHook,
-  shouldRunSetupForCreate,
-  writeIssueCommand
+  runHook
 } from '../hooks'
+import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import {
+  getDefaultTabCommandTrustContent,
+  getDefaultTabsLaunch,
+  getEffectiveSetupRunPolicy,
+  shouldRunSetupForCreate
+} from '../effective-hook-config'
+import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -1880,7 +1881,7 @@ const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_QUIET_MS = 1500
-// Why: Claude and Codex emit show-cursor while rendering pasted composer content.
+// Why: Claude and Codex emit show-cursor after accepting bracketed paste.
 const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
@@ -17694,11 +17695,11 @@ export class OrcaRuntimeService {
   } | null {
     const pty = this.ptysById.get(ptyId)
     const agent = pty?.launchAgent ?? pty?.foregroundAgent
-    if (agent !== 'claude' && agent !== 'codex') {
+    if (!isTerminalSendSettlementAgent(agent)) {
       return null
     }
     let armed = false
-    let observedMarker = false
+    let canSettle = false
     let settled = false
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
@@ -17739,13 +17740,13 @@ export class OrcaRuntimeService {
       if (!armed || settled) {
         return
       }
-      if (!observedMarker) {
+      if (!canSettle) {
         const combined = markerCarry + data
         markerCarry = combined.slice(-(AGENT_PROMPT_RENDER_MARKER.length - 1))
         if (!combined.includes(AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
-        observedMarker = true
+        canSettle = true
         // Why: a slow initial redraw must still receive the full settlement window.
         armHardTimer()
       }
@@ -17755,13 +17756,11 @@ export class OrcaRuntimeService {
       arm: () => {
         armed = true
         markerCarry = ''
+        armHardTimer()
       },
       wait: async () => {
         if (settled) {
           return
-        }
-        if (!hardTimer) {
-          armHardTimer()
         }
         await rendered
       },
@@ -32413,12 +32412,15 @@ export class OrcaRuntimeService {
   }
 
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
-  async isTerminalRunningAgent(handle: string): Promise<boolean> {
+  async isTerminalRunningAgent(
+    handle: string,
+    options: { retryForegroundWrappers?: boolean } = {}
+  ): Promise<boolean> {
     try {
       const pty = this.getLivePtyForHandle(handle)
       if (pty) {
         const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
-        return await this.isPtyRunningAgent(pty.pty, leaf)
+        return await this.isPtyRunningAgent(pty.pty, leaf, options)
       }
       const { leaf } = this.getLiveLeafForHandle(handle)
       const trackedPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : null
@@ -32469,8 +32471,33 @@ export class OrcaRuntimeService {
       }
       // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
       return await this.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
-        suppressClaude: shouldSuppressClaudeForeground
+        suppressClaude: shouldSuppressClaudeForeground,
+        retryWrappers: options.retryForegroundWrappers !== false
       })
+    } catch {
+      return false
+    }
+  }
+
+  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+    try {
+      const livePty = this.getLivePtyForHandle(handle)
+      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
+      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
+      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
+      if (!ptyId || !trackedPty || !this.ptyController) {
+        return false
+      }
+      const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
+      const recognizedAgent = recognized?.agent
+      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
+        return false
+      }
+      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
+        return false
+      }
+      trackedPty.foregroundAgent = recognizedAgent
+      return true
     } catch {
       return false
     }
@@ -32478,7 +32505,8 @@ export class OrcaRuntimeService {
 
   private async isPtyRunningAgent(
     pty: RuntimePtyWorktreeRecord,
-    leaf: RuntimeLeafRecord | null = null
+    leaf: RuntimeLeafRecord | null = null,
+    options: { retryForegroundWrappers?: boolean } = {}
   ): Promise<boolean> {
     const leafTitle = leaf
       ? getLatestAgentCandidateTitle(
@@ -32537,14 +32565,15 @@ export class OrcaRuntimeService {
     }
     // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
     return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
-      suppressClaude: shouldSuppressClaudeForeground
+      suppressClaude: shouldSuppressClaudeForeground,
+      retryWrappers: options.retryForegroundWrappers !== false
     })
   }
 
   private async isRecognizedForegroundAgentProcess(
     ptyId: string,
     foregroundProcess: string,
-    options: { suppressClaude?: boolean } = {}
+    options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
   ): Promise<boolean> {
     const initialRecognition = recognizeAgentProcess(foregroundProcess)
     if (initialRecognition !== null) {
@@ -32553,7 +32582,11 @@ export class OrcaRuntimeService {
         isExpectedAgentProcess(initialRecognition.processName, 'claude')
       )
     }
-    if (!this.isAgentWrapperForegroundProcess(foregroundProcess) || !this.ptyController) {
+    if (
+      options.retryWrappers === false ||
+      !this.isAgentWrapperForegroundProcess(foregroundProcess) ||
+      !this.ptyController
+    ) {
       return false
     }
     const startedAt = Date.now()
@@ -38356,6 +38389,12 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
     return 'management'
   }
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+}
+
+function isTerminalSendSettlementAgent(
+  agent: TuiAgent | null | undefined
+): agent is 'claude' | 'codex' {
+  return agent === 'claude' || agent === 'codex'
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {

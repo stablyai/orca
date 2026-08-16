@@ -29,13 +29,12 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
+import { getMarkerlessShellLaunchConfig, getShellReadyLaunchConfig } from './local-pty-shell-ready'
 import {
-  getMarkerlessShellLaunchConfig,
-  getShellReadyLaunchConfig,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
-} from './local-pty-shell-ready'
-import type { ShellReadySignal } from './local-pty-shell-ready'
+} from './local-pty-shell-ready-startup-command'
+import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'

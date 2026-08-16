@@ -4,7 +4,7 @@ import {
   canDiscardStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry
-} from './source-control-entry-actions'
+} from './source-control/listing/entry-actions'
 
 function entry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
   return {

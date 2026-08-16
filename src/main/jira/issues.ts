@@ -21,16 +21,9 @@ import type {
   JiraTransition,
   JiraUser
 } from '../../shared/jira-types'
-import {
-  acquire,
-  apiBasePath,
-  clearToken,
-  getClients,
-  isAuthError,
-  jiraRequest,
-  release,
-  type JiraClientForSite
-} from './client'
+import { acquire, release } from './request-queue'
+import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
+import { clearToken, getClients, isAuthError } from './client'
 import {
   adfToMarkdownText,
   collectAdfMediaAttrs,

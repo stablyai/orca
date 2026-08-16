@@ -17,7 +17,7 @@ import {
   startDaemonStreamBacklogProbe
 } from './daemon-stream-backlog-probe'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
