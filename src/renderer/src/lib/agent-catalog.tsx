@@ -207,6 +207,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/autohandai/code-cli'
   },
   {
+    id: 'bob',
+    label: translate('auto.lib.agent.catalog.ibm_bob_label', 'IBM Bob'),
+    cmd: 'bob',
+    faviconDomain: 'bob.ibm.com',
+    homepageUrl: 'https://bob.ibm.com/docs/shell/getting-started/bobshell-examples'
+  },
+  {
     id: 'cline',
     label: translate('auto.lib.agent.catalog.cbaf0c2e0b', 'Cline'),
     cmd: 'cline',

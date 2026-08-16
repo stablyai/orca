@@ -82,6 +82,95 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcess('cmd.exe')).toBeNull()
   })
 
+  it('recognizes IBM Bob across platform-specific process paths', () => {
+    expect(recognizeAgentProcess('/usr/local/bin/bob')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\bob.cmd`)).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/bob', 'bob')).toBe(true)
+    expect(isRecognizedAgentType('bob')).toBe(true)
+  })
+
+  it('does not recognize IBM Bob one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('bob -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob -psummarize')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --prompt "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --prompt=review')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --model granite "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --prompt-interactive "review this"')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob -i "review this"')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob --resume latest')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+  })
+
+  it('does not read IBM Bob option values as positional prompts', () => {
+    // Why: --auth-method and --extensions take values but are hidden from `bob --help`.
+    expect(recognizeAgentProcessFromCommandLine('bob --auth-method api-key')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob -e review-tools')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('bob --auth-method=api-key "review this"')
+    ).toBeNull()
+  })
+
+  it('keeps the IBM Bob yolo launch line recognized as an interactive agent', () => {
+    // Why: yolo mode prefixes --yolo before the prompt flag Orca appends.
+    expect(
+      recognizeAgentProcessFromCommandLine('bob --yolo --prompt-interactive "fix it"')
+    ).toEqual({ agent: 'bob', processName: 'bob' })
+  })
+
+  it('treats IBM Bob management subcommands and post-terminator prompts as one-shot', () => {
+    expect(recognizeAgentProcessFromCommandLine('bob mcp list')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob extensions list')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob -- --prompt-interactive')).toBeNull()
+  })
+
+  it('filters wrapped IBM Bob one-shot commands without dropping interactive shells', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/bob review')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\Users\dev\AppData\Roaming\npm\bob.cmd --prompt review`
+      )
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\Users\dev\AppData\Roaming\npm\bob.cmd --prompt-interactive review`
+      )
+    ).toEqual({ agent: 'bob', processName: 'bob' })
+    // Why: the npm install runs the bundle directly, so the script path is the only bob token.
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /Users/dev/.nvm/versions/node/v25.7.0/lib/node_modules/bobshell/bundle/bob.js --prompt-interactive review'
+      )
+    ).toEqual({ agent: 'bob', processName: 'bob' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /Users/dev/.nvm/versions/node/v25.7.0/lib/node_modules/bobshell/bundle/bob.js review'
+      )
+    ).toBeNull()
+  })
+
   it('recognizes Ante without classifying ante-prefixed path fragments as the agent', () => {
     expect(recognizeAgentProcess('ante')).toEqual({
       agent: 'ante',
