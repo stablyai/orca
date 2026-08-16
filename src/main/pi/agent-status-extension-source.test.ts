@@ -826,10 +826,47 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps reporting Pi-compatible agents once their agent_end handlers settle', async () => {
+  it.each([
+    ['configured OMP', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])('keeps %s working when agent_end will continue', async (_name, args) => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+      const harness = createHarness(args)
+      const context = { isIdle: vi.fn(() => true) }
+
+      await harness.callHook('agent_end', { willContinue: true }, context)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(harness.fetchMock).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['configured OMP', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])('settles final %s agent_end without waiting for ctx.isIdle', async (_name, args) => {
+    for (const event of [{ willContinue: false }, {}]) {
+      const harness = createHarness(args)
+      const context = { isIdle: vi.fn(() => false) }
+
+      await harness.callHook('agent_end', event, context)
+
+      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+        hook_event_name: 'agent_end'
+      })
+      expect(context.isIdle).not.toHaveBeenCalled()
+    }
+  })
+
+  it('keeps polling Pi and Prime until their agent_end handlers settle', async () => {
+    vi.useFakeTimers()
+    try {
+      for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
