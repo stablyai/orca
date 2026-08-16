@@ -496,6 +496,44 @@ describe('fetchCodexRateLimits', () => {
     })
   })
 
+  it('maps the RPC credits object into a Codex credit-count balance', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 20, windowDurationMins: 10079 },
+      secondary: null,
+      credits: { hasCredits: true, unlimited: false, balance: '500' }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.extraUsage).toMatchObject({
+      balance: 500,
+      unit: 'credits',
+      unlimited: false,
+      enabled: true
+    })
+  })
+
+  it('omits the Codex balance when the account has no credits', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 20, windowDurationMins: 10079 },
+      credits: { hasCredits: false, unlimited: false, balance: '0' }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.extraUsage ?? null).toBeNull()
+  })
+
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)

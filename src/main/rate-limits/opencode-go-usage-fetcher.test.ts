@@ -302,6 +302,31 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.monthly).toBeNull()
   })
 
+  it.each([
+    ['!0', true, null],
+    ['!1', false, 'not_enabled']
+  ])(
+    'maps useBalance %s to spendability on the billing balance',
+    async (wireValue, enabled, disabledReason) => {
+      const page = `
+        $R[20]={useBalance:${wireValue},rollingUsage:$R[21]={resetInSec:3600,usagePercent:100},weeklyUsage:$R[22]={resetInSec:86400,usagePercent:20}};
+        $R[30]={customerID:null,balance:1250000000,reload:!1,reloadAmount:2000000000};
+      `
+      netFetchMock
+        .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
+        .mockResolvedValueOnce(makeResponse(page))
+
+      const result = await fetchOpenCodeGoRateLimits('auth=token')
+
+      expect(result.extraUsage).toMatchObject({
+        balance: 12.5,
+        unit: 'currency',
+        enabled,
+        disabledReason
+      })
+    }
+  )
+
   it('caps usedPercent at 100 and floors at 0', async () => {
     const page = `
       rollingUsage: { usagePercent: 150, resetInSec: 3600 }

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: keep Codex RPC and PTY fallback paths together to audit protocol/parsing differences and shared account-scoped env handling. */
 import type {
   CodexRateLimitResetOutcome,
+  ExtraUsageBalance,
   ProviderRateLimits,
   RateLimitWindow
 } from '../../shared/rate-limit-types'
@@ -92,6 +93,10 @@ type RateLimitResetCredits = {
     grantedAt: number | null
   }[]
 }
+
+// Codex's pay-as-you-go credit balance, reported alongside the rate windows.
+// `balance` is a plain credit count (string), not a currency amount.
+type RpcCredits = NonNullable<CodexRateLimitWindowsSnapshot['credits']>
 
 // Why: the Codex app-server wraps rate limit data as { rateLimits: { primary, secondary, ... } }.
 type RpcRateLimitsResponse = {
@@ -506,6 +511,25 @@ function mapRpcWindow(
   }
 }
 
+// Codex credits are a unitless count, not currency. Only surface the balance
+// when the account actually has credits (or unlimited) so accounts that never
+// bought any don't get an empty "0 credits" row.
+function mapCodexCredits(raw: RpcCredits | null | undefined): ExtraUsageBalance | null {
+  if (!raw || (raw.hasCredits !== true && raw.unlimited !== true)) {
+    return null
+  }
+  const parsed = typeof raw.balance === 'string' ? Number(raw.balance) : raw.balance
+  const balance = typeof parsed === 'number' && Number.isFinite(parsed) ? Math.max(0, parsed) : 0
+  return {
+    balance,
+    unit: 'credits',
+    unlimited: raw.unlimited === true,
+    enabled: raw.hasCredits === true || raw.unlimited === true,
+    disabledReason: null,
+    resetsAt: null
+  }
+}
+
 function backendWindowToSnapshot(
   raw: BackendRateLimitWindow | null | undefined
 ): CodexRateWindowSnapshot | null {
@@ -809,6 +833,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )
+            const extraUsage = mapCodexCredits(result?.credits)
 
             settle(
               {
@@ -816,6 +841,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                 session,
                 weekly,
                 ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
+                ...(extraUsage ? { extraUsage } : {}),
                 updatedAt: Date.now(),
                 error: null,
                 status: 'ok'

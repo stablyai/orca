@@ -3283,7 +3283,10 @@
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
             "grokUsageMenu": "Grok 使用情况",
-            "floatingTerminalNewActivity": "{{label}}，有新活动"
+            "floatingTerminalNewActivity": "{{label}}，有新活动",
+            "4fba7dc1e7": "余额",
+            "4025a6f62f": "Unlimited",
+            "a95969101f": "credits"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3446,7 +3449,15 @@
             "e2c6a4f917": "运行 Grok 以刷新",
             "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动。如有提示，请完成登录，然后重试用量检查。您无需发送聊天消息。",
             "f90b3d7a16": "运行 Kimi 以刷新",
-            "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查。"
+            "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查。",
+            "fbc80d8be2": "Zen balance",
+            "c03c61f53f": "Balance",
+            "f6a27a3c0a": "{{value0}} available",
+            "7404abbece": "Usage credits",
+            "473d45cd0f": "Balance {{value0}}",
+            "f21b2ba897": "Credits",
+            "56c0d70577": "Unlimited",
+            "87b5bda4d3": "{{value0}} credits available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"

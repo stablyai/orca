@@ -1,13 +1,17 @@
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ExtraUsageBalance,
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../shared/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,
   OPENCODE_BASE_URL
 } from './opencode-go-request-session'
-import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
+import { parseSubscriptionFromPageText, parseZenBalanceUsd } from './opencode-go-page-scraper'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 15_000
@@ -71,6 +75,28 @@ function parseWorkspaceIds(text: string): string[] {
     }
   }
   return ids
+}
+
+// The Zen balance is pay-as-you-go credit with no cap or reset — represent it
+// as an uncapped balance (only `balance` set) so the UI shows a plain amount.
+function makeZenBalance(
+  balanceUsd: number | null,
+  useBalance: boolean | null
+): ExtraUsageBalance | null {
+  if (balanceUsd === null) {
+    return null
+  }
+  return {
+    balance: Math.max(0, balanceUsd),
+    unit: 'currency',
+    currencyCode: 'USD',
+    enabled: useBalance === true,
+    disabledReason: useBalance === true ? null : useBalance === false ? 'not_enabled' : 'unknown',
+    spent: null,
+    spendLimit: null,
+    spentPercent: null,
+    resetsAt: null
+  }
 }
 
 function makeWindow(
@@ -264,6 +290,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
           session: makeWindow(parsed.rollingUsagePercent, parsed.rollingResetInSec, 300),
           weekly: makeWindow(parsed.weeklyUsagePercent, parsed.weeklyResetInSec, 10080),
           monthly,
+          extraUsage: makeZenBalance(parseZenBalanceUsd(pageText), parsed.useBalance),
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
