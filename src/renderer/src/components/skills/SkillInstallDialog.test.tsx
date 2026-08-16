@@ -503,7 +503,7 @@ describe('SkillInstallDialog', () => {
 
     await screen.findByText('Skills installed and verified.')
     expect(skills.installBundleShare).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedSkillIds: ['skill-beta'] })
+      expect.objectContaining({ selectedSkillIds: ['skill-beta'], versionId: 'ver_1' })
     )
   })
 

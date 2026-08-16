@@ -3139,8 +3139,6 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelShare: () => Promise.resolve(),
     releaseShare: () => Promise.resolve(),
     resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
-    createDownloadGrant: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
     installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
     installBundleShare: () =>
       Promise.reject(new Error('Skill installation requires the desktop app.')),

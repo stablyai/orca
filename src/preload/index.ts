@@ -132,7 +132,6 @@ import type {
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
-  SkillCloudDownloadGrant,
   SkillCloudOwnedShare,
   SkillCloudOperation,
   SkillCloudPackageDetails
@@ -2584,8 +2583,6 @@ const api = {
       ipcRenderer.invoke('skills:releaseShare', preparationId),
     resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
       ipcRenderer.invoke('skills:resolveShare', shareId),
-    createDownloadGrant: (shareId: string): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> =>
-      ipcRenderer.invoke('skills:createDownloadGrant', shareId),
     installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
       ipcRenderer.invoke('skills:installShare', input),
     installBundleShare: (

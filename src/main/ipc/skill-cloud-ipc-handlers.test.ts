@@ -4,11 +4,13 @@ const {
   classifyInstallTargetMock,
   createDownloadGrantMock,
   handlers,
+  installSkillCloudGrantMock,
   registerInstallManagementMock
 } = vi.hoisted(() => ({
   classifyInstallTargetMock: vi.fn(),
   createDownloadGrantMock: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
+  installSkillCloudGrantMock: vi.fn(),
   registerInstallManagementMock: vi.fn()
 }))
 
@@ -33,7 +35,7 @@ vi.mock('../skills/skill-runtime-capability', () => ({
 }))
 vi.mock('../skills/skill-cloud-grant-installation', () => ({
   installSkillBundleCloudGrant: vi.fn(),
-  installSkillCloudGrant: vi.fn()
+  installSkillCloudGrant: installSkillCloudGrantMock
 }))
 vi.mock('./skill-install-progress-ipc', () => ({
   sendBundleInstallProgress: vi.fn(),
@@ -52,6 +54,7 @@ describe('skill cloud IPC', () => {
       message: 'not configured'
     })
     registerInstallManagementMock.mockReset()
+    installSkillCloudGrantMock.mockReset()
   })
 
   it('requests a grant for the exact reviewed share version', async () => {
@@ -74,5 +77,28 @@ describe('skill cloud IPC', () => {
       versionId: 'version-reviewed',
       installTarget: 'local'
     })
+  })
+
+  it('rejects a grant for a different version before installation', async () => {
+    createDownloadGrantMock.mockResolvedValue({
+      status: 'ok',
+      value: { version: { versionId: 'version-latest' } }
+    })
+    const runtime = { createSkillDownloadGrant: createDownloadGrantMock }
+    registerSkillCloudIpcHandlers(runtime as never, vi.fn())
+    const installShare = handlers.get('skills:installShare')
+
+    await expect(
+      installShare!(
+        { sender: {} },
+        {
+          shareId: 'share-1',
+          versionId: 'version-reviewed',
+          operationId: 'operation-1',
+          destination: { scope: 'global' }
+        }
+      )
+    ).rejects.toThrow('skill-package-version-mismatch')
+    expect(installSkillCloudGrantMock).not.toHaveBeenCalled()
   })
 })

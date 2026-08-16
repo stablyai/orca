@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
-import { SkillDiscoveryTargetSchema, type SkillDiscoveryResult } from '../../shared/skills'
+import type { SkillDiscoveryResult, SkillDiscoveryTargetSchema } from '../../shared/skills'
 import type { SkillCloudDownloadGrant } from '../../shared/skill-cloud-contract'
 import type { SkillBundleInstallProgress } from '../../shared/skill-bundle-install-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -13,6 +13,7 @@ import {
 } from '../skills/skill-cloud-grant-installation'
 import { SkillRemoteInstallCancellation } from '../skills/skill-remote-install-cancellation'
 import { classifySkillCloudInstallTarget } from '../skills/skill-cloud-install-target'
+import { assertSkillCloudGrantVersion } from '../skills/skill-cloud-grant-version'
 import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
 import {
   supportsSkillRuntimeBundleInstall,
@@ -30,22 +31,10 @@ import {
   skillCloudPackageVersionInstallSchema,
   skillCloudShareInstallSchema
 } from './skill-cloud-install-ipc-schemas'
-
-const sharePrepareSchema = z
-  .object({
-    skillIds: z.array(z.string().min(1).max(4096)).min(1).max(512),
-    bundleName: z.string().regex(/^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$/),
-    target: SkillDiscoveryTargetSchema.optional(),
-    packageId: z.string().min(1).max(128).optional()
-  })
-  .strict()
-
-const sharePublishSchema = z
-  .object({
-    preparationId: z.string().uuid(),
-    releaseNotes: z.string().max(10_000)
-  })
-  .strict()
+import {
+  skillSharePrepareIpcSchema,
+  skillSharePublishIpcSchema
+} from './skill-share-publishing-ipc-schemas'
 
 const packageVersionSchema = z
   .object({
@@ -66,7 +55,7 @@ function registerSharingHandlers(
     }
   )
   handleMainWindowSkillIpc('skills:prepareShare', async (_event, value: unknown) => {
-    const input = sharePrepareSchema.parse(value)
+    const input = skillSharePrepareIpcSchema.parse(value)
     const result = await discover(input.target)
     const requested = new Set(input.skillIds)
     const skills = result.skills.filter((candidate) => requested.has(candidate.id))
@@ -82,7 +71,7 @@ function registerSharingHandlers(
     })
   })
   handleMainWindowSkillIpc('skills:publishShare', async (_event, value: unknown) => {
-    const input = sharePublishSchema.parse(value)
+    const input = skillSharePublishIpcSchema.parse(value)
     return preparations.publish(input, (progress) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {
@@ -157,9 +146,6 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
   handleMainWindowSkillIpc('skills:resolveShare', (_event, shareId: unknown) =>
     runtime.resolveSkillShare(z.string().min(1).max(128).parse(shareId), {})
   )
-  handleMainWindowSkillIpc('skills:createDownloadGrant', (_event, shareId: unknown) =>
-    runtime.createSkillDownloadGrant(z.string().min(1).max(128).parse(shareId), {})
-  )
   handleMainWindowSkillIpc('skills:installShare', async (event, value: unknown) => {
     const parsed = skillCloudShareInstallSchema.parse(value)
     const input = { ...parsed, operationId: parsed.operationId ?? randomUUID() }
@@ -176,6 +162,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       installTarget
     })
     if (grant.status === 'ok') {
+      assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
     }
     return grant.status === 'ok' ? installAuthorizedGrant(grant.value, input) : grant
@@ -197,6 +184,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       installTarget
     })
     if (grant.status === 'ok') {
+      assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
     }
     return grant.status === 'ok'
@@ -222,6 +210,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       { installTarget }
     )
     if (grant.status === 'ok') {
+      assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
     }
     return grant.status === 'ok' ? installAuthorizedGrant(grant.value, input) : grant
@@ -244,6 +233,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       { installTarget }
     )
     if (grant.status === 'ok') {
+      assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
     }
     return grant.status === 'ok'

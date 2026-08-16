@@ -1,25 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, isTrustedUIRendererMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  isTrustedUIRendererMock: vi.fn()
+const { getTrustedUIRendererWebContentsMock, handleMock } = vi.hoisted(() => ({
+  getTrustedUIRendererWebContentsMock: vi.fn(),
+  handleMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
-vi.mock('./ui', () => ({ isTrustedUIRenderer: isTrustedUIRendererMock }))
+vi.mock('./ui', () => ({
+  getTrustedUIRendererWebContents: getTrustedUIRendererWebContentsMock
+}))
 
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
 describe('main-window skill IPC', () => {
   beforeEach(() => {
     handleMock.mockReset()
-    isTrustedUIRendererMock.mockReset()
+    getTrustedUIRendererWebContentsMock.mockReset()
   })
 
   it('allows the trusted main renderer', () => {
     const listener = vi.fn(() => 'ok')
     const sender = { id: 1 }
-    isTrustedUIRendererMock.mockImplementation((candidate) => candidate === sender)
+    getTrustedUIRendererWebContentsMock.mockReturnValue(sender)
     handleMainWindowSkillIpc('skills:test', listener)
 
     const handler = handleMock.mock.calls[0][1]
@@ -29,10 +31,11 @@ describe('main-window skill IPC', () => {
 
   it.each([
     ['dashboard pop-out', { id: 2 }],
-    ['stale renderer', { id: 3 }]
+    ['stale renderer', { id: 3 }],
+    ['missing main window', { id: 4 }]
   ])('rejects the %s before invoking skill code', (_label, sender) => {
     const listener = vi.fn()
-    isTrustedUIRendererMock.mockReturnValue(false)
+    getTrustedUIRendererWebContentsMock.mockReturnValue(null)
     handleMainWindowSkillIpc('skills:test', listener)
 
     const handler = handleMock.mock.calls[0][1]
