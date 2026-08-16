@@ -1,5 +1,9 @@
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -34,10 +38,18 @@ function resolveWorkspaceCwd(state: NativeChatSkillStateInputs, worktreeId: stri
   return null
 }
 
+/** The host that runs this workspace's agents — where the panel reads. */
+export function resolveWorkspaceExecutionHostId(
+  state: NativeChatSkillStateInputs,
+  worktreeId: string | null
+): ExecutionHostId {
+  return worktreeId ? getExecutionHostIdForWorktree(state, worktreeId) : LOCAL_EXECUTION_HOST_ID
+}
+
 /**
- * Which host runs this workspace's agents, and therefore where its context is
- * read — the same rule native chat applies to skill discovery, minus the pane:
- * SSH workspaces are inspected nowhere (the client cannot read that disk), an
+ * Where a workspace's context is read: on the host that runs its agents — the
+ * same rule native chat applies to skill discovery, minus the pane. SSH
+ * workspaces are inspected nowhere (the client cannot read that disk), an
  * environment-owned workspace resolves on its runtime, everything else here.
  */
 export function resolveWorkspaceContextTarget(
@@ -51,11 +63,11 @@ export function resolveWorkspaceContextTarget(
   if (!cwd) {
     return null
   }
-  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
-  const parsedHost = parseExecutionHostId(hostId)
+  const workspaceHostId = resolveWorkspaceExecutionHostId(state, worktreeId)
+  const parsedHost = parseExecutionHostId(workspaceHostId)
   if (parsedHost?.kind === 'ssh') {
     return {
-      key: JSON.stringify(['ssh', hostId, cwd]),
+      key: JSON.stringify(['ssh', parsedHost.id, cwd]),
       cwd,
       executionHostKind: 'ssh',
       runtimeTarget: { kind: 'local' },
@@ -80,7 +92,7 @@ export function resolveWorkspaceContextTarget(
     key: JSON.stringify([
       runtimeTarget.kind,
       runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null,
-      hostId,
+      workspaceHostId,
       projectRuntimeKey ?? null,
       cwd
     ]),

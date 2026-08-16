@@ -14916,7 +14916,6 @@
         },
         "WorkspaceContextPanel": {
           "noWorkspace": "Select a workspace to see the context its agents load.",
-          "hostLocal": "This host",
           "title": "Agent context",
           "refresh": "Refresh",
           "showMissing": "Show locations that were checked but empty",
@@ -14935,7 +14934,7 @@
           "noHooksInFile": "No hooks",
           "noHooks": "No agent hooks configured.",
           "plugins": "Plugins",
-          "noPlugins": "No plugin settings found.",
+          "noPlugins": "No enabled plugins found.",
           "enabled": "enabled",
           "disabled": "disabled",
           "scopeProject": "Workspace",
@@ -14944,14 +14943,17 @@
           "filterAll": "All",
           "filterMcp": "MCP",
           "filterLabel": "Filter sections",
-          "allAgents": "All agents",
-          "clearAgentFilter": "Show all agents",
           "scopeAriaLabel": "Agent context scope",
           "viewOptions": "Agent context view options",
           "agents": "Agents",
           "selectAllAgents": "Select all",
           "clearAgents": "Clear",
-          "resetView": "Reset view"
+          "resetView": "Reset view",
+          "unavailableSsh": "Agent context is not available for SSH workspaces yet.",
+          "unavailableRuntime": "Waiting for the runtime that owns this workspace.",
+          "hiddenByFilter": "Hidden by the current filter.",
+          "hostWsl": "{{value0}} · WSL {{value1}}",
+          "hostTitle": "Read on the host that runs this workspace"
         }
       },
       "link": {

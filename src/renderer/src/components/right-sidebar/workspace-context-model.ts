@@ -172,14 +172,6 @@ export function selectSkillsForAgents(
 
 type ReportRow = { agents: AgentType[]; scope: AgentContextScope }
 
-/** Every row of every kind, in one list, for filters and rollups that treat them alike. */
-function reportRows(report: AgentContextReport | null): ReportRow[] {
-  if (!report) {
-    return []
-  }
-  return [...report.instructionFiles, ...report.mcpFiles, ...report.hookFiles, ...report.plugins]
-}
-
 function filterReportRows(
   report: AgentContextReport,
   keep: (row: ReportRow) => boolean
@@ -240,14 +232,27 @@ export function selectSkillsForScope(
   return skills.filter((skill) => (skill.sourceKind === 'repo') === wantRepo)
 }
 
-/** Every agent that reads at least one row or owns at least one skill root here. */
+/** Rows that actually load something — a checked-but-empty location counts for nobody. */
+function presentReportRows(report: AgentContextReport | null): ReportRow[] {
+  if (!report) {
+    return []
+  }
+  return [
+    ...report.instructionFiles.filter((file) => file.exists),
+    ...report.mcpFiles.filter((file) => file.inspection.exists),
+    ...report.hookFiles.filter((file) => file.hookCount > 0),
+    ...report.plugins.filter((plugin) => plugin.enabled)
+  ]
+}
+
+/** Every agent that loads at least one row or owns at least one skill root here. */
 export function agentsInContext(
   report: AgentContextReport | null,
   skills: readonly DiscoveredSkill[],
   sources: readonly SkillDiscoverySource[]
 ): AgentType[] {
   const agents = new Set<AgentType>()
-  for (const row of reportRows(report)) {
+  for (const row of presentReportRows(report)) {
     for (const agent of row.agents) {
       agents.add(agent)
     }

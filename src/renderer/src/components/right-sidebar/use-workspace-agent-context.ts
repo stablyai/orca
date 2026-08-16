@@ -2,13 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { AgentContextReport } from '../../../../shared/agent-context'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { selectNativeChatSkillStateInputs } from '@/components/native-chat/native-chat-skill-discovery-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { inspectAgentContextForRuntimeTarget } from '@/runtime/runtime-agent-context-client'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { resolveWorkspaceContextTarget } from './workspace-context-target'
+import {
+  resolveWorkspaceContextTarget,
+  resolveWorkspaceExecutionHostId
+} from './workspace-context-target'
 
 /** Why the panel has nothing to show even though a workspace is active. */
 export type WorkspaceAgentContextUnavailable = 'ssh' | 'runtime-unresolved'
@@ -16,6 +20,8 @@ export type WorkspaceAgentContextUnavailable = 'ssh' | 'runtime-unresolved'
 export type WorkspaceAgentContextState = {
   worktreeId: string | null
   worktreePath: string | null
+  /** The host that runs the workspace's agents, where the report is read. */
+  hostId: ExecutionHostId
   unavailable: WorkspaceAgentContextUnavailable | null
   report: AgentContextReport | null
   loading: boolean
@@ -40,6 +46,10 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
   const worktree = useActiveWorktree()
   const worktreeId = worktree?.id ?? null
   const inputs = useAppStore(useShallow(selectNativeChatSkillStateInputs))
+  const hostId = useMemo(
+    () => resolveWorkspaceExecutionHostId(inputs, worktreeId),
+    [inputs, worktreeId]
+  )
   const target = useMemo(
     () => resolveWorkspaceContextTarget(inputs, worktreeId),
     [inputs, worktreeId]
@@ -124,6 +134,7 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
   return {
     worktreeId,
     worktreePath: target?.cwd ?? worktree?.path ?? null,
+    hostId,
     unavailable,
     report: current(keyedReport, targetKey),
     loading,

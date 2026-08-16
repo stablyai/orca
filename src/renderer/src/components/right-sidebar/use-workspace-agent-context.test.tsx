@@ -5,6 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentContextReport } from '../../../../shared/agent-context'
 
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
 const testState = vi.hoisted(() => ({
   worktree: null as null | { id: string; path: string },
   hostKind: 'local' as 'local' | 'runtime' | 'ssh' | 'unresolved',
@@ -19,6 +23,7 @@ vi.mock('@/components/native-chat/native-chat-skill-discovery-context', () => ({
   selectNativeChatSkillStateInputs: (state: unknown) => state
 }))
 vi.mock('./workspace-context-target', () => ({
+  resolveWorkspaceExecutionHostId: () => 'local',
   resolveWorkspaceContextTarget: (_state: unknown, worktreeId: string | null) => {
     if (!worktreeId || !testState.worktree || testState.hostKind === 'unresolved') {
       return null

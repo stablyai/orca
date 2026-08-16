@@ -7,3 +7,7 @@ export const SIDEBAR_SCOPE_TOGGLE_ITEM_CLASS = `h-7 min-h-7 min-w-0 flex-1 basis
 
 export const SIDEBAR_SCOPE_TOGGLE_GROUP_CLASS =
   'h-7 w-full rounded-md border border-sidebar-border bg-sidebar-accent/35 shadow-xs'
+
+/** "Select all" / "Clear" pills inside a right-sidebar view menu's agent list. */
+export const SIDEBAR_AGENT_BULK_ACTION_CLASS =
+  'rounded-full px-2 py-0.5 text-[11px] font-normal text-muted-foreground focus:text-foreground'

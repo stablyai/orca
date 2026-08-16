@@ -15,9 +15,15 @@ import {
   selectWorkspaceSkills
 } from './workspace-context-model'
 
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
 const testState = vi.hoisted(() => ({
   worktree: null as null | { id: string; path: string; branch: string },
   context: {
+    hostId: 'local' as string,
+    unavailable: null as null | 'ssh' | 'runtime-unresolved',
     report: null as AgentContextReport | null,
     loading: false,
     error: null as string | null,
@@ -30,11 +36,17 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: <T,>(selector: (state: { openFile: (file: unknown) => void }) => T): T =>
+  useAppStore: <T,>(
+    selector: (state: {
+      openFile: (file: unknown) => void
+      runtimeEnvironments: { id: string; name: string }[]
+    }) => T
+  ): T =>
     selector({
       openFile: (file) => {
         testState.openFile.push(file as { filePath: string; relativePath: string })
-      }
+      },
+      runtimeEnvironments: [{ id: 'env-1', name: 'Build box' }]
     })
 }))
 vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => testState.worktree }))
@@ -67,14 +79,14 @@ vi.mock('./workspace-context-controls', () => ({
   ),
   ContextViewMenu: ({
     agentOptions,
-    agents,
+    disabledAgents,
     showMissing,
     onAgentEnabledChange,
     onAllAgentsEnabledChange,
     onShowMissingChange
   }: {
     agentOptions: readonly string[]
-    agents: readonly string[] | null
+    disabledAgents: readonly string[]
     showMissing: boolean
     onAgentEnabledChange: (agent: string, enabled: boolean) => void
     onAllAgentsEnabledChange: (enabled: boolean) => void
@@ -86,8 +98,8 @@ vi.mock('./workspace-context-controls', () => ({
           key={agent}
           type="button"
           data-testid={`agent-${agent}`}
-          aria-pressed={agents === null || agents.includes(agent)}
-          onClick={() => onAgentEnabledChange(agent, !(agents === null || agents.includes(agent)))}
+          aria-pressed={!disabledAgents.includes(agent)}
+          onClick={() => onAgentEnabledChange(agent, disabledAgents.includes(agent))}
         >
           {agent}
         </button>
@@ -115,7 +127,9 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-    values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
+    values
+      ? fallback.replace(/\{\{(value\d)\}\}/g, (_match, name: string) => String(values[name]))
+      : fallback
 }))
 
 import WorkspaceContextPanel from './WorkspaceContextPanel'
@@ -153,6 +167,16 @@ function report(overrides: Partial<AgentContextReport> = {}): AgentContextReport
         exists: false,
         sizeBytes: null,
         updatedAt: null
+      },
+      {
+        id: 'home-gemini-md',
+        label: 'GEMINI.md',
+        path: '/home/u/.gemini/GEMINI.md',
+        scope: 'home',
+        agents: ['gemini'],
+        exists: true,
+        sizeBytes: 40,
+        updatedAt: 1
       }
     ],
     mcpFiles: [
@@ -199,8 +223,12 @@ describe('WorkspaceContextPanel', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     testState.worktree = { id: 'wt-1', path: '/home/u/repo', branch: 'main' }
+    testState.context.hostId = 'local'
+    testState.context.unavailable = null
     testState.context.report = report()
     testState.openFile = []
+    // Why: view options persist across mounts on purpose; tests start clean.
+    window.localStorage.clear()
   })
 
   afterEach(() => {
@@ -213,9 +241,33 @@ describe('WorkspaceContextPanel', () => {
     const text = container.textContent ?? ''
     expect(text).toContain('/home/u/repo/CLAUDE.md')
     expect(text).toContain('2.0 KB')
-    expect(text).not.toContain('GEMINI.md')
+    expect(text).not.toContain('/home/u/repo/GEMINI.md')
     expect(text).toContain('linear')
     expect(text).toContain('Agent context')
+  })
+
+  it('names the host the report was read on', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('Local')
+    testState.context.report = report({
+      target: { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/u', cwd: '/home/u/repo' }
+    })
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('WSL Ubuntu')
+    testState.context.hostId = 'runtime:env-1'
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('Build box')
+  })
+
+  it('says why nothing is shown for SSH and unresolved-runtime workspaces', () => {
+    testState.context.unavailable = 'ssh'
+    testState.context.report = null
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('not available for SSH workspaces')
+    expect(container.textContent).not.toContain('No instruction files')
+    testState.context.unavailable = 'runtime-unresolved'
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('Waiting for the runtime')
   })
 
   it('reveals checked-but-empty locations when toggled', () => {
@@ -224,8 +276,28 @@ describe('WorkspaceContextPanel', () => {
     act(() => {
       toggle.click()
     })
-    expect(container.textContent).toContain('GEMINI.md')
+    expect(container.textContent).toContain('/home/u/repo/GEMINI.md')
     expect(container.textContent).toContain('not found')
+  })
+
+  it('keeps the view options across a remount', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    act(() =>
+      (container.querySelector('[data-testid="show-missing"]') as HTMLButtonElement).click()
+    )
+    act(() =>
+      (container.querySelector('[data-testid="agent-claude"]') as HTMLButtonElement).click()
+    )
+    act(() => root.unmount())
+    root = createRoot(container)
+    act(() => root.render(<WorkspaceContextPanel />))
+    expect(container.textContent).toContain('/home/u/repo/GEMINI.md')
+    expect(container.textContent).not.toContain('/home/u/repo/CLAUDE.md')
+    expect(
+      (container.querySelector('[data-testid="agent-claude"]') as HTMLButtonElement).getAttribute(
+        'aria-pressed'
+      )
+    ).toBe('false')
   })
 
   it('opens a workspace-scoped instruction file in the editor on click', () => {
@@ -265,6 +337,24 @@ describe('WorkspaceContextPanel', () => {
     expect(text).not.toContain('/home/u/repo/CLAUDE.md')
     expect(text).not.toContain('linear')
     expect(text).not.toContain('adhd@local')
+    expect(text).toContain('Hidden by the current filter.')
+    expect(text).not.toContain('No MCP config files found.')
+  })
+
+  it('tells filtered-empty apart from truly empty when every agent is cleared', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    act(() =>
+      (container.querySelector('[data-testid="agents-clear"]') as HTMLButtonElement).click()
+    )
+    const text = container.textContent ?? ''
+    expect(text).toContain('Hidden by the current filter.')
+    expect(text).not.toContain('No instruction files found')
+    const hooksTab = [...container.querySelectorAll('[role="radio"]')].find(
+      (el) => el.textContent === 'Hooks'
+    ) as HTMLButtonElement
+    act(() => hooksTab.click())
+    // Why: hooks were empty before any filter, so this stays the plain empty copy.
+    expect(container.textContent).toContain('No agent hooks configured.')
   })
 
   it('narrows to workspace-scoped rows with the scope switch', () => {
@@ -333,9 +423,9 @@ describe('workspace-context-model', () => {
       groupInstructionFiles(files, false).map((group) => [group.scope, group.files.length])
     ).toEqual([
       ['project', 1],
-      ['home', 1]
+      ['home', 2]
     ])
-    expect(groupInstructionFiles(files, true).map((group) => group.files.length)).toEqual([2, 1])
+    expect(groupInstructionFiles(files, true).map((group) => group.files.length)).toEqual([2, 2])
   })
 
   it('narrows the report and skills to the chosen agents', () => {
@@ -347,11 +437,14 @@ describe('workspace-context-model', () => {
     ])
     expect(claude?.mcpFiles).toHaveLength(1)
     const gemini = filterReportByAgents(full, ['gemini'])
-    expect(gemini?.instructionFiles.map((file) => file.id)).toEqual(['project-gemini-md'])
+    expect(gemini?.instructionFiles.map((file) => file.id)).toEqual([
+      'project-gemini-md',
+      'home-gemini-md'
+    ])
     expect(gemini?.mcpFiles).toHaveLength(0)
     expect(gemini?.plugins).toHaveLength(0)
     expect(filterReportByAgents(full, null)).toBe(full)
-    expect(filterReportByAgents(full, ['claude', 'gemini'])?.instructionFiles).toHaveLength(3)
+    expect(filterReportByAgents(full, ['claude', 'gemini'])?.instructionFiles).toHaveLength(4)
     expect(filterReportByAgents(full, [])?.instructionFiles).toHaveLength(0)
 
     const sources: SkillDiscoverySource[] = [
@@ -428,7 +521,10 @@ describe('workspace-context-model', () => {
     expect(workspace?.instructionFiles.every((file) => file.scope !== 'home')).toBe(true)
     expect(workspace?.plugins).toHaveLength(0)
     const user = filterReportByScope(full, 'user')
-    expect(user?.instructionFiles.map((file) => file.id)).toEqual(['home-claude-md'])
+    expect(user?.instructionFiles.map((file) => file.id)).toEqual([
+      'home-claude-md',
+      'home-gemini-md'
+    ])
     expect(user?.mcpFiles).toHaveLength(0)
     expect(filterReportByScope(full, 'all')).toBe(full)
   })

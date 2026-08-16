@@ -37,15 +37,13 @@ import { translate } from '@/i18n/i18n'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from './AiVaultSessionLimitMenu'
 import {
+  SIDEBAR_AGENT_BULK_ACTION_CLASS,
   SIDEBAR_SCOPE_TOGGLE_GROUP_CLASS,
   SIDEBAR_SCOPE_TOGGLE_ITEM_CLASS
 } from './sidebar-scope-toggle'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
-
-const AGENT_BULK_ACTION_CLASS =
-  'rounded-full px-2 py-0.5 text-[11px] font-normal text-muted-foreground focus:text-foreground'
 
 const VAULT_SCOPE_TOGGLE_ITEM_CLASS = `${SIDEBAR_SCOPE_TOGGLE_ITEM_CLASS} @max-[300px]/ai-vault:px-1.5`
 
@@ -283,7 +281,7 @@ export function VaultViewMenu({
                 event.preventDefault()
                 onAllAgentsEnabledChange(true)
               }}
-              className={AGENT_BULK_ACTION_CLASS}
+              className={SIDEBAR_AGENT_BULK_ACTION_CLASS}
             >
               {translate(
                 'auto.components.right.sidebar.AiVaultPanelControls.selectAllAgents',
@@ -296,7 +294,7 @@ export function VaultViewMenu({
                 event.preventDefault()
                 onAllAgentsEnabledChange(false)
               }}
-              className={AGENT_BULK_ACTION_CLASS}
+              className={SIDEBAR_AGENT_BULK_ACTION_CLASS}
             >
               {translate('auto.components.right.sidebar.AiVaultPanelControls.clearAgents', 'Clear')}
             </DropdownMenuItem>

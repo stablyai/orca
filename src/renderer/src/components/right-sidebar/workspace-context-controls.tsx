@@ -1,6 +1,5 @@
 import type React from 'react'
 import { ListFilter } from 'lucide-react'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,13 +14,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
+  SIDEBAR_AGENT_BULK_ACTION_CLASS,
   SIDEBAR_SCOPE_TOGGLE_GROUP_CLASS,
   SIDEBAR_SCOPE_TOGGLE_ITEM_CLASS
 } from './sidebar-scope-toggle'
 import type { ContextScopeFilter } from './workspace-context-model'
-
-const AGENT_BULK_ACTION_CLASS =
-  'rounded-full px-2 py-0.5 text-[11px] font-normal text-muted-foreground focus:text-foreground'
 
 /** Workspace / User / All — the same segmented switch Session History uses for its scope. */
 export function ContextScopeSwitch({
@@ -62,12 +59,12 @@ export function ContextScopeSwitch({
 
 /**
  * View options — which agents' context to show plus the empty-location toggle.
- * `agents === null` means every agent present; the list only offers agents that
- * actually read something in this workspace.
+ * The list only offers agents that actually read something in this workspace;
+ * agents are tracked as the disabled set so a newly found agent shows up on.
  */
 export function ContextViewMenu({
   agentOptions,
-  agents,
+  disabledAgents,
   showMissing,
   adjustmentCount,
   onAgentEnabledChange,
@@ -76,7 +73,7 @@ export function ContextViewMenu({
   onReset
 }: {
   agentOptions: readonly TuiAgent[]
-  agents: readonly AgentType[] | null
+  disabledAgents: readonly TuiAgent[]
   showMissing: boolean
   adjustmentCount: number
   onAgentEnabledChange: (agent: TuiAgent, enabled: boolean) => void
@@ -84,9 +81,9 @@ export function ContextViewMenu({
   onShowMissingChange: (showMissing: boolean) => void
   onReset: () => void
 }): React.JSX.Element {
-  const isEnabled = (agent: TuiAgent): boolean => agents === null || agents.includes(agent)
-  const allSelected = agents === null || agentOptions.every(isEnabled)
-  const noneSelected = agents !== null && agents.length === 0
+  const isEnabled = (agent: TuiAgent): boolean => !disabledAgents.includes(agent)
+  const allSelected = agentOptions.every(isEnabled)
+  const noneSelected = agentOptions.length > 0 && !agentOptions.some(isEnabled)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -124,7 +121,7 @@ export function ContextViewMenu({
                 event.preventDefault()
                 onAllAgentsEnabledChange(true)
               }}
-              className={AGENT_BULK_ACTION_CLASS}
+              className={SIDEBAR_AGENT_BULK_ACTION_CLASS}
             >
               {translate(
                 'auto.components.rightSidebar.WorkspaceContextPanel.selectAllAgents',
@@ -137,7 +134,7 @@ export function ContextViewMenu({
                 event.preventDefault()
                 onAllAgentsEnabledChange(false)
               }}
-              className={AGENT_BULK_ACTION_CLASS}
+              className={SIDEBAR_AGENT_BULK_ACTION_CLASS}
             >
               {translate('auto.components.rightSidebar.WorkspaceContextPanel.clearAgents', 'Clear')}
             </DropdownMenuItem>
