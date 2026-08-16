@@ -30,6 +30,7 @@ import {
   isCommandAvailable
 } from '../ipc/preflight-command-exec'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { excludeMisidentifiedAgents } from './preflight-agent-identity-exclusion'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
