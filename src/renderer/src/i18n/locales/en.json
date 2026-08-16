@@ -14943,7 +14943,9 @@
           "scopeHome": "User",
           "filterAll": "All",
           "filterMcp": "MCP",
-          "filterLabel": "Filter sections"
+          "filterLabel": "Filter sections",
+          "allAgents": "All agents",
+          "clearAgentFilter": "Show all agents"
         }
       },
       "link": {

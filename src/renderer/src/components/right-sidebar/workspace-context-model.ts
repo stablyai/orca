@@ -4,7 +4,7 @@ import type {
   AgentContextScope
 } from '../../../../shared/agent-context'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { DiscoveredSkill } from '../../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
@@ -132,4 +132,88 @@ export function groupSkillsBySource(skills: readonly DiscoveredSkill[]): SkillSo
       label,
       skills: [...bucket.skills].sort((a, b) => a.name.localeCompare(b.name))
     }))
+}
+
+/** Which agent owns each discovered skill root; `null` marks a shared root every agent reads. */
+export function skillRootOwners(
+  sources: readonly SkillDiscoverySource[]
+): Map<string, AgentType | null> {
+  return new Map(sources.map((source) => [source.path, source.owner]))
+}
+
+function skillBelongsToAgent(
+  skill: DiscoveredSkill,
+  agent: AgentType,
+  owners: Map<string, AgentType | null>
+): boolean {
+  const roots = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+  return roots.some((root) => {
+    const owner = owners.get(root)
+    // Why: a root discovery did not enumerate (e.g. a plugin root) falls back
+    // to the skill's providers, where `agent-skills` means every agent.
+    if (owner === undefined) {
+      return skill.providers.includes(agent as never) || skill.providers.includes('agent-skills')
+    }
+    return owner === null || owner === agent
+  })
+}
+
+export function selectSkillsForAgent(
+  skills: readonly DiscoveredSkill[],
+  sources: readonly SkillDiscoverySource[],
+  agent: AgentType | null
+): DiscoveredSkill[] {
+  if (!agent) {
+    return [...skills]
+  }
+  const owners = skillRootOwners(sources)
+  return skills.filter((skill) => skillBelongsToAgent(skill, agent, owners))
+}
+
+/** The report narrowed to rows the given agent reads; `null` returns it unchanged. */
+export function filterReportByAgent(
+  report: AgentContextReport | null,
+  agent: AgentType | null
+): AgentContextReport | null {
+  if (!report || !agent) {
+    return report
+  }
+  const reads = (row: { agents: AgentType[] }): boolean => row.agents.includes(agent)
+  return {
+    ...report,
+    instructionFiles: report.instructionFiles.filter(reads),
+    mcpFiles: report.mcpFiles.filter(reads),
+    hookFiles: report.hookFiles.filter(reads),
+    plugins: report.plugins.filter(reads)
+  }
+}
+
+/** Every agent that reads at least one row or owns at least one skill root here. */
+export function agentsInContext(
+  report: AgentContextReport | null,
+  skills: readonly DiscoveredSkill[],
+  sources: readonly SkillDiscoverySource[]
+): AgentType[] {
+  const agents = new Set<AgentType>()
+  for (const row of [
+    ...(report?.instructionFiles ?? []),
+    ...(report?.mcpFiles ?? []),
+    ...(report?.hookFiles ?? []),
+    ...(report?.plugins ?? [])
+  ]) {
+    for (const agent of row.agents) {
+      agents.add(agent)
+    }
+  }
+  const owners = skillRootOwners(sources)
+  for (const skill of skills) {
+    const roots = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+    for (const root of roots) {
+      const owner = owners.get(root)
+      if (owner) {
+        agents.add(owner)
+      }
+    }
+  }
+  return [...agents]
 }

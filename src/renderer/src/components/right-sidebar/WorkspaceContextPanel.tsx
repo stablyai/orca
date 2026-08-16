@@ -1,21 +1,27 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, X } from 'lucide-react'
 import type { AgentContextInstructionFile } from '../../../../shared/agent-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import AgentCombobox from '@/components/agent/AgentCombobox'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { useWorkspaceAgentContext } from './use-workspace-agent-context'
 import {
+  agentsInContext,
   countPresent,
+  filterReportByAgent,
   formatBytes,
   groupInstructionFiles,
   groupSkillsBySource,
   isPathInside,
+  selectSkillsForAgent,
   selectWorkspaceSkills
 } from './workspace-context-model'
 import { ContextRow, ContextSection, EmptyRow, scopeLabel } from './workspace-context-rows'
@@ -69,7 +75,20 @@ function sectionFilterLabel(key: SectionFilter): string {
 export default function WorkspaceContextPanel(): React.JSX.Element {
   const worktree = useActiveWorktree()
   const openFile = useAppStore((s) => s.openFile)
-  const { report, loading, error, skills, skillsLoading, refresh } = useWorkspaceAgentContext()
+  const {
+    report: fullReport,
+    loading,
+    error,
+    skills,
+    skillSources,
+    skillsLoading,
+    refresh
+  } = useWorkspaceAgentContext()
+  const [agentFilter, setAgentFilter] = useState<TuiAgent | null>(null)
+  const report = useMemo(
+    () => filterReportByAgent(fullReport, agentFilter),
+    [fullReport, agentFilter]
+  )
   const [showMissing, setShowMissing] = useState(false)
   const [filter, setFilter] = useState<SectionFilter>('all')
   const showSection = (key: SectionKey): boolean => filter === 'all' || filter === key
@@ -81,9 +100,16 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
 
   const workspaceCwd = report?.target.cwd ?? null
   const workspaceSkills = useMemo(
-    () => selectWorkspaceSkills(skills, workspaceCwd),
-    [skills, workspaceCwd]
+    () =>
+      selectSkillsForAgent(selectWorkspaceSkills(skills, workspaceCwd), skillSources, agentFilter),
+    [agentFilter, skillSources, skills, workspaceCwd]
   )
+  const agentOptions = useMemo(() => {
+    const present = new Set(
+      agentsInContext(fullReport, selectWorkspaceSkills(skills, workspaceCwd), skillSources)
+    )
+    return AGENT_CATALOG.filter((entry) => present.has(entry.id))
+  }, [fullReport, skillSources, skills, workspaceCwd])
   const counts = countPresent(report)
   const skillGroups = useMemo(() => groupSkillsBySource(workspaceSkills), [workspaceSkills])
   const instructionGroups = useMemo(
@@ -155,6 +181,39 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
         >
           <RefreshCw className={cn(loading && 'animate-spin')} />
         </Button>
+      </div>
+      <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
+        <AgentCombobox
+          agents={agentOptions}
+          value={agentFilter}
+          onValueChange={setAgentFilter}
+          allowBlankTerminal={false}
+          allowNarrowTrigger
+          emptyLabel={translate(
+            'auto.components.rightSidebar.WorkspaceContextPanel.allAgents',
+            'All agents'
+          )}
+          triggerClassName="h-7 min-w-0 flex-1"
+        />
+        {agentFilter ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setAgentFilter(null)}
+            aria-label={translate(
+              'auto.components.rightSidebar.WorkspaceContextPanel.clearAgentFilter',
+              'Show all agents'
+            )}
+            title={translate(
+              'auto.components.rightSidebar.WorkspaceContextPanel.clearAgentFilter',
+              'Show all agents'
+            )}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
       <div
         role="tablist"

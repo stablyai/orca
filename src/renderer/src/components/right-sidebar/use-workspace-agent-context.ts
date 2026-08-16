@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentContextReport } from '../../../../shared/agent-context'
-import type { DiscoveredSkill, SkillDiscoveryTarget } from '../../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource,
+  SkillDiscoveryTarget
+} from '../../../../shared/skills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
 import { useInstalledAgentSkillNames } from '@/hooks/useInstalledAgentSkills'
@@ -15,6 +19,7 @@ export type WorkspaceAgentContextState = {
   loading: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
+  skillSources: readonly SkillDiscoverySource[]
   skillsLoading: boolean
   refresh: () => void
 }
@@ -100,6 +105,7 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
     loading,
     error,
     skills: skillState.skills,
+    skillSources: skillState.sources,
     skillsLoading: skillState.loading,
     refresh
   }

@@ -4,8 +4,14 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentContextReport } from '../../../../shared/agent-context'
-import type { DiscoveredSkill } from '../../../../shared/skills'
-import { selectWorkspaceSkills, groupInstructionFiles } from './workspace-context-model'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
+import {
+  agentsInContext,
+  filterReportByAgent,
+  groupInstructionFiles,
+  selectSkillsForAgent,
+  selectWorkspaceSkills
+} from './workspace-context-model'
 
 const testState = vi.hoisted(() => ({
   worktree: null as null | { id: string; path: string; branch: string },
@@ -14,6 +20,7 @@ const testState = vi.hoisted(() => ({
     loading: false,
     error: null as string | null,
     skills: [] as DiscoveredSkill[],
+    skillSources: [] as SkillDiscoverySource[],
     skillsLoading: false,
     refresh: () => {}
   },
@@ -35,6 +42,33 @@ vi.mock('./use-workspace-agent-context', () => ({
     worktreePath: testState.worktree?.path ?? null,
     ...testState.context
   })
+}))
+vi.mock('@/components/agent/AgentCombobox', () => ({
+  default: ({
+    value,
+    agents,
+    onValueChange
+  }: {
+    value: string | null
+    agents: { id: string }[]
+    onValueChange: (agent: string | null) => void
+  }) => (
+    <select
+      data-testid="agent-filter"
+      value={value ?? ''}
+      onChange={(event) => onValueChange(event.target.value || null)}
+    >
+      <option value="">All agents</option>
+      {agents.map((agent) => (
+        <option key={agent.id} value={agent.id}>
+          {agent.id}
+        </option>
+      ))}
+    </select>
+  )
+}))
+vi.mock('@/lib/agent-catalog', () => ({
+  AGENT_CATALOG: ['claude', 'codex', 'gemini', 'grok'].map((id) => ({ id, label: id }))
 }))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -175,6 +209,23 @@ describe('WorkspaceContextPanel', () => {
     expect(text).not.toContain('adhd@local')
   })
 
+  it('offers only agents present in the workspace and narrows every section to the chosen one', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    const select = container.querySelector('[data-testid="agent-filter"]') as HTMLSelectElement
+    expect([...select.options].map((option) => option.value)).toEqual(['', 'claude', 'gemini'])
+    act(() => {
+      select.value = 'gemini'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const checkbox = container.querySelector('[role="checkbox"]') as HTMLButtonElement
+    act(() => checkbox.click())
+    const text = container.textContent ?? ''
+    expect(text).toContain('GEMINI.md')
+    expect(text).not.toContain('/home/u/repo/CLAUDE.md')
+    expect(text).not.toContain('linear')
+    expect(text).not.toContain('adhd@local')
+  })
+
   it('shows the empty state without an active worktree', () => {
     testState.worktree = null
     act(() => root.render(<WorkspaceContextPanel />))
@@ -225,5 +276,82 @@ describe('workspace-context-model', () => {
       ['home', 1]
     ])
     expect(groupInstructionFiles(files, true).map((group) => group.files.length)).toEqual([2, 1])
+  })
+
+  it('narrows the report and skills to one agent', () => {
+    const full = report()
+    const claude = filterReportByAgent(full, 'claude')
+    expect(claude?.instructionFiles.map((file) => file.id)).toEqual([
+      'home-claude-md',
+      'project-claude-md'
+    ])
+    expect(claude?.mcpFiles).toHaveLength(1)
+    const gemini = filterReportByAgent(full, 'gemini')
+    expect(gemini?.instructionFiles.map((file) => file.id)).toEqual(['project-gemini-md'])
+    expect(gemini?.mcpFiles).toHaveLength(0)
+    expect(gemini?.plugins).toHaveLength(0)
+    expect(filterReportByAgent(full, null)).toBe(full)
+
+    const sources: SkillDiscoverySource[] = [
+      {
+        id: 'a',
+        label: 'Agent skills home',
+        path: '/h/.agents/skills',
+        sourceKind: 'home',
+        providers: ['agent-skills'],
+        owner: null,
+        exists: true
+      },
+      {
+        id: 'g',
+        label: 'Grok home',
+        path: '/h/.grok/skills',
+        sourceKind: 'home',
+        providers: ['agent-skills'],
+        owner: 'grok',
+        exists: true
+      },
+      {
+        id: 'c',
+        label: 'Claude home',
+        path: '/h/.claude/skills',
+        sourceKind: 'home',
+        providers: ['claude'],
+        owner: 'claude',
+        exists: true
+      }
+    ]
+    const skill = (id: string, rootPath: string, providers: DiscoveredSkill['providers']) =>
+      ({
+        id,
+        name: id,
+        description: null,
+        providers,
+        sourceKind: 'home',
+        sourceLabel: '',
+        rootPath,
+        directoryPath: rootPath,
+        skillFilePath: `${rootPath}/${id}/SKILL.md`,
+        installed: true,
+        updatedAt: null
+      }) satisfies DiscoveredSkill
+    const skills = [
+      skill('shared', '/h/.agents/skills', ['agent-skills']),
+      skill('grok-only', '/h/.grok/skills', ['agent-skills']),
+      skill('claude-only', '/h/.claude/skills', ['claude']),
+      skill('plugin', '/h/.claude/plugins/cache/x', ['claude'])
+    ]
+    expect(selectSkillsForAgent(skills, sources, 'grok').map((entry) => entry.id)).toEqual([
+      'shared',
+      'grok-only'
+    ])
+    expect(selectSkillsForAgent(skills, sources, 'claude').map((entry) => entry.id)).toEqual([
+      'shared',
+      'claude-only',
+      'plugin'
+    ])
+    expect(agentsInContext(full, skills, sources).sort()).toEqual(
+      ['claude', 'gemini', 'grok'].sort()
+    )
   })
 })
