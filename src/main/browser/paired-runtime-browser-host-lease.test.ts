@@ -35,6 +35,14 @@ afterEach(() => {
 })
 
 describe('PairedRuntimeBrowserHostLease', () => {
+  it.each([
+    [{ maxConcurrentCommandResults: 17 }, 'limit is invalid'],
+    [{ maxUnsettledCommandResults: 257 }, 'limit is invalid'],
+    [{ maxConcurrentCommandResults: 2, maxUnsettledCommandResults: 1 }, 'limits are inconsistent']
+  ])('rejects unsafe command-result limits', (limits, expectedMessage) => {
+    expect(() => createLease(limits)).toThrow(expectedMessage)
+  })
+
   it('returns only the runtime-issued epoch and generation', async () => {
     let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
     const close = vi.fn()
@@ -177,6 +185,81 @@ describe('PairedRuntimeBrowserHostLease', () => {
     await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(2))
     expect(close).not.toHaveBeenCalled()
     await lease.close()
+  })
+
+  it('bounds concurrent command-result requests below the subscription request ceiling', async () => {
+    const acknowledgements = Array.from({ length: 8 }, () => deferredCommandResultAck())
+    let active = 0
+    let peak = 0
+    const sendRequest = vi.fn().mockImplementation(() => {
+      const acknowledgement = acknowledgements[sendRequest.mock.calls.length - 1]
+      active += 1
+      peak = Math.max(peak, active)
+      return acknowledgement.promise.finally(() => {
+        active -= 1
+      })
+    })
+    const { callbacks } = await subscribeLease({ sendRequest })
+    const lease = createLease({
+      maxConcurrentCommandResults: 4,
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => ({ status: 'completed' })
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    for (let index = 0; index < acknowledgements.length; index += 1) {
+      callbacks.current!.onResponse(
+        commandResponse({
+          browserPageId: `page-${index}`,
+          pageHostGeneration: index + 1,
+          commandId: `command-${index}`
+        })
+      )
+    }
+
+    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(4))
+    expect(peak).toBe(4)
+    acknowledgements[0].resolve(commandResultAck(true))
+    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(5))
+    expect(peak).toBe(4)
+    await lease.close()
+  })
+
+  it('fails closed when unsettled command results exceed the explicit lease bound', async () => {
+    const never = new Promise<never>(() => {})
+    const { callbacks, close } = await subscribeLease({
+      sendRequest: vi.fn(() => never)
+    })
+    const onError = vi.fn()
+    const lease = createLease({
+      maxConcurrentCommandResults: 1,
+      maxUnsettledCommandResults: 2,
+      pageCommandProtocolVersion: 1,
+      onPageCommand: () => ({ status: 'completed' }),
+      onError
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
+    await starting
+
+    for (let index = 0; index < 3; index += 1) {
+      callbacks.current!.onResponse(
+        commandResponse({
+          browserPageId: `page-${index}`,
+          pageHostGeneration: index + 1,
+          commandId: `command-${index}`
+        })
+      )
+    }
+
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Browser host command result capacity reached' })
+    )
   })
 
   it.each([
@@ -560,6 +643,8 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
 
 function createLease(
   overrides: {
+    maxConcurrentCommandResults?: number
+    maxUnsettledCommandResults?: number
     onError?: (error: Error) => void
     onPageCommand?: (
       command: BrowserClientHostCommandEvent
@@ -590,7 +675,13 @@ function readyResponse(overrides: { pageCommandProtocolVersion?: 1 } = {}) {
   }
 }
 
-function commandResponse() {
+function commandResponse(
+  overrides: {
+    browserPageId?: string
+    pageHostGeneration?: number
+    commandId?: string
+  } = {}
+) {
   return {
     id: 'browser-host',
     ok: true as const,
@@ -609,10 +700,22 @@ function commandResponse() {
         type: 'createPage' as const,
         browserProfileId: 'default',
         executionHostKey: 'native:runtime-a:1'
-      }
+      },
+      ...overrides
     },
     _meta: { runtimeId: 'runtime-a' }
   }
+}
+
+function deferredCommandResultAck(): {
+  promise: Promise<ReturnType<typeof commandResultAck>>
+  resolve: (value: ReturnType<typeof commandResultAck>) => void
+} {
+  let resolve = (_value: ReturnType<typeof commandResultAck>): void => {}
+  const promise = new Promise<ReturnType<typeof commandResultAck>>((innerResolve) => {
+    resolve = innerResolve
+  })
+  return { promise, resolve }
 }
 
 function commandResultAck(accepted: boolean, runtimeId = 'runtime-a') {

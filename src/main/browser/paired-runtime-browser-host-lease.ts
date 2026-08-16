@@ -6,28 +6,18 @@ import {
   type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
-import type { PairingOffer } from '../../shared/pairing'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import {
   subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionOptions
+  type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
-
-type PairedRuntimeBrowserHostLeaseOptions = {
-  pairing: PairingOffer
-  authorityRuntimeId: string
-  browserHostClientId: string
-  hostCapabilities: readonly string[]
-  pageCommandProtocolVersion?: 1
-  onPageCommand?: (
-    command: BrowserClientHostCommandEvent
-  ) => BrowserClientHostCommandResultType | Promise<BrowserClientHostCommandResultType>
-  timeoutMs?: number
-  subscription?: RemoteRuntimeSubscriptionOptions
-  onError?: (error: Error) => void
-}
+import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
+import {
+  BrowserHostCommandResultSettler,
+  type BrowserHostCommandResultAdmission
+} from './browser-host-command-result-settler'
+import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'
 
 export class PairedRuntimeBrowserHostLease {
   private subscription: RemoteRuntimeSubscription | null = null
@@ -35,9 +25,17 @@ export class PairedRuntimeBrowserHostLease {
   private closePromise: Promise<void> | null = null
   private rejectReady: ((error: Error) => void) | null = null
   private authority: BrowserClientHostLeaseAuthority | null = null
+  private readonly commandResultSettler: BrowserHostCommandResultSettler
   private closed = false
 
-  constructor(private readonly options: PairedRuntimeBrowserHostLeaseOptions) {}
+  constructor(private readonly options: PairedRuntimeBrowserHostLeaseOptions) {
+    this.commandResultSettler = new BrowserHostCommandResultSettler({
+      maxConcurrent: options.maxConcurrentCommandResults,
+      maxUnsettled: options.maxUnsettledCommandResults,
+      submit: (command, result) => this.submitPageCommandResult(command, result),
+      onError: (error, rejectReady) => this.fail(error, rejectReady)
+    })
+  }
 
   start(): Promise<BrowserClientHostLeaseAuthority> {
     if (this.closed) {
@@ -123,7 +121,7 @@ export class PairedRuntimeBrowserHostLease {
               this.fail(new Error('Browser host command result transport unavailable'), rejectReady)
               return
             }
-            const authority = {
+            const authority = Object.freeze({
               authorityRuntimeId: this.options.authorityRuntimeId,
               authorityEpoch: parsed.data.authorityEpoch,
               browserHostClientId: this.options.browserHostClientId,
@@ -131,11 +129,17 @@ export class PairedRuntimeBrowserHostLease {
               ...(parsed.data.pageCommandProtocolVersion
                 ? { pageCommandProtocolVersion: parsed.data.pageCommandProtocolVersion }
                 : {})
-            }
+            })
             if (this.authority) {
-              if (!sameAuthority(this.authority, authority)) {
+              if (!sameBrowserClientHostLeaseAuthority(this.authority, authority)) {
                 this.fail(new Error('Browser host lease authority changed in place'), rejectReady)
               }
+              return
+            }
+            try {
+              this.options.onAuthority?.(authority)
+            } catch (error) {
+              this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
               return
             }
             this.authority = authority
@@ -218,15 +222,32 @@ export class PairedRuntimeBrowserHostLease {
       this.fail(new Error('Stale browser host page command'), rejectReady)
       return
     }
+    const admission = this.commandResultSettler.admit()
+    if (!admission) {
+      this.fail(new Error('Browser host command result capacity reached'), rejectReady)
+      return
+    }
     try {
       void Promise.resolve(this.options.onPageCommand(command))
-        .then((result) => this.submitPageCommandResult(command, result))
-        .catch((error) =>
+        .then((result) => this.enqueuePageCommandResult(admission, command, result, rejectReady))
+        .catch((error) => {
+          this.commandResultSettler.release(admission)
           this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
-        )
+        })
     } catch (error) {
+      this.commandResultSettler.release(admission)
       this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
     }
+  }
+
+  private enqueuePageCommandResult(
+    admission: BrowserHostCommandResultAdmission,
+    command: BrowserClientHostCommandEvent,
+    candidate: BrowserClientHostCommandResultType,
+    rejectReady: (error: Error) => void
+  ): void {
+    const result = BrowserClientHostCommandResult.parse(candidate)
+    this.commandResultSettler.enqueue(admission, command, result, rejectReady)
   }
 
   private async submitPageCommandResult(
@@ -269,6 +290,7 @@ export class PairedRuntimeBrowserHostLease {
   }
 
   private async closeLease(): Promise<void> {
+    this.commandResultSettler.close()
     this.subscription?.close()
     this.subscription = null
   }
@@ -280,17 +302,4 @@ export class PairedRuntimeBrowserHostLease {
       // A reporting callback cannot prevent lease cleanup.
     }
   }
-}
-
-function sameAuthority(
-  left: BrowserClientHostLeaseAuthority,
-  right: BrowserClientHostLeaseAuthority
-): boolean {
-  return (
-    left.authorityRuntimeId === right.authorityRuntimeId &&
-    left.authorityEpoch === right.authorityEpoch &&
-    left.browserHostClientId === right.browserHostClientId &&
-    left.browserHostGeneration === right.browserHostGeneration &&
-    left.pageCommandProtocolVersion === right.pageCommandProtocolVersion
-  )
 }

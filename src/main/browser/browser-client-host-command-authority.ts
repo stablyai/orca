@@ -23,3 +23,16 @@ export function snapshotBrowserClientHostLeaseAuthority(
 ): BrowserClientHostLeaseAuthority {
   return Object.freeze({ ...authority })
 }
+
+export function sameBrowserClientHostLeaseAuthority(
+  left: BrowserClientHostLeaseAuthority,
+  right: BrowserClientHostLeaseAuthority
+): boolean {
+  return (
+    left.authorityRuntimeId === right.authorityRuntimeId &&
+    left.authorityEpoch === right.authorityEpoch &&
+    left.browserHostClientId === right.browserHostClientId &&
+    left.browserHostGeneration === right.browserHostGeneration &&
+    left.pageCommandProtocolVersion === right.pageCommandProtocolVersion
+  )
+}

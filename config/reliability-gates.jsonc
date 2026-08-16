@@ -2588,6 +2588,7 @@
         "bounded client page-command dispatch and replay",
         "server-owned page-command issue and result ledger",
         "same-socket paired-runtime control requests",
+        "paired desktop browser-host lifecycle composition",
         "dedicated paired-runtime E2EE tunnel subscription"
       ],
       "platforms": ["macos", "linux", "windows"],
@@ -2598,7 +2599,7 @@
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
       ],
-      "invariant": "A client-hosted browser network route exists only for an exact live server-owned browser-host lease, authority epoch, host generation, paired identity, execution-host revision or SSH provider authority, and server-owned route generation. A client page is usable only when its runtime ID, authority epoch, host identity and generation, logical page ID, page-host generation, current placement, and still-live lease all match atomically; a retired, retirement-pending, or server-placed page cannot be claimed as live client placement. Live logical placements and their identities are bounded, an occupied logical page cannot change placement until exact two-phase retirement completes, cancellation restores the same authority, and the runtime-wide page generation stays monotonic without tombstones. Server-issued page commands and results remain bounded, FIFO per page, immutable after admission, authenticated to the exact paired lease, attach connection, and live placement, replayable only when byte-equivalent, and outcome-unknown after authority or result-transport loss. Non-native descriptors require explicit capability negotiation and an exact runtime-minted lease-bound execution-host grant. Host selection never chooses arbitrarily, stale cleanup or settlement cannot remove a replacement, destination names remain unresolved until the execution host, credit returns only after writes settle, and route loss never falls back to desktop DNS or sockets. A main-owned local listener remains stable across upstream transport loss, rejects CONNECT while offline, accepts only a strictly newer tunnel generation, ignores superseded callbacks, and never reuses a stream ID within one generation. Pending opens, admitted open rate, nested control requests, per-route application bytes, aggregate browser-host/process bytes, claims, and socket sources remain bounded with exact release on settlement and retirement. Queued transport drain yields after a bounded quantum. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
+      "invariant": "A client-hosted browser network route exists only for an exact live server-owned browser-host lease, authority epoch, host generation, paired identity, execution-host revision or SSH provider authority, and server-owned route generation. A client page is usable only when its runtime ID, authority epoch, host identity and generation, logical page ID, page-host generation, current placement, and still-live lease all match atomically; a retired, retirement-pending, or server-placed page cannot be claimed as live client placement. Live logical placements and their identities are bounded, an occupied logical page cannot change placement until exact two-phase retirement completes, cancellation restores the same authority, and the runtime-wide page generation stays monotonic without tombstones. Server-issued page commands and results remain bounded, FIFO per page, immutable after admission, authenticated to the exact paired lease, attach connection, and live placement, replayable only when byte-equivalent, and outcome-unknown after authority or result-transport loss. Desktop composition installs exact command authority before delivery, keeps result settlements below nested-request capacity, and closes transport before aborting owned handlers. Non-native descriptors require explicit capability negotiation and an exact runtime-minted lease-bound execution-host grant. Host selection never chooses arbitrarily, stale cleanup or settlement cannot remove a replacement, destination names remain unresolved until the execution host, credit returns only after writes settle, and route loss never falls back to desktop DNS or sockets. A main-owned local listener remains stable across upstream transport loss, rejects CONNECT while offline, accepts only a strictly newer tunnel generation, ignores superseded callbacks, and never reuses a stream ID within one generation. Pending opens, admitted open rate, nested control requests, per-route application bytes, aggregate browser-host/process bytes, claims, and socket sources remain bounded with exact release on settlement and retirement. Queued transport drain yields after a bounded quantum. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
       "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Reject a second identity on one connection and a fifth identity for one paired device, release one exact lease, then admit its replacement without starving another device. Saturate the browser-host long-poll sub-cap, require an ordinary wait to remain admitted, close the socket, and prove both counters and handlers release. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Mint an exact execution-host grant, reject a different key, prove late old grant cleanup leaves its replacement, and invalidate every grant with lease replacement. Reject client-to-client, client-to-server, server-to-server, and server-to-client placement overwrite until exact retirement. Begin retirement once idempotently, reject client use and every replacement while pending, cancel the exact token to restore the same placement, and reject delayed cancellation or completion after a newer retirement begins. Complete only the exact pending token, retain capacity until completion, and require a reused client page ID to receive a higher global generation without retaining a tombstone. Require a client page through the exact runtime, epoch, host, and page tuple; reject every mismatch, released or replaced leases, retirement-pending pages, retired pages, server placements, invalid identities, and the 257th live placement. Admit 16 pending destination opens and reject the seventeenth until one connects; admit 128 opens in one monotonic 10-second window and reject the 129th until the window expires. Fill 8 MiB across destination-to-client queues and separately across unsettled client-to-destination writes, release one exact retired stream, admit one replacement, and require the next byte claim to close the route without stale-callback or reentrant-close underflow. Across multiple routes, charge application copies, encrypted queue entries, and dynamic native socket bytes to one 32 MiB browser-host and 128 MiB process ceiling; reject zero-byte claim/socket-source floods, fence released leases, synchronously release JavaScript queue claims while retaining native claims through exact socket close, and yield a parked queue after four frames without reordering. Route nested responses by exact ID under reordering, reject unknown and duplicate IDs, cap pending requests and queued bytes, and tear down every concurrent waiter once on timeout or close. Drive one real paired attach, command, and result through one exact connection ID; reject missing send support and malformed or wrong-runtime acknowledgements while preserving old non-v1 attaches. Drop an authenticated transport, require the same listener to reject CONNECT before and during reconnect, attach the exact existing native v1 payload and capability pair to a strictly newer generation, ignore late old callbacks, and roll an exhausted stream-ID ledger only by replacing the generation. Require SSH descriptors to add an execution-host capability and exact grant, reject missing grants and stale provider authority before resolver or binary registration, pass exact domains to ssh2 and system-SSH SOCKS without local resolution, sanitize connector diagnostics, and close every stream and standalone route process once on timeout, synchronous failure, or rotation. Drive the accepted lease through real paired E2EE native SOCKS-to-HTTP and ephemeral Docker ssh2 remote-only DNS journeys, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
@@ -2610,6 +2611,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
@@ -2627,6 +2629,7 @@
         "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
         "src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "src/main/browser/paired-runtime-browser-host-lease.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host.test.ts",
         "src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "src/main/browser/browser-network-tunnel-session.test.ts",
         "src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts",
@@ -2717,7 +2720,19 @@
             "stale authority commands close the exact lease before handler delivery",
             "completed and failed results submit exact command authority on the established subscription",
             "missing result transport, handler failure, server rejection, and malformed or wrong-runtime acknowledgement close the lease",
-            "exact duplicate result acknowledgement remains idempotent"
+            "exact duplicate result acknowledgement remains idempotent",
+            "result settlement concurrency stays below nested-request capacity and excess unsettled results fail closed"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host.test.ts",
+          "assertions": [
+            "exact dispatcher authority exists before the first same-socket command can arrive",
+            "explicit close shuts transport before aborting every owned page handler",
+            "dispatcher abort still runs when lease cleanup rejects",
+            "lease transport failure aborts every owned handler and reports one terminal error",
+            "retirement and forgetting accept only the exact owned page generation",
+            "timed-out retirement stays fenced until the exact late handler settles"
           ]
         },
         {
@@ -2953,6 +2968,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.8,
+          "summary": "Fifty tests passed synchronous authority activation, hard 16/256 result bounds, exact transport-close-before-handler-abort ordering, cleanup rejection with guaranteed abort, same-socket result settlement, exact page retirement and forgetting, and late non-cooperative retirement settlement. The broader runtime/browser/shared run passed 9,711 tests with 24 existing skips."
+        },
         {
           "date": "2026-08-14",
           "runner": "local",
