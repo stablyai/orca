@@ -832,7 +832,7 @@ orca skills remove --skill orca-cli --local --dry-run     # print project-local 
 
 Install, update, and remove all write onto the machine that runs them. In an
 Orca SSH workspace or the WSL bridge the `orca` shim forwards commands to the
-Orca host, so they refuse to run there and print the command to run on the
+Orca host, so these commands refuse to run there. Run the same command on the
 machine you want.
 
 ## Troubleshooting
