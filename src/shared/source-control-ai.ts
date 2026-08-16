@@ -1207,6 +1207,16 @@ export function resolveSourceControlAiForOperation(
     input.prCreationProductDefaults
   )
   const actionRecipe = resolveActionRecipeForTextOperation(source, repoOverrides, input.operation)
+  const globalActionRecipe = readSourceControlActionDefault(
+    input.settings.sourceControlAi?.actions,
+    input.operation
+  )
+  const repoActionRecipe = repoOverrides?.actionOverrides?.[input.operation]
+  const explicitActionAgent = hasActionAgentRecipe(repoActionRecipe ?? {})
+    ? repoActionRecipe?.agentId
+    : hasActionAgentRecipe(globalActionRecipe)
+      ? globalActionRecipe.agentId
+      : undefined
   if (!actionRecipe.commandInputTemplate.trim()) {
     return {
       ok: false,
@@ -1215,15 +1225,14 @@ export function resolveSourceControlAiForOperation(
   }
   // Why: action recipes own the new customization model. The legacy global
   // agent remains a fallback so existing users migrate without losing intent.
-  const defaultAgent = input.defaultAgentOverride
-    ? getCommitMessageAgentSpec(input.defaultAgentOverride)
+  const launchAgent =
+    input.defaultAgentOverride && getCommitMessageAgentSpec(input.defaultAgentOverride)
       ? input.defaultAgentOverride
-      : input.settings.defaultTuiAgent
-    : input.settings.defaultTuiAgent
-  const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+      : undefined
+  const preferredAgent = explicitActionAgent ?? launchAgent ?? source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
-    defaultAgent,
+    input.settings.defaultTuiAgent,
     input.settings.disabledTuiAgents
   )
   if (!agentChoice) {
@@ -1265,7 +1274,7 @@ export function resolveSourceControlAiForOperation(
   }
 
   const agentId = agentChoice
-  const actionAgentId = actionRecipe.agentId ?? agentId
+  const actionAgentId = explicitActionAgent ?? agentId
   const resolvedActionAgentId =
     actionAgentId === agentId
       ? agentId

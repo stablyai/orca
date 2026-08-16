@@ -82,6 +82,28 @@ describe('source-control AI resolution', () => {
     expect(result.ok && result.value.params.agentId).toBe('codex')
   })
 
+  it('uses the launch agent before the legacy source-control fallback', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'claude'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: 'claude',
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      defaultAgentOverride: 'codex'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('codex')
+  })
+
   it('keeps an explicit branch-name agent ahead of the launch agent', () => {
     const base = settings()
     base.sourceControlAi = {
