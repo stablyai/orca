@@ -263,7 +263,8 @@ const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
   from: OptionalString,
-  devMode: OptionalBoolean
+  devMode: OptionalBoolean,
+  callerTerminalHandle: OptionalString
 })
 
 const AskParams = z
@@ -1715,16 +1716,37 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
       }
-      const ctx = db.getDispatchContext(params.task)
+      const callerTerminalHandle =
+        params.callerTerminalHandle ??
+        orchestrationCompatibilityEvidence?.terminalHandle ??
+        params.from
+      const callerRun = callerTerminalHandle
+        ? resolveRunScope(runtime, {
+            callerTerminalHandle,
+            requireCurrentConsumer: true,
+            legacyCoordinatorRunId,
+            callerEvidence: orchestrationCompatibilityEvidence
+          })
+        : undefined
+      const task = db.getTask(params.task)
+      if (callerRun && task?.run_id !== callerRun.id) {
+        if (params.preamble) {
+          throw new OrchestrationError(
+            'task_not_found',
+            `Task ${params.task} was not found in Run ${callerRun.id}.`
+          )
+        }
+        return { dispatch: null }
+      }
+      const ctx = task ? db.getDispatchContext(task.id) : undefined
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
       if (params.preamble) {
-        const task = db.getTask(params.task)
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }

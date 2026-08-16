@@ -109,7 +109,9 @@ it('accepts an explicit current settlement without a compatibility read', async 
 it('fails closed when an older runtime leaves worker_done dispatched without a verdict', async () => {
   callMock
     .mockResolvedValueOnce({
-      result: { message: { id: 'msg_unconfirmed', run_id: 'run_1' } }
+      result: {
+        message: { id: 'msg_unconfirmed', run_id: 'run_1', from_handle: 'term_foreign' }
+      }
     })
     .mockResolvedValueOnce({
       result: { dispatch: { id: 'ctx_1', status: 'dispatched' } }
@@ -132,7 +134,10 @@ it('fails closed when an older runtime leaves worker_done dispatched without a v
     } as never)
   ).rejects.toMatchObject({ code: 'operation_unknown' })
 
-  expect(callMock).toHaveBeenNthCalledWith(2, 'orchestration.dispatchShow', { task: 'task_1' })
+  expect(callMock).toHaveBeenNthCalledWith(2, 'orchestration.dispatchShow', {
+    task: 'task_1',
+    callerTerminalHandle: 'term_foreign'
+  })
   expect(callMock).toHaveBeenNthCalledWith(3, 'orchestration.taskList', {
     status: 'completed',
     run: 'run_1'

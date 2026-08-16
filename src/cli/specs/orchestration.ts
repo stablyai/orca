@@ -177,7 +177,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'dispatch-show'],
-    summary: 'Show dispatch context for a task',
+    summary: "Show dispatch context for a task in the caller's Run",
     usage:
       'orca orchestration dispatch-show --task <task_id> [--preamble] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'task', 'preamble', 'from']

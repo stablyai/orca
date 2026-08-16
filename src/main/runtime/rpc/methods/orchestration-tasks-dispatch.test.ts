@@ -455,7 +455,8 @@ describe('orchestration RPC methods', () => {
       db.createDispatchContext(task.id, 'term_a')
 
       const result = (await call('orchestration.dispatchShow', {
-        task: task.id
+        task: task.id,
+        callerTerminalHandle: 'term_coord'
       })) as { dispatch: { task_id: string } | null }
 
       expect(result.dispatch?.task_id).toBe(task.id)
@@ -464,10 +465,71 @@ describe('orchestration RPC methods', () => {
     it('returns null for unknown task', async () => {
       setup()
       const result = (await call('orchestration.dispatchShow', {
-        task: 'task_fake'
+        task: 'task_fake',
+        callerTerminalHandle: 'term_coord'
       })) as { dispatch: null }
 
       expect(result.dispatch).toBeNull()
+    })
+
+    it('hides dispatch context for a task in another Run', async () => {
+      setup()
+      const otherRun = db.createRun({
+        objective: 'Other Run',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      })
+      const task = db.createTask({ spec: 'private work', runId: otherRun.id })
+      db.createDispatchContext(task.id, 'term_other_worker')
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id,
+        callerTerminalHandle: 'term_coord'
+      })) as { dispatch: null }
+
+      expect(result.dispatch).toBeNull()
+    })
+
+    it('uses attested CLI evidence to hide another Run without a new param', async () => {
+      setup()
+      const otherRun = db.createRun({
+        objective: 'Other Run',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      })
+      const task = db.createTask({ spec: 'private work', runId: otherRun.id })
+      db.createDispatchContext(task.id, 'term_other_worker')
+      ctx = {
+        ...ctx,
+        orchestrationCompatibilityEvidence: {
+          terminalHandle: 'term_coord',
+          paneKey: coordinatorPaneKey
+        }
+      }
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id
+      })) as { dispatch: null }
+
+      expect(result.dispatch).toBeNull()
+    })
+
+    it('does not generate another Run preamble', async () => {
+      setup()
+      const otherRun = db.createRun({
+        objective: 'Other Run',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+      })
+      const task = db.createTask({ spec: 'private work', runId: otherRun.id })
+
+      await expect(
+        call('orchestration.dispatchShow', {
+          task: task.id,
+          preamble: true,
+          callerTerminalHandle: 'term_coord'
+        })
+      ).rejects.toMatchObject({ code: 'task_not_found' })
     })
 
     it('--preamble returns the preamble text', async () => {
