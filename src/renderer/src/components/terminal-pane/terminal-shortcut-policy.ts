@@ -86,6 +86,17 @@ function resolveUnshiftedCharacterForCode(code: string | undefined): string | un
   return PUNCTUATION_CODE_MAP[code]
 }
 
+function isPlainCtrlW(event: TerminalShortcutEvent): boolean {
+  const code = event.code?.trim()
+  return (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    (code ? code === 'KeyW' : event.key.toLowerCase() === 'w')
+  )
+}
+
 /**
  * Resolves terminal keyboard events before xterm receives them, centralizing
  * Orca shortcuts and terminal byte fallbacks in one platform-aware policy.
@@ -110,7 +121,9 @@ export function resolveTerminalShortcutAction(
   // Why: gates the tab.close pane-close alias — under terminal-first a remapped tab.close yields to the shell (terminal.closePane, scope terminal, still closes).
   terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first',
   // Why: query-only Droid/Grok consumers need CSI-u even when the live kitty flags remain inactive.
-  hasCtrlEnterCsiUAuthority?: () => boolean
+  hasCtrlEnterCsiUAuthority?: () => boolean,
+  // Why: Windows Git Bash uses Ctrl+W for readline word erase, so Terminal-first must yield that chord even though terminal.closePane is terminal-scoped.
+  isWindowsGitBashPane?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
@@ -165,6 +178,12 @@ export function resolveTerminalShortcutAction(
     // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
     // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
     if (
+      !(
+        terminalShortcutPolicy === 'terminal-first' &&
+        platform === 'win32' &&
+        isPlainCtrlW(event) &&
+        isWindowsGitBashPane?.() === true
+      ) &&
       isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
         context: 'terminal',
         terminalShortcutPolicy

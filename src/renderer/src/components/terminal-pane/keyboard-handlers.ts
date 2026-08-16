@@ -49,6 +49,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import { isWindowsGitBashPaneForShortcut } from './windows-git-bash-shortcut'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -68,7 +69,8 @@ export function resolveTerminalKeyboardShortcutAction(
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
   terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
-  hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12]
+  hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12],
+  isWindowsGitBashPane?: Parameters<typeof resolveTerminalShortcutAction>[13]
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -85,7 +87,8 @@ export function resolveTerminalKeyboardShortcutAction(
     getWindowsShiftEnterEncoding,
     isWindowsTerminalHost,
     terminalShortcutPolicy,
-    hasCtrlEnterCsiUAuthority
+    hasCtrlEnterCsiUAuthority,
+    isWindowsGitBashPane
   )
 }
 
@@ -402,6 +405,21 @@ export function useTerminalKeyboardShortcuts({
       )
     }
 
+    const isActivePaneWindowsGitBash = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return false
+      }
+      const localSessionMetadata = paneTransportsRef.current
+        .get(activePane.id)
+        ?.getLocalSessionMetadata?.()
+      return isWindowsGitBashPaneForShortcut({
+        isWindowsTerminalHost: isActivePaneWindowsTerminalHost(),
+        sessionShellOverride: localSessionMetadata?.shellOverride
+      })
+    }
+
     // Why: the pane's TUI opted into kitty keyboard reporting via CSI > u;
     // the tracker mirrors that from PTY output so the policy can encode
     // Option chords the way the application negotiated.
@@ -446,7 +464,8 @@ export function useTerminalKeyboardShortcuts({
         getActivePaneWindowsShiftEnterEncoding,
         isActivePaneWindowsTerminalHost,
         terminalShortcutPolicy,
-        hasActivePaneCtrlEnterCsiUAuthority
+        hasActivePaneCtrlEnterCsiUAuthority,
+        isActivePaneWindowsGitBash
       )
 
     const createCapturedInputSender = (
