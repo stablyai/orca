@@ -448,10 +448,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(requestSpy.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(1)
         expect(errorSpy).toHaveBeenCalledWith(
           '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
-          expect.objectContaining({
-            sessionId: 'orphaned-legacy-session',
-            protocolVersion: 30
-          })
+          { protocolVersion: 30, killErrorClass: 'unknown' }
         )
       } finally {
         legacy.dispose()

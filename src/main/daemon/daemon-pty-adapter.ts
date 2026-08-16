@@ -1053,13 +1053,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
     })
     if (!retire.ok) {
+      const killErrorClass = classifyAttachOnlyKillError(retire.error)
       console.error(
         '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
-        { sessionId: id, protocolVersion: this.protocolVersion, error: retire.error }
+        { protocolVersion: this.protocolVersion, killErrorClass }
       )
       trackAttachOnlyOrphanRisk({
         protocolVersion: this.protocolVersion,
-        killErrorClass: classifyAttachOnlyKillError(retire.error)
+        killErrorClass
       })
     }
     throw new SessionNotFoundError(id)
