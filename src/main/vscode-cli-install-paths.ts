@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { getLauncherBaseName } from './editor-launcher-name'
 
 type KnownPathOptions = {
@@ -30,8 +30,8 @@ export function listKnownVsCodeCliPaths(command: string, options: KnownPathOptio
 
   if (platform === 'darwin') {
     const app = insiders ? 'Visual Studio Code - Insiders.app' : 'Visual Studio Code.app'
-    const relative = join(app, 'Contents', 'Resources', 'app', 'bin', 'code')
-    return [join('/Applications', relative), join(homePath, 'Applications', relative)]
+    const relative = posix.join(app, 'Contents', 'Resources', 'app', 'bin', 'code')
+    return [posix.join('/Applications', relative), posix.join(homePath, 'Applications', relative)]
   }
 
   if (platform === 'win32') {

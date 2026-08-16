@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import type * as NodePath from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 import { listKnownVsCodeCliPaths, resolveKnownVsCodeCliPath } from './vscode-cli-install-paths'
 
 describe('listKnownVsCodeCliPaths', () => {
@@ -21,6 +22,31 @@ describe('listKnownVsCodeCliPaths', () => {
         homePath: '/Users/ada'
       })[0]
     ).toBe('/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code')
+  })
+
+  it('keeps macOS candidates POSIX when executed on a Windows host', async () => {
+    vi.resetModules()
+    vi.doMock('node:path', async () => {
+      const path = await vi.importActual<typeof NodePath>('node:path')
+      return { ...path, join: path.win32.join }
+    })
+    try {
+      const { listKnownVsCodeCliPaths: listPathsWithWindowsHost } =
+        await import('./vscode-cli-install-paths')
+
+      expect(
+        listPathsWithWindowsHost('code', {
+          platform: 'darwin',
+          homePath: '/Users/ada'
+        })
+      ).toEqual([
+        '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+        '/Users/ada/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+      ])
+    } finally {
+      vi.doUnmock('node:path')
+      vi.resetModules()
+    }
   })
 
   it('returns Windows user and Program Files bin shims', () => {
