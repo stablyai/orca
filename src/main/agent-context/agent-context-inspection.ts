@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs'
-import { open, readdir, stat } from 'node:fs/promises'
+import { open, readdir, stat, type FileHandle } from 'node:fs/promises'
 import type {
   AgentContextHookFile,
   AgentContextInstructionFile,
@@ -48,19 +48,29 @@ async function readBoundedText(pathValue: string): Promise<string | null> {
   if (fileStat.size > MAX_CONFIG_BYTES) {
     return null
   }
-  const file = await open(pathValue, 'r')
+  // Why: one unreadable file (EACCES, deleted between stat and open) must not
+  // fail the whole report; it reads as missing, like a file that never existed.
+  let file: FileHandle
+  try {
+    file = await open(pathValue, 'r')
+  } catch {
+    return null
+  }
   try {
     const buffer = Buffer.alloc(fileStat.size)
     const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
     return buffer.subarray(0, bytesRead).toString('utf8')
+  } catch {
+    return null
   } finally {
-    await file.close()
+    await file.close().catch(() => undefined)
   }
 }
 
 async function countRuleFiles(dirPath: string): Promise<number | null> {
   try {
-    const entries = await readdir(dirPath, { withFileTypes: true })
+    // Why: Cursor and Copilot both read rule files from nested folders.
+    const entries = await readdir(dirPath, { withFileTypes: true, recursive: true })
     return entries.filter((entry) => entry.isFile() && RULE_FILE_PATTERN.test(entry.name)).length
   } catch {
     return null

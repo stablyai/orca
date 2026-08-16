@@ -143,7 +143,7 @@ describe('WorkspaceContextPanel', () => {
 
   it('reveals checked-but-empty locations when toggled', () => {
     act(() => root.render(<WorkspaceContextPanel />))
-    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement
+    const checkbox = container.querySelector('[role="checkbox"]') as HTMLButtonElement
     act(() => {
       checkbox.click()
     })

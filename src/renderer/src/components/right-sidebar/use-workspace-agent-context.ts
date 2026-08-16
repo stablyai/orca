@@ -45,7 +45,13 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
     discoveryTarget
   })
 
-  const [report, setReport] = useState<AgentContextReport | null>(null)
+  // Why: keyed to the target so a workspace switch never shows (or opens files
+  // from) the previous workspace's report while the new scan is in flight.
+  const [keyedReport, setKeyedReport] = useState<{
+    key: string
+    report: AgentContextReport
+  } | null>(null)
+  const report = keyedReport?.key === discoveryTargetKey ? keyedReport.report : null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [generation, setGeneration] = useState(0)
@@ -55,7 +61,7 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
 
   useEffect(() => {
     if (!runtimeTarget || !discoveryTarget) {
-      setReport(null)
+      setKeyedReport(null)
       setLoading(false)
       setError(null)
       return
@@ -66,7 +72,7 @@ export function useWorkspaceAgentContext(): WorkspaceAgentContextState {
     void inspectAgentContextForRuntimeTarget(runtimeTarget, discoveryTarget)
       .then((next) => {
         if (mountedRef.current && latestKeyRef.current === requestKey) {
-          setReport(next)
+          setKeyedReport({ key: requestKey, report: next })
         }
       })
       .catch((cause: unknown) => {

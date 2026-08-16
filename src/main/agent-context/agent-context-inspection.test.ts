@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { inspectAgentContext } from './agent-context-inspection'
 import { buildInstructionFileSources, MAX_ANCESTOR_LEVELS } from './agent-context-sources'
@@ -185,15 +185,29 @@ describe('inspectAgentContext', () => {
 })
 
 describe('buildInstructionFileSources', () => {
-  it('stops the ancestor walk at the home directory and at the level cap', () => {
+  it('walks exactly MAX_ANCESTOR_LEVELS parents when the home directory is not reached', () => {
+    const outside = join(root, 'elsewhere')
     const nested = join(
-      homeDir,
+      outside,
       ...Array.from({ length: MAX_ANCESTOR_LEVELS + 3 }, (_, i) => `d${i}`)
     )
-    const sources = buildInstructionFileSources({ homeDir, cwd: nested })
-    const ancestors = sources.filter((source) => source.scope === 'ancestor')
-    expect(ancestors.length).toBeLessThanOrEqual(MAX_ANCESTOR_LEVELS * 2)
-    expect(ancestors.every((source) => !source.path.startsWith(join(homeDir, 'CLAUDE')))).toBe(true)
+    const ancestors = buildInstructionFileSources({ homeDir, cwd: nested }).filter(
+      (source) => source.scope === 'ancestor'
+    )
+    // Two rows (CLAUDE.md + AGENTS.md) per ancestor level.
+    expect(ancestors).toHaveLength(MAX_ANCESTOR_LEVELS * 2)
+    expect(ancestors[0]?.path).toBe(join(dirname(nested), 'CLAUDE.md'))
+  })
+
+  it('stops the ancestor walk at the home directory', () => {
+    const nested = join(homeDir, 'a', 'b')
+    const ancestors = buildInstructionFileSources({ homeDir, cwd: nested }).filter(
+      (source) => source.scope === 'ancestor'
+    )
+    expect(ancestors.map((source) => source.path)).toEqual([
+      join(homeDir, 'a', 'CLAUDE.md'),
+      join(homeDir, 'a', 'AGENTS.md')
+    ])
   })
 
   it('omits project and ancestor rows without a workspace', () => {

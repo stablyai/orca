@@ -29,8 +29,12 @@ export function formatBytes(sizeBytes: number | null): string {
   return kib < 100 ? `${kib.toFixed(1)} KB` : `${Math.round(kib)} KB`
 }
 
+const WINDOWS_PATH_PATTERN = /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/])/
+
+/** Windows drive and UNC paths compare case-insensitively; POSIX paths keep case. */
 function normalizePathForPrefix(pathValue: string): string {
-  return pathValue.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const normalized = pathValue.replace(/\\/g, '/').replace(/\/+$/, '')
+  return WINDOWS_PATH_PATTERN.test(pathValue) ? normalized.toLowerCase() : normalized
 }
 
 /** Whether `child` is `parent` or sits inside it, tolerant of separator style. */

@@ -3140,8 +3140,14 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
 
 function createAgentContextApi(): NonNullable<Partial<PreloadApi>['agentContext']> {
   return {
+    // Why: the paired runtime owns its WSL/project-runtime resolution; a client
+    // target describes the client's host, so only workspace identity crosses.
     inspect: (target) =>
-      callRuntimeResult<AgentContextReport>('agentContext.inspect', target, 15_000)
+      callRuntimeResult<AgentContextReport>(
+        'agentContext.inspect',
+        { cwd: target?.cwd, worktreeId: target?.worktreeId },
+        15_000
+      )
   }
 }
 

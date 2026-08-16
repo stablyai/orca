@@ -4,6 +4,8 @@ import type { AgentContextInstructionFile } from '../../../../shared/agent-conte
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -139,18 +141,20 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
             {hostLabel ? ` · ${hostLabel}` : ''}
           </div>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={refresh}
           aria-label={translate(
             'auto.components.rightSidebar.WorkspaceContextPanel.refresh',
             'Refresh'
           )}
           title={translate('auto.components.rightSidebar.WorkspaceContextPanel.refresh', 'Refresh')}
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground"
         >
-          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-        </button>
+          <RefreshCw className={cn(loading && 'animate-spin')} />
+        </Button>
       </div>
       <div
         role="tablist"
@@ -178,12 +182,11 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
           </button>
         ))}
       </div>
-      <label className="flex cursor-pointer items-center gap-2 border-b border-border px-4 py-1.5 text-[11px] text-muted-foreground">
-        <input
-          type="checkbox"
-          className="size-3"
+      <label className="flex cursor-pointer items-center gap-2 border-b border-border px-4 py-1.5 text-xs text-muted-foreground">
+        <Checkbox
+          className="size-3.5"
           checked={showMissing}
-          onChange={(event) => setShowMissing(event.target.checked)}
+          onCheckedChange={(checked) => setShowMissing(checked === true)}
         />
         {translate(
           'auto.components.rightSidebar.WorkspaceContextPanel.showMissing',
@@ -204,7 +207,7 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
             open={filter === 'instructions' || open.instructions}
             onToggle={() => toggle('instructions')}
           >
-            {instructionGroups.length === 0 ? (
+            {report && instructionGroups.length === 0 ? (
               <EmptyRow
                 text={translate(
                   'auto.components.rightSidebar.WorkspaceContextPanel.noInstructions',
