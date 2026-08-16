@@ -5,6 +5,7 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { translate } from '@/i18n/i18n'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
@@ -19,7 +20,6 @@ import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext
 } from './terminal-link-action-request'
-import { translate } from '@/i18n/i18n'
 
 export { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 export type { ParsedOrchestrationTaskLink } from './terminal-orchestration-task-links'
@@ -292,10 +292,15 @@ function ptyIdMatchesTerminalHandle(
 }
 
 function getTerminalHandleFocusHint(showActions: boolean): string {
-  const prefix = showActions ? 'Click for actions or ' : ''
+  const prefix = showActions
+    ? translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.click.for.actions.or',
+        '单击查看操作或 '
+      )
+    : ''
   return navigator.userAgent.includes('Mac')
-    ? `${prefix}⌘+click to switch terminal`
-    : `${prefix}Ctrl+click to switch terminal`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.handle.links.mac.switch.terminal', '⌘+点击切换终端')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.handle.links.windows.switch.terminal', 'Ctrl+点击切换终端')}`
 }
 
 async function focusRuntimeTerminalHandle(

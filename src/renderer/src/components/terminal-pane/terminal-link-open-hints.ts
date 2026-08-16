@@ -1,34 +1,45 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
+import { translate } from '@/i18n/i18n'
 
 export function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
 }
 
 function terminalLinkActionHintPrefix(showActions: boolean): string {
-  return showActions ? 'Click for actions, ' : ''
+  return showActions
+    ? translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.click.for.actions',
+        '单击查看操作，'
+      )
+    : ''
 }
 
 export function getTerminalFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
   return isMacPlatform()
-    ? `${prefix}⌘+click to open, or ⇧⌘+click for default app`
-    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.open.file', '⌘+点击打开，或 ⇧⌘+点击用默认应用打开')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.open.file', 'Ctrl+点击打开，或 Shift+Ctrl+点击用默认应用打开')}`
 }
 
 export function getTerminalOrcaFileOpenHint(showActions = true): string {
-  const prefix = showActions ? 'Click for actions or ' : ''
+  const prefix = showActions
+    ? translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.click.for.actions.or',
+        '单击查看操作或 '
+      )
+    : ''
   return isMacPlatform()
-    ? `${prefix}⌘+click to open in Orca`
-    : `${prefix}Ctrl+click to open in Orca`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.open.in.orca', '⌘+点击在 Orca 中打开')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.open.in.orca', 'Ctrl+点击在 Orca 中打开')}`
 }
 
 // Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
 export function getTerminalHtmlFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
   return isMacPlatform()
-    ? `${prefix}⌘+click to open, or ⇧⌘+click for default browser`
-    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default browser`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.open.html', '⌘+点击打开，或 ⇧⌘+点击用默认浏览器打开')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.open.html', 'Ctrl+点击打开，或 Shift+Ctrl+点击用默认浏览器打开')}`
 }
 
 export type TerminalUrlOpenHintOptions = {
@@ -81,22 +92,38 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
   const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
   if (invertsToOrca) {
     return isMacPlatform()
-      ? `${prefix}⌘+click to open, or ⇧⌘+click to open in Orca`
-      : `${prefix}Ctrl+click to open, or Shift+Ctrl+click to open in Orca`
+      ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.open.url.orca', '⌘+点击打开，或 ⇧⌘+点击在 Orca 中打开')}`
+      : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.open.url.orca', 'Ctrl+点击打开，或 Shift+Ctrl+点击在 Orca 中打开')}`
   }
   return isMacPlatform()
-    ? `${prefix}⌘+click to open, or ⇧⌘+click for system browser`
-    : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.open.url.system', '⌘+点击打开，或 ⇧⌘+点击用系统浏览器打开')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.open.url.system', 'Ctrl+点击打开，或 Shift+Ctrl+点击用系统浏览器打开')}`
 }
 
 export function getTerminalUrlSystemBrowserHint(): string {
-  return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+  return isMacPlatform()
+    ? translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.mac.system.browser',
+        '⇧⌘+点击用系统浏览器打开'
+      )
+    : translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.windows.system.browser',
+        'Shift+Ctrl+点击用系统浏览器打开'
+      )
 }
 
 // Why: the mirror of the system-browser hint for surfaces where inverting sends the
 // modifier the other way; a plain click there already opens the system browser.
 export function getTerminalUrlOrcaBrowserHint(): string {
-  return isMacPlatform() ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
+  return isMacPlatform()
+    ? translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.mac.orca.browser',
+        '⇧⌘+点击在 Orca 中打开'
+      )
+    : translate(
+        'auto.components.terminal.pane.terminal.link.open.hints.windows.orca.browser',
+        'Shift+Ctrl+点击在 Orca 中打开'
+      )
 }
 
 export function getTerminalWorktreePathOpenHint(
@@ -105,13 +132,18 @@ export function getTerminalWorktreePathOpenHint(
 ): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
   if (!canOpenWithSystemDefault) {
-    const directPrefix = showActions ? 'Click for actions or ' : ''
+    const directPrefix = showActions
+      ? translate(
+          'auto.components.terminal.pane.terminal.link.open.hints.click.for.actions.or',
+          '单击查看操作或 '
+        )
+      : ''
     return isMacPlatform()
-      ? `${directPrefix}⌘+click to switch workspace`
-      : `${directPrefix}Ctrl+click to switch workspace`
+      ? `${directPrefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.switch.workspace', '⌘+点击切换工作区')}`
+      : `${directPrefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.switch.workspace', 'Ctrl+点击切换工作区')}`
   }
 
   return isMacPlatform()
-    ? `${prefix}⌘+click to switch workspace, or ⇧⌘+click to open in Finder`
-    : `${prefix}Ctrl+click to switch workspace, or Shift+Ctrl+click to open folder`
+    ? `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.mac.worktree.finder', '⌘+点击切换工作区，或 ⇧⌘+点击在访达中打开')}`
+    : `${prefix}${translate('auto.components.terminal.pane.terminal.link.open.hints.windows.worktree.folder', 'Ctrl+点击切换工作区，或 Shift+Ctrl+点击打开文件夹')}`
 }
