@@ -1,4 +1,5 @@
 import type { MobileGitUpstreamStatus } from './mobile-git-status'
+import { translate } from '../../../src/renderer/src/i18n/i18n'
 
 // Icon identifier resolved to a lucide component by the screen. Kept as a string
 // here so this module stays free of the native lucide import and unit-testable.
@@ -83,7 +84,7 @@ export function buildMobileSourceControlActions(
 
   return [
     {
-      label: 'Commit',
+      label: translate('mobile.sourceControl.actions.commit', 'Commit'),
       iconKey: 'commit',
       disabled: busy || !!commitHint,
       hint: commitHint,
@@ -92,7 +93,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commit
     },
     {
-      label: 'Commit & Push',
+      label: translate('mobile.sourceControl.actions.commitPush', 'Commit & Push'),
       iconKey: 'push',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream,
       hint: commitHint ?? remoteHint,
@@ -101,7 +102,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commitPush
     },
     {
-      label: 'Commit & Sync',
+      label: translate('mobile.sourceControl.actions.commitSync', 'Commit & Sync'),
       iconKey: 'sync',
       disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream || behind === 0,
       hint:
@@ -116,7 +117,12 @@ export function buildMobileSourceControlActions(
       onPress: handlers.commitSync
     },
     {
-      label: ahead > 0 ? `Push (${ahead})` : 'Push',
+      label:
+        ahead > 0
+          ? translate('mobile.sourceControl.actions.pushCount', 'Push ({{count}})', {
+              count: ahead
+            })
+          : translate('mobile.sourceControl.actions.push', 'Push'),
       iconKey: 'push',
       disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0,
       hint: !hasUpstream ? remoteHint : ahead === 0 ? 'Nothing to push' : undefined,
@@ -125,7 +131,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.push
     },
     {
-      label: 'Create PR',
+      label: translate('mobile.sourceControl.actions.createPr', 'Create PR'),
       iconKey: 'pr',
       disabled: busy || !args.prAvailable,
       hint: prHint,
@@ -134,7 +140,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.createPr
     },
     {
-      label: 'Push & Create PR',
+      label: translate('mobile.sourceControl.actions.pushCreatePr', 'Push & Create PR'),
       iconKey: 'pr',
       disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0 || !args.prAvailable,
       hint: prHint ?? (!hasUpstream ? remoteHint : undefined),
@@ -143,7 +149,12 @@ export function buildMobileSourceControlActions(
       onPress: handlers.pushAndCreatePr
     },
     {
-      label: behind > 0 ? `Pull (${behind})` : 'Pull',
+      label:
+        behind > 0
+          ? translate('mobile.sourceControl.actions.pullCount', 'Pull ({{count}})', {
+              count: behind
+            })
+          : translate('mobile.sourceControl.actions.pull', 'Pull'),
       iconKey: 'pull',
       disabled: busy || !upstreamKnown || !hasUpstream || behind === 0,
       hint: !hasUpstream ? remoteHint : behind === 0 ? 'Nothing to pull' : undefined,
@@ -152,7 +163,13 @@ export function buildMobileSourceControlActions(
       onPress: handlers.pull
     },
     {
-      label: ahead > 0 || behind > 0 ? `Sync (↓${behind} ↑${ahead})` : 'Sync',
+      label:
+        ahead > 0 || behind > 0
+          ? translate('mobile.sourceControl.actions.syncCount', 'Sync (↓{{behind}} ↑{{ahead}})', {
+              ahead,
+              behind
+            })
+          : translate('mobile.sourceControl.actions.sync', 'Sync'),
       iconKey: 'sync',
       disabled: busy || !upstreamKnown || !hasUpstream || (ahead === 0 && behind === 0),
       hint:
@@ -166,7 +183,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.sync
     },
     {
-      label: 'Fetch',
+      label: translate('mobile.sourceControl.actions.fetch', 'Fetch'),
       iconKey: 'fetch',
       disabled: busy,
       loading: args.busyAction === 'fetch',
@@ -174,7 +191,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.fetch
     },
     {
-      label: 'Publish Branch',
+      label: translate('mobile.sourceControl.actions.publishBranch', 'Publish Branch'),
       iconKey: 'publish',
       disabled: busy || !upstreamKnown || hasUpstream,
       hint: !upstreamKnown
@@ -187,7 +204,12 @@ export function buildMobileSourceControlActions(
       onPress: handlers.publish
     },
     {
-      label: behind > 0 ? `Fast-forward (${behind})` : 'Fast-forward',
+      label:
+        behind > 0
+          ? translate('mobile.sourceControl.actions.fastForwardCount', 'Fast-forward ({{count}})', {
+              count: behind
+            })
+          : translate('mobile.sourceControl.actions.fastForward', 'Fast-forward'),
       iconKey: 'pull',
       disabled: busy || !upstreamKnown || !hasUpstream || behind === 0 || ahead > 0,
       hint: !hasUpstream
@@ -202,7 +224,7 @@ export function buildMobileSourceControlActions(
       onPress: handlers.fastForward
     },
     {
-      label: 'Rebase onto base',
+      label: translate('mobile.sourceControl.actions.rebaseOntoBase', 'Rebase onto base'),
       iconKey: 'branch',
       disabled: busy,
       loading: args.busyAction === 'rebase',
@@ -210,14 +232,14 @@ export function buildMobileSourceControlActions(
       onPress: handlers.rebase
     },
     {
-      label: 'Switch branch',
+      label: translate('mobile.sourceControl.actions.switchBranch', 'Switch branch'),
       iconKey: 'branch',
       disabled: busy,
       skipAutoClose: true,
       onPress: handlers.checkout
     },
     {
-      label: 'Commits',
+      label: translate('mobile.sourceControl.actions.commits', 'Commits'),
       iconKey: 'history',
       disabled: busy,
       onPress: handlers.history

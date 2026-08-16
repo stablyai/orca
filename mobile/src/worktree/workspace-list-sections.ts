@@ -10,9 +10,26 @@ import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-s
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import { sortWorktrees } from './workspace-list-ordering'
+import { translate } from '../../../src/renderer/src/i18n/i18n'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
+
+/** Translate default workspace status labels to the active UI locale. */
+function translateWorkspaceStatusLabel(status: WorkspaceStatusDefinition): string {
+  switch (status.id) {
+    case 'todo':
+      return translate('auto.components.sidebar.workspaceBoardStatus.todo', 'Todo')
+    case 'in-progress':
+      return translate('auto.components.sidebar.workspaceBoardStatus.inProgress', 'In progress')
+    case 'in-review':
+      return translate('auto.components.sidebar.workspaceBoardStatus.inReview', 'In review')
+    case 'completed':
+      return translate('auto.components.sidebar.workspaceBoardStatus.done', 'Done')
+    default:
+      return status.label
+  }
+}
 
 function makeSection(
   key: string,
@@ -198,7 +215,7 @@ export function buildSections(
         sections.push(
           makeSection(
             getMobileWorkspaceStatusGroupKey(status.id),
-            status.label,
+            translateWorkspaceStatusLabel(status),
             items,
             undefined,
             collapsedGroups

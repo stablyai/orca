@@ -3,6 +3,7 @@ import {
   type SourceControlCommitAreaPrimaryActionDecision,
   type SourceControlRemoteOpKind
 } from '../../../src/shared/source-control-primary-action-decision'
+import { translate } from '../../../src/renderer/src/i18n/i18n'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
@@ -129,21 +130,21 @@ function getMobileBranchCommitsAhead(
 
 function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionDecision): string {
   if (decision.requiresForceWithLease) {
-    return 'Force Push'
+    return translate('mobile.sourceControl.primaryAction.forcePush', 'Force Push')
   }
   switch (decision.kind) {
     case 'commit':
-      return 'Commit'
+      return translate('mobile.sourceControl.primaryAction.commit', 'Commit')
     case 'stage':
-      return 'Stage All'
+      return translate('mobile.sourceControl.primaryAction.stageAll', 'Stage All')
     case 'push':
-      return 'Push'
+      return translate('mobile.sourceControl.primaryAction.push', 'Push')
     case 'pull':
-      return 'Pull'
+      return translate('mobile.sourceControl.primaryAction.pull', 'Pull')
     case 'sync':
-      return 'Sync'
+      return translate('mobile.sourceControl.primaryAction.sync', 'Sync')
     case 'publish':
-      return 'Publish Branch'
+      return translate('mobile.sourceControl.primaryAction.publishBranch', 'Publish Branch')
   }
 }
 

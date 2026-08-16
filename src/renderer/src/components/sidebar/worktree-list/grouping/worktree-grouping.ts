@@ -17,6 +17,7 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { getManualOrderAnchorRepo, sortProjectEntries } from './section-order'
+import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
 
 /** Buckets worktrees into their sections and returns them in render order. */
 export function buildOrderedGroups(args: {
@@ -63,8 +64,8 @@ export function buildOrderedGroups(args: {
     } else if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
       key = getWorkspaceStatusGroupKey(workspaceStatus)
-      label =
-        workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
+      const statusDef = workspaceStatuses.find((status) => status.id === workspaceStatus)
+      label = statusDef ? translateWorkspaceBoardStatusLabel(statusDef) : workspaceStatus
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`

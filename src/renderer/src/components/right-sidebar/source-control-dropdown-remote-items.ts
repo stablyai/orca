@@ -52,7 +52,10 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const push: DropdownItem = {
     kind: 'push',
-    label: formatCountLabel('Push', ahead),
+    label: formatCountLabel(
+      translate('auto.components.right.sidebar.source.control.dropdown.remote.items.push', 'Push'),
+      ahead
+    ),
     title: publishBlockedByDetachedHead
       ? 'Check out a branch before pushing commits'
       : pushBlockedByOpenHostedReviewTarget
@@ -76,7 +79,13 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const forcePush: DropdownItem = {
     kind: 'force_push',
-    label: formatCountLabel('Force Push', pushLabelCount),
+    label: formatCountLabel(
+      translate(
+        'auto.components.right.sidebar.source.control.dropdown.remote.items.forcepush',
+        'Force Push'
+      ),
+      pushLabelCount
+    ),
     title: publishBlockedByDetachedHead
       ? 'Check out a branch before force pushing commits'
       : pushBlockedByOpenHostedReviewTarget
@@ -96,7 +105,10 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const pull: DropdownItem = {
     kind: 'pull',
-    label: formatCountLabel('Pull', behind),
+    label: formatCountLabel(
+      translate('auto.components.right.sidebar.source.control.dropdown.remote.items.pull', 'Pull'),
+      behind
+    ),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
@@ -117,7 +129,13 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const fastForward: DropdownItem = {
     kind: 'fast_forward',
-    label: formatCountLabel('Fast-forward', behind),
+    label: formatCountLabel(
+      translate(
+        'auto.components.right.sidebar.source.control.dropdown.remote.items.fastforward',
+        'Fast-forward'
+      ),
+      behind
+    ),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
@@ -140,7 +158,11 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const sync: DropdownItem = {
     kind: 'sync',
-    label: formatSyncLabel('Sync', ahead, behind),
+    label: formatSyncLabel(
+      translate('auto.components.right.sidebar.source.control.dropdown.remote.items.sync', 'Sync'),
+      ahead,
+      behind
+    ),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
@@ -168,7 +190,16 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
   const rebase: DropdownItem = {
     kind: 'rebase_base',
-    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
+    label: rebaseBaseLabel
+      ? translate(
+          'auto.components.right.sidebar.source.control.dropdown.remote.items.rebase.from',
+          'Rebase from {{ref}}',
+          { ref: rebaseBaseLabel }
+        )
+      : translate(
+          'auto.components.right.sidebar.source.control.dropdown.remote.items.rebase.base',
+          'Rebase from Base'
+        ),
     title: ((): string => {
       if (!rebaseBaseLabel || !hasRemoteBaseRef) {
         return 'Choose a remote base branch to rebase from'
@@ -198,12 +229,24 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
     kind: 'publish',
     label:
       publishBlockedByMergedPR || publishBlockedByPRLoading
-        ? 'PR Status'
+        ? translate(
+            'auto.components.right.sidebar.source.control.dropdown.remote.items.publish.prstatus',
+            'PR Status'
+          )
         : publishBlockedByOpenHostedReview
-          ? 'Linked Review'
+          ? translate(
+              'auto.components.right.sidebar.source.control.dropdown.remote.items.publish.linkedreview',
+              'Linked Review'
+            )
           : publishBlockedByDetachedHead
-            ? 'No Branch'
-            : 'Publish Branch',
+            ? translate(
+                'auto.components.right.sidebar.source.control.dropdown.remote.items.publish.nobranch',
+                'No Branch'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.dropdown.remote.items.publish.branch',
+                'Publish Branch'
+              ),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading

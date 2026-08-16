@@ -59,7 +59,15 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
                     : 'Commit staged changes and push'))
   const commitPush: DropdownItem = {
     kind: 'commit_push',
-    label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
+    label: shouldForcePushWithLease
+      ? translate(
+          'auto.components.right.sidebar.source.control.dropdown.commit.items.a1b2c3d4e5',
+          'Commit & Force Push'
+        )
+      : translate(
+          'auto.components.right.sidebar.source.control.dropdown.commit.items.f6g7h8i9j0',
+          'Commit & Push'
+        ),
     title: commitPushTitle,
     // Why: match explicit Push — only an open linked review with a known head can commit+push without a git upstream.
     disabled:

@@ -1,20 +1,38 @@
 // Why: label/title wording for the dropdown rows, kept apart from the priority ladder so copy edits
 // do not touch the state machine.
 
+import { translate } from '@/i18n/i18n'
+
 export function describePushCount(ahead: number): string {
-  return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
+  return translate(
+    'auto.components.right.sidebar.source.control.dropdown.labels.push.count',
+    'Push {{count}} commit{{plural}}',
+    { count: ahead, plural: ahead === 1 ? '' : 's' }
+  )
 }
 
 export function describePullCount(behind: number): string {
-  return `Pull ${behind} commit${behind === 1 ? '' : 's'}`
+  return translate(
+    'auto.components.right.sidebar.source.control.dropdown.labels.pull.count',
+    'Pull {{count}} commit{{plural}}',
+    { count: behind, plural: behind === 1 ? '' : 's' }
+  )
 }
 
 export function describeFastForwardCount(behind: number): string {
-  return `Fast-forward ${behind} commit${behind === 1 ? '' : 's'}`
+  return translate(
+    'auto.components.right.sidebar.source.control.dropdown.labels.fastforward.count',
+    'Fast-forward {{count}} commit{{plural}}',
+    { count: behind, plural: behind === 1 ? '' : 's' }
+  )
 }
 
 export function describeSyncCounts(ahead: number, behind: number): string {
-  return `Pull ${behind}, push ${ahead}`
+  return translate(
+    'auto.components.right.sidebar.source.control.dropdown.labels.sync.counts',
+    'Pull {{behind}}, push {{ahead}}',
+    { ahead, behind }
+  )
 }
 
 export function formatCountLabel(base: string, count: number): string {
