@@ -14,6 +14,7 @@ function row(overrides: Partial<UnifiedSessionRow> = {}): UnifiedSessionRow {
     cpu: null,
     memory: null,
     hasLocalSamples: false,
+    uptimeSeconds: null,
     ...overrides
   }
 }

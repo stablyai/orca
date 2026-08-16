@@ -24,6 +24,8 @@ export type UnifiedSessionRow = {
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  /** Seconds since the session's root process started; `null` when unavailable. */
+  uptimeSeconds: Metric
 }
 
 export type UnifiedWorktreeRow = {
