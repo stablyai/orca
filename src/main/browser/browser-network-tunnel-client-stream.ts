@@ -1,28 +1,23 @@
 import { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import type { BrowserNetworkTunnelSourceFlowStream } from './browser-network-tunnel-source-flow'
+import type { BrowserNetworkTunnelSourceReceiveStream } from './browser-network-tunnel-source-receive-flow'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
 } from './browser-network-tunnel-stream-state'
 
-export type BrowserNetworkTunnelClientStream = BrowserNetworkTunnelSourceFlowStream & {
-  id: number
-  socket: BrowserNetworkTunnelDuplex
-  opened: boolean
-  closed: boolean
-  localEnded: boolean
-  localHalfCloseSent: boolean
-  remoteEnded: boolean
-  remoteClosed: boolean
-  readableEnded: boolean
-  receiveCredit: number
-  pendingToSocket: Uint8Array<ArrayBufferLike>[]
-  pendingToSocketBytes: number
-  readableDemand: boolean
-  connectTimeout: ReturnType<typeof setTimeout>
-  resolveOpen: (socket: BrowserNetworkTunnelDuplex) => void
-  rejectOpen: (error: Error) => void
-}
+export type BrowserNetworkTunnelClientStream = BrowserNetworkTunnelSourceFlowStream &
+  BrowserNetworkTunnelSourceReceiveStream & {
+    id: number
+    socket: BrowserNetworkTunnelDuplex
+    closed: boolean
+    localEnded: boolean
+    localHalfCloseSent: boolean
+    remoteClosed: boolean
+    connectTimeout: ReturnType<typeof setTimeout>
+    resolveOpen: (socket: BrowserNetworkTunnelDuplex) => void
+    rejectOpen: (error: Error) => void
+  }
 
 type BrowserNetworkTunnelClientStreamCallbacks = {
   writeBytes: (bytes: Uint8Array<ArrayBufferLike>, callback: (error?: Error | null) => void) => void
@@ -58,6 +53,7 @@ export function createBrowserNetworkTunnelClientStream(
     receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     pendingToSocket: [],
     pendingToSocketBytes: 0,
+    unsettledToSocket: [],
     readableDemand: false,
     pendingWrites: [],
     pendingWriteBytes: 0,

@@ -123,6 +123,77 @@ describe('subscribeRemoteRuntimeRequest', () => {
     )
   })
 
+  it('accounts encrypted queues and native socket buffers in an injected aggregate budget', async () => {
+    const server = await createSubscriptionServer()
+    const releaseQueued = vi.fn()
+    const releaseSocket = vi.fn()
+    const canSend = vi.fn(() => false)
+    let readBufferedAmount: (() => number) | undefined
+    const outboundMemoryBudget = {
+      claimQueuedBytes: vi.fn(() => releaseQueued),
+      registerBufferedAmount: vi.fn((read: () => number) => {
+        readBufferedAmount = read
+        return { canSend, release: releaseSocket }
+      })
+    }
+    const onResponse = vi.fn()
+    const onClose = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'network.browserTunnel',
+      {},
+      1000,
+      { onResponse, onError: vi.fn(), onClose },
+      {
+        outboundMemoryBudget,
+        outboundQueue: { softCapBytes: 1, maxQueuedBytes: 1024, maxQueuedFrames: 8 }
+      }
+    )
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+
+    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(true)
+    expect(outboundMemoryBudget.registerBufferedAmount).toHaveBeenCalledOnce()
+    expect(readBufferedAmount?.()).toBeGreaterThanOrEqual(0)
+    expect(canSend).toHaveBeenCalledWith(expect.any(Number), false)
+    expect(outboundMemoryBudget.claimQueuedBytes).toHaveBeenCalledWith(expect.any(Number))
+
+    subscription.close()
+    subscription.close()
+    expect(releaseQueued).toHaveBeenCalledOnce()
+    expect(releaseSocket).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+    expect(releaseSocket).toHaveBeenCalledOnce()
+  })
+
+  it('keeps native socket bytes charged through failure cleanup and a later close', async () => {
+    const server = await createSubscriptionServer()
+    const releaseSocket = vi.fn()
+    const onError = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'network.browserTunnel',
+      {},
+      1000,
+      { onResponse: vi.fn(), onError },
+      {
+        outboundMemoryBudget: {
+          claimQueuedBytes: vi.fn(() => vi.fn()),
+          registerBufferedAmount: vi.fn(() => ({ canSend: () => false, release: releaseSocket }))
+        },
+        outboundQueue: { softCapBytes: 1, maxQueuedBytes: 1, maxQueuedFrames: 1 }
+      }
+    )
+
+    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'remote_runtime_unavailable' })
+    )
+    subscription.close()
+    expect(releaseSocket).not.toHaveBeenCalled()
+
+    await vi.waitFor(() => expect(releaseSocket).toHaveBeenCalledOnce())
+  })
+
   it('detaches subscription socket listeners after close', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
     try {

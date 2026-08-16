@@ -14,10 +14,15 @@ import {
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
+import {
+  BrowserNetworkTunnelOutboundMemoryBudgetRegistry,
+  type BrowserNetworkTunnelOutboundMemoryLease
+} from './browser-network-tunnel-outbound-memory-budget'
 import { RemoteBrowserSocksServer } from './remote-browser-socks-server'
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
+const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
 type PairedRuntimeBrowserNetworkRouteOptions = {
   pairing: PairingOffer
@@ -25,6 +30,7 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   executionHostRevision: number
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
+  outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
   onError?: (error: Error) => void
 }
 
@@ -33,6 +39,7 @@ export class PairedRuntimeBrowserNetworkRoute {
   private tunnel: BrowserNetworkTunnelClient | null = null
   private readonly socks: RemoteBrowserSocksServer
   private subscription: RemoteRuntimeSubscription | null = null
+  private outboundMemory: BrowserNetworkTunnelOutboundMemoryLease | null = null
   private startPromise: Promise<{ host: string; port: number }> | null = null
   private closePromise: Promise<void> | null = null
   private rejectReady: ((error: Error) => void) | null = null
@@ -75,6 +82,12 @@ export class PairedRuntimeBrowserNetworkRoute {
     void ready.catch(() => undefined)
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
+      this.outboundMemory = (
+        this.options.outboundMemoryBudgetRegistry ?? outboundMemoryBudgets
+      ).acquire(this.options.lease.browserHostClientId)
+      if (!this.outboundMemory) {
+        throw new Error('Browser network route outbound memory admission failed')
+      }
       const subscription = await subscribeRemoteRuntimeRequest(
         this.options.pairing,
         'network.browserTunnel',
@@ -117,7 +130,8 @@ export class PairedRuntimeBrowserNetworkRoute {
               }
               this.tunnel = new BrowserNetworkTunnelClient({
                 tunnelGeneration: result.tunnelGeneration,
-                sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false
+                sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false,
+                outboundMemory: this.outboundMemory ?? undefined
               })
               this.ready = true
               resolveReady()
@@ -149,8 +163,10 @@ export class PairedRuntimeBrowserNetworkRoute {
           outboundQueue: {
             softCapBytes: BROWSER_TUNNEL_WS_SOFT_CAP_BYTES,
             maxQueuedBytes: BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES,
-            maxQueuedFrames: 2_048
+            maxQueuedFrames: 2_048,
+            maxDrainFramesPerTurn: 4
           },
+          outboundMemoryBudget: this.outboundMemory,
           clientCapabilities: [
             ...(this.options.subscription?.clientCapabilities ?? []),
             BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -214,15 +230,21 @@ export class PairedRuntimeBrowserNetworkRoute {
   }
 
   private async closeRoute(error: Error): Promise<void> {
-    this.tunnel?.close(error)
-    this.tunnel = null
     const failures: Error[] = []
+    try {
+      this.tunnel?.close(error)
+    } catch (closeError) {
+      failures.push(closeError instanceof Error ? closeError : new Error(String(closeError)))
+    }
+    this.tunnel = null
     try {
       this.subscription?.close()
     } catch (closeError) {
       failures.push(closeError instanceof Error ? closeError : new Error(String(closeError)))
     }
     this.subscription = null
+    this.outboundMemory?.release()
+    this.outboundMemory = null
     try {
       await this.socks.close()
     } catch (closeError) {

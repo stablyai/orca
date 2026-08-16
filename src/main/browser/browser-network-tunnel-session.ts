@@ -13,7 +13,7 @@ import {
   writeBrowserNetworkDestination
 } from './browser-network-tunnel-destination-flow'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
-import { BrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
+import { createBrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   reserveBrowserNetworkTunnelStreamId,
@@ -34,7 +34,7 @@ export class BrowserNetworkTunnelSession {
   private readonly connect: BrowserNetworkTunnelSessionOptions['connect']
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly onClose: BrowserNetworkTunnelSessionOptions['onClose']
-  private readonly resourceBudget: BrowserNetworkTunnelResourceBudget
+  private readonly resourceBudget: ReturnType<typeof createBrowserNetworkTunnelResourceBudget>
   private readonly streams = new Map<number, BrowserNetworkTunnelStream>()
   private readonly openedStreamIds = new Set<number>()
   private closed = false
@@ -50,7 +50,7 @@ export class BrowserNetworkTunnelSession {
       () => !this.closed
     )
     this.onClose = options.onClose
-    this.resourceBudget = new BrowserNetworkTunnelResourceBudget(options.now)
+    this.resourceBudget = createBrowserNetworkTunnelResourceBudget(options)
   }
 
   handleBinary(bytes: Uint8Array<ArrayBufferLike>): void {

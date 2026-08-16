@@ -8,6 +8,7 @@ type PendingWrite = {
   bytes: Uint8Array<ArrayBufferLike>
   offset: number
   callback: (error?: Error | null) => void
+  releaseApplicationBytes: () => void
 }
 
 export type BrowserNetworkTunnelSourceFlowStream = {
@@ -19,7 +20,8 @@ export type BrowserNetworkTunnelSourceFlowStream = {
 export function queueBrowserNetworkSourceWrite(
   stream: BrowserNetworkTunnelSourceFlowStream,
   bytes: Uint8Array<ArrayBufferLike>,
-  callback: PendingWrite['callback']
+  callback: PendingWrite['callback'],
+  claimApplicationBytes: (bytes: number) => (() => void) | null
 ): boolean {
   if (
     stream.pendingWriteBytes + bytes.byteLength > BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES ||
@@ -27,8 +29,12 @@ export function queueBrowserNetworkSourceWrite(
   ) {
     return false
   }
+  const releaseApplicationBytes = claimApplicationBytes(bytes.byteLength)
+  if (!releaseApplicationBytes) {
+    return false
+  }
   const copy = bytes.slice()
-  stream.pendingWrites.push({ bytes: copy, offset: 0, callback })
+  stream.pendingWrites.push({ bytes: copy, offset: 0, callback, releaseApplicationBytes })
   stream.pendingWriteBytes += copy.byteLength
   return true
 }
@@ -52,6 +58,7 @@ export function flushBrowserNetworkSourceWrites(
     stream.pendingWriteBytes -= length
     if (pending.offset === pending.bytes.byteLength) {
       stream.pendingWrites.shift()
+      pending.releaseApplicationBytes()
       pending.callback()
     }
   }

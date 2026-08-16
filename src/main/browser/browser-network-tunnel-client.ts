@@ -7,6 +7,7 @@ import {
   type BrowserNetworkTunnelOpen
 } from '../../shared/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
+import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-tunnel-outbound-memory-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   validateBrowserNetworkTunnelGeneration
@@ -22,7 +23,8 @@ import {
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import {
   beginBrowserNetworkSourceRead,
-  grantBrowserNetworkSourceReceiveCredit
+  grantBrowserNetworkSourceReceiveCredit,
+  settleBrowserNetworkSourceData
 } from './browser-network-tunnel-source-receive-flow'
 import { retireBrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-retirement'
 import { handleBrowserNetworkTunnelClientStreamFrame } from './browser-network-tunnel-client-stream-frames'
@@ -30,11 +32,13 @@ import { handleBrowserNetworkTunnelClientStreamFrame } from './browser-network-t
 type BrowserNetworkTunnelClientOptions = {
   tunnelGeneration: number
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  outboundMemory?: Pick<BrowserNetworkTunnelOutboundMemoryLease, 'claimApplicationBytes'>
 }
 
 export class BrowserNetworkTunnelClient {
   private readonly tunnelGeneration: number
   private readonly frameSender: BrowserNetworkTunnelFrameSender
+  private readonly outboundMemory: BrowserNetworkTunnelClientOptions['outboundMemory']
   private readonly streams = new Map<number, BrowserNetworkTunnelClientStream>()
   private nextStreamId = 1
   private closed = false
@@ -42,6 +46,7 @@ export class BrowserNetworkTunnelClient {
   constructor(options: BrowserNetworkTunnelClientOptions) {
     validateBrowserNetworkTunnelGeneration(options.tunnelGeneration)
     this.tunnelGeneration = options.tunnelGeneration
+    this.outboundMemory = options.outboundMemory
     this.frameSender = new BrowserNetworkTunnelFrameSender(
       options.tunnelGeneration,
       options.sendBinary,
@@ -130,6 +135,7 @@ export class BrowserNetworkTunnelClient {
       send: (opcode, streamId, payload) => this.frameSender.send(opcode, streamId, payload),
       closeTunnel: (error) => this.close(error),
       flushWrites: (target) => this.flushStreamWrites(target),
+      claimApplicationBytes: (bytes) => this.claimApplicationBytes(bytes),
       retire: (target, error) => this.retireStream(target, error)
     })
   }
@@ -144,7 +150,11 @@ export class BrowserNetworkTunnelClient {
       callback(new Error('Browser tunnel stream is not writable'))
       return
     }
-    if (!queueBrowserNetworkSourceWrite(stream, bytes, callback)) {
+    if (
+      !queueBrowserNetworkSourceWrite(stream, bytes, callback, (pendingBytes) =>
+        this.claimApplicationBytes(pendingBytes)
+      )
+    ) {
       const error = new Error('Browser tunnel source buffer overflow')
       callback(error)
       this.failStream(stream, error)
@@ -187,8 +197,10 @@ export class BrowserNetworkTunnelClient {
 
   private consumeStreamBytes(streamId: number, bytes: number): void {
     const stream = this.streams.get(streamId)
-    if (stream) {
+    if (stream && settleBrowserNetworkSourceData(stream, bytes)) {
       this.replenishStreamCredit(stream, bytes)
+    } else if (stream) {
+      this.close(new Error('Browser tunnel settled invalid destination bytes'))
     }
   }
 
@@ -267,5 +279,12 @@ export class BrowserNetworkTunnelClient {
 
   private isCurrent(stream: BrowserNetworkTunnelClientStream): boolean {
     return !this.closed && !stream.closed && this.streams.get(stream.id) === stream
+  }
+
+  private claimApplicationBytes(bytes: number): (() => void) | null {
+    if (!this.outboundMemory) {
+      return () => undefined
+    }
+    return this.outboundMemory.claimApplicationBytes(bytes)
   }
 }

@@ -20,6 +20,7 @@ type BrowserNetworkTunnelClientStreamFrameActions = {
   ) => boolean
   closeTunnel: (error: Error) => void
   flushWrites: (stream: BrowserNetworkTunnelClientStream) => void
+  claimApplicationBytes: (bytes: number) => (() => void) | null
   retire: (stream: BrowserNetworkTunnelClientStream, error?: Error) => void
 }
 
@@ -31,7 +32,8 @@ export function handleBrowserNetworkTunnelClientStreamFrame(
   dispatchBrowserNetworkTunnelClientFrame(frame, {
     opened: () => openedStream(stream, actions),
     grantCredit: () => grantStreamCredit(stream, frame.payload, actions),
-    deliverData: () => deliverStreamData(stream, frame.payload, actions.closeTunnel),
+    deliverData: () =>
+      deliverStreamData(stream, frame.payload, actions.claimApplicationBytes, actions.closeTunnel),
     halfClose: () => halfCloseStream(stream, actions.closeTunnel),
     close: () => closeStream(stream, actions),
     remoteFailure: (error) => actions.retire(stream, error),
@@ -84,9 +86,10 @@ function grantStreamCredit(
 function deliverStreamData(
   stream: BrowserNetworkTunnelClientStream,
   payload: Uint8Array<ArrayBufferLike>,
+  claimApplicationBytes: (bytes: number) => (() => void) | null,
   closeTunnel: (error: Error) => void
 ): void {
-  if (!queueBrowserNetworkSourceData(stream, payload)) {
+  if (!queueBrowserNetworkSourceData(stream, payload, claimApplicationBytes)) {
     closeTunnel(new Error('Browser tunnel received invalid destination data'))
   }
 }

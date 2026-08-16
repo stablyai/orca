@@ -14,6 +14,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 }))
 
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
+import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
 import { RemoteBrowserSocksServer } from './remote-browser-socks-server'
 
 const pairing = {
@@ -191,10 +192,52 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await vi.waitFor(() => expect(closeSubscription).toHaveBeenCalledOnce())
     expect(closeSocks).toHaveBeenCalledOnce()
   })
+
+  it('binds and releases the exact browser-host outbound memory lease', async () => {
+    let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
+    let subscriptionOptions: Record<string, unknown> | undefined
+    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
+      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+        callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+        subscriptionOptions = args[5] as Record<string, unknown>
+        return { requestId: 'budgeted', close: vi.fn(), sendBinary: () => true }
+      }
+    )
+    const route = createRoute({ outboundMemoryBudgetRegistry: registry })
+    const starting = route.start()
+    await vi.waitFor(() => expect(callbacks).toBeDefined())
+
+    expect(subscriptionOptions?.outboundMemoryBudget).toBeDefined()
+    expect(subscriptionOptions?.outboundQueue).toMatchObject({ maxDrainFramesPerTurn: 4 })
+    expect(registry.evidence()).toMatchObject({ hosts: 1, leases: 1 })
+    callbacks!.onResponse({
+      id: 'budgeted',
+      ok: true,
+      result: { type: 'ready', tunnelGeneration: 7 },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    await starting
+
+    await route.close()
+    expect(registry.evidence()).toMatchObject({ hosts: 0, leases: 0 })
+  })
+
+  it('opens no subscription when browser-host memory admission is exhausted', async () => {
+    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({ processMaxLeases: 0 })
+    const route = createRoute({ outboundMemoryBudgetRegistry: registry })
+
+    await expect(route.start()).rejects.toThrow('outbound memory admission failed')
+    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+  })
 })
 
 function createRoute(
-  overrides: { timeoutMs?: number; onError?: (error: Error) => void } = {}
+  overrides: {
+    timeoutMs?: number
+    onError?: (error: Error) => void
+    outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
+  } = {}
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({
     pairing,

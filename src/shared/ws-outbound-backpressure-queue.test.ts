@@ -8,6 +8,7 @@ function createHarness(overrides?: {
   softCapBytes?: number
   maxQueuedBytes?: number
   maxQueuedFrames?: number
+  maxDrainFramesPerTurn?: number
   writable?: boolean
   parkAfterSend?: boolean
   throwOnSend?: boolean
@@ -17,6 +18,7 @@ function createHarness(overrides?: {
   let writable = overrides?.writable ?? true
   const overflow = vi.fn()
   let pendingTimer: (() => void) | null = null
+  let pendingTimerDelay: number | null = null
 
   const softCapBytes = overrides?.softCapBytes ?? 100
   const queue = createWsOutboundBackpressureQueue<string>({
@@ -36,13 +38,16 @@ function createHarness(overrides?: {
     softCapBytes,
     maxQueuedBytes: overrides?.maxQueuedBytes ?? 1000,
     maxQueuedFrames: overrides?.maxQueuedFrames,
+    maxDrainFramesPerTurn: overrides?.maxDrainFramesPerTurn,
     drainPollMs: 10,
-    setTimer: (cb) => {
+    setTimer: (cb, delay) => {
       pendingTimer = cb
+      pendingTimerDelay = delay
       return 1 as unknown as ReturnType<typeof setTimeout>
     },
     clearTimer: () => {
       pendingTimer = null
+      pendingTimerDelay = null
     }
   })
 
@@ -59,9 +64,11 @@ function createHarness(overrides?: {
     runTimer: () => {
       const cb = pendingTimer
       pendingTimer = null
+      pendingTimerDelay = null
       cb?.()
     },
-    hasTimer: () => pendingTimer !== null
+    hasTimer: () => pendingTimer !== null,
+    timerDelay: () => pendingTimerDelay
   }
 }
 
@@ -88,22 +95,53 @@ describe('ws outbound backpressure queue', () => {
 
   it('applies prospective admission to a direct-send frame', () => {
     const sent = vi.fn()
-    const canSend = vi.fn(() => false)
+    const canSend = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+    let pendingTimer: (() => void) | null = null
     const queue = createWsOutboundBackpressureQueue<string>({
       send: sent,
       byteLengthOf: (frame) => frame.length,
       getBufferedAmount: () => 0,
       isWritable: () => true,
       canSend,
-      onOverflow: vi.fn()
+      onOverflow: vi.fn(),
+      setTimer: (callback) => {
+        pendingTimer = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearTimer: () => {
+        pendingTimer = null
+      }
     })
 
     expect(queue.enqueue('frame')).toBe(true)
 
-    expect(canSend).toHaveBeenCalledWith(5)
+    expect(canSend).toHaveBeenCalledWith(5, false)
     expect(sent).not.toHaveBeenCalled()
     expect(queue.queuedBytes()).toBe(5)
+
+    const scheduled = pendingTimer as (() => void) | null
+    scheduled?.()
+    expect(canSend).toHaveBeenLastCalledWith(5, true)
+    expect(sent).toHaveBeenCalledWith('frame')
     queue.dispose()
+  })
+
+  it('yields after a configured drain quantum while preserving FIFO order', () => {
+    const h = createHarness({ maxDrainFramesPerTurn: 2 })
+    h.setBuffered(101)
+    h.queue.enqueue('a')
+    h.queue.enqueue('b')
+    h.queue.enqueue('c')
+    h.setBuffered(0)
+
+    h.runTimer()
+    expect(h.sent).toEqual(['a', 'b'])
+    expect(h.hasTimer()).toBe(true)
+    expect(h.timerDelay()).toBe(0)
+
+    h.runTimer()
+    expect(h.sent).toEqual(['a', 'b', 'c'])
+    expect(h.hasTimer()).toBe(false)
   })
 
   it('rejects an oversized frame before the direct-send fast path', () => {
@@ -133,6 +171,7 @@ describe('ws outbound backpressure queue', () => {
     // Nothing sent yet; all held in order.
     expect(h.sent).toEqual([])
     expect(h.queue.queuedBytes()).toBe('one'.length + 'two'.length + 'three'.length)
+    expect(h.timerDelay()).toBe(10)
 
     // Link recovers; the drain timer flushes everything in FIFO order.
     h.setBuffered(0)

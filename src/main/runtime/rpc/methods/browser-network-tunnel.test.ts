@@ -8,9 +8,13 @@ import {
   type BrowserHostLease
 } from '../../browser-host-lease-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from './index'
-import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser-network-tunnel'
+import {
+  BROWSER_NETWORK_TUNNEL_METHODS,
+  createBrowserNetworkTunnelMethods
+} from './browser-network-tunnel'
 
 function request(lease?: BrowserHostLease, overrides: Record<string, unknown> = {}) {
   return {
@@ -157,6 +161,38 @@ describe('network.browserTunnel RPC', () => {
     )
   })
 
+  it('opens no route or binary handler when process memory admission is exhausted', async () => {
+    const hostRuntime = runtime()
+    const lease = attachLease(hostRuntime)
+    const memoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
+      processMaxLeases: 0
+    })
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: createBrowserNetworkTunnelMethods(memoryBudgets)
+    })
+    const replies: string[] = []
+    const registerBinaryMessageHandler = vi.fn()
+
+    await dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
+      connectionId: 'connection-a',
+      clientKind: 'runtime',
+      pairedDeviceId: 'device-a',
+      clientCapabilities: negotiatedCapabilities,
+      sendBinary: vi.fn(() => true),
+      registerBinaryMessageHandler
+    })
+
+    expect(JSON.parse(replies[0]!)).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ message: 'browser_tunnel_memory_admission_failed' })
+      })
+    )
+    expect(registerBinaryMessageHandler).not.toHaveBeenCalled()
+    expect(memoryBudgets.evidence()).toMatchObject({ hosts: 0, leases: 0 })
+  })
+
   it('allocates the tunnel generation and removes its raw handler on cleanup', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
@@ -188,6 +224,35 @@ describe('network.browserTunnel RPC', () => {
     cleanups.get('browser-network-tunnel:connection-a')?.()
     await dispatch
     expect(unregister).toHaveBeenCalledOnce()
+  })
+
+  it('releases route memory when binary-handler cleanup throws', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const lease = attachLease(hostRuntime)
+    const memoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: createBrowserNetworkTunnelMethods(memoryBudgets)
+    })
+    const replies: string[] = []
+    const dispatch = dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
+      connectionId: 'connection-a',
+      clientKind: 'runtime',
+      pairedDeviceId: 'device-a',
+      clientCapabilities: negotiatedCapabilities,
+      sendBinary: vi.fn(() => true),
+      registerBinaryMessageHandler: vi.fn(() => () => {
+        throw new Error('unregister failed')
+      })
+    })
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+
+    expect(() => cleanups.get('browser-network-tunnel:connection-a')?.()).toThrow(
+      'unregister failed'
+    )
+    await dispatch
+    expect(memoryBudgets.evidence()).toMatchObject({ hosts: 0, leases: 0 })
   })
 
   it('fences an older route when the same lease replaces it', async () => {
