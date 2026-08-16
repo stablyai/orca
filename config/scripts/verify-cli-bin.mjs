@@ -75,6 +75,14 @@ export function verifyPackageCliBin({
       )}`
     )
   }
+  if (outPackageJson.version !== packageJson.version) {
+    throw new Error(
+      `compiled CLI package boundary version must match package.json (${packageJson.version}): ${path.relative(
+        projectDir,
+        outPackageJsonPath
+      )}`
+    )
+  }
 
   if (process.platform !== 'win32' && (stats.mode & 0o111) === 0) {
     if (!fixExecutable) {

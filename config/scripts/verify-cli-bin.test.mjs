@@ -32,7 +32,11 @@ function makeProjectWithCli(
     'utf8'
   )
   if (writeOutPackageJson) {
-    writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'commonjs' }), 'utf8')
+    writeFileSync(
+      outPackageJsonPath,
+      JSON.stringify({ type: 'commonjs', version: '1.2.3-test' }),
+      'utf8'
+    )
   }
   writeFileSync(cliPath, content, 'utf8')
   if (process.platform !== 'win32') {
@@ -90,6 +94,21 @@ describe('verifyPackageCliBin', () => {
     writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'module' }), 'utf8')
 
     expect(() => verifyPackageCliBin({ projectDir })).toThrow('type=commonjs')
+  })
+
+  it('rejects a compiled package version that differs from the project', () => {
+    const { projectDir, outPackageJsonPath } = makeProjectWithCli(
+      '#!/usr/bin/env node\nconsole.log("orca")\n'
+    )
+    writeFileSync(
+      outPackageJsonPath,
+      JSON.stringify({ type: 'commonjs', version: '0.0.0-stale' }),
+      'utf8'
+    )
+
+    expect(() => verifyPackageCliBin({ projectDir })).toThrow(
+      'compiled CLI package boundary version must match package.json (1.2.3-test)'
+    )
   })
 
   it.skipIf(process.platform === 'win32')('can repair the POSIX executable bit', () => {
