@@ -6,24 +6,29 @@ import {
   type BrowserClientPageRendererEndpoint
 } from './browser-client-page-renderer-bridge'
 
-const rendererBridges = new BrowserClientPageRendererBridgeRegistry({
-  transport: {
-    onReply: (listener) => ipcMain.on(BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL, listener),
-    offReply: (listener) =>
-      ipcMain.removeListener(BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL, listener)
-  }
-})
+let rendererBridges: BrowserClientPageRendererBridgeRegistry | null = null
 
 export function attachBrowserClientPageRenderer(renderer: BrowserClientPageRendererEndpoint): void {
-  rendererBridges.attachRenderer(renderer)
+  getRendererBridges().attachRenderer(renderer)
 }
 
 export function retireBrowserClientPageRenderer(
   renderer: BrowserClientPageRendererEndpoint
 ): boolean {
-  return rendererBridges.retireRenderer(renderer)
+  return rendererBridges?.retireRenderer(renderer) ?? false
 }
 
 export function selectBrowserClientPageRenderer(): BrowserClientPageRenderer {
-  return rendererBridges.selectRenderer()
+  return getRendererBridges().selectRenderer()
+}
+
+function getRendererBridges(): BrowserClientPageRendererBridgeRegistry {
+  rendererBridges ??= new BrowserClientPageRendererBridgeRegistry({
+    transport: {
+      onReply: (listener) => ipcMain.on(BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL, listener),
+      offReply: (listener) =>
+        ipcMain.removeListener(BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL, listener)
+    }
+  })
+  return rendererBridges
 }

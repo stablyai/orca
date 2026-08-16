@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   browserNetworkExecutionHostKey,
+  parseBrowserNetworkExecutionHostKey,
   resolveNativeBrowserNetworkExecutionRoute
 } from './browser-network-execution-route'
 
@@ -38,5 +39,27 @@ describe('browser network execution route', () => {
         runtimeRevision: 2
       })
     ).toThrow('browser_tunnel_execution_host_mismatch')
+  })
+
+  it('round trips only canonical execution-host keys', () => {
+    const host = {
+      kind: 'ssh' as const,
+      targetId: 'ssh-a',
+      providerEpoch: 'provider-a',
+      connectionGeneration: 3
+    }
+    const key = browserNetworkExecutionHostKey(host)
+
+    expect(parseBrowserNetworkExecutionHostKey(key)).toEqual(host)
+    for (const malformed of [
+      'ssh:ssh-a:provider-a:3',
+      ' ["ssh","ssh-a","provider-a",3]',
+      '["ssh","ssh-a","provider-a",3,4]',
+      '["native","runtime-a",-1]'
+    ]) {
+      expect(() => parseBrowserNetworkExecutionHostKey(malformed)).toThrow(
+        'browser_tunnel_execution_host_key_invalid'
+      )
+    }
   })
 })

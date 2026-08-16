@@ -24,11 +24,8 @@ import {
 } from './browser-client-page-renderer-runtime'
 
 describe('browser client page renderer runtime', () => {
-  it('binds the app-lifetime IPC listener and exact current Electron renderer', async () => {
-    const listener = ipcMainOn.mock.calls.find(
-      ([channel]) => channel === BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL
-    )?.[1]
-    expect(listener).toEqual(expect.any(Function))
+  it('lazily binds the app-lifetime IPC listener and exact current Electron renderer', async () => {
+    expect(ipcMainOn).not.toHaveBeenCalled()
     const rendererEndpoint = {
       id: 41,
       mainFrame: {},
@@ -36,6 +33,10 @@ describe('browser client page renderer runtime', () => {
       send: vi.fn()
     }
     attachBrowserClientPageRenderer(rendererEndpoint)
+    const listener = ipcMainOn.mock.calls.find(
+      ([channel]) => channel === BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL
+    )?.[1]
+    expect(listener).toEqual(expect.any(Function))
 
     const renderer = selectBrowserClientPageRenderer()
     const mounted = renderer.mountPage(

@@ -22,6 +22,7 @@ export type PairedRuntimeBrowserClientHostOptions = {
   subscription?: RemoteRuntimeSubscriptionOptions
   maxConcurrentCommandResults?: number
   maxUnsettledCommandResults?: number
+  onAuthority?: (authority: BrowserClientHostLeaseAuthority) => void
   onError?: (error: Error) => void
 }
 
@@ -72,10 +73,15 @@ export class PairedRuntimeBrowserClientHost {
     return this.dispatcher?.forgetPage(browserPageId, pageHostGeneration) ?? false
   }
 
+  whenHandlersSettled(): Promise<void> {
+    return this.dispatcher?.whenClosed() ?? Promise.resolve()
+  }
+
   private activateDispatcher(authority: BrowserClientHostLeaseAuthority): void {
     if (this.closed || this.dispatcher) {
       throw new Error('Browser client host authority is unavailable')
     }
+    this.options.onAuthority?.(authority)
     this.dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler: this.options.handler,

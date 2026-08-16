@@ -36,7 +36,7 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest locally reviewed stack tip: commit `b49d3bd020` on
+- Latest published stack tip: commit `4b6674f057` on
   `sta-4150-browser-client-page-renderer-registry`, draft PR
   [#14596](https://github.com/stablyai/orca/pull/14596); CI is running.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
@@ -176,10 +176,10 @@ Before publishing this stage:
 - [x] Attach the PR and post one concise Linear checkpoint while keeping STA-4150 In Progress.
 - [x] Update the Orca worktree comment with the published checkpoint.
 
-## Current local stage: retained renderer registry
+## Published stage: retained renderer registry (#14596)
 
-The parent failed because no preload request consumer or renderer-owned retained page surface
-existed. The current uncommitted candidate remains production-inert and adds:
+The preceding stage lacked a preload request consumer and renderer-owned retained page surface.
+This production-inert stage adds:
 
 - A top-frame-only preload listener installed before the renderer subscriber, with a bounded
   512-request queue, fixed timeout, immediate overflow failure, latest-subscriber fencing, and
@@ -220,13 +220,59 @@ Current evidence:
   activation caveats: missing-destruction capacity retention, conservative transient-ID fencing,
   and live Electron/cross-platform soak.
 
+## Published stage: environment-scoped client-host composition (#14613)
+
+Branch `sta-4150-browser-client-host-composition` is stacked on #14596 as draft PR
+[#14613](https://github.com/stablyai/orca/pull/14613). The candidate is production-inert: it
+advertises no browser-host capability, publishes no client placement, and has no normal
+browser-creation caller.
+
+Implemented in this stage:
+
+- One environment pairing revision owns at most one composed `PairedRuntimeBrowserClientHost`,
+  command executor, current renderer selector, route Session/WebContents registries, and
+  reference-counted route per canonical execution-host key.
+- Authority connection identity includes Orca profile, environment, pairing revision, fresh
+  authority runtime, pairing public key, and paired-device identity. Native route keys must name
+  that exact authority runtime; SSH routes retain the runtime-minted lease-bound grant contract.
+- Environment invalidation and app quit close the authenticated control transport before page
+  cleanup, then force-close every route. No fallback to desktop DNS, sockets, or server placement
+  is allowed.
+- A non-cooperative handler removes network reach immediately, defers executor cleanup until the
+  exact late settlement, and keeps a bounded environment tombstone until cleanup proves complete.
+- Failed or cancelled creates that are cleanly absent can retire and be forgotten. Ambiguous
+  cleanup remains generation-fenced until process restart or future authenticated reconciliation,
+  and close racing an in-flight create cannot retain a late page.
+
+Deterministic evidence:
+
+- Baseline: the route registry, composition, and registry suites failed to import because their
+  modules did not exist.
+- The first CI run exposed an import-time Electron side effect in an unrelated ephemeral-VM test:
+  importing runtime-environment cleanup constructed the renderer bridge and called `ipcMain.on`.
+  The exact shard now proves renderer IPC is bound lazily on first renderer use instead.
+- Focused composition gate: 9 files / 118 tests passed.
+- Focused composition plus execution-route gate: 22 files / 271 tests passed.
+- WebContents/renderer gate: 12 files / 201 tests passed, including isolated Electron 43.1.0.
+- Real old/new terminal wire compatibility: 5/5 journeys passed.
+- Full Node/CLI/web typecheck, lint and native/type-aware audits, 85-gate reliability manifest,
+  max-lines ratchet, formatting, changed-code quality, and diff checks passed.
+- CLI, production Electron, and paired-web artifacts rebuilt from the exact diff. Electron is
+  43.1.0, Playwright is 1.59.1, Node is 24.18.0, and pnpm is 10.24.0.
+- Fresh lifecycle, correctness, security, and resource re-reviews found no blocker. Review-driven
+  fixes preserve the asynchronous starter contract, test permanent fail-closed tombstones, and
+  report deferred cleanup failures without releasing the safety fence.
+- The CI regression fix passes the exact formerly failing test plus renderer, paired-host, and
+  runtime-environment suites: 4 files / 59 tests, full typecheck, lint/audits, changed-code quality,
+  formatting, and diff checks.
+
 ## Acceptance matrix
 
 | Requirement                                                        | State                     | Evidence or blocker                                                                                               |
 | ------------------------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Negotiated client-host and tunnel contracts                        | Partial                   | Schemas/RPC methods exist; runtime capabilities are intentionally not advertised                                  |
 | Runtime placement, leases, authority epochs, host/page generations | Partial                   | Deterministic registries exist; normal browser creation does not call them                                        |
-| Main browser-host registry                                         | Partial                   | Route Session, guest, command executor, and exact renderer bridge exist; no production lease/executor composition |
+| Main browser-host registry                                         | Partial                   | Environment-scoped lease/executor/route composition exists but has no production caller                           |
 | Renderer-owned retained webview registry and surface               | Partial                   | Local exact-tuple preload/registry stage passes deterministic and Electron proof; no BrowserPane adoption exists  |
 | Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                     |
 | SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                         |
@@ -245,22 +291,21 @@ Current evidence:
 
 ## Remaining implementation order
 
-1. Finish bridge PR #14578 CI and fix any actionable failure.
-2. Finish validation/review and publish the local renderer registry stage as a draft stack layer.
-3. Compose one environment-scoped `PairedRuntimeBrowserClientHost` with the command executor,
-   exact route resolver, current renderer bridge, shutdown, and page retirement.
-4. Add inventory/reclaim/restore/close reconciliation before recovering ambiguous slots or routes.
-5. Add optional placement to logical session-tab publication and renderer state. Follow
+1. Monitor #14596 and #14613 CI and fix any actionable failure without merging or marking them
+   ready.
+2. Add authenticated inventory/reclaim/restore/close reconciliation before recovering ambiguous
+   slots or routes.
+3. Add optional placement to logical session-tab publication and renderer state. Follow
    `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
-6. Route create and every existing browser command by explicit placement. Never silently fall
+4. Route create and every existing browser command by explicit placement. Never silently fall
    back or migrate a live page.
-7. Add local browser chrome and interaction-owner fencing for client placement.
-8. Add mobile mirroring and dedicated large-result channels without coupling them to control or
+5. Add local browser chrome and interaction-owner fencing for client placement.
+6. Add mobile mirroring and dedicated large-result channels without coupling them to control or
    terminal multiplexing.
-9. Run real Electron containment and traffic proof, then headed/headless/browserless paired
+7. Run real Electron containment and traffic proof, then headed/headless/browserless paired
    journeys and the physical platform/provider matrix.
-10. Enable client placement only behind a kill switch for newly created eligible desktop pages;
-    retain explicit server placement and rollback that does not move existing pages.
+8. Enable client placement only behind a kill switch for newly created eligible desktop pages;
+   retain explicit server placement and rollback that does not move existing pages.
 
 ## Compatibility costs and risks
 
@@ -316,17 +361,20 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Pushed the STA-4150 staged branches listed in the draft-stack table.
 - Opened and maintained their linked draft PRs; none were merged or marked ready.
 - Attached draft PRs and posted one concise checkpoint per stage on STA-4150.
-- Latest public checkpoint: attached/commented PR #14566 after all required CI passed.
+- Latest public checkpoint: attached/commented draft PR #14613; CI is running.
 - Updated the Orca worktree comment/status at context, reproduction, fix, validation, and review
   checkpoints.
 - Pushed the renderer-bridge branch, opened draft PR #14578 on #14566, attached it to STA-4150,
   and posted one concise checkpoint. The ticket remains In Progress.
 - Rebased and pushed all 24 published branches onto `origin/main@e2d309e9cd`; the patch series was
   identical by `git range-diff`, and the rewritten #14578 CI run is in progress.
+- Pushed the retained renderer registry and opened draft PR #14596 on #14578; attached it to
+  STA-4150 and posted one concise checkpoint. The ticket remains In Progress.
+- Pushed the environment-scoped composition and opened draft PR #14613 on #14596; attached it to
+  STA-4150 and posted one concise checkpoint. The ticket remains In Progress.
 - Rebased all 25 branches onto `origin/main@9bb8836bb6`, confirmed all 26 patches identical before
   the ledger-only amend, and pushed them with lease checks.
-- Opened draft PR #14596 on #14578 for the renderer registry; its CI run is in progress. No PR was
-  merged or marked ready.
+- No PR was merged or marked ready.
 
 ## Completion rule
 

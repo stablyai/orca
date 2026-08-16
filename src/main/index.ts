@@ -203,6 +203,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { shutdownPairedRuntimeBrowserClientHosts } from './browser/paired-runtime-browser-client-host-runtime'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -3262,6 +3263,7 @@ app.on('will-quit', (e) => {
     codexUsage?.flush(),
     openCodeUsage?.flush()
   ]).then(() => {})
+  const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
 
   // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
   const ownedPid = process.pid
@@ -3294,6 +3296,7 @@ app.on('will-quit', (e) => {
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
+    { name: 'browser-client-hosts', promise: browserClientHostShutdown },
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },

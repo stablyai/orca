@@ -266,6 +266,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(order.slice(-2)).toEqual(['retire-guest', 'retire-renderer-page'])
     expect(routeSession.release).not.toHaveBeenCalled()
     expect(route.release).not.toHaveBeenCalled()
+    expect(executor.hasUnresolvedPage('page-a', 7)).toBe(true)
     await expect(
       executor.handle(
         createCommand('createPage', { pageHostGeneration: 8 }),
@@ -319,6 +320,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(dependencies.routeWebContents.registerGuest).not.toHaveBeenCalled()
     expect(dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledOnce()
     expect(renderer.retirePage).toHaveBeenCalledOnce()
+    expect(executor.hasUnresolvedPage('page-a', 7)).toBe(false)
   })
 
   it('cleans up an exact mounted guest when creation is aborted', async () => {
@@ -486,5 +488,53 @@ describe('BrowserClientPageCommandExecutor', () => {
     ).resolves.toEqual({ status: 'failed', errorCode: 'browser_client_page_capacity' })
     resolveRoute(route)
     await expect(first).resolves.toEqual({ status: 'completed' })
+  })
+
+  it('does not retain a page when close races its in-flight creation', async () => {
+    const { dependencies, executor, order, route } = createHarness()
+    let resolveRoute = (_route: typeof route): void => {}
+    dependencies.retainNetworkRoute.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRoute = resolve
+        })
+    )
+    const creating = executor.handle(createCommand('createPage'), new AbortController().signal)
+    await Promise.resolve()
+
+    await expect(executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
+    resolveRoute(route)
+
+    await expect(creating).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
+    expect(executor.hasPage('page-a', 7)).toBe(false)
+    expect(order.slice(-4)).toEqual([
+      'retire-guest',
+      'retire-renderer-page',
+      'release-session',
+      'release-route'
+    ])
+  })
+
+  it('retires every retained page before fencing later commands', async () => {
+    const { executor, order } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+
+    await executor.close()
+
+    expect(order.slice(-4)).toEqual([
+      'retire-guest',
+      'retire-renderer-page',
+      'release-session',
+      'release-route'
+    ])
+    await expect(
+      executor.handle(createCommand('navigate'), new AbortController().signal)
+    ).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
   })
 })

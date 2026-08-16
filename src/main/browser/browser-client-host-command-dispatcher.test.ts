@@ -407,8 +407,15 @@ describe('BrowserClientHostCommandDispatcher', () => {
     expect(() => dispatcher.dispatch(command(1, 'create-c', 'createPage', 'page-c'))).toThrow(
       'browser_host_command_dispatcher_closed'
     )
+    let handlersSettled = false
+    void dispatcher.whenClosed().then(() => {
+      handlersSettled = true
+    })
+    await Promise.resolve()
+    expect(handlersSettled).toBe(false)
     stuck.resolve({ status: 'completed' })
     await vi.runAllTimersAsync()
+    await expect(dispatcher.whenClosed()).resolves.toBeUndefined()
   })
 })
 

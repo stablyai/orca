@@ -20,6 +20,7 @@ import {
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
+import { closePairedRuntimeBrowserClientHostEnvironment } from '../browser/paired-runtime-browser-client-host-runtime'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string
@@ -61,6 +62,12 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): vo
   closeRemoteRuntimeRequestConnection(environmentId)
   clearSharedControlSupport(environmentId)
   closeSubscriptionsForEnvironment(environmentId)
+  void closePairedRuntimeBrowserClientHostEnvironment(
+    environmentId,
+    new Error('Runtime environment transport was invalidated')
+  ).catch((error) => {
+    console.warn('[runtime-environments] browser client host retirement failed:', error)
+  })
 }
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {

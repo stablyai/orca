@@ -1,5 +1,5 @@
 import { connect } from 'node:net'
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 
@@ -27,6 +27,31 @@ export function browserNetworkExecutionHostKey(host: BrowserNetworkExecutionHost
     return JSON.stringify(['native', host.runtimeId, host.revision])
   }
   return JSON.stringify(['ssh', host.targetId, host.providerEpoch, host.connectionGeneration])
+}
+
+export function parseBrowserNetworkExecutionHostKey(key: string): BrowserNetworkExecutionHost {
+  let tuple: unknown
+  try {
+    tuple = JSON.parse(key)
+  } catch {
+    throw new Error('browser_tunnel_execution_host_key_invalid')
+  }
+  const candidate =
+    Array.isArray(tuple) && tuple[0] === 'native' && tuple.length === 3
+      ? { kind: 'native', runtimeId: tuple[1], revision: tuple[2] }
+      : Array.isArray(tuple) && tuple[0] === 'ssh' && tuple.length === 4
+        ? {
+            kind: 'ssh',
+            targetId: tuple[1],
+            providerEpoch: tuple[2],
+            connectionGeneration: tuple[3]
+          }
+        : null
+  const parsed = BrowserNetworkExecutionHost.safeParse(candidate)
+  if (!parsed.success || browserNetworkExecutionHostKey(parsed.data) !== key) {
+    throw new Error('browser_tunnel_execution_host_key_invalid')
+  }
+  return parsed.data
 }
 
 export function resolveNativeBrowserNetworkExecutionRoute(

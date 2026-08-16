@@ -44,6 +44,9 @@ export class BrowserClientHostCommandDispatcher {
   private activeCommands = 0
   private runningHandlers = 0
   private retiredGenerationFloor = 0
+  private readonly closedSettlement: Promise<void>
+  private resolveClosedSettlement = (): void => {}
+  private closedSettlementResolved = false
   private closed = false
 
   constructor(options: DispatcherOptions) {
@@ -62,6 +65,9 @@ export class BrowserClientHostCommandDispatcher {
       limits.maxCachedCommandResults
     )
     this.joinTimeoutMs = limits.joinTimeoutMs
+    this.closedSettlement = new Promise((resolve) => {
+      this.resolveClosedSettlement = resolve
+    })
   }
 
   dispatch(command: BrowserClientHostCommandEvent): Promise<BrowserClientHostCommandResult> {
@@ -164,7 +170,12 @@ export class BrowserClientHostCommandDispatcher {
       this.pages.clear()
       this.resultCache.clear()
     }
+    this.settleClosedHandlers()
     return settled
+  }
+
+  whenClosed(): Promise<void> {
+    return this.closedSettlement
   }
 
   private schedulePage(page: PageState): void {
@@ -255,7 +266,16 @@ export class BrowserClientHostCommandDispatcher {
     if (this.closed && this.runningHandlers === 0) {
       this.pages.clear()
       this.resultCache.clear()
+      this.settleClosedHandlers()
     }
+  }
+
+  private settleClosedHandlers(): void {
+    if (!this.closed || this.runningHandlers !== 0 || this.closedSettlementResolved) {
+      return
+    }
+    this.closedSettlementResolved = true
+    this.resolveClosedSettlement()
   }
 
   private cancelPage(page: PageState, errorCode: string): void {

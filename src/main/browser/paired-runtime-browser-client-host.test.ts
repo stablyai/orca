@@ -214,6 +214,28 @@ describe('PairedRuntimeBrowserClientHost', () => {
     expect(host.forgetPage('page-a', 1)).toBe(true)
     await host.close()
   })
+
+  it('exposes exact late handler settlement after bounded close', async () => {
+    const { callbacks } = subscribeHost()
+    const stuck = deferredCommandResult()
+    const host = createHost(() => stuck.promise, undefined, { joinTimeoutMs: 10 })
+    const starting = host.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse())
+    await starting
+    callbacks.current!.onResponse(commandResponse())
+
+    await expect(host.close()).resolves.toBe(false)
+    let handlersSettled = false
+    void host.whenHandlersSettled().then(() => {
+      handlersSettled = true
+    })
+    await Promise.resolve()
+    expect(handlersSettled).toBe(false)
+
+    stuck.resolve({ status: 'completed' })
+    await expect(host.whenHandlersSettled()).resolves.toBeUndefined()
+  })
 })
 
 function subscribeHost(): {
