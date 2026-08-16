@@ -18,6 +18,7 @@ type BrowserHostReconnectAttach = {
 type BrowserHostLeaseReconnectControllerOptions = {
   graceMs: number
   leasesByClientId: Map<string, BrowserHostLeaseState>
+  fenceReconciliation(state: BrowserHostLeaseState): void
   fenceLease(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void
   fenceRoute(state: BrowserHostRouteState, reason: BrowserHostFenceReason): void
 }
@@ -97,6 +98,7 @@ export class BrowserHostLeaseReconnectController {
       return
     }
     state.status = 'reconnecting'
+    this.options.fenceReconciliation(state)
     for (const route of state.routes) {
       this.options.fenceRoute(route, 'lease_released')
     }

@@ -103,6 +103,89 @@ describe('paired runtime browser network tunnel', () => {
     expect(errors).toEqual([])
   })
 
+  it('commits reconciliation placement after a real paired command result', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-reconciliation-'))
+    resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+    const runtime = new OrcaRuntimeService({} as never)
+    const rpc = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      methods: [...ALL_RPC_METHODS, ...BROWSER_CLIENT_HOST_METHODS]
+    })
+    await rpc.start()
+    resources.push(() => rpc.stop())
+
+    const offer = rpc.createPairingOffer({ name: 'browser-reconciliation', scope: 'runtime' })
+    if (!offer.available) {
+      throw new Error('Runtime pairing is unavailable')
+    }
+    const pairing = parsePairingCode(offer.pairingUrl)
+    if (!pairing?.pairedDeviceId) {
+      throw new Error('Runtime pairing identity is unavailable')
+    }
+    const oldPage = {
+      authorityRuntimeId: 'runtime-old',
+      authorityEpoch: 'epoch-old',
+      browserHostClientId: 'integration-browser-host',
+      browserHostGeneration: 4,
+      browserPageId: 'page-reclaimed',
+      pageHostGeneration: 7,
+      browserProfileId: 'default',
+      executionHostKey: 'native:integration',
+      state: 'active' as const,
+      currentUrl: 'https://remote.internal/'
+    }
+    const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
+    const hostLease = new PairedRuntimeBrowserHostLease({
+      pairing,
+      authorityRuntimeId: runtime.getRuntimeId(),
+      browserHostClientId: 'integration-browser-host',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageReconciliationProtocolVersion: 1,
+      getPageInventory: () => [oldPage],
+      onPageCommand
+    })
+    await hostLease.start()
+    resources.push(() => hostLease.close())
+
+    const registry = getBrowserHostLeaseRegistry(runtime)
+    const attached = registry.select('integration-browser-host')
+    const identity = {
+      authorityEpoch: attached.authorityEpoch,
+      browserHostClientId: attached.browserHostClientId,
+      browserHostGeneration: attached.browserHostGeneration,
+      pairedDeviceId: attached.pairedDeviceId
+    }
+    const grant = registry.grantExecutionHost(identity, 'native:integration')
+    resources.push(grant.release)
+    const result = await registry.reconcileClientPages(identity, [
+      {
+        authorityRuntimeId: attached.authorityRuntimeId,
+        authorityEpoch: attached.authorityEpoch,
+        browserHostClientId: attached.browserHostClientId,
+        browserHostGeneration: attached.browserHostGeneration,
+        browserPageId: oldPage.browserPageId,
+        pageHostGeneration: 8,
+        browserProfileId: oldPage.browserProfileId,
+        executionHostKey: oldPage.executionHostKey,
+        reclaimFrom: { ...oldPage, pairedDeviceId: pairing.pairedDeviceId }
+      }
+    ])
+
+    expect(result).toMatchObject({ reclaimed: 1 })
+    expect(onPageCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.objectContaining({ type: 'reclaimPage' }) })
+    )
+    expect(registry.getPlacement(oldPage.browserPageId)).toMatchObject({
+      kind: 'client',
+      pageHostGeneration: 8
+    })
+  })
+
   it('loads an execution-host HTTP target through SOCKS and the dedicated E2EE socket', async () => {
     const destinationSockets = new Set<Socket>()
     const destination = createServer((socket) => {

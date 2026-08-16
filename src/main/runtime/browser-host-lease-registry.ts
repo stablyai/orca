@@ -20,6 +20,7 @@ import { BrowserHostGenerationCounter } from './browser-host-generation-counter'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import {
   BrowserHostPagePlacementRegistry,
+  requireLiveBrowserClientPage,
   type BrowserClientPageAuthority,
   type BrowserPageRetirement,
   type RuntimeBrowserClientPlacement,
@@ -32,6 +33,8 @@ import {
   selectBrowserHostLease
 } from './browser-host-capability-selection'
 import { snapshotBrowserHostPageInventory } from './browser-host-page-inventory-snapshot'
+import { BrowserHostPageReconciliationOrchestrator } from './browser-host-page-reconciliation-orchestration'
+import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
 import { BrowserHostLeaseReconnectController } from './browser-host-lease-reconnect'
 import {
   assertBrowserHostReconnectNegotiation,
@@ -46,6 +49,7 @@ export class BrowserHostLeaseRegistry {
   private readonly leasesByClientId = new Map<string, BrowserHostLeaseState>()
   private readonly routesByKey = new Map<string, BrowserHostRouteState>()
   private readonly pagePlacements: BrowserHostPagePlacementRegistry
+  private readonly pageReconciliations: BrowserHostPageReconciliationOrchestrator
   private readonly reconnects: BrowserHostLeaseReconnectController
 
   constructor(options: {
@@ -59,9 +63,14 @@ export class BrowserHostLeaseRegistry {
       authorityRuntimeId: this.authorityRuntimeId,
       authorityEpoch: this.authorityEpoch
     })
+    this.pageReconciliations = new BrowserHostPageReconciliationOrchestrator(
+      this,
+      this.pagePlacements
+    )
     this.reconnects = new BrowserHostLeaseReconnectController({
       graceMs: options.reconnectGraceMs ?? 15_000,
       leasesByClientId: this.leasesByClientId,
+      fenceReconciliation: (state) => this.pageReconciliations.fence(state),
       fenceLease: (state, reason) => this.fenceLease(state, reason),
       fenceRoute: (state, reason) => this.fenceRoute(state, reason)
     })
@@ -71,14 +80,13 @@ export class BrowserHostLeaseRegistry {
     const pageInventory = snapshotBrowserHostPageInventory(input)
     assertBrowserHostReconnectNegotiation(input)
     const existing = this.leasesByClientId.get(input.browserHostClientId)
-    if (existing) {
-      if (existing.lease.pairedDeviceId !== input.pairedDeviceId) {
-        throw new Error('browser_host_identity_conflict')
-      }
+    if (existing && existing.lease.pairedDeviceId !== input.pairedDeviceId) {
+      throw new Error('browser_host_identity_conflict')
     }
     assertBrowserHostLeaseAdmission(this.leasesByClientId.values(), input, existing)
     const restored = existing ? this.reconnects.restore(existing, input, pageInventory) : undefined
-    if (restored) {
+    if (restored && existing) {
+      this.pageReconciliations.observeInventory(existing)
       return restored
     }
     const generation = this.generations.take('host')
@@ -168,18 +176,15 @@ export class BrowserHostLeaseRegistry {
   }
 
   requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {
-    const placement = this.pagePlacements.requireClientPage(authority)
-    const lease = this.leasesByClientId.get(authority.browserHostClientId)
-    if (!lease) {
-      throw new Error('browser_host_lease_required')
-    }
-    if (lease.lease.browserHostGeneration !== authority.browserHostGeneration) {
-      throw new Error('browser_host_lease_stale')
-    }
-    if (lease.status !== 'active') {
-      throw new Error('browser_host_lease_reconnecting')
-    }
-    return placement
+    return requireLiveBrowserClientPage(this.pagePlacements, this.leasesByClientId, authority)
+  }
+
+  reconcileClientPages(
+    identity: BrowserHostLeaseIdentity,
+    intents: readonly BrowserHostRuntimePageIntent[],
+    options: { maxConcurrency?: number; actionTimeoutMs?: number; signal?: AbortSignal } = {}
+  ) {
+    return this.pageReconciliations.reconcile(this.requireLeaseState(identity), intents, options)
   }
 
   attachCommandDelivery(
@@ -226,7 +231,9 @@ export class BrowserHostLeaseRegistry {
   ): boolean {
     const state = this.requireLeaseState(identity)
     const ledger = requireBrowserHostCommandResultLedger(state, identity)
-    this.requireClientPage(params)
+    if (!ledger.isReconciliationResult(params)) {
+      this.requireClientPage(params)
+    }
     return ledger.settle(params)
   }
 
@@ -289,6 +296,7 @@ export class BrowserHostLeaseRegistry {
     if (this.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
       return
     }
+    this.pageReconciliations.fence(state)
     this.pagePlacements.fenceClientHostPlacements({
       browserHostClientId: state.lease.browserHostClientId,
       browserHostGeneration: state.lease.browserHostGeneration

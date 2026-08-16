@@ -36,11 +36,21 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-page-reconciliation-adapters`, draft PR
-  [#14763](https://github.com/stablyai/orca/pull/14763), stacked on reconciliation-command PR
-  [#14759](https://github.com/stablyai/orca/pull/14759).
-- All 37 published patches are cascade-rebased onto `origin/main@c4e397bcdc`. Range-diff marked
-  every patch identical; the two intervening main commits touch no STA-4150 file.
+- Latest published stack tip: `sta-4150-browser-reconciliation-orchestration`, draft PR
+  [#14769](https://github.com/stablyai/orca/pull/14769), stacked on reconciliation-adapter PR
+  [#14763](https://github.com/stablyai/orca/pull/14763).
+- PR #14769 CI exposed one stale combined-stack expectation in both Node shards: replacing a host
+  lease now makes the exact old page terminal retirement-pending before the new lease is installed,
+  rather than reporting only a stale lease. The deterministic baseline was 1 failed / 4 passed;
+  the corrected expectation passes the 4-file / 29-test lease-retirement gate.
+- Its rerun then reproduced the known Electron guest-readiness race under Node 24: `getURL()` was
+  sampled as an empty string before the attached guest exposed `about:blank`. The fixture now waits
+  on that observable readiness condition instead of weakening the blank-page assertion; 3/3 fresh
+  isolated Electron runs pass.
+- The 37 published patches plus the local orchestration patch are cascade-rebased onto
+  `origin/main@92fb276040`. Range-diff marked all 38 patches identical. Safety pointer
+  `sta-4150-safety-pre-92fb-orchestration-20260815` preserves the old series; no rewritten public
+  branch has been pushed at this checkpoint.
 - Published lease-fence placement-retirement stage: draft PR
   [#14753](https://github.com/stablyai/orca/pull/14753). It makes exact terminal host-generation
   placement retirement non-cancellable without inferring destruction or releasing capacity.
@@ -117,6 +127,7 @@ ownership.
 | [#14756](https://github.com/stablyai/orca/pull/14756) | Plan execution     | Bounded two-phase reconciliation action execution                         |
 | [#14759](https://github.com/stablyai/orca/pull/14759) | Command contracts  | Negotiated reclaim, restore, and close command contracts                  |
 | [#14763](https://github.com/stablyai/orca/pull/14763) | Client adapters    | Exact retained-page reclaim, restore, close, and fail-closed cleanup      |
+| [#14769](https://github.com/stablyai/orca/pull/14769) | Orchestration      | Proof-driven command issue, replay, reservation, and placement commit     |
 
 ## Published stage: exact renderer bridge (#14578)
 
@@ -786,6 +797,51 @@ Published reconciliation-adapter stage (#14763):
 - Draft PR [#14763](https://github.com/stablyai/orca/pull/14763) stacks on #14759 and remains
   draft. GitHub auto-attached it to STA-4150; the ticket remains In Progress.
 
+Published proof-driven reconciliation-orchestration stage (#14769):
+
+- Baseline: all 5 initial orchestration assertions failed because the registry had no
+  `reconcileClientPages` entry point.
+- Candidate: one immutable authenticated inventory is consumed once. Reclaim, close, and restore
+  issue through the exact negotiated command ledger; target generations reserve capacity without
+  publishing placement, and placement commits only after the exact completed client result.
+- Unknown results stay replayable. An inventory captured while a reconciliation result is unknown
+  is quarantined; result replay must settle first, followed by another fresh attach and inventory.
+- A reconnect-grace review oracle was red because the old attempt remained pending after connection
+  authority changed. The candidate now aborts that attempt immediately while preserving the exact
+  unknown command for replay; the focused test is green.
+- A close-capacity review oracle was red because a completed close retained an active ledger page
+  slot forever. The ledger now releases that slot after exact close proof while retaining bounded
+  exact result replay; the `maxPages: 1` regression is green.
+- Missing-page reservations claim placement capacity; replacement reservations do not double-count
+  an existing slot. A competing ordinary placement cannot steal reserved capacity.
+- Validation on the pre-rebase parent: focused 5 files / 55 tests, affected 17 files / 172 tests,
+  paired-runtime 18 files / 183 tests, real paired RPC/E2EE integration 3/3, mixed-version terminal
+  wire 5/5, and isolated Electron lifecycle 1/1. Full Node/CLI/web typecheck, lint and
+  native/type-aware audits, 87 reliability gates, max-lines, localization/skill checks, changed-code
+  quality, formatting, and diff checks pass.
+- The full 38-patch stack rebased conflict-free from `origin/main@c4e397bcdc` to
+  `origin/main@92fb276040`; range-diff marked every patch identical before this tracker amend, and
+  all 36 local published-stage branch refs were advanced to their corresponding commits.
+- Post-rebase focused coverage passes 5 files / 55 tests; full Node/CLI/web typecheck, lint/audits,
+  87-gate validation, max-lines, changed-code quality, real paired RPC/E2EE integration 3/3, isolated
+  Electron 1/1, formatting, and diff checks pass.
+- Readiness review found no P0/P1. There is no mobile persisted state, handshake/framing, route,
+  deep-link, path/shell, native-module, dependency, UI, or production capability change. Work is
+  bounded by 256 inventory/placement entries, 16 reconciliation callbacks, action deadlines, and
+  per-page/global result caches; reconnect abort listeners and reservations are released.
+- Production advertisement and callers remain disabled. No user-visible browser is activated, and
+  old clients, explicit server/offscreen placement, browserless hosts, SSH/WSL routes, folder
+  workspaces, and git worktrees retain their current behavior.
+- Remaining activation blockers: preserve the concrete client executor across authority
+  transition; publish optional placement; route create/agent/CLI commands by placement; add local
+  browser chrome and interaction ownership; add mobile mirroring and large-result channels; then
+  prove headed/headless/browserless, macOS/Linux/Windows, SSH/WSL, folder/worktree, multi-client,
+  containment, and rolling-version journeys behind a kill switch.
+- Draft PR [#14769](https://github.com/stablyai/orca/pull/14769) stacks on #14763 and remains draft.
+  GitHub auto-attached it to STA-4150; one orchestration checkpoint comment
+  (`1153c604-bbb5-4293-af33-cfb4143170c9`) was posted, and the ticket remains In Progress. No PR
+  was merged or marked ready.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -794,7 +850,7 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Pushed the STA-4150 staged branches listed in the draft-stack table.
 - Opened and maintained their linked draft PRs; none were merged or marked ready.
 - Attached draft PRs and posted one concise checkpoint per stage on STA-4150.
-- Latest public checkpoint: GitHub auto-attached draft PR #14763 and one Linear checkpoint was
+- Latest public checkpoint: GitHub auto-attached draft PR #14769 and one Linear checkpoint was
   posted; CI is running.
 - Updated the Orca worktree comment/status at context, reproduction, fix, validation, and review
   checkpoints.
@@ -882,6 +938,11 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Opened draft PR [#14763](https://github.com/stablyai/orca/pull/14763) on #14759. GitHub
   auto-attached it to STA-4150; posted exactly one reconciliation-adapter checkpoint comment
   (`de3e18d0-c24d-433b-ad67-3943c68d4129`) and kept the ticket In Progress.
+- Atomically force-pushed all 36 existing published stack branches with exact remote-OID leases and
+  created `sta-4150-browser-reconciliation-orchestration` with a must-not-exist lease. Opened draft
+  PR [#14769](https://github.com/stablyai/orca/pull/14769) on #14763.
+- GitHub auto-attached #14769 to STA-4150. Posted exactly one orchestration checkpoint comment
+  (`1153c604-bbb5-4293-af33-cfb4143170c9`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

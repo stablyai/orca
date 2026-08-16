@@ -156,6 +156,54 @@ describe('browser host page placement authority', () => {
     ]).toEqual([1, 2, 3])
   })
 
+  it('reserves an exact reconciliation generation without exposing placement', () => {
+    const pages = placements()
+    const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+    const reservation = pages.reserveClientPage('page-a', host, 5)
+
+    expect(pages.getPlacement('page-a')).toBeUndefined()
+    expect(() => pages.placeClientPage('page-a', host)).toThrow(
+      'browser_page_replacement_requires_retirement'
+    )
+    expect(pages.commitClientPageReservation(reservation)).toBe(reservation.placement)
+    expect(pages.getPlacement('page-a')).toBe(reservation.placement)
+    expect(pages.placeClientPage('page-b', host)).toMatchObject({ pageHostGeneration: 6 })
+
+    const cancelled = pages.reserveClientPage('page-c', host, 9)
+    expect(pages.cancelClientPageReservation(cancelled)).toBe(true)
+    expect(pages.cancelClientPageReservation(cancelled)).toBe(false)
+    expect(pages.placeClientPage('page-c', host)).toMatchObject({ pageHostGeneration: 10 })
+  })
+
+  it('reserves only missing-page capacity and blocks competing placement admission', () => {
+    const pages = placements(2)
+    const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+    const existing = pages.placeClientPage('page-a', host)
+    const replacement = pages.reserveClientPage('page-a', host, 5)
+    const missing = pages.reserveClientPage('page-b', host, 6)
+
+    expect(() => pages.placeServerPage('page-c')).toThrow('browser_page_placement_capacity')
+    expect(pages.cancelClientPageReservation(missing)).toBe(true)
+    expect(pages.placeServerPage('page-c')).toEqual({ kind: 'server' })
+
+    const retirement = pages.beginPageRetirement('page-a', existing)
+    expect(pages.completePageRetirement(retirement)).toBe(true)
+    expect(pages.commitClientPageReservation(replacement)).toBe(replacement.placement)
+  })
+
+  it('transfers a retired placement slot to its pending replacement reservation', () => {
+    const pages = placements(1)
+    const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+    const existing = pages.placeClientPage('page-a', host)
+    const replacement = pages.reserveClientPage('page-a', host, 5)
+
+    const retirement = pages.beginPageRetirement('page-a', existing)
+    expect(pages.completePageRetirement(retirement)).toBe(true)
+
+    expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
+    expect(pages.commitClientPageReservation(replacement)).toBe(replacement.placement)
+  })
+
   it('rejects invalid page identities before consuming placement capacity', () => {
     const pages = placements(1)
     const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }

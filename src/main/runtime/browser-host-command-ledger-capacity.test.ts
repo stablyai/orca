@@ -114,6 +114,36 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
     ledger.settle(resultParams(issued.event, { status: 'completed' }))
     await issued.result
   })
+
+  it('releases completed close capacity while retaining exact result replay', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority, maxPages: 1 })
+    ledger.attach(vi.fn())
+    const created = issueCreate(ledger, 'page-a', 1)
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    await created.result
+    const closed = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'closePage',
+        targetAuthority: {
+          authorityRuntimeId: 'runtime-a',
+          authorityEpoch: 'epoch-a',
+          browserHostClientId: 'host-a',
+          browserHostGeneration: 1,
+          pageHostGeneration: 1
+        }
+      }
+    })
+    ledger.settle(resultParams(closed.event, { status: 'completed' }))
+    await closed.result
+
+    const replacement = issueCreate(ledger, 'page-b', 2)
+
+    expect(ledger.settle(resultParams(closed.event, { status: 'completed' }))).toBe(false)
+    ledger.settle(resultParams(replacement.event, { status: 'completed' }))
+    await replacement.result
+  })
 })
 
 function issueCreate(ledger: BrowserHostCommandLedger, browserPageId: string, generation: number) {

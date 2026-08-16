@@ -1,3 +1,5 @@
+import type { BrowserHostLeaseState } from './browser-host-lease-records'
+
 const MAX_GENERATION = 0xffff_ffff
 const MAX_IDENTITY_LENGTH = 256
 const DEFAULT_MAX_PAGE_PLACEMENTS = 256
@@ -13,6 +15,10 @@ export type RuntimeBrowserPlacement = RuntimeBrowserServerPlacement | RuntimeBro
 export type BrowserPageRetirement = Readonly<{
   browserPageId: string
   placement: RuntimeBrowserPlacement
+}>
+export type BrowserClientPagePlacementReservation = Readonly<{
+  browserPageId: string
+  placement: RuntimeBrowserClientPlacement
 }>
 
 export type BrowserClientPageAuthority = Readonly<{
@@ -39,6 +45,9 @@ type BrowserPagePlacementState = {
 export class BrowserHostPagePlacementRegistry {
   private nextPageGeneration = 1
   private readonly placementsByPageId = new Map<string, BrowserPagePlacementState>()
+  private readonly reservationsByPageId = new Map<string, BrowserClientPagePlacementReservation>()
+  private readonly reservationSlotClaims = new Set<BrowserClientPagePlacementReservation>()
+  private reservedPlacementSlots = 0
   private readonly maxPagePlacements: number
 
   constructor(
@@ -69,6 +78,70 @@ export class BrowserHostPagePlacementRegistry {
     })
     this.placementsByPageId.set(browserPageId, { placement })
     return placement
+  }
+
+  reserveClientPage(
+    browserPageId: string,
+    host: BrowserHostPlacementIdentity,
+    pageHostGeneration: number
+  ): BrowserClientPagePlacementReservation {
+    assertBrowserPageIdentity(browserPageId)
+    assertBrowserHostPlacementIdentity(host)
+    assertBrowserPageGeneration(pageHostGeneration)
+    if (this.reservationsByPageId.has(browserPageId)) {
+      throw new Error('browser_page_reconciliation_reservation_pending')
+    }
+    const claimsPlacementSlot = !this.placementsByPageId.has(browserPageId)
+    if (
+      claimsPlacementSlot &&
+      this.placementsByPageId.size + this.reservedPlacementSlots >= this.maxPagePlacements
+    ) {
+      throw new Error('browser_page_placement_capacity')
+    }
+    if (pageHostGeneration < this.nextPageGeneration) {
+      throw new Error('browser_page_generation_stale')
+    }
+    this.nextPageGeneration = pageHostGeneration + 1
+    const reservation = Object.freeze({
+      browserPageId,
+      placement: Object.freeze({
+        kind: 'client' as const,
+        browserHostClientId: host.browserHostClientId,
+        browserHostGeneration: host.browserHostGeneration,
+        pageHostGeneration
+      })
+    })
+    this.reservationsByPageId.set(browserPageId, reservation)
+    if (claimsPlacementSlot) {
+      this.claimReservationSlot(reservation)
+    }
+    return reservation
+  }
+
+  commitClientPageReservation(
+    reservation: BrowserClientPagePlacementReservation
+  ): RuntimeBrowserClientPlacement {
+    if (this.reservationsByPageId.get(reservation.browserPageId) !== reservation) {
+      throw new Error('browser_page_reconciliation_reservation_stale')
+    }
+    if (this.placementsByPageId.has(reservation.browserPageId)) {
+      throw new Error('browser_page_replacement_requires_retirement')
+    }
+    this.reservationsByPageId.delete(reservation.browserPageId)
+    this.releaseReservationSlot(reservation)
+    this.placementsByPageId.set(reservation.browserPageId, {
+      placement: reservation.placement
+    })
+    return reservation.placement
+  }
+
+  cancelClientPageReservation(reservation: BrowserClientPagePlacementReservation): boolean {
+    if (this.reservationsByPageId.get(reservation.browserPageId) !== reservation) {
+      return false
+    }
+    this.reservationsByPageId.delete(reservation.browserPageId)
+    this.releaseReservationSlot(reservation)
+    return true
   }
 
   requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {
@@ -153,6 +226,10 @@ export class BrowserHostPagePlacementRegistry {
     state.retirementCompletionInProgress = true
     try {
       beforeComplete?.()
+      const reservation = this.reservationsByPageId.get(retirement.browserPageId)
+      if (reservation) {
+        this.claimReservationSlot(reservation)
+      }
       return this.placementsByPageId.delete(retirement.browserPageId)
     } finally {
       state.retirementCompletionInProgress = false
@@ -160,17 +237,14 @@ export class BrowserHostPagePlacementRegistry {
   }
 
   assertPlacementAdmission(browserPageId: string): void {
+    assertBrowserPageIdentity(browserPageId)
     if (
-      typeof browserPageId !== 'string' ||
-      browserPageId.length === 0 ||
-      browserPageId.length > MAX_IDENTITY_LENGTH
+      this.placementsByPageId.has(browserPageId) ||
+      this.reservationsByPageId.has(browserPageId)
     ) {
-      throw new Error('browser_page_identity_invalid')
-    }
-    if (this.placementsByPageId.has(browserPageId)) {
       throw new Error('browser_page_replacement_requires_retirement')
     }
-    if (this.placementsByPageId.size >= this.maxPagePlacements) {
+    if (this.placementsByPageId.size + this.reservedPlacementSlots >= this.maxPagePlacements) {
       throw new Error('browser_page_placement_capacity')
     }
   }
@@ -182,6 +256,58 @@ export class BrowserHostPagePlacementRegistry {
     }
     this.nextPageGeneration += 1
     return value
+  }
+
+  private claimReservationSlot(reservation: BrowserClientPagePlacementReservation): void {
+    if (!this.reservationSlotClaims.has(reservation)) {
+      this.reservationSlotClaims.add(reservation)
+      this.reservedPlacementSlots += 1
+    }
+  }
+
+  private releaseReservationSlot(reservation: BrowserClientPagePlacementReservation): void {
+    if (this.reservationSlotClaims.delete(reservation)) {
+      this.reservedPlacementSlots -= 1
+    }
+  }
+}
+
+export function requireLiveBrowserClientPage(
+  placements: BrowserHostPagePlacementRegistry,
+  leasesByClientId: Map<string, BrowserHostLeaseState>,
+  authority: BrowserClientPageAuthority
+): RuntimeBrowserClientPlacement {
+  const placement = placements.requireClientPage(authority)
+  const lease = leasesByClientId.get(authority.browserHostClientId)
+  if (!lease) {
+    throw new Error('browser_host_lease_required')
+  }
+  if (lease.lease.browserHostGeneration !== authority.browserHostGeneration) {
+    throw new Error('browser_host_lease_stale')
+  }
+  if (lease.status !== 'active') {
+    throw new Error('browser_host_lease_reconnecting')
+  }
+  return placement
+}
+
+function assertBrowserPageIdentity(browserPageId: string): void {
+  if (
+    typeof browserPageId !== 'string' ||
+    browserPageId.length === 0 ||
+    browserPageId.length > MAX_IDENTITY_LENGTH
+  ) {
+    throw new Error('browser_page_identity_invalid')
+  }
+}
+
+function assertBrowserPageGeneration(pageHostGeneration: number): void {
+  if (
+    !Number.isInteger(pageHostGeneration) ||
+    pageHostGeneration < 1 ||
+    pageHostGeneration > MAX_GENERATION
+  ) {
+    throw new Error('browser_page_generation_stale')
   }
 }
 

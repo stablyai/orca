@@ -107,6 +107,16 @@ async function waitForRendererReady(contents) {
   throw new Error('renderer fixture did not become ready')
 }
 
+async function waitForGuestUrl(guest) {
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    const url = guest.getURL()
+    if (url) return url
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error('attached guest URL did not become observable')
+}
+
 async function run() {
   const timeout = setTimeout(() => {
     writeFileSync(resultPath, JSON.stringify({ error: 'fixture timeout' }))
@@ -162,7 +172,7 @@ async function run() {
   }
   const mounted = await renderer.mountPage(page, new AbortController().signal)
   if (!attachedGuest) throw new Error('did-attach-webview was not observed')
-  const initialUrl = attachedGuest.getURL()
+  const initialUrl = await waitForGuestUrl(attachedGuest)
   const hostRendererMatched = attachedGuest.hostWebContents === window.webContents
   if (attachedGuest.id !== mounted.webContentsId) throw new Error('guest id mismatch')
 

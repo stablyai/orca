@@ -83,12 +83,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
         browserHostClientId: 'host-a',
         hostCapabilities: ['webview']
       },
-      15_000,
+      expect.any(Number),
       expect.any(Object),
       expect.objectContaining({
         clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
       })
     )
+    expectInitialAttachTimeout()
     await lease.close()
     expect(close).toHaveBeenCalledOnce()
   })
@@ -116,10 +117,11 @@ describe('PairedRuntimeBrowserHostLease', () => {
       pairing,
       'browser.clientHost.attach',
       expect.objectContaining({ pageCommandProtocolVersion: 1 }),
-      15_000,
+      expect.any(Number),
       expect.any(Object),
       expect.any(Object)
     )
+    expectInitialAttachTimeout()
     callbacks.current!.onResponse(commandResponse())
 
     expect(onPageCommand).toHaveBeenCalledOnce()
@@ -163,10 +165,11 @@ describe('PairedRuntimeBrowserHostLease', () => {
         pageInventoryProtocolVersion: 1,
         pageInventory: [page]
       }),
-      15_000,
+      expect.any(Number),
       expect.any(Object),
       expect.any(Object)
     )
+    expectInitialAttachTimeout()
     callbacks.current!.onResponse(readyResponse({ pageInventoryProtocolVersion: 1 }))
 
     await expect(starting).resolves.toMatchObject({ pageInventoryProtocolVersion: 1 })
@@ -216,10 +219,11 @@ describe('PairedRuntimeBrowserHostLease', () => {
       pairing,
       'browser.clientHost.attach',
       expect.objectContaining({ pageInventoryProtocolVersion: 1, pageInventory: [] }),
-      15_000,
+      expect.any(Number),
       expect.any(Object),
       expect.any(Object)
     )
+    expectInitialAttachTimeout()
     await lease.close()
   })
 
@@ -707,6 +711,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 })
+
+function expectInitialAttachTimeout(): void {
+  const timeoutMs = subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[3]
+  expect(timeoutMs).toEqual(expect.any(Number))
+  expect(timeoutMs).toBeGreaterThan(0)
+  expect(timeoutMs).toBeLessThanOrEqual(15_000)
+}
 
 async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn> }): Promise<{
   callbacks: { current?: RemoteRuntimeSubscriptionCallbacks }

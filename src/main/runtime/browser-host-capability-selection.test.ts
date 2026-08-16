@@ -67,7 +67,7 @@ describe('browser host capability selection', () => {
         browserHostGeneration: 1,
         pageHostGeneration: 1
       })
-    ).toThrow('browser_host_lease_stale')
+    ).toThrow('browser_page_retirement_pending')
     expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
       'browser_page_replacement_requires_retirement'
     )

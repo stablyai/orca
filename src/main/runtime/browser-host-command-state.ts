@@ -14,6 +14,7 @@ export type BrowserHostCommandInput = {
   browserPageId: string
   pageHostGeneration: number
   command: BrowserClientHostCommandEvent['command']
+  resultAdmission?: 'placed-page' | 'reconciliation'
 }
 
 export type BrowserHostCommandResultParams = Omit<
@@ -25,6 +26,7 @@ export type BrowserHostCommandResultParams = Omit<
 
 export type BrowserHostCommandRecord = {
   event: BrowserClientHostCommandEvent
+  resultAdmission: 'placed-page' | 'reconciliation'
   result: Promise<BrowserClientHostCommandResult>
   resolve: (result: BrowserClientHostCommandResult) => void
   reject: (error: Error) => void
@@ -39,6 +41,7 @@ export type BrowserHostCommandPageState = {
   outstanding: number
   settledSequences: number[]
   terminalCommandIssued: boolean
+  activeCapacityReleased: boolean
 }
 
 export function assertBrowserHostCommandOrder(
@@ -104,7 +107,8 @@ export type BrowserHostCommandLedgerOptions = {
 }
 
 export function createBrowserHostCommandRecord(
-  event: BrowserClientHostCommandEvent
+  event: BrowserClientHostCommandEvent,
+  resultAdmission: BrowserHostCommandRecord['resultAdmission']
 ): BrowserHostCommandRecord {
   let resolve = (_result: BrowserClientHostCommandResult): void => {}
   let reject = (_error: Error): void => {}
@@ -113,7 +117,7 @@ export function createBrowserHostCommandRecord(
     reject = innerReject
   })
   void result.catch(() => undefined)
-  return { event, result, resolve, reject }
+  return { event, resultAdmission, result, resolve, reject }
 }
 
 export function sameBrowserHostCommandResult(
@@ -125,6 +129,22 @@ export function sameBrowserHostCommandResult(
     (first.status === 'completed' ||
       (second.status === 'failed' && first.errorCode === second.errorCode))
   )
+}
+
+export function assertBrowserHostCommandResultAuthority(
+  authority: BrowserClientHostLeaseAuthority,
+  params: BrowserHostCommandResultParams
+): void {
+  if (
+    params.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion ||
+    params.pageReconciliationProtocolVersion !== authority.pageReconciliationProtocolVersion ||
+    params.authorityRuntimeId !== authority.authorityRuntimeId ||
+    params.authorityEpoch !== authority.authorityEpoch ||
+    params.browserHostClientId !== authority.browserHostClientId ||
+    params.browserHostGeneration !== authority.browserHostGeneration
+  ) {
+    throw new Error('browser_host_command_result_authority_stale')
+  }
 }
 
 export function positiveBrowserHostCommandLimit(
