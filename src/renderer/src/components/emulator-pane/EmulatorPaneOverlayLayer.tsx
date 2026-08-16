@@ -1,12 +1,26 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import EmulatorPane from './EmulatorPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { useOverlaySlotGeometry } from '../tab-group/use-overlay-slot-geometry'
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
+
+const HAS_CSS_ANCHOR_POSITIONING =
+  typeof CSS !== 'undefined' &&
+  CSS.supports('position-anchor', '--orca-emulator-overlay-probe') &&
+  CSS.supports('top', 'anchor(--orca-emulator-overlay-probe top)') &&
+  CSS.supports('width', 'anchor-size(--orca-emulator-overlay-probe width)')
+
+function shouldUseCssAnchorPositioning(): boolean {
+  return (
+    HAS_CSS_ANCHOR_POSITIONING &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
 
 type SimulatorOverlaySlotProps = {
   tab: Tab
@@ -21,10 +35,18 @@ const SimulatorOverlaySlot = memo(function SimulatorOverlaySlot({
   isActive,
   onFocusOwningGroup
 }: SimulatorOverlaySlotProps): React.JSX.Element {
+  const overlayRef = useRef<HTMLDivElement | null>(null)
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const { measuredRect, useCssAnchors } = useOverlaySlotGeometry({
+    overlayRef,
+    groupId,
+    worktreeId: tab.worktreeId,
+    cssAnchorsSupported: shouldUseCssAnchorPositioning(),
+    isVisible: isActive
+  })
   const style: React.CSSProperties = useMemo(
     () =>
-      anchorName
+      anchorName && useCssAnchors
         ? {
             position: 'absolute',
             positionAnchor: anchorName,
@@ -36,14 +58,27 @@ const SimulatorOverlaySlot = memo(function SimulatorOverlaySlot({
             visibility: isActive ? 'visible' : 'hidden',
             pointerEvents: isActive ? 'auto' : 'none'
           }
-        : { display: 'none' },
-    [anchorName, isActive]
+        : anchorName
+          ? {
+              position: 'absolute',
+              top: measuredRect?.top ?? 32,
+              left: measuredRect?.left ?? 0,
+              width: measuredRect?.width ?? '100%',
+              height: measuredRect?.height ?? 'calc(100% - 32px)',
+              zIndex: isActive ? 2 : 1,
+              visibility: isActive ? 'visible' : 'hidden',
+              pointerEvents: isActive ? 'auto' : 'none'
+            }
+          : { display: 'none' },
+    [anchorName, isActive, measuredRect, useCssAnchors]
   )
 
   return (
     <div
+      ref={overlayRef}
       style={style}
       className="orca-emulator-overlay-slot min-h-0 min-w-0 overflow-hidden"
+      data-overlay-geometry={useCssAnchors ? 'anchor' : 'measured'}
       onPointerDownCapture={() => {
         if (groupId && onFocusOwningGroup) {
           onFocusOwningGroup(groupId)

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { useOverlaySlotGeometry } from '../tab-group/use-overlay-slot-geometry'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -15,20 +16,12 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
 const MIN_OVERLAY_FIT_WIDTH_PX = 48
 const MIN_OVERLAY_FIT_HEIGHT_PX = 24
-const FALLBACK_RECT_MIN_CHANGE_PX = 1
 
 function shouldUseCssAnchorPositioning(): boolean {
   return (
     HAS_CSS_ANCHOR_POSITIONING &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
-}
-
-type MeasuredFallbackRect = {
-  top: number
-  left: number
-  width: number
-  height: number
 }
 
 type TerminalOverlaySlotProps = {
@@ -64,75 +57,22 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
-  const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
-    null
-  )
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
+  const { measuredRect, forceMeasured, useCssAnchors } = useOverlaySlotGeometry({
+    overlayRef,
+    groupId,
+    worktreeId,
+    cssAnchorsSupported: shouldUseCssAnchorPositioning(),
+    isVisible
+  })
+
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
       setShouldMeasureHiddenStartup(false)
     }
   }, [isVisible, shouldMeasureHiddenStartup])
-  useLayoutEffect(() => {
-    if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
-      return
-    }
-
-    const findBody = (): HTMLElement | null => {
-      for (const candidate of document.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
-        if (candidate.dataset.tabGroupBodyId === groupId) {
-          return candidate
-        }
-      }
-      return null
-    }
-
-    const updateRect = (): void => {
-      const overlay = overlayRef.current
-      const parent = overlay?.parentElement
-      const body = findBody()
-      if (!parent || !body) {
-        setMeasuredFallbackRect(null)
-        return
-      }
-      const parentRect = parent.getBoundingClientRect()
-      const bodyRect = body.getBoundingClientRect()
-      const next: MeasuredFallbackRect = {
-        top: bodyRect.top - parentRect.top,
-        left: bodyRect.left - parentRect.left,
-        width: bodyRect.width,
-        height: bodyRect.height
-      }
-      // Why: ResizeObserver and xterm fit can otherwise amplify sub-pixel jitter forever.
-      setMeasuredFallbackRect((prev) =>
-        prev &&
-        Math.abs(prev.top - next.top) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.left - next.left) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.width - next.width) < FALLBACK_RECT_MIN_CHANGE_PX &&
-        Math.abs(prev.height - next.height) < FALLBACK_RECT_MIN_CHANGE_PX
-          ? prev
-          : next
-      )
-    }
-
-    updateRect()
-    const body = findBody()
-    const parent = overlayRef.current?.parentElement
-    const resizeObserver = new ResizeObserver(updateRect)
-    if (body) {
-      resizeObserver.observe(body)
-    }
-    if (parent) {
-      resizeObserver.observe(parent)
-    }
-    window.addEventListener('resize', updateRect)
-    return () => {
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', updateRect)
-    }
-  }, [anchorName, groupId, isVisible])
 
   useLayoutEffect(() => {
     if (!isVisible || !anchorName) {
@@ -167,11 +107,11 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       window.clearTimeout(retryId)
       window.clearTimeout(settledRetryId)
     }
-  }, [anchorName, isVisible, measuredFallbackRect])
+  }, [anchorName, isVisible, measuredRect, forceMeasured])
 
   const style: React.CSSProperties = useMemo(
     () =>
-      anchorName && shouldUseCssAnchorPositioning()
+      anchorName && useCssAnchors
         ? {
             position: 'absolute',
             positionAnchor: anchorName,
@@ -185,14 +125,14 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           }
         : anchorName
           ? {
-              // Why: Chrome builds without CSS anchor positioning otherwise
-              // mount the terminal into a 0x0 overlay. Measure the tab-group
-              // body so the fallback does not cover the tab strip.
+              // Why: without trusted CSS anchors (unsupported, web client, or
+              // post-snap desync), measure the tab-group body so the overlay
+              // never covers the tab strip or neighboring columns.
               position: 'absolute',
-              top: measuredFallbackRect?.top ?? 32,
-              left: measuredFallbackRect?.left ?? 0,
-              width: measuredFallbackRect?.width ?? '100%',
-              height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
+              top: measuredRect?.top ?? 32,
+              left: measuredRect?.left ?? 0,
+              width: measuredRect?.width ?? '100%',
+              height: measuredRect?.height ?? 'calc(100% - 32px)',
               display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
               opacity: isVisible ? 1 : 0,
               pointerEvents: isVisible ? 'auto' : 'none'
@@ -206,7 +146,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               display: 'none',
               pointerEvents: 'none'
             },
-    [anchorName, isVisible, measuredFallbackRect, shouldMeasureHiddenStartup]
+    [anchorName, isVisible, measuredRect, shouldMeasureHiddenStartup, useCssAnchors]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
@@ -265,6 +205,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       ref={overlayRef}
       style={style}
       data-terminal-overlay-tab-id={terminalTabId}
+      data-overlay-geometry={useCssAnchors ? 'anchor' : 'measured'}
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
     >

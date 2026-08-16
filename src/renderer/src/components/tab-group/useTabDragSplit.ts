@@ -406,6 +406,12 @@ export function useTabDragSplit({
             targetGroupId: paneColumnSplit.groupId,
             splitDirection: paneColumnSplit.zone
           })
+          // Why: column snap reflows CSS-anchor overlays; a post-drop resize
+          // tick re-runs geometry verification so a desynced hit-test box
+          // cannot keep covering tab chrome after the snap settles.
+          requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'))
+          })
         }
         finishDrag(
           shouldRestorePreDragActivation,

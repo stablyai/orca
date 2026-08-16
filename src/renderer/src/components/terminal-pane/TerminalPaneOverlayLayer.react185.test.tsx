@@ -95,6 +95,7 @@ beforeEach(() => {
 
   bodyEl = document.createElement('div')
   bodyEl.setAttribute('data-tab-group-body-id', GROUP_ID)
+  bodyEl.setAttribute('data-worktree-id', 'wt-1')
   bodyRect = createRect({ top: 32, height: 568 })
   bodyEl.getBoundingClientRect = () => bodyRect
   document.body.appendChild(bodyEl)
