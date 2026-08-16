@@ -31,6 +31,7 @@ import {
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
+  useConnectionPath,
   useLastConnectedAt,
   useReconnectAttempt
 } from '../../../src/transport/client-context-connection-metrics'
@@ -138,6 +139,7 @@ export function HostScreen({
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const connectionPath = useConnectionPath(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   // Why: useRef, not useMemo — React may discard memoized values, which would silently
@@ -817,7 +819,8 @@ export function HostScreen({
             const headerVerdict = classifyConnection({
               state: connState,
               reconnectAttempts,
-              lastConnectedAt
+              lastConnectedAt,
+              path: connectionPath
             })
             return (
               <>

@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 
 // Why: thresholds for escalating connection UX from neutral
@@ -49,6 +50,7 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  path?: MobileConnectionPath
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -67,6 +69,10 @@ export function classifyConnection(args: {
 
   if (state === 'disconnected') {
     return { kind: 'normal', label: 'Disconnected' }
+  }
+
+  if (args.path === 'relay') {
+    return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
   // connecting / handshaking / reconnecting from here. The gates apply to all

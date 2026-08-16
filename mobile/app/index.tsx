@@ -765,7 +765,8 @@ export default function HomeScreen() {
               state,
               reconnectAttempts: attempts,
               lastConnectedAt,
-              endpoint: item.endpoint
+              endpoint: item.endpoint,
+              path: hostPaths[item.id] ?? 'lan'
             })
             return (
               <MobileHostCard
