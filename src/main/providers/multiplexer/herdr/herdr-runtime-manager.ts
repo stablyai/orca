@@ -9,7 +9,7 @@ import type {
 import { HerdrRuntimeError, unwrapHerdrResponse } from './herdr-runtime-contract'
 import type { HerdrProjectHostGraph } from './herdr-runtime-graph'
 export type { HerdrProjectHostGraph } from './herdr-runtime-graph'
-import { ensureStockHerdrWorkspace } from './ensure-herdr-workspace'
+import { enrichHerdrWorkspaceCheckouts, ensureStockHerdrWorkspace } from './ensure-herdr-workspace'
 export type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
 import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
 import {
@@ -17,6 +17,7 @@ import {
   rememberOrcaPaneBindings,
   orcaPaneBinding,
   orcaWorkspaceBinding,
+  collectLeafIds,
   ORCA_BINDING_TOKEN,
   ORCA_METADATA_SOURCE
 } from './herdr-binding-metadata'
@@ -96,6 +97,21 @@ export class HerdrRuntimeManager {
     private readonly surfaceSync?: HerdrSurfaceSync
   ) {}
 
+  private paneHintsForRoot(
+    sessionName: string,
+    projectId: string,
+    root: Parameters<typeof collectLeafIds>[0]
+  ): Record<string, string> {
+    const hints: Record<string, string> = {}
+    for (const leafId of collectLeafIds(root)) {
+      const paneId = this.getPaneId(sessionName, projectId, leafId)
+      if (paneId) {
+        hints[leafId] = paneId
+      }
+    }
+    return hints
+  }
+
   getPaneId(sessionName: string, projectId: string, leafId: string): string | null {
     return (
       this.paneIdsBySessionAndBinding.get(
@@ -111,6 +127,7 @@ export class HerdrRuntimeManager {
       this.graphsByKey.set(graphKey(sessionName, graph.project.id), graph)
       this.ensureEventSubscription()
       let snapshot = await this.snapshot(sessionName)
+      await enrichHerdrWorkspaceCheckouts(this.transport, sessionName, snapshot)
 
       for (const worktree of graph.worktrees) {
         const tabs = graph.tabsByWorktreeId[worktree.id] ?? []
@@ -135,7 +152,10 @@ export class HerdrRuntimeManager {
               tab,
               root,
               snapshot,
-              graph.persistedPaneIdsByLeafId ?? {}
+              {
+                ...graph.persistedPaneIdsByLeafId,
+                ...this.paneHintsForRoot(sessionName, graph.project.id, root)
+              }
             )
           }
         }

@@ -152,6 +152,9 @@ export async function restoreOrcaPaneBindings(
         tokens: { [ORCA_BINDING_TOKEN]: binding }
       })
     )
+    if (pane) {
+      pane.tokens = { ...pane.tokens, [ORCA_BINDING_TOKEN]: binding }
+    }
   }
 }
 

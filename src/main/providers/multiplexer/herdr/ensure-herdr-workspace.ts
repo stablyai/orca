@@ -1,6 +1,6 @@
 import { firstTerminalLeafId } from '../../../../shared/herdr-session-identity'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { basename } from 'node:path'
+import { basename, normalize } from 'node:path'
 import {
   findUniqueHerdrMatch,
   ORCA_BINDING_TOKEN,
@@ -45,13 +45,7 @@ export async function ensureStockHerdrWorkspace(
     return bound
   }
 
-  const adoptable = findUniqueHerdrMatch(
-    snapshot.workspaces,
-    (workspace) =>
-      !workspace.tokens?.[ORCA_BINDING_TOKEN] &&
-      workspace.worktree?.checkout_path === worktree.path,
-    `workspace checkout ${worktree.path}`
-  )
+  const adoptable = findAdoptableWorkspace(snapshot.workspaces, worktree)
   if (adoptable) {
     await reportOrcaWorkspaceBinding(transport, sessionName, adoptable.workspace_id, binding)
     adoptable.tokens = { ...adoptable.tokens, [ORCA_BINDING_TOKEN]: binding }
@@ -162,4 +156,60 @@ async function openStockWorktree(
     }
   }
   return workspace
+}
+
+export async function enrichHerdrWorkspaceCheckouts(
+  transport: HerdrHostTransport,
+  sessionName: string,
+  snapshot: HerdrSessionSnapshot
+): Promise<void> {
+  for (const workspace of snapshot.workspaces) {
+    if (workspace.cwd || workspace.path || workspace.worktree?.checkout_path) {
+      continue
+    }
+    try {
+      const details = unwrapHerdrResponse<{ workspace: HerdrWorkspace }>(
+        await transport.request(sessionName, 'workspace.get', {
+          workspace_id: workspace.workspace_id
+        })
+      ).workspace
+      workspace.cwd = details.cwd ?? workspace.cwd
+      workspace.path = details.path ?? workspace.path
+      workspace.worktree = details.worktree ?? workspace.worktree
+    } catch {
+      // Skinny snapshot records stay adoptable by unique label.
+    }
+  }
+}
+
+function findAdoptableWorkspace(
+  workspaces: HerdrWorkspace[],
+  worktree: HerdrWorktreeDescriptor
+): HerdrWorkspace | null {
+  const byCheckout = findUniqueHerdrMatch(
+    workspaces,
+    (workspace) =>
+      !workspace.tokens?.[ORCA_BINDING_TOKEN] && workspaceMatchesCheckout(workspace, worktree.path),
+    `workspace checkout ${worktree.path}`
+  )
+  if (byCheckout) {
+    return byCheckout
+  }
+  const expectedLabel = worktree.displayName || basename(worktree.path)
+  const unbound = workspaces.filter((workspace) => !workspace.tokens?.[ORCA_BINDING_TOKEN])
+  if (unbound.length === 1 && unbound[0].label === expectedLabel) {
+    return unbound[0]
+  }
+  return findUniqueHerdrMatch(
+    unbound,
+    (workspace) => workspace.label === expectedLabel,
+    `workspace label ${expectedLabel}`
+  )
+}
+
+function workspaceMatchesCheckout(workspace: HerdrWorkspace, checkoutPath: string): boolean {
+  const expected = normalize(checkoutPath)
+  return [workspace.worktree?.checkout_path, workspace.cwd, workspace.path].some(
+    (candidate) => candidate !== undefined && normalize(candidate) === expected
+  )
 }

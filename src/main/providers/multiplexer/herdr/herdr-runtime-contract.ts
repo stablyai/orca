@@ -10,6 +10,8 @@ export type HerdrWorkspace = {
   workspace_id: string
   label: string
   tokens?: Record<string, string>
+  cwd?: string
+  path?: string
   worktree?: { checkout_path: string }
 }
 

@@ -18,6 +18,21 @@ import {
 } from './herdr-binding-metadata'
 import { applyTabLayout, ensureTabSplits } from './herdr-layout-reconcile'
 
+function hintedSplitIsLive(
+  root: TerminalPaneLayoutNode,
+  workspaceId: string,
+  snapshot: HerdrSessionSnapshot,
+  persistedPaneIds: Record<string, string>
+): boolean {
+  return collectLeafIds(root).every((leafId) => {
+    const paneId = persistedPaneIds[leafId]
+    return Boolean(
+      paneId &&
+      snapshot.panes.some((pane) => pane.pane_id === paneId && pane.workspace_id === workspaceId)
+    )
+  })
+}
+
 // Ensure the tab layout exists in herdr, either via layout.apply or pane.split replay.
 // Returns void; throws on unrecoverable errors.
 export async function ensureTabLayout(
@@ -126,6 +141,20 @@ export async function ensureTabLayout(
     await claimOrcaPaneBinding(transport, sessionName, projectId, rootLeafId, rootPane, snapshot)
   }
   if (root.type === 'leaf') {
+    return
+  }
+  // Why: after `session stop` Herdr restores pane ids but drops tokens.
+  // layout.apply rematerializes the split and mints new pane ids.
+  if (hintedSplitIsLive(root, workspaceId, snapshot, persistedPaneIds)) {
+    await restoreOrcaPaneBindings(
+      transport,
+      sessionName,
+      projectId,
+      root,
+      herdrTab.tab_id,
+      snapshot,
+      persistedPaneIds
+    )
     return
   }
   // Prefer one layout.apply to materialize the whole tree; fall

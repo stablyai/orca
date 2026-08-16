@@ -13,11 +13,22 @@ function runNode(args, env) {
   execFileSync(process.execPath, args, { cwd: repoRoot, stdio: 'inherit', env })
 }
 
-const herdrBinary = execFileSync(
-  process.execPath,
-  [join(scriptDir, 'download-herdr-release.mjs')],
-  { cwd: repoRoot, encoding: 'utf8' }
-).trim()
+function resolveHerdrBinary() {
+  if (process.env.ORCA_HERDR_TEST_BINARY) {
+    return process.env.ORCA_HERDR_TEST_BINARY
+  }
+  try {
+    const which = process.platform === 'win32' ? 'where' : 'which'
+    return execFileSync(which, ['herdr'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0]
+  } catch {
+    return execFileSync(process.execPath, [join(scriptDir, 'download-herdr-release.mjs')], {
+      cwd: repoRoot,
+      encoding: 'utf8'
+    }).trim()
+  }
+}
+
+const herdrBinary = resolveHerdrBinary()
 
 const vitestEntry = join(repoRoot, 'node_modules', 'vitest', 'vitest.mjs')
 runNode(
@@ -26,7 +37,8 @@ runNode(
     'run',
     '--config',
     'config/vitest.config.ts',
-    'src/main/providers/multiplexer/herdr/herdr-real-runtime.integration.test.ts'
+    'src/main/providers/multiplexer/herdr/herdr-real-runtime.integration.test.ts',
+    'src/main/providers/multiplexer/herdr/herdr-process-restart.integration.test.ts'
   ],
   { ...process.env, ORCA_HERDR_TEST_BINARY: herdrBinary }
 )

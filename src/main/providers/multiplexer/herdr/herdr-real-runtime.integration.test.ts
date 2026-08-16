@@ -5,8 +5,9 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-host-transport'
 import type { HerdrSessionSnapshot } from './herdr-runtime-contract'
 import { unwrapHerdrResponse } from './herdr-runtime-contract'
+import { resolveStockHerdrTestBinary } from './herdr-stock-binary'
 
-const binary = process.env.ORCA_HERDR_TEST_BINARY
+const binary = resolveStockHerdrTestBinary()
 const describeRealHerdr = binary ? describe : describe.skip
 
 describeRealHerdr('stock Herdr runtime integration', () => {

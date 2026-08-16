@@ -18,21 +18,19 @@ import type {
   LayoutExportResult,
   LayoutSetSplitRatioParams,
   LayoutSetSplitRatioResult,
-  PaneReadParams,
-  PaneReadWireResponse,
-  PaneResizeParams,
-  PaneResizeResult,
   ServerLiveHandoffParams,
   ServerLiveHandoffResult,
   Subscription
 } from './herdr-socket-types'
 import { HerdrSocketSessionManager } from './herdr-socket-session'
+import { isHerdrProcessGone, recoverHerdrSocketSession } from './herdr-socket-recover'
 
 export class HerdrSocketTransport implements HerdrHostTransport {
   private readonly options: HerdrSocketConnectionOptions
   private readonly connectionsBySession = new Map<string, HerdrSocketConnection>()
   private readonly eventConnectionsBySession = new Map<string, HerdrSocketEventConnection>()
   private readonly eventListeners = new Set<(event: HerdrSocketEvent) => void>()
+  private readonly recoveries = new Map<string, Promise<void>>()
   private readonly sessionManager: HerdrSocketSessionManager
 
   constructor(options: HerdrSocketConnectionOptions, sessionManager?: HerdrSocketSessionManager) {
@@ -74,7 +72,21 @@ export class HerdrSocketTransport implements HerdrHostTransport {
   }
 
   private async raw<T>(sessionName: string, method: string, params: unknown): Promise<T> {
-    return await this.connectionFor(sessionName).request<T>(method, params)
+    try {
+      return await this.connectionFor(sessionName).request<T>(method, params)
+    } catch (error) {
+      if (!isHerdrProcessGone(error)) {
+        throw error
+      }
+      await recoverHerdrSocketSession({
+        sessionName,
+        connectionsBySession: this.connectionsBySession,
+        eventConnectionsBySession: this.eventConnectionsBySession,
+        recoveries: this.recoveries,
+        ensureSession: (name) => this.ensureSession(name)
+      })
+      return await this.connectionFor(sessionName).request<T>(method, params)
+    }
   }
 
   // Socket-only helpers without a session argument route to the session this
@@ -154,7 +166,6 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     this.connectionsBySession.clear()
   }
 
-  // Events
   async eventsSubscribe(subscriptions: Subscription[]): Promise<void> {
     this.ensureEventSubscription(this.options.sessionName)
     const connection = this.eventConnectionsBySession.get(this.options.sessionName)
@@ -171,7 +182,6 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     })
   }
 
-  // Layout
   async layoutExport(params: LayoutExportParams): Promise<LayoutExportResult> {
     return await this.sockRaw('layout.export', params)
   }
@@ -182,7 +192,6 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     return await this.sockRaw('layout.set_split_ratio', params)
   }
 
-  // Server
   async serverLiveHandoff(params: ServerLiveHandoffParams): Promise<ServerLiveHandoffResult> {
     return await this.sockRaw('server.live_handoff', params)
   }
@@ -199,132 +208,11 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     return await this.sockRaw('server.reload_agent_manifests', {})
   }
 
-  // Ping
   async ping(): Promise<unknown> {
     return await this.sockRaw('ping', {})
   }
 
-  // Pane socket-only
-  async paneRead(params: PaneReadParams): Promise<PaneReadWireResponse> {
-    return await this.sockRaw('pane.read', params)
-  }
-  async paneResize(params: PaneResizeParams): Promise<PaneResizeResult> {
-    return await this.sockRaw('pane.resize', params)
-  }
-  async paneFocusDirection(params: {
-    direction: 'left' | 'right' | 'up' | 'down'
-    pane_id?: string | null
-  }): Promise<unknown> {
-    return await this.sockRaw('pane.focus_direction', params)
-  }
-  async paneFocus(params: { pane_id: string }): Promise<unknown> {
-    return await this.sockRaw('pane.focus', params)
-  }
-  async paneSendText(params: { pane_id: string; text: string }): Promise<unknown> {
-    return await this.sockRaw('pane.send_text', params)
-  }
-  async paneClearAgentAuthority(params: {
-    pane_id: string
-    seq?: number | null
-    source?: string | null
-  }): Promise<unknown> {
-    return await this.sockRaw('pane.clear_agent_authority', params)
-  }
-  async paneGraphicsSet(params: unknown): Promise<unknown> {
-    return await this.sockRaw('pane.graphics.set', params)
-  }
-  async paneGraphicsClear(params: unknown): Promise<unknown> {
-    return await this.sockRaw('pane.graphics.clear', params)
-  }
-  async paneGraphicsInfo(params: unknown): Promise<unknown> {
-    return await this.sockRaw('pane.graphics.info', params)
-  }
-
-  // Agent view socket-only
-  async agentViewSet(params: {
-    source: string
-    label?: string | null
-    filter?: unknown
-    sort?: unknown[]
-  }): Promise<unknown> {
-    return await this.sockRaw('agent.view.set', params)
-  }
-  async agentViewClear(params: { source?: string | null }): Promise<unknown> {
-    return await this.sockRaw('agent.view.clear', params)
-  }
-
-  // Workspace
   async workspaceList(): Promise<unknown> {
     return await this.sockRaw('workspace.list', {})
-  }
-  async workspaceMove(params: { workspace_id: string; insert_index: number }): Promise<unknown> {
-    return await this.sockRaw('workspace.move', params)
-  }
-  async workspaceMoveBlock(params: {
-    workspace_ids: string[]
-    before_workspace_id?: string | null
-  }): Promise<unknown> {
-    return await this.sockRaw('workspace.move_block', params)
-  }
-
-  // Tab socket-only
-  async tabMove(params: { tab_id: string; insert_index: number }): Promise<unknown> {
-    return await this.sockRaw('tab.move', params)
-  }
-
-  // Client socket-only
-  async clientWindowTitleSet(params: { title: string }): Promise<unknown> {
-    return await this.sockRaw('client.window_title.set', params)
-  }
-  async clientWindowTitleClear(): Promise<unknown> {
-    return await this.sockRaw('client.window_title.clear', {})
-  }
-
-  // Plugin
-  async pluginLink(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.link', params)
-  }
-  async pluginList(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.list', params)
-  }
-  async pluginUnlink(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.unlink', params)
-  }
-  async pluginEnable(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.enable', params)
-  }
-  async pluginDisable(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.disable', params)
-  }
-  async pluginActionList(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.action.list', params)
-  }
-  async pluginActionInvoke(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.action.invoke', params)
-  }
-  async pluginLogList(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.log.list', params)
-  }
-  async pluginPaneOpen(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.pane.open', params)
-  }
-  async pluginPaneFocus(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.pane.focus', params)
-  }
-  async pluginPaneClose(params: unknown): Promise<unknown> {
-    return await this.sockRaw('plugin.pane.close', params)
-  }
-
-  // Integration
-  async integrationInstall(params: unknown): Promise<unknown> {
-    return await this.sockRaw('integration.install', params)
-  }
-  async integrationUninstall(params: unknown): Promise<unknown> {
-    return await this.sockRaw('integration.uninstall', params)
-  }
-
-  // Popup
-  async popupClose(params: unknown): Promise<unknown> {
-    return await this.sockRaw('popup.close', params)
   }
 }

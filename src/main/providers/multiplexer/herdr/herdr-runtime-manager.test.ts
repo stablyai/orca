@@ -89,6 +89,11 @@ function stockTransport(
       if (method === 'session.snapshot') {
         return { id: 'snapshot', result: { snapshot } }
       }
+      if (method === 'workspace.get') {
+        const id = (params as { workspace_id?: string }).workspace_id
+        const workspace = snapshot.workspaces.find((candidate) => candidate.workspace_id === id)
+        return { id: 'workspace-get', result: { workspace: workspace ?? { workspace_id: id } } }
+      }
       if (method === 'workspace.create') {
         const workspace = { workspace_id: 'w1', label: 'repo' }
         const createdTab = { tab_id: 'w1:t1', workspace_id: 'w1', label: 'Terminal' }
@@ -257,6 +262,85 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     )
     expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')).toBe(
       'w1:p2'
+    )
+  })
+
+  it('adopts an unbound restored workspace by cwd after a herdr restart', async () => {
+    const host = stockTransport({
+      workspaces: [{ workspace_id: 'w-restored', label: 'repo', cwd: '/repo' }]
+    })
+    const manager = new HerdrRuntimeManager(host.transport)
+    await manager.reconcileProjectHost(graph())
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(0)
+    expect(host.snapshot.workspaces).toHaveLength(1)
+    expect(host.snapshot.workspaces[0].workspace_id).toBe('w-restored')
+    expect(host.snapshot.workspaces[0].tokens?.[ORCA_BINDING_TOKEN]).toBeTruthy()
+  })
+
+  it('reclaims restored split panes after tokens drop without rematerializing', async () => {
+    const host = stockTransport()
+    const manager = new HerdrRuntimeManager(host.transport)
+    await manager.reconcileProjectHost(graph())
+    const session = herdrSessionNameForProject(project())
+    const leaf1 = manager.getPaneId(session, 'project-1', 'leaf-1')
+    const leaf2 = manager.getPaneId(session, 'project-1', 'leaf-2')
+    expect(leaf1).toBeTruthy()
+    expect(leaf2).toBeTruthy()
+
+    for (const pane of host.snapshot.panes) {
+      delete pane.tokens
+    }
+    for (const workspace of host.snapshot.workspaces) {
+      delete workspace.tokens
+    }
+    host.requestMock.mockClear()
+    await manager.reconcileProjectHost(graph())
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'pane.split')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'layout.apply')
+    ).toHaveLength(0)
+    expect(manager.getPaneId(session, 'project-1', 'leaf-1')).toBe(leaf1)
+    expect(manager.getPaneId(session, 'project-1', 'leaf-2')).toBe(leaf2)
+  })
+
+  it('reclaims persisted split panes on a fresh manager without rematerializing', async () => {
+    const host = stockTransport({
+      workspaces: [{ workspace_id: 'w1', label: 'repo', cwd: '/repo' }],
+      tabs: [{ tab_id: 'w1:t1', workspace_id: 'w1', label: 'Terminal' }],
+      panes: [
+        { pane_id: 'w1:p1', tab_id: 'w1:t1', workspace_id: 'w1' },
+        { pane_id: 'w1:p3', tab_id: 'w1:t1', workspace_id: 'w1' }
+      ]
+    })
+    const manager = new HerdrRuntimeManager(host.transport)
+    await manager.reconcileProjectHost({
+      ...graph(),
+      persistedPaneIdsByLeafId: { 'leaf-1': 'w1:p1', 'leaf-2': 'w1:p3' }
+    })
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'pane.split')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'layout.apply')
+    ).toHaveLength(0)
+    expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-1')).toBe(
+      'w1:p1'
+    )
+    expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')).toBe(
+      'w1:p3'
     )
   })
 

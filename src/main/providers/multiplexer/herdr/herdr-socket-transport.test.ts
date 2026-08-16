@@ -343,4 +343,46 @@ describe('HerdrSocketTransport', () => {
     expect(forAlpha).toMatchObject({ result: { session: 'alpha' } })
     expect(forBeta).toMatchObject({ result: { session: 'beta' } })
   })
+
+  it('restarts the session when the herdr process is gone and retries the request', async () => {
+    const server = createSocketServer()
+    let down = false
+    const originalFactory = server.factory
+    const factory = (socketPath: string) => {
+      if (down) {
+        const socket = Object.assign(new EventEmitter(), {
+          write: vi.fn(),
+          destroy: vi.fn()
+        })
+        setImmediate(() =>
+          socket.emit('error', Object.assign(new Error('gone'), { code: 'ECONNREFUSED' }))
+        )
+        return socket as unknown as Socket
+      }
+      return originalFactory(socketPath)
+    }
+    let restarts = 0
+    const restartingManager = {
+      ensureSession: async () => {
+        restarts += 1
+        down = false
+      },
+      schemaProtocol: async () => 19
+    } as unknown as HerdrSocketSessionManager
+    server.setResponder(sessionSnapshotResponder(() => ({ result: { type: 'pong' } })))
+    const transport = new HerdrSocketTransport(
+      {
+        sessionName: 'shared',
+        timeoutMs: 500,
+        socketFactory: factory,
+        reconnection: disabledReconnection
+      },
+      restartingManager
+    )
+    await transport.ensureSession('alpha')
+    down = true
+    const response = await transport.request('alpha', 'ping', {})
+    expect(response).toMatchObject({ result: { type: 'pong' } })
+    expect(restarts).toBeGreaterThan(1)
+  })
 })
