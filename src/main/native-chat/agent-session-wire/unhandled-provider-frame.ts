@@ -79,19 +79,12 @@ export function unhandledProviderFrameJournalItem(
   // one; the raw frame stays behind the row's disclosure either way.
   const message = readableMessage(payload)
   const display = message ? boundInlineText(message, limits) : null
-  const blobs = new Map<string, string>()
-  if (bounded.truncated) {
-    blobs.set(bounded.digest, serialized)
-  }
-  if (message && display?.bounded.truncated) {
-    blobs.set(display.bounded.digest, message)
-  }
   return {
     body: {
       kind: 'status',
       text: display?.text ?? `${provider} · ${kind}`,
       providerFrame: { provider, kind, payload: bounded }
     },
-    blobs: [...blobs].map(([digest, blobPayload]) => ({ digest, payload: blobPayload }))
+    blobs: bounded.truncated ? [{ digest: bounded.digest, payload: serialized }] : []
   }
 }
