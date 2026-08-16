@@ -64,7 +64,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       installedCommand={updateCommand}
       removeCommand={removeCommand}
       terminalTitle="Computer Use setup"
-      terminalAriaLabel="Computer Use skill install terminal"
+      terminalAriaLabel="Computer Use skill setup terminal"
       terminalWorktreeId="settings-computer-use-skill-terminal"
       terminalShellOverride={activeSkillRuntime.terminalShellOverride}
       terminalRuntime={activeSkillRuntime.agentRuntime}
