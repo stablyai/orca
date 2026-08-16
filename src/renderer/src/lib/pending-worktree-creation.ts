@@ -1,15 +1,17 @@
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
+  SetupDecision
+} from '../../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
+import type {
   GitPushTarget,
-  SetupDecision,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus,
   WorkspaceLinkedItem,
-  WorktreeStartupLaunch
-} from '../../../shared/types'
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.
@@ -45,17 +47,24 @@ export type WorktreeCreationRequest = {
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
+  /** Checkout ownership selected by the provisioned recipe. */
+  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
+  /** Source-host commit captured before a provisioned-root recipe starts. */
+  ephemeralVmExpectedRefHead?: string
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
     sourceRepoId: string
     recipeId: string
     projectId: string
+    checkoutMode?: 'orca-worktree' | 'provisioned-root'
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
+  /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+  nameWasGenerated?: boolean
   displayName?: string
   baseBranch?: string
   compareBaseRef?: string

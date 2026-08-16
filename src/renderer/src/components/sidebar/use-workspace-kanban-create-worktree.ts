@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 
 export function useWorkspaceKanbanCreateWorktree(): {
   canCreateWorktree: boolean

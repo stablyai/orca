@@ -111,7 +111,14 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     return { ...actual, homedir: () => tempHome }
   })
 
-  return import('./client')
+  // One import call per reset so the split modules share a single graph (and
+  // thus one copy of the request queue / credential caches) per test.
+  const [client, queue, api] = await Promise.all([
+    import('./client'),
+    import('./request-queue'),
+    import('./authenticated-request')
+  ])
+  return { ...client, ...queue, ...api }
 }
 
 beforeEach(() => {

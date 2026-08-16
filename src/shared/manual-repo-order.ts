@@ -1,8 +1,10 @@
 import { getRepoExecutionHostId, normalizeExecutionHostId } from './execution-host'
-import type { ManualRepoOrderEntry, Repo } from './types'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
+import type { Repo } from './repo-types'
+import type { ManualRepoOrderEntry } from './ui-chrome-types'
 
 function getEntryKey(entry: ManualRepoOrderEntry): string {
-  return `${entry.hostId}\0${entry.repoId}`
+  return getRepoHostIdentityForParts(entry.repoId, entry.hostId)
 }
 
 export function normalizeManualRepoOrder(value: unknown): ManualRepoOrderEntry[] {
@@ -41,13 +43,15 @@ export function getManualRepoOrder(repos: readonly Repo[]): ManualRepoOrderEntry
 export function applyManualRepoOrder(
   repos: readonly Repo[],
   order: readonly ManualRepoOrderEntry[] | null | undefined
-): Repo[] {
+): readonly Repo[] {
   const normalized = normalizeManualRepoOrder(order)
+  // Why: results flow straight back into `repos`, so a reorder that moves nothing must return
+  // the input — a fresh array would invalidate every identity-keyed repo memo downstream.
   if (normalized.length === 0) {
-    return [...repos]
+    return repos
   }
   const rankByKey = new Map(normalized.map((entry, index) => [getEntryKey(entry), index]))
-  return repos
+  const ordered = repos
     .map((repo, index) => ({
       repo,
       index,
@@ -66,4 +70,5 @@ export function applyManualRepoOrder(
       return a.rank - b.rank || a.index - b.index
     })
     .map(({ repo }) => repo)
+  return ordered.every((repo, index) => repo === repos[index]) ? repos : ordered
 }

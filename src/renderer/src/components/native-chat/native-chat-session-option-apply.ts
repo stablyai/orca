@@ -109,7 +109,9 @@ async function handleAgentPicker(
   ctx: SessionOptionApplyContext,
   midSession: Extract<CatalogMidSessionApply, { kind: 'agent-picker' }>
 ): Promise<SessionOptionSetResult> {
-  await ctx.dispatchCommand(midSession.command)
+  await (midSession.delivery
+    ? ctx.dispatchCommand(midSession.command, { delivery: midSession.delivery })
+    : ctx.dispatchCommand(midSession.command))
   ctx.clearModelTruth()
   const snapshot = ctx.publish()
   ctx.onAgentPicker?.()

@@ -195,10 +195,8 @@ describe('input-source text substitution reaches the terminal', () => {
   describe.each([
     ['none', 0],
     ['disambiguate', 1],
-    ['event types', 2],
     ['alternate keys', 4],
     ['disambiguate + alternate keys', 5],
-    ['disambiguate + event types + alternate keys', 7],
     // Bit 4 asks for associated text, which only decorates a report bit 3 would already have
     // produced — on its own it does not turn a printable key into one.
     ['associated text', 16]
@@ -208,13 +206,23 @@ describe('input-source text substitution reaches the terminal', () => {
     })
   })
 
+  // Bit 1 (`report_event_types`) is orthogonal to bit 3: the press stays raw substituted text,
+  // but the app asked to be told when the key came back up, and the forwarder owns that keyup.
+  describe.each([
+    ['event types', 2],
+    ['disambiguate + event types + alternate keys', 7]
+  ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
+    it('sends the substituted character raw followed by one CSI-u release', () => {
+      expect(type([COMMA], flags)).toBe('，\x1b[44;1:3u')
+    })
+  })
+
   // Bit 3 is `report_all_keys_as_escape_codes`: the app asked for every printable key as a CSI-u
   // report, so committing raw UTF-8 hands it a byte stream it declined. Re-encode the press that
   // produced the commit. This is not CJK-specific — it is every printable key in such a pane.
   describe.each([
     ['all keys as escape codes', 8],
-    ['all keys + disambiguate', 9],
-    ['all keys + disambiguate + event types + alternate keys', 15]
+    ['all keys + disambiguate', 9]
   ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
     it('sends a CSI-u report for the physical key instead of the substituted character', () => {
       // `,` is the physical Comma key; U+002C is 44. The committed `，` is deliberately absent —
@@ -222,6 +230,10 @@ describe('input-source text substitution reaches the terminal', () => {
       // carry it.
       expect(type([COMMA], flags)).toBe('\x1b[44u')
     })
+  })
+
+  it('pairs the CSI-u press with exactly one release when event types are also negotiated', () => {
+    expect(type([COMMA], 15)).toBe('\x1b[44u\x1b[44;1:3u')
   })
 
   it('reports the physical key as the associated text under bit 3 + bit 4, not the substitution', () => {

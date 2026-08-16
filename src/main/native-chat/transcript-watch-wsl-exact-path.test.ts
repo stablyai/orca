@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as NodeFsModule from 'node:fs'
+import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const ROLLOUT_LINUX =
@@ -23,11 +23,15 @@ vi.mock('../wsl', () => ({
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
   getWslHomeAsync: vi.fn(async () => UBUNTU_HOME)
 }))
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsModule>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromisesModule>()
   return {
     ...actual,
-    existsSync: (path: string) => path === ROLLOUT_UNC || actual.existsSync(path)
+    access: async (path: string) => {
+      if (path !== ROLLOUT_UNC) {
+        await actual.access(path)
+      }
+    }
   }
 })
 
@@ -64,7 +68,12 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     })
 
     await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(ROLLOUT_UNC, expect.anything(), expect.anything())
+    expect(mocks.install).toHaveBeenCalledWith(
+      ROLLOUT_UNC,
+      expect.anything(),
+      expect.anything(),
+      expect.any(AbortSignal)
+    )
     expect(mocks.install.mock.calls.every(([path]) => path !== ROLLOUT_LINUX)).toBe(true)
     subscription.unsubscribe()
   })
@@ -80,7 +89,12 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     })
 
     await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(ROLLOUT_LINUX, expect.anything(), expect.anything())
+    expect(mocks.install).toHaveBeenCalledWith(
+      ROLLOUT_LINUX,
+      expect.anything(),
+      expect.anything(),
+      expect.any(AbortSignal)
+    )
     subscription.unsubscribe()
   })
 })

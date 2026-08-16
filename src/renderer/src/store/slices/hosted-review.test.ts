@@ -27,7 +27,8 @@ const mockApi = {
   hostedReview: {
     forBranch: vi.fn(),
     getCreationEligibility: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    createStacked: vi.fn()
   }
 }
 
@@ -41,6 +42,7 @@ function makeStore(settings: AppState['settings'] = null) {
       | 'fetchHostedReviewForBranch'
       | 'getHostedReviewCreationEligibility'
       | 'createHostedReview'
+      | 'createStackedHostedReview'
       | 'settings'
       | 'repos'
       | 'prCache'
@@ -80,6 +82,7 @@ describe('hosted review slice', () => {
     mockApi.hostedReview.forBranch.mockReset()
     mockApi.hostedReview.getCreationEligibility.mockReset()
     mockApi.hostedReview.create.mockReset()
+    mockApi.hostedReview.createStacked.mockReset()
     runtimeRpc.callRuntimeRpc.mockReset()
   })
 
@@ -388,6 +391,35 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('routes stacked pull request creation through its dedicated IPC method', async () => {
+    mockApi.hostedReview.createStacked.mockResolvedValueOnce({
+      ok: true,
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42',
+      stackNumber: 50,
+      parentReview: { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+    })
+    const store = makeStore()
+
+    await store.getState().createStackedHostedReview('/repo', {
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child',
+      worktreePath: '/worktrees/child'
+    })
+
+    expect(mockApi.hostedReview.createStacked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        repoId: 'repo-1',
+        base: 'stack/parent',
+        head: 'stack/child'
+      })
+    )
+    expect(mockApi.hostedReview.create).not.toHaveBeenCalled()
+  })
+
   it('forwards SSH connectionId when checking pull request creation eligibility', async () => {
     mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
       provider: 'github',
@@ -487,6 +519,39 @@ describe('hosted review slice', () => {
         title: 'Create PR'
       },
       { timeoutMs: 60_000 }
+    )
+  })
+
+  it('uses a distinct runtime method for stacked pull request creation', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
+      ok: true,
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42',
+      stackNumber: 50,
+      parentReview: { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+    })
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-win'
+    } as AppState['settings'])
+
+    await store.getState().createStackedHostedReview('/repo', {
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child',
+      worktreePath: 'C:\\worktrees\\child'
+    })
+
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-win' },
+      'hostedReview.createStacked',
+      expect.objectContaining({
+        repo: 'repo-1',
+        worktree: 'path:C:\\worktrees\\child',
+        base: 'stack/parent',
+        head: 'stack/child'
+      }),
+      { timeoutMs: 90_000 }
     )
   })
 

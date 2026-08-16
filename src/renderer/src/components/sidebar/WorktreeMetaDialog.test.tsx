@@ -4,13 +4,11 @@ import { act, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type {
-  FolderWorkspace,
-  LinearIssue,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 // Why: Radix tooltips need a provider the dialog does not own, and the menu's
@@ -223,6 +221,17 @@ describe('WorktreeMetaDialog issue link row', () => {
 
     expect(providerChip().textContent).toContain('GitHub')
     expect(issueInput().value).toBe('42')
+  })
+
+  it('replaces a completed emoji shortcode in the display name', () => {
+    openDialog()
+    const displayNameInput = screen.getByRole('textbox', { name: 'Display Name' })
+
+    fireEvent.change(displayNameInput, {
+      target: { value: 'Feature :wink:', selectionStart: 14 }
+    })
+
+    expect((displayNameInput as HTMLInputElement).value).toBe('Feature 😉')
   })
 
   it('seeds the chip and value from a Linear link', () => {

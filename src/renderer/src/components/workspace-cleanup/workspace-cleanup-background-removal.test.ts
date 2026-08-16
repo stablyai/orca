@@ -14,6 +14,12 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('../sidebar/preserved-branch-batch-toast', () => ({
+  showPreservedBranchBatchToast: vi.fn()
+}))
+
+import { showPreservedBranchBatchToast } from '../sidebar/preserved-branch-batch-toast'
+
 async function settleBackgroundRemoval(): Promise<void> {
   for (let index = 0; index < 10; index += 1) {
     await Promise.resolve()
@@ -92,7 +98,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedCount: 1,
       failedCount: 0
     })
-    expect(toast.success).toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
     expect(onResult).toHaveBeenCalledWith({ removedIds: [candidate.worktreeId], failures: [] })
   })
 
@@ -129,6 +135,54 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedCount: 2,
       failedCount: 0
     })
+  })
+
+  it('reports all preserved branches in one cleanup result', async () => {
+    const first = makeCandidate()
+    const second = makeCandidate({
+      worktreeId: 'repo-1::/repo/beta',
+      displayName: 'beta',
+      branch: 'beta',
+      path: '/repo/beta'
+    })
+    const firstBranch = {
+      worktreeId: first.worktreeId,
+      branchName: 'feature/alpha',
+      expectedHead: 'alpha-head'
+    }
+    const secondBranch = {
+      worktreeId: second.worktreeId,
+      branchName: 'feature/beta',
+      expectedHead: 'beta-head'
+    }
+    const onResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [first, second],
+      removeCandidates: vi
+        .fn()
+        .mockResolvedValueOnce({
+          removedIds: [first.worktreeId],
+          failures: [],
+          preservedBranches: [firstBranch]
+        })
+        .mockResolvedValueOnce({
+          removedIds: [second.worktreeId],
+          failures: [],
+          preservedBranches: [secondBranch]
+        }),
+      onProgress: vi.fn(),
+      onResult
+    })
+    await settleBackgroundRemoval()
+
+    expect(onResult).toHaveBeenCalledWith({
+      removedIds: [first.worktreeId, second.worktreeId],
+      failures: [],
+      preservedBranches: [firstBranch, secondBranch]
+    })
+    expect(showPreservedBranchBatchToast).toHaveBeenCalledWith(2, [firstBranch, secondBranch])
+    expect(toast.success).not.toHaveBeenCalledWith('Removed workspaces: 2')
   })
 
   it('removes nested candidates before their parent workspace', async () => {
@@ -518,7 +572,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedIds: [parent.worktreeId],
       failures: []
     })
-    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 1')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('hardens a provisional parent skip after the child late-fails post-batch', async () => {
@@ -775,7 +829,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     })
     await settleBackgroundRemoval()
 
-    expect(toast.success).toHaveBeenCalledWith('Removed workspaces: 1')
+    expect(toast.success).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalledWith(
       'Workspace cleanup failed',
       expect.objectContaining({ description: 'callback failed' })

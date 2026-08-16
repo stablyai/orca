@@ -93,6 +93,7 @@ vi.mock('./ssh', () => ({
 
 const { OMP_SESSIONS_DIR } = await import('../ai-vault/session-scanner-roots')
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
+const { deleteAiVaultSession: deleteAiVaultSessionWithDeps } = await import('./ai-vault-delete')
 
 const provider = {} as IFilesystemProvider
 
@@ -789,9 +790,14 @@ describe('deleteAiVaultSession', () => {
   }
 
   it('invalidates every AI Vault cache after a real delete', async () => {
+    const invalidateMultiHostListCache = vi.fn()
+    const invalidateBackgroundCache = vi.fn().mockResolvedValue(undefined)
     mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
 
-    const result = await _internals.deleteAiVaultSession(args)
+    const result = await deleteAiVaultSessionWithDeps(args, {
+      invalidateMultiHostListCache,
+      invalidateBackgroundCache
+    })
 
     expect(result).toEqual({ outcome: 'deleted' })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
@@ -800,11 +806,12 @@ describe('deleteAiVaultSession', () => {
         sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
-      }),
-      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
+      })
     )
+    expect(invalidateMultiHostListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateSessionParseCacheEntry).toHaveBeenCalledWith(args.filePath)
+    expect(invalidateBackgroundCache).toHaveBeenCalledWith([args.filePath])
   })
 
   it('does not invalidate any cache when the executor rejects (e.g. non-local host)', async () => {
@@ -850,8 +857,7 @@ describe('deleteAiVaultSession', () => {
       reason: 'invalid-path'
     })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '' }),
-      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
+      expect.objectContaining({ filePath: '' })
     )
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
   })

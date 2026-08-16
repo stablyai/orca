@@ -23,6 +23,8 @@ export function useMobileNativeChatTerminalStream(args: {
   streamRevision: number
   subscriptionsRef: MutableRefObject<Map<string, () => void>>
   subscribingRef: MutableRefObject<Set<string>>
+  /** Handles whose current subscribe went out as an input lease only. */
+  leaseOnlyRef: MutableRefObject<Set<string>>
   webReadyRef: MutableRefObject<Set<string>>
   initializedRef: MutableRefObject<Set<string>>
   subscribe: (handle: string) => void
@@ -55,13 +57,21 @@ export function useMobileNativeChatTerminalStream(args: {
       healthyStreamProofRef.current = null
     }
   }, [])
-  const notifyWebReady = useCallback((handle: string, wasAlreadyReady: boolean) => {
-    // Why: ordinary WebView startups must not rerender the large session route;
-    // only readiness that can release a native-chat lease needs reconciliation.
-    if (!wasAlreadyReady && coveredHandleRef.current === handle) {
-      setWebReadyRevision((revision) => revision + 1)
-    }
-  }, [])
+  const notifyWebReady = useCallback(
+    (handle: string, wasAlreadyReady: boolean) => {
+      // Why: ordinary WebView startups must not rerender the large session route;
+      // only readiness that can release a native-chat lease needs reconciliation.
+      // A lease-only stream counts: the route's own web-ready path bails on any live
+      // subscription, so nothing else would ever trade that lease for output.
+      if (
+        !wasAlreadyReady &&
+        (coveredHandleRef.current === handle || args.leaseOnlyRef.current.has(handle))
+      ) {
+        setWebReadyRevision((revision) => revision + 1)
+      }
+    },
+    [args.leaseOnlyRef]
+  )
   const notifyListedHandles = useCallback(
     (liveHandles: ReadonlySet<string>) => {
       // Why: the rearm budget bounds one teardown, not the handle's lifetime. A covered
@@ -106,7 +116,7 @@ export function useMobileNativeChatTerminalStream(args: {
       (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
     )
   }, [])
-  useEffect(() => {
+  const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
       forgetRearmState(coveredHandleRef.current)
@@ -115,12 +125,15 @@ export function useMobileNativeChatTerminalStream(args: {
     const streamActive =
       handle != null &&
       (args.subscriptionsRef.current.has(handle) || args.subscribingRef.current.has(handle))
+    const streamIsLeaseOnly =
+      streamActive && handle != null && args.leaseOnlyRef.current.has(handle)
     const action = resolveMobileNativeChatTerminalStreamAction({
       showNativeChat: args.showNativeChat,
       activeHandle: handle,
       activeTabType: args.activeTabType,
       streamActive,
       streamCovered: coveredHandleRef.current === handle,
+      streamIsLeaseOnly,
       webViewReady: handle != null && args.webReadyRef.current.has(handle)
     })
     const streamHolding = action === 'none' && streamActive && coveredHandleRef.current === handle
@@ -181,7 +194,11 @@ export function useMobileNativeChatTerminalStream(args: {
       args.subscribe(handle)
       return
     }
-    if (coveredHandleRef.current === handle) {
+    if (coveredHandleRef.current === handle || streamIsLeaseOnly) {
+      // Why clear `initialized`: a lease-only stream delivered no scrollback, so xterm
+      // holds nothing — a stale mark would drop the replacement snapshot and the
+      // terminal would stay blank through the resubscribe.
+      args.initializedRef.current.delete(handle)
       args.unsubscribe(handle)
       coveredHandleRef.current = null
     }
@@ -190,6 +207,7 @@ export function useMobileNativeChatTerminalStream(args: {
     args.activeHandle,
     args.activeTabType,
     args.initializedRef,
+    args.leaseOnlyRef,
     args.leaseReady,
     args.showNativeChat,
     args.streamRevision,
@@ -203,6 +221,7 @@ export function useMobileNativeChatTerminalStream(args: {
     rearmBudgetRevision,
     webReadyRevision
   ])
+  useEffect(() => reconcileStream(), [reconcileStream])
   useEffect(() => cancelHealthyStreamProof, [cancelHealthyStreamProof])
   // Why memoized: the session route keeps this object in callback dep arrays, and a
   // fresh literal per render would rebuild them on every keystroke. All three members

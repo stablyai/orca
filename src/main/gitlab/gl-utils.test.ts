@@ -17,8 +17,10 @@ import {
   _resetProjectRefCache,
   classifyGlabError,
   classifyJobLogError,
+  classifyListFetchError,
   classifyListIssuesError,
   getIssueProjectRef,
+  parseGlabJsonList,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -27,6 +29,7 @@ import {
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
+import { GlabNonListResponseError } from './glab-api-response'
 import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
@@ -498,6 +501,69 @@ gitlab.example.com:8080:
       'gitlab.example.com:3030',
       'gitlab.example.com:8443'
     ])
+  })
+})
+
+describe('parseGlabJsonList', () => {
+  it('returns the parsed list unchanged', () => {
+    expect(parseGlabJsonList<{ iid: number }>('[{"iid":1}]')).toEqual([{ iid: 1 }])
+  })
+
+  it.each([
+    ['null', 'null'],
+    ['a number', '0'],
+    ['a string', '"nope"'],
+    ['an object', '{"data":[]}']
+  ])('reports the raw payload for %s as an unclassifiable body', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(GlabNonListResponseError)
+    expect(() => parseGlabJsonList(payload)).toThrow(payload)
+  })
+
+  // Why: glab allows a 10MB body, and the renderer's error banner has no length guard of its own.
+  it.each([
+    ['an opaque body', `{"data":"${'x'.repeat(50_000)}"}`],
+    ['an error envelope', `{"message":"${'x'.repeat(50_000)}"}`]
+  ])('bounds the reported payload for %s', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(
+      /^GitLab returned (?:a non-list response|an error): .{300}$/
+    )
+  })
+
+  it.each([
+    ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
+    ['error', '{"error":"insufficient_scope"}', 'insufficient_scope'],
+    ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error'],
+    // Why: GitLab sends both on some endpoints; `message` is the human-facing one.
+    [
+      'message when both are set',
+      '{"message":"404 Project Not Found","error":"insufficient_scope"}',
+      '404 Project Not Found'
+    ]
+  ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
+    // Why: an envelope is GitLab's own diagnostic, so it stays classifiable — unlike a raw body.
+    expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)
+    expect(() => parseGlabJsonList(payload)).not.toThrow(GlabNonListResponseError)
+  })
+})
+
+describe('classifyListFetchError', () => {
+  it('keeps opaque payload text away from the classifier', () => {
+    // Why: the title would otherwise substring-match as a network failure and replace the payload.
+    const payload = '{"data":[{"title":"fix network timeout"}]}'
+    let thrown: unknown
+    try {
+      parseGlabJsonList(payload)
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toBeInstanceOf(GlabNonListResponseError)
+    const classified = classifyListFetchError(thrown)
+    expect(classified.type).toBe('unknown')
+    expect(classified.message).toContain('fix network timeout')
+  })
+
+  it('still classifies ordinary glab failures by their stderr', () => {
+    expect(classifyListFetchError(new Error('HTTP 403 Forbidden')).type).toBe('permission_denied')
   })
 })
 

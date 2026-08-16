@@ -78,6 +78,7 @@ export function dashboardSnapshotInputsChanged(
     // these two instead of worktreesByRepo.
     state.folderWorkspaces !== previousState.folderWorkspaces ||
     state.projectGroups !== previousState.projectGroups ||
+    state.sshTargetLabels !== previousState.sshTargetLabels ||
     state.restoredRuntimeHostIdByWorkspaceSessionKey !==
       previousState.restoredRuntimeHostIdByWorkspaceSessionKey ||
     state.runtimeEnvironments !== previousState.runtimeEnvironments ||

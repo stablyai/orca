@@ -53,6 +53,7 @@ function renderServerPathStartStep(runtimeEnvironmentId: string | null): string 
 
 type LocalStartStepDomOptions = {
   isAdding?: boolean
+  actionsDisabled?: boolean
   addProjectBusyLabel?: string | null
   nestedScanInProgress?: boolean
   nestedScanId?: string | null
@@ -76,6 +77,7 @@ async function renderLocalStartStepDom(
           repoCount={1}
           isSshLikely={isSshLikely}
           isAdding={options.isAdding ?? false}
+          actionsDisabled={options.actionsDisabled ?? false}
           addProjectBusyLabel={options.addProjectBusyLabel ?? null}
           nestedScanInProgress={options.nestedScanInProgress ?? false}
           nestedScanId={options.nestedScanId ?? null}
@@ -251,6 +253,20 @@ describe('AddRepoLocalStartStep', () => {
     expect(findButton(container, 'Clone from URL').disabled).toBe(false)
     expect(findButton(container, 'Project on SSH host').disabled).toBe(false)
     expect(findButton(container, 'Create new project').disabled).toBe(false)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('disables host-scoped actions until a host is selectable', async () => {
+    const { container, root } = await renderLocalStartStepDom(false, { actionsDisabled: true })
+
+    expect(findButton(container, 'Browse folder').disabled).toBe(true)
+    expect(findButton(container, 'Clone from URL').disabled).toBe(true)
+    expect(findButton(container, 'Project on SSH host').disabled).toBe(true)
+    expect(findButton(container, 'Create new project').disabled).toBe(true)
+    expect(findButton(container, 'Browse folder').textContent).not.toContain('⏎')
 
     await act(async () => {
       root.unmount()

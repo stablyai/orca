@@ -41,7 +41,7 @@ const MAX_OUTPUT_CHARS = 32_768
 
 function readConfig(): ClientConfig {
   const configIndex = process.argv.indexOf('--config')
-  const configPath = configIndex >= 0 ? process.argv[configIndex + 1] : undefined
+  const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
   if (!configPath) {
     throw new Error('Reconnect client requires --config <path>')
   }

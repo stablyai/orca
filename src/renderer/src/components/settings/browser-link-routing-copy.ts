@@ -4,6 +4,14 @@ export function getBrowserLinkRoutingShortcutLabel(platform: { isMac: boolean })
   return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
 }
 
+export function getTerminalLinkActionsDescription(platform: { isMac: boolean }): string {
+  return translate(
+    'auto.components.settings.BrowserTerminalLinkActionsSetting.description',
+    'Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click.',
+    { modifier: platform.isMac ? '⌘' : 'Ctrl' }
+  )
+}
+
 // Why: "always" stops being true once inverting is on, so only then does the nested
 // row take over the chord sentence — with it off this reads exactly as it always has.
 // Each variant is a complete catalog entry: stitched suffixes break in locales whose

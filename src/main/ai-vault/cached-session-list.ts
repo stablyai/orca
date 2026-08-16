@@ -1,8 +1,8 @@
 import { join } from 'node:path'
 import {
-  resetAiVaultScannerWorkerForTests,
-  scanAiVaultSessionsInWorker
-} from './session-scanner-worker-spawn'
+  resetAiVaultScannerBackgroundForTests,
+  scanAiVaultSessionsInBackground
+} from './session-scanner-background'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -77,7 +77,7 @@ export async function listAiVaultSessions(
     start: async (scanSignal) => {
       const additionalCodexSessionsDirs =
         sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
-      const result = await scanAiVaultSessionsInWorker(
+      const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,
           unlimited: args?.unlimited,
@@ -142,5 +142,5 @@ export function resetAiVaultSessionListCacheForTests(): void {
   invalidateAiVaultSessionListCache()
   scanCoordinator = new AiVaultScanCoordinator()
   sources = {}
-  resetAiVaultScannerWorkerForTests()
+  resetAiVaultScannerBackgroundForTests()
 }

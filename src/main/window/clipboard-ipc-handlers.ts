@@ -9,7 +9,8 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -31,6 +32,7 @@ import {
 } from './clipboard-file-copy'
 import {
   cleanupExpiredRemoteClipboardFiles,
+  scheduleLegacyRemoteClipboardFileCleanup,
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
@@ -85,6 +87,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
 
   void cleanupExpiredRemoteClipboardFiles()
+  scheduleLegacyRemoteClipboardFileCleanup()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)

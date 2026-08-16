@@ -157,28 +157,12 @@ const RESET_SNAPSHOT = {
   }
 } as const
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 async function renderAccountsRoute(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(AccountsScreen))
-      await Promise.resolve()
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(AccountsScreen))
+    await Promise.resolve()
+  })
   if (!renderer) {
     throw new Error('Accounts route did not render')
   }
@@ -229,7 +213,6 @@ describe('accounts route Codex reset credit', () => {
   let storedValues: Map<string, string>
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     resetCodexResetAttemptJournalForTests()
     storedValues = new Map()
     dependencies.alert.mockReset()

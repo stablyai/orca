@@ -4,7 +4,7 @@ import type { AiVaultSessionTitle } from '../../../shared/ai-vault-session-title
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 

@@ -44,6 +44,7 @@ import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
   deriveWorkerTerminalListState,
+  WORKER_SETTLED_STATES,
   type WorkerTerminalResourceRow,
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
@@ -52,11 +53,18 @@ import {
   type WorkerTerminalRetainedReason
 } from './worker-terminal-ownership'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import {
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
 import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
 } from './context-only-dispatch-release'
+import {
+  ensureMutationReceiptCapacity,
+  migrateMutationReceiptCapacity
+} from './mutation-receipt-capacity'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -68,16 +76,40 @@ function isEquivalentPaneKey(a: string, b: string): boolean {
   return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
 }
 
+function parseWorkerTerminalPriorOwnerIds(value: string): string[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')
+      ? parsed
+      : null
+  } catch {
+    return null
+  }
+}
+
+const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
+export const ORCHESTRATION_DELIVERY_BATCH_LIMIT = 50
+
+export type MailboxRoutingPage = {
+  routedCount: number
+  hasMore: boolean
+  types: MessageType[]
+}
+
+export type ForeignDirectMailboxRoutingPage = MailboxRoutingPage & {
+  mailboxes: { mailboxHandle: string; types: MessageType[] }[]
+}
 // Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
 // text after the first ':', so this narrows candidates without deciding equivalence itself.
 const RUN_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(coordinator_pane_key, instr(coordinator_pane_key, ':') + 1)"
 const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1)"
+const REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL = "substr(pane_key, instr(pane_key, ':') + 1)"
 
 function paneKeyMatchSuffix(paneKey: string): string {
   const colon = paneKey.indexOf(':')
-  return colon < 0 ? paneKey : paneKey.slice(colon + 1)
+  return colon === -1 ? paneKey : paneKey.slice(colon + 1)
 }
 
 export type {
@@ -261,9 +293,6 @@ export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 export const LEGACY_CONTRACT_VERSION = 0
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
-const MUTATION_RECEIPT_MAX_ROWS = 10_000
-const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
-
 export type RunListPage = {
   runs: RunRow[]
   nextCursor: string | null
@@ -281,10 +310,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity.
+const SCHEMA_VERSION = 28
 
-function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
+function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
     // Why: Windows protects these files through Orca's current-user-only userData DACL; POSIX mode bits are inert there.
     return
@@ -306,14 +335,17 @@ export class OrchestrationDb {
   // emptiness so the non-orchestration majority short-circuits the whole
   // per-terminal fan-out. Only createDispatchContext flips this false→true.
   private hasAnyDispatchContextsCache: boolean | undefined
+  private localMutationCallerFingerprint: string | undefined
 
-  constructor(dbPath: string | ':memory:') {
+  constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
     this.createTables()
     this.migrate()
+    this.createCoordinatorMailRoutingTrigger()
+    this.rememberCurrentRunCoordinatorHandles()
     hardenOrchestrationDatabaseFiles(dbPath)
   }
 
@@ -360,6 +392,38 @@ export class OrchestrationDb {
       CREATE INDEX IF NOT EXISTS idx_inbox ON messages(to_handle, read);
       CREATE INDEX IF NOT EXISTS idx_thread ON messages(thread_id);
 
+      CREATE TABLE IF NOT EXISTS run_coordinator_handles (
+        run_id          TEXT NOT NULL,
+        terminal_handle TEXT NOT NULL,
+        first_bound_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, terminal_handle)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_run_coordinator_handles_handle
+        ON run_coordinator_handles(terminal_handle, run_id);
+
+      CREATE TRIGGER IF NOT EXISTS trg_runs_remember_coordinator_insert
+      AFTER INSERT ON runs
+      WHEN NEW.legacy = 0 AND NEW.coordinator_handle IS NOT NULL
+      BEGIN
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        VALUES (NEW.id, NEW.coordinator_handle);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_runs_remember_coordinator_update
+      AFTER UPDATE OF coordinator_handle ON runs
+      WHEN NEW.legacy = 0 AND NEW.coordinator_handle IS NOT NULL
+      BEGIN
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        VALUES (NEW.id, NEW.coordinator_handle);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_runs_forget_coordinator_handles
+      AFTER DELETE ON runs
+      BEGIN
+        DELETE FROM run_coordinator_handles WHERE run_id = OLD.id;
+      END;
+
       CREATE TABLE IF NOT EXISTS deliveries (
         id                    TEXT PRIMARY KEY,
         run_id                TEXT NOT NULL,
@@ -387,6 +451,11 @@ export class OrchestrationDb {
         created_at          TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (caller_fingerprint, request_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS mutation_caller_identities (
+        transport           TEXT PRIMARY KEY,
+        caller_fingerprint  TEXT NOT NULL UNIQUE
       );
 
       CREATE TABLE IF NOT EXISTS worker_dispatches (
@@ -464,6 +533,7 @@ export class OrchestrationDb {
         remote_worktree_id      TEXT,
         remote_terminal_handle  TEXT,
         to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
+        to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
         created_at              TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -493,6 +563,12 @@ export class OrchestrationDb {
         created_at              TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
       );
+      CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane
+        ON remote_dispatch_attachments(pane_key)
+        WHERE state IN ('starting', 'ready');
+      CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane_suffix
+        ON remote_dispatch_attachments(${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL})
+        WHERE state IN ('starting', 'ready') AND pane_key IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS federation_relay_items (
         dispatch_id   TEXT NOT NULL,
@@ -607,7 +683,7 @@ export class OrchestrationDb {
         scheduler_lost_at   TEXT
       );
     `)
-    this.createUndeliveredInboxIndexIfPossible()
+    this.createMailboxDeliveryIndexesIfPossible()
   }
 
   // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
@@ -867,6 +943,7 @@ export class OrchestrationDb {
             remote_worktree_id      TEXT,
             remote_terminal_handle  TEXT,
             to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
+            to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
             created_at              TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
           );
@@ -983,12 +1060,40 @@ export class OrchestrationDb {
             WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
         `)
       }
+      if (current < 26) {
+        migrateMutationReceiptCapacity(this.db)
+      }
+      if (
+        current < 27 &&
+        !this.hasColumn('federated_dispatches', 'to_home_acknowledged_sequence')
+      ) {
+        this.db.exec(
+          'ALTER TABLE federated_dispatches ADD COLUMN to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0'
+        )
+      }
+      if (current < 28) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS mutation_caller_identities (
+            transport           TEXT PRIMARY KEY,
+            caller_fingerprint  TEXT NOT NULL UNIQUE
+          );
+        `)
+      }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
           ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})
           WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched');
+        CREATE INDEX IF NOT EXISTS idx_dispatch_active_run_assignee_handle
+          ON dispatch_contexts(run_id, assignee_handle)
+          WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
+        CREATE INDEX IF NOT EXISTS idx_dispatch_active_run_pane_leaf
+          ON dispatch_contexts(run_id, ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})
+          WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched');
+        CREATE INDEX IF NOT EXISTS idx_dispatch_active_assignee_pane_key
+          ON dispatch_contexts(assignee_pane_key)
+          WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched');
       `)
-      this.createUndeliveredInboxIndexIfPossible()
+      this.createMailboxDeliveryIndexesIfPossible()
 
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
       this.db.exec('COMMIT')
@@ -1371,13 +1476,36 @@ export class OrchestrationDb {
     return rows.some((r) => r.name === column)
   }
 
-  private createUndeliveredInboxIndexIfPossible(): void {
-    if (!this.hasColumn('messages', 'delivered_at')) {
+  private createMailboxDeliveryIndexesIfPossible(): void {
+    const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
+    if (hasDeliveredAt) {
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
+          ON messages(to_handle, read, delivered_at, sequence)
+      `)
+    }
+
+    if (
+      !hasDeliveredAt ||
+      !this.hasColumn('messages', 'run_id') ||
+      !this.hasColumn('messages', 'delivery_contract')
+    ) {
       return
     }
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
-        ON messages(to_handle, read, delivered_at, sequence)
+      CREATE INDEX IF NOT EXISTS idx_messages_undelivered_direct_run
+        ON messages(run_id, to_handle, sequence)
+        WHERE read = 0 AND delivered_at IS NULL
+          AND delivery_contract = 'current_delivery';
+      CREATE INDEX IF NOT EXISTS idx_messages_unread_current_inbox
+        ON messages(to_handle, sequence)
+        WHERE read = 0 AND delivery_contract = 'current_delivery';
+      CREATE INDEX IF NOT EXISTS idx_messages_unread_current_inbox_type
+        ON messages(to_handle, type, sequence)
+        WHERE read = 0 AND delivery_contract = 'current_delivery';
+      CREATE INDEX IF NOT EXISTS idx_messages_unread_current_run_type
+        ON messages(run_id, to_handle, type, sequence)
+        WHERE read = 0 AND delivery_contract = 'current_delivery';
     `)
   }
 
@@ -1398,42 +1526,32 @@ export class OrchestrationDb {
 
   // ── Durable mutation receipts ──
 
-  private ensureMutationReceiptCapacity(): void {
+  getOrCreateLocalMutationCallerFingerprint(): string {
+    if (this.localMutationCallerFingerprint) {
+      return this.localMutationCallerFingerprint
+    }
+    const transport = 'local_authenticated_transport'
+    const existing = this.db
+      .prepare('SELECT caller_fingerprint FROM mutation_caller_identities WHERE transport = ?')
+      .get(transport) as { caller_fingerprint: string } | undefined
+    if (existing) {
+      this.localMutationCallerFingerprint = existing.caller_fingerprint
+      return this.localMutationCallerFingerprint
+    }
     this.db
       .prepare(
-        `DELETE FROM mutation_receipts
-         WHERE state = 'completed'
-           AND updated_at < datetime('now', ?)`
+        `INSERT OR IGNORE INTO mutation_caller_identities (transport, caller_fingerprint)
+         VALUES (?, ?)`
       )
-      .run(`-${MUTATION_RECEIPT_MAX_AGE_DAYS} days`)
-
-    const row = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
+      .run(transport, randomBytes(32).toString('hex'))
+    const created = this.db
+      .prepare('SELECT caller_fingerprint FROM mutation_caller_identities WHERE transport = ?')
+      .get(transport) as { caller_fingerprint: string } | undefined
+    if (!created) {
+      throw new Error('Failed to create the local orchestration mutation caller identity.')
     }
-    const completedToRemove = row.count - MUTATION_RECEIPT_MAX_ROWS + 1
-    if (completedToRemove > 0) {
-      this.db
-        .prepare(
-          `DELETE FROM mutation_receipts
-           WHERE rowid IN (
-             SELECT rowid FROM mutation_receipts
-             WHERE state = 'completed'
-             ORDER BY updated_at ASC, rowid ASC
-             LIMIT ?
-           )`
-        )
-        .run(completedToRemove)
-    }
-
-    const retained = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
-    }
-    if (retained.count >= MUTATION_RECEIPT_MAX_ROWS) {
-      throw new OrchestrationError(
-        'mutation_ledger_full',
-        'The durable mutation ledger is full of unresolved operations. Resolve or inspect them before starting another mutation.'
-      )
-    }
+    this.localMutationCallerFingerprint = created.caller_fingerprint
+    return this.localMutationCallerFingerprint
   }
 
   beginMutationReceipt(params: {
@@ -1458,7 +1576,7 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: existing.state, row: existing }
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -1793,12 +1911,27 @@ export class OrchestrationDb {
     return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
   }
 
+  // Why: caller-side fence jurisdiction. Widening this fences more callers, so keep it narrow.
   isLegacyCoordinatorHandle(runId: string, terminalHandle: string): boolean {
     const principal = this.getLegacyCoordinatorPrincipal(runId)
     if (principal) {
       return principal.terminal_handle === terminalHandle
     }
     return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
+  }
+
+  // Why: recipient-side permit for legacy lifecycle mail. After a takeover revokes the old principal
+  // the replacement coordinator is only reachable through the Run binding.
+  isLegacyCoordinatorDeliveryTarget(runId: string, terminalHandle: string): boolean {
+    if (this.isLegacyCoordinatorHandle(runId, terminalHandle)) {
+      return true
+    }
+    if (this.getRunRaw(runId)?.coordinator_handle !== terminalHandle) {
+      return false
+    }
+    // Why: must match resolveLegacyWorkerCoordinatorDelivery's takeover test. A still-committed
+    // principal routes legacy_direct to this handle, and no reader can see that mailbox.
+    return this.getLegacyCoordinatorPrincipal(runId)?.status !== 'committed'
   }
 
   findLegacyWorkerCompletion(params: {
@@ -1976,7 +2109,10 @@ export class OrchestrationDb {
     recovery: boolean
   } {
     const principal = this.requireLegacyMailPrincipal(params.principalId)
-    const limit = Math.min(Math.max(params.limit ?? 50, 1), 50)
+    const limit = Math.min(
+      Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
+      ORCHESTRATION_DELIVERY_BATCH_LIMIT
+    )
     const addressSql =
       principal.role === 'worker' ? '(m.to_handle = ? OR m.to_handle = ?)' : 'm.to_handle = ?'
     const addressParams =
@@ -2257,6 +2393,7 @@ export class OrchestrationDb {
            ) VALUES (?, ?, ?, ?, 1, 0)`
         )
         .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
+      this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -2373,6 +2510,14 @@ export class OrchestrationDb {
         )
       }
       this.unbindOtherRunsForPane(params.coordinatorPaneKey, params.runId)
+      for (const handle of new Set(
+        [run.coordinator_handle, params.coordinatorHandle].filter((value): value is string =>
+          Boolean(value)
+        )
+      )) {
+        this.rememberRunCoordinatorHandle(params.runId, handle)
+        this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
+      }
       if (
         (params.takeoverLegacy && !takeoverAlreadyApplied) ||
         !sameBinding ||
@@ -2479,6 +2624,9 @@ export class OrchestrationDb {
   private unbindOtherRunsForPane(paneKey: string, exceptRunId?: string): void {
     for (const run of this.runsBoundToPane(paneKey)) {
       if (run.id !== exceptRunId) {
+        if (run.coordinator_handle) {
+          this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
+        }
         this.db
           .prepare(
             `UPDATE runs
@@ -2496,6 +2644,54 @@ export class OrchestrationDb {
   private requireRun(runId: string): void {
     if (!this.getRunRaw(runId)) {
       throw new Error(`Run not found: ${runId}`)
+    }
+  }
+
+  private rememberRunCoordinatorHandle(runId: string, terminalHandle: string): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)`
+      )
+      .run(runId, terminalHandle)
+  }
+
+  private rememberCurrentRunCoordinatorHandles(): void {
+    this.db.exec(`
+      INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+      SELECT id, coordinator_handle FROM runs
+      WHERE legacy = 0 AND coordinator_handle IS NOT NULL
+    `)
+  }
+
+  private createCoordinatorMailRoutingTrigger(): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.exec(`
+        DROP TRIGGER IF EXISTS trg_messages_route_coordinator_mail;
+        CREATE TRIGGER trg_messages_route_coordinator_mail
+        AFTER INSERT ON messages
+        WHEN NEW.read = 0 AND NEW.delivery_contract = 'current_delivery'
+          AND EXISTS (
+            SELECT 1 FROM runs
+            WHERE runs.id = NEW.run_id AND runs.legacy = 0
+          )
+          AND EXISTS (
+            SELECT 1 FROM run_coordinator_handles
+            WHERE run_id = NEW.run_id AND terminal_handle = NEW.to_handle
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM dispatch_contexts
+            WHERE run_id = NEW.run_id AND assignee_handle = NEW.to_handle
+              AND status IN ('pending', 'dispatched')
+          )
+        BEGIN
+          UPDATE messages SET to_handle = 'run:' || NEW.run_id WHERE sequence = NEW.sequence;
+        END;
+      `)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
   }
 
@@ -2696,7 +2892,10 @@ export class OrchestrationDb {
     limit?: number
     wakeTypes?: MessageType[]
   }): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
-    const limit = Math.min(Math.max(params.limit ?? 50, 1), 50)
+    const limit = Math.min(
+      Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
+      ORCHESTRATION_DELIVERY_BATCH_LIMIT
+    )
     this.db.exec('BEGIN IMMEDIATE')
     try {
       this.requireCurrentConsumer(params.runId, params.consumerGeneration)
@@ -2838,6 +3037,31 @@ export class OrchestrationDb {
            ORDER BY sequence DESC LIMIT ?`
         )
         .all(runId, address, limit) as MessageRow[]
+    )
+  }
+
+  getUnreadRunMailbox(runId: string, limit = 100, types?: MessageType[]): MessageRow[] {
+    const address = `run:${runId}`
+    const conditions = [
+      'run_id = ?',
+      'to_handle = ?',
+      'read = 0',
+      "delivery_contract = 'current_delivery'"
+    ]
+    const params: (string | number)[] = [runId, address]
+    if (types?.length) {
+      conditions.push(`type IN (${types.map(() => '?').join(',')})`)
+      params.push(...types)
+    }
+    const indexClause = types?.length ? ' INDEXED BY idx_messages_unread_current_run_type' : ''
+    params.push(Math.max(1, Math.floor(limit)))
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          `SELECT * FROM messages${indexClause} WHERE ${conditions.join(' AND ')}
+           ORDER BY sequence ASC LIMIT ?`
+        )
+        .all(...params) as MessageRow[]
     )
   }
 
@@ -3503,30 +3727,434 @@ export class OrchestrationDb {
   }
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
-  getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    if (types && types.length > 0) {
-      const placeholders = types.map(() => '?').join(',')
-      return exposeMessageListTimestamps(
-        this.db
-          .prepare(
-            `SELECT * FROM messages
-             WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL
-               AND delivery_contract = 'current_delivery'
-               AND type IN (${placeholders}) ORDER BY sequence`
-          )
-          .all(toHandle, ...types) as MessageRow[]
-      )
+  getUndeliveredUnreadMessages(
+    toHandle: string,
+    types?: MessageType[],
+    options?: { excludeTypes?: readonly string[]; limit?: number }
+  ): MessageRow[] {
+    const conditions = [
+      'to_handle = ?',
+      'read = 0',
+      'delivered_at IS NULL',
+      "delivery_contract = 'current_delivery'"
+    ]
+    const params: (string | number)[] = [toHandle]
+    if (types?.length) {
+      conditions.push(`type IN (${types.map(() => '?').join(',')})`)
+      params.push(...types)
+    }
+    if (options?.excludeTypes?.length) {
+      conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
+      params.push(...options.excludeTypes)
+    }
+    const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
+    if (options?.limit !== undefined) {
+      params.push(Math.max(1, Math.floor(options.limit)))
     }
     return exposeMessageListTimestamps(
       this.db
         .prepare(
           `SELECT * FROM messages
-           WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL
-             AND delivery_contract = 'current_delivery'
-           ORDER BY sequence`
+           WHERE ${conditions.join(' AND ')}
+           ORDER BY sequence${limitSql}`
         )
-        .all(toHandle) as MessageRow[]
+        .all(...params) as MessageRow[]
     )
+  }
+
+  getUndeliveredUnreadMailboxHandles(): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT to_handle FROM messages
+           WHERE read = 0 AND delivered_at IS NULL
+             AND delivery_contract = 'current_delivery'`
+        )
+        .all() as { to_handle: string }[]
+    ).map((row) => row.to_handle)
+  }
+
+  hasUndeliveredDirectMessageForRun(runId: string, directHandle: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM messages INDEXED BY idx_messages_undelivered_direct_run
+           WHERE run_id = ? AND to_handle = ? AND read = 0 AND delivered_at IS NULL
+             AND delivery_contract = 'current_delivery'
+           LIMIT 1`
+        )
+        .get(runId, directHandle)
+    )
+  }
+
+  hasOutstandingRunDelivery(runId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare("SELECT 1 FROM deliveries WHERE run_id = ? AND status = 'outstanding' LIMIT 1")
+        .get(runId)
+    )
+  }
+
+  getLatestUnreadDirectMessageSequenceForRun(
+    runId: string,
+    directHandle: string
+  ): number | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT sequence FROM messages
+         WHERE run_id = ? AND to_handle = ? AND read = 0
+           AND delivery_contract = 'current_delivery'
+         ORDER BY sequence DESC LIMIT 1`
+      )
+      .get(runId, directHandle) as { sequence: number } | undefined
+    return row?.sequence
+  }
+
+  // Why: change mailbox ownership without changing unread or acknowledgment state.
+  private routeDirectMessagePage(
+    mailboxHandle: string,
+    runId: string,
+    directHandle: string,
+    throughSequence?: number,
+    preserveActiveDispatchOwnership = false
+  ): MailboxRoutingPage {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
+      const dispatchOwnershipClause = preserveActiveDispatchOwnership
+        ? ` AND NOT EXISTS (
+             SELECT 1 FROM dispatch_contexts
+             WHERE dispatch_contexts.run_id = messages.run_id
+               AND dispatch_contexts.assignee_handle = messages.to_handle
+               AND dispatch_contexts.status IN ('pending', 'dispatched')
+           )`
+        : ''
+      const params: (string | number)[] = [runId, directHandle]
+      if (throughSequence !== undefined) {
+        params.push(throughSequence)
+      }
+      params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+      const rows = this.db
+        .prepare(
+          `SELECT id, type FROM messages
+           WHERE run_id = ? AND to_handle = ? AND read = 0
+             AND delivery_contract = 'current_delivery'${throughClause}${dispatchOwnershipClause}
+           ORDER BY sequence LIMIT ?`
+        )
+        .all(...params) as {
+        id: string
+        type: MessageType
+      }[]
+      const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+      if (page.length === 0) {
+        this.db.exec('COMMIT')
+        return { routedCount: 0, hasMore: false, types: [] }
+      }
+      const placeholders = page.map(() => '?').join(',')
+      const result = this.db
+        .prepare(
+          `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
+           WHERE run_id = ? AND to_handle = ? AND read = 0
+             AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`
+        )
+        .run(mailboxHandle, runId, directHandle, ...page.map((row) => row.id))
+      this.db.exec('COMMIT')
+      return {
+        routedCount: Number(result.changes),
+        hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,
+        types: [...new Set(page.map((row) => row.type))]
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private routeAllUnreadDirectMessagesToRunMailbox(runId: string, directHandle: string): void {
+    this.db
+      .prepare(
+        `UPDATE messages SET to_handle = ?
+         WHERE run_id = ? AND to_handle = ? AND read = 0
+           AND delivery_contract = 'current_delivery'
+           AND NOT EXISTS (
+             SELECT 1 FROM dispatch_contexts
+             WHERE dispatch_contexts.run_id = messages.run_id
+               AND dispatch_contexts.assignee_handle = messages.to_handle
+               AND dispatch_contexts.status IN ('pending', 'dispatched')
+           )`
+      )
+      .run(`run:${runId}`, runId, directHandle)
+  }
+
+  routeUnreadDirectMessagesToRunMailbox(
+    runId: string,
+    directHandle: string,
+    throughSequence?: number
+  ): MailboxRoutingPage {
+    return this.routeDirectMessagePage(`run:${runId}`, runId, directHandle, throughSequence, true)
+  }
+
+  routeUnreadDirectMessagesToDispatchMailbox(
+    dispatchId: string,
+    runId: string,
+    directHandle: string,
+    throughSequence?: number
+  ): MailboxRoutingPage {
+    return this.routeDirectMessagePage(
+      `dispatch:${dispatchId}`,
+      runId,
+      directHandle,
+      throughSequence
+    )
+  }
+
+  routeUnreadDispatchMailboxToRunMailbox(
+    dispatchId: string,
+    runId: string,
+    throughSequence?: number
+  ): MailboxRoutingPage {
+    const dispatchMailbox = `dispatch:${dispatchId}`
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
+      const params: (string | number)[] = [runId, dispatchMailbox]
+      if (throughSequence !== undefined) {
+        params.push(throughSequence)
+      }
+      params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+      const rows = this.db
+        .prepare(
+          `SELECT id, type FROM messages INDEXED BY idx_messages_unread_current_inbox
+           WHERE run_id = ? AND to_handle = ? AND read = 0
+             AND delivery_contract = 'current_delivery'${throughClause}
+           ORDER BY sequence LIMIT ?`
+        )
+        .all(...params) as {
+        id: string
+        type: MessageType
+      }[]
+      const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+      if (page.length === 0) {
+        this.db.exec('COMMIT')
+        return { routedCount: 0, hasMore: false, types: [] }
+      }
+      const placeholders = page.map(() => '?').join(',')
+      const result = this.db
+        .prepare(
+          `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
+           WHERE run_id = ? AND to_handle = ? AND read = 0
+             AND delivery_contract = 'current_delivery'
+             AND id IN (${placeholders})`
+        )
+        .run(`run:${runId}`, runId, dispatchMailbox, ...page.map((row) => row.id))
+      this.db.exec('COMMIT')
+      return {
+        routedCount: Number(result.changes),
+        hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,
+        types: [...new Set(page.map((row) => row.type))]
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  getLatestUnreadMessageSequence(mailboxHandle: string): number | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT sequence FROM messages INDEXED BY idx_messages_unread_current_inbox
+         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+         ORDER BY sequence DESC LIMIT 1`
+      )
+      .get(mailboxHandle) as { sequence: number } | undefined
+    return row?.sequence
+  }
+
+  private findActiveDispatchForDirectMessageOwner(
+    runId: string,
+    directHandle: string,
+    paneKey?: string
+  ): DispatchContextRow | undefined {
+    const exact = this.db
+      .prepare(
+        `SELECT * FROM dispatch_contexts
+         WHERE run_id = ? AND assignee_handle = ? AND status IN ('pending', 'dispatched')
+         ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(runId, directHandle) as DispatchContextRow | undefined
+    if (exact || !paneKey || !parsePaneKey(paneKey)) {
+      return exact
+    }
+    return this.db
+      .prepare(
+        `SELECT * FROM dispatch_contexts
+         WHERE run_id = ? AND assignee_pane_key IS NOT NULL
+           AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
+           AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(runId, paneKeyMatchSuffix(paneKey)) as DispatchContextRow | undefined
+  }
+
+  routeForeignDirectMessagesToOwnedMailboxes(
+    directHandle: string,
+    currentRunId?: string,
+    paneKey?: string
+  ): ForeignDirectMailboxRoutingPage {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const runExclusion = currentRunId === undefined ? '' : ' AND candidate.run_id <> ?'
+      const paneSuffix = paneKey && parsePaneKey(paneKey) ? paneKeyMatchSuffix(paneKey) : undefined
+      const exclusionParams = currentRunId === undefined ? [] : [currentRunId]
+      const branches = [
+        `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
+         FROM run_coordinator_handles AS coordinator
+         JOIN runs AS owner_run ON owner_run.id = coordinator.run_id AND owner_run.legacy = 0
+         JOIN messages AS candidate INDEXED BY idx_messages_undelivered_direct_run
+           ON candidate.run_id = coordinator.run_id
+          AND candidate.to_handle = coordinator.terminal_handle
+         WHERE coordinator.terminal_handle = ?${runExclusion}
+           AND candidate.read = 0 AND candidate.delivered_at IS NULL
+           AND candidate.delivery_contract = 'current_delivery'`,
+        `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
+         FROM (
+           SELECT direct_dispatch.run_id
+           FROM dispatch_contexts AS direct_dispatch
+             INDEXED BY idx_dispatch_active_assignee_handle
+           JOIN runs AS owner_run
+             ON owner_run.id = direct_dispatch.run_id AND owner_run.legacy = 0
+           WHERE direct_dispatch.assignee_handle = ?
+             AND direct_dispatch.status IN ('pending', 'dispatched')
+           GROUP BY direct_dispatch.run_id
+         ) AS dispatch_owner
+         JOIN messages AS candidate INDEXED BY idx_messages_undelivered_direct_run
+           ON candidate.run_id = dispatch_owner.run_id AND candidate.to_handle = ?
+         WHERE 1 = 1${runExclusion}
+           AND candidate.read = 0 AND candidate.delivered_at IS NULL
+           AND candidate.delivery_contract = 'current_delivery'`
+      ]
+      const branchParams: (string | number)[][] = [
+        [directHandle, ...exclusionParams, ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1],
+        [directHandle, directHandle, ...exclusionParams, ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1]
+      ]
+      if (paneSuffix !== undefined) {
+        branches.push(
+          `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
+           FROM (
+             SELECT pane_dispatch.run_id
+             FROM dispatch_contexts AS pane_dispatch INDEXED BY idx_dispatch_assignee_pane_leaf
+             JOIN runs AS owner_run
+               ON owner_run.id = pane_dispatch.run_id AND owner_run.legacy = 0
+             WHERE pane_dispatch.assignee_pane_key IS NOT NULL
+               AND pane_dispatch.status IN ('pending', 'dispatched')
+               AND instr(pane_dispatch.assignee_pane_key, ':') > 1
+               AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+             GROUP BY pane_dispatch.run_id
+           ) AS pane_owner
+           JOIN messages AS candidate INDEXED BY idx_messages_undelivered_direct_run
+             ON candidate.run_id = pane_owner.run_id AND candidate.to_handle = ?
+           WHERE 1 = 1${runExclusion}
+             AND candidate.read = 0 AND candidate.delivered_at IS NULL
+             AND candidate.delivery_contract = 'current_delivery'`
+        )
+        branchParams.push([
+          paneSuffix,
+          directHandle,
+          ...exclusionParams,
+          ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1
+        ])
+      }
+      const limitedBranches = branches.map(
+        (branch) => `SELECT * FROM (${branch} ORDER BY candidate.sequence LIMIT ?)`
+      )
+      const rows = this.db
+        .prepare(
+          `SELECT id, run_id, type FROM (${limitedBranches.join(' UNION ')})
+           ORDER BY sequence LIMIT ?`
+        )
+        .all(...branchParams.flat(), ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1) as {
+        id: string
+        run_id: string
+        type: MessageType
+      }[]
+      const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+      if (page.length === 0) {
+        this.db.exec('COMMIT')
+        return { routedCount: 0, hasMore: false, types: [], mailboxes: [] }
+      }
+      const runIds = [...new Set(page.map((row) => row.run_id))]
+      const dispatchByRun = new Map<string, DispatchContextRow>()
+      for (const runId of runIds) {
+        const dispatch = this.findActiveDispatchForDirectMessageOwner(runId, directHandle, paneKey)
+        if (dispatch) {
+          dispatchByRun.set(runId, dispatch)
+        }
+      }
+      const idsByMailbox = new Map<string, string[]>()
+      const byMailbox = new Map<string, Set<MessageType>>()
+      for (const row of page) {
+        const dispatch = dispatchByRun.get(row.run_id)
+        const mailboxHandle = dispatch ? `dispatch:${dispatch.id}` : `run:${row.run_id}`
+        const ids = idsByMailbox.get(mailboxHandle) ?? []
+        ids.push(row.id)
+        idsByMailbox.set(mailboxHandle, ids)
+        const types = byMailbox.get(mailboxHandle) ?? new Set<MessageType>()
+        types.add(row.type)
+        byMailbox.set(mailboxHandle, types)
+      }
+      for (const [mailboxHandle, ids] of idsByMailbox) {
+        const placeholders = ids.map(() => '?').join(',')
+        this.db
+          .prepare(
+            `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
+             WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL
+               AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`
+          )
+          .run(mailboxHandle, directHandle, ...ids)
+      }
+      this.db.exec('COMMIT')
+      return {
+        routedCount: page.length,
+        hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,
+        types: [...new Set(page.map((row) => row.type))],
+        mailboxes: [...byMailbox].map(([mailboxHandle, types]) => ({
+          mailboxHandle,
+          types: [...types]
+        }))
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  getUnreadDirectMessageTypes(directHandle: string): MessageType[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT type FROM messages INDEXED BY idx_messages_unread_current_inbox_type
+           WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+           ORDER BY type`
+        )
+        .all(directHandle) as { type: MessageType }[]
+    ).map((row) => row.type)
+  }
+
+  areUnreadMessages(toHandle: string, ids: string[]): boolean {
+    let matched = 0
+    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+      const placeholders = batch.map(() => '?').join(',')
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM messages INDEXED BY idx_messages_id
+           WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+             AND id IN (${placeholders})`
+        )
+        .get(toHandle, ...batch) as { count: number }
+      matched += row.count
+    }
+    return matched === ids.length
   }
 
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
@@ -3554,13 +4182,26 @@ export class OrchestrationDb {
 
   // Why: use datetime('now') so delivered_at matches the space-format UTC shape of the table's other timestamps for correct ordering (§3.2).
   markAsDelivered(ids: string[]): void {
-    if (ids.length === 0) {
-      return
+    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+      const placeholders = batch.map(() => '?').join(',')
+      this.db
+        .prepare(`UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`)
+        .run(...batch)
     }
-    const placeholders = ids.map(() => '?').join(',')
-    this.db
-      .prepare(`UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`)
-      .run(...ids)
+  }
+
+  markAsUndelivered(ids: string[]): void {
+    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+      const placeholders = batch.map(() => '?').join(',')
+      this.db
+        .prepare(
+          `UPDATE messages SET delivered_at = NULL
+           WHERE read = 0 AND id IN (${placeholders})`
+        )
+        .run(...batch)
+    }
   }
 
   markAsReadAndDelivered(ids: string[]): void {
@@ -3803,8 +4444,6 @@ export class OrchestrationDb {
     }
     const id = generateId('task')
     const depsJson = JSON.stringify(task.deps ?? [])
-    const hasDeps = (task.deps ?? []).length > 0
-    const status: TaskStatus = hasDeps ? 'pending' : 'ready'
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
@@ -3816,7 +4455,18 @@ export class OrchestrationDb {
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
            task_title, display_name, spec, status, deps
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN EXISTS (
+             SELECT 1
+             FROM json_each(?) requested
+             LEFT JOIN tasks dependency ON dependency.id = requested.value
+             WHERE dependency.id IS NULL
+                OR dependency.run_id <> ?
+                OR dependency.status <> 'completed'
+           ) THEN 'pending' ELSE 'ready' END,
+           ?
+         )`
       )
       .run(
         id,
@@ -3829,7 +4479,8 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
-        status,
+        depsJson,
+        runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
@@ -3885,7 +4536,7 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
   }
 
-  // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.
+  // Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
   listTasksWithDispatch(filter?: {
     status?: TaskStatus
     ready?: boolean
@@ -3913,16 +4564,14 @@ export class OrchestrationDb {
         d.assignee_handle AS assignee_handle,
         d.id              AS dispatch_id
       FROM tasks t
-      LEFT JOIN (
-        SELECT dc.*
-        FROM dispatch_contexts dc
-        INNER JOIN (
-          SELECT task_id, MAX(rowid) AS max_rowid
-          FROM dispatch_contexts
-          WHERE status IN ('pending', 'dispatched')
-          GROUP BY task_id
-        ) latest ON latest.task_id = dc.task_id AND latest.max_rowid = dc.rowid
-      ) d ON d.task_id = t.id
+      LEFT JOIN dispatch_contexts d ON d.rowid = (
+        SELECT candidate.rowid
+        FROM dispatch_contexts candidate
+        WHERE candidate.task_id = t.id
+          AND candidate.status IN ('pending', 'dispatched')
+        ORDER BY candidate.rowid DESC
+        LIMIT 1
+      )
       ${where}
       ORDER BY t.created_at
     `
@@ -4009,7 +4658,7 @@ export class OrchestrationDb {
             `Mutation ${receipt.requestId} already has a durable acceptance record.`
           )
         }
-        this.ensureMutationReceiptCapacity()
+        ensureMutationReceiptCapacity(this.db)
         this.db
           .prepare(
             `INSERT INTO mutation_receipts (
@@ -4584,6 +5233,42 @@ export class OrchestrationDb {
       .all(runId ?? null, runId ?? null) as FederatedDispatchRow[]
   }
 
+  findNextTerminalFederatedDispatchPendingAcknowledgment(
+    afterRowId: number
+  ): { dispatchId: string; rowId: number } | undefined {
+    return this.db
+      .prepare(
+        `SELECT fd.dispatch_id AS dispatchId, fd.rowid AS rowId
+         FROM federated_dispatches fd
+         INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+         WHERE wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+           AND fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+           AND fd.rowid > ?
+         ORDER BY fd.rowid
+         LIMIT 1`
+      )
+      .get(afterRowId) as { dispatchId: string; rowId: number } | undefined
+  }
+
+  isFederatedDispatchRelayEligible(dispatchId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1
+           FROM federated_dispatches fd
+           INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+           WHERE fd.dispatch_id = ?
+             AND (
+               wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+               OR (
+                 fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
+               )
+             )`
+        )
+        .get(dispatchId)
+    )
+  }
+
   updateFederatedDispatchResources(params: {
     dispatchId: string
     remoteRuntimeEpoch: string
@@ -4642,7 +5327,7 @@ export class OrchestrationDb {
           `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
         )
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -4935,14 +5620,24 @@ export class OrchestrationDb {
   }
 
   findActiveRemoteAttachmentForPane(paneKey: string): RemoteDispatchAttachmentRow | undefined {
-    const rows = this.db
+    if (!parsePaneKey(paneKey)) {
+      return this.db
+        .prepare(
+          `SELECT * FROM remote_dispatch_attachments
+           WHERE state IN ('starting', 'ready') AND pane_key = ?
+           ORDER BY rowid DESC LIMIT 1`
+        )
+        .get(paneKey) as RemoteDispatchAttachmentRow | undefined
+    }
+    return this.db
       .prepare(
         `SELECT * FROM remote_dispatch_attachments
          WHERE state IN ('starting', 'ready') AND pane_key IS NOT NULL
-         ORDER BY rowid DESC`
+           AND instr(pane_key, ':') > 1
+           AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC LIMIT 1`
       )
-      .all() as RemoteDispatchAttachmentRow[]
-    return rows.find((row) => row.pane_key && isEquivalentPaneKey(row.pane_key, paneKey))
+      .get(paneKeyMatchSuffix(paneKey)) as RemoteDispatchAttachmentRow | undefined
   }
 
   enqueueFederationRelay(params: {
@@ -4996,6 +5691,26 @@ export class OrchestrationDb {
             params.direction,
             heartbeat.sequence
           ) as FederationRelayItemRow
+        }
+      }
+      if (params.kind === 'worker_done') {
+        const identicalReport = this.db
+          .prepare(
+            `SELECT * FROM federation_relay_items
+             WHERE dispatch_id = ? AND direction = ? AND kind = 'worker_done'
+               AND payload = ? AND acked_at IS NULL
+             ORDER BY sequence DESC LIMIT 1`
+          )
+          .get(params.dispatchId, params.direction, params.payload) as
+          | FederationRelayItemRow
+          | undefined
+        if (identicalReport) {
+          this.settleRemoteAttachmentInRelayTransaction(
+            params.dispatchId,
+            params.settleRemoteOutcome
+          )
+          this.db.exec('COMMIT')
+          return identicalReport
         }
       }
       const quota = this.db
@@ -5130,13 +5845,80 @@ export class OrchestrationDb {
     dispatchId: string
     direction: FederationRelayDirection
     throughSequence: number
+    settleRemoteReports?: { sequence: number; outcome?: WorkerReportOutcome }[]
   }): void {
-    this.db
-      .prepare(
-        `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
-         WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const settledReports = params.settleRemoteReports ?? []
+      for (const settledReport of settledReports) {
+        const report = this.getFederationRelayItem(
+          params.dispatchId,
+          params.direction,
+          settledReport.sequence
+        )
+        if (
+          params.direction !== 'to_home' ||
+          settledReport.sequence > params.throughSequence ||
+          report?.kind !== 'worker_done' ||
+          (settledReport.outcome !== undefined &&
+            parseFederatedWorkerReportOutcome(report.payload) !== settledReport.outcome)
+        ) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Federation acknowledgment for ${params.dispatchId} does not match its queued worker_done.`
+          )
+        }
+      }
+      const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+      if (
+        params.direction === 'to_home' &&
+        attachment !== undefined &&
+        attachment.protocol_version >=
+          ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+      ) {
+        const acknowledgedReports = this.db
+          .prepare(
+            `SELECT sequence FROM federation_relay_items
+             WHERE dispatch_id = ? AND direction = 'to_home' AND kind = 'worker_done'
+               AND acked_at IS NULL AND sequence <= ?`
+          )
+          .all(params.dispatchId, params.throughSequence) as { sequence: number }[]
+        const settledSequences = new Set(settledReports.map((report) => report.sequence))
+        if (acknowledgedReports.some((report) => !settledSequences.has(report.sequence))) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Federation acknowledgment for ${params.dispatchId} omits a worker_done settlement.`
+          )
+        }
+      }
+      const terminalOutcomes = new Set(
+        settledReports.flatMap((report) => (report.outcome ? [report.outcome] : []))
       )
-      .run(params.dispatchId, params.direction, params.throughSequence)
+      if (terminalOutcomes.size > 1) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
+        )
+      }
+      const terminalOutcome = settledReports.find((report) => report.outcome)?.outcome
+      if (terminalOutcome) {
+        this.settleRemoteAttachmentInRelayTransaction(
+          params.dispatchId,
+          terminalOutcome,
+          'worker_report_settled'
+        )
+      }
+      this.db
+        .prepare(
+          `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
+           WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
+        )
+        .run(params.dispatchId, params.direction, params.throughSequence)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   setFederatedHomeImportSequence(dispatchId: string, sequence: number): void {
@@ -5147,6 +5929,44 @@ export class OrchestrationDb {
          WHERE dispatch_id = ? AND to_home_imported_sequence < ?`
       )
       .run(sequence, dispatchId, sequence)
+  }
+
+  recordFederatedHomeAcknowledgment(params: {
+    dispatchId: string
+    remoteRuntimeEpoch: string
+    sequence: number
+  }): void {
+    const federated = this.getFederatedDispatch(params.dispatchId)
+    if (
+      !federated ||
+      !Number.isInteger(params.sequence) ||
+      params.sequence < 0 ||
+      params.sequence > federated.to_home_imported_sequence
+    ) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Federation acknowledgment for ${params.dispatchId} exceeds imported relay state.`
+      )
+    }
+    this.db
+      .prepare(
+        `UPDATE federated_dispatches
+         SET remote_runtime_epoch = ?,
+             to_home_acknowledged_sequence = CASE
+               WHEN remote_runtime_epoch = ?
+                 THEN MAX(to_home_acknowledged_sequence, ?)
+               ELSE ?
+             END,
+             updated_at = datetime('now')
+         WHERE dispatch_id = ?`
+      )
+      .run(
+        params.remoteRuntimeEpoch,
+        params.remoteRuntimeEpoch,
+        params.sequence,
+        params.sequence,
+        params.dispatchId
+      )
   }
 
   importFederatedRelayItem(params: {
@@ -5174,7 +5994,11 @@ export class OrchestrationDb {
           result: string
         }
       | { kind: 'rejected'; code: string; reason: string }
-  }): { message: MessageRow; duplicate: boolean } {
+  }): {
+    message: MessageRow
+    duplicate: boolean
+    lifecycle?: WorkerReportSettlement | { action: 'rejected'; code: string; reason: string }
+  } {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const federated = this.getFederatedDispatch(params.dispatchId)
@@ -5184,18 +6008,14 @@ export class OrchestrationDb {
           `Federated Dispatch ${params.dispatchId} was not found.`
         )
       }
-      if (params.sequence <= federated.to_home_imported_sequence) {
-        const existing = this.getMessageById(params.message.id)
-        if (!existing) {
-          throw new OrchestrationError(
-            'operation_unknown',
-            `Federated relay sequence ${params.sequence} was committed without its message.`
-          )
-        }
-        this.db.exec('COMMIT')
-        return { message: existing, duplicate: true }
+      const duplicate = params.sequence <= federated.to_home_imported_sequence
+      if (duplicate && !this.getMessageById(params.message.id)) {
+        throw new OrchestrationError(
+          'operation_unknown',
+          `Federated relay sequence ${params.sequence} was committed without its message.`
+        )
       }
-      if (params.sequence !== federated.to_home_imported_sequence + 1) {
+      if (!duplicate && params.sequence !== federated.to_home_imported_sequence + 1) {
         throw new OrchestrationError(
           'operation_unknown',
           `Federated relay for ${params.dispatchId} is not contiguous after sequence ${federated.to_home_imported_sequence}.`
@@ -5222,32 +6042,45 @@ export class OrchestrationDb {
           dispatchId: params.dispatchId
         })
       }
-      if (params.lifecycle.kind === 'heartbeat') {
+      let lifecycle:
+        | WorkerReportSettlement
+        | { action: 'rejected'; code: string; reason: string }
+        | undefined
+      if (params.lifecycle.kind === 'heartbeat' && !duplicate) {
         this.recordHeartbeat(params.dispatchId, params.lifecycle.at)
       } else if (params.lifecycle.kind === 'worker_report') {
-        const settlement = this.settleWorkerReportInTransaction({
+        lifecycle = this.settleWorkerReportInTransaction({
           taskId: params.lifecycle.taskId,
           dispatchId: params.dispatchId,
           outcome: params.lifecycle.outcome,
           result: params.lifecycle.result
         })
-        if (settlement.action === 'rejected') {
+        if (lifecycle.action === 'rejected' && !duplicate) {
           message = this.convertLifecycleMessageToRejection(
             message.id,
-            settlement.code,
-            settlement.reason
+            lifecycle.code,
+            lifecycle.reason
           ) as MessageRow
         }
       } else if (params.lifecycle.kind === 'rejected') {
-        message = this.convertLifecycleMessageToRejection(
-          message.id,
-          params.lifecycle.code,
-          params.lifecycle.reason
-        ) as MessageRow
+        lifecycle = {
+          action: 'rejected',
+          code: params.lifecycle.code,
+          reason: params.lifecycle.reason
+        }
+        if (!duplicate) {
+          message = this.convertLifecycleMessageToRejection(
+            message.id,
+            params.lifecycle.code,
+            params.lifecycle.reason
+          ) as MessageRow
+        }
       }
-      this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
+      if (!duplicate) {
+        this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
+      }
       this.db.exec('COMMIT')
-      return { message, duplicate: false }
+      return { message, duplicate, ...(lifecycle ? { lifecycle } : {}) }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -5348,19 +6181,37 @@ export class OrchestrationDb {
 
   private settleRemoteAttachmentInRelayTransaction(
     dispatchId: string,
-    outcome: WorkerReportOutcome | undefined
+    outcome: WorkerReportOutcome | undefined,
+    stage = 'worker_report_queued'
   ): void {
     if (!outcome) {
       return
     }
+    const attachment = this.getRemoteDispatchAttachment(dispatchId)
+    const state = outcome === 'succeeded' ? 'succeeded' : 'failed'
+    if (!attachment) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    if (attachment.state === state) {
+      return
+    }
+    if (attachment.state !== 'ready') {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
+      )
+    }
     this.db
       .prepare(
         `UPDATE remote_dispatch_attachments
-         SET state = ?, stage = 'worker_report_queued', capability_hash = NULL,
+         SET state = ?, stage = ?, capability_hash = NULL,
              updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'ready'`
       )
-      .run(outcome === 'succeeded' ? 'succeeded' : 'failed', dispatchId)
+      .run(state, stage, dispatchId)
   }
 
   isDispatchProcessCurrent(params: {
@@ -5852,12 +6703,12 @@ export class OrchestrationDb {
       if (!worker) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
       }
-      if (!['succeeded', 'failed'].includes(worker.state)) {
+      if (!WORKER_SETTLED_STATES.includes(worker.state)) {
         // Why: release is post-completion cleanup only; recording intent for an unsettled or
         // uncertain worker would let recovery close a terminal the coordinator never reviewed.
         throw new OrchestrationError(
           'dispatch_inactive',
-          `Dispatch ${dispatchId} is ${worker.state}; only a succeeded or failed worker can release. Use worker-stop to cancel an active worker.`
+          `Dispatch ${dispatchId} is ${worker.state}; only a settled worker can release. Use worker-stop to cancel an active worker.`
         )
       }
       const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
@@ -5871,6 +6722,10 @@ export class OrchestrationDb {
       if (resource.release_state === 'released' || resource.ownership_state === 'released') {
         this.db.exec('COMMIT')
         return { disposition: 'already_released', resource }
+      }
+      if (worker.state === 'stopped' || worker.state === 'abandoned') {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource, reason: 'identity_unproven' }
       }
       if (resource.ownership_state === 'external') {
         this.db.exec('COMMIT')
@@ -5914,6 +6769,66 @@ export class OrchestrationDb {
         disposition: 'requested',
         resource: this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
       }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  settleDeadWorkerTerminalRelease(params: {
+    requestingDispatchId: string
+    resourceId: string
+    processIncarnation: string
+  }):
+    | { disposition: 'released'; resource: WorkerTerminalResourceRow }
+    | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const resource = this.getWorkerTerminalResource(params.resourceId)
+      if (!resource) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Worker terminal resource ${params.resourceId} was not found.`
+        )
+      }
+      const priorOwners = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+      const requesterRelated =
+        resource.owner_dispatch_id === params.requestingDispatchId ||
+        priorOwners?.includes(params.requestingDispatchId) === true
+      const requester = this.getWorkerDispatch(params.requestingDispatchId)
+      const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
+      const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
+      const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
+      if (
+        !priorOwners ||
+        !requesterRelated ||
+        !requesterSettled ||
+        !ownerSettled ||
+        resource.process_incarnation !== params.processIncarnation ||
+        resource.ownership_state === 'released' ||
+        !['not_requested', 'retained', 'unknown'].includes(resource.release_state)
+      ) {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource }
+      }
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+           SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
+               release_requested_at = COALESCE(release_requested_at, datetime('now')),
+               release_completed_at = datetime('now'), release_error = NULL,
+               updated_at = datetime('now')
+           WHERE id = ? AND process_incarnation = ? AND ownership_state != 'released'
+             AND release_state IN ('not_requested', 'retained', 'unknown')`
+        )
+        .run(params.resourceId, params.processIncarnation)
+      const released = this.getWorkerTerminalResource(
+        params.resourceId
+      ) as WorkerTerminalResourceRow
+      this.db.exec('COMMIT')
+      return released.release_state === 'released'
+        ? { disposition: 'released', resource: released }
+        : { disposition: 'retained', resource: released }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -6404,21 +7319,28 @@ export class OrchestrationDb {
       return undefined
     }
 
-    const actives = this.db
+    const exactPane = this.db
+      .prepare(
+        `SELECT * FROM dispatch_contexts
+         WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
+         ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(assigneePaneKey) as DispatchContextRow | undefined
+    if (exactPane) {
+      return exactPane
+    }
+    if (!parsePaneKey(assigneePaneKey)) {
+      return undefined
+    }
+    return this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
          WHERE assignee_pane_key IS NOT NULL
-           AND status IN ('pending', 'dispatched')
-           AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
+           AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
+           AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC LIMIT 1`
       )
-      .all(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow[]
-
-    for (const row of actives) {
-      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
-        return row
-      }
-    }
-    return undefined
+      .get(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow | undefined
   }
 
   getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {
@@ -6795,6 +7717,7 @@ export class OrchestrationDb {
       DELETE FROM dispatch_contexts;
       DELETE FROM tasks;
       DELETE FROM messages;
+      DELETE FROM run_coordinator_handles;
       DELETE FROM runs;
       INSERT INTO runs (id, objective, home_database, consumer_generation, legacy)
         VALUES ('${LEGACY_RUN_ID}', 'Legacy orchestration state (inspect only)', 'this_database', 0, 1);
@@ -6836,5 +7759,20 @@ export class OrchestrationDb {
 
   close(): void {
     this.db.close()
+  }
+}
+
+function parseFederatedWorkerReportOutcome(payload: string): WorkerReportOutcome | undefined {
+  try {
+    const message = JSON.parse(payload) as { payload?: unknown }
+    if (typeof message.payload !== 'string') {
+      return undefined
+    }
+    const report = JSON.parse(message.payload) as { outcome?: unknown }
+    return report.outcome === 'succeeded' || report.outcome === 'failed'
+      ? report.outcome
+      : undefined
+  } catch {
+    return undefined
   }
 }

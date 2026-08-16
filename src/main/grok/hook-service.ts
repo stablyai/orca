@@ -14,6 +14,7 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
@@ -182,6 +183,10 @@ function buildInstalledConfig(
 }
 
 export class GrokHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()

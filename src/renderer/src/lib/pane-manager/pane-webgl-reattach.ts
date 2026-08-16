@@ -11,6 +11,11 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
   if (!pane.webglAddon || pane.webglDisabledAfterContextLoss) {
     return
   }
+  if (pane.webglAttachmentDeferred) {
+    pane.webglRebuildDeferred = true
+    return
+  }
+  pane.webglRebuildDeferred = false
   disposeWebgl(pane)
   // Why: the live addon just proved context creation works, so a stale attach
   // backoff from an earlier failure must not downgrade this pane to DOM.

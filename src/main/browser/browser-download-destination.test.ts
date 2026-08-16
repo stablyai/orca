@@ -86,6 +86,40 @@ describe('BrowserDownloadDestinationReservations', () => {
     expect(macReservations.reserve('report.csv').filename).toBe('report (1).csv')
   })
 
+  it('rewrites Windows reserved device basenames', () => {
+    const reservations = new BrowserDownloadDestinationReservations({
+      downloadsPath,
+      pathExists: vi.fn(() => false),
+      platform: 'win32'
+    })
+
+    expect(reservations.reserve('CON').filename).toBe('_CON')
+    expect(reservations.reserve('con.txt').filename).toBe('_con.txt')
+    expect(reservations.reserve('NUL.tar.gz').filename).toBe('_NUL.tar.gz')
+    expect(reservations.reserve('AUX.json').filename).toBe('_AUX.json')
+    expect(reservations.reserve('PRN').filename).toBe('_PRN')
+    expect(reservations.reserve('CLOCK$.csv').filename).toBe('_CLOCK$.csv')
+    expect(reservations.reserve('CONIN$.txt').filename).toBe('_CONIN$.txt')
+    expect(reservations.reserve('CONOUT$.log').filename).toBe('_CONOUT$.log')
+    expect(reservations.reserve('COM1.log').filename).toBe('_COM1.log')
+    expect(reservations.reserve('COM¹.log').filename).toBe('_COM¹.log')
+    expect(reservations.reserve('LPT9.csv').filename).toBe('_LPT9.csv')
+    expect(reservations.reserve('LPT³.csv').filename).toBe('_LPT³.csv')
+    expect(reservations.reserve('COM10.log').filename).toBe('COM10.log')
+    expect(reservations.reserve('LPT0.csv').filename).toBe('LPT0.csv')
+    expect(reservations.reserve('CONSOLE.txt').filename).toBe('CONSOLE.txt')
+  })
+
+  it('preserves Windows device-like names on other platforms', () => {
+    const reservations = new BrowserDownloadDestinationReservations({
+      downloadsPath,
+      pathExists: vi.fn(() => false),
+      platform: 'linux'
+    })
+
+    expect(reservations.reserve('CON.txt').filename).toBe('CON.txt')
+  })
+
   it('fails after bounded collision attempts', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,

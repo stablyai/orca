@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
-import { safeFit, safeFitAndThen } from './pane-fit'
+import { readProposedPaneFitDimensions, safeFit, safeFitAndThen } from './pane-fit'
 import { applyOrDeferPaneMetricOptions } from './pane-metric-options-deferral'
 import { paneFitClientSizeChanged } from './pane-reveal-fit'
+import { setFitOverride } from './mobile-fit-overrides'
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: vi.fn()
@@ -501,5 +502,65 @@ describe('deferred metric flush inside safeFit', () => {
     expect(safeFit(pane)).toBe(true)
     expect(pane.terminal.options.fontSize).toBe(12)
     expect(pane.fitAddon.fit).toHaveBeenCalled()
+  })
+
+  it('reports the post-metric grid used by the next safe fit', () => {
+    const terminal = { cols: 80, rows: 24, options: {} as Record<string, unknown> }
+    const pane = {
+      id: 12,
+      terminal,
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: 500, height: 300 })
+      },
+      fitAddon: {
+        fit: vi.fn(),
+        proposeDimensions: vi.fn(() =>
+          Number(terminal.options.fontSize ?? 10) >= 18
+            ? { cols: 20, rows: 10 }
+            : { cols: 40, rows: 20 }
+        )
+      }
+    } as unknown as ManagedPane
+    applyOrDeferPaneMetricOptions(pane, { fontSize: 18 }, false)
+
+    expect(readProposedPaneFitDimensions(pane)).toEqual({ cols: 20, rows: 10 })
+    expect(pane.terminal.options.fontSize).toBe(18)
+  })
+
+  it('reports an owner override even while the pane is unmeasurable', () => {
+    const resize = vi.fn()
+    const pane = {
+      terminal: { cols: 80, rows: 24, options: {}, resize },
+      container: {
+        dataset: { ptyId: 'pty-override' },
+        getBoundingClientRect: () => ({ width: 0, height: 0 })
+      },
+      fitAddon: { proposeDimensions: vi.fn() }
+    } as unknown as ManagedPane
+    setFitOverride('pty-override', 'mobile-fit', 49, 20)
+
+    try {
+      expect(readProposedPaneFitDimensions(pane)).toEqual({ cols: 49, rows: 20 })
+      expect(pane.fitAddon.proposeDimensions).not.toHaveBeenCalled()
+      expect(safeFit(pane)).toBe(false)
+      expect(resize).not.toHaveBeenCalled()
+    } finally {
+      setFitOverride('pty-override', 'desktop-fit', 0, 0)
+    }
+  })
+
+  it('flushes deferred metrics before reporting a measurable owner override', () => {
+    const pane = createMetricPane()
+    pane.container.dataset.ptyId = 'pty-metric-override'
+    applyOrDeferPaneMetricOptions(pane, { fontSize: 12 }, false)
+    setFitOverride('pty-metric-override', 'mobile-fit', 49, 20)
+
+    try {
+      expect(readProposedPaneFitDimensions(pane)).toEqual({ cols: 49, rows: 20 })
+      expect(pane.terminal.options.fontSize).toBe(12)
+    } finally {
+      setFitOverride('pty-metric-override', 'desktop-fit', 0, 0)
+    }
   })
 })

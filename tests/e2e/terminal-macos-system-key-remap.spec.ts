@@ -149,7 +149,12 @@ test.describe('Terminal macOS system key remap', () => {
           expect(received).toEqual([Buffer.from(`${committed}\n`).toString('hex')])
           completed = true
         } finally {
-          await closeTerminalImePaneArena(arena, testInfo, `${arm.slug}-${layout.label}`, !completed)
+          await closeTerminalImePaneArena(
+            arena,
+            testInfo,
+            `${arm.slug}-${layout.label}`,
+            !completed
+          )
           removeTerminalImeByteReader(reader)
         }
       })

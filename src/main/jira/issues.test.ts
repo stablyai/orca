@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraClientForSite } from './client'
+import type { JiraClientForSite } from './authenticated-request'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
 
@@ -21,14 +21,11 @@ const {
   releaseMock: vi.fn()
 }))
 
-vi.mock('./client', () => ({
-  acquire: (...args: unknown[]) => acquireMock(...args),
-  release: (...args: unknown[]) => releaseMock(...args),
+vi.mock('./request-queue', () => ({ acquire: acquireMock, release: releaseMock }))
+
+vi.mock('./authenticated-request', () => ({
   apiBasePath: (site: { authType?: string }) =>
     site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
-  clearToken: (...args: unknown[]) => clearTokenMock(...args),
-  getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
   jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
   JiraApiError: class JiraApiError extends Error {
@@ -38,6 +35,12 @@ vi.mock('./client', () => ({
       this.status = status
     }
   }
+}))
+
+vi.mock('./client', () => ({
+  clearToken: (...args: unknown[]) => clearTokenMock(...args),
+  getClients: (...args: unknown[]) => getClientsMock(...args),
+  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args)
 }))
 
 function makeEntry(id = 'site-1'): JiraClientForSite {

@@ -1,15 +1,11 @@
-import type {
-  GitHubAssignableUser,
-  GitHubWorkItemDetails,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRInfo
-} from '../../../src/shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
+import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
   normalizeGitHubPRForBranchOutcome,
   type GitHubPRForBranchResponse
-} from '../../../src/shared/github-pr-for-branch-outcome'
+} from '../../../src/shared/github/pull-request-for-branch-outcome'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'

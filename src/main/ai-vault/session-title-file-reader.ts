@@ -1,4 +1,4 @@
-import { lstat } from 'node:fs/promises'
+import { wslGatedLstat } from '../native-chat/wsl-transcript-fs-access'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitle,
@@ -27,7 +27,7 @@ async function readOneTitle(
     return cache?.get(request) ?? null
   }
   try {
-    const stats = await lstat(transcriptPath)
+    const stats = await wslGatedLstat(transcriptPath, 'scan', signal)
     if (!stats.isFile() || signal?.aborted) {
       return null
     }

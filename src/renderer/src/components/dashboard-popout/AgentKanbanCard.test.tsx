@@ -102,6 +102,23 @@ describe('AgentKanbanCard', () => {
     expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
   })
 
+  it('shows the saved SSH host beside the repository metadata', () => {
+    const { container } = renderCard({
+      card: card({
+        hostKind: 'ssh',
+        executionHostId: 'ssh:opaque-target',
+        hostLabel: 'openclaw'
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByLabelText('SSH host · openclaw')).toHaveAttribute(
+      'data-dashboard-host-badge',
+      'ssh'
+    )
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument()
+  })
+
   it('shows review metadata and expands grouped subagents without opening the terminal', () => {
     const onOpenTerminal = vi.fn()
     renderCard({
@@ -164,7 +181,7 @@ describe('AgentKanbanCard', () => {
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
-    expect(attention.firstElementChild?.className).toContain('border-amber-500/40')
+    expect(attention.firstElementChild?.className).toContain('border-agent-question/40')
 
     cleanup()
     const { container: done } = renderCard({
@@ -181,7 +198,7 @@ describe('AgentKanbanCard', () => {
     const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
-    expect(idleClassName).not.toContain('amber')
+    expect(idleClassName).not.toContain('agent-question')
   })
 
   it('heads the card with the conversation name and drops the worktree to the footer', () => {

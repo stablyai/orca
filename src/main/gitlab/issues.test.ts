@@ -30,15 +30,9 @@ vi.mock('./gl-utils', async () => {
   }
 })
 
-import {
-  addIssueComment,
-  createIssue,
-  getIssue,
-  listAssignableUsers,
-  listIssues,
-  listLabels,
-  updateIssue
-} from './issues'
+import { addIssueComment, createIssue, getIssue, listIssues } from './issues'
+import { updateIssue } from './issue-update'
+import { listAssignableUsers, listLabels } from './project-label-and-member-lookup'
 
 describe('gitlab issue operations', () => {
   beforeEach(() => {
@@ -179,6 +173,32 @@ describe('gitlab issue operations', () => {
   it('surfaces a permission_denied error instead of collapsing to empty', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
+
+    const result = await listIssues('/repo-root', 5)
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('permission_denied')
+  })
+
+  it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: [], total: 0 })
+    })
+
+    const result = await listIssues('/repo-root', 5)
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('unknown')
+    expect(result.error?.message).toContain('{"data":[],"total":0}')
+    expect(result.error?.message).not.toContain('is not a function')
+  })
+
+  it('reports a GitLab error envelope by its own message', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ message: '403 Forbidden' })
+    })
 
     const result = await listIssues('/repo-root', 5)
 

@@ -636,6 +636,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('setCreateError({')
   })
 
+  it('uses submit-time smart metadata for both folder launch mode and startup content', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const submitFolderTarget',
+      'const submit = useCallback'
+    )
+    expect(section).toContain(
+      'const submitLinkedWorkItem = smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem'
+    )
+    expect(section).toContain('resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)')
+    expect(section).toContain('linkedWorkItem: submitLinkedWorkItem')
+  })
+
   it('gates every submit path on the derived source intent', () => {
     // Why: derived from name+mode, so the submitted name and the gate can never disagree.
     expect(HOOK_SOURCE).toContain(
@@ -750,6 +763,7 @@ describe('useComposerState host-context boundaries', () => {
       'const submitQuick = useCallback'
     )
     expect(fullSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
+    expect(fullSubmit).toContain('startupDraft: startupPlan.draftPrompt')
     expect(fullSubmit).not.toContain('platform: CLIENT_PLATFORM')
 
     const quickSubmit = sourceBetween(
@@ -771,6 +785,7 @@ describe('useComposerState host-context boundaries', () => {
     )
 
     expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('backendStartupTerminalSpawned: true')
     expect(activation).toContain('command: startupPlan.launchCommand')
     expect(activation).toContain('launchAgent: tuiAgent')
     // The removed activation-time fallback must not come back through this caller.
