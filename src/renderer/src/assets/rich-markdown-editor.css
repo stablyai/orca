@@ -964,6 +964,12 @@
   font-size: 11px;
   font-family: var(--font-mono, monospace);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.rich-markdown-code-block-wrapper:hover .rich-markdown-code-block-lang {
+  opacity: 1;
 }
 
 /* Copy button inside rich-mode code blocks — sits to the left of the
