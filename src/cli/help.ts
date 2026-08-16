@@ -268,7 +268,7 @@ Selectors:
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
-  --text <text>             Raw bytes written to the PTY (not filtered). Use shell escapes for control keys, e.g. $'\\x1b' for Escape
+  --text <text>             Raw bytes written to the PTY (not filtered). Use Bash/Zsh ANSI-C quoting for control keys, e.g. $'\\x1b' for Escape
   --enter                   Append Enter after sending text
   --interrupt               Append Ctrl+C (\\x03); other control keys go through --text
 
@@ -348,7 +348,7 @@ Examples:
   $ orca terminal create --worktree active --command "codex"
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
-  $ orca terminal send --terminal term_123 --text $'\\x1b'
+  $ orca terminal send --terminal term_123 --text $'\\x1b' # Bash/Zsh ANSI-C quoting
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
   $ orca tab current --json
   $ orca tab show --page page_123 --json
@@ -432,7 +432,7 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
   }
   if (command === 'terminal send' && flag === 'text') {
-    return "--text <text>          Raw PTY bytes (verbatim). Control keys: $'\\x1b' Escape, $'\\x15' Ctrl+U"
+    return "--text <text>          Raw PTY bytes (verbatim). Bash/Zsh ANSI-C: $'\\x1b' Escape, $'\\x15' Ctrl+U"
   }
   if (command === 'terminal send' && flag === 'interrupt') {
     return '--interrupt            Append Ctrl+C (\\x03); other control sequences use --text'
