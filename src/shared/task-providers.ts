@@ -53,10 +53,6 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
     }
   }
 
-  if (normalized.length > 0 && !normalized.includes('plane')) {
-    normalized.push('plane')
-  }
-
   // Why: at least one provider must remain visible so the Tasks surface always
   // has a valid source to select after settings hydration or manual edits.
   return normalized.length > 0 ? normalized : [...TASK_PROVIDERS]

@@ -16,6 +16,7 @@ import {
   planeConnect,
   planeConnectOAuth,
   planeDisconnect,
+  planeSelectInstance,
   planeStatus,
   planeTestConnection
 } from '@/runtime/runtime-plane-client'
@@ -40,6 +41,7 @@ export type PlaneSlice = {
     args: PlaneOAuthConnectArgs
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   disconnectPlane: (instanceId?: string) => Promise<void>
+  selectPlaneInstance: (instanceId: string) => Promise<void>
   testPlaneConnection: (instanceId?: string) => ReturnType<typeof planeTestConnection>
   listPlaneIssues: (
     query: PlaneIssueQuery,
@@ -117,6 +119,12 @@ export const createPlaneSlice: StateCreator<AppState, [], [], PlaneSlice> = (set
     beginPlaneMutation()
     set(EMPTY_PLANE_READ_CACHES)
     await get().checkPlaneConnection(true)
+  },
+
+  selectPlaneInstance: async (instanceId) => {
+    const status = await planeSelectInstance(get().settings, instanceId)
+    beginPlaneMutation()
+    set({ ...EMPTY_PLANE_READ_CACHES, planeStatus: status, planeStatusChecked: true })
   },
 
   testPlaneConnection: (instanceId) => planeTestConnection(get().settings, instanceId),

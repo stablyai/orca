@@ -150,7 +150,10 @@ async function readIssueByIdentifier(
       apiPath(client, `/work-items/${encodeURIComponent(identifier)}/?${params}`)
     )
     return mapWorkItem(client, null, data)
-  } catch {
+  } catch (error) {
+    if (!isPlaneNotFoundError(error)) {
+      throw error
+    }
     return null
   }
 }
@@ -171,7 +174,15 @@ async function readIssueById(client: PlaneClient, id: string): Promise<PlaneWork
       if (issue) {
         return issue
       }
-    } catch {}
+    } catch (error) {
+      if (!isPlaneNotFoundError(error)) {
+        throw error
+      }
+    }
   }
   return null
+}
+
+function isPlaneNotFoundError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('Plane API 404:')
 }

@@ -11,18 +11,16 @@ describe('task providers', () => {
   it('normalizes provider lists while preserving supported order', () => {
     expect(normalizeVisibleTaskProviders(['gitlab', 'unknown', 'gitlab', 'linear'])).toEqual([
       'gitlab',
-      'linear',
-      'plane'
+      'linear'
     ])
   })
 
-  it('adds Plane to older saved visible provider lists', () => {
+  it('preserves older saved visible provider lists without forcing Plane visible', () => {
     expect(normalizeVisibleTaskProviders(['github', 'gitlab', 'linear', 'jira'])).toEqual([
       'github',
       'gitlab',
       'linear',
-      'jira',
-      'plane'
+      'jira'
     ])
   })
 
@@ -44,7 +42,7 @@ describe('task providers', () => {
       })
     ).toEqual({
       defaultTaskSource: 'github',
-      visibleTaskProviders: ['github', 'linear', 'plane']
+      visibleTaskProviders: ['github', 'linear']
     })
   })
 
@@ -56,7 +54,7 @@ describe('task providers', () => {
       })
     ).toEqual({
       defaultTaskSource: 'gitlab',
-      visibleTaskProviders: ['gitlab', 'plane']
+      visibleTaskProviders: ['gitlab']
     })
   })
 

@@ -39,6 +39,7 @@ import {
   type InflightPlaneReadRequest,
   type PlaneProjectResources
 } from './plane-cache'
+import { staleOrThrow } from './plane-stale-fallback'
 
 type PlaneSliceSet = Parameters<StateCreator<AppState, [], [], PlaneSlice>>[0]
 type PlaneSliceGet = Parameters<StateCreator<AppState, [], [], PlaneSlice>>[1]
@@ -78,7 +79,7 @@ export function createPlaneReadActions(set: PlaneSliceSet, get: PlaneSliceGet): 
         })
         .catch((error) => {
           console.warn('[plane] listPlaneIssues failed:', error)
-          return get().planeIssueListCache[cacheKey]?.data ?? { items: [] }
+          return staleOrThrow(get().planeIssueListCache[cacheKey]?.data, error)
         })
         .finally(() => clearInflightEntry(inflightPlaneIssueLists, cacheKey, entry))
       entry = makeInflightEntry(promise, scope.contextKey, mutationGeneration, options?.force)
@@ -217,7 +218,7 @@ function readPlaneProjects(
     })
     .catch((error) => {
       console.warn('[plane] listPlaneProjects failed:', error)
-      return get().planeProjectCache[cacheKey]?.data ?? []
+      return staleOrThrow(get().planeProjectCache[cacheKey]?.data, error)
     })
     .finally(() => clearInflightEntry(inflightPlaneProjects, cacheKey, entry))
   entry = makeInflightEntry(promise, scope.contextKey, mutationGeneration, force)
@@ -249,7 +250,7 @@ function readPlaneMembers(
     })
     .catch((error) => {
       console.warn('[plane] listPlaneMembers failed:', error)
-      return get().planeMemberCache[cacheKey]?.data ?? []
+      return staleOrThrow(get().planeMemberCache[cacheKey]?.data, error)
     })
     .finally(() => clearInflightEntry(inflightPlaneMembers, cacheKey, entry))
   entry = makeInflightEntry(promise, scope.contextKey, mutationGeneration, force)
@@ -299,7 +300,7 @@ function readPlaneProjectResources(
     })
     .catch((error) => {
       console.warn('[plane] listPlaneProjectResources failed:', error)
-      return get().planeProjectResourceCache[cacheKey]?.data ?? emptyPlaneProjectResources()
+      return staleOrThrow(get().planeProjectResourceCache[cacheKey]?.data, error)
     })
     .finally(() => clearInflightEntry(inflightPlaneProjectResources, cacheKey, entry))
   entry = makeInflightEntry(promise, scope.contextKey, mutationGeneration, force)

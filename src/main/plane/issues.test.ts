@@ -397,4 +397,24 @@ describe('Plane issue API adapter', () => {
       estimate_point: 5
     })
   })
+
+  it('reports non-404 lookup failures when updating work items', async () => {
+    planeFetch.mockRejectedValueOnce(new Error('Plane API 401: unauthorized'))
+    const { updateIssue } = await import('./issues')
+
+    await expect(updateIssue('AIF-1', { title: 'Updated' })).resolves.toEqual({
+      ok: false,
+      error: 'Plane API 401: unauthorized'
+    })
+  })
+
+  it('treats 404 lookup failures as missing work items', async () => {
+    planeFetch.mockRejectedValueOnce(new Error('Plane API 404: not found'))
+    const { updateIssue } = await import('./issues')
+
+    await expect(updateIssue('AIF-1', { title: 'Updated' })).resolves.toEqual({
+      ok: false,
+      error: 'Plane work item not found'
+    })
+  })
 })

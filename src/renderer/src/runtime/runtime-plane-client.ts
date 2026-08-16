@@ -160,6 +160,10 @@ export const planeDisconnect = (
   settings: RuntimePlaneSettings,
   instanceId?: string
 ): Promise<void> => planeCall(settings, 'plane.disconnect', instanceId ? { instanceId } : undefined)
+export const planeSelectInstance = (
+  settings: RuntimePlaneSettings,
+  instanceId: string
+): Promise<PlaneConnectionStatus> => planeCall(settings, 'plane.selectInstance', { instanceId })
 export const planeTestConnection = (
   settings: RuntimePlaneSettings,
   instanceId?: string

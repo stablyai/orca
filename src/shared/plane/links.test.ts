@@ -35,6 +35,21 @@ describe('Plane links', () => {
     })
   })
 
+  it('parses Plane browse work-item URLs', () => {
+    expect(parsePlaneIssueLink('https://app.plane.so/acme/browse/eng-12')).toEqual({
+      baseUrl: 'https://app.plane.so',
+      workspaceSlug: 'acme',
+      projectIdentifier: 'ENG',
+      sequenceId: 12,
+      identifier: 'ENG-12'
+    })
+  })
+
+  it('rejects Plane browse epic URLs', () => {
+    expect(parsePlaneIssueLink('https://app.plane.so/acme/browse/epic/eng-12')).toBeNull()
+    expect(parsePlaneIssueLink('https://app.plane.so/acme/browse/epics/eng-12')).toBeNull()
+  })
+
   it('rejects non-web URLs', () => {
     expect(parsePlaneIssueLink('file://plane.example.com/acme/issues/ENG-12')).toBeNull()
   })

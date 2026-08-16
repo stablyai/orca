@@ -17,6 +17,7 @@ const planeListCycles = vi.fn()
 const planeListModules = vi.fn()
 const planeListWorkItemTypes = vi.fn()
 const planeListEstimates = vi.fn()
+const planeSelectInstance = vi.fn()
 const planeTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-plane-client', () => ({
@@ -32,8 +33,13 @@ vi.mock('@/runtime/runtime-plane-client', () => ({
   planeListProjects: (...args: unknown[]) => planeListProjects(...args),
   planeListStates: (...args: unknown[]) => planeListStates(...args),
   planeListWorkItemTypes: (...args: unknown[]) => planeListWorkItemTypes(...args),
+  planeSelectInstance: (...args: unknown[]) => planeSelectInstance(...args),
   planeStatus: (...args: unknown[]) => planeStatus(...args),
   planeTestConnection: (...args: unknown[]) => planeTestConnection(...args)
+}))
+
+vi.mock('@/lib/provider-runtime-context', () => ({
+  getProviderRuntimeContextKey: (settings: unknown) => JSON.stringify(settings ?? null)
 }))
 
 function createTestStore() {
@@ -116,6 +122,15 @@ describe('createPlaneSlice cached reads', () => {
     ).resolves.toMatchObject({ items: [{ id: 'PRO-1' }] })
   })
 
+  it('rejects issue list failures when no stale cache exists', async () => {
+    const store = createTestStore()
+    planeListIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listPlaneIssues({ preset: 'open' }, 30, 'instance-1')
+    ).rejects.toThrow('network down')
+  })
+
   it('isolates ambient issue caches by focused runtime context', async () => {
     const store = createTestStore()
     planeListIssues
@@ -150,6 +165,25 @@ describe('createPlaneSlice cached reads', () => {
     await store.getState().disconnectPlane('instance-1')
 
     expect(store.getState().planeIssueListCache).toEqual({})
+  })
+
+  it('clears cached reads after selecting a Plane instance', async () => {
+    const store = createTestStore()
+    planeListIssues.mockResolvedValueOnce({ items: [issue('PRO-1')] })
+    planeSelectInstance.mockResolvedValueOnce({
+      connected: true,
+      activeInstanceId: 'instance-2',
+      selectedInstanceId: 'instance-2',
+      instances: [],
+      viewer: null
+    })
+
+    await store.getState().listPlaneIssues({ preset: 'open' }, 30)
+    expect(Object.keys(store.getState().planeIssueListCache)).toHaveLength(1)
+    await store.getState().selectPlaneInstance('instance-2')
+
+    expect(store.getState().planeIssueListCache).toEqual({})
+    expect(store.getState().planeStatus.selectedInstanceId).toBe('instance-2')
   })
 
   it('keeps project resources isolated by project id', async () => {

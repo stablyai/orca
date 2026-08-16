@@ -7,7 +7,7 @@ export type PlaneIssueLink = {
 }
 
 const PLANE_IDENTIFIER_PATTERN = /^([A-Z][A-Z0-9_]*)-(\d+)$/i
-const PLANE_ISSUE_ROUTE_SEGMENTS = new Set(['issues', 'work-items'])
+const PLANE_ISSUE_ROUTE_SEGMENTS = new Set(['issues', 'work-items', 'browse'])
 
 export function parsePlaneIssueLink(input: string): PlaneIssueLink | null {
   const trimmed = input.trim()
@@ -26,6 +26,9 @@ export function parsePlaneIssueLink(input: string): PlaneIssueLink | null {
     const pathParts = url.pathname.split('/').filter(Boolean)
     const issueRouteIndex = pathParts.findIndex((part) => PLANE_ISSUE_ROUTE_SEGMENTS.has(part))
     if (issueRouteIndex === -1) {
+      return null
+    }
+    if (isEpicBrowsePath(pathParts, issueRouteIndex)) {
       return null
     }
     const identifier = pathParts.find(
@@ -48,6 +51,13 @@ export function parsePlaneIssueLink(input: string): PlaneIssueLink | null {
   } catch {
     return null
   }
+}
+
+function isEpicBrowsePath(pathParts: string[], browseIndex: number): boolean {
+  return (
+    pathParts[browseIndex] === 'browse' &&
+    pathParts.slice(browseIndex + 1).some((part) => ['epic', 'epics'].includes(part.toLowerCase()))
+  )
 }
 
 function parsePlaneIdentifier(value: string): PlaneIssueLink | null {
