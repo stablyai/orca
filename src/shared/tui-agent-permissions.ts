@@ -1,5 +1,5 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type AgentPermissionMode = 'yolo' | 'manual' | 'mixed'
 

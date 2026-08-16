@@ -4,13 +4,13 @@ import {
   normalizeCmdJPaletteQuery,
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
-import {
-  getProjectGroupHeaderKey,
-  getProjectHeaderRevealTarget,
-  type ProjectGroupingModel
-} from '../sidebar/worktree-list-groups'
+import { getProjectGroupHeaderKey } from '../sidebar/worktree-list/grouping/group-keys'
+import { getProjectHeaderRevealTarget } from '../sidebar/worktree-list/grouping/project-grouping'
+import type { ProjectGroupingModel } from '../sidebar/worktree-list/grouping/project-grouping'
 
 export type CmdJProjectGroupResult = {
   id: string

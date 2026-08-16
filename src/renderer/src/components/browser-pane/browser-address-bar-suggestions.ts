@@ -6,7 +6,7 @@ import {
   SEARCH_ENGINE_LABELS,
   type SearchEngine
 } from '../../../../shared/browser-url'
-import type { BrowserHistoryEntry } from '../../../../shared/types'
+import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
@@ -127,7 +127,7 @@ export function buildBrowserAddressBarSuggestions({
 
   // Why: the history row gives Enter the same target while showing real page metadata.
   const duplicateIdx = historySuggestions.findIndex((h) => h.url === topAction.url)
-  if (duplicateIdx >= 0) {
+  if (duplicateIdx !== -1) {
     return historySuggestions.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
   }
 

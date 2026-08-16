@@ -21,7 +21,7 @@
  *      latches permanently even after the SSH repo finishes hydrating.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'

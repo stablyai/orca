@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FloatingBrowserSlot } from './FloatingBrowserSlot'
 import { getBrowserOverlaySlotViewport } from '@/components/browser-pane/browser-page-viewport'
-import type { BrowserTab } from '../../../../shared/types'
+import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 
 // Why: BrowserPane mounts a real Electron <webview> we can't run in jsdom; stub
 // it so the test isolates the slot-root registration that BrowserPane depends on.

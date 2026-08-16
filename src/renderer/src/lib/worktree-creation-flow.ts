@@ -1,11 +1,8 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import {
-  activateAndRevealWorktree,
-  ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult
-} from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
@@ -13,11 +10,12 @@ import {
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from '@/lib/ephemeral-vm-worktree-creation'
+import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import type { CreateWorktreeResult } from '../../../shared/types'
+import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationPhase,
@@ -105,7 +103,8 @@ async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
-    const backendStartup = resolveBackendDraftStartup(preparedRequest)
+    const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
+    const backendStartup = provisionedRoot ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -135,6 +134,7 @@ async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),
@@ -144,7 +144,8 @@ async function executeWorktreeCreation(
           // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
           ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
             ? { startupDraft: preparedRequest.launchDraftPrompt }
-            : {})
+            : {}),
+          ...(provisionedRoot ? { provisionedRoot } : {})
         }
       )
   } catch (error) {
@@ -153,7 +154,9 @@ async function executeWorktreeCreation(
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return
     }
-    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+    if (preparedRequest.ephemeralVmRuntimeId) {
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+    }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     // Why: an error must stay on the same creation surface that owns the faux
     // tab strip, rather than falling back to stale previous-workspace tabs.
@@ -171,11 +174,11 @@ async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
-  // Why: if the user dismissed/cancelled while the create was in flight, the entry
-  // is gone. Git already made the worktree on disk, but don't auto-provision (trust
-  // write, terminal, agent, note) work they abandoned — it surfaces as a plain row
-  // via worktrees:changed and provisions lazily on first open.
+  // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
+    if (preparedRequest.ephemeralVmRuntimeId) {
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+    }
     return
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)

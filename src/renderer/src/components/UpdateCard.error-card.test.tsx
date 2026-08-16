@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinuxPackageInstallRecovery } from '../../../shared/types'
+import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
 

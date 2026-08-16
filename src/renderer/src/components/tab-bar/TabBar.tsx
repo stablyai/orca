@@ -27,6 +27,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     resolvedGroupId: runtime.resolvedGroupId,
     terminalOnly,
     mobileEmulatorEnabled: runtime.mobileEmulatorEnabled,
+    managedBrowserCreationEnabled: runtime.managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled: runtime.mobileEmulatorCreationEnabled,
     workspaceHasSimulatorTab: runtime.workspaceHasSimulatorTab,
     showWindowsShellMenu: runtime.showWindowsShellMenu,
     projectRuntimeShellMenuMode: runtime.projectRuntimeShellMenuMode,

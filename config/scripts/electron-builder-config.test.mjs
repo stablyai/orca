@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+const REPO_ROOT = join(import.meta.dirname, '..', '..')
+const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
+
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
@@ -169,6 +172,29 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
     )
+  })
+
+  // Why: the scanner service is forked with ELECTRON_RUN_AS_NODE, so asar is
+  // invisible to it and a packed worker entry fails closed — dropping every
+  // OpenCode session in packaged builds while dev stays green. Three legs must
+  // agree on the filename, so all three are read rather than hardcoded.
+  it('unpacks the OpenCode SQLite worker entry the scanner service forks', async () => {
+    const spawnSource = await readFile(
+      join(SRC_MAIN_DIR, 'ai-vault', 'session-scanner-opencode-sqlite-worker-spawn.ts'),
+      'utf8'
+    )
+    const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
+
+    expect(entryFilename).toBeDefined()
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    // Why: the emitted path comes from the rollup input key under
+    // entryFileNames '[name].js', not from the source filename — renaming the
+    // key alone would leave the other two legs agreeing on a file that no
+    // longer exists.
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toContain("entryFileNames: '[name].js'")
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
   })
 
   it('keeps the worker-thread hang watchdog inside app.asar', () => {

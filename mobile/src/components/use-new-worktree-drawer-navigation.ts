@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { resolveNewWorktreeFormSheetVisible } from './new-worktree-form-sheet-visibility'
 
-export type NewWorktreeDrawerView = 'form' | 'transition' | 'source' | 'repo' | 'agent' | 'trust'
+export type NewWorktreeDrawerView =
+  | 'form'
+  | 'transition'
+  | 'source'
+  | 'project'
+  | 'runTarget'
+  | 'agent'
+  | 'trust'
 
 // Why: iOS cannot reliably present a second native modal until the first drawer's
 // exit commits; one extra frame keeps transitions sequential on slower devices.

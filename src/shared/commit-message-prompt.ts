@@ -9,7 +9,7 @@ Rules:
 - First line: imperative mood, <= 72 chars, no trailing period.
 - Optional body: blank line, then wrapped at 72 chars explaining WHY.
 - Output ONLY the commit message - no preamble, no code fences, no quotes.
-- Do not include "Co-authored-by" trailers - Orca appends them after generation when configured.
+- Do not include "Co-authored-by" or other git trailers.
 
 Staged diff:
 \`\`\`diff
@@ -131,8 +131,16 @@ export function truncateDiffForPrompt(
 
 export const CUSTOM_PROMPT_PLACEHOLDER = '{prompt}'
 
+/** Source range of a token: [start, end) offsets into the original string.
+ * `divergesFromShell` marks a token this tokenizer cannot model faithfully for
+ * the target shell: an unquoted operator (`;&|<>`), a word-leading `#`
+ * comment, an expansion opener whose body can span tokens (backtick, `$(`,
+ * `${`, quoted or not), or a cmd single-quoted region (cmd has no
+ * single-quote syntax). Not recoverable from the token value alone. */
+export type CommandTokenSpan = { start: number; end: number; divergesFromShell: boolean }
+
 export type TokenizeCustomCommandResult =
-  | { ok: true; tokens: string[] }
+  | { ok: true; tokens: string[]; spans: CommandTokenSpan[] }
   | { ok: false; error: string }
 
 // Why: deliberately POSIX-shell-style only for *grouping* (single + double
@@ -143,8 +151,11 @@ export type TokenizeCustomCommandResult =
 // surface we don't need.
 export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
   const tokens: string[] = []
+  const spans: CommandTokenSpan[] = []
   let current = ''
   let inToken = false
+  let tokenStart = 0
+  let divergesFromShell = false
   let quote: '"' | "'" | null = null
   let i = 0
 
@@ -152,10 +163,17 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
     const ch = template[i]
     if (quote) {
       if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+        // Why: inside double quotes the shell only consumes the backslash
+        // before these; elsewhere it stays a literal byte this tokenizer drops.
+        divergesFromShell ||= !'$`"\\'.includes(template[i + 1])
         current += template[i + 1]
         i += 2
         continue
       }
+      // Why: a `"` inside $(…) or `…` re-opens a nested quoting context in the
+      // real shell, so this tokenizer's word boundaries stop matching it.
+      divergesFromShell ||=
+        quote === '"' && (ch === '`' || (ch === '$' && '({'.includes(template[i + 1] ?? '\0')))
       if (ch === quote) {
         quote = null
         i++
@@ -171,13 +189,22 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
 
     if (ch === '"' || ch === "'") {
       quote = ch
+      if (!inToken) {
+        tokenStart = i
+      }
       inToken = true
       i++
       continue
     }
 
     if (ch === '\\' && i + 1 < template.length) {
+      // Why: an unquoted line continuation joins words the shell splits, so a
+      // selector can hide inside the joined token and skip the gap check.
+      divergesFromShell ||= template[i + 1] === '\n'
       current += template[i + 1]
+      if (!inToken) {
+        tokenStart = i
+      }
       inToken = true
       i += 2
       continue
@@ -186,13 +213,25 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
     if (/\s/.test(ch)) {
       if (inToken) {
         tokens.push(current)
+        spans.push({ start: tokenStart, end: i, divergesFromShell })
         current = ''
         inToken = false
+        divergesFromShell = false
       }
       i++
       continue
     }
 
+    if (!inToken) {
+      tokenStart = i
+    }
+    // Why: a trailing unpaired escape swallows whatever a consumer appends
+    // after the base, so the base is not safe to build on.
+    divergesFromShell ||= ch === '\\' && i + 1 >= template.length
+    divergesFromShell ||=
+      ';&|<>`'.includes(ch) ||
+      (ch === '#' && !inToken) ||
+      (ch === '$' && '({\'"'.includes(template[i + 1] ?? '\0'))
     current += ch
     inToken = true
     i++
@@ -203,8 +242,9 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   }
   if (inToken) {
     tokens.push(current)
+    spans.push({ start: tokenStart, end: template.length, divergesFromShell })
   }
-  return { ok: true, tokens }
+  return { ok: true, tokens, spans }
 }
 
 export type CustomCommandPlan =

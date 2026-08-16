@@ -34,12 +34,12 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
-  Worktree,
   WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../shared/types'
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   deferWorktreeContextMenuDeleteIntent,
   type WorktreeContextMenuDeleteIntent
@@ -65,6 +65,7 @@ import {
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
+import { unnestWorktrees } from './worktree-unnest'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type Props = {
@@ -749,8 +750,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
 
   const handleRemoveParentLink = useCallback(() => {
-    void Promise.all(
-      activeContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
+    void unnestWorktrees(
+      activeContextWorktrees.map((item) => item.id),
+      updateWorktreeLineage
     )
   }, [activeContextWorktrees, updateWorktreeLineage])
 

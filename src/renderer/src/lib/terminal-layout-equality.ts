@@ -1,4 +1,7 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../shared/terminal-tab-types'
 
 function sameStringRecord(
   a: Readonly<Record<string, string>> | undefined,
@@ -10,9 +13,7 @@ function sameStringRecord(
   const rightKeys = Object.keys(right)
   return (
     leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]
-    )
+    leftKeys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
   )
 }
 

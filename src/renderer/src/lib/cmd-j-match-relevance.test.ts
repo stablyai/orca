@@ -6,7 +6,7 @@ import {
   scorePaletteRelevance
 } from './cmd-j-match-relevance'
 import type { PaletteSearchResult } from './worktree-palette-search'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {

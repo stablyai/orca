@@ -1,7 +1,7 @@
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
-} from '../../../src/shared/github-repository-identity-key'
+} from '../../../src/shared/github/repository-identity-key'
 
 export type GitHubProjectRepoMatch = {
   id: string

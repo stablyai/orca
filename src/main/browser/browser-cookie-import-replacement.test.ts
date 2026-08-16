@@ -3,15 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetPathMock,
   clearPendingCookieImportMock,
+  disposeClearStoreMock,
   execFileSyncMock,
+  restoreClearIdentitiesMock,
   sessionFromPartitionMock,
-  setPendingCookieImportMock
+  setPendingCookieImportMock,
+  snapshotClearIdentitiesMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   clearPendingCookieImportMock: vi.fn(),
+  disposeClearStoreMock: vi.fn(),
   execFileSyncMock: vi.fn(),
+  restoreClearIdentitiesMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
-  setPendingCookieImportMock: vi.fn()
+  setPendingCookieImportMock: vi.fn(),
+  snapshotClearIdentitiesMock: vi.fn()
 }))
 
 vi.mock('./browser-session-registry', () => ({
@@ -26,12 +32,37 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+// Why: snapshot/restore are spies, not no-ops, so a rollback that never ran cannot pass as one.
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: object) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+    }
+  }) => ({
+    get: (filter: object) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    snapshotClearIdentities: snapshotClearIdentitiesMock,
+    restoreClearIdentities: restoreClearIdentitiesMock,
+    dispose: disposeClearStoreMock
+  })
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+beforeEach(() => {
+  snapshotClearIdentitiesMock
+    .mockReset()
+    .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+      items.map(({ cookie: entry, url }) => ({ url, ...entry }))
+    )
+  restoreClearIdentitiesMock.mockReset().mockResolvedValue(undefined)
+  disposeClearStoreMock.mockReset()
+})
 
 describe('validated cookie replacement', () => {
   let cookiesGetMock: ReturnType<typeof vi.fn>
@@ -59,10 +90,11 @@ describe('validated cookie replacement', () => {
     return filePath
   }
 
-  it('filters Google source-bound cookies before replacing imported domain scopes', async () => {
+  it('keeps Google out of the replace scope so its cookies are never removed', async () => {
     cookiesGetMock.mockResolvedValue([
       cookie('.google.com', 'old-google'),
       cookie('.accounts.google.com', 'old-accounts', '/signin'),
+      cookie('.example.com', 'old-example'),
       cookie('.unrelated.com', 'keep'),
       cookie('.google.com.evil.example', 'keep-suffix-confusion')
     ])
@@ -76,15 +108,13 @@ describe('validated cookie replacement', () => {
 
     expect(result.ok && result.summary).toMatchObject({
       totalCookies: 3,
-      importedCookies: 2,
-      skippedCookies: 1,
-      domains: ['example.com', 'google.com']
+      importedCookies: 1,
+      skippedCookies: 2,
+      googleCookiesSkipped: 2,
+      domains: ['example.com']
     })
-    expect(cookiesRemoveMock.mock.calls).toEqual([
-      ['https://google.com/', 'old-google'],
-      ['https://accounts.google.com/signin', 'old-accounts']
-    ])
-    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SAPISID', 'SIDCC'])
+    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'old-example']])
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SIDCC'])
     expect(Math.max(...cookiesRemoveMock.mock.invocationCallOrder)).toBeLessThan(
       Math.min(...cookiesSetMock.mock.invocationCallOrder)
     )
@@ -101,6 +131,7 @@ describe('validated cookie replacement', () => {
       totalCookies: 1,
       importedCookies: 0,
       skippedCookies: 1,
+      googleCookiesSkipped: 1,
       domains: []
     })
     expect(cookiesGetMock).not.toHaveBeenCalled()
@@ -124,8 +155,17 @@ describe('validated cookie replacement', () => {
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
-  it('restores the previous snapshot when an incoming cookie is rejected', async () => {
+  // Why (STA-4097): this rollback puts back the user's ORIGINAL cookies, which the import had
+  // already deleted. cookies.get drops partitionKey and cookies.set ignores it, so rebuilding
+  // them through the Electron API resurrected CHIPS cookies unpartitioned. The undo now travels
+  // back through the CDP identities, which are the only thing that carries the partition.
+  it('restores the previous cookies through CDP identities when an incoming cookie is rejected', async () => {
+    const partitionKey = { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
     cookiesGetMock.mockResolvedValue([cookie('.example.com', 'existing')])
+    snapshotClearIdentitiesMock.mockImplementation(
+      async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+        items.map(({ cookie: entry, url }) => ({ url, ...entry, partitionKey }))
+    )
     cookiesSetMock
       .mockResolvedValue(undefined)
       .mockResolvedValueOnce(undefined)
@@ -142,16 +182,35 @@ describe('validated cookie replacement', () => {
       ['https://example.com/', 'existing'],
       ['https://example.com/', 'first']
     ])
-    expect(cookiesSetMock).toHaveBeenLastCalledWith({
-      url: 'https://example.com/',
-      name: 'existing',
-      value: 'old',
-      domain: '.example.com',
-      path: '/',
-      secure: true,
-      httpOnly: undefined,
-      sameSite: 'unspecified'
-    })
+    expect(restoreClearIdentitiesMock).toHaveBeenCalledOnce()
+    expect(restoreClearIdentitiesMock.mock.calls[0]?.[0]).toEqual([
+      { url: 'https://example.com/', ...cookie('.example.com', 'existing'), partitionKey }
+    ])
+    // Why: cookies.set is only ever the two imported cookies — a third call would mean the
+    // partition-dropping reconstruction came back.
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['first', 'second'])
+    expect(disposeClearStoreMock).toHaveBeenCalledOnce()
+  })
+
+  // Why: restoreClearIdentities attaches a debugger before it iterates, so calling it with an
+  // empty restore set would create a hidden BrowserWindow to put nothing back.
+  it('does not reach for CDP when the rollback has nothing to restore', async () => {
+    cookiesGetMock.mockResolvedValue([])
+    cookiesSetMock
+      .mockResolvedValue(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('cookie rejected'))
+    const filePath = writeCookies([
+      { domain: '.example.com', name: 'first', value: 'new', secure: true },
+      { domain: '.example.com', name: 'second', value: 'new', secure: true }
+    ])
+
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+
+    expect(result.ok).toBe(false)
+    // Why: the imported cookie is still removed — that half of the rollback is lossless.
+    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'first']])
+    expect(restoreClearIdentitiesMock).not.toHaveBeenCalled()
   })
 
   it('fails closed when existing cookies cannot be replaced', async () => {
@@ -168,7 +227,7 @@ describe('validated cookie replacement', () => {
 })
 
 describe('native Chromium integrity-cookie accounting', () => {
-  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let tmpDir: string
 
@@ -180,15 +239,16 @@ describe('native Chromium integrity-cookie accounting', () => {
     })
     clearPendingCookieImportMock.mockClear()
     setPendingCookieImportMock.mockClear()
-    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset().mockReturnValue({
       cookies: {
         flushStore: vi.fn().mockResolvedValue(undefined),
+        get: vi.fn().mockResolvedValue([]),
         remove: vi.fn().mockResolvedValue(undefined),
         set: cookiesSetMock
       },
-      clearStorageData: clearStorageDataMock
+      clearData: clearDataMock
     })
   })
 
@@ -196,7 +256,7 @@ describe('native Chromium integrity-cookie accounting', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('includes domain-scoped integrity cookies in skippedCookies', async () => {
+  it('counts every excluded Google cookie in skippedCookies', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -214,11 +274,12 @@ describe('native Chromium integrity-cookie accounting', () => {
       )
       expect(result.ok && result.summary).toMatchObject({
         totalCookies: 3,
-        importedCookies: 2,
-        skippedCookies: 1,
-        domains: ['example.com', 'google.com']
+        importedCookies: 1,
+        skippedCookies: 2,
+        googleCookiesSkipped: 2,
+        domains: ['example.com']
       })
-      expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SAPISID', 'AEC'])
+      expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['AEC'])
     } finally {
       platformSpy.mockRestore()
     }
@@ -247,9 +308,10 @@ describe('native Chromium integrity-cookie accounting', () => {
         totalCookies: 3,
         importedCookies: 0,
         skippedCookies: 3,
+        googleCookiesSkipped: 2,
         domains: []
       })
-      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      expect(clearDataMock).not.toHaveBeenCalled()
       expect(cookiesSetMock).not.toHaveBeenCalled()
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
       expect(clearPendingCookieImportMock).not.toHaveBeenCalled()

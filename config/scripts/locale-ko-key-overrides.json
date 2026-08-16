@@ -2273,12 +2273,6 @@
   "auto.components.settings.GitPane.976afc6b3e": {
     "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
   },
-  "auto.components.settings.GitPane.b5f534717a": {
-    "ko": "공동 작성"
-  },
-  "auto.components.settings.GitPane.b9b5771bb1": {
-    "ko": "표기"
-  },
   "auto.components.settings.GitPane.b9c011fbc2": {
     "ko": "속도 제한"
   },
@@ -2287,9 +2281,6 @@
   },
   "auto.components.settings.GitPane.db3a127eb1": {
     "ko": "이렇게 하면 다음과 같은 명령이 유지됩니다"
-  },
-  "auto.components.settings.GitPane.e02ea23a32": {
-    "ko": "Orca 표기"
   },
   "auto.components.settings.GitPane.f35007e6e8": {
     "ko": "git-username"
@@ -4453,9 +4444,6 @@
   },
   "auto.components.sidebar.worktree.list.groups.6798dc7c94": {
     "ko": "리뷰 중"
-  },
-  "auto.components.skills.SkillsPage.b088e0785d": {
-    "ko": "베타"
   },
   "auto.components.source.control.SourceControlActionVariableChips.4bf6d88039": {
     "ko": "(비어 있음)"

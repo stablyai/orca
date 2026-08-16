@@ -6,6 +6,7 @@ import { subscribeToTerminalUserInput } from '@/components/terminal-pane/termina
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
   buildPreviewAppearanceOptions,
@@ -200,6 +201,7 @@ export function AgentTerminalPreview({
       ptyId,
       container,
       getTerminal: () => terminal,
+      getTerminalInput: () => terminalInputRef.current,
       isDisposed: () => disposed
     })
 
@@ -210,7 +212,11 @@ export function AgentTerminalPreview({
 
     const installImeNativeTextBridge = (): void => {
       if (terminal) {
-        imeBridge = installPreviewImeBridge(terminal)
+        // Why a live getter: kitty state can change between keydown and commit,
+        // and the tracker outlives every reconnect inside this effect.
+        imeBridge = installPreviewImeBridge(terminal, {
+          getKittyKeyboardFlags: () => kittyKeyboardModes.flags
+        })
       }
     }
 
@@ -304,22 +310,13 @@ export function AgentTerminalPreview({
           clamp(snap.rows ?? FALLBACK_ROWS, 2, 200)
         )
         terminal.reset()
-        // Why: the reset drops xterm's kitty flags, so the mirror must restart
-        // from the incoming snapshot instead of the dead session's state.
-        kittyKeyboardModes.reset()
       }
-      if (snap.scrollbackAnsi) {
-        writeReplayed(snap.scrollbackAnsi)
-      }
-      if (snap.data) {
-        writeReplayed(snap.data)
-      }
-      if (snap.pendingEscapeTailAnsi) {
-        writeReplayed(snap.pendingEscapeTailAnsi)
-      }
-      for (const data of connection.replay) {
-        writeReplayed(data)
-      }
+      replayPreviewConnectionSnapshot({
+        snapshot: snap,
+        replay: connection.replay,
+        kittyKeyboardModes,
+        write: (chunk, live) => writeReplayed(chunk, undefined, live)
+      })
       for (const payload of pendingLivePayloads.splice(0)) {
         writeLive(payload)
       }

@@ -15,7 +15,8 @@
 // process (`repoSlug` reads `.git/config`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo, GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   deleteRepoSlugCacheKey,
@@ -29,7 +30,7 @@ import {
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 

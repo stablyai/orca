@@ -153,11 +153,15 @@
 }
 
 .agent-map-worktree-status-glow.fleet-status-waiting {
-  stroke: color-mix(in srgb, var(--color-amber-500) 28%, transparent);
+  stroke: color-mix(in srgb, var(--agent-question) 32%, transparent);
 }
 
 .agent-map-worktree-status-glow.fleet-status-working {
   stroke: color-mix(in srgb, var(--color-yellow-500) 28%, transparent);
+}
+
+.agent-map-worktree-status-glow.fleet-status-done {
+  stroke: color-mix(in srgb, var(--color-emerald-500) 34%, transparent);
 }
 
 :where(
@@ -195,11 +199,16 @@
 }
 
 .agent-map-worktree-ring.is-waiting {
-  stroke: var(--color-amber-500);
+  stroke: var(--agent-question);
 }
 
 .agent-map-worktree-ring.is-blocked {
   stroke: var(--color-red-500);
+}
+
+/* Whole workspace has settled and something in it is still unread. */
+.agent-map-worktree-ring.is-done {
+  stroke: var(--color-emerald-500);
 }
 
 .agent-map-worktree-label {
@@ -320,6 +329,38 @@
   vector-effect: non-scaling-stroke;
 }
 
+.agent-map-agent-status-flare {
+  fill: none;
+  pointer-events: none;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  vector-effect: non-scaling-stroke;
+  /* Keep in step with AGENT_MAP_STATUS_FLARE_MS, which gates how long the element stays
+     mounted. The performance test asserts the two agree. */
+  animation: agent-map-status-flare 1400ms cubic-bezier(0.25, 0.5, 0.25, 1) both;
+}
+
+.agent-map-agent-status-flare.fleet-status-waiting {
+  stroke: var(--agent-question);
+}
+
+.agent-map-agent-status-flare.fleet-status-done {
+  stroke: var(--color-emerald-500);
+}
+
+@keyframes agent-map-status-flare {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.62);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
 .agent-map-agent-status-glow {
   fill: none;
   pointer-events: none;
@@ -332,11 +373,17 @@
 }
 
 .agent-map-agent-status-glow.fleet-status-waiting {
-  stroke: color-mix(in srgb, var(--color-amber-500) 42%, transparent);
+  stroke: color-mix(in srgb, var(--agent-question) 48%, transparent);
 }
 
 .agent-map-agent-status-glow.fleet-status-blocked {
   stroke: color-mix(in srgb, var(--color-red-500) 38%, transparent);
+}
+
+/* Unread finishes only. `fleet-status-done-seen` gets no glow — that is the whole
+   difference between "you have not looked at this" and "you have". */
+.agent-map-agent-status-glow.fleet-status-done {
+  stroke: color-mix(in srgb, var(--color-emerald-500) 46%, transparent);
 }
 
 .agent-map-agent-icon {
@@ -378,11 +425,20 @@
 }
 
 .fleet-status-waiting .agent-map-agent-mark {
-  stroke: var(--color-amber-500);
+  stroke: var(--agent-question);
 }
 
+/* Unread: filled core. Fill survives zoom-out further than a halo does, and it is the
+   one channel still legible once the node is a few pixels wide. */
 .fleet-status-done .agent-map-agent-mark {
+  fill: color-mix(in srgb, var(--color-emerald-500) 38%, var(--background));
   stroke: var(--color-emerald-500);
+  stroke-width: 2;
+}
+
+/* Seen: hollow, and still unmistakably green — you read it, you have not landed it. */
+.fleet-status-done-seen .agent-map-agent-mark {
+  stroke: color-mix(in srgb, var(--color-emerald-500) 62%, transparent);
 }
 
 .fleet-status-idle .agent-map-agent-mark {
@@ -394,6 +450,19 @@
   pointer-events: none;
   stroke: var(--background);
   stroke-width: 2;
+}
+
+/* Shape cue for 'waiting': hue alone can't carry it at low zoom or for
+   red-green CVD, where orange and blocked-red converge. */
+.agent-map-agent-question-backdrop {
+  fill: var(--background);
+  pointer-events: none;
+  stroke: none;
+}
+
+.agent-map-agent-question-icon {
+  overflow: visible;
+  pointer-events: none;
 }
 
 .agent-map-aggregate-node circle {
@@ -433,8 +502,8 @@
 }
 
 .agent-map-legend-dot.fleet-status-waiting {
-  background: var(--color-amber-500);
-  box-shadow: 0 0 4px color-mix(in srgb, var(--color-amber-500) 72%, transparent);
+  background: var(--agent-question);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--agent-question) 72%, transparent);
   opacity: 1;
 }
 
@@ -490,10 +559,17 @@
   .agent-map-worktree-label-group,
   .agent-map-agent-node,
   .agent-map-agent-visual,
+  .agent-map-agent-mark,
+  .agent-map-agent-status-flare,
   .agent-map-lineage-link,
   .agent-map-worktree-lineage-link {
     animation: none;
     transition: none;
+  }
+
+  /* No flare without motion — the halo and filled core already carry the state. */
+  .agent-map-agent-status-flare {
+    display: none;
   }
 
   :where(

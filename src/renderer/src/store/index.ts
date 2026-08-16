@@ -34,6 +34,7 @@ import { createRuntimeDetectedAgentsSlice } from './slices/runtime-detected-agen
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
+import { createWorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
@@ -46,7 +47,10 @@ import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerRuntimeHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
 import {
   registerRendererMemoryProfileContributor,
@@ -90,6 +94,7 @@ export const useAppStore = create<AppState>()((...a) => {
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
+    ...createWorkspaceCleanupBrowseSlice(...a),
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
@@ -104,6 +109,10 @@ export const useAppStore = create<AppState>()((...a) => {
 })
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+registerRuntimeHttpLinkBrowserOpener(async (request) => {
+  const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
+  await openWorkspaceBrowserTab(request)
+})
 
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
 // so OOM crash reports identify what grew without a local repro.

@@ -99,7 +99,7 @@ function messagesAfterPendingBoundary(
     return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
   }
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
-  if (boundaryIndex >= 0) {
+  if (boundaryIndex !== -1) {
     return messages.slice(boundaryIndex + 1)
   }
   // A bounded authoritative read can page the boundary out. Fall back to the
@@ -123,6 +123,26 @@ function messageIsAfterPendingTimestamp(
   return pending.afterMessageTimestamp == null
     ? message.timestamp >= boundary
     : message.timestamp > boundary
+}
+
+/**
+ * Rows a glue match may consume. Glue always starts at the oldest still-open
+ * echo, so that echo's send boundary is the floor: unbounded, an older turn
+ * whose text happens to split across the queue ("fix the bug" vs "fix the" +
+ * "bug") would retire sends issued long after it. A missing message boundary
+ * falls back to send time — a fuzzy match must never reach further back than
+ * an exact one.
+ */
+function gluedCandidateMessages(
+  messages: readonly NativeChatMessage[],
+  open: readonly NativeChatPendingSend[]
+): readonly NativeChatMessage[] {
+  const oldest = open[0]
+  if (!oldest) {
+    return []
+  }
+  const anchor = oldest.afterMessageId === undefined ? { ...oldest, afterMessageId: null } : oldest
+  return messagesAfterPendingBoundary(messages, anchor)
 }
 
 /**
@@ -151,20 +171,20 @@ export function prunePendingSends(
     consumed.set(key, Math.max(used, occurrence))
     return occurrence > available
   })
-  // Why: when rapid body writes glued two optimistic sends into one transcript
-  // user row ("joke"+"continue"→"jokecontinue"), exact keys never match. Drop
-  // those echoes once an assistant turn advances past the glued user text.
+  // Why: when a lost Enter glued two optimistic sends onto one input line, the
+  // transcript carries one row ("joke"+"continue"→"jokecontinue") that no exact
+  // key matches. Drop those echoes once an assistant turn advances past it.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
   const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
     stillOpen,
-    advancedNativeChatUserTexts(messages)
+    advancedNativeChatUserTexts(gluedCandidateMessages(messages, stillOpen))
   )
   const next = pending.filter((entry, index) => {
     if (!exactKeep[index]) {
       return false
     }
     const openIndex = stillOpen.indexOf(entry)
-    return openIndex < 0 || !gluedRepresented.has(openIndex)
+    return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
   return next.length === pending.length ? pending : next
 }
@@ -200,7 +220,7 @@ export function pendingSendsAsMessages(
   const stillVisible = pending.filter((_, index) => exactVisible[index])
   const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
     stillVisible,
-    matchingNativeChatUserTexts(existingMessages)
+    matchingNativeChatUserTexts(gluedCandidateMessages(existingMessages, stillVisible))
   )
   return pending
     .filter((entry, index) => {
@@ -208,7 +228,7 @@ export function pendingSendsAsMessages(
         return false
       }
       const openIndex = stillVisible.indexOf(entry)
-      return openIndex < 0 || !gluedRepresented.has(openIndex)
+      return openIndex === -1 || !gluedRepresented.has(openIndex)
     })
     .map((entry) => ({
       id: `pending:${entry.id}`,

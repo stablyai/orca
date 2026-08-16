@@ -1,25 +1,32 @@
 import { randomUUID } from 'node:crypto'
-import type { Dir } from 'node:fs'
-import { mkdir, opendir, rm, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { app } from 'electron'
 
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { startSpan } from '../observability/tracer'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   writeFileToClipboard,
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
+import {
+  cleanupExpiredRemoteClipboardStaging,
+  cleanupLegacyRemoteClipboardStaging,
+  createRemoteClipboardTransferDirectory,
+  RemoteClipboardStagingRootUnsafeError,
+  removeRemoteClipboardTransferDirectory,
+  scheduleRemoteClipboardTransferCleanup
+} from './clipboard-remote-file-staging'
 
 type RemoteClipboardFileDeps = Omit<ClipboardFileDeps, 'resolveFilePath'>
 
-const REMOTE_CLIPBOARD_FILE_TTL_MS = 60 * 60 * 1000
-const REMOTE_CLIPBOARD_FILE_PREFIX = 'orca-clipboard-file-'
-const REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY = 8
+const REMOTE_CLIPBOARD_LEGACY_CLEANUP_DELAY_MS = 30 * 1000
 const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+let legacyCleanupScheduled = false
 
 export async function writeRemoteFileToClipboard({
   remotePath,
@@ -39,11 +46,21 @@ export async function writeRemoteFileToClipboard({
     throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
   }
 
-  const tempDir = join(
-    app.getPath('temp'),
-    `${REMOTE_CLIPBOARD_FILE_PREFIX}${Date.now()}-${randomUUID()}`
-  )
-  await mkdir(tempDir, { mode: 0o700 })
+  const tempRoot = app.getPath('temp')
+  let tempDir: string
+  try {
+    tempDir = await createRemoteClipboardTransferDirectory(tempRoot, Date.now(), randomUUID())
+  } catch (error) {
+    const span = startSpan('clipboard.remote_staging_init', {
+      attributes: {
+        operation: 'create',
+        platform: process.platform,
+        failure_category: getStagingFailureCategory(error)
+      }
+    })
+    span.fail(error instanceof Error ? error : String(error))
+    return { ok: false, reason: 'staging-unavailable' }
+  }
   const localPath = join(
     tempDir,
     sanitizeLocalClipboardFilename(getRuntimePathBasename(remotePath))
@@ -70,62 +87,33 @@ export async function writeRemoteFileToClipboard({
       // Why: OS file clipboards keep a path reference, so the staged copy must
       // survive after this IPC call long enough for the user to paste it.
       keepTempFile = true
-      scheduleRemoteClipboardFileCleanup(tempDir)
+      scheduleRemoteClipboardTransferCleanup(tempRoot, tempDir)
     }
     return result
   } finally {
     if (!keepTempFile) {
-      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+      await removeRemoteClipboardTransferDirectory(tempRoot, tempDir)
     }
   }
 }
 
-// Why: the OS temp root is shared with every other program and routinely holds
-// millions of unrelated entries on long-lived machines, so this startup sweep
-// streams it and only ever retains work for entries it actually owns.
 export async function cleanupExpiredRemoteClipboardFiles(nowMs = Date.now()): Promise<void> {
-  const tempRoot = app.getPath('temp')
-  let tempRootDir: Dir
-  try {
-    tempRootDir = await opendir(tempRoot)
-  } catch {
+  await cleanupExpiredRemoteClipboardStaging(app.getPath('temp'), nowMs)
+}
+
+export async function cleanupLegacyRemoteClipboardFiles(nowMs = Date.now()): Promise<void> {
+  await cleanupLegacyRemoteClipboardStaging(app.getPath('temp'), nowMs)
+}
+
+export function scheduleLegacyRemoteClipboardFileCleanup(): void {
+  if (legacyCleanupScheduled) {
     return
   }
-
-  const pending = new Set<Promise<void>>()
-  try {
-    for await (const entry of tempRootDir) {
-      if (!entry.isDirectory() || !entry.name.startsWith(REMOTE_CLIPBOARD_FILE_PREFIX)) {
-        continue
-      }
-      const cleanup = cleanupExpiredRemoteClipboardDirectory(join(tempRoot, entry.name), nowMs)
-      pending.add(cleanup)
-      void cleanup.finally(() => pending.delete(cleanup))
-      if (pending.size >= REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY) {
-        await Promise.race(pending)
-      }
-    }
-  } catch {
-    // Why: a partial best-effort sweep beats failing startup on a temp-root read error.
-  } finally {
-    // Why: exhausting the iterator already closes the handle; closing again is harmless.
-    await tempRootDir.close().catch(() => undefined)
-  }
-  await Promise.all(pending)
-}
-
-async function cleanupExpiredRemoteClipboardDirectory(
-  tempDir: string,
-  nowMs: number
-): Promise<void> {
-  try {
-    const tempStats = await stat(tempDir)
-    if (nowMs - tempStats.mtimeMs >= REMOTE_CLIPBOARD_FILE_TTL_MS) {
-      await rm(tempDir, { recursive: true, force: true })
-    }
-  } catch {
-    // Why: stale staged SSH files should not make startup cleanup noisy.
-  }
+  legacyCleanupScheduled = true
+  const timer = setTimeout(() => {
+    void cleanupLegacyRemoteClipboardFiles().catch(() => undefined)
+  }, REMOTE_CLIPBOARD_LEGACY_CLEANUP_DELAY_MS)
+  unrefTimer(timer)
 }
 
 function sanitizeLocalClipboardFilename(remoteBasename: string): string {
@@ -140,11 +128,22 @@ function sanitizeLocalClipboardFilename(remoteBasename: string): string {
   return sanitized
 }
 
-function scheduleRemoteClipboardFileCleanup(tempDir: string): void {
-  const timer = setTimeout(() => {
-    void rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
-  }, REMOTE_CLIPBOARD_FILE_TTL_MS)
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
   }
+}
+
+function getStagingFailureCategory(error: unknown): string {
+  if (error instanceof RemoteClipboardStagingRootUnsafeError) {
+    return 'unsafe-root'
+  }
+  const code = error instanceof Error && 'code' in error ? String(error.code) : undefined
+  if (code === 'EACCES' || code === 'EPERM') {
+    return 'permissions'
+  }
+  if (code === 'EEXIST' || code === 'ENOTDIR') {
+    return 'path-conflict'
+  }
+  return 'unavailable'
 }

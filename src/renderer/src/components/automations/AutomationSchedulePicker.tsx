@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
+import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
 
@@ -49,49 +50,6 @@ const DAY_OPTIONS = [
   ['5', 'Friday'],
   ['6', 'Saturday']
 ] as const
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1))
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => String(index))
-const PERIOD_OPTIONS = ['AM', 'PM'] as const
-
-function parseTime(value: string): { hour: number; minute: number } {
-  const [hour, minute] = value.split(':').map((part) => Number(part))
-  return {
-    hour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 9,
-    minute: Number.isInteger(minute) && minute >= 0 && minute <= 59 ? minute : 0
-  }
-}
-
-function formatTimeInput(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-}
-
-function getClockParts(time: string): { hour12: number; minute: number; period: 'AM' | 'PM' } {
-  const { hour, minute } = parseTime(time)
-  return {
-    hour12: hour % 12 === 0 ? 12 : hour % 12,
-    minute,
-    period: hour >= 12 ? 'PM' : 'AM'
-  }
-}
-
-function updateTimePart(
-  time: string,
-  patch: { hour12?: number; minute?: number; period?: 'AM' | 'PM' }
-): string {
-  const current = getClockParts(time)
-  const nextHour12 = patch.hour12 ?? current.hour12
-  const nextPeriod = patch.period ?? current.period
-  const nextMinute = patch.minute ?? current.minute
-  const hour24 =
-    nextPeriod === 'AM'
-      ? nextHour12 === 12
-        ? 0
-        : nextHour12
-      : nextHour12 === 12
-        ? 12
-        : nextHour12 + 12
-  return formatTimeInput(hour24, nextMinute)
-}
 
 function getDraftScheduleLabel(draft: AutomationDraft): string {
   if (draft.preset === 'custom') {
@@ -99,7 +57,7 @@ function getDraftScheduleLabel(draft: AutomationDraft): string {
       ? formatAutomationSchedule(draft.customSchedule)
       : 'Advanced schedule'
   }
-  const { hour, minute } = parseTime(draft.time)
+  const { hour, minute } = parseAutomationTime(draft.time)
   return formatAutomationSchedule(
     buildAutomationRrule({
       preset: draft.preset,
@@ -118,7 +76,7 @@ function buildCustomScheduleSeed(draft: AutomationDraft): string {
   if (draft.preset === 'custom') {
     return ''
   }
-  const { hour, minute } = parseTime(draft.time)
+  const { hour, minute } = parseAutomationTime(draft.time)
   return buildAutomationCronSchedule({
     preset: draft.preset,
     hour,
@@ -151,12 +109,19 @@ export function AutomationSchedulePicker({
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
   const label = getDraftScheduleLabel(draft)
-  const clockParts = getClockParts(draft.time)
   const customSchedule = draft.customSchedule.trim()
   const customScheduleInvalid =
     draft.preset === 'custom' &&
     customSchedule.length > 0 &&
     !validateAdvancedSchedule(customSchedule)
+
+  const setTime = (time: string): void => {
+    onDraftChange((current) => ({
+      ...current,
+      time,
+      scheduleWarning: null
+    }))
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -198,7 +163,7 @@ export function AutomationSchedulePicker({
               <SelectTrigger className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(([value, fallbackLabel, labelKey]) => (
                   <SelectItem key={value} value={value}>
                     {getAutomationSchedulePresetLabel([value, fallbackLabel, labelKey])}
@@ -232,7 +197,7 @@ export function AutomationSchedulePicker({
                     <SelectTrigger className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       {DAY_OPTIONS.map(([value, dayLabel]) => (
                         <SelectItem key={value} value={value}>
                           {dayLabel}
@@ -249,27 +214,7 @@ export function AutomationSchedulePicker({
                     'Minute'
                   )}
                 >
-                  <Select
-                    value={String(clockParts.minute)}
-                    onValueChange={(minute) =>
-                      onDraftChange((current) => ({
-                        ...current,
-                        time: updateTimePart(current.time, { minute: Number(minute) }),
-                        scheduleWarning: null
-                      }))
-                    }
-                  >
-                    <SelectTrigger className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MINUTE_OPTIONS.map((minute) => (
-                        <SelectItem key={minute} value={minute}>
-                          :{minute.padStart(2, '0')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <AutomationTimeField time={draft.time} mode="minute" onTimeChange={setTime} />
                 </Field>
               ) : (
                 <Field
@@ -278,89 +223,7 @@ export function AutomationSchedulePicker({
                     'Time'
                   )}
                 >
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
-                    <Select
-                      value={String(clockParts.hour12)}
-                      onValueChange={(hour12) =>
-                        onDraftChange((current) => ({
-                          ...current,
-                          time: updateTimePart(current.time, { hour12: Number(hour12) }),
-                          scheduleWarning: null
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={translate(
-                          'auto.components.automations.AutomationSchedulePicker.6b802ecc99',
-                          'Hour'
-                        )}
-                        className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HOUR_OPTIONS.map((hour) => (
-                          <SelectItem key={hour} value={hour}>
-                            {hour}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={String(clockParts.minute)}
-                      onValueChange={(minute) =>
-                        onDraftChange((current) => ({
-                          ...current,
-                          time: updateTimePart(current.time, { minute: Number(minute) }),
-                          scheduleWarning: null
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={translate(
-                          'auto.components.automations.AutomationSchedulePicker.9e677335b0',
-                          'Minute'
-                        )}
-                        className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MINUTE_OPTIONS.map((minute) => (
-                          <SelectItem key={minute} value={minute}>
-                            {minute.padStart(2, '0')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={clockParts.period}
-                      onValueChange={(period) =>
-                        onDraftChange((current) => ({
-                          ...current,
-                          time: updateTimePart(current.time, { period: period as 'AM' | 'PM' }),
-                          scheduleWarning: null
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={translate(
-                          'auto.components.automations.AutomationSchedulePicker.22359b186a',
-                          'AM or PM'
-                        )}
-                        className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PERIOD_OPTIONS.map((period) => (
-                          <SelectItem key={period} value={period}>
-                            {period}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <AutomationTimeField time={draft.time} mode="time" onTimeChange={setTime} />
                 </Field>
               )}
             </>
