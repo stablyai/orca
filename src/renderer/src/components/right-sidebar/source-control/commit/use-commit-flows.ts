@@ -67,6 +67,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     commitInFlightRef,
     commitMessage,
     compareBaseRef,
+    conflictOperation,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,

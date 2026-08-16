@@ -81,6 +81,22 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_amend.title).toBe('Amend staged changes to the last commit')
   })
 
+  it('disables commit_amend during an active merge/rebase/cherry-pick even without unresolved conflicts', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: false,
+        conflictOperation: 'merge',
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_amend.disabled).toBe(true)
+    expect(byKind.commit_amend.title).toBe('Resolve conflicts before amending')
+  })
+
   it('enables commit actions when staged files also have unstaged changes', () => {
     const items = resolveDropdownItems(
       inputs({

@@ -28,7 +28,8 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     commitDisabledReason,
     canCommit,
     stagedCount,
-    hasUnresolvedConflicts
+    hasUnresolvedConflicts,
+    conflictOperation
   } = ctx
 
   const commit: DropdownItem = {
@@ -117,8 +118,9 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
   }
 
   // Why: amend reuses the last commit message (--no-edit), so it doesn't require hasMessage.
+  // A merge/rebase/cherry-pick can stay active after conflicts resolve, so gate on conflictOperation too.
   const amendDisabledReason: string | null =
-    hasUnresolvedConflicts
+    hasUnresolvedConflicts || conflictOperation !== 'unknown'
       ? 'Resolve conflicts before amending'
       : stagedCount === 0
         ? 'Stage at least one file to amend'

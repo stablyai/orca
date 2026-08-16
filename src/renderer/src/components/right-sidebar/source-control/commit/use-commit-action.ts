@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import { getConnectionId } from '@/lib/connection-context'
 import { amendRuntimeGit, commitRuntimeGit } from '@/runtime/runtime-git-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
@@ -20,6 +21,7 @@ export function useSourceControlCommitAction({
   commitInFlightRef,
   commitMessage,
   compareBaseRef,
+  conflictOperation,
   refreshActiveGitStatusAfterMutation,
   refreshBranchCompareRef,
   refreshGitHistoryRef,
@@ -37,6 +39,7 @@ export function useSourceControlCommitAction({
   commitInFlightRef: SourceControlWorktreeOperationState['commitInFlightRef']
   commitMessage: string
   compareBaseRef: string | null
+  conflictOperation: GitConflictOperation
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   refreshBranchCompareRef: React.RefObject<() => Promise<void>>
   refreshGitHistoryRef: React.RefObject<() => Promise<void>>
@@ -173,7 +176,7 @@ export function useSourceControlCommitAction({
     if (!target) {
       return false
     }
-    if (stagedCount === 0 || unresolvedConflictCount > 0) {
+    if (stagedCount === 0 || unresolvedConflictCount > 0 || conflictOperation !== 'unknown') {
       return false
     }
     if (commitInFlightRef.current[target.worktreeId]) {
@@ -222,6 +225,7 @@ export function useSourceControlCommitAction({
     beginGitBranchCompareRequest,
     commitInFlightRef,
     compareBaseRef,
+    conflictOperation,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
