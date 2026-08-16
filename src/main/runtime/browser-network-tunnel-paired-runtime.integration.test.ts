@@ -103,7 +103,7 @@ describe('paired runtime browser network tunnel', () => {
     expect(errors).toEqual([])
   })
 
-  it('commits reconciliation placement after a real paired command result', async () => {
+  it('commits same-runtime reconciliation placement after a real paired command result', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-reconciliation-'))
     resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
     const runtime = new OrcaRuntimeService({} as never)
@@ -126,7 +126,7 @@ describe('paired runtime browser network tunnel', () => {
       throw new Error('Runtime pairing identity is unavailable')
     }
     const oldPage = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: runtime.getRuntimeId(),
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'integration-browser-host',
       browserHostGeneration: 4,

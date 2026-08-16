@@ -47,7 +47,7 @@ const priorPageAuthority = (
 
 function reconciliationPlan() {
   const previous = {
-    authorityRuntimeId: 'runtime-old',
+    authorityRuntimeId: 'runtime-new',
     authorityEpoch: 'epoch-old',
     browserHostClientId: 'client-a',
     browserHostGeneration: 4,

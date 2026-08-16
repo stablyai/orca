@@ -7,6 +7,7 @@ import {
   assertCurrentBrowserClientPageRenderer,
   browserClientPageIdentity
 } from './browser-client-page-command-admission'
+import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import {
   createBrowserClientPageInventory,
@@ -63,6 +64,7 @@ async function reclaimPage(
     !page ||
     page.retiring ||
     page.reconciling ||
+    page.inventory.authorityRuntimeId !== event.authorityRuntimeId ||
     !sameBrowserClientPageAuthority(page.inventory, event.command.previousAuthority) ||
     page.inventory.browserProfileId !== event.command.browserProfileId ||
     page.inventory.executionHostKey !== event.command.executionHostKey
@@ -210,25 +212,6 @@ async function failClosedRekeyedPage(
     })
   }
   throw error
-}
-
-function sameBrowserClientPageAuthority(
-  inventory: BrowserClientHostedPageInventory,
-  authority: {
-    authorityRuntimeId: string
-    authorityEpoch: string
-    browserHostClientId: string
-    browserHostGeneration: number
-    pageHostGeneration: number
-  }
-): boolean {
-  return (
-    inventory.authorityRuntimeId === authority.authorityRuntimeId &&
-    inventory.authorityEpoch === authority.authorityEpoch &&
-    inventory.browserHostClientId === authority.browserHostClientId &&
-    inventory.browserHostGeneration === authority.browserHostGeneration &&
-    inventory.pageHostGeneration === authority.pageHostGeneration
-  )
 }
 
 function reconciliationCreateEvent(

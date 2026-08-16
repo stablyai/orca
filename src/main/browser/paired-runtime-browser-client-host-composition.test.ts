@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
@@ -12,6 +13,18 @@ const authority: BrowserClientHostLeaseAuthority = {
   browserHostGeneration: 4,
   pageCommandProtocolVersion: 1
 }
+
+const replacementAuthority: BrowserClientHostLeaseAuthority = {
+  ...authority,
+  authorityRuntimeId: 'runtime-b',
+  authorityEpoch: 'epoch-b',
+  browserHostGeneration: 1,
+  pageInventoryProtocolVersion: 1,
+  pageReconciliationProtocolVersion: 1
+}
+
+const initialInput = { authorityConnectionIdentity: 'authority-record-a' }
+const replacementInput = { authorityConnectionIdentity: 'authority-record-b' }
 
 describe('PairedRuntimeBrowserClientHostComposition', () => {
   it('activates exact route authority before admitting page commands', async () => {
@@ -32,6 +45,123 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
       expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
     ])
     expect(rig.executor.snapshotPageInventory).toHaveBeenCalledOnce()
+  })
+
+  it('publishes a fresh inventory snapshot for every reconnect attach', () => {
+    const rig = createRig({ pageInventory: [] })
+    rig.executor.snapshotPageInventory
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([retainedPageInventory()])
+    rig.createComposition()
+
+    expect(rig.hostOptions.getPageInventory?.()).toEqual([])
+    expect(rig.hostOptions.getPageInventory?.()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
+    ])
+    expect(rig.executor.snapshotPageInventory).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves inventory while replacing authority with fresh routes', async () => {
+    const rig = createRig()
+    const composition = rig.createComposition()
+    await composition.start()
+
+    await expect(composition.replaceAuthority(replacementInput)).resolves.toEqual(
+      replacementAuthority
+    )
+
+    expect(rig.replacementInventory).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', authorityRuntimeId: 'runtime-a' })
+    ])
+    expect(rig.executor.close).not.toHaveBeenCalled()
+    expect(rig.routes.close).not.toHaveBeenCalled()
+    expect(rig.order).toEqual([
+      'activate-routes',
+      'retire-routes',
+      'fence-authority-transition',
+      'close-host',
+      'complete-authority-transition',
+      'attach-replacement-inventory',
+      'activate-replacement-routes'
+    ])
+  })
+
+  it('rejects retained inventory when replacement cannot reconcile it', async () => {
+    const rig = createRig({
+      replacementAuthority: {
+        ...replacementAuthority,
+        pageInventoryProtocolVersion: undefined,
+        pageReconciliationProtocolVersion: undefined
+      }
+    })
+    const composition = rig.createComposition()
+    await composition.start()
+
+    await expect(composition.replaceAuthority(replacementInput)).rejects.toThrow(
+      'browser_client_page_reconciliation_unsupported'
+    )
+
+    expect(rig.replacementInventory).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', authorityRuntimeId: 'runtime-a' })
+    ])
+    expect(rig.replacementRoutes.close).not.toHaveBeenCalled()
+    expect(rig.order).not.toContain('activate-replacement-routes')
+    await composition.close()
+  })
+
+  it('allows a legacy replacement when there is no retained inventory', async () => {
+    const legacyAuthority = {
+      ...replacementAuthority,
+      pageInventoryProtocolVersion: undefined,
+      pageReconciliationProtocolVersion: undefined
+    }
+    const rig = createRig({ pageInventory: [], replacementAuthority: legacyAuthority })
+    const composition = rig.createComposition()
+    await composition.start()
+
+    await expect(composition.replaceAuthority(replacementInput)).resolves.toEqual(legacyAuthority)
+
+    expect(rig.replacementInventory).toEqual([])
+    expect(rig.order).toContain('activate-replacement-routes')
+    await composition.close()
+  })
+
+  it('waits for old handlers and ignores their late callbacks before replacement', async () => {
+    const rig = createRig({ hostSettled: false })
+    const composition = rig.createComposition()
+    await composition.start()
+    const oldCallbacks = rig.hostOptionsHistory[0]!
+
+    const replacing = composition.replaceAuthority(replacementInput)
+    await Promise.resolve()
+    expect(rig.hosts).toHaveLength(1)
+
+    rig.settleHandlers()
+    await replacing
+    oldCallbacks.onError?.(new Error('late old-host failure'))
+    oldCallbacks.onTransportLost?.(new Error('late old-host loss'))
+
+    expect(rig.hosts).toHaveLength(2)
+    expect(rig.hosts[1]!.close).not.toHaveBeenCalled()
+    expect(rig.replacementRoutes.suspend).not.toHaveBeenCalled()
+    expect(rig.onError).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when retired routes reject during replacement', async () => {
+    const routeRetireError = new Error('route retirement failed')
+    const rig = createRig({ routeRetireError })
+    const composition = rig.createComposition()
+    await composition.start()
+
+    await expect(composition.replaceAuthority(replacementInput)).rejects.toThrow(
+      'paired_runtime_browser_client_host_composition_closed'
+    )
+    await composition.whenClosed()
+
+    expect(rig.onError).toHaveBeenCalledWith(routeRetireError)
+    expect(rig.executor.close).toHaveBeenCalledOnce()
+    expect(rig.routes.close).toHaveBeenCalledOnce()
+    expect(rig.order).not.toContain('activate-replacement-routes')
   })
 
   it('suspends routes without closing pages and gates commands through recovery', async () => {
@@ -199,22 +329,38 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
   })
 })
 
-function createRig(options: { executorCloseError?: Error; hostSettled?: boolean } = {}) {
+function createRig(
+  options: {
+    executorCloseError?: Error
+    hostSettled?: boolean
+    pageInventory?: readonly BrowserClientHostedPageInventory[]
+    replacementAuthority?: BrowserClientHostLeaseAuthority
+    routeRetireError?: Error
+  } = {}
+) {
   const order: string[] = []
   let settleHandlers = (): void => {}
   const handlersSettled = new Promise<void>((resolve) => {
     settleHandlers = resolve
   })
-  const routes = {
+  const createRoutes = (replacement = false) => ({
     retain: vi.fn(),
     suspend: vi.fn(() => {
-      order.push('suspend-routes')
+      order.push(replacement ? 'suspend-replacement-routes' : 'suspend-routes')
     }),
     reconnect: vi.fn(async () => {}),
+    retire: vi.fn(async () => {
+      order.push(replacement ? 'retire-replacement-routes' : 'retire-routes')
+      if (!replacement && options.routeRetireError) {
+        throw options.routeRetireError
+      }
+    }),
     close: vi.fn(async () => {
-      order.push('close-routes')
+      order.push(replacement ? 'close-replacement-routes' : 'close-routes')
     })
-  }
+  })
+  const routes = createRoutes()
+  const replacementRoutes = createRoutes(true)
   const executor = {
     handle: vi.fn(async () => {
       order.push('handle-command')
@@ -225,22 +371,16 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
+    beginAuthorityTransition: vi.fn(() => {
+      order.push('fence-authority-transition')
+    }),
+    completeAuthorityTransition: vi.fn(() => {
+      order.push('complete-authority-transition')
+    }),
     fenceNavigation: vi.fn(() => {
       order.push('fence-navigation')
     }),
-    snapshotPageInventory: vi.fn(() => [
-      {
-        authorityRuntimeId: 'runtime-a',
-        authorityEpoch: 'epoch-a',
-        browserHostClientId: 'client-a',
-        browserHostGeneration: 4,
-        browserPageId: 'page-a',
-        pageHostGeneration: 7,
-        browserProfileId: 'profile-a',
-        executionHostKey: 'execution-host-a',
-        state: 'active' as const
-      }
-    ]),
+    snapshotPageInventory: vi.fn(() => options.pageInventory ?? [retainedPageInventory()]),
     close: vi.fn(async () => {
       order.push('close-executor')
       if (options.executorCloseError) {
@@ -248,7 +388,7 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
       }
     })
   }
-  let hostOptions: {
+  type HostOptions = {
     getPageInventory?: () => readonly unknown[]
     onAuthority?: (next: BrowserClientHostLeaseAuthority) => void
     onTransportLost?: (error: Error) => void
@@ -258,11 +398,27 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
       event: BrowserClientHostCommandEvent,
       signal: AbortSignal
     ) => Promise<{ status: 'completed' | 'failed'; errorCode?: string }>
-  } = {}
-  const host = {
+  }
+  const hostOptionsHistory: HostOptions[] = []
+  const hosts: {
+    start: ReturnType<typeof vi.fn>
+    retirePage: ReturnType<typeof vi.fn>
+    forgetPage: ReturnType<typeof vi.fn>
+    whenHandlersSettled: ReturnType<typeof vi.fn>
+    close: ReturnType<typeof vi.fn>
+  }[] = []
+  let replacementInventory: readonly unknown[] = []
+  const makeHost = (callbacks: HostOptions, replacement: boolean) => ({
     start: vi.fn(async () => {
-      hostOptions.onAuthority?.(authority)
-      return authority
+      const nextAuthority = replacement
+        ? (options.replacementAuthority ?? replacementAuthority)
+        : authority
+      if (replacement) {
+        replacementInventory = callbacks.getPageInventory?.() ?? []
+        order.push('attach-replacement-inventory')
+      }
+      callbacks.onAuthority?.(nextAuthority)
+      return nextAuthority
     }),
     retirePage: vi.fn(async () => {
       order.push('retire-dispatcher-page')
@@ -274,35 +430,64 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
     }),
     whenHandlersSettled: vi.fn(() => handlersSettled),
     close: vi.fn(async () => {
-      order.push('close-host')
-      return options.hostSettled ?? true
+      order.push(replacement ? 'close-replacement-host' : 'close-host')
+      return replacement ? true : (options.hostSettled ?? true)
     })
-  }
+  })
   const onError = vi.fn()
   return {
     order,
     routes,
+    replacementRoutes,
     executor,
-    host,
+    hosts,
+    hostOptionsHistory,
     onError,
     settleHandlers,
     get hostOptions() {
-      return hostOptions
+      return hostOptionsHistory.at(-1) ?? {}
+    },
+    get host() {
+      return hosts[0]!
+    },
+    get replacementInventory() {
+      return replacementInventory
     },
     createComposition: () =>
       new PairedRuntimeBrowserClientHostComposition({
-        createRoutes: (next) => {
-          expect(next).toEqual(authority)
-          order.push('activate-routes')
-          return routes
+        initialInput,
+        createRoutes: (input, nextAuthority) => {
+          const replacement = input === replacementInput
+          expect(nextAuthority).toEqual(
+            replacement ? (options.replacementAuthority ?? replacementAuthority) : authority
+          )
+          order.push(replacement ? 'activate-replacement-routes' : 'activate-routes')
+          return replacement ? replacementRoutes : routes
         },
         createExecutor: () => executor,
-        createHost: (next) => {
-          hostOptions = next
+        createHost: (input, callbacks) => {
+          const replacement = input === replacementInput
+          hostOptionsHistory.push(callbacks)
+          const host = makeHost(callbacks, replacement)
+          hosts.push(host)
           return host
         },
         onError
       })
+  }
+}
+
+function retainedPageInventory(): BrowserClientHostedPageInventory {
+  return {
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: 'epoch-a',
+    browserHostClientId: 'client-a',
+    browserHostGeneration: 4,
+    browserPageId: 'page-a',
+    pageHostGeneration: 7,
+    browserProfileId: 'profile-a',
+    executionHostKey: 'execution-host-a',
+    state: 'active'
   }
 }
 

@@ -24,6 +24,13 @@ export class BrowserClientPageNavigationFence {
       return
     }
     this.fenced = true
+    this.revoke(pages, revoke)
+  }
+
+  revoke(
+    pages: Iterable<BrowserClientPageNavigationClaim>,
+    revoke: (claim: BrowserRouteGuestLifecycleClaim) => void
+  ): void {
     const failures: unknown[] = []
     for (const page of pages) {
       try {

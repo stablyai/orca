@@ -19,6 +19,7 @@ export type PairedRuntimeBrowserClientHostOptions = {
   hostCapabilities: readonly string[]
   handler: CommandHandler
   getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
+  pageReconciliationProtocolVersion?: 1
   dispatcher?: DispatcherLimits
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
@@ -48,6 +49,9 @@ export class PairedRuntimeBrowserClientHost {
         ? {
             pageInventoryProtocolVersion: 1,
             leaseReconnectProtocolVersion: 1,
+            ...(options.pageReconciliationProtocolVersion
+              ? { pageReconciliationProtocolVersion: options.pageReconciliationProtocolVersion }
+              : {}),
             getPageInventory: options.getPageInventory
           }
         : {}),

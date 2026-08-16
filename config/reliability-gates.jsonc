@@ -2589,6 +2589,7 @@
         "server-owned page-command issue and result ledger",
         "same-socket paired-runtime control requests",
         "paired desktop browser-host lifecycle composition",
+        "same-pairing browser-host authority replacement",
         "bounded client-page reconciliation execution",
         "proof-driven server page-reconciliation orchestration",
         "capability-gated client-page reconciliation commands",
@@ -2734,7 +2735,8 @@
           "assertions": [
             "exact current pages retain without navigation while runtime-missing pages restore and client orphans close",
             "profile, execution-host, authority, generation, and outcome-unknown mismatches require a close-before-restore barrier",
-            "old-epoch reclaim requires one exact persisted previous authority, authenticated paired-device provenance, an epoch transition, and the same browser-host client identity while allowing counters to restart under the new epoch",
+            "old-epoch reclaim requires one exact persisted previous authority on the same runtime, authenticated paired-device provenance, an epoch transition, and the same browser-host client identity while allowing counters to restart under the new epoch",
+            "a runtime-authority change, including an SSH page whose route key omits runtime identity, requires close-before-restore instead of DOM-preserving reclaim",
             "duplicate and over-capacity inventories fail atomically before returning a partial plan",
             "invalid identities, generations, URLs, states, limits, duplicate inventories, and over-capacity inventories fail atomically while valid records and action lists are immutable"
           ]
@@ -2840,6 +2842,7 @@
         {
           "file": "src/main/browser/paired-runtime-browser-client-host.test.ts",
           "assertions": [
+            "reconciliation is advertised only when the composed host explicitly enables it beside complete inventory",
             "exact dispatcher authority exists before the first same-socket command can arrive",
             "explicit close shuts transport before aborting every owned page handler",
             "dispatcher abort still runs when lease cleanup rejects",
@@ -2859,7 +2862,7 @@
           "file": "src/main/browser/paired-runtime-browser-client-host-composition.test.ts",
           "assertions": [
             "exact route authority activates before the first page command",
-            "host attach samples the executor's exact page inventory once",
+            "each initial or reconnect attach samples a fresh exact executor inventory while the compatibility gate binds to the latest published snapshot",
             "control loss suspends routes without closing pages and command admission waits for exact route recovery",
             "one command gate spans repeated loss while stale route recoveries cannot close the replacement",
             "page retirement settles dispatcher ownership before guest cleanup and ledger forget",
@@ -2867,6 +2870,10 @@
             "shutdown closes control transport before executor pages and every retained route",
             "non-settling handlers remove network reach immediately and defer page cleanup until exact late settlement",
             "deferred executor cleanup failures remain fenced and emit an observable composition error",
+            "same-pairing runtime replacement retires old routes, fences guest navigation, waits for old handlers, and activates retained inventory only after exact reconciliation echo",
+            "a legacy replacement remains available for empty inventory but cannot activate routes for unreconciled retained pages",
+            "retired-route cleanup failure closes the composition before replacement authority can activate",
+            "late callbacks from a replaced host generation cannot suspend or close its replacement",
             "cleanly absent failed creates are forgotten while unresolved cleanup remains fenced"
           ]
         },
@@ -2896,6 +2903,10 @@
             "legacy-valid command identities remain executable even when optional inventory cannot encode them",
             "executor capacity cannot exceed the shared 256-page attach limit",
             "failed retirement leaves immutable outcome-unknown inventory without a retryable live-page handle",
+            "authority transition retains page inventory while fencing old navigation and uses the replacement connection identity for future pages",
+            "in-flight old-authority creation rechecks transition state and releases its route without committing a page",
+            "transition revocation failure keeps later commands fenced while exact cleanup still completes",
+            "ordinary navigation requires the page inventory to match the exact command authority",
             "terminal navigation fencing revokes retained grants once and blocks late in-flight creation without inferring destruction",
             "revocation failure remains observable while exact guest, renderer, Session, and route cleanup still run"
           ]
@@ -2904,6 +2915,7 @@
           "file": "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
           "assertions": [
             "reclaim moves one exact retained guest to a new authority without remounting",
+            "DOM-preserving reclaim is rejected when the runtime authority changes",
             "restore creates fresh authority and destroys it when initial navigation cannot be proven",
             "close targets only exact prior authority",
             "renderer failure or abort after main rekey retires both possible exact renderer identities, preserves unrelated pages, destroys the guest, and reports outcome unknown"
@@ -2933,6 +2945,8 @@
           "file": "src/main/browser/paired-runtime-browser-client-host-registry.test.ts",
           "assertions": [
             "one environment pairing revision shares one host composition",
+            "a same-pairing runtime change preserves that composition and delegates exact authority replacement",
+            "a failed authority replacement retains a cleanup tombstone and cannot expose a half-active successor",
             "a changed pairing revision closes before its replacement starts",
             "unsettled host cleanup retains a bounded tombstone, blocks replacement, and releases only when deferred cleanup proves completion",
             "unresolved deferred cleanup remains fail-closed until authenticated reconciliation or process restart",
@@ -2950,6 +2964,8 @@
             "one transient route failure retries without closing healthy routes",
             "a superseded route recovery retains no retry timer",
             "persistent route failure exhausts bounded grace without leaking retry timers",
+            "authority retirement blocks admission and reconnect while retaining suspended SSH routes until exact page release",
+            "final shutdown force-closes retained retired routes",
             "registry shutdown closes every route and rejects later admission"
           ]
         },
@@ -3172,6 +3188,7 @@
           "file": "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
           "assertions": [
             "attach, page-command delivery, and result settlement share one exact authenticated connection and paired identity",
+            "same-runtime authority replacement commits placement only after the exact completed client result",
             "SOCKS HTTP bytes cross the dedicated authenticated E2EE subscription to runtime-native TCP",
             "closing the route destroys the execution-host destination socket"
           ]

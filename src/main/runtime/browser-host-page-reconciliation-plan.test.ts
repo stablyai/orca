@@ -97,9 +97,9 @@ describe('browser host page reconciliation plan', () => {
     })
   })
 
-  it('reclaims only an exact persisted previous authority without navigation', () => {
+  it('reclaims only an exact persisted previous authority on the same runtime', () => {
     const previous = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
@@ -190,7 +190,7 @@ describe('browser host page reconciliation plan', () => {
 
   it('permits generation counters to restart under a new authority epoch', () => {
     const previous = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 9,
@@ -207,6 +207,29 @@ describe('browser host page reconciliation plan', () => {
     expect(planBrowserHostPageReconciliation([intent], [page], inventorySource).reclaim).toEqual([
       { intent, page }
     ])
+  })
+
+  it('closes and restores an SSH page instead of reclaiming it across runtimes', () => {
+    const previous = {
+      authorityRuntimeId: 'runtime-old',
+      authorityEpoch: 'epoch-old',
+      browserHostClientId: 'client-a',
+      browserHostGeneration: 4,
+      pageHostGeneration: 7,
+      pairedDeviceId: 'device-a'
+    }
+    const intent = currentIntent({
+      executionHostKey: JSON.stringify(['ssh', 'target-a', 'provider-a', 3]),
+      reclaimFrom: previous
+    })
+    const page = currentPage({
+      ...inventoryPageAuthority(previous),
+      executionHostKey: intent.executionHostKey
+    })
+
+    expect(
+      planBrowserHostPageReconciliation([intent], [page], inventorySource).closeThenRestore
+    ).toEqual([{ intent, page }])
   })
 
   it('rejects restart reclaim from a different authenticated paired device', () => {

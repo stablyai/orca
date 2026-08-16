@@ -6,8 +6,9 @@ export type PairedRuntimeBrowserClientHostStart = {
   authorityRuntimeId: string
 }
 
-type RegisteredBrowserClientHost = {
+type RegisteredBrowserClientHost<Start> = {
   start(): Promise<BrowserClientHostLeaseAuthority>
+  replaceAuthority(input: Start): Promise<BrowserClientHostLeaseAuthority>
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   close(error?: Error): Promise<boolean>
   whenClosed(): Promise<void>
@@ -16,13 +17,13 @@ type RegisteredBrowserClientHost = {
 type PairedRuntimeBrowserClientHostRegistryOptions<
   Start extends PairedRuntimeBrowserClientHostStart
 > = {
-  createComposition(input: Start): RegisteredBrowserClientHost
+  createComposition(input: Start): RegisteredBrowserClientHost<Start>
 }
 
-type EnvironmentHostRecord = {
+type EnvironmentHostRecord<Start> = {
   pairingRevision: number
   authorityRuntimeId: string
-  composition: RegisteredBrowserClientHost
+  composition: RegisteredBrowserClientHost<Start>
   authority: Promise<BrowserClientHostLeaseAuthority>
   cleanupPending: boolean
 }
@@ -30,7 +31,7 @@ type EnvironmentHostRecord = {
 export class PairedRuntimeBrowserClientHostRegistry<
   Start extends PairedRuntimeBrowserClientHostStart = PairedRuntimeBrowserClientHostStart
 > {
-  private readonly hosts = new Map<string, EnvironmentHostRecord>()
+  private readonly hosts = new Map<string, EnvironmentHostRecord<Start>>()
   private readonly operations = new Map<string, Promise<void>>()
   private closePromise: Promise<void> | null = null
   private closed = false
@@ -54,6 +55,16 @@ export class PairedRuntimeBrowserClientHostRegistry<
         existing.authorityRuntimeId === input.authorityRuntimeId
       ) {
         return existing.authority
+      }
+      if (existing?.pairingRevision === input.pairingRevision) {
+        existing.authorityRuntimeId = input.authorityRuntimeId
+        existing.authority = existing.composition.replaceAuthority(input)
+        try {
+          return await existing.authority
+        } catch (error) {
+          await this.cleanupFailedStart(input.environmentId, existing, error)
+          throw error
+        }
       }
       if (existing) {
         let settled = false
@@ -84,12 +95,7 @@ export class PairedRuntimeBrowserClientHostRegistry<
       try {
         return await authority
       } catch (error) {
-        const cleanupSettled = await composition.close(asError(error)).catch(() => false)
-        if (cleanupSettled && this.hosts.get(input.environmentId) === record) {
-          this.hosts.delete(input.environmentId)
-        } else {
-          this.retainCleanupTombstone(input.environmentId, record)
-        }
+        await this.cleanupFailedStart(input.environmentId, record, error)
         throw error
       }
     })
@@ -169,7 +175,23 @@ export class PairedRuntimeBrowserClientHostRegistry<
     }
   }
 
-  private retainCleanupTombstone(environmentId: string, record: EnvironmentHostRecord): void {
+  private async cleanupFailedStart(
+    environmentId: string,
+    record: EnvironmentHostRecord<Start>,
+    error: unknown
+  ): Promise<void> {
+    const cleanupSettled = await record.composition.close(asError(error)).catch(() => false)
+    if (cleanupSettled && this.hosts.get(environmentId) === record) {
+      this.hosts.delete(environmentId)
+    } else {
+      this.retainCleanupTombstone(environmentId, record)
+    }
+  }
+
+  private retainCleanupTombstone(
+    environmentId: string,
+    record: EnvironmentHostRecord<Start>
+  ): void {
     if (record.cleanupPending) {
       return
     }

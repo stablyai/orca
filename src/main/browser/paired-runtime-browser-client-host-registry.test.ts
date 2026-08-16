@@ -40,6 +40,46 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     expect(order).toEqual(['start-first', 'close-first', 'start-second'])
   })
 
+  it('preserves the composition across a runtime authority transition', async () => {
+    const composition = createComposition()
+    const compositionFactory = vi.fn(() => composition)
+    const registry = new PairedRuntimeBrowserClientHostRegistry({
+      createComposition: compositionFactory
+    })
+    await registry.start(input(11))
+
+    await registry.start(input(11, 'runtime-b'))
+
+    expect(compositionFactory).toHaveBeenCalledOnce()
+    expect(composition.replaceAuthority).toHaveBeenCalledWith(input(11, 'runtime-b'))
+    expect(composition.close).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failed authority transition tombstoned until cleanup settles', async () => {
+    const cleanup = deferred<void>()
+    const failed = createComposition(undefined, undefined, undefined, false, cleanup.promise)
+    failed.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
+    const replacement = createComposition()
+    const compositionFactory = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(replacement)
+    const registry = new PairedRuntimeBrowserClientHostRegistry({
+      createComposition: compositionFactory
+    })
+    await registry.start(input(11))
+
+    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
+      'replacement attach failed'
+    )
+    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
+      'paired_runtime_browser_client_host_cleanup_pending'
+    )
+    expect(replacement.start).not.toHaveBeenCalled()
+
+    cleanup.resolve()
+    await cleanup.promise
+    await expect(registry.start(input(11, 'runtime-b'))).resolves.toEqual(authority)
+    expect(replacement.start).toHaveBeenCalledOnce()
+  })
+
   it('blocks replacement when the old host cannot prove handler settlement', async () => {
     const cleanup = deferred<void>()
     const first = createComposition(undefined, undefined, undefined, false, cleanup.promise)
@@ -135,6 +175,7 @@ function createComposition(
       }
       return authority
     }),
+    replaceAuthority: vi.fn(async () => ({ ...authority, authorityRuntimeId: 'runtime-b' })),
     retirePage: vi.fn(async () => true),
     close: vi.fn(async () => {
       if (order && closeLabel) {
@@ -156,10 +197,10 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
-function input(pairingRevision: number) {
+function input(pairingRevision: number, authorityRuntimeId = 'runtime-a') {
   return {
     environmentId: 'environment-a',
     pairingRevision,
-    authorityRuntimeId: 'runtime-a'
+    authorityRuntimeId
   }
 }

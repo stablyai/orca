@@ -33,31 +33,29 @@ const browserClientHosts =
   new PairedRuntimeBrowserClientHostRegistry<ProductionBrowserClientHostStart>({
     createComposition: (input) =>
       new PairedRuntimeBrowserClientHostComposition({
-        createRoutes: (authority) => createNetworkRoutes(input.pairing, authority),
-        createExecutor: ({ retainNetworkRoute }) =>
+        initialInput: input,
+        createRoutes: (next, authority) => createNetworkRoutes(next.pairing, authority),
+        createExecutor: (next, { retainNetworkRoute }) =>
           new BrowserClientPageCommandExecutor({
-            orcaProfileId: input.orcaProfileId,
-            authorityConnectionIdentity: input.authorityConnectionIdentity,
+            orcaProfileId: next.orcaProfileId,
+            authorityConnectionIdentity: next.authorityConnectionIdentity,
             retainNetworkRoute,
             selectRenderer: selectBrowserClientPageRenderer,
             routeSessions: browserRouteSessionRegistry,
             routeWebContents: browserRouteWebContentsRegistry
           }),
-        createHost: ({
-          handler,
-          getPageInventory,
-          onAuthority,
-          onTransportLost,
-          onReconnected,
-          onError
-        }) =>
+        createHost: (
+          next,
+          { handler, getPageInventory, onAuthority, onTransportLost, onReconnected, onError }
+        ) =>
           new PairedRuntimeBrowserClientHost({
-            pairing: input.pairing,
-            authorityRuntimeId: input.authorityRuntimeId,
+            pairing: next.pairing,
+            authorityRuntimeId: next.authorityRuntimeId,
             browserHostClientId,
             hostCapabilities: ['webview'],
             handler,
             getPageInventory,
+            pageReconciliationProtocolVersion: 1,
             onAuthority,
             onTransportLost,
             onReconnected,

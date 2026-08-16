@@ -37,6 +37,7 @@ export class BrowserClientNetworkRouteRegistry {
   private recoveryGeneration = 0
   private recovery: { generation: number; abort: AbortController; promise: Promise<void> } | null =
     null
+  private retirement: ReturnType<typeof createRouteRetirement> | null = null
   private readonly reconnectGraceMs: number
   private readonly reconnectRetryDelayMs: number
   private suspended = false
@@ -105,6 +106,23 @@ export class BrowserClientNetworkRouteRegistry {
     return this.closePromise
   }
 
+  retire(error = new Error('Browser client network route registry is retired')): Promise<void> {
+    if (this.closed) {
+      return this.closePromise ?? Promise.resolve()
+    }
+    const retirement = (this.retirement ??= createRouteRetirement())
+    if (!this.suspended) {
+      try {
+        this.suspend(error)
+      } catch (suspensionError) {
+        retirement.reject(suspensionError)
+        throw suspensionError
+      }
+    }
+    this.settleRetirement()
+    return retirement.promise
+  }
+
   suspend(error = new Error('Browser client network routes suspended')): void {
     if (this.closed) {
       return
@@ -129,6 +147,9 @@ export class BrowserClientNetworkRouteRegistry {
   reconnect(): Promise<void> {
     if (this.closed) {
       return Promise.reject(new Error('browser_client_network_route_registry_closed'))
+    }
+    if (this.retirement) {
+      return Promise.reject(new Error('browser_client_network_route_registry_retired'))
     }
     if (!this.suspended) {
       return Promise.resolve()
@@ -173,6 +194,9 @@ export class BrowserClientNetworkRouteRegistry {
     if (this.closed) {
       throw new Error('browser_client_network_route_registry_closed')
     }
+    if (this.retirement) {
+      throw new Error('browser_client_network_route_registry_retired')
+    }
     if (this.suspended) {
       throw new Error('browser_client_network_route_registry_suspended')
     }
@@ -189,8 +213,11 @@ export class BrowserClientNetworkRouteRegistry {
     if (retained.references !== 0 || this.routes.get(retained.key) !== retained) {
       return
     }
-    this.routes.delete(retained.key)
     await retained.route.close()
+    if (this.routes.get(retained.key) === retained) {
+      this.routes.delete(retained.key)
+    }
+    this.settleRetirement()
   }
 
   private async releaseAfterFailedRetain(retained: RetainedRoute, error: unknown): Promise<void> {
@@ -212,9 +239,34 @@ export class BrowserClientNetworkRouteRegistry {
       result.status === 'rejected' ? [result.reason] : []
     )
     if (failures.length > 0) {
+      this.retirement?.reject(
+        new AggregateError(failures, 'Browser client network route cleanup failed')
+      )
       throw new AggregateError(failures, 'Browser client network route cleanup failed')
     }
+    this.settleRetirement()
   }
+
+  private settleRetirement(): void {
+    if (this.retirement && this.routes.size === 0) {
+      this.retirement.resolve()
+    }
+  }
+}
+
+function createRouteRetirement(): {
+  promise: Promise<void>
+  resolve: () => void
+  reject: (error: unknown) => void
+} {
+  let resolve = (): void => {}
+  let reject = (_error: unknown): void => {}
+  const promise = new Promise<void>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  void promise.catch(() => undefined)
+  return { promise, resolve, reject }
 }
 
 function assertRouteAddress(address: { host: string; port: number }): void {

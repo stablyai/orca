@@ -24,6 +24,7 @@ import {
   isBrowserClientPageCleanupFailure
 } from './browser-client-page-command-failure'
 import { BrowserClientPageNavigationFence } from './browser-client-page-navigation-fence'
+import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
 import { executeBrowserClientPageReconciliationCommand } from './browser-client-page-reconciliation'
 import type {
   BrowserClientPageLifecycleRegistry,
@@ -52,9 +53,12 @@ export class BrowserClientPageCommandExecutor {
   private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
   private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
+  private authorityConnectionIdentity: string
+  private authorityTransitioning = false
   private closed = false
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
+    this.authorityConnectionIdentity = dependencies.authorityConnectionIdentity
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
     if (
       !Number.isInteger(this.maxPages) ||
@@ -69,7 +73,7 @@ export class BrowserClientPageCommandExecutor {
     event: BrowserClientHostCommandEvent,
     signal: AbortSignal
   ): Promise<BrowserClientHostCommandResult> {
-    if (this.closed || this.navigationFence.isFenced) {
+    if (this.closed || this.authorityTransitioning || this.navigationFence.isFenced) {
       return { status: 'failed', errorCode: 'browser_client_page_executor_closed' }
     }
     try {
@@ -94,7 +98,8 @@ export class BrowserClientPageCommandExecutor {
             pages: this.pages,
             failedPages: this.failedPages,
             routeWebContents: this.dependencies.routeWebContents,
-            assertAvailable: () => this.navigationFence.assertAvailable(this.closed),
+            assertAvailable: () =>
+              this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
             createPage: (command, commandSignal) => this.createPage(command, commandSignal),
             navigate: (command, commandSignal) => this.navigate(command, commandSignal),
             retirePage: (browserPageId, generation) => this.retirePage(browserPageId, generation),
@@ -136,6 +141,24 @@ export class BrowserClientPageCommandExecutor {
     this.navigationFence.fence(this.pages.values(), (claim) =>
       this.dependencies.routeWebContents.revokeNavigation(claim)
     )
+  }
+
+  beginAuthorityTransition(): void {
+    if (this.closed || this.authorityTransitioning) {
+      throw new Error('browser_client_page_authority_transition_unavailable')
+    }
+    this.authorityTransitioning = true
+    this.navigationFence.revoke(this.pages.values(), (claim) =>
+      this.dependencies.routeWebContents.revokeNavigation(claim)
+    )
+  }
+
+  completeAuthorityTransition(authorityConnectionIdentity: string): void {
+    if (this.closed || !this.authorityTransitioning || !authorityConnectionIdentity) {
+      throw new Error('browser_client_page_authority_transition_unavailable')
+    }
+    this.authorityConnectionIdentity = authorityConnectionIdentity
+    this.authorityTransitioning = false
   }
 
   async retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
@@ -198,10 +221,13 @@ export class BrowserClientPageCommandExecutor {
     signal: AbortSignal
   ): Promise<void> {
     await createReservedBrowserClientPage(
-      this.dependencies,
+      {
+        ...this.dependencies,
+        authorityConnectionIdentity: this.authorityConnectionIdentity
+      },
       event,
       signal,
-      () => this.navigationFence.assertAvailable(this.closed),
+      () => this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
       (page) => this.pages.set(event.browserPageId, page)
     )
   }
@@ -215,7 +241,8 @@ export class BrowserClientPageCommandExecutor {
       !page ||
       page.generation !== event.pageHostGeneration ||
       page.retiring ||
-      page.reconciling
+      page.reconciling ||
+      !sameBrowserClientPageAuthority(page.inventory, event)
     ) {
       throw new BrowserClientPageCommandError('browser_client_page_generation_stale')
     }

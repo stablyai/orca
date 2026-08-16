@@ -378,7 +378,7 @@ function leaseIdentity(lease: {
 
 function oldPage(browserPageId: string): BrowserClientHostedPageInventory {
   return {
-    authorityRuntimeId: 'runtime-old',
+    authorityRuntimeId: 'runtime-new',
     authorityEpoch: 'epoch-old',
     browserHostClientId: 'host-a',
     browserHostGeneration: 4,

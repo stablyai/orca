@@ -159,6 +159,25 @@ describe('browser client page reconciliation adapters', () => {
     ])
   })
 
+  it('rejects DOM-preserving reclaim across runtime authorities', async () => {
+    const { executor, renderer, routeWebContents } = createHarness()
+    await executor.handle(command('createPage'), new AbortController().signal)
+
+    await expect(
+      executor.handle(
+        command('reclaimPage', { authorityRuntimeId: 'runtime-b' }),
+        new AbortController().signal
+      )
+    ).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_reconciliation_authority_stale'
+    })
+
+    expect(renderer.rekeyPage).not.toHaveBeenCalled()
+    expect(routeWebContents.rekeyGuestLifecycle).not.toHaveBeenCalled()
+    expect(executor.hasPage('page-a', 7)).toBe(true)
+  })
+
   it('closes only the exact stale authority and leaves mismatches untouched', async () => {
     const { executor, renderer } = createHarness()
     await executor.handle(command('createPage'), new AbortController().signal)

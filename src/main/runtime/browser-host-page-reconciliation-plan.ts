@@ -106,6 +106,7 @@ function canReclaimPage(
     intent.reclaimFrom &&
     intent.reclaimFrom.pairedDeviceId === inventoryPairedDeviceId &&
     intent.authorityEpoch !== intent.reclaimFrom.authorityEpoch &&
+    intent.authorityRuntimeId === intent.reclaimFrom.authorityRuntimeId &&
     sameAuthority(intent.reclaimFrom, page) &&
     intent.browserHostClientId === intent.reclaimFrom.browserHostClientId &&
     intent.browserProfileId === page.browserProfileId &&

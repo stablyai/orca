@@ -5,13 +5,13 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
-import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
+import {
+  type ComposedBrowserClientNetworkRoutes,
+  PairedRuntimeBrowserClientHostRouteSets
+} from './paired-runtime-browser-client-host-route-sets'
 
-type ComposedNetworkRoutes = {
-  retain(key: string, signal: AbortSignal): Promise<BrowserClientPageNetworkRoute>
-  suspend(error?: Error): void
-  reconnect(): Promise<void>
-  close(error?: Error): Promise<void>
+type BrowserClientHostAuthorityTransitionInput = {
+  authorityConnectionIdentity: string
 }
 
 type ComposedPageExecutor = {
@@ -22,6 +22,8 @@ type ComposedPageExecutor = {
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
+  beginAuthorityTransition(): void
+  completeAuthorityTransition(authorityConnectionIdentity: string): void
   fenceNavigation(): void
   close(): Promise<void>
 }
@@ -34,53 +36,62 @@ type ComposedClientHost = {
   close(error?: Error): Promise<boolean>
 }
 
-type PairedRuntimeBrowserClientHostCompositionOptions = {
-  createRoutes(authority: BrowserClientHostLeaseAuthority): ComposedNetworkRoutes
-  createExecutor(options: {
-    retainNetworkRoute(
-      executionHostKey: string,
-      signal: AbortSignal
-    ): Promise<BrowserClientPageNetworkRoute>
-  }): ComposedPageExecutor
-  createHost(options: {
-    handler(
-      event: BrowserClientHostCommandEvent,
-      signal: AbortSignal
-    ): Promise<BrowserClientHostCommandResult>
-    onAuthority(authority: BrowserClientHostLeaseAuthority): void
-    getPageInventory(): readonly BrowserClientHostedPageInventory[]
-    onError(error: Error): void
-    onTransportLost(error: Error): void
-    onReconnected(authority: BrowserClientHostLeaseAuthority): void
-  }): ComposedClientHost
+type ClientHostCallbacks = {
+  handler(
+    event: BrowserClientHostCommandEvent,
+    signal: AbortSignal
+  ): Promise<BrowserClientHostCommandResult>
+  onAuthority(authority: BrowserClientHostLeaseAuthority): void
+  getPageInventory(): readonly BrowserClientHostedPageInventory[]
+  onError(error: Error): void
+  onTransportLost(error: Error): void
+  onReconnected(authority: BrowserClientHostLeaseAuthority): void
+}
+
+type PairedRuntimeBrowserClientHostCompositionOptions<
+  Start extends BrowserClientHostAuthorityTransitionInput
+> = {
+  initialInput: Start
+  createRoutes(
+    input: Start,
+    authority: BrowserClientHostLeaseAuthority
+  ): ComposedBrowserClientNetworkRoutes
+  createExecutor(
+    input: Start,
+    options: {
+      retainNetworkRoute(
+        executionHostKey: string,
+        signal: AbortSignal
+      ): Promise<BrowserClientPageNetworkRoute>
+    }
+  ): ComposedPageExecutor
+  createHost(input: Start, callbacks: ClientHostCallbacks): ComposedClientHost
   onError?: (error: Error) => void
 }
 
-export class PairedRuntimeBrowserClientHostComposition {
+export class PairedRuntimeBrowserClientHostComposition<
+  Start extends BrowserClientHostAuthorityTransitionInput
+> {
   private readonly executor: ComposedPageExecutor
-  private readonly host: ComposedClientHost
-  private routes: ComposedNetworkRoutes | null = null
+  private host: ComposedClientHost
+  private readonly routeSets: PairedRuntimeBrowserClientHostRouteSets<Start>
   private startPromise: Promise<BrowserClientHostLeaseAuthority> | null = null
   private closePromise: Promise<boolean> | null = null
   private deferredExecutorClose: Promise<void> | null = null
-  private routeRecovery: ReturnType<typeof createRouteRecoveryGate> | null = null
-  private routeAuthority: BrowserClientHostLeaseAuthority | null = null
-  private routeRecoveryGeneration = 0
+  private hostGeneration = 0
   private closed = false
   private errorReported = false
 
-  constructor(private readonly options: PairedRuntimeBrowserClientHostCompositionOptions) {
-    this.executor = options.createExecutor({
-      retainNetworkRoute: (key, signal) => this.requireRoutes().retain(key, signal)
+  constructor(private readonly options: PairedRuntimeBrowserClientHostCompositionOptions<Start>) {
+    this.routeSets = new PairedRuntimeBrowserClientHostRouteSets({
+      createRoutes: options.createRoutes,
+      onRecoveryError: (error) => this.handleHostError(error),
+      onCleanupError: (error) => this.handleHostError(error)
     })
-    this.host = options.createHost({
-      handler: (event, signal) => this.handleCommand(event, signal),
-      getPageInventory: () => this.executor.snapshotPageInventory(),
-      onAuthority: (authority) => this.activateRoutes(authority),
-      onTransportLost: (error) => this.suspendRoutes(error),
-      onReconnected: (authority) => this.reconnectRoutes(authority),
-      onError: (error) => this.handleHostError(error)
+    this.executor = options.createExecutor(options.initialInput, {
+      retainNetworkRoute: (key, signal) => this.routeSets.retain(key, signal)
     })
+    this.host = this.createHost(options.initialInput, false)
   }
 
   start(): Promise<BrowserClientHostLeaseAuthority> {
@@ -88,6 +99,22 @@ export class PairedRuntimeBrowserClientHostComposition {
       return Promise.reject(new Error('paired_runtime_browser_client_host_composition_closed'))
     }
     this.startPromise ??= this.host.start()
+    return this.startPromise
+  }
+
+  replaceAuthority(input: Start): Promise<BrowserClientHostLeaseAuthority> {
+    if (this.closed) {
+      return Promise.reject(new Error('paired_runtime_browser_client_host_composition_closed'))
+    }
+    const error = new Error('Browser client host runtime authority was replaced')
+    this.hostGeneration += 1
+    try {
+      this.routeSets.retireCurrent(error)
+      this.executor.beginAuthorityTransition()
+    } catch (transitionError) {
+      return Promise.reject(transitionError)
+    }
+    this.startPromise = this.finishAuthorityReplacement(input, error)
     return this.startPromise
   }
 
@@ -113,9 +140,9 @@ export class PairedRuntimeBrowserClientHostComposition {
   close(error = new Error('Browser client host composition is closed')): Promise<boolean> {
     if (!this.closed) {
       this.closed = true
+      this.hostGeneration += 1
       this.fenceTerminalAuthority(error)
     }
-    this.rejectRouteRecovery(error)
     this.closePromise ??= this.closeComposition(error)
     return this.closePromise
   }
@@ -128,100 +155,88 @@ export class PairedRuntimeBrowserClientHostComposition {
     await this.deferredExecutorClose
   }
 
-  private activateRoutes(authority: BrowserClientHostLeaseAuthority): void {
-    if (this.closed || this.routes) {
-      throw new Error('browser_client_network_route_authority_unavailable')
+  private createHost(input: Start, requiresReconciliation: boolean): ComposedClientHost {
+    const generation = ++this.hostGeneration
+    let publishedInventory: readonly BrowserClientHostedPageInventory[] | null = null
+    return this.options.createHost(input, {
+      handler: (event, signal) => this.handleCommand(generation, event, signal),
+      getPageInventory: () => {
+        if (this.hostGeneration !== generation) {
+          return []
+        }
+        publishedInventory = this.executor.snapshotPageInventory()
+        return publishedInventory
+      },
+      onAuthority: (authority) => {
+        if (this.hostGeneration === generation) {
+          if (
+            requiresReconciliation &&
+            publishedInventory?.length &&
+            authority.pageReconciliationProtocolVersion !== 1
+          ) {
+            throw new Error('browser_client_page_reconciliation_unsupported')
+          }
+          this.routeSets.activate(input, authority)
+        }
+      },
+      onTransportLost: (error) => {
+        if (this.hostGeneration === generation) {
+          this.routeSets.suspend(error)
+        }
+      },
+      onReconnected: (authority) => {
+        if (this.hostGeneration === generation) {
+          this.routeSets.reconnect(authority)
+        }
+      },
+      onError: (error) => {
+        if (this.hostGeneration === generation) {
+          this.handleHostError(error)
+        }
+      }
+    })
+  }
+
+  private async finishAuthorityReplacement(
+    input: Start,
+    error: Error
+  ): Promise<BrowserClientHostLeaseAuthority> {
+    const previousHost = this.host
+    const settled = await previousHost.close(error)
+    if (!settled) {
+      await previousHost.whenHandlersSettled()
     }
-    this.routeAuthority = authority
-    this.routes = this.options.createRoutes(authority)
+    if (this.closed) {
+      throw new Error('paired_runtime_browser_client_host_composition_closed')
+    }
+    this.executor.completeAuthorityTransition(input.authorityConnectionIdentity)
+    const replacementHost = this.createHost(input, true)
+    this.host = replacementHost
+    return replacementHost.start()
   }
 
   private async handleCommand(
+    generation: number,
     event: BrowserClientHostCommandEvent,
     signal: AbortSignal
   ): Promise<BrowserClientHostCommandResult> {
-    const recovery = this.routeRecovery
-    if (recovery) {
-      await waitForRouteRecovery(recovery.promise, signal)
+    if (this.hostGeneration !== generation) {
+      throw new Error('browser_client_host_command_aborted')
     }
-    if (this.closed || signal.aborted) {
+    await this.routeSets.waitForRecovery(signal)
+    if (this.closed || signal.aborted || this.hostGeneration !== generation) {
       throw new Error('browser_client_host_command_aborted')
     }
     return this.executor.handle(event, signal)
   }
 
-  private suspendRoutes(error: Error): void {
-    if (this.closed) {
-      return
-    }
-    const routes = this.requireRoutes()
-    if (!this.routeRecovery) {
-      this.routeRecovery = createRouteRecoveryGate()
-      void this.routeRecovery.promise.catch(() => undefined)
-    }
-    this.routeRecoveryGeneration += 1
-    routes.suspend(error)
-  }
-
-  private reconnectRoutes(authority: BrowserClientHostLeaseAuthority): void {
-    if (
-      this.closed ||
-      !this.routeAuthority ||
-      !sameBrowserClientHostLeaseAuthority(this.routeAuthority, authority)
-    ) {
-      throw new Error('browser_client_network_route_authority_changed')
-    }
-    const recovery = this.routeRecovery
-    if (!recovery) {
-      throw new Error('browser_client_network_route_recovery_unexpected')
-    }
-    const generation = this.routeRecoveryGeneration
-    void this.requireRoutes()
-      .reconnect()
-      .then(() => {
-        if (this.routeRecovery === recovery && this.routeRecoveryGeneration === generation) {
-          this.routeRecovery = null
-          recovery.resolve()
-        }
-      })
-      .catch((error) => {
-        const routeError = asError(error)
-        if (this.routeRecovery !== recovery || this.routeRecoveryGeneration !== generation) {
-          return
-        }
-        this.routeRecovery = null
-        recovery.reject(routeError)
-        this.handleHostError(routeError)
-      })
-  }
-
-  private rejectRouteRecovery(error: Error): void {
-    const recovery = this.routeRecovery
-    if (!recovery) {
-      return
-    }
-    this.routeRecovery = null
-    recovery.reject(error)
-  }
-
   private fenceTerminalAuthority(error: Error): void {
-    try {
-      this.routes?.suspend(error)
-    } catch (routeError) {
-      this.reportCleanupError(asError(routeError))
-    }
+    this.routeSets.fence(error)
     try {
       this.executor.fenceNavigation()
     } catch (navigationError) {
       this.reportCleanupError(asError(navigationError))
     }
-  }
-
-  private requireRoutes(): ComposedNetworkRoutes {
-    if (!this.routes || this.closed) {
-      throw new Error('browser_client_network_route_authority_unavailable')
-    }
-    return this.routes
   }
 
   private async closeComposition(error: Error): Promise<boolean> {
@@ -245,7 +260,7 @@ export class PairedRuntimeBrowserClientHostComposition {
       )
     }
     try {
-      await this.routes?.close(error)
+      await this.routeSets.close(error)
     } catch (routeError) {
       failures.push(routeError)
     }
@@ -267,52 +282,14 @@ export class PairedRuntimeBrowserClientHostComposition {
     this.errorReported = true
     try {
       this.options.onError?.(error)
-    } catch {
-      // Reporting cannot retain a failed browser host composition.
-    }
+    } catch {}
   }
 
   private reportCleanupError(error: Error): void {
     try {
       this.options.onError?.(error)
-    } catch {
-      // Reporting cannot release ambiguous cleanup state.
-    }
+    } catch {}
   }
-}
-
-function createRouteRecoveryGate(): {
-  promise: Promise<void>
-  resolve: () => void
-  reject: (error: Error) => void
-} {
-  let resolve = (): void => {}
-  let reject = (_error: Error): void => {}
-  const promise = new Promise<void>((innerResolve, innerReject) => {
-    resolve = innerResolve
-    reject = innerReject
-  })
-  return { promise, resolve, reject }
-}
-
-function waitForRouteRecovery(recovery: Promise<void>, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    return Promise.reject(new Error('browser_client_host_command_aborted'))
-  }
-  return new Promise((resolve, reject) => {
-    const abort = (): void => reject(new Error('browser_client_host_command_aborted'))
-    signal.addEventListener('abort', abort, { once: true })
-    void recovery.then(
-      () => {
-        signal.removeEventListener('abort', abort)
-        resolve()
-      },
-      (error) => {
-        signal.removeEventListener('abort', abort)
-        reject(error)
-      }
-    )
-  })
 }
 
 function asError(error: unknown): Error {

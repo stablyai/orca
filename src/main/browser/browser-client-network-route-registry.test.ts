@@ -45,6 +45,37 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     expect(route.close).toHaveBeenCalledOnce()
   })
 
+  it('keeps an ambiguously closed route fenced until final registry cleanup', async () => {
+    const cleanupError = new Error('route cleanup outcome unknown')
+    const route = createRoute()
+    let closed = false
+    route.close.mockImplementation(async () => {
+      closed = true
+      throw cleanupError
+    })
+    route.reconnect.mockImplementation(async () => {
+      if (closed) {
+        throw new Error('Browser network route is closed')
+      }
+      return { host: '127.0.0.1', port: 43123 }
+    })
+    const routeFactory = vi.fn(() => route)
+    const registry = new BrowserClientNetworkRouteRegistry({ authority, createRoute: routeFactory })
+    const key = browserNetworkExecutionHostKey({
+      kind: 'native',
+      runtimeId: 'runtime-a',
+      revision: 7
+    })
+    const retained = await registry.retain(key, signal())
+
+    await expect(retained.release()).rejects.toThrow(cleanupError)
+    await expect(registry.retain(key, signal())).rejects.toThrow('Browser network route is closed')
+    expect(routeFactory).toHaveBeenCalledOnce()
+
+    await expect(registry.close()).rejects.toThrow('Browser client network route cleanup failed')
+    expect(route.close).toHaveBeenCalledTimes(3)
+  })
+
   it('rejects a native route for a different authority runtime', async () => {
     const routeFactory = vi.fn(() => createRoute())
     const registry = new BrowserClientNetworkRouteRegistry({
@@ -118,6 +149,53 @@ describe('BrowserClientNetworkRouteRegistry', () => {
         signal()
       )
     ).rejects.toThrow('browser_client_network_route_registry_closed')
+  })
+
+  it('retires old authority routes without destroying them before exact page cleanup', async () => {
+    const route = createRoute()
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      createRoute: () => route
+    })
+    const key = browserNetworkExecutionHostKey({
+      kind: 'ssh',
+      targetId: 'ssh-a',
+      providerEpoch: 'provider-a',
+      connectionGeneration: 1
+    })
+    const retained = await registry.retain(key, signal())
+
+    const retirement = registry.retire(new Error('authority replaced'))
+
+    expect(route.suspend).toHaveBeenCalledOnce()
+    expect(route.close).not.toHaveBeenCalled()
+    await expect(registry.retain(key, signal())).rejects.toThrow(
+      'browser_client_network_route_registry_retired'
+    )
+    await expect(registry.reconnect()).rejects.toThrow(
+      'browser_client_network_route_registry_retired'
+    )
+
+    await retained.release()
+    await expect(retirement).resolves.toBeUndefined()
+    expect(route.close).toHaveBeenCalledOnce()
+  })
+
+  it('force-closes retained retired routes during final shutdown', async () => {
+    const route = createRoute()
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      createRoute: () => route
+    })
+    await registry.retain(
+      browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
+      signal()
+    )
+
+    void registry.retire()
+    await registry.close()
+
+    expect(route.close).toHaveBeenCalledOnce()
   })
 
   it('suspends every retained transport and restores the same listener address', async () => {

@@ -65,6 +65,35 @@ describe('PairedRuntimeBrowserClientHost', () => {
     await host.close()
   })
 
+  it('advertises reconciliation only when the composed host enables it', async () => {
+    const { callbacks } = subscribeHost()
+    const host = createHost(
+      () => ({ status: 'completed' }),
+      undefined,
+      undefined,
+      () => [],
+      1
+    )
+    const starting = host.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+
+    expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).toMatchObject({
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageReconciliationProtocolVersion: 1
+    })
+    callbacks.current!.onResponse({
+      ...readyResponse(),
+      result: {
+        ...readyResponse().result,
+        pageInventoryProtocolVersion: 1,
+        pageReconciliationProtocolVersion: 1
+      }
+    })
+    await expect(starting).resolves.toMatchObject({ pageReconciliationProtocolVersion: 1 })
+    await host.close()
+  })
+
   it('constructs command authority before the first command can arrive', async () => {
     const { callbacks, sendRequest } = subscribeHost()
     const handler = vi.fn((_command: BrowserClientHostCommandEvent, _signal: AbortSignal) => ({
@@ -301,7 +330,8 @@ function createHost(
   ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>,
   onError?: (error: Error) => void,
   dispatcher?: { joinTimeoutMs?: number },
-  getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
+  getPageInventory?: () => readonly BrowserClientHostedPageInventory[],
+  pageReconciliationProtocolVersion?: 1
 ): PairedRuntimeBrowserClientHost {
   return new PairedRuntimeBrowserClientHost({
     pairing,
@@ -310,6 +340,7 @@ function createHost(
     hostCapabilities: ['webview'],
     handler,
     getPageInventory,
+    ...(pageReconciliationProtocolVersion ? { pageReconciliationProtocolVersion } : {}),
     onError,
     dispatcher
   })

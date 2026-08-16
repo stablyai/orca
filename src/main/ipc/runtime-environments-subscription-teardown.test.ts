@@ -62,8 +62,7 @@ vi.mock('./runtime-environment-request-connections', () => ({
   closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
 }))
 vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
-  closePairedRuntimeBrowserClientHostEnvironment:
-    closePairedRuntimeBrowserClientHostEnvironmentMock
+  closePairedRuntimeBrowserClientHostEnvironment: closePairedRuntimeBrowserClientHostEnvironmentMock
 }))
 
 import {

@@ -1,6 +1,6 @@
 # STA-4150 Client-Hosted Browser Progress
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 This is the durable ownership ledger for
 [STA-4150](https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews).
@@ -36,9 +36,21 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-reconciliation-orchestration`, draft PR
-  [#14769](https://github.com/stablyai/orca/pull/14769), stacked on reconciliation-adapter PR
-  [#14763](https://github.com/stablyai/orca/pull/14763).
+- Latest published stack tip: `sta-4150-browser-client-executor-authority-transition`, draft PR
+  [#14876](https://github.com/stablyai/orca/pull/14876), stacked exactly on corrected
+  reconciliation-orchestration PR [#14769](https://github.com/stablyai/orca/pull/14769). It
+  preserves the concrete client executor and retained Electron inventory across a same-pairing
+  runtime change. The 40-patch series is based directly on `origin/main@1b6d2403cb`; #14876 CI is
+  running.
+- A fresh review reproduced two blockers before publication: an unnegotiated replacement could
+  retain old-runtime inventory indefinitely, and an in-flight create could commit after authority
+  transition began. The candidate now requires exact reconciliation echo before activating
+  retained inventory, allows legacy replacement only for empty inventory, and rechecks transition
+  state before every create/reconciliation commit.
+- Final review reproduced a reconnect-only stale-inventory defect: the client sampled inventory
+  once per host generation, so later reconnect attaches could republish the initial empty or stale
+  snapshot. Every attach now samples fresh executor inventory, with a deterministic regression
+  test and an updated reliability-gate assertion.
 - PR #14769 CI exposed one stale combined-stack expectation in both Node shards: replacing a host
   lease now makes the exact old page terminal retirement-pending before the new lease is installed,
   rather than reporting only a stale lease. The deterministic baseline was 1 failed / 4 passed;
@@ -47,10 +59,28 @@ Old clients and callers that omit placement must retain current server-hosted be
   sampled as an empty string before the attached guest exposed `about:blank`. The fixture now waits
   on that observable readiness condition instead of weakening the blank-page assertion; 3/3 fresh
   isolated Electron runs pass.
-- The 37 published patches plus the local orchestration patch are cascade-rebased onto
-  `origin/main@92fb276040`. Range-diff marked all 38 patches identical. Safety pointer
-  `sta-4150-safety-pre-92fb-orchestration-20260815` preserves the old series; no rewritten public
-  branch has been pushed at this checkpoint.
+- The latest rebase onto `origin/main@1b6d2403cb` was conflict-free, advanced all 38 local stage
+  branches, and `git range-diff` marked all 40 patches identical. Safety tags
+  `sta-4150-safety-pre-paired-fixture-amend-20260816`,
+  `sta-4150-safety-pre-fd1-authority-rebase-20260816`, and
+  `sta-4150-safety-pre-1b6-authority-rebase-20260816` preserve the prior tips. All 37 existing
+  draft branches were updated with exact force-with-lease checks; public #14769 is now
+  `a2d6eece6d`, and the new authority branch is published as draft #14876.
+- Latest-base validation passes the paired authority/tunnel integration (3/3), the broad authority
+  and reconnect package (23 files / 279 tests), the Session/WebContents quarantine gate (12 files /
+  142 tests), the old/new terminal-wire matrix (5/5), full Node/CLI/web typecheck, full lint and
+  zero-warning audits, the 88-gate reliability manifest, changed-code quality, desktop build, and a
+  real Docker/OpenSSH SOCKS oracle (2/2). The two wire/security P2 leads are resolved for this
+  stage: arbitrary authenticated tunnel destinations are required browser behavior, while exact
+  SSH execution-host grants belong to activation and are already rejected before registration
+  when absent. The focused routing package passes 3 files / 23 tests, shared compatibility passes
+  3 files / 46 tests, and the mobile legacy fixture passes 1/1 in its own workspace. The bounded
+  lifecycle/resource review found no P0/P1/P2 defect. Rejected cleanup remains an intentional
+  unknown-outcome tombstone: a 3-file / 36-test oracle proves an ambiguously closed route cannot be
+  recreated or reused and is still retried during final registry cleanup. Page, operation, route,
+  retired-route-set, recovery-waiter, and reconnect resources are bounded; both OpenCode tabs were
+  closed. The post-rebase affected authority suite passes 11 files / 173 tests, full Node/CLI/web
+  typecheck passes, and full lint plus native/type-aware audits and all 88 reliability gates pass.
 - Published lease-fence placement-retirement stage: draft PR
   [#14753](https://github.com/stablyai/orca/pull/14753). It makes exact terminal host-generation
   placement retirement non-cancellable without inferring destruction or releasing capacity.
@@ -66,23 +96,106 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Published admission stage: `sta-4150-browser-host-admission-fairness`. It reserves browser-host
   capacity per authenticated paired device, keeps ordinary waits available, and retries explicit
   admission pressure inside existing attach/reconnect deadlines.
-- Current main has one unrelated type-aware lint warning in
-  `config/scripts/pr-test-loc-summary.test.mjs:88`, introduced by #14738 and byte-identical on this
-  branch. STA-4150 changed-code quality is clean; do not mix that CI-script fix into this stage.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
 - Published bridge branch: `sta-4150-browser-client-page-mount-bridge` locally rebased to
   `830cb95c25`, draft PR [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566;
   its prior head passed every substantive job while GitHub's aggregate `verify` remained queued.
 - Published renderer-registry branch: `sta-4150-browser-client-page-renderer-registry`, draft PR
   [#14596](https://github.com/stablyai/orca/pull/14596), stacked on #14578.
-- Feature state: **production-inert and not user-visible**. No capability advertisement, default
-  client placement, live page registration, or server-placement migration is enabled.
+- Current stack-tip state is **not yet activated or user-visible**, because capability
+  advertisement, default client placement, live host registration, and normal caller routing are
+  not connected yet. This is only the current development-stack boundary. The next feature layer
+  must activate and prove the end-to-end desktop path; no further standalone compatibility
+  substrate should be added first.
 - Design evidence: `remote-browser-client-hosting.md`, SHA-256
   `d5f6a16df09286388e4d335a8bd896ce0260e9f626ddcc79d8043eff7159a4e0`.
 - OSS reference: T3Code commit `184d8ef33b8f42869fb84f66a33984185b81dc47` keeps shared
   logical preview state, registers the exact Electron `WebContents`, and queues navigation until
   registration. Orca additionally needs authenticated execution-host routing, remote DNS,
   scoped partitions, mixed-version fencing, and fail-closed cleanup.
+
+## Revised delivery plan
+
+The implementation target is one activated desktop vertical slice. Compatibility belongs at the
+page-placement boundary, not throughout the new engine:
+
+- Eligible capable Electron desktops default new pages to client placement.
+- Old, web/mobile, headless, browserless, and explicit-server callers keep the current server path.
+- Placement is immutable for a page generation. There is no live engine migration, speculative
+  client-then-server fallback, or duplicate page execution.
+- Additive optional fields and negotiated capabilities protect old peers. They must not turn the
+  client-hosted engine into a second implementation of the server engine.
+
+### Phase A: finish and prove the feature
+
+1. Completed: corrected #14769 and authority-transition draft #14876 are published on the latest
+   base with the bounded lifecycle/resource review and sticky-cleanup oracle clean.
+2. Build one activation branch above authority transition. This branch must connect capability
+   advertisement, eligible default placement, live host registration, all normal browser/agent/CLI
+   call routing, renderer mount, local input and browser chrome, fail-closed execution-host
+   networking, failure UX/telemetry, and a kill switch for newly created pages.
+3. Prove the activated tip before reshaping history: deterministic placement/authority failures,
+   real paired Electron, no-screencast client pages, remote DNS/localhost/subresources, tunnel-loss
+   containment, reconnect/restart, old/new peers, server fallback for ineligible callers,
+   headed/headless/browserless hosts, SSH/WSL/native, folder/worktree, and the platform matrix.
+4. Add no new substrate PR between authority transition and activation. Add a secondary-channel PR
+   only if ticket acceptance requires mobile/web mirroring or a separately bounded large-result
+   transport.
+
+### Phase B: replace development history with the landing stack
+
+The 37 draft PRs remain development and evidence history while Phase A is changing. Do not relink,
+rebase, or individually production-harden that chain. After the activated tip is green, preserve it
+with a safety ref and replay the same implementation from latest `origin/main` into five branches:
+
+| Order | Landing PR                           | Cohesive scope                                                                   |
+| ----- | ------------------------------------ | -------------------------------------------------------------------------------- |
+| 1     | Contracts and placement              | Optional wire contracts, capabilities, placement model, compatibility policy     |
+| 2     | Paired tunnel and execution routing  | Bounded tunnel, remote DNS, SSH/WSL/native routes, admission and accounting      |
+| 3     | Electron isolation and lifecycle     | Partitions, quarantine, exact WebContents ownership, mount, navigation, cleanup  |
+| 4     | Command authority and reconciliation | Leases, dispatch/results, replacement, reconnect, inventory and reconciliation   |
+| 5     | Activated desktop product path       | Advertisement, default selection, callers, UI/input, kill switch, telemetry, E2E |
+
+Each PR is a review boundary and each cumulative tip must compile and pass its owned deterministic
+tests. The lower PRs do not need to be independently deployable: do not add two-way shims, dormant
+fallback machinery, or temporary product flags just so a partial stack could ship alone. Production
+readiness is decided at PR 5, whose final tree must exactly match the already-proven Phase A tip.
+
+Construct and validate the replacement branches locally before registering them with `gh stack`.
+Then adopt them in dependency order, submit draft PRs non-interactively, verify the generated bases,
+and record the old-to-new mapping before closing any superseded draft. If a lower-layer defect is
+found, fix its owning branch and cascade-rebase only the branches above it. Do not merge or mark any
+PR ready during this work.
+
+The intended replacement branch chain is:
+
+```text
+origin/main
+  └─ sta-4150-landing-contracts-placement
+     └─ sta-4150-landing-paired-tunnel-routing
+        └─ sta-4150-landing-electron-lifecycle
+           └─ sta-4150-landing-command-authority
+              └─ sta-4150-landing-desktop-activation
+```
+
+Stack mechanics:
+
+1. Rebase and fully revalidate the activated development tip on the latest `origin/main`, then
+   preserve both its base and tip with safety refs.
+2. Build the five named branches locally from that exact base. Preserve dependency order and allow
+   multiple commits per branch; do not add temporary runtime behavior just to isolate a review
+   layer.
+3. Require the fifth branch tree to equal the preserved activated tip, and use `git range-diff` to
+   account for every rewritten commit before any GitHub mutation.
+4. Adopt the existing local branches with `gh stack init --base main <branches...>`, then use
+   `gh stack submit --auto --remote origin`. Draft is the default; never pass `--open`.
+5. Verify the chain with `gh stack view --json`, replace generated PR titles and bodies with the
+   staged scope and test evidence, and keep Linear In Progress.
+6. Put review fixes on the lowest branch that owns them, run `gh stack rebase --upstack`, and
+   revalidate every affected cumulative tip. Never use `gh stack merge` for this ticket.
+
+The kill switch changes placement only for pages created after it is disabled. It must not migrate,
+replace, or silently fall back an existing client-hosted page.
 
 ## Draft stack
 
@@ -128,6 +241,7 @@ ownership.
 | [#14759](https://github.com/stablyai/orca/pull/14759) | Command contracts  | Negotiated reclaim, restore, and close command contracts                  |
 | [#14763](https://github.com/stablyai/orca/pull/14763) | Client adapters    | Exact retained-page reclaim, restore, close, and fail-closed cleanup      |
 | [#14769](https://github.com/stablyai/orca/pull/14769) | Orchestration      | Proof-driven command issue, replay, reservation, and placement commit     |
+| [#14876](https://github.com/stablyai/orca/pull/14876) | Authority change   | Preserve executor, pages, routes, and exact reconciliation across runtime |
 
 ## Published stage: exact renderer bridge (#14578)
 
@@ -560,23 +674,13 @@ Validation and review:
 
 ## Remaining implementation order
 
-1. Monitor #14763 CI without merging or marking it ready; production advertisement stays disabled.
-2. Add a dedicated authenticated server action-issuance path that binds one immutable plan to its
-   exact lease and client inventory. Preserve the client executor across the authority transition;
-   a transport or composition restart must not destroy the retained guest before reclaim.
-3. Rekey server placement only after the exact client command result proves reclaim or restore;
-   keep outcome-unknown inventory fenced and rerun a fresh plan after any phase-one failure.
-4. Add optional placement to logical session-tab publication and renderer state. Follow
-   `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
-5. Route create and every existing browser command by explicit placement. Never silently fall
-   back or migrate a live page.
-6. Add local browser chrome and interaction-owner fencing for client placement.
-7. Add mobile mirroring and dedicated large-result channels without coupling them to control or
-   terminal multiplexing.
-8. Run real Electron containment and traffic proof, then headed/headless/browserless paired
-   journeys and the physical platform/provider matrix.
-9. Enable client placement only behind a kill switch for newly created eligible desktop pages;
-   retain explicit server placement and rollback that does not move existing pages.
+1. Implement the complete activated desktop slice directly above authority transition; do not add
+   another inert substrate layer.
+2. Run deterministic, paired-Electron, containment, rolling-version, execution-host, workspace,
+   browserless, and physical-platform acceptance against that activated tip.
+3. If acceptance does not require a secondary transport, stop at the desktop feature boundary.
+4. Rebuild the proven tree as the five-PR landing stack above, verify exact final-tree equality, and
+   preserve an auditable old-to-new PR mapping and range-diff.
 
 ## Compatibility costs and risks
 
@@ -842,6 +946,35 @@ Published proof-driven reconciliation-orchestration stage (#14769):
   (`1153c604-bbb5-4293-af33-cfb4143170c9`) was posted, and the ticket remains In Progress. No PR
   was merged or marked ready.
 
+Current local authority-transition stage:
+
+- Baseline: replacing `authorityRuntimeId` for the same pairing destroyed the composition and its
+  retained Electron page inventory. The first production seam made the registry test green while
+  Node typecheck remained red because the composition lacked `replaceAuthority`.
+- Candidate: old routes suspend and retire synchronously; old navigation grants revoke before
+  asynchronous cleanup; old handlers settle before the executor changes connection identity; a
+  fresh host and route set then attach the immutable old inventory for close/restore reconciliation.
+- Fresh review red/green: a replacement without reconciliation echo previously resolved while
+  publishing one old-runtime page. It now fails before replacement route activation and dispatcher
+  admission; empty inventory still permits a legacy replacement. An in-flight old-authority create
+  previously completed after transition began; it now fails and releases its route. Retired-route
+  rejection also closes the composition before replacement activation, while transition revocation
+  failure remains fenced and exact cleanup completes.
+- SSH constraint: execution-host keys may omit runtime identity, so any runtime change requires
+  close-then-restore rather than DOM-preserving reclaim. Same-runtime/new-epoch reclaim remains
+  supported.
+- Latest-base validation: focused authority/reconciliation coverage passes 9 files / 136 tests;
+  reconnect and lease-lifecycle coverage passes 14 files / 169 tests. The paired integration passed
+  3/3 before the final rebase and still needs its latest-base rerun; broader affected coverage,
+  mixed-version wire, full typecheck/lint/audits, builds, and fresh reviews also remain queued.
+- The 40-patch stack rebased conflict-free onto `origin/main@fd1dba9db9`; `git range-diff` marked all
+  40 patches identical. Safety tags `sta-4150-safety-pre-paired-fixture-amend-20260816` and
+  `sta-4150-safety-pre-fd1-authority-rebase-20260816` preserve the prior tips. No rewritten branch
+  has been pushed at this checkpoint.
+- No new field or opcode was added. The existing optional reconciliation version is advertised only
+  by the otherwise uncalled composed client-host path, must be echoed exactly, and remains inert
+  because no production capability advertisement or browser-create caller exists.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -943,6 +1076,10 @@ topology, versions, and explicit gaps at every later checkpoint.
   PR [#14769](https://github.com/stablyai/orca/pull/14769) on #14763.
 - GitHub auto-attached #14769 to STA-4150. Posted exactly one orchestration checkpoint comment
   (`1153c604-bbb5-4293-af33-cfb4143170c9`) and kept the ticket In Progress.
+- Locally committed #14769's bounded-deadline assertion fix and the authority-transition stage,
+  then cascade-rebased all 40 patches and 37 local stack refs onto `origin/main@d2ffe1f362` with an
+  exact 40/40 range-diff. No rewritten branch, new PR, GitHub comment, Linear mutation, or status
+  change has been published at this checkpoint.
 - No PR was merged or marked ready.
 
 ## Completion rule
