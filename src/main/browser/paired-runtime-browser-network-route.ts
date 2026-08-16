@@ -1,27 +1,14 @@
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { PairingOffer } from '../../shared/pairing'
-import {
-  BrowserNetworkTunnelEvent,
-  type BrowserHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionOptions
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
-import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
 import {
   BrowserNetworkTunnelOutboundMemoryBudgetRegistry,
   type BrowserNetworkTunnelOutboundMemoryLease
 } from './browser-network-tunnel-outbound-memory-budget'
+import { PairedRuntimeBrowserNetworkTransport } from './paired-runtime-browser-network-transport'
 import { RemoteBrowserSocksServer } from './remote-browser-socks-server'
 
-const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
-const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
 type PairedRuntimeBrowserNetworkRouteOptions = {
@@ -31,29 +18,33 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
   outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
+  maxStreamIdsPerTunnel?: number
   onError?: (error: Error) => void
 }
 
+type BrowserNetworkRouteAddress = { host: string; port: number }
+
 export class PairedRuntimeBrowserNetworkRoute {
   private readonly options: PairedRuntimeBrowserNetworkRouteOptions
-  private tunnel: BrowserNetworkTunnelClient | null = null
   private readonly socks: RemoteBrowserSocksServer
-  private subscription: RemoteRuntimeSubscription | null = null
+  private transport: PairedRuntimeBrowserNetworkTransport | null = null
   private outboundMemory: BrowserNetworkTunnelOutboundMemoryLease | null = null
-  private startPromise: Promise<{ host: string; port: number }> | null = null
+  private startPromise: Promise<BrowserNetworkRouteAddress> | null = null
+  private reconnectPromise: Promise<BrowserNetworkRouteAddress> | null = null
   private closePromise: Promise<void> | null = null
-  private rejectReady: ((error: Error) => void) | null = null
+  private address: BrowserNetworkRouteAddress | null = null
+  private lastTunnelGeneration = 0
+  private started = false
   private closed = false
-  private ready = false
 
   constructor(options: PairedRuntimeBrowserNetworkRouteOptions) {
     this.options = options
     this.socks = new RemoteBrowserSocksServer({
-      open: (target) => this.requireTunnel().open(target)
+      open: (target) => this.openTarget(target)
     })
   }
 
-  start(): Promise<{ host: string; port: number }> {
+  start(): Promise<BrowserNetworkRouteAddress> {
     if (this.closed) {
       return Promise.reject(new Error('Browser network route is closed'))
     }
@@ -61,26 +52,29 @@ export class PairedRuntimeBrowserNetworkRoute {
     return this.startPromise
   }
 
+  reconnect(): Promise<BrowserNetworkRouteAddress> {
+    if (this.closed) {
+      return Promise.reject(new Error('Browser network route is closed'))
+    }
+    if (!this.started) {
+      return this.start()
+    }
+    if (this.transport?.tunnel && this.address) {
+      return Promise.resolve(this.address)
+    }
+    return this.beginReconnect()
+  }
+
   async close(error = new Error('Browser network route is closed')): Promise<void> {
     if (this.closePromise) {
       return this.closePromise
     }
     this.closed = true
-    this.rejectReady?.(error)
     this.closePromise = this.closeRoute(error)
     return this.closePromise
   }
 
-  private async startRoute(): Promise<{ host: string; port: number }> {
-    const timeoutMs = this.options.timeoutMs ?? 15_000
-    let resolveReady = (): void => {}
-    let rejectReady = (_error: Error): void => {}
-    const ready = new Promise<void>((resolve, reject) => {
-      resolveReady = resolve
-      rejectReady = reject
-    })
-    void ready.catch(() => undefined)
-    let readyTimeout: ReturnType<typeof setTimeout> | null = null
+  private async startRoute(): Promise<BrowserNetworkRouteAddress> {
     try {
       this.outboundMemory = (
         this.options.outboundMemoryBudgetRegistry ?? outboundMemoryBudgets
@@ -88,116 +82,16 @@ export class PairedRuntimeBrowserNetworkRoute {
       if (!this.outboundMemory) {
         throw new Error('Browser network route outbound memory admission failed')
       }
-      const subscription = await subscribeRemoteRuntimeRequest(
-        this.options.pairing,
-        'network.browserTunnel',
-        {
-          ...this.options.lease,
-          executionHost: {
-            kind: 'native',
-            runtimeId: this.options.lease.authorityRuntimeId,
-            revision: this.options.executionHostRevision
-          }
-        },
-        timeoutMs,
-        {
-          onResponse: (response) => {
-            if (!response.ok) {
-              this.fail(
-                new RemoteRuntimeClientError(response.error.code, response.error.message),
-                rejectReady
-              )
-              return
-            }
-            const parsed = BrowserNetworkTunnelEvent.safeParse(response.result)
-            if (
-              !parsed.success ||
-              response._meta.runtimeId !== this.options.lease.authorityRuntimeId
-            ) {
-              this.fail(new Error('Invalid browser network route response'), rejectReady)
-              return
-            }
-            const result = parsed.data
-            if (result.type === 'ready') {
-              if (this.tunnel) {
-                if (this.tunnel.generation !== result.tunnelGeneration) {
-                  this.fail(
-                    new Error('Browser network route generation changed in place'),
-                    rejectReady
-                  )
-                }
-                return
-              }
-              this.tunnel = new BrowserNetworkTunnelClient({
-                tunnelGeneration: result.tunnelGeneration,
-                sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false,
-                outboundMemory: this.outboundMemory ?? undefined
-              })
-              this.ready = true
-              resolveReady()
-            } else if (this.tunnel?.generation === result.tunnelGeneration) {
-              this.fail(new Error('Browser network route closed by the runtime'), rejectReady)
-            } else {
-              this.fail(
-                new Error('Browser network route closed with an unknown generation'),
-                rejectReady
-              )
-            }
-          },
-          onBinary: (bytes) => {
-            if (!this.tunnel) {
-              this.fail(
-                new Error('Browser network route received binary data before readiness'),
-                rejectReady
-              )
-              return
-            }
-            this.tunnel.handleBinary(bytes)
-          },
-          onError: (routeError) => this.fail(routeError, rejectReady),
-          onClose: () => this.fail(new Error('Browser network route transport closed'), rejectReady)
-        },
-        {
-          ...this.options.subscription,
-          perMessageDeflate: false,
-          outboundQueue: {
-            softCapBytes: BROWSER_TUNNEL_WS_SOFT_CAP_BYTES,
-            maxQueuedBytes: BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES,
-            maxQueuedFrames: 2_048,
-            maxDrainFramesPerTurn: 4
-          },
-          outboundMemoryBudget: this.outboundMemory,
-          clientCapabilities: [
-            ...(this.options.subscription?.clientCapabilities ?? []),
-            BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-            BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-          ]
-        }
-      )
-      if (this.closed) {
-        subscription.close()
-        throw new Error('Browser network route closed during startup')
-      }
-      this.subscription = subscription
-      this.rejectReady = rejectReady
-      readyTimeout = setTimeout(
-        () =>
-          rejectReady(
-            new RemoteRuntimeClientError('runtime_timeout', 'Browser tunnel attach timed out.')
-          ),
-        timeoutMs
-      )
-      await ready
-      if (this.closed) {
-        throw new Error('Browser network route closed during startup')
-      }
+      await this.connectTransport()
       const address = await this.socks.listen()
-      if (this.closed) {
+      if (this.closed || !this.transport?.tunnel) {
         throw new Error('Browser network route closed during startup')
       }
+      this.address = address
+      this.started = true
       return address
     } catch (error) {
-      const routeError = error instanceof Error ? error : new Error(String(error))
+      const routeError = asError(error)
       try {
         await this.close(routeError)
       } catch (closeError) {
@@ -207,48 +101,113 @@ export class PairedRuntimeBrowserNetworkRoute {
         )
       }
       throw routeError
-    } finally {
-      if (readyTimeout) {
-        clearTimeout(readyTimeout)
-      }
-      this.rejectReady = null
     }
   }
 
-  private fail(error: Error, rejectReady: (error: Error) => void): void {
-    if (this.closed) {
+  private async connectTransport(): Promise<void> {
+    const outboundMemory = this.outboundMemory
+    if (!outboundMemory) {
+      throw new Error('Browser network route memory lease is unavailable')
+    }
+    const transport = new PairedRuntimeBrowserNetworkTransport({
+      pairing: this.options.pairing,
+      lease: this.options.lease,
+      executionHostRevision: this.options.executionHostRevision,
+      timeoutMs: this.options.timeoutMs ?? 15_000,
+      subscription: this.options.subscription,
+      outboundMemory,
+      maxStreamIds: this.options.maxStreamIdsPerTunnel,
+      minimumTunnelGeneration: this.lastTunnelGeneration,
+      onReady: (readyTransport, generation) => {
+        if (this.transport === readyTransport) {
+          this.lastTunnelGeneration = Math.max(this.lastTunnelGeneration, generation)
+        }
+      },
+      onFailure: (failed, error, cleanupFailures) =>
+        this.handleTransportFailure(failed, error, cleanupFailures)
+    })
+    this.transport = transport
+    const tunnel = await transport.start()
+    if (this.closed || this.transport !== transport) {
+      for (const failure of transport.close(new Error('Browser network transport superseded'))) {
+        this.reportError(failure)
+      }
+      throw new Error('Browser network route transport was superseded')
+    }
+    this.lastTunnelGeneration = Math.max(this.lastTunnelGeneration, tunnel.generation)
+  }
+
+  private beginReconnect(): Promise<BrowserNetworkRouteAddress> {
+    if (this.reconnectPromise) {
+      return this.reconnectPromise
+    }
+    const address = this.address
+    if (!address) {
+      return Promise.reject(new Error('Browser network route listener is not ready'))
+    }
+    const reconnecting = this.connectTransport()
+      .then(() => {
+        if (this.closed || !this.transport?.tunnel) {
+          throw new Error('Browser network route reconnect was not retained')
+        }
+        return address
+      })
+      .finally(() => {
+        if (this.reconnectPromise === reconnecting) {
+          this.reconnectPromise = null
+        }
+      })
+    this.reconnectPromise = reconnecting
+    return reconnecting
+  }
+
+  private replaceExhaustedTransport(): Promise<BrowserNetworkRouteAddress> {
+    if (this.reconnectPromise) {
+      return this.reconnectPromise
+    }
+    const transport = this.transport
+    this.transport = null
+    for (const failure of transport?.close(
+      new Error('Browser network route stream IDs exhausted')
+    ) ?? []) {
+      this.reportError(failure)
+    }
+    return this.beginReconnect()
+  }
+
+  private async openTarget(target: BrowserNetworkTunnelOpen) {
+    let tunnel = this.requireTunnel()
+    if (tunnel.streamIdsExhausted) {
+      await this.replaceExhaustedTransport()
+      tunnel = this.requireTunnel()
+    }
+    return tunnel.open(target)
+  }
+
+  private handleTransportFailure(
+    transport: PairedRuntimeBrowserNetworkTransport,
+    error: Error,
+    cleanupFailures: Error[]
+  ): void {
+    if (this.transport !== transport) {
       return
     }
-    if (!this.ready) {
-      rejectReady(error)
-    }
-    const closing = this.close(error)
+    this.transport = null
     this.reportError(error)
-    void closing.catch((closeError) =>
-      this.reportError(closeError instanceof Error ? closeError : new Error(String(closeError)))
-    )
+    for (const failure of cleanupFailures) {
+      this.reportError(failure)
+    }
   }
 
   private async closeRoute(error: Error): Promise<void> {
-    const failures: Error[] = []
-    try {
-      this.tunnel?.close(error)
-    } catch (closeError) {
-      failures.push(closeError instanceof Error ? closeError : new Error(String(closeError)))
-    }
-    this.tunnel = null
-    try {
-      this.subscription?.close()
-    } catch (closeError) {
-      failures.push(closeError instanceof Error ? closeError : new Error(String(closeError)))
-    }
-    this.subscription = null
+    const failures = this.transport?.close(error) ?? []
+    this.transport = null
     this.outboundMemory?.release()
     this.outboundMemory = null
     try {
       await this.socks.close()
     } catch (closeError) {
-      failures.push(closeError instanceof Error ? closeError : new Error(String(closeError)))
+      failures.push(asError(closeError))
     }
     if (failures.length === 1) {
       throw failures[0]
@@ -266,10 +225,15 @@ export class PairedRuntimeBrowserNetworkRoute {
     }
   }
 
-  private requireTunnel(): BrowserNetworkTunnelClient {
-    if (!this.tunnel) {
+  private requireTunnel() {
+    const tunnel = this.transport?.tunnel
+    if (!tunnel) {
       throw new Error('Browser network route is not ready')
     }
-    return this.tunnel
+    return tunnel
   }
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }

@@ -10,6 +10,7 @@ import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-
 import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-tunnel-outbound-memory-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS,
   validateBrowserNetworkTunnelGeneration
 } from './browser-network-tunnel-stream-state'
 import {
@@ -33,12 +34,16 @@ type BrowserNetworkTunnelClientOptions = {
   tunnelGeneration: number
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   outboundMemory?: Pick<BrowserNetworkTunnelOutboundMemoryLease, 'claimApplicationBytes'>
+  maxStreamIds?: number
+  onClosed?: (error: Error) => void
 }
 
 export class BrowserNetworkTunnelClient {
   private readonly tunnelGeneration: number
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly outboundMemory: BrowserNetworkTunnelClientOptions['outboundMemory']
+  private readonly maxStreamIds: number
+  private readonly onClosed: BrowserNetworkTunnelClientOptions['onClosed']
   private readonly streams = new Map<number, BrowserNetworkTunnelClientStream>()
   private nextStreamId = 1
   private closed = false
@@ -47,6 +52,15 @@ export class BrowserNetworkTunnelClient {
     validateBrowserNetworkTunnelGeneration(options.tunnelGeneration)
     this.tunnelGeneration = options.tunnelGeneration
     this.outboundMemory = options.outboundMemory
+    this.onClosed = options.onClosed
+    this.maxStreamIds = options.maxStreamIds ?? BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
+    if (
+      !Number.isSafeInteger(this.maxStreamIds) ||
+      this.maxStreamIds < 1 ||
+      this.maxStreamIds > BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
+    ) {
+      throw new Error('Browser tunnel stream id budget is invalid')
+    }
     this.frameSender = new BrowserNetworkTunnelFrameSender(
       options.tunnelGeneration,
       options.sendBinary,
@@ -59,12 +73,19 @@ export class BrowserNetworkTunnelClient {
     return this.tunnelGeneration
   }
 
+  get streamIdsExhausted(): boolean {
+    return this.nextStreamId > this.maxStreamIds
+  }
+
   open(target: BrowserNetworkTunnelOpen): Promise<BrowserNetworkTunnelDuplex> {
     if (this.closed) {
       return Promise.reject(new Error('Browser tunnel is closed'))
     }
-    if (this.streams.size >= 32 || this.nextStreamId > 65_536) {
+    if (this.streams.size >= 32) {
       return Promise.reject(new Error('Browser tunnel stream limit exceeded'))
+    }
+    if (this.streamIdsExhausted) {
+      return Promise.reject(new Error('Browser tunnel stream id limit exceeded'))
     }
     let openPayload: Uint8Array<ArrayBufferLike>
     try {
@@ -125,6 +146,7 @@ export class BrowserNetworkTunnelClient {
       this.retireStream(stream, error)
     }
     this.streams.clear()
+    this.onClosed?.(error)
   }
 
   private handleStreamFrame(

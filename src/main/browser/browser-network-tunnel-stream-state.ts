@@ -2,7 +2,7 @@ export const BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES = 256 * 1024
 export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES = 256 * 1024
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
-const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
+export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
 
 export function validateBrowserNetworkTunnelGeneration(generation: number): void {
   if (!Number.isInteger(generation) || generation < 1 || generation > 0xffff_ffff) {

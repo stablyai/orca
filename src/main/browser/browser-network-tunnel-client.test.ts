@@ -181,6 +181,38 @@ describe('BrowserNetworkTunnelClient', () => {
     client.close()
   })
 
+  it('never reuses stream IDs within one generation after its bounded ledger exhausts', async () => {
+    const sent: Uint8Array<ArrayBufferLike>[] = []
+    const client = new BrowserNetworkTunnelClient({
+      tunnelGeneration: 7,
+      maxStreamIds: 2,
+      sendBinary: (bytes) => {
+        sent.push(bytes)
+        return true
+      }
+    })
+
+    for (let streamId = 1; streamId <= 2; streamId += 1) {
+      const opening = client.open({ host: 'retired.internal', port: 443 })
+      client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, streamId))
+      const socket = await opening
+      socket.on('error', () => {})
+      socket.destroy()
+      await once(socket, 'close')
+    }
+
+    expect(client.streamIdsExhausted).toBe(true)
+    const exhausted = client.open({ host: 'next.internal', port: 443 })
+    client.close()
+    await expect(exhausted).rejects.toThrow('stream id limit exceeded')
+    expect(
+      sent
+        .map(decodeBrowserNetworkTunnelFrame)
+        .filter((candidate) => candidate?.opcode === BrowserNetworkTunnelOpcode.Open)
+        .map((candidate) => candidate!.streamId)
+    ).toEqual([1, 2])
+  })
+
   it('withholds destination credit until a readable consumer asks for data', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
     const client = new BrowserNetworkTunnelClient({
