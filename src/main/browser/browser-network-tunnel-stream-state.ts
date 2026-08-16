@@ -45,11 +45,13 @@ export type BrowserNetworkTunnelStream = {
   id: number
   socket: BrowserNetworkTunnelSocket
   connected: boolean
+  releasePendingOpen: () => void
   closed: boolean
   receiveCredit: number
   sendCredit: number
   pendingToClient: Uint8Array<ArrayBufferLike>[]
   pendingToClientBytes: number
+  pendingDestinationWriteReleases: Set<() => void>
   clientEnded: boolean
   destinationEnded: boolean
   destinationClosed: boolean
@@ -62,5 +64,6 @@ export type BrowserNetworkTunnelSessionOptions = {
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   onClose?: () => void
+  now?: () => number
 }
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'

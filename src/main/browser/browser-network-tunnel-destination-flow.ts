@@ -14,12 +14,25 @@ type BrowserNetworkTunnelDestinationFlowActions = {
   sendData: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   sendHalfClose: () => void
   finalizeClose: () => void
+  releaseRetainedBytes: (bytes: number) => void
+}
+
+export function halfCloseBrowserNetworkDestination(
+  stream: BrowserNetworkTunnelStream
+): string | null {
+  if (!stream.connected || stream.clientEnded) {
+    return 'invalid_client_half_close'
+  }
+  stream.clientEnded = true
+  stream.socket.end()
+  return null
 }
 
 export function writeBrowserNetworkDestination(
   stream: BrowserNetworkTunnelStream,
   payload: Uint8Array<ArrayBufferLike>,
-  onSettled: (bytes: number) => void
+  onSettled: (bytes: number) => void,
+  claimRetainedBytes: (bytes: number) => (() => void) | null
 ): string | null {
   if (!stream.connected || stream.clientEnded) {
     return 'invalid_client_data'
@@ -30,9 +43,31 @@ export function writeBrowserNetworkDestination(
   if (payload.byteLength === 0) {
     return null
   }
+  if (
+    stream.pendingDestinationWriteReleases.size >= BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS
+  ) {
+    return 'destination_write_chunk_overflow'
+  }
+  const releaseClaim = claimRetainedBytes(payload.byteLength)
+  if (!releaseClaim) {
+    return 'route_buffer_overflow'
+  }
   stream.receiveCredit -= payload.byteLength
   const bytes = payload.slice()
-  stream.socket.write(bytes, () => onSettled(bytes.byteLength))
+  let retained = true
+  const release = (): void => {
+    if (!retained) {
+      return
+    }
+    retained = false
+    stream.pendingDestinationWriteReleases.delete(release)
+    releaseClaim()
+  }
+  stream.pendingDestinationWriteReleases.add(release)
+  stream.socket.write(bytes, () => {
+    release()
+    onSettled(bytes.byteLength)
+  })
   return null
 }
 
@@ -84,8 +119,12 @@ export function flushBrowserNetworkDestination(
     if (!actions.sendData(next.subarray(0, length))) {
       return
     }
+    if (!actions.isCurrent()) {
+      return
+    }
     stream.sendCredit -= length
     stream.pendingToClientBytes -= length
+    actions.releaseRetainedBytes(length)
     if (length === next.byteLength) {
       stream.pendingToClient.shift()
     } else {

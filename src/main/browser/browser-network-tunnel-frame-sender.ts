@@ -1,6 +1,6 @@
 import {
+  BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelFrame,
-  type BrowserNetworkTunnelOpcode,
   type BrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
@@ -42,5 +42,9 @@ export class BrowserNetworkTunnelFrameSender {
       this.onRejected?.()
     }
     return accepted
+  }
+
+  sendError(streamId: number, code: string): boolean {
+    return this.send(BrowserNetworkTunnelOpcode.Error, streamId, new TextEncoder().encode(code))
   }
 }

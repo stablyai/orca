@@ -8,12 +8,13 @@ import {
 import {
   flushBrowserNetworkDestination,
   grantBrowserNetworkDestinationCredit,
+  halfCloseBrowserNetworkDestination,
   queueBrowserNetworkDestinationData,
   writeBrowserNetworkDestination
 } from './browser-network-tunnel-destination-flow'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
+import { BrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import {
-  BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   reserveBrowserNetworkTunnelStreamId,
   validateBrowserNetworkTunnelGeneration,
@@ -21,6 +22,10 @@ import {
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
 } from './browser-network-tunnel-stream-state'
+import {
+  createBrowserNetworkTunnelStream,
+  retireBrowserNetworkTunnelStream
+} from './browser-network-tunnel-stream-lifecycle'
 
 const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 128
 
@@ -29,6 +34,7 @@ export class BrowserNetworkTunnelSession {
   private readonly connect: BrowserNetworkTunnelSessionOptions['connect']
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly onClose: BrowserNetworkTunnelSessionOptions['onClose']
+  private readonly resourceBudget: BrowserNetworkTunnelResourceBudget
   private readonly streams = new Map<number, BrowserNetworkTunnelStream>()
   private readonly openedStreamIds = new Set<number>()
   private closed = false
@@ -44,6 +50,7 @@ export class BrowserNetworkTunnelSession {
       () => !this.closed
     )
     this.onClose = options.onClose
+    this.resourceBudget = new BrowserNetworkTunnelResourceBudget(options.now)
   }
 
   handleBinary(bytes: Uint8Array<ArrayBufferLike>): void {
@@ -95,7 +102,10 @@ export class BrowserNetworkTunnelSession {
     } else if (frame.opcode === BrowserNetworkTunnelOpcode.WindowUpdate) {
       this.grantDestinationCredit(stream, frame.payload)
     } else if (frame.opcode === BrowserNetworkTunnelOpcode.HalfClose) {
-      this.halfCloseDestination(stream)
+      const error = halfCloseBrowserNetworkDestination(stream)
+      if (error) {
+        this.failProtocolStream(stream, error)
+      }
     } else if (
       frame.opcode === BrowserNetworkTunnelOpcode.Close ||
       frame.opcode === BrowserNetworkTunnelOpcode.Error
@@ -109,44 +119,43 @@ export class BrowserNetworkTunnelSession {
   private openStream(frame: BrowserNetworkTunnelFrame): void {
     const identityError = reserveBrowserNetworkTunnelStreamId(this.openedStreamIds, frame.streamId)
     if (identityError) {
-      this.sendError(frame.streamId, identityError)
+      this.frameSender.sendError(frame.streamId, identityError)
       this.close()
       return
     }
+    if (!this.resourceBudget.admitOpenAttempt()) {
+      this.frameSender.sendError(frame.streamId, 'open_rate_exceeded')
+      return
+    }
     if (this.streams.size >= BROWSER_NETWORK_TUNNEL_MAX_STREAMS) {
-      this.sendError(frame.streamId, 'stream_limit_exceeded')
+      this.frameSender.sendError(frame.streamId, 'stream_limit_exceeded')
       return
     }
     const target = decodeBrowserNetworkTunnelOpen(frame.payload)
     if (!target) {
-      this.sendError(frame.streamId, 'invalid_open_target')
+      this.frameSender.sendError(frame.streamId, 'invalid_open_target')
+      return
+    }
+    const releasePendingOpen = this.resourceBudget.claimPendingOpen()
+    if (!releasePendingOpen) {
+      this.frameSender.sendError(frame.streamId, 'pending_open_limit_exceeded')
       return
     }
     let socket: BrowserNetworkTunnelSocket
     try {
       socket = this.connect(target)
     } catch {
-      this.sendError(frame.streamId, 'destination_connect_failed')
+      releasePendingOpen()
+      this.frameSender.sendError(frame.streamId, 'destination_connect_failed')
       return
     }
-    const stream: BrowserNetworkTunnelStream = {
+    const stream = createBrowserNetworkTunnelStream({
       id: frame.streamId,
       socket,
-      connected: false,
-      closed: false,
-      receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
-      sendCredit: 0,
-      pendingToClient: [],
-      pendingToClientBytes: 0,
-      clientEnded: false,
-      destinationEnded: false,
-      destinationClosed: false,
-      destinationHalfCloseSent: false,
-      connectTimeout: setTimeout(
-        () => this.failStream(stream, 'destination_connect_timeout'),
-        BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS
-      )
-    }
+      releasePendingOpen,
+      onConnectTimeout: (pendingStream) =>
+        this.failStream(pendingStream, 'destination_connect_timeout')
+    })
     this.streams.set(stream.id, stream)
     socket.setNoDelay(true)
     socket.pause()
@@ -162,6 +171,7 @@ export class BrowserNetworkTunnelSession {
       return
     }
     stream.connected = true
+    stream.releasePendingOpen()
     clearTimeout(stream.connectTimeout)
     this.frameSender.send(BrowserNetworkTunnelOpcode.Opened, stream.id)
     this.frameSender.send(
@@ -175,17 +185,22 @@ export class BrowserNetworkTunnelSession {
     stream: BrowserNetworkTunnelStream,
     payload: Uint8Array<ArrayBufferLike>
   ): void {
-    const error = writeBrowserNetworkDestination(stream, payload, (bytes) => {
-      if (!this.isCurrent(stream)) {
-        return
-      }
-      stream.receiveCredit += bytes
-      this.frameSender.send(
-        BrowserNetworkTunnelOpcode.WindowUpdate,
-        stream.id,
-        encodeBrowserNetworkTunnelWindowUpdate(bytes)
-      )
-    })
+    const error = writeBrowserNetworkDestination(
+      stream,
+      payload,
+      (bytes) => {
+        if (!this.isCurrent(stream)) {
+          return
+        }
+        stream.receiveCredit += bytes
+        this.frameSender.send(
+          BrowserNetworkTunnelOpcode.WindowUpdate,
+          stream.id,
+          encodeBrowserNetworkTunnelWindowUpdate(bytes)
+        )
+      },
+      (bytes) => this.resourceBudget.claimRetainedBytes(bytes)
+    )
     if (error) {
       this.failProtocolStream(stream, error)
     }
@@ -210,8 +225,13 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream) || bytes.byteLength === 0) {
       return
     }
+    if (!this.resourceBudget.reserveRetainedBytes(bytes.byteLength)) {
+      this.failProtocolStream(stream, 'route_buffer_overflow')
+      return
+    }
     const error = queueBrowserNetworkDestinationData(stream, bytes)
     if (error) {
+      this.resourceBudget.releaseRetainedBytes(bytes.byteLength)
       this.failStream(stream, error)
       return
     }
@@ -223,7 +243,8 @@ export class BrowserNetworkTunnelSession {
       isCurrent: () => this.isCurrent(stream),
       sendData: (bytes) => this.frameSender.send(BrowserNetworkTunnelOpcode.Data, stream.id, bytes),
       sendHalfClose: () => this.sendDestinationHalfClose(stream),
-      finalizeClose: () => this.finalizeDestinationClose(stream)
+      finalizeClose: () => this.finalizeDestinationClose(stream),
+      releaseRetainedBytes: (bytes) => this.resourceBudget.releaseRetainedBytes(bytes)
     })
   }
 
@@ -255,7 +276,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
-    this.sendError(stream.id, code)
+    this.frameSender.sendError(stream.id, code)
     this.deleteStream(stream)
   }
 
@@ -263,25 +284,8 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
-    this.sendError(stream.id, code)
+    this.frameSender.sendError(stream.id, code)
     this.close()
-  }
-
-  private sendError(streamId: number, code: string): void {
-    this.frameSender.send(
-      BrowserNetworkTunnelOpcode.Error,
-      streamId,
-      new TextEncoder().encode(code)
-    )
-  }
-
-  private halfCloseDestination(stream: BrowserNetworkTunnelStream): void {
-    if (!stream.connected || stream.clientEnded) {
-      this.failProtocolStream(stream, 'invalid_client_half_close')
-      return
-    }
-    stream.clientEnded = true
-    stream.socket.end()
   }
 
   private sendDestinationHalfClose(stream: BrowserNetworkTunnelStream): void {
@@ -306,14 +310,9 @@ export class BrowserNetworkTunnelSession {
   }
 
   private retireStream(stream: BrowserNetworkTunnelStream): void {
-    if (stream.closed) {
-      return
-    }
-    stream.closed = true
-    clearTimeout(stream.connectTimeout)
-    stream.pendingToClient = []
-    stream.pendingToClientBytes = 0
-    stream.socket.destroy()
+    retireBrowserNetworkTunnelStream(stream, (bytes) =>
+      this.resourceBudget.releaseRetainedBytes(bytes)
+    )
   }
 
   private isCurrent(stream: BrowserNetworkTunnelStream): boolean {
