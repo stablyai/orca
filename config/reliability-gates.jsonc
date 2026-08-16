@@ -2937,6 +2937,7 @@
           "assertions": [
             "destination writes replenish client credit only after settlement",
             "stale generations and reused stream IDs cannot replace the current destination",
+            "late frames for retired or reserved stream IDs leave concurrent destinations alive while never-reserved IDs fail closed",
             "pending opens and admitted open rate remain bounded and recover only after exact release or window expiry",
             "both traffic directions share an 8 MiB application-retention ledger with exact settlement, retirement, stale-callback, and reentrant-close release",
             "unsettled client-to-destination writes retain at most 256 chunks per stream independently of byte credit"
@@ -2957,6 +2958,7 @@
             "pending tiny frames stay chunk-bounded and data drains before remote close retirement",
             "late local settlement after remote close sends no stale credit and leaves the tunnel usable",
             "stale generations cannot open a stream and route close destroys every source",
+            "late frames for retired stream IDs leave concurrent sources alive while never-allocated IDs fail closed",
             "stream IDs never repeat within one tunnel generation after the bounded ledger exhausts"
           ]
         },

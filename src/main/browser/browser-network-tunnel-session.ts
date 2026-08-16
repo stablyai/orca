@@ -13,6 +13,7 @@ import {
   writeBrowserNetworkDestination
 } from './browser-network-tunnel-destination-flow'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
+import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'
 import { createBrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
@@ -81,11 +82,7 @@ export class BrowserNetworkTunnelSession {
   }
 
   private handleFrame(frame: BrowserNetworkTunnelFrame): void {
-    if (frame.opcode === BrowserNetworkTunnelOpcode.Ping) {
-      this.frameSender.send(BrowserNetworkTunnelOpcode.Pong, frame.streamId, frame.payload)
-      return
-    }
-    if (frame.opcode === BrowserNetworkTunnelOpcode.Pong) {
+    if (handleBrowserNetworkTunnelHeartbeat(frame, this.frameSender)) {
       return
     }
     if (frame.opcode === BrowserNetworkTunnelOpcode.Open) {
@@ -94,6 +91,9 @@ export class BrowserNetworkTunnelSession {
     }
     const stream = this.streams.get(frame.streamId)
     if (!stream) {
+      if (this.openedStreamIds.has(frame.streamId)) {
+        return
+      }
       this.close()
       return
     }

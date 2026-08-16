@@ -229,7 +229,7 @@ describe('BrowserNetworkTunnelSession', () => {
     expect(error ? new TextDecoder().decode(error.payload) : '').toBe('stream_id_reused')
   })
 
-  it('rejects current-generation frames for unknown and retired stream IDs', () => {
+  it('rejects current-generation frames for never-reserved and reused stream IDs', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
     const connect = vi.fn(() => socket)
@@ -270,6 +270,38 @@ describe('BrowserNetworkTunnelSession', () => {
     )
     unknownSession.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([1]), 4))
     expect(otherSocket.destroyed).toBe(true)
+  })
+
+  it('keeps concurrent streams alive when late data arrives for a retired stream', () => {
+    const firstSocket = new FakeSocket()
+    const secondSocket = new FakeSocket()
+    const connect = vi.fn().mockReturnValueOnce(firstSocket).mockReturnValueOnce(secondSocket)
+    const session = new BrowserNetworkTunnelSession({
+      tunnelGeneration: 7,
+      connect,
+      sendBinary: () => true
+    })
+    const open = (streamId: number): void =>
+      session.handleBinary(
+        frame(
+          BrowserNetworkTunnelOpcode.Open,
+          encodeBrowserNetworkTunnelOpen({ host: 'localhost', port: 80 }),
+          streamId
+        )
+      )
+
+    open(1)
+    open(2)
+    firstSocket.emit('connect')
+    secondSocket.emit('connect')
+    session.handleBinary(frame(BrowserNetworkTunnelOpcode.Close, new Uint8Array(), 1))
+    session.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([1]), 1))
+
+    expect(firstSocket.destroyed).toBe(true)
+    expect(secondSocket.destroyed).toBe(false)
+    session.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([2]), 2))
+    expect(secondSocket.writes).toEqual([new Uint8Array([2])])
+    session.close()
   })
 
   it('accepts unused out-of-order stream IDs without permitting reuse', () => {

@@ -7,6 +7,7 @@ import {
   type BrowserNetworkTunnelOpen
 } from '../../shared/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
+import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-tunnel-outbound-memory-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
@@ -122,15 +123,14 @@ export class BrowserNetworkTunnelClient {
     if (frame.tunnelGeneration !== this.tunnelGeneration) {
       return
     }
-    if (frame.opcode === BrowserNetworkTunnelOpcode.Ping) {
-      this.frameSender.send(BrowserNetworkTunnelOpcode.Pong, frame.streamId, frame.payload)
-      return
-    }
-    if (frame.opcode === BrowserNetworkTunnelOpcode.Pong) {
+    if (handleBrowserNetworkTunnelHeartbeat(frame, this.frameSender)) {
       return
     }
     const stream = this.streams.get(frame.streamId)
     if (!stream) {
+      if (frame.streamId < this.nextStreamId) {
+        return
+      }
       this.close(new Error('Browser tunnel received a frame for an unknown stream'))
       return
     }

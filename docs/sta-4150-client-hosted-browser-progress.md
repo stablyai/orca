@@ -36,13 +36,15 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-client-host-reconnect-grace`, draft PR
-  [#14691](https://github.com/stablyai/orca/pull/14691), stacked on inventory PR
-  [#14648](https://github.com/stablyai/orca/pull/14648). The stack is rebased onto
-  `origin/main@e570cade3c`.
+- Latest published stack tip: `sta-4150-browser-tunnel-retired-frame-isolation`, draft PR
+  [#14694](https://github.com/stablyai/orca/pull/14694), stacked on reconnect PR
+  [#14691](https://github.com/stablyai/orca/pull/14691). The stack is rebased onto
+  `origin/main@3908978ba4`.
 - The reconnect stage preserves exact client-host authority and page/executor lifetime through a
   negotiated, bounded same-client reconnect grace. Its pre-ledger, pre-replay-fix tip was
   `1093072a0b`; the reviewed fix was first committed at `5374c561a6` before this final ledger amend.
+- Published retired-frame stage `sta-4150-browser-tunnel-retired-frame-isolation` prevents one late
+  frame for a retired stream from destroying healthy concurrent tunnel streams.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
 - Published bridge branch: `sta-4150-browser-client-page-mount-bridge` locally rebased to
   `830cb95c25`, draft PR [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566;
@@ -94,6 +96,7 @@ ownership.
 | [#14617](https://github.com/stablyai/orca/pull/14617) | Reconciliation    | Bounded retain, reclaim, restore, and close semantics                     |
 | [#14648](https://github.com/stablyai/orca/pull/14648) | Page inventory    | Optional authenticated complete client-page snapshot                      |
 | [#14691](https://github.com/stablyai/orca/pull/14691) | Reconnect grace   | Negotiated same-client authority and page lifetime preservation           |
+| [#14694](https://github.com/stablyai/orca/pull/14694) | Tunnel isolation  | Late retired-stream frames cannot collapse healthy concurrent streams     |
 
 ## Current stage: exact renderer bridge
 
@@ -416,6 +419,41 @@ Deterministic evidence:
 - Live headed/headless/browserless reconnect, Electron containment, SSH/WSL, and physical
   cross-platform proof remain activation blockers; this deterministic stage makes no such claim.
 
+## Published stage: retired tunnel-frame isolation (#14694)
+
+The browser-tunnel protocol already allocates stream IDs monotonically and never reuses an ID
+within one tunnel generation. The client retains its next allocated ID, and the execution-host
+session retains a bounded set of every reserved ID. That is enough to distinguish an in-flight
+frame for a retired or permanently burned stream identity from a frame for a never-reserved
+identity without a new field or opcode.
+
+Implemented:
+
+- Both tunnel ends ignore a valid non-Open frame only when its current generation proves that exact
+  stream ID previously existed and is now retired.
+- A never-allocated client ID, never-reserved execution-host ID, malformed frame, stale generation,
+  or explicit Open reuse keeps the existing fail-closed behavior. Rejected execution-host opens
+  burn their reserved ID before admission and may therefore ignore later frames without targeting
+  another stream.
+- Ping/Pong handling moved into one concrete heartbeat module so the session remains within its
+  300-line module budget without a suppression or limit bump.
+
+Deterministic evidence:
+
+- Baseline was 2/2 red: retire stream 1, keep stream 2 active, deliver late Data for stream 1, and
+  observe both client and execution-host session destroy stream 2.
+- The same oracle is green on the candidate: stream 2 carries a marker after the late frame, while
+  a never-allocated ID still closes the route and a reused Open still fails closed.
+- Focused client/session: 2 files / 28 tests passed. Full browser-network/control gate: 16 files /
+  198 tests passed. Full Node/CLI/web typecheck, lint and native/type-aware audits, the 87-gate
+  manifest, max-lines ratchet, localization checks, formatting, diff checks, and changed-code
+  quality across 180 files pass.
+- A fresh read-only review found no P0/P1 or required fix across all opcodes, generation rollover,
+  mixed versions, resource bounds, and malicious-peer behavior. It prompted the precise
+  reserved-versus-never-reserved wording above.
+- No payload, opcode, capability, field, limit, or publication changes. New/new peers avoid the
+  teardown race; an older peer may retain its conservative whole-tunnel close until upgraded.
+
 ## Acceptance matrix
 
 | Requirement                                                        | State                     | Evidence or blocker                                                                                               |
@@ -441,10 +479,10 @@ Deterministic evidence:
 
 ## Remaining implementation order
 
-1. Monitor #14691 CI without merging or marking it ready.
-2. Make late per-stream frames local to that stream, make long-poll admission fair/recoverable
-   across paired devices, retire placements when fencing a lease, and enforce main-owned webview
-   navigation grants before activating any client-host capability.
+1. Monitor #14691 and #14694 CI without merging or marking either ready.
+2. Make long-poll admission fair/recoverable across paired devices, retire placements when
+   fencing a lease, and enforce main-owned webview navigation grants before activating any
+   client-host capability.
 3. Execute the pinned reclaim/restore/close reconciliation plan against authenticated runtime
    intent and the preserved reconnect inventory before recovering ambiguous slots or routes.
 4. Add optional placement to logical session-tab publication and renderer state. Follow
@@ -523,6 +561,15 @@ Published reconnect-grace stage (#14691):
   durability contract changes. The optional JSON field is stripped by old peers and required only
   after exact echo on a reconnect attempt.
 
+Published retired-frame isolation stage (#14694):
+
+- Baseline/candidate oracle: 2 failed / 26 passed before the fix, 28/28 passed after it.
+- Full affected browser-network/control gate: 16 files / 198 tests passed.
+- Full Node/CLI/web typecheck, lint/audits, 87-gate manifest, max-lines, localization, formatting,
+  diff checks, and changed-code quality pass.
+- The full 31-patch stack rebased conflict-free onto `origin/main@3908978ba4`; `git range-diff`
+  marked every patch identical before this ledger amend.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -562,6 +609,13 @@ topology, versions, and explicit gaps at every later checkpoint.
   [#14691](https://github.com/stablyai/orca/pull/14691) on #14648. No PR was merged or marked ready.
 - Attached #14691 to STA-4150 and posted one concise reconnect-stage checkpoint. The ticket remains
   In Progress.
+- Rebased all 31 patches onto `origin/main@3908978ba4`, confirmed every patch identical by
+  `git range-diff`, and atomically force-pushed all 29 prior public branches with exact remote-OID
+  leases while creating the retired-frame branch with a must-not-exist lease.
+- Opened draft PR [#14694](https://github.com/stablyai/orca/pull/14694) on #14691. No PR was merged
+  or marked ready.
+- GitHub attached #14694 to STA-4150 automatically; posted exactly one retired-frame checkpoint
+  comment and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

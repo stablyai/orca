@@ -181,6 +181,34 @@ describe('BrowserNetworkTunnelClient', () => {
     client.close()
   })
 
+  it('ignores a retired stream frame but rejects a never-allocated stream ID', async () => {
+    const client = new BrowserNetworkTunnelClient({
+      tunnelGeneration: 7,
+      sendBinary: () => true
+    })
+    const firstOpening = client.open({ host: 'first.internal', port: 443 })
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
+    const first = await firstOpening
+    first.on('error', () => {})
+    const firstClosed = once(first, 'close')
+    first.destroy()
+    await firstClosed
+
+    const secondOpening = client.open({ host: 'second.internal', port: 443 })
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, 2))
+    const second = await secondOpening
+    second.on('error', () => {})
+
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([1]), 7, 1))
+
+    expect(second.destroyed).toBe(false)
+    const received = once(second, 'data')
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([2]), 7, 2))
+    await expect(received).resolves.toEqual([Buffer.from([2])])
+    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([3]), 7, 3))
+    expect(second.destroyed).toBe(true)
+  })
+
   it('never reuses stream IDs within one generation after its bounded ledger exhausts', async () => {
     const sent: Uint8Array<ArrayBufferLike>[] = []
     const client = new BrowserNetworkTunnelClient({
