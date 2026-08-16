@@ -172,13 +172,15 @@ async function getProjectRefPreferring(
   preferredRemoteNames: readonly string[],
   knownHosts?: readonly string[],
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  excludedRemoteNames: readonly string[] = []
 ): Promise<ProjectRef | null> {
   return resolveProjectRefPreferringRemotes(
     preferredRemoteNames,
     (remoteName) =>
       getProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions),
-    () => listRepoRemoteNames(repoPath, connectionId, localGitOptions)
+    () => listRepoRemoteNames(repoPath, connectionId, localGitOptions),
+    excludedRemoteNames
   )
 }
 
@@ -230,13 +232,14 @@ export async function resolveIssueSource(
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
-    // Why: prefer origin after upstream, then any other remote (#13816).
+    // Why: prefer origin after upstream, then any other remote without retrying upstream (#13816).
     const fallback = await getProjectRefPreferring(
       repoPath,
       ['origin'],
       knownHosts,
       connectionId,
-      localGitOptions
+      localGitOptions,
+      ['upstream']
     )
     return { source: fallback, fellBack: fallback !== null }
   }

@@ -11,20 +11,29 @@ import type { LocalGitExecOptions } from './gitlab-known-host-probe'
 export async function resolveProjectRefPreferringRemotes<T>(
   preferredRemoteNames: readonly string[],
   probeRemote: (remoteName: string) => Promise<T | null>,
-  listRemoteNames: () => Promise<readonly string[]>
+  listRemoteNames: () => Promise<readonly string[]>,
+  excludedRemoteNames: readonly string[] = []
 ): Promise<T | null> {
-  const seen = new Set<string>()
+  const seen = new Set(excludedRemoteNames)
   for (const remoteName of preferredRemoteNames) {
-    if (!remoteName || seen.has(remoteName)) continue
+    if (!remoteName || seen.has(remoteName)) {
+      continue
+    }
     seen.add(remoteName)
     const ref = await probeRemote(remoteName)
-    if (ref) return ref
+    if (ref) {
+      return ref
+    }
   }
   for (const remoteName of await listRemoteNames()) {
-    if (seen.has(remoteName)) continue
+    if (seen.has(remoteName)) {
+      continue
+    }
     seen.add(remoteName)
     const ref = await probeRemote(remoteName)
-    if (ref) return ref
+    if (ref) {
+      return ref
+    }
   }
   return null
 }
@@ -45,7 +54,9 @@ export async function listRepoRemoteNames(
   try {
     if (connectionId) {
       const provider = getSshGitProvider(connectionId)
-      if (!provider) return []
+      if (!provider) {
+        return []
+      }
       const { stdout } = await provider.exec(['remote'], repoPath, {
         signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
       })

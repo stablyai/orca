@@ -26,8 +26,7 @@ import {
   getProjectRef,
   getProjectRefForRemote,
   parseGlabApiResponse,
-  parseGlabAuthStatusHosts,
-  resolveIssueSource
+  parseGlabAuthStatusHosts
 } from './gl-utils'
 import { GlabNonListResponseError } from './glab-api-response'
 import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
@@ -159,13 +158,15 @@ describe('gitlab project ref resolution', () => {
   })
 
   it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[], options?: { wslDistro?: string }) => {
-      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
-        const path = options?.wslDistro ? 'wsl/orca' : 'host/orca'
-        return { stdout: `git@gitlab.com:${path}.git\n` }
+    gitExecFileAsyncMock.mockImplementation(
+      async (args: string[], options?: { wslDistro?: string }) => {
+        if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+          const path = options?.wslDistro ? 'wsl/orca' : 'host/orca'
+          return { stdout: `git@gitlab.com:${path}.git\n` }
+        }
+        throw new Error(`unexpected git args: ${args.join(' ')}`)
       }
-      throw new Error(`unexpected git args: ${args.join(' ')}`)
-    })
+    )
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
@@ -400,84 +401,6 @@ describe('gitlab project ref resolution', () => {
       path: 'after/orca'
     })
     expect(sshExecMock).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('resolveIssueSource', () => {
-  beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
-    _resetProjectRefCache()
-  })
-
-  it("'auto' + upstream exists → upstream, fellBack=false", async () => {
-    mockGitRemotes({
-      upstream: 'git@gitlab.com:stablyai/orca.git',
-      origin: 'git@gitlab.com:fork/orca.git'
-    })
-
-    await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'stablyai/orca' },
-      fellBack: false
-    })
-  })
-
-  it("'auto' + no upstream → origin, fellBack=false", async () => {
-    mockGitRemotes({
-      upstream: 'git@example.com:stablyai/orca.git',
-      origin: 'git@gitlab.com:solo/orca.git'
-    })
-
-    await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'solo/orca' },
-      fellBack: false
-    })
-  })
-
-  it("'upstream' + no upstream remote → origin, fellBack=true", async () => {
-    mockGitRemotes({ origin: 'git@gitlab.com:solo/orca.git' })
-
-    await expect(resolveIssueSource('/repo', 'upstream')).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'solo/orca' },
-      fellBack: true
-    })
-  })
-
-  it("'upstream' + only a non-origin GitLab remote → that remote, fellBack=true", async () => {
-    mockGitRemotes({ myremote: 'git@gitlab.com:group/project.git' })
-
-    await expect(resolveIssueSource('/repo', 'upstream')).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'group/project' },
-      fellBack: true
-    })
-  })
-
-  it("'origin' + upstream exists → origin (ignores upstream), fellBack=false", async () => {
-    mockGitRemotes({
-      origin: 'git@gitlab.com:fork/orca.git',
-      upstream: 'git@gitlab.com:stablyai/orca.git'
-    })
-
-    await expect(resolveIssueSource('/repo', 'origin')).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'fork/orca' },
-      fellBack: false
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-      ['remote', 'get-url', 'upstream'],
-      expect.anything()
-    )
-  })
-
-  it('undefined preference is treated identically to auto', async () => {
-    mockGitRemotes({ upstream: 'git@gitlab.com:stablyai/orca.git' })
-
-    await expect(resolveIssueSource('/repo', undefined)).resolves.toEqual({
-      source: { host: 'gitlab.com', path: 'stablyai/orca' },
-      fellBack: false
-    })
   })
 })
 
