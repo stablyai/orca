@@ -101,7 +101,33 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
     await expect(composition.close()).resolves.toBe(true)
 
-    expect(rig.order).toEqual(['activate-routes', 'close-host', 'close-executor', 'close-routes'])
+    expect(rig.order).toEqual([
+      'activate-routes',
+      'suspend-routes',
+      'fence-navigation',
+      'close-host',
+      'close-executor',
+      'close-routes'
+    ])
+  })
+
+  it('fences navigation and routes before terminal host cleanup can wait', async () => {
+    const rig = createRig()
+    const composition = rig.createComposition()
+    const error = new Error('terminal authority loss')
+    await composition.start()
+
+    rig.hostOptions.onError?.(error)
+
+    expect(rig.routes.suspend).toHaveBeenCalledWith(error)
+    expect(rig.executor.fenceNavigation).toHaveBeenCalledOnce()
+    expect(rig.order.slice(0, 4)).toEqual([
+      'activate-routes',
+      'suspend-routes',
+      'fence-navigation',
+      'close-host'
+    ])
+    await composition.whenClosed()
   })
 
   it('fails closed without racing page cleanup when handlers do not settle', async () => {
@@ -111,13 +137,26 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
     await expect(composition.close()).resolves.toBe(false)
 
-    expect(rig.order).toEqual(['activate-routes', 'close-host', 'close-routes'])
+    expect(rig.order).toEqual([
+      'activate-routes',
+      'suspend-routes',
+      'fence-navigation',
+      'close-host',
+      'close-routes'
+    ])
     expect(rig.executor.close).not.toHaveBeenCalled()
 
     rig.settleHandlers()
     await composition.whenClosed()
 
-    expect(rig.order).toEqual(['activate-routes', 'close-host', 'close-routes', 'close-executor'])
+    expect(rig.order).toEqual([
+      'activate-routes',
+      'suspend-routes',
+      'fence-navigation',
+      'close-host',
+      'close-routes',
+      'close-executor'
+    ])
   })
 
   it('reports a deferred executor cleanup failure while retaining its fence', async () => {
@@ -168,7 +207,9 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
   })
   const routes = {
     retain: vi.fn(),
-    suspend: vi.fn(),
+    suspend: vi.fn(() => {
+      order.push('suspend-routes')
+    }),
     reconnect: vi.fn(async () => {}),
     close: vi.fn(async () => {
       order.push('close-routes')
@@ -184,6 +225,9 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
+    fenceNavigation: vi.fn(() => {
+      order.push('fence-navigation')
+    }),
     snapshotPageInventory: vi.fn(() => [
       {
         authorityRuntimeId: 'runtime-a',
@@ -209,6 +253,7 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
     onAuthority?: (next: BrowserClientHostLeaseAuthority) => void
     onTransportLost?: (error: Error) => void
     onReconnected?: (next: BrowserClientHostLeaseAuthority) => void
+    onError?: (error: Error) => void
     handler?: (
       event: BrowserClientHostCommandEvent,
       signal: AbortSignal

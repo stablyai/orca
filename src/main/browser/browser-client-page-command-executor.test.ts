@@ -104,6 +104,10 @@ function createHarness(options: { maxPages?: number } = {}) {
         order.push('grant-navigation')
         return true
       }),
+      revokeNavigation: vi.fn(() => {
+        order.push('revoke-navigation')
+        return true
+      }),
       navigateGuest: vi.fn(async () => {
         order.push('navigate-guest')
         return true
@@ -627,12 +631,7 @@ describe('BrowserClientPageCommandExecutor', () => {
       errorCode: 'browser_client_page_executor_closed'
     })
     expect(executor.hasPage('page-a', 7)).toBe(false)
-    expect(order.slice(-4)).toEqual([
-      'retire-guest',
-      'retire-renderer-page',
-      'release-session',
-      'release-route'
-    ])
+    expect(order).toEqual(['release-route'])
   })
 
   it('retires every retained page before fencing later commands', async () => {
@@ -641,7 +640,8 @@ describe('BrowserClientPageCommandExecutor', () => {
 
     await executor.close()
 
-    expect(order.slice(-4)).toEqual([
+    expect(order.slice(-5)).toEqual([
+      'revoke-navigation',
       'retire-guest',
       'retire-renderer-page',
       'release-session',
@@ -653,5 +653,76 @@ describe('BrowserClientPageCommandExecutor', () => {
       status: 'failed',
       errorCode: 'browser_client_page_executor_closed'
     })
+  })
+
+  it('revokes retained navigation once without inferring guest destruction', async () => {
+    const { dependencies, executor, order, route } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+
+    executor.fenceNavigation()
+    executor.fenceNavigation()
+
+    expect(dependencies.routeWebContents.revokeNavigation).toHaveBeenCalledOnce()
+    expect(order.at(-1)).toBe('revoke-navigation')
+    expect(route.release).not.toHaveBeenCalled()
+    await expect(
+      executor.handle(createCommand('navigate'), new AbortController().signal)
+    ).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
+    await executor.close()
+  })
+
+  it('continues exact page cleanup when navigation revocation throws', async () => {
+    const { dependencies, executor, order } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+    dependencies.routeWebContents.revokeNavigation.mockImplementationOnce(() => {
+      order.push('revoke-navigation')
+      throw new Error('navigation revocation failed')
+    })
+
+    await expect(executor.close()).rejects.toMatchObject({
+      message: 'Browser client page navigation fencing failed',
+      errors: [expect.objectContaining({ message: 'navigation revocation failed' })]
+    })
+
+    expect(order.slice(-5)).toEqual([
+      'revoke-navigation',
+      'retire-guest',
+      'retire-renderer-page',
+      'release-session',
+      'release-route'
+    ])
+    await expect(
+      executor.handle(createCommand('navigate'), new AbortController().signal)
+    ).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
+  })
+
+  it('prevents an in-flight creation from granting navigation after fencing', async () => {
+    const { dependencies, executor, order, route } = createHarness()
+    let resolveRoute = (_route: typeof route): void => {}
+    dependencies.retainNetworkRoute.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRoute = resolve
+        })
+    )
+    const creating = executor.handle(createCommand('createPage'), new AbortController().signal)
+    await Promise.resolve()
+
+    executor.fenceNavigation()
+    resolveRoute(route)
+
+    await expect(creating).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
+    expect(dependencies.routeWebContents.grantNavigation).not.toHaveBeenCalled()
+    expect(order).toEqual(['release-route'])
+    await executor.close()
   })
 })

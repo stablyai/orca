@@ -22,6 +22,7 @@ type ComposedPageExecutor = {
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
+  fenceNavigation(): void
   close(): Promise<void>
 }
 
@@ -110,7 +111,10 @@ export class PairedRuntimeBrowserClientHostComposition {
   }
 
   close(error = new Error('Browser client host composition is closed')): Promise<boolean> {
-    this.closed = true
+    if (!this.closed) {
+      this.closed = true
+      this.fenceTerminalAuthority(error)
+    }
     this.rejectRouteRecovery(error)
     this.closePromise ??= this.closeComposition(error)
     return this.closePromise
@@ -198,6 +202,19 @@ export class PairedRuntimeBrowserClientHostComposition {
     }
     this.routeRecovery = null
     recovery.reject(error)
+  }
+
+  private fenceTerminalAuthority(error: Error): void {
+    try {
+      this.routes?.suspend(error)
+    } catch (routeError) {
+      this.reportCleanupError(asError(routeError))
+    }
+    try {
+      this.executor.fenceNavigation()
+    } catch (navigationError) {
+      this.reportCleanupError(asError(navigationError))
+    }
   }
 
   private requireRoutes(): ComposedNetworkRoutes {

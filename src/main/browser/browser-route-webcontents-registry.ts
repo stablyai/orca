@@ -17,6 +17,11 @@ import {
   isValidRoutePageRetirement
 } from './browser-route-guest-guard'
 import { claimBrowserRouteGuestLifecycle } from './browser-route-guest-lifecycle-claim'
+import { releaseBrowserRouteGuest } from './browser-route-guest-release'
+import {
+  grantBrowserRouteGuestNavigation,
+  revokeBrowserRouteGuestNavigation
+} from './browser-route-navigation-authority'
 import {
   beginBrowserRouteGuestRetirement,
   createBrowserRouteGuestState,
@@ -128,21 +133,29 @@ export class BrowserRouteWebContentsRegistry {
   }
 
   grantNavigation(registration: GuestIdentity): boolean {
-    if (!isValidRoutePageRegistration(registration)) {
-      return false
-    }
     const state = this.guests.get(registration.webContentsId)
-    if (
-      !state?.registration ||
-      browserRoutePageKey(state.registration) !== browserRoutePageKey(registration) ||
-      !isBlankRouteGuest(state.guest) ||
-      !this.registrationMatchesGuest(state, registration) ||
-      !this.hasLivePageAuthority(state)
-    ) {
-      return false
-    }
-    state.navigationGranted = true
-    return true
+    return grantBrowserRouteGuestNavigation({
+      registration,
+      state,
+      registrationMatches: () =>
+        Boolean(
+          state &&
+          isBlankRouteGuest(state.guest) &&
+          this.registrationMatchesGuest(state, registration)
+        ),
+      hasLivePageAuthority: () => Boolean(state && this.hasLivePageAuthority(state))
+    })
+  }
+
+  revokeNavigation(claim: BrowserRouteGuestLifecycleClaim): boolean {
+    const registration = claim.registration
+    const state = this.guests.get(registration.webContentsId)
+    return revokeBrowserRouteGuestNavigation({
+      claim,
+      state,
+      registrationMatches: () =>
+        Boolean(state && this.registrationMatchesGuest(state, registration))
+    })
   }
 
   async navigateGuest(claim: BrowserRouteGuestLifecycleClaim, rawUrl: string): Promise<boolean> {
@@ -289,34 +302,6 @@ export class BrowserRouteWebContentsRegistry {
   }
 
   private releaseGuest(state: GuestState): void {
-    if (this.guests.get(state.guest.id) === state) {
-      this.guests.delete(state.guest.id)
-    }
-    if (state.registration) {
-      const pageKey = browserRoutePageKey(state.registration)
-      if (this.guestsByPage.get(pageKey) === state) {
-        this.guestsByPage.delete(pageKey)
-      }
-    }
-    try {
-      state.guest.off('will-navigate', state.onNavigate)
-    } catch {}
-    try {
-      state.guest.off('will-redirect', state.onNavigate)
-    } catch {}
-    try {
-      state.guest.off('render-process-gone', state.onRenderProcessGone)
-    } catch {}
-    try {
-      state.guest.off('destroyed', state.onDestroyed)
-    } catch {}
-    const callback = state.retirementCallback
-    state.retirementCallback = null
-    state.resolveDestroyed()
-    if (callback) {
-      try {
-        callback()
-      } catch {}
-    }
+    releaseBrowserRouteGuest(state, this.guests, this.guestsByPage)
   }
 }

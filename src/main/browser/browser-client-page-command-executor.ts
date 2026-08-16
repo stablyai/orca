@@ -21,12 +21,16 @@ import type {
 } from './browser-route-page-authority'
 import type { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import type { BrowserRouteSessionHandle } from './browser-route-session-state'
-import type { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 import {
   browserClientPageCommandFailureCode,
   BrowserClientPageCommandError,
   isBrowserClientPageCleanupFailure
 } from './browser-client-page-command-failure'
+import { BrowserClientPageNavigationFence } from './browser-client-page-navigation-fence'
+import type {
+  BrowserClientPageLifecycleRegistry,
+  BrowserClientRetainedPage
+} from './browser-client-page-retained-state'
 import {
   createBrowserClientPageInventory,
   snapshotBrowserClientPageInventoryList,
@@ -39,33 +43,16 @@ type BrowserClientPageCommandExecutorDependencies = {
   retainNetworkRoute(executionHostKey: string, signal: AbortSignal): Promise<RetainedNetworkRoute>
   selectRenderer(): BrowserClientPageRenderer
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
-  routeWebContents: Pick<
-    BrowserRouteWebContentsRegistry,
-    | 'claimGuestLifecycle'
-    | 'registerGuest'
-    | 'grantNavigation'
-    | 'navigateGuest'
-    | 'beginGuestRetirement'
-  >
+  routeWebContents: BrowserClientPageLifecycleRegistry
   maxPages?: number
-}
-
-type RetainedPage = {
-  generation: number
-  inventory: BrowserClientHostedPageInventory
-  registration: BrowserRoutePageGuestIdentity
-  lifecycleClaim: BrowserRouteGuestLifecycleClaim
-  renderer: BrowserClientPageRenderer
-  route: RetainedNetworkRoute
-  routeSession: BrowserRouteSessionHandle
-  retiring: Promise<void> | null
 }
 
 export class BrowserClientPageCommandExecutor {
   private readonly maxPages: number
-  private readonly pages = new Map<string, RetainedPage>()
+  private readonly pages = new Map<string, BrowserClientRetainedPage>()
   private readonly creatingPages = new Map<string, BrowserClientHostedPageInventory>()
   private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
+  private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
   private closed = false
 
@@ -84,7 +71,7 @@ export class BrowserClientPageCommandExecutor {
     event: BrowserClientHostCommandEvent,
     signal: AbortSignal
   ): Promise<BrowserClientHostCommandResult> {
-    if (this.closed) {
+    if (this.closed || this.navigationFence.isFenced) {
       return { status: 'failed', errorCode: 'browser_client_page_executor_closed' }
     }
     try {
@@ -115,7 +102,17 @@ export class BrowserClientPageCommandExecutor {
 
   close(): Promise<void> {
     this.closed = true
-    return (this.closePromise ??= this.closePages())
+    return (this.closePromise ??= this.navigationFence.fenceBeforeCleanup(
+      this.pages.values(),
+      (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
+      () => this.closePages()
+    ))
+  }
+
+  fenceNavigation(): void {
+    this.navigationFence.fence(this.pages.values(), (claim) =>
+      this.dependencies.routeWebContents.revokeNavigation(claim)
+    )
   }
 
   async retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
@@ -182,6 +179,7 @@ export class BrowserClientPageCommandExecutor {
         throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
       }
       assertBrowserClientPageCommandNotAborted(signal)
+      this.navigationFence.assertAvailable(this.closed)
       renderer = this.dependencies.selectRenderer()
       assertCurrentBrowserClientPageRenderer(renderer)
       routeSession = await this.dependencies.routeSessions.preparePage({
@@ -197,6 +195,7 @@ export class BrowserClientPageCommandExecutor {
         proxyEndpoint: route.proxyEndpoint
       })
       assertBrowserClientPageCommandNotAborted(signal)
+      this.navigationFence.assertAvailable(this.closed)
       assertCurrentBrowserClientPageRenderer(renderer)
       const page = browserClientPageIdentity(event, routeSession.partition)
       mountAttempted = true
@@ -211,6 +210,7 @@ export class BrowserClientPageCommandExecutor {
         throw new BrowserClientPageCommandError('browser_client_page_guest_observation_failed')
       }
       assertBrowserClientPageCommandNotAborted(signal)
+      this.navigationFence.assertAvailable(this.closed)
       assertCurrentBrowserClientPageRenderer(renderer)
       if (!this.dependencies.routeWebContents.registerGuest(registration)) {
         throw new BrowserClientPageCommandError('browser_client_page_guest_registration_failed')
@@ -218,7 +218,7 @@ export class BrowserClientPageCommandExecutor {
       if (!this.dependencies.routeWebContents.grantNavigation(registration)) {
         throw new BrowserClientPageCommandError('browser_client_page_navigation_grant_failed')
       }
-      if (this.closed) {
+      if (this.closed || this.navigationFence.isFenced) {
         throw new BrowserClientPageCommandError('browser_client_page_executor_closed')
       }
       this.pages.set(event.browserPageId, {
@@ -276,7 +276,7 @@ export class BrowserClientPageCommandExecutor {
     page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, normalized)
   }
 
-  private async cleanupPage(page: RetainedPage): Promise<void> {
+  private async cleanupPage(page: BrowserClientRetainedPage): Promise<void> {
     return cleanupBrowserClientPage(this.dependencies.routeWebContents, {
       guestMayExist: true,
       lifecycleClaim: page.lifecycleClaim,

@@ -36,14 +36,18 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-lease-fence-placement-retirement`, draft PR
-  [#14753](https://github.com/stablyai/orca/pull/14753), stacked on admission-fairness PR
-  [#14747](https://github.com/stablyai/orca/pull/14747).
+- Latest published stack tip: `sta-4150-browser-navigation-grant-lease-fencing`, draft PR
+  [#14754](https://github.com/stablyai/orca/pull/14754), stacked on lease-retirement PR
+  [#14753](https://github.com/stablyai/orca/pull/14753).
 - All 32 patches through the published admission stage are rebased onto
   `origin/main@5b7f44278a`; range-diff marked every patch identical before the exact-lease push.
 - Published lease-fence placement-retirement stage: draft PR
   [#14753](https://github.com/stablyai/orca/pull/14753). It makes exact terminal host-generation
   placement retirement non-cancellable without inferring destruction or releasing capacity.
+- Published navigation-fence stage: draft PR
+  [#14754](https://github.com/stablyai/orca/pull/14754). Terminal authority loss synchronously
+  suspends routes and revokes exact retained WebContents navigation grants before asynchronous host
+  cleanup; recoverable reconnect still preserves pages and grants.
 - The reconnect stage preserves exact client-host authority and page/executor lifetime through a
   negotiated, bounded same-client reconnect grace. Its pre-ledger, pre-replay-fix tip was
   `1093072a0b`; the reviewed fix was first committed at `5374c561a6` before this final ledger amend.
@@ -109,6 +113,7 @@ ownership.
 | [#14694](https://github.com/stablyai/orca/pull/14694) | Tunnel isolation   | Late retired-stream frames cannot collapse healthy concurrent streams     |
 | [#14747](https://github.com/stablyai/orca/pull/14747) | Admission fairness | Per-device host capacity, wait reservation, and bounded pressure recovery |
 | [#14753](https://github.com/stablyai/orca/pull/14753) | Lease retirement   | Terminal exact-host fencing makes placements non-cancellable pending      |
+| [#14754](https://github.com/stablyai/orca/pull/14754) | Navigation fence   | Terminal authority loss suspends routes and revokes exact guest grants    |
 
 ## Current stage: exact renderer bridge
 
@@ -541,22 +546,20 @@ Validation and review:
 
 ## Remaining implementation order
 
-1. Monitor #14747 CI without merging or marking it ready; the current-main type-aware warning is
+1. Monitor #14754 CI without merging or marking it ready; the current-main type-aware warning is
    upstream and must not be folded into this browser stage.
-2. Retire placements when fencing a lease and enforce main-owned webview navigation grants before
-   activating any client-host capability.
-3. Execute the pinned reclaim/restore/close reconciliation plan against authenticated runtime
+2. Execute the pinned reclaim/restore/close reconciliation plan against authenticated runtime
    intent and the preserved reconnect inventory before recovering ambiguous slots or routes.
-4. Add optional placement to logical session-tab publication and renderer state. Follow
+3. Add optional placement to logical session-tab publication and renderer state. Follow
    `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
-5. Route create and every existing browser command by explicit placement. Never silently fall
+4. Route create and every existing browser command by explicit placement. Never silently fall
    back or migrate a live page.
-6. Add local browser chrome and interaction-owner fencing for client placement.
-7. Add mobile mirroring and dedicated large-result channels without coupling them to control or
+5. Add local browser chrome and interaction-owner fencing for client placement.
+6. Add mobile mirroring and dedicated large-result channels without coupling them to control or
    terminal multiplexing.
-8. Run real Electron containment and traffic proof, then headed/headless/browserless paired
+7. Run real Electron containment and traffic proof, then headed/headless/browserless paired
    journeys and the physical platform/provider matrix.
-9. Enable client placement only behind a kill switch for newly created eligible desktop pages;
+8. Enable client placement only behind a kill switch for newly created eligible desktop pages;
    retain explicit server placement and rollback that does not move existing pages.
 
 ## Compatibility costs and risks
@@ -665,6 +668,29 @@ Published lease-fence placement-retirement stage (#14753):
 - No exchanged field, opcode, capability, payload, publication, placement default, SSH/WSL path,
   folder/worktree behavior, Electron UI, or server-hosted browser behavior changes.
 
+Published terminal navigation-authority stage (#14754):
+
+- Baseline: the new composition oracle failed 1 of 11 assertions because terminal host loss began
+  asynchronous control cleanup without first suspending routes or revoking local WebContents
+  navigation authority.
+- Candidate: terminal close marks the composition closed, suspends every retained route, then
+  revokes only exact opaque guest lifecycle claims before host cleanup can wait for command
+  handlers. Negotiated reconnect still suspends routes without destroying pages or grants.
+- Late in-flight create work rechecks the fence after every asynchronous admission boundary and
+  cannot register or grant a page after terminal authority loss.
+- Revocation neither destroys a guest nor releases its Session or route. If revocation throws,
+  executor close remains fenced, reports the failure, and still attempts exact guest, renderer,
+  Session, and route cleanup.
+- Focused coverage passes 3 files / 62 tests; the WebContents lifecycle gate passes 12 files / 132
+  tests; the paired-runtime gate passes 16 files / 167 tests; mixed-version terminal wire passes
+  5/5.
+- Node/CLI/web typecheck, changed-code quality, 87-gate reliability validation, max-lines ratchet,
+  localization, formatting, and diff checks pass. Full lint reaches only the known upstream-main
+  type-aware warning at `config/scripts/pr-test-loc-summary.test.mjs:88`.
+- No exchanged field, opcode, capability, payload, publication, placement default, SSH/WSL path,
+  folder/worktree behavior, UI, or server-hosted browser behavior changes. The stage remains
+  production-inert and needs live activation/topology evidence later.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -673,7 +699,8 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Pushed the STA-4150 staged branches listed in the draft-stack table.
 - Opened and maintained their linked draft PRs; none were merged or marked ready.
 - Attached draft PRs and posted one concise checkpoint per stage on STA-4150.
-- Latest public checkpoint: attached/commented draft PR #14648; CI is running.
+- Latest public checkpoint: GitHub auto-attached draft PR #14754 and one Linear checkpoint was
+  posted; CI is running.
 - Updated the Orca worktree comment/status at context, reproduction, fix, validation, and review
   checkpoints.
 - Pushed the renderer-bridge branch, opened draft PR #14578 on #14566, attached it to STA-4150,
@@ -728,6 +755,11 @@ topology, versions, and explicit gaps at every later checkpoint.
   changed, and no PR was merged or marked ready.
 - GitHub auto-attached #14753 to STA-4150. Posted exactly one lease-retirement checkpoint comment
   (`99343f4d-a584-46fd-94ab-fc8d004e738b`) and kept the ticket In Progress.
+- Pushed `sta-4150-browser-navigation-grant-lease-fencing` with a must-not-exist lease and opened
+  draft PR [#14754](https://github.com/stablyai/orca/pull/14754) on #14753. No prior stack branch
+  changed, and no PR was merged or marked ready.
+- GitHub auto-attached #14754 to STA-4150. Posted exactly one navigation-fence checkpoint comment
+  (`6ea865bf-8003-435a-8600-9ec11fd21577`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

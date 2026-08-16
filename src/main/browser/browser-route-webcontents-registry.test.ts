@@ -157,6 +157,31 @@ describe('BrowserRouteWebContentsRegistry', () => {
     expect(guest.openWindow()).toEqual({ action: 'deny' })
   })
 
+  it('revokes only the exact guest lifecycle claim without destroying it', () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession })
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+    const claim = requireLifecycleClaim(registry)
+
+    expect(
+      registry.revokeNavigation({
+        ...claim,
+        registration: { ...page, pageHostGeneration: page.pageHostGeneration + 1 }
+      })
+    ).toBe(false)
+    const afterStaleFence = navigationEvent()
+    guest.emit('will-navigate', afterStaleFence, 'https://example.com/')
+    expect(afterStaleFence.preventDefault).not.toHaveBeenCalled()
+
+    expect(registry.revokeNavigation(claim)).toBe(true)
+    const afterExactFence = navigationEvent()
+    guest.emit('will-navigate', afterExactFence, 'https://example.com/')
+    expect(afterExactFence.preventDefault).toHaveBeenCalledOnce()
+    expect(guest.guest.close).not.toHaveBeenCalled()
+  })
+
   it('loads only a normalized web URL on the exact registered guest', async () => {
     const { registry, routeSession } = createHarness()
     const guest = createGuest({ session: routeSession })
