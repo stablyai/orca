@@ -8,6 +8,9 @@ describe('worker-stop terminal-close contract', () => {
 
   it('documents processAction as the close guarantee surface', () => {
     expect(workerStop).toBeDefined()
+    expect(workerStop?.summary).toBe(
+      'Fence one Dispatch; close its terminal only for the exact live supervised worker'
+    )
     const notes = workerStop?.notes?.join('\n') ?? ''
     expect(notes).toContain('closed_agent_terminal')
     expect(notes).toContain('processAction')

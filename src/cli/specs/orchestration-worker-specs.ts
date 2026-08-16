@@ -61,7 +61,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-stop'],
-    summary: 'Fence one Dispatch and stop its supervised agent terminal',
+    summary: 'Fence one Dispatch; close its terminal only for the exact live supervised worker',
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
