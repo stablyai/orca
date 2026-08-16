@@ -1013,11 +1013,15 @@ function mergeProjectCompatibilityForHostRepoChange({
   })
 }
 
-function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>) {
-  if (group.executionHostId) {
-    return group.executionHostId
+function getProjectGroupHostId(
+  group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
+): ExecutionHostId {
+  const explicitHost = parseExecutionHostId(group.executionHostId)
+  if (explicitHost) {
+    return explicitHost.id
   }
-  return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
+  const connectionId = group.connectionId?.trim()
+  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
 function getProjectGroupHostIdentity(group: ProjectGroup): string {
@@ -1031,7 +1035,7 @@ function projectGroupMatchesOwnerHost(
   if (!group.executionHostId && !group.connectionId?.trim()) {
     return true
   }
-  return getProjectGroupHostId(group) === ownerHostId
+  return catalogOwnsHost(ownerHostId, getProjectGroupHostId(group))
 }
 
 /** Route group mutations to the group's owner host, not whichever runtime is focused. */
@@ -2885,13 +2889,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             (workspace) =>
               !(
                 deletedGroupIds.has(workspace.projectGroupId) &&
-                getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
+                catalogOwnsHost(ownerHostId, getFolderWorkspaceHostId(workspace, s.projectGroups))
               )
           ),
           repos: s.repos.map((repo) =>
             repo.projectGroupId &&
             deletedGroupIds.has(repo.projectGroupId) &&
-            (getRepoExecutionHostId(repo) === ownerHostId ||
+            (catalogOwnsHost(ownerHostId, getRepoExecutionHostId(repo)) ||
               (!repo.executionHostId && !repo.connectionId))
               ? { ...repo, projectGroupId: null }
               : repo

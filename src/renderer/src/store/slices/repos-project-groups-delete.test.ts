@@ -166,6 +166,82 @@ describe('project group deletion store routing', () => {
     expect(store.getState().projectGroups).toEqual([])
   })
 
+  it('removes a group whose persisted execution host needs normalization', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-normalized-host-group',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const remoteOwnedGroup: ProjectGroup = {
+      ...projectGroup,
+      executionHostId: ' runtime:env-remote ' as never
+    }
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      projectGroups: [remoteOwnedGroup],
+      repos: []
+    })
+
+    await expect(store.getState().deleteProjectGroup(remoteOwnedGroup.id)).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-remote',
+      method: 'projectGroup.delete',
+      params: { groupId: remoteOwnedGroup.id },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().projectGroups).toEqual([])
+  })
+
+  it('removes an SSH-owned group through the local project-group store', async () => {
+    projectGroupsDelete.mockResolvedValue(true)
+    const sshOwnedGroup: ProjectGroup = {
+      ...projectGroup,
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    }
+    const sshOwnedRepo: Repo = {
+      ...remoteRepo,
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1',
+      projectGroupId: sshOwnedGroup.id
+    }
+    const sshOwnedWorkspace: FolderWorkspace = {
+      id: 'ssh-folder-workspace',
+      projectGroupId: sshOwnedGroup.id,
+      name: 'SSH workspace',
+      folderPath: '/srv/workspace',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [sshOwnedGroup],
+      folderWorkspaces: [sshOwnedWorkspace],
+      repos: [sshOwnedRepo]
+    })
+
+    await expect(store.getState().deleteProjectGroup(sshOwnedGroup.id)).resolves.toBe(true)
+
+    expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: sshOwnedGroup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'projectGroup.delete' })
+    )
+    expect(store.getState().projectGroups).toEqual([])
+    expect(store.getState().folderWorkspaces).toEqual([])
+    expect(store.getState().repos).toMatchObject([{ id: sshOwnedRepo.id, projectGroupId: null }])
+  })
+
   it('keeps local delete when a local group is selected under a focused remote runtime', async () => {
     projectGroupsDelete.mockResolvedValue(true)
     const localGroup: ProjectGroup = {
