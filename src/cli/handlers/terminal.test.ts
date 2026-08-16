@@ -114,6 +114,29 @@ describe('terminal create CLI contract', () => {
     })
     expect(printResult).not.toHaveBeenCalled()
   })
+
+  it('prints a successful create response with a valid handle', async () => {
+    vi.mocked(printResult).mockClear()
+    const result = {
+      result: {
+        terminal: {
+          handle: 'term-created',
+          worktreeId: 'wt-1',
+          title: null
+        }
+      }
+    }
+    const call = vi.fn().mockResolvedValue(result)
+
+    await TERMINAL_HANDLERS['terminal create']({
+      flags: new Map([['worktree', 'active']]),
+      client: { call, isRemote: false } as unknown as RuntimeClient,
+      cwd: process.cwd(),
+      json: true
+    })
+
+    expect(printResult).toHaveBeenCalledWith(result, true, expect.any(Function))
+  })
 })
 
 describe('terminal send CLI', () => {
