@@ -158,6 +158,8 @@ const LONG_POLL_CAP = 16
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
 // clients sharing this runtime. Reserve half the budget for the other classes.
 const ASK_LONG_POLL_SHARE = 0.5
+// Why: permanent browser-host leases may use only one quarter, preserving capacity for waits and asks.
+const BROWSER_HOST_LONG_POLL_SHARE = 0.25
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -442,10 +444,13 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 ])
 
 // Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-type LongPollClass = 'ask' | 'wait'
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-function longPollClassOf(request: RpcRequest): LongPollClass | null {
+export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+  if (request.method === 'browser.clientHost.attach') {
+    return 'browser-host'
+  }
   if (request.method === 'terminal.wait') {
     return 'wait'
   }
@@ -501,6 +506,7 @@ export class OrcaRuntimeRpcServer {
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
+  private readonly browserHostLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -533,6 +539,7 @@ export class OrcaRuntimeRpcServer {
   private activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   private activeAskLongPolls = 0
+  private activeBrowserHostLongPolls = 0
 
   constructor({
     runtime,
@@ -564,6 +571,10 @@ export class OrcaRuntimeRpcServer {
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
+    this.browserHostLongPollCap = Math.max(
+      1,
+      Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)
+    )
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -1513,7 +1524,7 @@ export class OrcaRuntimeRpcServer {
     const request = parsed.request
 
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
-    const longPoll = longPollClassOf(request)
+    const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
@@ -1535,7 +1546,7 @@ export class OrcaRuntimeRpcServer {
   // Why: one fence for both transports — the total cap protects short RPCs, the ask
   // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
   // Returns the rejection message, or null once the slot is reserved.
-  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+  private admitLongPoll(longPoll: RuntimeLongPollClass | null): string | null {
     if (!longPoll) {
       return null
     }
@@ -1545,20 +1556,30 @@ export class OrcaRuntimeRpcServer {
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
     }
+    if (
+      longPoll === 'browser-host' &&
+      this.activeBrowserHostLongPolls >= this.browserHostLongPollCap
+    ) {
+      return 'browser-host capacity reached; retry with backoff'
+    }
     this.activeLongPolls += 1
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls += 1
     }
     return null
   }
 
-  private releaseLongPoll(longPoll: LongPollClass | null): void {
+  private releaseLongPoll(longPoll: RuntimeLongPollClass | null): void {
     if (!longPoll) {
       return
     }
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
     }
   }
 
@@ -1650,7 +1671,7 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = longPollClassOf(request)
+    const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
     if (rejection) {
       reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))

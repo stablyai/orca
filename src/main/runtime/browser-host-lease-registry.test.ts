@@ -58,6 +58,72 @@ describe('BrowserHostLeaseRegistry', () => {
     ).toThrow('browser_host_identity_conflict')
   })
 
+  it('admits only one distinct browser host per authenticated connection', () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+
+    expect(() =>
+      leases.attach({
+        browserHostClientId: 'host-b',
+        connectionId: 'connection-a',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview']
+      })
+    ).toThrow('browser_host_connection_capacity')
+    first.release()
+    expect(
+      leases.attach({
+        browserHostClientId: 'host-b',
+        connectionId: 'connection-a',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview']
+      }).lease.browserHostClientId
+    ).toBe('host-b')
+  })
+
+  it('bounds distinct browser hosts per paired device without starving another device', () => {
+    const leases = registry()
+    const handles = Array.from({ length: 4 }, (_, index) =>
+      leases.attach({
+        browserHostClientId: `host-${index}`,
+        connectionId: `connection-${index}`,
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview']
+      })
+    )
+
+    expect(() =>
+      leases.attach({
+        browserHostClientId: 'host-overflow',
+        connectionId: 'connection-overflow',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview']
+      })
+    ).toThrow('browser_host_device_capacity')
+    expect(
+      leases.attach({
+        browserHostClientId: 'host-other-device',
+        connectionId: 'connection-other-device',
+        pairedDeviceId: 'device-b',
+        hostCapabilities: ['webview']
+      }).lease.browserHostClientId
+    ).toBe('host-other-device')
+    handles[0]!.release()
+    expect(
+      leases.attach({
+        browserHostClientId: 'host-after-release',
+        connectionId: 'connection-after-release',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview']
+      }).lease.browserHostClientId
+    ).toBe('host-after-release')
+  })
+
   it('allocates monotonic page generations and rejects a stale host generation', () => {
     const leases = registry()
     const first = leases.attach({
@@ -94,6 +160,43 @@ describe('BrowserHostLeaseRegistry', () => {
       browserHostGeneration: 2,
       pageHostGeneration: 2
     })
+  })
+
+  it('retires closed page placement without reusing its generation', () => {
+    const leases = registry()
+    leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+    const first = leases.placeClientPage('page-a', 'host-a')
+
+    expect(leases.retirePage('page-a', first)).toBe(true)
+
+    expect(leases.getPlacement('page-a')).toBeUndefined()
+    expect(leases.placeClientPage('page-a', 'host-a')).toMatchObject({
+      pageHostGeneration: first.kind === 'client' ? first.pageHostGeneration + 1 : Number.NaN
+    })
+  })
+
+  it('does not let late cleanup retire a replacement or server placement', () => {
+    const leases = registry()
+    leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview']
+    })
+    const first = leases.placeClientPage('page-a', 'host-a')
+    const replacement = leases.placeClientPage('page-a', 'host-a')
+
+    expect(leases.retirePage('page-a', first)).toBe(false)
+    expect(leases.getPlacement('page-a')).toBe(replacement)
+    const server = leases.placeServerPage('page-a')
+    expect(leases.retirePage('page-a', replacement)).toBe(false)
+    expect(leases.getPlacement('page-a')).toBe(server)
+    expect(leases.retirePage('page-a', server)).toBe(true)
   })
 
   it('binds tunnel generations to the lease and fences replaced routes', async () => {

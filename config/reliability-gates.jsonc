@@ -2589,16 +2589,16 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Deterministic protocol, registry, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, bounded receive bytes and chunks, authority epochs, exact host selection, monotonic host/page/route generations, connection-owned cleanup, exact client revocation, stale and replaced fences, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. Explicitly injected browser-host and paired-runtime tunnel methods lease one exact host, then carry SOCKS and HTTP bytes over a dedicated E2EE socket to the fenced native execution-host revision and prove route close destroys the destination socket. Both methods and capabilities remain disabled in production. SSH and WSL providers remain uncovered.",
+      "coverageNotes": "Deterministic protocol, registry, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, bounded receive bytes and chunks, authority epochs, exact host selection, one host per authenticated connection, four hosts per paired device, long-poll metering and disconnect abort, monotonic host/page/route generations without page tombstones, connection-owned cleanup, exact client revocation, stale and replaced fences, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. Explicitly injected browser-host and paired-runtime tunnel methods lease one exact host, then carry SOCKS and HTTP bytes over a dedicated E2EE socket to the fenced native execution-host revision and prove route close destroys the destination socket. Both methods and capabilities remain disabled in production. SSH and WSL providers remain uncovered.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
       ],
       "invariant": "A client-hosted browser network route exists only for an exact live server-owned browser-host lease, authority epoch, host generation, paired identity, execution-host revision, and server-owned route generation. Host selection never chooses arbitrarily, stale cleanup cannot remove a replacement, destination names remain unresolved until the execution host, credit returns only after writes settle, and route loss never falls back to desktop DNS or sockets. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
-      "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Reject missing, stale, wrong-device, wrong-epoch, and wrong-execution-revision tunnel requests before binary registration. Drive the accepted lease through a real paired E2EE SOCKS-to-HTTP journey, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
+      "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Reject a second identity on one connection and a fifth identity for one paired device, release one exact lease, then admit its replacement without starving another device. Saturate the browser-host long-poll sub-cap, require an ordinary wait to remain admitted, close the socket, and prove both counters and handlers release. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Retire a closed page placement by exact token, reject delayed cleanup against a replacement and server placement, and require its reused ID to receive a higher global generation without retaining a tombstone. Reject missing, stale, wrong-device, wrong-epoch, and wrong-execution-revision tunnel requests before binary registration. Drive the accepted lease through a real paired E2EE SOCKS-to-HTTP journey, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts"
       ],
       "testFiles": [
@@ -2606,6 +2606,7 @@
         "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
         "src/main/runtime/browser-host-lease-registry.test.ts",
+        "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
         "src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "src/main/browser/paired-runtime-browser-host-lease.test.ts",
         "src/main/browser/browser-network-tunnel-session.test.ts",
@@ -2622,9 +2623,19 @@
           "file": "src/main/runtime/browser-host-lease-registry.test.ts",
           "assertions": [
             "multiple live hosts require exact selection instead of first-connected routing",
+            "one connection and one paired device cannot retain more than their exact host limits",
             "same-device replacement increments generation and fences the old connection",
             "late cleanup cannot remove a newer lease or route generation",
+            "late page cleanup cannot remove a replacement client generation or server placement",
+            "retired page placement leaves no tombstone and a reused ID receives a higher global generation",
             "page placement generations are monotonic and stale lease authority is rejected"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
+          "assertions": [
+            "browser-host attachment has a dedicated sub-cap that preserves ordinary wait admission",
+            "socket close aborts the exact host and wait handlers and releases both counters"
           ]
         },
         {
@@ -2632,6 +2643,7 @@
           "assertions": [
             "the control method stays out of production registration",
             "only a negotiated authenticated paired-runtime connection receives a server-owned epoch and generation",
+            "a second browser-host identity on one authenticated connection is rejected",
             "connection cleanup releases the exact lease and replacement emits an epoch-and-generation-bound revocation"
           ]
         },
@@ -2710,10 +2722,10 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
           "durationSeconds": 3.4,
-          "summary": "Ten files passed 60 lease, authority, placement, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
+          "summary": "Eleven files passed 67 lease, reserved long-poll and host admission, token-safe placement retirement, authority, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
         },
         {
           "date": "2026-08-13",
@@ -2753,11 +2765,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The lease registry and control-client suites were recorded red at missing modules before implementation. The unchanged tunnel authorization oracle was behaviorally red because an authenticated socket could self-assert its paired device ID and received ready generation 7 without a lease; it is green after server-owned lease and route fencing. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed with an exact control lease while both production registries remained closed. Full mutation/revert evidence remains to be collected before promotion."
+        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The lease registry and control-client suites were recorded red at missing modules before implementation. The unchanged tunnel authorization oracle was behaviorally red because an authenticated socket could self-assert its paired device ID and received ready generation 7 without a lease; it is green after server-owned lease and route fencing. On c9a41abf24, the unchanged admission oracle failed three ways: a second identity on one connection and a fifth identity for one paired device were both admitted, and closed page placement had no retirement API. All three pass after bounded admission and tombstone-free global page generations. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed with an exact control lease while both production registries remained closed. Full mutation/revert evidence remains to be collected before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Data frames, send credit, pending bytes and chunk counts in both directions, streams, SOCKS handshake and pipelined application bytes are bounded. Credit returns only after the execution-host or browser-facing socket write settles, and the injected transport must explicitly accept each frame. Aggregate route, browser-host, and process ledgers plus drain-aware fair scheduling remain required before live tunnel advertisement."
+        "evidence": "Data frames, send credit, pending bytes and chunk counts in both directions, streams, SOCKS handshake and pipelined application bytes are bounded. One authenticated connection retains at most one browser host and one paired device at most four, with exact release restoring admission. Permanent browser-host polls use at most one quarter of the shared long-poll slots, and real injected dispatch proves an ordinary wait remains admitted and socket close releases both classes. Credit returns only after the execution-host or browser-facing socket write settles, and the injected transport must explicitly accept each frame. Pending-open/rate admission, aggregate route/browser-host/process byte ledgers, and drain-aware fair scheduling remain required before live tunnel advertisement."
       },
       "promotionCriteria": [
         "Add bounded pending-open admission and open-rate limits plus aggregate route, browser-host, and process memory ledgers with runtime-wide fair scheduling.",
@@ -2768,6 +2780,7 @@
       ],
       "knownGaps": [
         "No runtime capability is advertised, the paired tunnel method is not registered in production, and no Electron webview selects it yet.",
+        "The token-safe page-retirement API has no production lifecycle caller until client placement activates.",
         "Pending-open and open-rate admission plus aggregate encrypted-WebSocket and destination-buffer accounting are not implemented.",
         "The loopback SOCKS endpoint uses Chromium-compatible no-auth and is not safe to activate until its desktop trust boundary is approved or isolated.",
         "SSH, WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."

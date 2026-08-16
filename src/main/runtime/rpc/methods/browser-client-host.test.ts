@@ -140,4 +140,40 @@ describe('browser.clientHost.attach RPC', () => {
       .release()
     await second
   })
+
+  it('rejects a second browser-host identity on one authenticated connection', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const firstReplies: string[] = []
+    const rejectedReplies: string[] = []
+    const options = {
+      connectionId: 'connection-a',
+      clientKind: 'runtime' as const,
+      pairedDeviceId: 'device-a',
+      clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+    }
+    const first = dispatcher.dispatchStreaming(
+      request('host-a'),
+      (reply) => firstReplies.push(reply),
+      options
+    )
+    await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
+
+    await dispatcher.dispatchStreaming(
+      request('host-b'),
+      (reply) => rejectedReplies.push(reply),
+      options
+    )
+
+    expect(JSON.parse(rejectedReplies[0]!)).toMatchObject({
+      ok: false,
+      error: { message: 'browser_host_connection_capacity' }
+    })
+    cleanups.get('browser-client-host:host-a')?.()
+    await first
+  })
 })

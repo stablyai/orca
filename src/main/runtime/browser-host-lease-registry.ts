@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 const MAX_GENERATION = 0xffff_ffff
+const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
+// Why: tolerate brief desktop restart/update overlap while keeping one paired identity bounded.
+const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
 
 export type RuntimeBrowserPlacement =
   | { kind: 'server' }
@@ -64,8 +67,9 @@ export class BrowserHostLeaseRegistry {
   readonly authorityRuntimeId: string
   readonly authorityEpoch: string
   private nextHostGeneration = 1
+  // Why: a global counter lets closed page IDs leave no tombstone without reusing a stale generation.
+  private nextPageGeneration = 1
   private nextTunnelGeneration = 1
-  private readonly nextPageGenerationByPageId = new Map<string, number>()
   private readonly leasesByClientId = new Map<string, LeaseState>()
   private readonly routesByKey = new Map<string, RouteState>()
   private readonly placementsByPageId = new Map<string, RuntimeBrowserPlacement>()
@@ -87,6 +91,7 @@ export class BrowserHostLeaseRegistry {
         throw new Error('browser_host_identity_conflict')
       }
     }
+    this.assertLeaseAdmission(input, existing)
     const generation = this.takeGeneration('host')
     if (existing) {
       this.fenceLease(existing, 'replaced')
@@ -155,7 +160,7 @@ export class BrowserHostLeaseRegistry {
 
   placeClientPage(browserPageId: string, browserHostClientId?: string): RuntimeBrowserPlacement {
     const lease = this.select(browserHostClientId)
-    const pageHostGeneration = this.takePageGeneration(browserPageId)
+    const pageHostGeneration = this.takePageGeneration()
     const placement = Object.freeze({
       kind: 'client' as const,
       browserHostClientId: lease.browserHostClientId,
@@ -168,6 +173,13 @@ export class BrowserHostLeaseRegistry {
 
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {
     return this.placementsByPageId.get(browserPageId)
+  }
+
+  retirePage(browserPageId: string, expected: RuntimeBrowserPlacement): boolean {
+    if (this.placementsByPageId.get(browserPageId) !== expected) {
+      return false
+    }
+    return this.placementsByPageId.delete(browserPageId)
   }
 
   openTunnel(
@@ -199,6 +211,31 @@ export class BrowserHostLeaseRegistry {
 
   private releaseLease(state: LeaseState): void {
     this.fenceLease(state, 'lease_released')
+  }
+
+  private assertLeaseAdmission(
+    input: { connectionId: string; pairedDeviceId: string },
+    replacement: LeaseState | undefined
+  ): void {
+    let connectionLeases = 0
+    let deviceLeases = 0
+    for (const state of this.leasesByClientId.values()) {
+      if (state === replacement) {
+        continue
+      }
+      if (state.lease.connectionId === input.connectionId) {
+        connectionLeases += 1
+      }
+      if (state.lease.pairedDeviceId === input.pairedDeviceId) {
+        deviceLeases += 1
+      }
+    }
+    if (connectionLeases >= MAX_BROWSER_HOSTS_PER_CONNECTION) {
+      throw new Error('browser_host_connection_capacity')
+    }
+    if (deviceLeases >= MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE) {
+      throw new Error('browser_host_device_capacity')
+    }
   }
 
   private fenceLease(state: LeaseState, reason: FenceReason): void {
@@ -233,12 +270,12 @@ export class BrowserHostLeaseRegistry {
     return value
   }
 
-  private takePageGeneration(browserPageId: string): number {
-    const value = this.nextPageGenerationByPageId.get(browserPageId) ?? 1
+  private takePageGeneration(): number {
+    const value = this.nextPageGeneration
     if (value > MAX_GENERATION) {
       throw new Error('browser_page_generation_exhausted')
     }
-    this.nextPageGenerationByPageId.set(browserPageId, value + 1)
+    this.nextPageGeneration += 1
     return value
   }
 }
