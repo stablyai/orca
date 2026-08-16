@@ -1257,16 +1257,31 @@ export function useIpcEvents(): void {
         if (!store.settings) {
           return
         }
+        const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
+        const settingsUpdates = store.settings.activeRuntimeEnvironmentId
+          ? activeOwnerUpdates
+          : updates
         useAppStore.setState({
           settings: {
             ...store.settings,
-            ...updates,
+            ...settingsUpdates,
             notifications: {
               ...store.settings.notifications,
               ...updates.notifications
             }
-          }
+          },
+          ...(worktreeVisibilityDefaults
+            ? {
+                worktreeVisibilityDefaultsByHost: {
+                  ...store.worktreeVisibilityDefaultsByHost,
+                  local: worktreeVisibilityDefaults
+                }
+              }
+            : {})
         })
+        if ('worktreeVisibilityDefaults' in updates) {
+          void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
+        }
       })
     )
 
@@ -2030,33 +2045,36 @@ export function useIpcEvents(): void {
     // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
     if (window.api.ui.onTerminalTabCloseRequest) {
       unsubs.push(
-        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
-          let responded = false
-          const respond = (error?: string): void => {
-            if (responded) {
-              return
+        window.api.ui.onTerminalTabCloseRequest(
+          ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
+            let responded = false
+            const respond = (error?: string): void => {
+              if (responded) {
+                return
+              }
+              responded = true
+              window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
             }
-            responded = true
-            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+            closeTerminalTab(tabId, {
+              rejectPinned: true,
+              ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+              onCancel: () => respond('terminal_tab_pinned'),
+              onClosed: () => {
+                void (async () => {
+                  const state = useAppStore.getState()
+                  await persistWorkspaceSessionByHost(
+                    window.api.session,
+                    buildWorkspaceSessionPayload(state),
+                    state
+                  )
+                  respond()
+                })().catch((error: unknown) => {
+                  respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                })
+              }
+            })
           }
-          closeTerminalTab(tabId, {
-            rejectPinned: true,
-            onCancel: () => respond('terminal_tab_pinned'),
-            onClosed: () => {
-              void (async () => {
-                const state = useAppStore.getState()
-                await persistWorkspaceSessionByHost(
-                  window.api.session,
-                  buildWorkspaceSessionPayload(state),
-                  state
-                )
-                respond()
-              })().catch((error: unknown) => {
-                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
-              })
-            }
-          })
-        })
+        )
       )
     }
 

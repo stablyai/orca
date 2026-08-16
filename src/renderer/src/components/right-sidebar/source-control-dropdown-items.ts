@@ -48,7 +48,7 @@ export type DropdownItem = {
   variant?: 'default' | 'destructive'
 }
 
-export type DropdownSeparator = { kind: 'separator' }
+export type DropdownSeparator = { kind: 'separator'; id: string }
 
 export type DropdownEntry = DropdownItem | DropdownSeparator
 
@@ -530,7 +530,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     commitItem,
     commitPushItem,
     commitSyncItem,
-    { kind: 'separator' },
+    { kind: 'separator', id: 'before-remote' },
     pushItem,
     forcePushItem,
     createPRItem,
@@ -546,7 +546,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     const isRebase = conflictOperation === 'rebase'
     const label = isRebase ? 'Abort rebase' : 'Abort merge'
     entries.push(
-      { kind: 'separator' },
+      { kind: 'separator', id: 'before-abort' },
       {
         kind: isRebase ? 'abort_rebase' : 'abort_merge',
         label,

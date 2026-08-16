@@ -15,7 +15,9 @@ import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remot
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from './protocol-version'
 
 const servers: WebSocketServer[] = []
@@ -74,7 +76,9 @@ describe('subscribeRemoteRuntimeRequest', () => {
       deviceToken: 'device-token',
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
       ]
     })
     const bytes = new Uint8Array([1, 2, 3])

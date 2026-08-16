@@ -4,7 +4,7 @@ import type { editor } from 'monaco-editor'
 import type { GitBlameResult } from '../../../../shared/git-blame'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../shared/pr-comment-time'
 import { getRuntimeGitBlame } from '@/runtime/runtime-git-client'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 

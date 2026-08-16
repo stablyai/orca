@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../shared/pr-comment-time'
 import { getRuntimeGitHistory } from '@/runtime/runtime-git-client'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'

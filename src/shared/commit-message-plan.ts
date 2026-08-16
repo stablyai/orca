@@ -68,7 +68,7 @@ function planAdditionalAgentArgs(
   return { ok: true, args: tokenized.tokens }
 }
 
-const CODEX_MODEL_OPTION_ALIASES = ['--model', '-m'] as const
+const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
 
 function matchesOption(token: string, aliases: readonly string[]): boolean {
   return aliases.some(
@@ -129,6 +129,77 @@ function applyRecipeOptionOverride(args: {
       ...args.recipeArgs.slice(recipeOption.index + recipeOption.consumed)
     ]
   }
+}
+
+function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]): string[] {
+  let result = tokens
+  while (true) {
+    const found = findOptionOccurrence(result, aliases, true)
+    if (!found) {
+      return result
+    }
+    result = [...result.slice(0, found.index), ...result.slice(found.index + found.consumed)]
+  }
+}
+
+/** Drops every occurrence after the first, so a user who types the same singleton
+ *  twice in one field still gets a single flag rather than a rejected argv. */
+function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[]): string[] {
+  let result = tokens
+  while (true) {
+    const first = findOptionOccurrence(result, aliases, true)
+    if (!first) {
+      return result
+    }
+    const tail = result.slice(first.index + first.consumed)
+    const duplicate = findOptionOccurrence(tail, aliases, true)
+    if (!duplicate) {
+      return result
+    }
+    const offset = first.index + first.consumed
+    result = [
+      ...result.slice(0, offset + duplicate.index),
+      ...result.slice(offset + duplicate.index + duplicate.consumed)
+    ]
+  }
+}
+
+/** Removes generated singleton options shadowed by user input. Recipe args
+ *  outrank a command-override prefix, which outranks Orca's generated value. */
+function applySingletonOptionOverrides(args: {
+  generatedArgs: string[]
+  prefixArgs: string[]
+  recipeArgs: string[]
+  singletonOptions: readonly (readonly string[])[]
+}): { generatedArgs: string[]; prefixArgs: string[]; recipeArgs: string[] } {
+  let generatedArgs = args.generatedArgs
+  let prefixArgs = args.prefixArgs
+  let recipeArgs = args.recipeArgs
+
+  for (const aliases of args.singletonOptions) {
+    recipeArgs = keepFirstOptionOccurrence(recipeArgs, aliases)
+    prefixArgs = keepFirstOptionOccurrence(prefixArgs, aliases)
+    const recipeOption = findOptionOccurrence(recipeArgs, aliases, true)
+    const prefixOption = findOptionOccurrence(prefixArgs, aliases, true)
+    const prefixHasTerminator = prefixArgs.includes('--')
+    if (recipeOption && !prefixHasTerminator) {
+      prefixArgs = removeAllOptionOccurrences(prefixArgs, aliases)
+    } else if (prefixOption && !prefixHasTerminator) {
+      const generatedOption = findOptionOccurrence(generatedArgs, aliases, false)
+      if (generatedOption) {
+        generatedArgs = [
+          ...generatedArgs.slice(0, generatedOption.index),
+          ...generatedArgs.slice(generatedOption.index + generatedOption.consumed)
+        ]
+      }
+      continue
+    }
+    const withRecipe = applyRecipeOptionOverride({ generatedArgs, recipeArgs, aliases })
+    generatedArgs = withRecipe.generatedArgs
+    recipeArgs = withRecipe.recipeArgs
+  }
+
+  return { generatedArgs, prefixArgs, recipeArgs }
 }
 
 function insertAdditionalAgentArgs(args: {
@@ -227,31 +298,29 @@ export function planCommitMessageGeneration(
   if (!agentArgs.ok) {
     return agentArgs
   }
-  // Why: Codex rejects repeated singleton model flags. Recipe CLI arguments
-  // are the more specific setting, so they replace Orca's generated model.
-  const overriddenArgs =
-    input.agentId === 'codex'
-      ? applyRecipeOptionOverride({
-          generatedArgs: baseArgs,
-          recipeArgs: agentArgs.args,
-          aliases: CODEX_MODEL_OPTION_ALIASES
-        })
-      : { generatedArgs: baseArgs, recipeArgs: agentArgs.args }
-  const args = insertAdditionalAgentArgs({
-    baseArgs: overriddenArgs.generatedArgs,
-    agentArgs: overriddenArgs.recipeArgs,
-    promptDelivery: spec.promptDelivery,
-    prompt: argvPrompt
-  })
   const command = planAgentBinary(spec.binary, input.agentCommandOverride)
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
+  // Why: repeating a singleton flag makes yargs-based CLIs parse it as an array and
+  // crash (OpenCode's `model.split('/')`). User values replace Orca's, never stack.
+  const merged = applySingletonOptionOverrides({
+    generatedArgs: baseArgs,
+    prefixArgs: command.prefixArgs,
+    recipeArgs: agentArgs.args,
+    singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS
+  })
+  const args = insertAdditionalAgentArgs({
+    baseArgs: merged.generatedArgs,
+    agentArgs: merged.recipeArgs,
+    promptDelivery: spec.promptDelivery,
+    prompt: argvPrompt
+  })
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...args],
+      args: [...merged.prefixArgs, ...args],
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       label: spec.label
     }

@@ -28,7 +28,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { resolveStartupLaunchDraftText } from '@/lib/worktree-activation'
+import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate

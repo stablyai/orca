@@ -100,9 +100,7 @@ describe('macOS daemon TCC attribution health', () => {
     }
     await withDaemonLikeProcess(async (writePidFile) => {
       writePidFile({ spawnerExecPath: join(dir, 'deleted-bundle', 'Orca') })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'severed'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
     })
   })
 
@@ -114,13 +112,11 @@ describe('macOS daemon TCC attribution health', () => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
       writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.3' })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'intact'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
     })
   })
 
-  it('reports severed after a packaged update reuses the spawning binary path', async () => {
+  it('reports intact after an app-version change when the spawning binary path still exists', async () => {
     if (process.platform !== 'darwin') {
       return
     }
@@ -128,34 +124,21 @@ describe('macOS daemon TCC attribution health', () => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
       writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.2' })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'severed'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
     })
   })
 
-  it('flags missing or changed app-version metadata only for packaged builds', async () => {
+  it('fails open without a recorded spawning binary', async () => {
     if (process.platform !== 'darwin') {
       return
     }
     await withDaemonLikeProcess(async (writePidFile) => {
       writePidFile({})
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'severed'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
       writePidFile({ appVersion: '1.2.2' })
-      // Updater replaced the bundle since this daemon was forked → attribution is gone.
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'severed'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
       writePidFile({ appVersion: '1.2.3' })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-        'unknown'
-      )
-      // Dev builds pass null — no version heuristic, fail open.
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, null)).toBe(
-        'unknown'
-      )
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
     })
   })
 
@@ -163,17 +146,13 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
-    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-      'unknown'
-    )
+    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
   })
 
   it('reports unknown off macOS', async () => {
     if (process.platform === 'darwin') {
       return
     }
-    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath, '1.2.3')).toBe(
-      'unknown'
-    )
+    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
   })
 })

@@ -20,14 +20,16 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const TYPES_SOURCE = readFileSync(
-  fileURLToPath(new URL('../../src/shared/types.ts', import.meta.url)),
+  fileURLToPath(new URL('../../src/shared/global-settings-types.ts', import.meta.url)),
   'utf8'
 )
 
 function countGlobalSettingsFields(source) {
   const block = source.match(/export type GlobalSettings = \{([\s\S]*?)\n\}/)
   if (!block) {
-    throw new Error('types.ts no longer declares GlobalSettings in the expected shape')
+    throw new Error(
+      'global-settings-types.ts no longer declares GlobalSettings in the expected shape'
+    )
   }
   const fields = block[1].match(/^\s{2}\w+\??:/gm) ?? []
   if (fields.length < 50) {

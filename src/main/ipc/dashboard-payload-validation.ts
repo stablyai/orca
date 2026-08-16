@@ -53,6 +53,7 @@ const DASHBOARD_HOST_PLATFORMS = new Set([
   'win32'
 ])
 const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
+const WINDOWS_INPUT_RECORD_PASTE_NEWLINES = new Set(['alt-enter', 'csi-u'])
 
 function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
@@ -308,6 +309,11 @@ function isDashboardTerminalInput(value: unknown): boolean {
     isOptionalBoundedString(input.osRelease, MAX_LABEL_LENGTH) &&
     typeof input.windowsShiftEnterEncoding === 'string' &&
     WINDOWS_SHIFT_ENTER_ENCODINGS.has(input.windowsShiftEnterEncoding) &&
+    (input.forceBracketedMultilineTextPaste === undefined ||
+      input.forceBracketedMultilineTextPaste === true) &&
+    (input.windowsInputRecordPasteNewline === undefined ||
+      (typeof input.windowsInputRecordPasteNewline === 'string' &&
+        WINDOWS_INPUT_RECORD_PASTE_NEWLINES.has(input.windowsInputRecordPasteNewline))) &&
     typeof input.ctrlEnterCsiU === 'boolean' &&
     typeof input.kittyKeyboardAdvertised === 'boolean'
   )

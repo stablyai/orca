@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildActiveOpenFileSignature,
   buildActiveOpenRowKeys
-} from './source-control-active-open-file-keys'
+} from './source-control/listing/active-open-file-keys'
 
 describe('buildActiveOpenFileSignature', () => {
   it('encodes the diff source and relative path', () => {

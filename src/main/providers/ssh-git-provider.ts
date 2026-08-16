@@ -33,6 +33,7 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import { GitStatusReadLeaseOwner } from '../git/git-status-read-lease-owner'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -88,21 +89,26 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 /** SSH-backed implementation of the git provider contract. */
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
+  private readonly statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
 
-  private async runWithDiffDedupeClear<T>(run: () => Promise<T>): Promise<T> {
-    // Why: git mutations can stale both existing and concurrently-started diff reads.
-    // Clear before and after so later reads never join pre-mutation work.
-    this.gitDiffReadDedupe.clear()
+  private async runWithGitReadInvalidation<T>(run: () => Promise<T>): Promise<T> {
+    this.invalidateGitReads()
     try {
       return await run()
     } finally {
-      this.gitDiffReadDedupe.clear()
+      this.invalidateGitReads()
     }
   }
+
+  private invalidateGitReads(): void {
+    this.gitDiffReadDedupe.clear()
+    this.statusReadLeaseOwner.invalidate()
+  }
+
   private loggedWorktreeIsCleanFallback = false
 
   constructor(
@@ -143,9 +149,20 @@ export class SshGitProvider implements IGitProvider {
       ...lineStatsReuseArgs,
       ...branchLineTotalArgs
     }
-    return (await (options?.signal
-      ? this.mux.request('git.status', request, { signal: options.signal })
-      : this.mux.request('git.status', request))) as GitStatusResult
+    const key = stableInFlightKey([
+      worktreePath,
+      options?.includeIgnored === true,
+      options?.bypassEffectiveUpstreamNegativeCache === true,
+      options?.reuseLineStats === true,
+      // Why: the result carries a total only for callers who asked, and only for
+      // this fork point, so a shared lease must never serve one to the other.
+      options?.branchLineTotalMergeBase ?? ''
+    ])
+    return this.statusReadLeaseOwner.lease(key, options?.signal, async (sharedSignal) => {
+      return (await this.mux.request('git.status', request, {
+        signal: sharedSignal
+      })) as GitStatusResult
+    })
   }
 
   async getSubmoduleStatus(
@@ -206,7 +223,7 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     message: string
   ): Promise<{ success: boolean; error?: string }> {
-    return this.runWithDiffDedupeClear(
+    return this.runWithGitReadInvalidation(
       async () =>
         (await this.mux.request('git.commit', {
           worktreePath,
@@ -426,57 +443,39 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async stageFile(worktreePath: string, filePath: string): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.stage', { worktreePath, filePath })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async unstageFile(worktreePath: string, filePath: string): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.unstage', { worktreePath, filePath })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.bulkStage', { worktreePath, filePaths })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.bulkUnstage', { worktreePath, filePaths })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async discardChanges(worktreePath: string, filePath: string): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.discard', { worktreePath, filePath })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
-    this.gitDiffReadDedupe.clear()
-    try {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
-    } finally {
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
@@ -486,19 +485,19 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async abortMerge(worktreePath: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.abortMerge', { worktreePath })
     })
   }
 
   async abortRebase(worktreePath: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.abortRebase', { worktreePath })
     })
   }
 
   async checkoutBranch(worktreePath: string, branch: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.checkout', { worktreePath, branch })
     })
   }
@@ -542,7 +541,7 @@ export class SshGitProvider implements IGitProvider {
     pushTarget?: GitPushTarget,
     options: { forceWithLease?: boolean } = {}
   ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.push', {
         worktreePath,
         publish,
@@ -553,13 +552,13 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
     })
   }
 
   async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.fastForward', {
         worktreePath,
         ...(pushTarget ? { pushTarget } : {})
@@ -568,13 +567,13 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
     })
   }
 
   async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
     })
   }
@@ -583,7 +582,7 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
-    return this.runWithDiffDedupeClear(
+    return this.runWithGitReadInvalidation(
       async () =>
         (await this.mux.request('git.forkSync', {
           worktreePath,
@@ -599,7 +598,7 @@ export class SshGitProvider implements IGitProvider {
     ref: string,
     options?: { skipAutoMaintenance?: boolean }
   ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.fetchRemoteTrackingRef', {
         worktreePath,
         remote,
@@ -616,7 +615,7 @@ export class SshGitProvider implements IGitProvider {
     mrIid: number
   ): Promise<string> {
     try {
-      return await this.runWithDiffDedupeClear(async () => {
+      return await this.runWithGitReadInvalidation(async () => {
         // Why: the durable-ref RPC is a NEW method name. Old relays only implement
         // FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead, so calling the ref
         // variant makes them return -32601 rather than silently no-op the durable
@@ -647,7 +646,7 @@ export class SshGitProvider implements IGitProvider {
     prNumber: number
   ): Promise<string> {
     try {
-      return await this.runWithDiffDedupeClear(async () => {
+      return await this.runWithGitReadInvalidation(async () => {
         const result = await this.mux.request('git.fetchGitHubPullRequestHead', {
           worktreePath,
           remote,
@@ -739,7 +738,7 @@ export class SshGitProvider implements IGitProvider {
     targetDir: string,
     options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
   ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.addWorktree', {
         repoPath,
         branchName,
@@ -754,7 +753,7 @@ export class SshGitProvider implements IGitProvider {
     force?: boolean,
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<RemoveWorktreeResult> {
-    return this.runWithDiffDedupeClear(
+    return this.runWithGitReadInvalidation(
       async () =>
         ((await this.mux.request('git.removeWorktree', {
           worktreePath,
@@ -813,13 +812,13 @@ export class SshGitProvider implements IGitProvider {
     ownerWorktreePath?: string
     checkOnly?: boolean
   }): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
     })
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
+    await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
     })
   }
@@ -830,7 +829,7 @@ export class SshGitProvider implements IGitProvider {
     expectedHead: string
   ): Promise<void> {
     try {
-      await this.runWithDiffDedupeClear(async () => {
+      await this.runWithGitReadInvalidation(async () => {
         await this.mux.request('git.forceDeletePreservedBranch', {
           repoPath,
           branchName,
@@ -859,7 +858,7 @@ export class SshGitProvider implements IGitProvider {
         ? requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
         : requestGitStreamable(this.mux, 'git.exec', { args, cwd })
     const result = gitExecMutatesRepository(args)
-      ? await this.runWithDiffDedupeClear(run)
+      ? await this.runWithGitReadInvalidation(run)
       : await run()
     return result as {
       stdout: string
@@ -876,41 +875,41 @@ export class SshGitProvider implements IGitProvider {
       onProgress?: (progress: { phase: string; percent: number }) => void
     }
   ): Promise<{ stdout: string; stderr: string }> {
-    this.gitDiffReadDedupe.clear()
-    const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const unsubscribe = options?.onProgress
-      ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
-          if (params.progressId !== progressId) {
-            return
-          }
-          const phase = params.phase
-          const percent = params.percent
-          if (typeof phase === 'string' && typeof percent === 'number') {
-            options.onProgress?.({ phase, percent })
-          }
-        })
-      : undefined
-    try {
-      const result = await this.mux.request(
-        'git.clone',
-        { args, cwd, progressId },
-        { signal: options?.signal, timeoutMs: options?.timeoutMs }
-      )
-      return result as {
-        stdout: string
-        stderr: string
-      }
-    } catch (error) {
-      if (isJsonRpcMethodNotFoundError(error)) {
-        throw new Error(
-          'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+    return this.runWithGitReadInvalidation(async () => {
+      const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const unsubscribe = options?.onProgress
+        ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
+            if (params.progressId !== progressId) {
+              return
+            }
+            const phase = params.phase
+            const percent = params.percent
+            if (typeof phase === 'string' && typeof percent === 'number') {
+              options.onProgress?.({ phase, percent })
+            }
+          })
+        : undefined
+      try {
+        const result = await this.mux.request(
+          'git.clone',
+          { args, cwd, progressId },
+          { signal: options?.signal, timeoutMs: options?.timeoutMs }
         )
+        return result as {
+          stdout: string
+          stderr: string
+        }
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+          )
+        }
+        throw error
+      } finally {
+        unsubscribe?.()
       }
-      throw error
-    } finally {
-      unsubscribe?.()
-      this.gitDiffReadDedupe.clear()
-    }
+    })
   }
 
   async isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }> {

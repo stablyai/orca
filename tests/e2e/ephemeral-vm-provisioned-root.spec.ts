@@ -25,7 +25,7 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
   try {
     ensureDockerSshRelayImage(process.cwd())
     target = startDockerSshRelayTarget(testInfo)
-    seedRecipeRepo(sourceRepo, target)
+    const expectedRefHead = seedRecipeRepo(sourceRepo, target)
     await waitForSessionReady(orcaPage)
     const sourceRepoId = await addRecipeRepo(orcaPage, sourceRepo)
 
@@ -81,13 +81,26 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
         `git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} branch --show-current`
       )
     ).toBe(workspaceName)
+    expect(
+      execDockerSshRelayTargetCommand(
+        target,
+        `git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} rev-parse HEAD`
+      )
+    ).toBe(expectedRefHead)
 
-    await orcaPage
-      .getByRole('option', { name: new RegExp(workspaceName) })
-      .click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Remove Project from Orca' }).click()
     const removeDialog = orcaPage.getByRole('dialog', { name: 'Remove Project' })
-    await expect(removeDialog).toBeVisible()
+    const removeMenuItem = orcaPage.getByRole('menuitem', { name: 'Remove Project from Orca' })
+    await expect(async () => {
+      await orcaPage
+        .getByRole('option', { name: new RegExp(workspaceName) })
+        .click({ button: 'right' })
+      await expect(removeMenuItem).toBeVisible({ timeout: 1_000 })
+      await removeMenuItem.click({ force: true, timeout: 1_000 })
+      await expect(removeDialog).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 10_000 })
+    await expect(removeDialog).toContainText(
+      'Its VM recipe determines whether the environment and its files are permanently deleted.'
+    )
     await removeDialog.getByRole('button', { name: 'Remove', exact: true }).click()
     await expect
       .poll(
@@ -120,7 +133,7 @@ async function addRecipeRepo(page: Parameters<typeof waitForSessionReady>[0], re
   }, repoPath)
 }
 
-function seedRecipeRepo(repoPath: string, target: DockerSshRelayTarget): void {
+function seedRecipeRepo(repoPath: string, target: DockerSshRelayTarget): string {
   const createScript = path.join(repoPath, 'create.sh')
   const destroyScript = path.join(repoPath, 'destroy.sh')
   writeFileSync(
@@ -129,8 +142,11 @@ function seedRecipeRepo(repoPath: string, target: DockerSshRelayTarget): void {
 set -euo pipefail
 [ "\${ORCA_RECIPE_RESULT_SCHEMA_VERSION:-}" = 2 ]
 [ -n "\${ORCA_REPO_URL:-}" ]
+[ -n "\${ORCA_REPO_REF:-}" ]
+[ -n "\${ORCA_REPO_REF_HEAD:-}" ]
 [ -n "\${ORCA_REPO_BRANCH:-}" ]
-docker exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} checkout -B "$ORCA_REPO_BRANCH" >&2
+docker exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} cat-file -e "$ORCA_REPO_REF_HEAD^{commit}"
+docker exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD" >&2
 node -e 'console.log(JSON.stringify({schemaVersion:2,checkoutMode:"provisioned-root",connection:{type:"ssh",projectRoot:process.argv[1],target:{label:"Docker provisioned root",host:process.argv[2],port:Number(process.argv[3]),username:"root",identityFile:process.argv[4],identitiesOnly:true}}}))' ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} ${shellQuote(target.host)} ${target.port} ${shellQuote(target.identityFile)}
 `
   )
@@ -162,4 +178,22 @@ docker rm -f ${shellQuote(target.containerName)} >/dev/null
   })
   execFileSync('git', ['add', '.'], { cwd: repoPath })
   execFileSync('git', ['commit', '-m', 'seed recipe'], { cwd: repoPath })
+  const expectedRefHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  }).trim()
+  execDockerSshRelayTargetCommand(
+    target,
+    `rm -rf ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} && mkdir -p ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)}`
+  )
+  execFileSync('docker', [
+    'cp',
+    `${repoPath}${path.sep}.`,
+    `${target.containerName}:${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}`
+  ])
+  execDockerSshRelayTargetCommand(
+    target,
+    `chown -R root:root ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)}`
+  )
+  return expectedRefHead
 }

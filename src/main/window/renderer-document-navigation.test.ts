@@ -45,22 +45,17 @@ describe('renderer document navigation', () => {
 
   it('cancels only the matching main-frame provisional navigation', () => {
     const cancel = vi.fn()
-    const fixture = createFixture('http://localhost:5173/', vi.fn(() => cancel))
+    const fixture = createFixture(
+      'http://localhost:5173/',
+      vi.fn(() => cancel)
+    )
 
     fixture.navigate?.({}, 'http://localhost:5173/reload', false, true)
     fixture.failProvisionalLoad?.({}, -3, 'aborted', 'other', true, 1, 1)
     fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload', false, 1, 1)
     expect(cancel).not.toHaveBeenCalled()
 
-    fixture.failProvisionalLoad?.(
-      {},
-      -3,
-      'aborted',
-      'http://localhost:5173/reload',
-      true,
-      1,
-      1
-    )
+    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload', true, 1, 1)
     expect(cancel).toHaveBeenCalledOnce()
   })
 
@@ -73,31 +68,18 @@ describe('renderer document navigation', () => {
     fixture.navigate?.({}, 'http://localhost:5173/reload-b', false, true)
 
     expect(onStarted).toHaveBeenCalledOnce()
-    fixture.failProvisionalLoad?.(
-      {},
-      -3,
-      'aborted',
-      'http://localhost:5173/reload-a',
-      true,
-      1,
-      1
-    )
+    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload-a', true, 1, 1)
     expect(cancel).not.toHaveBeenCalled()
-    fixture.failProvisionalLoad?.(
-      {},
-      -3,
-      'aborted',
-      'http://localhost:5173/reload-b',
-      true,
-      1,
-      1
-    )
+    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload-b', true, 1, 1)
     expect(cancel).toHaveBeenCalledOnce()
   })
 
   it('does not cancel a navigation after its document commits', () => {
     const cancel = vi.fn()
-    const fixture = createFixture('file:///opt/orca/renderer/index.html', vi.fn(() => cancel))
+    const fixture = createFixture(
+      'file:///opt/orca/renderer/index.html',
+      vi.fn(() => cancel)
+    )
 
     fixture.navigate?.({}, 'file:///opt/orca/renderer/index.html?reload=1', false, true)
     fixture.commitNavigation?.(
@@ -124,7 +106,10 @@ describe('renderer document navigation', () => {
 
   it('cancels when a later will-navigate listener blocks the navigation', async () => {
     const cancel = vi.fn()
-    const fixture = createFixture('http://localhost:5173/', vi.fn(() => cancel))
+    const fixture = createFixture(
+      'http://localhost:5173/',
+      vi.fn(() => cancel)
+    )
     const event = { defaultPrevented: false }
 
     fixture.navigate?.({}, 'http://localhost:5173/reload', false, true)

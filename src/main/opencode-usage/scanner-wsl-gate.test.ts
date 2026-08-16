@@ -20,7 +20,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: mocks.stat
 }))
 
-import { listOpenCodeDatabases } from './scanner'
+import { listOpenCodeDatabases } from './opencode-database-discovery'
 import {
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
   WslTranscriptFsError
