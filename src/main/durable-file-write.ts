@@ -3,9 +3,10 @@
 // empty-file symptom as issue #1158, from a different cause. The .bak ring recovers it at up to an
 // hour's loss; fsync stops it from happening.
 
-import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
+import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -138,13 +139,21 @@ export async function removeStaleDurableWriteTempFiles(
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */
 export function writeFileDurableSync(tmpPath: string, finalPath: string, payload: string): void {
-  writeFileSync(tmpPath, payload, 'utf-8')
-  const fd = openSync(tmpPath, 'r+')
+  let renamed = false
   try {
-    fsyncSync(fd)
+    writeFileSync(tmpPath, payload, 'utf-8')
+    const fd = openSync(tmpPath, 'r+')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameFileWithWindowsRetry(tmpPath, finalPath)
+    renamed = true
+    syncDirectorySync(dirname(finalPath))
   } finally {
-    closeSync(fd)
+    if (!renamed) {
+      rmSync(tmpPath, { force: true })
+    }
   }
-  renameSync(tmpPath, finalPath)
-  syncDirectorySync(dirname(finalPath))
 }

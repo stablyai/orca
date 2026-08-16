@@ -22,6 +22,7 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
 )
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
+export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
 export const isMock = { dev: false }
 export const macosTahoeMock = { value: false }
 
@@ -117,6 +118,8 @@ export function resetMainWindowMocks(): void {
   notificationShowMock.mockClear()
   powerMonitorOnMock.mockReset()
   powerMonitorRemoveListenerMock.mockReset()
+  routePartitionAllowedMock.mockReset()
+  routePartitionAllowedMock.mockReturnValue(false)
   isMock.dev = false
   macosTahoeMock.value = false
   ipcMainMock.on.mockReset()

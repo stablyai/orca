@@ -13,6 +13,11 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../browser/browser-route-session-runtime', async () => ({
+  browserRouteSessionRegistry: {
+    isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
+  }
+}))
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
@@ -24,6 +29,7 @@ import {
   openExternalMock,
   powerMonitorOnMock,
   resetMainWindowMocks,
+  routePartitionAllowedMock,
   withPlatform
 } from './createMainWindow-test-harness'
 
@@ -183,6 +189,29 @@ describe('createMainWindow', () => {
       preload: expect.stringMatching(/browser-window-close-preload\.js$/),
       sandbox: true
     })
+
+    routePartitionAllowedMock.mockImplementation(
+      (partition) => partition === 'persist:orca-browser-v1-route-partition'
+    )
+    const allowRouteEvent = { preventDefault: vi.fn() }
+    const allowRoutePrefs = { partition: 'persist:orca-browser-v1-route-partition' }
+    windowHandlers['will-attach-webview'](
+      allowRouteEvent as never,
+      allowRoutePrefs as never,
+      { src: 'about:blank' } as never
+    )
+    expect(allowRouteEvent.preventDefault).not.toHaveBeenCalled()
+    expect(allowRoutePrefs).toMatchObject({
+      partition: 'persist:orca-browser-v1-route-partition',
+      sandbox: true
+    })
+    const denyRouteNavigationEvent = { preventDefault: vi.fn() }
+    windowHandlers['will-attach-webview'](
+      denyRouteNavigationEvent as never,
+      { partition: 'persist:orca-browser-v1-route-partition' } as never,
+      { src: 'https://example.com/' } as never
+    )
+    expect(denyRouteNavigationEvent.preventDefault).toHaveBeenCalledOnce()
 
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
     windowHandlers['will-attach-webview'](

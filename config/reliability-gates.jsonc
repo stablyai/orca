@@ -2083,7 +2083,7 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["remote-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["remote-runtime", "ssh"],
+      "coveredProviders": [],
       "coverageNotes": "A headed macOS desktop host and separate paired Electron client exercise a real mirrored terminal link, owner-asserted host browser creation, exact host/client page identity, rendered DOM, explicit browser-tab activation, client external-browser suppression, exact host/client close convergence, and continued original-PTY liveness. Unit contracts cover OSC, WebLinksAddon, click fallback, explicit System Browser routing, failed creation, incapable runtimes, and unchanged direct SSH behavior.",
       "motivatingLinks": [
         "https://stablygroup.slack.com/archives/C0AK2T3JEF4/p1786567689897109",
@@ -2950,6 +2950,125 @@
         "SSH2 and system OpenSSH have isolated Docker evidence, but WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."
       ],
       "demotionRule": "Keep experimental or demote if a self-asserted or ambiguous host can receive a route, an SSH descriptor bypasses capability, lease-bound grant, or provider-authority checks, late cleanup can remove a replacement, a route can resolve names on the desktop, exceed a byte or stream bound, replenish credit before destination settlement, accept a stale or non-increasing generation, reuse a stream ID within one generation, lose or bypass its fail-closed listener during reconnect, expose the SOCKS listener off-loopback, accept BIND/UDP, or fall back when the selected route is unavailable."
+    },
+    {
+      "id": "browser-client-host.route-partition-policy",
+      "title": "Client-hosted browser partitions apply route policy before attachment",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-session-security-boundary",
+      "surfaces": [
+        "route- and profile-scoped Electron partitions",
+        "persistent partition binding metadata",
+        "fixed SOCKS5 session policy",
+        "webview partition allowlist"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, exact SOCKS5 configuration with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, and arbitrary initial-navigation denial. No production caller prepares a route partition. Persisted-worker containment, UDP/DoH/WebRTC denial, exact WebContents registration, provider journeys, and real Electron traffic capture remain uncovered.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint, and no partition enters the webview allowlist until its existing browser policy is installed, fixed SOCKS5 proxy is applied, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only; later navigation remains unavailable because exact WebContents registration does not exist. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded.",
+      "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require policy setup, setProxy with <-loopback>, closeAllConnections, and exact SOCKS5 resolveProxy in order while isAllowedPartition remains false; then require it to become live. Reject DIRECT, a different proxy endpoint, the 65th live partition, and the 65th page generation. Replace one exact page token and prove stale cleanup cannot retire the replacement. In the window boundary, allow only blank initial attachment for a live route partition and reject direct HTTPS attachment.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts"
+      ],
+      "testFiles": [
+        "src/main/browser/browser-route-identity.test.ts",
+        "src/main/browser/browser-route-partition-binding-store.test.ts",
+        "src/main/browser/browser-route-session-registry.test.ts",
+        "src/main/browser/browser-session-registry.test.ts",
+        "src/main/browser/browser-session-startup.test.ts",
+        "src/main/window/createMainWindow.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/browser-route-identity.test.ts",
+          "assertions": [
+            "aggregate partition and durable binding fingerprints are stable and opaque",
+            "delimiter-containing identities remain structurally distinct",
+            "individual component equality and Windows-illegal path separators are absent",
+            "empty and unbounded identity components are rejected"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-partition-binding-store.test.ts",
+          "assertions": [
+            "opaque bindings survive restart",
+            "replacement and malformed metadata fail closed",
+            "oversized metadata and Chromium data without a binding fail closed",
+            "persisted binding count is bounded"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-session-registry.test.ts",
+          "assertions": [
+            "policy, proxy, connection closure, and verification finish before allowlisting",
+            "DIRECT and endpoint retargeting are rejected",
+            "non-loopback listeners and invalid page generations are rejected before persistence",
+            "missing browser profiles consume no durable binding capacity",
+            "partial setup cleanup and concurrent setup settle exactly once",
+            "partition and page-generation counts are bounded",
+            "stale page cleanup cannot retire its replacement"
+          ]
+        },
+        {
+          "file": "src/main/window/createMainWindow.test.ts",
+          "assertions": [
+            "a live route partition may attach only the normalized blank document",
+            "an arbitrary URL cannot be the initial route-partition document"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.5,
+          "summary": "Six files passed 150 opaque identity, durable collision binding, bounded partition/page, proxy-before-allowlist, policy reuse, profile startup, and blank-only attach tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "deterministic identity, binding-store, session-policy, and window-boundary tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passes locally; CI and real Electron soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The identity, binding-store, and route-session suites failed at missing modules before implementation. The unchanged main-window and startup oracles then failed behaviorally because a live route partition was denied even for blank attachment and active-profile startup never scoped route bindings. A focused policy-failure oracle proved partial session policy setup was not cleared, and a capacity oracle proved a second page remained admitted behind a one-page cap. All four behaviors pass after integration. Real Electron mutation/revert and network-capture evidence remain required before activation."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Derivation performs one bounded full SHA-256 aggregate partition hash and one binding hash. The registry admits at most 64 live or pending partitions, 64 logical page generations per partition, and 512 durable bindings per Orca profile. Concurrent preparation shares one promise and one Electron proxy application per partition. Binding-file reads are capped at 128 KiB. Writes are bounded synchronous profile-local JSON, fsync the temporary file before Windows-retried rename, and fsync the containing directory where supported."
+      },
+      "promotionCriteria": [
+        "Use Playwright CDP in real Electron to prove proxy application before the first HTTP, HTTPS, WebSocket, DNS, worker, popup, redirect, and speculative request.",
+        "Hold or stop persisted workers until proxy verification and prove network-service restart cannot reset the partition to DIRECT or system proxy.",
+        "Register the exact WebContents and page generation before navigation, and fence reload, popup, restore, profile-switch, renderer-crash, and stale-cleanup paths.",
+        "Disable or capture every UDP, QUIC, DoH, WebRTC, and non-SOCKS desktop egress path on macOS, Linux, and Windows."
+      ],
+      "knownGaps": [
+        "No production method calls preparePage, so the registry and allowlist remain inert.",
+        "Creating a persistent Electron Session may wake an existing service worker before setProxy; worker hold or termination proof is required.",
+        "The route partition permits only blank initial attachment; exact WebContents registration and later navigation permission do not exist yet.",
+        "Real Electron proxy syntax, loopback coverage, network-service recovery, popup/worker behavior, and desktop packet capture are not validated because the required Electron skill is unavailable in this workspace.",
+        "QUIC, DoH, WebRTC, WebTransport, and other UDP/direct-network paths are not yet disabled or proven fail closed.",
+        "Partition deletion, download/transfer draining, idle route release, disk quotas, and browser-profile cloning are later lifecycle stages.",
+        "Binding writes serialize in Electron main, and packaged hosts rely on Orca's per-userData single-instance lock. Activation still needs an explicit guard for dev instances that share userData or a cross-process CAS/lock.",
+        "Sequential proxy or policy setup failures retain durable bindings and can exhaust the 512-binding ledger. Activation requires bounded tombstone recovery and partition garbage collection.",
+        "Each preparePage synchronously reads and parses bounded binding metadata on Electron main; activation requires latency evidence or a safely invalidated cache before this becomes frequent."
+      ],
+      "demotionRule": "Keep experimental or demote if raw identities enter a partition path, a durable binding mismatch is reused, a partition retargets to another execution host or live listener, a route partition becomes attachable before exact proxy verification, initial attachment can navigate beyond blank, stale cleanup retires a replacement, admission exceeds a declared cap, or any browser request reaches desktop DNS, TCP, UDP, localhost, or system proxy outside the selected route."
     },
     {
       "id": "browser-stream.bounded-reconnect",

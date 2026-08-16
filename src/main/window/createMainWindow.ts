@@ -15,9 +15,11 @@ import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserRouteSessionRegistry } from '../browser/browser-route-session-runtime'
 import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
@@ -467,9 +469,15 @@ export function createMainWindow(
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
+    const isProfilePartition = browserSessionRegistry.isAllowedPartition(partition)
+    const isRoutePartition = browserRouteSessionRegistry.isAllowedPartition(partition)
 
     // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
-    if (!normalizedSrc || !browserSessionRegistry.isAllowedPartition(partition)) {
+    if (
+      !normalizedSrc ||
+      (!isProfilePartition && !isRoutePartition) ||
+      (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL)
+    ) {
       event.preventDefault()
       return
     }
