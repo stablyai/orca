@@ -3,16 +3,21 @@ import type {
   BrowserNetworkExecutionHost
 } from '../../shared/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import { reconnectBrowserClientNetworkRoutes } from './browser-client-network-route-recovery'
+import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
 import { parseBrowserNetworkExecutionHostKey } from './browser-network-execution-route'
 
 type BrowserClientNetworkRoute = {
   start(): Promise<{ host: string; port: number }>
   reconnect(): Promise<{ host: string; port: number }>
+  suspend(error?: Error): void
   close(error?: Error): Promise<void>
 }
 
 type BrowserClientNetworkRouteRegistryOptions = {
   authority: BrowserHostLeaseAuthority
+  reconnectGraceMs?: number
+  reconnectRetryDelayMs?: number
   createRoute(
     executionHost: BrowserNetworkExecutionHost,
     authority: BrowserHostLeaseAuthority
@@ -23,14 +28,24 @@ type RetainedRoute = {
   key: string
   route: BrowserClientNetworkRoute
   references: number
+  address?: { host: string; port: number }
 }
 
 export class BrowserClientNetworkRouteRegistry {
   private readonly routes = new Map<string, RetainedRoute>()
   private closePromise: Promise<void> | null = null
+  private recoveryGeneration = 0
+  private recovery: { generation: number; abort: AbortController; promise: Promise<void> } | null =
+    null
+  private readonly reconnectGraceMs: number
+  private readonly reconnectRetryDelayMs: number
+  private suspended = false
   private closed = false
 
-  constructor(private readonly options: BrowserClientNetworkRouteRegistryOptions) {}
+  constructor(private readonly options: BrowserClientNetworkRouteRegistryOptions) {
+    this.reconnectGraceMs = resolveBrowserHostReconnectDelay(options.reconnectGraceMs, 15_000)
+    this.reconnectRetryDelayMs = resolveBrowserHostReconnectDelay(options.reconnectRetryDelayMs)
+  }
 
   async retain(key: string, signal: AbortSignal): Promise<BrowserClientPageNetworkRoute> {
     this.assertAdmission(signal)
@@ -58,14 +73,11 @@ export class BrowserClientNetworkRouteRegistry {
         signal
       )
       this.assertAdmission(signal)
-      if (
-        address.host !== '127.0.0.1' ||
-        !Number.isInteger(address.port) ||
-        address.port < 1 ||
-        address.port > 65_535
-      ) {
-        throw new Error('browser_client_network_route_address_invalid')
+      assertRouteAddress(address)
+      if (retained.address && !sameRouteAddress(retained.address, address)) {
+        throw new Error('browser_client_network_route_address_changed')
       }
+      retained.address = address
       let released = false
       return {
         key,
@@ -87,13 +99,82 @@ export class BrowserClientNetworkRouteRegistry {
 
   close(error = new Error('Browser client network route registry is closed')): Promise<void> {
     this.closed = true
+    this.recovery?.abort.abort()
+    this.recovery = null
     this.closePromise ??= this.closeRoutes(error)
     return this.closePromise
+  }
+
+  suspend(error = new Error('Browser client network routes suspended')): void {
+    if (this.closed) {
+      return
+    }
+    this.suspended = true
+    this.recovery?.abort.abort()
+    this.recovery = null
+    this.recoveryGeneration += 1
+    const failures: unknown[] = []
+    for (const retained of this.routes.values()) {
+      try {
+        retained.route.suspend(error)
+      } catch (failure) {
+        failures.push(failure)
+      }
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'Browser client network route suspension failed')
+    }
+  }
+
+  reconnect(): Promise<void> {
+    if (this.closed) {
+      return Promise.reject(new Error('browser_client_network_route_registry_closed'))
+    }
+    if (!this.suspended) {
+      return Promise.resolve()
+    }
+    const existing = this.recovery
+    if (existing?.generation === this.recoveryGeneration) {
+      return existing.promise
+    }
+    const generation = this.recoveryGeneration
+    const abort = new AbortController()
+    const recovering = this.reconnectRoutes(generation, abort.signal).finally(() => {
+      if (this.recovery?.promise === recovering) {
+        this.recovery = null
+      }
+    })
+    this.recovery = { generation, abort, promise: recovering }
+    return recovering
+  }
+
+  private async reconnectRoutes(generation: number, signal: AbortSignal): Promise<void> {
+    const retained = [...this.routes.values()]
+    const addresses = await reconnectBrowserClientNetworkRoutes({
+      routes: retained,
+      signal,
+      graceMs: this.reconnectGraceMs,
+      retryDelayMs: this.reconnectRetryDelayMs,
+      browserHostClientId: this.options.authority.browserHostClientId
+    })
+    for (const [index, address] of addresses.entries()) {
+      assertRouteAddress(address)
+      const previous = retained[index]?.address
+      if (previous && !sameRouteAddress(previous, address)) {
+        throw new Error('browser_client_network_route_address_changed')
+      }
+    }
+    if (!this.closed && this.recoveryGeneration === generation) {
+      this.suspended = false
+    }
   }
 
   private assertAdmission(signal: AbortSignal): void {
     if (this.closed) {
       throw new Error('browser_client_network_route_registry_closed')
+    }
+    if (this.suspended) {
+      throw new Error('browser_client_network_route_registry_suspended')
     }
     if (signal.aborted) {
       throw new Error('browser_client_network_route_aborted')
@@ -134,6 +215,24 @@ export class BrowserClientNetworkRouteRegistry {
       throw new AggregateError(failures, 'Browser client network route cleanup failed')
     }
   }
+}
+
+function assertRouteAddress(address: { host: string; port: number }): void {
+  if (
+    address.host !== '127.0.0.1' ||
+    !Number.isInteger(address.port) ||
+    address.port < 1 ||
+    address.port > 65_535
+  ) {
+    throw new Error('browser_client_network_route_address_invalid')
+  }
+}
+
+function sameRouteAddress(
+  left: { host: string; port: number },
+  right: { host: string; port: number }
+): boolean {
+  return left.host === right.host && left.port === right.port
 }
 
 function waitForRouteAddress(

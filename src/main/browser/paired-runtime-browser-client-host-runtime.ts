@@ -43,7 +43,14 @@ const browserClientHosts =
             routeSessions: browserRouteSessionRegistry,
             routeWebContents: browserRouteWebContentsRegistry
           }),
-        createHost: ({ handler, getPageInventory, onAuthority, onError }) =>
+        createHost: ({
+          handler,
+          getPageInventory,
+          onAuthority,
+          onTransportLost,
+          onReconnected,
+          onError
+        }) =>
           new PairedRuntimeBrowserClientHost({
             pairing: input.pairing,
             authorityRuntimeId: input.authorityRuntimeId,
@@ -52,6 +59,8 @@ const browserClientHosts =
             handler,
             getPageInventory,
             onAuthority,
+            onTransportLost,
+            onReconnected,
             onError
           }),
         onError: (error) => retireFailedEnvironmentHost(input.environmentId, error)

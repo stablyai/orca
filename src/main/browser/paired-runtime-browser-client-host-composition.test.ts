@@ -34,6 +34,51 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     expect(rig.executor.snapshotPageInventory).toHaveBeenCalledOnce()
   })
 
+  it('suspends routes without closing pages and gates commands through recovery', async () => {
+    const rig = createRig()
+    const composition = rig.createComposition()
+    await composition.start()
+
+    rig.hostOptions.onTransportLost?.(new Error('transport lost'))
+    const handling = rig.hostOptions.handler?.(command(), new AbortController().signal)
+    await Promise.resolve()
+    expect(rig.routes.suspend).toHaveBeenCalledOnce()
+    expect(rig.executor.handle).not.toHaveBeenCalled()
+    expect(rig.executor.close).not.toHaveBeenCalled()
+
+    rig.hostOptions.onReconnected?.(authority)
+    await expect(handling).resolves.toEqual({ status: 'completed' })
+    expect(rig.routes.reconnect).toHaveBeenCalledOnce()
+    expect(rig.executor.handle).toHaveBeenCalledOnce()
+  })
+
+  it('keeps one command gate across repeated loss while fencing stale route recovery', async () => {
+    const firstRecovery = deferred<void>()
+    const secondRecovery = deferred<void>()
+    const rig = createRig()
+    rig.routes.reconnect
+      .mockImplementationOnce(() => firstRecovery.promise)
+      .mockImplementationOnce(() => secondRecovery.promise)
+    const composition = rig.createComposition()
+    await composition.start()
+
+    rig.hostOptions.onTransportLost?.(new Error('first loss'))
+    const handling = rig.hostOptions.handler?.(command(), new AbortController().signal)
+    rig.hostOptions.onReconnected?.(authority)
+    rig.hostOptions.onTransportLost?.(new Error('second loss'))
+    rig.hostOptions.onReconnected?.(authority)
+    firstRecovery.reject(new Error('superseded route recovery'))
+    await Promise.resolve()
+
+    expect(rig.host.close).not.toHaveBeenCalled()
+    expect(rig.executor.handle).not.toHaveBeenCalled()
+    secondRecovery.resolve()
+    await expect(handling).resolves.toEqual({ status: 'completed' })
+    expect(rig.routes.suspend).toHaveBeenCalledTimes(2)
+    expect(rig.routes.reconnect).toHaveBeenCalledTimes(2)
+    expect(rig.executor.handle).toHaveBeenCalledOnce()
+  })
+
   it('settles dispatcher retirement before destroying and forgetting the page', async () => {
     const rig = createRig()
     const composition = rig.createComposition()
@@ -123,6 +168,8 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
   })
   const routes = {
     retain: vi.fn(),
+    suspend: vi.fn(),
+    reconnect: vi.fn(async () => {}),
     close: vi.fn(async () => {
       order.push('close-routes')
     })
@@ -160,6 +207,8 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
   let hostOptions: {
     getPageInventory?: () => readonly unknown[]
     onAuthority?: (next: BrowserClientHostLeaseAuthority) => void
+    onTransportLost?: (error: Error) => void
+    onReconnected?: (next: BrowserClientHostLeaseAuthority) => void
     handler?: (
       event: BrowserClientHostCommandEvent,
       signal: AbortSignal
@@ -227,4 +276,18 @@ function command(): BrowserClientHostCommandEvent {
       executionHostKey: 'execution-host-a'
     }
   }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: Error) => void
+} {
+  let resolve = (_value: T): void => {}
+  let reject = (_error: Error): void => {}
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
 }

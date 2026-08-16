@@ -14,6 +14,67 @@ const authority: BrowserClientHostLeaseAuthority = {
 }
 
 describe('BrowserHostCommandLedger', () => {
+  it('replays each unsettled command when delivery reattaches', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    const firstDelivery = vi.fn()
+    const release = ledger.attach(firstDelivery)
+    const issued = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'createPage',
+        browserProfileId: 'profile-a',
+        executionHostKey: 'native:runtime-a:1'
+      }
+    })
+    release()
+    const replacementDelivery = vi.fn()
+
+    ledger.attach(replacementDelivery)
+
+    expect(firstDelivery).toHaveBeenCalledWith(issued.event)
+    expect(replacementDelivery).toHaveBeenCalledOnce()
+    expect(replacementDelivery).toHaveBeenCalledWith(issued.event)
+    ledger.settle({ ...issued.event, result: { status: 'completed' } })
+    await expect(issued.result).resolves.toEqual({ status: 'completed' })
+  })
+
+  it('retains unsettled commands when replacement delivery fails partway through replay', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    const release = ledger.attach(vi.fn())
+    const create = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'createPage',
+        browserProfileId: 'profile-a',
+        executionHostKey: 'native:runtime-a:1'
+      }
+    })
+    const navigate = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: { type: 'navigate', url: 'https://remote.internal' }
+    })
+    release()
+    expect(() =>
+      ledger.attach((event) => {
+        if (event.commandSequence === 2) {
+          throw new Error('transport closed')
+        }
+      })
+    ).toThrow('browser_host_command_delivery_failed')
+    const replay = vi.fn()
+
+    ledger.attach(replay)
+
+    expect(replay.mock.calls.map(([event]) => event.commandSequence)).toEqual([1, 2])
+    ledger.settle(resultParams(create.event, { status: 'completed' }))
+    ledger.settle(resultParams(navigate.event, { status: 'completed' }))
+    await expect(create.result).resolves.toEqual({ status: 'completed' })
+    await expect(navigate.result).resolves.toEqual({ status: 'completed' })
+  })
+
   it('publishes bounded per-page sequences and settles results in order', async () => {
     const emit = vi.fn()
     const ledger = new BrowserHostCommandLedger({

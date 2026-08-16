@@ -8,7 +8,12 @@ const DEFAULT_MAX_CONCURRENT_COMMAND_RESULTS = 16
 // Mirror the server ledger ceiling so an honest host never over-admits completed work.
 const DEFAULT_MAX_UNSETTLED_COMMAND_RESULTS = 256
 
-export type BrowserHostCommandResultAdmission = { active: boolean }
+export type BrowserHostCommandResultAdmission = { active: boolean; commandKey: string }
+
+export type BrowserHostCommandResultAdmissionResult = {
+  admission: BrowserHostCommandResultAdmission
+  duplicate: boolean
+}
 
 type PendingCommandResult = {
   admission: BrowserHostCommandResultAdmission
@@ -31,6 +36,7 @@ export class BrowserHostCommandResultSettler {
   private readonly maxConcurrent: number
   private readonly maxUnsettled: number
   private readonly pending: PendingCommandResult[] = []
+  private readonly admissionsByCommandKey = new Map<string, BrowserHostCommandResultAdmission>()
   private unsettled = 0
   private inFlight = 0
   private closed = false
@@ -43,12 +49,19 @@ export class BrowserHostCommandResultSettler {
     }
   }
 
-  admit(): BrowserHostCommandResultAdmission | null {
+  admit(command: BrowserClientHostCommandEvent): BrowserHostCommandResultAdmissionResult | null {
+    const commandKey = browserHostCommandResultAdmissionKey(command)
+    const existing = this.admissionsByCommandKey.get(commandKey)
+    if (existing?.active) {
+      return { admission: existing, duplicate: true }
+    }
     if (this.closed || this.unsettled >= this.maxUnsettled) {
       return null
     }
     this.unsettled += 1
-    return { active: true }
+    const admission = { active: true, commandKey }
+    this.admissionsByCommandKey.set(commandKey, admission)
+    return { admission, duplicate: false }
   }
 
   enqueue(
@@ -70,6 +83,9 @@ export class BrowserHostCommandResultSettler {
       return
     }
     admission.active = false
+    if (this.admissionsByCommandKey.get(admission.commandKey) === admission) {
+      this.admissionsByCommandKey.delete(admission.commandKey)
+    }
     this.unsettled -= 1
   }
 
@@ -82,6 +98,7 @@ export class BrowserHostCommandResultSettler {
       this.release(pending.admission)
     }
     this.pending.length = 0
+    this.admissionsByCommandKey.clear()
   }
 
   private drain(): void {
@@ -106,6 +123,15 @@ export class BrowserHostCommandResultSettler {
         })
     }
   }
+}
+
+function browserHostCommandResultAdmissionKey(command: BrowserClientHostCommandEvent): string {
+  return JSON.stringify([
+    command.browserPageId,
+    command.pageHostGeneration,
+    command.commandSequence,
+    command.commandId
+  ])
 }
 
 function boundedLimit(value: number | undefined, maximum: number): number {

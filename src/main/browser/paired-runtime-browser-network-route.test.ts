@@ -273,6 +273,29 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
+  it('suspends the tunnel immediately while preserving the SOCKS listener', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute()
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    const address = await starting
+
+    route.suspend()
+    expect(attempts[0]!.close).toHaveBeenCalledOnce()
+    const offline = await connectSocks(address.host, address.port)
+    await greetSocks(offline)
+    offline.write(domainConnectRequest('offline.internal', 443))
+    expect(Array.from(await readExact(offline, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
+    offline.destroy()
+
+    const reconnecting = route.reconnect()
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    ready(attempts[1]!, 8)
+    await expect(reconnecting).resolves.toEqual(address)
+    await route.close()
+  })
+
   it('reattaches with the exact existing v1 payload and capability pair', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute({

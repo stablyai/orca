@@ -18,6 +18,10 @@ export const BROWSER_CLIENT_HOST_PAGE_COMMAND_PROTOCOL_VERSION = 1 as const
 const PageCommandProtocolVersion = z.literal(BROWSER_CLIENT_HOST_PAGE_COMMAND_PROTOCOL_VERSION)
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION = 1 as const
 const PageInventoryProtocolVersion = z.literal(BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION)
+export const BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION = 1 as const
+const LeaseReconnectProtocolVersion = z.literal(
+  BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION
+)
 
 export const BrowserHostLeaseAuthority = z.object({
   authorityRuntimeId: Identity,
@@ -86,7 +90,8 @@ export const BrowserClientHostAttachParams = z
     hostCapabilities: z.array(z.string().min(1).max(128)).max(32),
     pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
     pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
-    pageInventory: BrowserClientHostedPageInventoryList.optional()
+    pageInventory: BrowserClientHostedPageInventoryList.optional(),
+    leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
   })
   .superRefine((params, context) => {
     if (
@@ -96,6 +101,15 @@ export const BrowserClientHostAttachParams = z
       context.addIssue({
         code: 'custom',
         message: 'Browser page inventory negotiation is incomplete'
+      })
+    }
+    if (
+      params.leaseReconnectProtocolVersion !== undefined &&
+      params.pageInventoryProtocolVersion === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Browser host reconnect requires page inventory negotiation'
       })
     }
     for (const [index, page] of (params.pageInventory ?? []).entries()) {
@@ -114,7 +128,8 @@ export const BrowserClientHostReady = z.object({
   authorityEpoch: Identity,
   browserHostGeneration: Generation,
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
-  pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional()
+  pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
+  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
 })
 
 const BrowserClientHostRevoked = z.object({
@@ -126,7 +141,8 @@ const BrowserClientHostRevoked = z.object({
 
 export const BrowserClientHostLeaseAuthority = BrowserHostLeaseAuthority.extend({
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
-  pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional()
+  pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
+  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
 })
 
 export type BrowserClientHostLeaseAuthority = z.infer<typeof BrowserClientHostLeaseAuthority>

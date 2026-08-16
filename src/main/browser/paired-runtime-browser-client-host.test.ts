@@ -48,7 +48,11 @@ describe('PairedRuntimeBrowserClientHost', () => {
     expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       pairing,
       'browser.clientHost.attach',
-      expect.objectContaining({ pageInventoryProtocolVersion: 1, pageInventory: [] }),
+      expect.objectContaining({
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [],
+        leaseReconnectProtocolVersion: 1
+      }),
       15_000,
       expect.any(Object),
       expect.any(Object)

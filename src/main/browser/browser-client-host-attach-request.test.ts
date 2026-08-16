@@ -22,6 +22,7 @@ describe('browser client host attach request', () => {
       pageCommandProtocolVersion: 1,
       onPageCommand,
       pageInventoryProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1,
       getPageInventory: () => [
         {
           authorityRuntimeId: 'runtime-old',
@@ -42,5 +43,28 @@ describe('browser client host attach request', () => {
     expect(attach.params).toMatchObject({ pageCommandProtocolVersion: 1 })
     expect(attach.params).not.toHaveProperty('pageInventoryProtocolVersion')
     expect(attach.params).not.toHaveProperty('pageInventory')
+    expect(attach.params).not.toHaveProperty('leaseReconnectProtocolVersion')
+  })
+
+  it('includes reconnect negotiation only beside an encoded inventory snapshot', () => {
+    const attach = createBrowserClientHostAttachRequest({
+      pairing,
+      authorityRuntimeId: 'runtime-a',
+      browserHostClientId: 'host-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1,
+      getPageInventory: () => []
+    })
+
+    expect(attach).toMatchObject({
+      pageInventoryProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1,
+      params: {
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [],
+        leaseReconnectProtocolVersion: 1
+      }
+    })
   })
 })

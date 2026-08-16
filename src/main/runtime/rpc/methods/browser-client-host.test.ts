@@ -9,7 +9,8 @@ import { ALL_RPC_METHODS } from './index'
 function request(
   browserHostClientId = 'host-a',
   pageCommandProtocolVersion?: 1,
-  pageInventoryProtocolVersion?: 1
+  pageInventoryProtocolVersion?: 1,
+  leaseReconnectProtocolVersion?: 1
 ) {
   return {
     id: `browser-host:${browserHostClientId}`,
@@ -22,7 +23,8 @@ function request(
       ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {}),
       ...(pageInventoryProtocolVersion
         ? { pageInventoryProtocolVersion, pageInventory: [inventoryPage()] }
-        : {})
+        : {}),
+      ...(leaseReconnectProtocolVersion ? { leaseReconnectProtocolVersion } : {})
     }
   }
 }
@@ -278,6 +280,132 @@ describe('browser.clientHost.attach RPC', () => {
 
     cleanups.get('browser-client-host:host-a')?.()
     await dispatch
+  })
+
+  it('publishes ready before replaying an unsettled command on exact reattach', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const options = {
+      clientKind: 'runtime' as const,
+      pairedDeviceId: 'device-a',
+      clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+    }
+    const firstReplies: string[] = []
+    const first = dispatcher.dispatchStreaming(
+      request('host-a', 1, 1, 1),
+      (reply) => firstReplies.push(reply),
+      { ...options, connectionId: 'connection-a' }
+    )
+    await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
+    const registry = getBrowserHostLeaseRegistry(hostRuntime)
+    const lease = registry.select('host-a')
+    const placement = registry.placeClientPage('page-a', 'host-a')
+    if (placement.kind !== 'client') {
+      throw new Error('expected client placement')
+    }
+    registry.grantExecutionHost(
+      {
+        authorityEpoch: lease.authorityEpoch,
+        browserHostClientId: lease.browserHostClientId,
+        browserHostGeneration: lease.browserHostGeneration,
+        pairedDeviceId: lease.pairedDeviceId
+      },
+      'host-key-a'
+    )
+    const issued = registry.issueClientPageCommand(
+      {
+        authorityRuntimeId: lease.authorityRuntimeId,
+        authorityEpoch: lease.authorityEpoch,
+        browserPageId: 'page-a',
+        browserHostClientId: lease.browserHostClientId,
+        browserHostGeneration: lease.browserHostGeneration,
+        pageHostGeneration: placement.pageHostGeneration
+      },
+      {
+        type: 'createPage',
+        browserProfileId: 'default',
+        executionHostKey: 'host-key-a'
+      }
+    )
+    await vi.waitFor(() => expect(firstReplies).toHaveLength(2))
+    const disconnectFirst = cleanups.get('browser-client-host:host-a')
+    disconnectFirst?.()
+    await first
+
+    const replacementReplies: string[] = []
+    const replacement = dispatcher.dispatchStreaming(
+      request('host-a', 1, 1, 1),
+      (reply) => replacementReplies.push(reply),
+      { ...options, connectionId: 'connection-b' }
+    )
+    await vi.waitFor(() => expect(replacementReplies).toHaveLength(2))
+
+    expect(JSON.parse(replacementReplies[0]!).result).toMatchObject({
+      type: 'ready',
+      authorityEpoch: lease.authorityEpoch,
+      browserHostGeneration: lease.browserHostGeneration,
+      leaseReconnectProtocolVersion: 1
+    })
+    expect(JSON.parse(replacementReplies[1]!).result).toEqual(issued.event)
+    expect(
+      await dispatchCommandResult(
+        dispatcher,
+        { ...issued.event, result: { status: 'completed' } },
+        { connectionId: 'connection-b' }
+      )
+    ).toMatchObject({ ok: true, result: { accepted: true } })
+    await expect(issued.result).resolves.toEqual({ status: 'completed' })
+
+    cleanups.get('browser-client-host:host-a')?.()
+    await replacement
+  })
+
+  it('restores exact authority when reattach reaches the host before old cleanup', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const options = {
+      clientKind: 'runtime' as const,
+      pairedDeviceId: 'device-a',
+      clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+    }
+    const firstReplies: string[] = []
+    const first = dispatcher.dispatchStreaming(
+      request('host-a', 1, 1, 1),
+      (reply) => firstReplies.push(reply),
+      { ...options, connectionId: 'connection-a' }
+    )
+    await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
+    const firstReady = JSON.parse(firstReplies[0]!).result
+    const replacementReplies: string[] = []
+
+    const replacement = dispatcher.dispatchStreaming(
+      request('host-a', 1, 1, 1),
+      (reply) => replacementReplies.push(reply),
+      { ...options, connectionId: 'connection-b' }
+    )
+    await vi.waitFor(() => expect(replacementReplies).toHaveLength(1))
+    await first
+
+    expect(JSON.parse(replacementReplies[0]!).result).toMatchObject({
+      type: 'ready',
+      authorityEpoch: firstReady.authorityEpoch,
+      browserHostGeneration: firstReady.browserHostGeneration
+    })
+    expect(firstReplies).toHaveLength(1)
+    expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
+      connectionId: 'connection-b',
+      browserHostGeneration: firstReady.browserHostGeneration
+    })
+    cleanups.get('browser-client-host:host-a')?.()
+    await replacement
   })
 
   it('rejects command results from unauthenticated callers', async () => {

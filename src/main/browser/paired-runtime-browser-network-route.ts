@@ -69,6 +69,18 @@ export class PairedRuntimeBrowserNetworkRoute {
     return this.beginReconnect()
   }
 
+  suspend(error = new Error('Browser network route transport suspended')): void {
+    if (this.closed) {
+      return
+    }
+    const transport = this.transport
+    this.transport = null
+    this.reconnectPromise = null
+    for (const failure of transport?.close(error) ?? []) {
+      this.reportError(failure)
+    }
+  }
+
   async close(error = new Error('Browser network route is closed')): Promise<void> {
     if (this.closePromise) {
       return this.closePromise

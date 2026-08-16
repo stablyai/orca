@@ -6,6 +6,7 @@ import {
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import {
+  assertBrowserHostCommandOrder,
   createBrowserHostCommandRecord,
   DEFAULT_MAX_CACHED_RESULTS,
   DEFAULT_MAX_CACHED_RESULTS_PER_PAGE,
@@ -20,6 +21,7 @@ import {
   positiveBrowserHostCommandLimit,
   sameBrowserHostCommandResult
 } from './browser-host-command-state'
+import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
 
 export class BrowserHostCommandLedger {
   private readonly authority: BrowserClientHostLeaseAuthority
@@ -68,11 +70,21 @@ export class BrowserHostCommandLedger {
       throw new Error('browser_host_command_delivery_attached')
     }
     this.delivery = delivery
+    try {
+      replayOutstandingBrowserHostCommands(this.pages.values(), delivery)
+    } catch {
+      this.detachDelivery()
+      throw new Error('browser_host_command_delivery_failed')
+    }
     return () => {
       if (this.delivery === delivery) {
         this.delivery = undefined
       }
     }
+  }
+
+  detachDelivery(): void {
+    this.delivery = undefined
   }
 
   issue(input: BrowserHostCommandInput): {
@@ -94,7 +106,7 @@ export class BrowserHostCommandLedger {
     if (page.outstanding >= this.maxOutstandingCommandsPerPage) {
       throw new Error('browser_host_page_command_capacity')
     }
-    this.assertCommandOrder(page, command)
+    assertBrowserHostCommandOrder(page, command)
     admission.commit()
     const commandSequence = page.nextIssueSequence
     const event = Object.freeze({
@@ -222,18 +234,6 @@ export class BrowserHostCommandLedger {
         }
         this.pages.set(input.browserPageId, page)
       }
-    }
-  }
-
-  private assertCommandOrder(
-    page: BrowserHostCommandPageState,
-    command: BrowserClientHostCommandEvent['command']
-  ): void {
-    if (page.nextIssueSequence === 1 && command.type !== 'createPage') {
-      throw new Error('browser_host_command_create_required')
-    }
-    if (page.nextIssueSequence > 1 && command.type === 'createPage') {
-      throw new Error('browser_host_command_create_repeated')
     }
   }
 

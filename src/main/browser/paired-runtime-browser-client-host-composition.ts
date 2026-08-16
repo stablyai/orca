@@ -5,9 +5,12 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
 
 type ComposedNetworkRoutes = {
   retain(key: string, signal: AbortSignal): Promise<BrowserClientPageNetworkRoute>
+  suspend(error?: Error): void
+  reconnect(): Promise<void>
   close(error?: Error): Promise<void>
 }
 
@@ -46,6 +49,8 @@ type PairedRuntimeBrowserClientHostCompositionOptions = {
     onAuthority(authority: BrowserClientHostLeaseAuthority): void
     getPageInventory(): readonly BrowserClientHostedPageInventory[]
     onError(error: Error): void
+    onTransportLost(error: Error): void
+    onReconnected(authority: BrowserClientHostLeaseAuthority): void
   }): ComposedClientHost
   onError?: (error: Error) => void
 }
@@ -57,6 +62,9 @@ export class PairedRuntimeBrowserClientHostComposition {
   private startPromise: Promise<BrowserClientHostLeaseAuthority> | null = null
   private closePromise: Promise<boolean> | null = null
   private deferredExecutorClose: Promise<void> | null = null
+  private routeRecovery: ReturnType<typeof createRouteRecoveryGate> | null = null
+  private routeAuthority: BrowserClientHostLeaseAuthority | null = null
+  private routeRecoveryGeneration = 0
   private closed = false
   private errorReported = false
 
@@ -65,9 +73,11 @@ export class PairedRuntimeBrowserClientHostComposition {
       retainNetworkRoute: (key, signal) => this.requireRoutes().retain(key, signal)
     })
     this.host = options.createHost({
-      handler: (event, signal) => this.executor.handle(event, signal),
+      handler: (event, signal) => this.handleCommand(event, signal),
       getPageInventory: () => this.executor.snapshotPageInventory(),
       onAuthority: (authority) => this.activateRoutes(authority),
+      onTransportLost: (error) => this.suspendRoutes(error),
+      onReconnected: (authority) => this.reconnectRoutes(authority),
       onError: (error) => this.handleHostError(error)
     })
   }
@@ -101,6 +111,7 @@ export class PairedRuntimeBrowserClientHostComposition {
 
   close(error = new Error('Browser client host composition is closed')): Promise<boolean> {
     this.closed = true
+    this.rejectRouteRecovery(error)
     this.closePromise ??= this.closeComposition(error)
     return this.closePromise
   }
@@ -117,7 +128,76 @@ export class PairedRuntimeBrowserClientHostComposition {
     if (this.closed || this.routes) {
       throw new Error('browser_client_network_route_authority_unavailable')
     }
+    this.routeAuthority = authority
     this.routes = this.options.createRoutes(authority)
+  }
+
+  private async handleCommand(
+    event: BrowserClientHostCommandEvent,
+    signal: AbortSignal
+  ): Promise<BrowserClientHostCommandResult> {
+    const recovery = this.routeRecovery
+    if (recovery) {
+      await waitForRouteRecovery(recovery.promise, signal)
+    }
+    if (this.closed || signal.aborted) {
+      throw new Error('browser_client_host_command_aborted')
+    }
+    return this.executor.handle(event, signal)
+  }
+
+  private suspendRoutes(error: Error): void {
+    if (this.closed) {
+      return
+    }
+    const routes = this.requireRoutes()
+    if (!this.routeRecovery) {
+      this.routeRecovery = createRouteRecoveryGate()
+      void this.routeRecovery.promise.catch(() => undefined)
+    }
+    this.routeRecoveryGeneration += 1
+    routes.suspend(error)
+  }
+
+  private reconnectRoutes(authority: BrowserClientHostLeaseAuthority): void {
+    if (
+      this.closed ||
+      !this.routeAuthority ||
+      !sameBrowserClientHostLeaseAuthority(this.routeAuthority, authority)
+    ) {
+      throw new Error('browser_client_network_route_authority_changed')
+    }
+    const recovery = this.routeRecovery
+    if (!recovery) {
+      throw new Error('browser_client_network_route_recovery_unexpected')
+    }
+    const generation = this.routeRecoveryGeneration
+    void this.requireRoutes()
+      .reconnect()
+      .then(() => {
+        if (this.routeRecovery === recovery && this.routeRecoveryGeneration === generation) {
+          this.routeRecovery = null
+          recovery.resolve()
+        }
+      })
+      .catch((error) => {
+        const routeError = asError(error)
+        if (this.routeRecovery !== recovery || this.routeRecoveryGeneration !== generation) {
+          return
+        }
+        this.routeRecovery = null
+        recovery.reject(routeError)
+        this.handleHostError(routeError)
+      })
+  }
+
+  private rejectRouteRecovery(error: Error): void {
+    const recovery = this.routeRecovery
+    if (!recovery) {
+      return
+    }
+    this.routeRecovery = null
+    recovery.reject(error)
   }
 
   private requireRoutes(): ComposedNetworkRoutes {
@@ -182,6 +262,40 @@ export class PairedRuntimeBrowserClientHostComposition {
       // Reporting cannot release ambiguous cleanup state.
     }
   }
+}
+
+function createRouteRecoveryGate(): {
+  promise: Promise<void>
+  resolve: () => void
+  reject: (error: Error) => void
+} {
+  let resolve = (): void => {}
+  let reject = (_error: Error): void => {}
+  const promise = new Promise<void>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
+function waitForRouteRecovery(recovery: Promise<void>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.reject(new Error('browser_client_host_command_aborted'))
+  }
+  return new Promise((resolve, reject) => {
+    const abort = (): void => reject(new Error('browser_client_host_command_aborted'))
+    signal.addEventListener('abort', abort, { once: true })
+    void recovery.then(
+      () => {
+        signal.removeEventListener('abort', abort)
+        resolve()
+      },
+      (error) => {
+        signal.removeEventListener('abort', abort)
+        reject(error)
+      }
+    )
+  })
 }
 
 function asError(error: unknown): Error {

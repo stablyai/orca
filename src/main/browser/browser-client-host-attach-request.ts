@@ -11,6 +11,12 @@ export function assertBrowserClientHostAttachOptions(
   ) {
     throw new Error('Browser host page inventory negotiation is incomplete')
   }
+  if (
+    options.leaseReconnectProtocolVersion !== undefined &&
+    options.pageInventoryProtocolVersion === undefined
+  ) {
+    throw new Error('Browser host reconnect requires page inventory negotiation')
+  }
 }
 
 export function createBrowserClientHostAttachRequest(
@@ -25,6 +31,9 @@ export function createBrowserClientHostAttachRequest(
   const pageInventoryProtocolVersion = pageInventory
     ? options.pageInventoryProtocolVersion
     : undefined
+  const leaseReconnectProtocolVersion = pageInventoryProtocolVersion
+    ? options.leaseReconnectProtocolVersion
+    : undefined
   const params = BrowserClientHostAttachParams.parse({
     authorityRuntimeId: options.authorityRuntimeId,
     browserHostClientId: options.browserHostClientId,
@@ -35,7 +44,13 @@ export function createBrowserClientHostAttachRequest(
           pageInventoryProtocolVersion,
           pageInventory
         }
-      : {})
+      : {}),
+    ...(leaseReconnectProtocolVersion ? { leaseReconnectProtocolVersion } : {})
   })
-  return { pageCommandProtocolVersion, pageInventoryProtocolVersion, params }
+  return {
+    pageCommandProtocolVersion,
+    pageInventoryProtocolVersion,
+    leaseReconnectProtocolVersion,
+    params
+  }
 }

@@ -34,6 +34,7 @@ export function sameBrowserClientHostLeaseAuthority(
     left.browserHostClientId === right.browserHostClientId &&
     left.browserHostGeneration === right.browserHostGeneration &&
     left.pageCommandProtocolVersion === right.pageCommandProtocolVersion &&
-    left.pageInventoryProtocolVersion === right.pageInventoryProtocolVersion
+    left.pageInventoryProtocolVersion === right.pageInventoryProtocolVersion &&
+    left.leaseReconnectProtocolVersion === right.leaseReconnectProtocolVersion
   )
 }

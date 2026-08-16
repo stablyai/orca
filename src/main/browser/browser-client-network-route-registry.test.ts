@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
 import { browserNetworkExecutionHostKey } from './browser-network-execution-route'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
@@ -9,6 +9,10 @@ const authority: BrowserHostLeaseAuthority = {
   browserHostClientId: 'client-a',
   browserHostGeneration: 2
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('BrowserClientNetworkRouteRegistry', () => {
   it('retains one exact route until its final page releases it', async () => {
@@ -115,6 +119,140 @@ describe('BrowserClientNetworkRouteRegistry', () => {
       )
     ).rejects.toThrow('browser_client_network_route_registry_closed')
   })
+
+  it('suspends every retained transport and restores the same listener address', async () => {
+    const route = createRoute()
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      createRoute: () => route
+    })
+    const key = browserNetworkExecutionHostKey({
+      kind: 'native',
+      runtimeId: 'runtime-a',
+      revision: 1
+    })
+    await registry.retain(key, signal())
+
+    registry.suspend()
+    await expect(registry.retain(key, signal())).rejects.toThrow(
+      'browser_client_network_route_registry_suspended'
+    )
+    await registry.reconnect()
+
+    expect(route.suspend).toHaveBeenCalledOnce()
+    expect(route.reconnect).toHaveBeenCalledOnce()
+    await expect(registry.retain(key, signal())).resolves.toMatchObject({
+      proxyEndpoint: { host: '127.0.0.1', port: 43123 }
+    })
+    await registry.close()
+  })
+
+  it('retries one flaky route without closing healthy retained routes', async () => {
+    vi.useFakeTimers()
+    const flaky = createRoute()
+    flaky.reconnect
+      .mockRejectedValueOnce(new Error('transient tunnel failure'))
+      .mockResolvedValue({ host: '127.0.0.1', port: 43123 })
+    const healthy = createRoute()
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      reconnectGraceMs: 1_000,
+      reconnectRetryDelayMs: 10,
+      createRoute: vi.fn().mockReturnValueOnce(flaky).mockReturnValueOnce(healthy)
+    })
+    await registry.retain(
+      browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
+      signal()
+    )
+    await registry.retain(
+      browserNetworkExecutionHostKey({
+        kind: 'ssh',
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a',
+        connectionGeneration: 1
+      }),
+      signal()
+    )
+
+    registry.suspend()
+    const reconnecting = registry.reconnect()
+    await vi.runAllTimersAsync()
+    await expect(reconnecting).resolves.toBeUndefined()
+
+    expect(flaky.reconnect).toHaveBeenCalledTimes(2)
+    expect(healthy.reconnect).toHaveBeenCalledOnce()
+    expect(flaky.close).not.toHaveBeenCalled()
+    expect(healthy.close).not.toHaveBeenCalled()
+    await registry.close()
+  })
+
+  it('aborts a stale route recovery without retaining its retry timer', async () => {
+    vi.useFakeTimers()
+    let rejectReconnect = (_error: Error): void => {}
+    const route = createRoute()
+    route.reconnect.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectReconnect = reject
+      })
+    )
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      createRoute: () => route
+    })
+    await registry.retain(
+      browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
+      signal()
+    )
+    registry.suspend()
+    const reconnecting = registry.reconnect()
+    await Promise.resolve()
+
+    registry.suspend(new Error('second loss'))
+    rejectReconnect(new Error('superseded transport'))
+
+    await expect(reconnecting).rejects.toThrow('browser_client_network_route_recovery_superseded')
+    expect(vi.getTimerCount()).toBe(0)
+    await registry.close()
+  })
+
+  it('fails bounded recovery after one route exhausts grace without leaking timers', async () => {
+    vi.useFakeTimers()
+    const flaky = createRoute()
+    flaky.reconnect.mockRejectedValue(new Error('persistent tunnel failure'))
+    const healthy = createRoute()
+    const registry = new BrowserClientNetworkRouteRegistry({
+      authority,
+      reconnectGraceMs: 25,
+      reconnectRetryDelayMs: 10,
+      createRoute: vi.fn().mockReturnValueOnce(flaky).mockReturnValueOnce(healthy)
+    })
+    await registry.retain(
+      browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
+      signal()
+    )
+    await registry.retain(
+      browserNetworkExecutionHostKey({
+        kind: 'ssh',
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a',
+        connectionGeneration: 1
+      }),
+      signal()
+    )
+    registry.suspend()
+    const reconnecting = registry.reconnect()
+    const rejected = expect(reconnecting).rejects.toThrow(
+      'Browser client network route reconnect failed'
+    )
+
+    await vi.runAllTimersAsync()
+    await rejected
+
+    expect(flaky.reconnect.mock.calls.length).toBeGreaterThan(1)
+    expect(healthy.reconnect).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    await registry.close()
+  })
 })
 
 function createRoute(
@@ -126,6 +264,7 @@ function createRoute(
   return {
     start: vi.fn(() => started),
     reconnect: vi.fn(() => started),
+    suspend: vi.fn(),
     close: vi.fn(async () => {})
   }
 }

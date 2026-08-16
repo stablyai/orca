@@ -33,9 +33,14 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
         hostCapabilities: params.hostCapabilities,
         pageCommandProtocolVersion: params.pageCommandProtocolVersion,
         pageInventoryProtocolVersion: params.pageInventoryProtocolVersion,
-        pageInventory: params.pageInventory
+        pageInventory: params.pageInventory,
+        leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion
       })
       let releaseCommandDelivery = (): void => {}
+      let resolveDisconnected = (): void => {}
+      const whenDisconnected = new Promise<void>((resolve) => {
+        resolveDisconnected = resolve
+      })
       let cleaned = false
       const cleanup = (): void => {
         if (cleaned) {
@@ -43,7 +48,8 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
         }
         cleaned = true
         releaseCommandDelivery()
-        handle.release()
+        handle.disconnect()
+        resolveDisconnected()
       }
       const subscriptionId = `browser-client-host:${params.browserHostClientId}`
       try {
@@ -53,6 +59,20 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
           cleanup()
           return
         }
+        emit({
+          type: 'ready',
+          authorityEpoch: handle.lease.authorityEpoch,
+          browserHostGeneration: handle.lease.browserHostGeneration,
+          ...(params.pageCommandProtocolVersion
+            ? { pageCommandProtocolVersion: params.pageCommandProtocolVersion }
+            : {}),
+          ...(params.pageInventoryProtocolVersion
+            ? { pageInventoryProtocolVersion: params.pageInventoryProtocolVersion }
+            : {}),
+          ...(params.leaseReconnectProtocolVersion
+            ? { leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion }
+            : {})
+        })
         if (params.pageCommandProtocolVersion) {
           releaseCommandDelivery = registry.attachCommandDelivery(
             {
@@ -64,18 +84,14 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
             emit
           )
         }
-        emit({
-          type: 'ready',
-          authorityEpoch: handle.lease.authorityEpoch,
-          browserHostGeneration: handle.lease.browserHostGeneration,
-          ...(params.pageCommandProtocolVersion
-            ? { pageCommandProtocolVersion: params.pageCommandProtocolVersion }
-            : {}),
-          ...(params.pageInventoryProtocolVersion
-            ? { pageInventoryProtocolVersion: params.pageInventoryProtocolVersion }
-            : {})
-        })
-        const reason = await handle.whenFenced
+        const reason = await Promise.race([
+          handle.whenFenced,
+          whenDisconnected.then(() => undefined),
+          handle.whenConnectionSuperseded.then(() => undefined)
+        ])
+        if (!reason) {
+          return
+        }
         emit({
           type: 'revoked',
           authorityEpoch: handle.lease.authorityEpoch,

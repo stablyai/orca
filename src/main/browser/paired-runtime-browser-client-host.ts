@@ -25,6 +25,8 @@ export type PairedRuntimeBrowserClientHostOptions = {
   maxConcurrentCommandResults?: number
   maxUnsettledCommandResults?: number
   onAuthority?: (authority: BrowserClientHostLeaseAuthority) => void
+  onTransportLost?: (error: Error) => void
+  onReconnected?: (authority: BrowserClientHostLeaseAuthority) => void
   onError?: (error: Error) => void
 }
 
@@ -45,10 +47,13 @@ export class PairedRuntimeBrowserClientHost {
       ...(options.getPageInventory
         ? {
             pageInventoryProtocolVersion: 1,
+            leaseReconnectProtocolVersion: 1,
             getPageInventory: options.getPageInventory
           }
         : {}),
       onAuthority: (authority) => this.activateDispatcher(authority),
+      onTransportLost: options.onTransportLost,
+      onReconnected: options.onReconnected,
       onPageCommand: (command) => this.dispatch(command),
       timeoutMs: options.timeoutMs,
       subscription: options.subscription,

@@ -40,6 +40,18 @@ export type BrowserHostCommandPageState = {
   settledSequences: number[]
 }
 
+export function assertBrowserHostCommandOrder(
+  page: BrowserHostCommandPageState,
+  command: BrowserClientHostCommandEvent['command']
+): void {
+  if (page.nextIssueSequence === 1 && command.type !== 'createPage') {
+    throw new Error('browser_host_command_create_required')
+  }
+  if (page.nextIssueSequence > 1 && command.type === 'createPage') {
+    throw new Error('browser_host_command_create_repeated')
+  }
+}
+
 export type BrowserHostCommandLedgerOptions = {
   authority: BrowserClientHostLeaseAuthority
   createCommandId?: (commandSequence: number) => string

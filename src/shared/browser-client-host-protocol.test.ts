@@ -5,6 +5,7 @@ import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES,
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION,
+  BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION,
   BrowserClientHostAttachParams,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResultAck,
@@ -158,6 +159,35 @@ describe('browser client-host control protocol', () => {
     ).toThrow('Browser page inventory authority does not match the attaching host')
   })
 
+  it('negotiates reconnect grace only with a complete inventory snapshot', () => {
+    expect(
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [],
+        leaseReconnectProtocolVersion: BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION
+      })
+    ).toMatchObject({ leaseReconnectProtocolVersion: 1 })
+    expect(
+      BrowserClientHostReady.parse({
+        type: 'ready',
+        authorityEpoch: 'epoch-a',
+        browserHostGeneration: 2,
+        leaseReconnectProtocolVersion: 1
+      })
+    ).toMatchObject({ leaseReconnectProtocolVersion: 1 })
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        leaseReconnectProtocolVersion: 1
+      })
+    ).toThrow('Browser host reconnect requires page inventory negotiation')
+  })
+
   it('bounds inventory identities after JSON escaping without narrowing legacy identities', () => {
     const authorityRuntimeId = maxInventoryIdentity('runtime-')
     const browserHostClientId = maxInventoryIdentity('host-')
@@ -229,7 +259,8 @@ describe('browser client-host control protocol', () => {
         browserHostClientId: 'host-a',
         hostCapabilities: ['webview'],
         pageInventoryProtocolVersion: 1,
-        pageInventory: []
+        pageInventory: [],
+        leaseReconnectProtocolVersion: 1
       })
     ).not.toHaveProperty('pageInventory')
     expect(
@@ -237,7 +268,8 @@ describe('browser client-host control protocol', () => {
         type: 'ready',
         authorityEpoch: 'epoch-a',
         browserHostGeneration: 2,
-        pageInventoryProtocolVersion: 1
+        pageInventoryProtocolVersion: 1,
+        leaseReconnectProtocolVersion: 1
       })
     ).not.toHaveProperty('pageInventoryProtocolVersion')
   })

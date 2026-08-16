@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 
-const registry = (): BrowserHostLeaseRegistry =>
-  new BrowserHostLeaseRegistry({ authorityRuntimeId: 'runtime-a', authorityEpoch: 'epoch-a' })
+const registry = (reconnectGraceMs?: number): BrowserHostLeaseRegistry =>
+  new BrowserHostLeaseRegistry({
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: 'epoch-a',
+    reconnectGraceMs
+  })
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('BrowserHostLeaseRegistry', () => {
   it('rejects incomplete, duplicate, and foreign-client inventory before replacing a lease', () => {
@@ -64,6 +72,222 @@ describe('BrowserHostLeaseRegistry', () => {
     ])
     expect(Object.isFrozen(lease.pageInventory)).toBe(true)
     expect(Object.isFrozen(lease.pageInventory?.[0])).toBe(true)
+  })
+
+  it('keeps a negotiated lease unavailable during grace and restores its exact authority', async () => {
+    vi.useFakeTimers()
+    const leases = registry(1_000)
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [inventoryPage()],
+      leaseReconnectProtocolVersion: 1
+    })
+    const placement = leases.placeClientPage('page-a', 'host-a')
+    const route = leases.openTunnel({
+      authorityEpoch: first.lease.authorityEpoch,
+      browserHostClientId: first.lease.browserHostClientId,
+      browserHostGeneration: first.lease.browserHostGeneration,
+      pairedDeviceId: first.lease.pairedDeviceId,
+      executionHostKey: 'native:runtime-a:1'
+    })
+
+    first.disconnect()
+
+    expect(() => leases.select('host-a')).toThrow('browser_host_unavailable')
+    expect(leases.getPlacement('page-a')).toEqual(placement)
+    await expect(route.whenFenced).resolves.toBe('lease_released')
+    let fenced = false
+    void first.whenFenced.then(() => {
+      fenced = true
+    })
+    await Promise.resolve()
+    expect(fenced).toBe(false)
+
+    const replacementInventory = [{ ...inventoryPage(), currentUrl: 'https://reconnected/' }]
+    const replacement = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: replacementInventory,
+      leaseReconnectProtocolVersion: 1
+    })
+
+    expect(replacement.lease).toMatchObject({
+      authorityEpoch: first.lease.authorityEpoch,
+      browserHostGeneration: first.lease.browserHostGeneration,
+      connectionId: 'connection-b',
+      pageInventory: replacementInventory
+    })
+    expect(leases.select('host-a')).toEqual(replacement.lease)
+    first.disconnect()
+    expect(leases.select('host-a')).toEqual(replacement.lease)
+  })
+
+  it('restores exact authority when reattach arrives before old connection cleanup', async () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+    const placement = leases.placeClientPage('page-a', 'host-a')
+    const route = leases.openTunnel({
+      authorityEpoch: first.lease.authorityEpoch,
+      browserHostClientId: first.lease.browserHostClientId,
+      browserHostGeneration: first.lease.browserHostGeneration,
+      pairedDeviceId: first.lease.pairedDeviceId,
+      executionHostKey: 'native:runtime-a:1'
+    })
+    const releaseOldDelivery = leases.attachCommandDelivery(
+      {
+        authorityEpoch: first.lease.authorityEpoch,
+        browserHostClientId: first.lease.browserHostClientId,
+        browserHostGeneration: first.lease.browserHostGeneration,
+        pairedDeviceId: first.lease.pairedDeviceId
+      },
+      vi.fn()
+    )
+
+    const replacement = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+
+    await expect(first.whenConnectionSuperseded).resolves.toBeUndefined()
+    await expect(route.whenFenced).resolves.toBe('lease_released')
+    expect(replacement.lease.browserHostGeneration).toBe(first.lease.browserHostGeneration)
+    expect(leases.getPlacement('page-a')).toEqual(placement)
+    expect(() =>
+      leases.attachCommandDelivery(
+        {
+          authorityEpoch: replacement.lease.authorityEpoch,
+          browserHostClientId: replacement.lease.browserHostClientId,
+          browserHostGeneration: replacement.lease.browserHostGeneration,
+          pairedDeviceId: replacement.lease.pairedDeviceId
+        },
+        vi.fn()
+      )
+    ).not.toThrow()
+    releaseOldDelivery()
+    first.disconnect()
+    expect(leases.select('host-a')).toEqual(replacement.lease)
+  })
+
+  it('expires negotiated grace and keeps legacy disconnect behavior immediate', async () => {
+    vi.useFakeTimers()
+    const leases = registry(1_000)
+    const reconnecting = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+    reconnecting.disconnect()
+
+    await vi.advanceTimersByTimeAsync(999)
+    let fenced = false
+    void reconnecting.whenFenced.then(() => {
+      fenced = true
+    })
+    await Promise.resolve()
+    expect(fenced).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(reconnecting.whenFenced).resolves.toBe('released')
+
+    const legacy = leases.attach({
+      browserHostClientId: 'host-b',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-b',
+      hostCapabilities: ['webview']
+    })
+    legacy.disconnect()
+    await expect(legacy.whenFenced).resolves.toBe('released')
+  })
+
+  it('keeps foreign devices out and makes explicit grace revocation terminal', async () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+    first.disconnect()
+
+    expect(() =>
+      leases.attach({
+        browserHostClientId: 'host-a',
+        connectionId: 'foreign-connection',
+        pairedDeviceId: 'device-b',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [],
+        leaseReconnectProtocolVersion: 1
+      })
+    ).toThrow('browser_host_identity_conflict')
+    first.release()
+    await expect(first.whenFenced).resolves.toBe('released')
+
+    const late = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+    expect(late.lease.browserHostGeneration).toBe(first.lease.browserHostGeneration + 1)
+  })
+
+  it('replaces reconnecting authority on a capability mismatch', async () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+    first.disconnect()
+
+    const mismatch = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview', 'different'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+
+    await expect(first.whenFenced).resolves.toBe('replaced')
+    expect(mismatch.lease.browserHostGeneration).toBe(first.lease.browserHostGeneration + 1)
   })
 
   it('selects only an exact host when more than one lease is live', () => {

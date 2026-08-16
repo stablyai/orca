@@ -14,11 +14,16 @@ export type PairedRuntimeBrowserHostLeaseOptions = {
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1
+  leaseReconnectProtocolVersion?: 1
   getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
   onPageCommand?: (
     command: BrowserClientHostCommandEvent
   ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>
   onAuthority?: (authority: BrowserClientHostLeaseAuthority) => void
+  onTransportLost?: (error: Error) => void
+  onReconnected?: (authority: BrowserClientHostLeaseAuthority) => void
+  reconnectGraceMs?: number
+  reconnectRetryDelayMs?: number
   maxConcurrentCommandResults?: number
   maxUnsettledCommandResults?: number
   timeoutMs?: number

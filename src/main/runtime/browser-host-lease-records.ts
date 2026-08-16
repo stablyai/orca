@@ -17,6 +17,7 @@ export type BrowserHostLease = Readonly<{
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1
+  leaseReconnectProtocolVersion?: 1
   pageInventory?: readonly BrowserClientHostedPageInventory[]
 }>
 
@@ -30,7 +31,11 @@ export type BrowserHostCommandResultIdentity = BrowserHostLeaseIdentity &
 
 export type BrowserHostLeaseState = {
   token: symbol
+  connectionToken: symbol
+  connectionFence: BrowserHostFence
   lease: BrowserHostLease
+  status: 'active' | 'reconnecting'
+  reconnectTimer?: ReturnType<typeof setTimeout>
   fence: BrowserHostFence
   routes: Set<BrowserHostRouteState>
   executionHostGrants: BrowserExecutionHostGrantRegistry
@@ -49,6 +54,8 @@ export type BrowserHostRouteState = {
 export type BrowserHostLeaseHandle = Readonly<{
   lease: BrowserHostLease
   whenFenced: Promise<BrowserHostFenceReason>
+  whenConnectionSuperseded: Promise<void>
+  disconnect: () => void
   release: () => void
 }>
 
