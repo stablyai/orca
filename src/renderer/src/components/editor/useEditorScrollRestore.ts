@@ -1,9 +1,9 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import { richMarkdownSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 
 /**
- * Saves and restores scroll position for the rich markdown editor.
+ * Saves and restores scroll position and text selection for the rich markdown editor.
  * Extracted to keep the editor component under the max-lines lint limit.
  */
 export function useEditorScrollRestore(
@@ -46,6 +46,15 @@ export function useEditorScrollRestore(
       container.removeEventListener('scroll', onScroll)
     }
   }, [scrollContainerRef, scrollCacheKey])
+  useLayoutEffect(() => {
+    if (!editor) {
+      return
+    }
+    return () => {
+      const { from, to } = editor.state.selection
+      setWithLRU(richMarkdownSelectionCache, scrollCacheKey, { from, to })
+    }
+  }, [editor, scrollCacheKey])
 
   // Restore scroll position with RAF retry loop for async Tiptap content.
   useLayoutEffect(() => {
@@ -84,4 +93,18 @@ export function useEditorScrollRestore(
     // editor is null on the first render, so the retry loop would start before
     // content is mounted and exhaust its 30 frames before Tiptap hydrates.
   }, [scrollContainerRef, scrollCacheKey, editor])
+
+  useLayoutEffect(() => {
+    if (!editor) {
+      return
+    }
+    const savedSelection = richMarkdownSelectionCache.get(scrollCacheKey)
+    if (savedSelection) {
+      const docSize = editor.state.doc.content.size
+      editor.commands.setTextSelection({
+        from: Math.min(savedSelection.from, docSize),
+        to: Math.min(savedSelection.to, docSize)
+      })
+    }
+  }, [editor, scrollCacheKey])
 }

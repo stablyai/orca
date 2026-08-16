@@ -1,22 +1,26 @@
 // @vitest-environment happy-dom
 import type { Editor } from '@tiptap/react'
+import { TextSelection } from '@tiptap/pm/state'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 
 function createEditor(
   focus = vi.fn(),
-  domFocus: (options?: FocusOptions) => void = vi.fn()
+  domFocus: (options?: FocusOptions) => void = vi.fn(),
+  selection: object = {}
 ): Editor {
   return {
     isDestroyed: false,
     commands: { focus },
+    state: { selection },
     view: { dom: { focus: domFocus } }
   } as unknown as Editor
 }
 
 function setupScheduledFocus(
   activeElement: object | null,
-  force = false
+  force = false,
+  selection: object = {}
 ): {
   focus: ReturnType<typeof vi.fn>
   runFrame: () => void
@@ -31,7 +35,7 @@ function setupScheduledFocus(
   })
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
   vi.stubGlobal('document', { activeElement, body: {} })
-  autoFocusRichEditor(createEditor(focus), null, force)
+  autoFocusRichEditor(createEditor(focus, vi.fn(), selection), null, force)
 
   return {
     focus,
@@ -68,6 +72,21 @@ describe('autoFocusRichEditor', () => {
     expect(focus).toHaveBeenCalledWith('start', { scrollIntoView: false })
   })
 
+  it('preserves a restored text selection on an ordinary remount', () => {
+    const selection = Object.create(TextSelection.prototype)
+    const { focus, runFrame } = setupScheduledFocus(null, false, selection)
+    runFrame()
+
+    expect(focus).toHaveBeenCalledWith(null, { scrollIntoView: false })
+  })
+
+  it('starts at the beginning for an explicit handoff', () => {
+    const selection = Object.create(TextSelection.prototype)
+    const { focus, runFrame } = setupScheduledFocus(null, true, selection)
+    runFrame()
+
+    expect(focus).toHaveBeenCalledWith('start', { scrollIntoView: false })
+  })
   it('honors an explicit focus handoff', () => {
     const { focus, runFrame } = setupScheduledFocus({}, true)
     runFrame()

@@ -5,6 +5,7 @@ import {
   cursorPositionCache,
   diffViewStateCache,
   pdfViewPositionCache,
+  richMarkdownSelectionCache,
   scrollTopCache
 } from '@/lib/scroll-cache'
 import {
@@ -47,6 +48,8 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       scrollTopCache.delete(`${prevFile.filePath}:rich`)
       scrollTopCache.delete(`${prevFile.filePath}:preview`)
       scrollTopCache.delete(`${prevFile.filePath}:mermaid-diagram`)
+      richMarkdownSelectionCache.delete(`${prevFile.filePath}:rich`)
+      deleteCacheEntriesByPrefix(richMarkdownSelectionCache, `${prevFile.filePath}::`)
       cursorPositionCache.delete(prevFile.filePath)
       deleteCacheEntriesByPrefix(cursorPositionCache, `${prevFile.filePath}::`)
       // Why: only 'edit' tabs ever get a PDF scroll key (see EditorContent).

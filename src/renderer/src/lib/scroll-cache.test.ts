@@ -3,12 +3,14 @@ import {
   cursorPositionCache,
   diffViewStateCache,
   pdfViewPositionCache,
+  richMarkdownSelectionCache,
   setWithLRU,
   scrollTopCache
 } from './scroll-cache'
 
 beforeEach(() => {
   scrollTopCache.clear()
+  richMarkdownSelectionCache.clear()
   cursorPositionCache.clear()
   diffViewStateCache.clear()
   pdfViewPositionCache.clear()
