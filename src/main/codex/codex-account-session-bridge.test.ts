@@ -207,24 +207,28 @@ describe('linkCodexRolloutIntoAccountHome', () => {
     expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('already-there\n')
   })
 
-  it('replaces a symlink the sweep left so the hardlink can still land', () => {
-    const sourceHome = join(workspaceRoot, 'account-a')
-    const targetHome = join(workspaceRoot, 'account-b')
-    const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_B, 'session\n')
-    const targetFilePath = rolloutPath(targetHome, ROLLOUT_B)
-    mkdirSync(join(targetFilePath, '..'), { recursive: true })
-    symlinkSync(rolloutFilePath, targetFilePath)
+  // skipIf: symlink creation on Windows needs elevation or Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'replaces a symlink the sweep left so the hardlink can still land',
+    () => {
+      const sourceHome = join(workspaceRoot, 'account-a')
+      const targetHome = join(workspaceRoot, 'account-b')
+      const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_B, 'session\n')
+      const targetFilePath = rolloutPath(targetHome, ROLLOUT_B)
+      mkdirSync(join(targetFilePath, '..'), { recursive: true })
+      symlinkSync(rolloutFilePath, targetFilePath)
 
-    expect(
-      linkCodexRolloutIntoAccountHome({
-        sourceCodexHomePath: sourceHome,
-        targetCodexHomePath: targetHome,
-        rolloutFilePath
-      })
-    ).toBe(targetFilePath)
-    expect(lstatSync(targetFilePath).isSymbolicLink()).toBe(false)
-    expect(statSync(targetFilePath).ino).toBe(statSync(rolloutFilePath).ino)
-  })
+      expect(
+        linkCodexRolloutIntoAccountHome({
+          sourceCodexHomePath: sourceHome,
+          targetCodexHomePath: targetHome,
+          rolloutFilePath
+        })
+      ).toBe(targetFilePath)
+      expect(lstatSync(targetFilePath).isSymbolicLink()).toBe(false)
+      expect(statSync(targetFilePath).ino).toBe(statSync(rolloutFilePath).ino)
+    }
+  )
 
   it('refuses a rollout that lies outside the source home sessions tree', () => {
     const sourceHome = join(workspaceRoot, 'account-a')

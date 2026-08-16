@@ -1577,7 +1577,11 @@ function TerminalPane(
         startup: buildCodexAccountRestartStartup({
           tabId,
           leafId: pane.leafId,
-          worktreeId
+          worktreeId,
+          // Why: the resume argv is quoted for the shell that runs it, and the
+          // tab can override the machine's default (the detached driver passes
+          // this too).
+          shellOverride: terminalTab?.shellOverride
         }),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
@@ -1634,6 +1638,7 @@ function TerminalPane(
       suppressPtyExit,
       syncPanePtyLayoutBinding,
       tabId,
+      terminalTab?.shellOverride,
       updateTabPtyId,
       updateTabTitle,
       worktreeId

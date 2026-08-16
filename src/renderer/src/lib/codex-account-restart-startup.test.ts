@@ -1,7 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type * as localPreflightContext from '@/lib/local-preflight-context'
 import { buildCodexAccountRestartStartup } from './codex-account-restart-startup'
+
+let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
+
+vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof localPreflightContext>()),
+  getLocalProjectExecutionRuntimeContext: () => projectRuntimeContext
+}))
 
 const TAB_ID = 'tab-1'
 const LEAF_ID = '0195f2ce-1111-4000-8000-000000000001'
@@ -23,6 +32,7 @@ const build = (): ReturnType<typeof buildCodexAccountRestartStartup> =>
 describe('buildCodexAccountRestartStartup', () => {
   beforeEach(() => {
     seedAgentStatus(null)
+    projectRuntimeContext = undefined
   })
 
   it('names the session so the relaunch continues the conversation', () => {
@@ -83,6 +93,34 @@ describe('buildCodexAccountRestartStartup', () => {
 
     expect(startup.command).toContain(SESSION_ID)
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
+  })
+
+  it('keeps the bare relaunch for a resolved WSL runtime', () => {
+    // Why: main repins and links the rollout for host lanes only, so a WSL
+    // pane's resume argv would name a conversation its new home does not list
+    // — failing the launch outright instead of at least starting clean.
+    seedAgentStatus({
+      agentType: 'codex',
+      state: 'idle',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    projectRuntimeContext = {
+      status: 'resolved',
+      runtime: {
+        kind: 'wsl',
+        hostPlatform: 'wsl',
+        projectId: 'project-1',
+        distro: 'Ubuntu',
+        reason: 'project-override',
+        cacheKey: 'repo-1:wsl:Ubuntu'
+      }
+    }
+
+    const startup = build()
+
+    expect(startup.command).toBe('codex')
+    expect(startup.resumeProviderSession).toBeUndefined()
+    expect(startup.codexAccountSwitchRestart).toBe(true)
   })
 
   it('falls back when the pane is running another agent', () => {
