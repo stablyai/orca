@@ -475,6 +475,55 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
   })
 
+  it('excludes the Neovim version manager when it owns the bob executable', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'which') {
+        if (String(args[0]) === 'bob') {
+          return { stdout: '/home/test/.cargo/bin/bob\n' }
+        }
+        throw new Error('not found')
+      }
+      if (command === 'bob' && String(args[0]) === '--help') {
+        return { stdout: 'bob 4.0.3\nA version manager for Neovim\n', stderr: '' }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('keeps IBM Bob when the identity probe fails', async () => {
+    // Why: a probe that errors says nothing about identity, so it must not hide a real install.
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'which') {
+        if (String(args[0]) === 'bob') {
+          return { stdout: '/home/test/.local/bin/bob\n' }
+        }
+        throw new Error('not found')
+      }
+      throw new Error('probe unavailable')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+  })
+
+  it('keeps IBM Bob when its own help text is returned', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'which') {
+        if (String(args[0]) === 'bob') {
+          return { stdout: '/home/test/.local/bin/bob\n' }
+        }
+        throw new Error('not found')
+      }
+      if (command === 'bob' && String(args[0]) === '--help') {
+        return { stdout: 'bob\nIBM Bob Shell\n  --prompt-interactive <text>\n', stderr: '' }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+  })
+
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
