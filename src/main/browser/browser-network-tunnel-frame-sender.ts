@@ -1,5 +1,6 @@
 import {
   encodeBrowserNetworkTunnelFrame,
+  type BrowserNetworkTunnelOpcode,
   type BrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
@@ -12,5 +13,34 @@ export function sendBrowserNetworkTunnelFrame(
     return sendBinary(encodeBrowserNetworkTunnelFrame(frame))
   } catch {
     return false
+  }
+}
+
+export class BrowserNetworkTunnelFrameSender {
+  constructor(
+    private readonly tunnelGeneration: number,
+    private readonly sendBinary: BrowserNetworkTunnelSessionOptions['sendBinary'],
+    private readonly onRejected?: () => void,
+    private readonly canSend?: () => boolean
+  ) {}
+
+  send(
+    opcode: BrowserNetworkTunnelOpcode,
+    streamId: number,
+    payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
+  ): boolean {
+    if (this.canSend && !this.canSend()) {
+      return false
+    }
+    const accepted = sendBrowserNetworkTunnelFrame(this.sendBinary, {
+      opcode,
+      tunnelGeneration: this.tunnelGeneration,
+      streamId,
+      payload
+    })
+    if (!accepted) {
+      this.onRejected?.()
+    }
+    return accepted
   }
 }

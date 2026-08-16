@@ -15,6 +15,7 @@ import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remot
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
@@ -86,6 +87,40 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await expect(server.nextBinary).resolves.toEqual(bytes)
     expect(onError).not.toHaveBeenCalled()
     subscription.close()
+  })
+
+  it('binds optional capabilities and rejects a hard outbound queue overflow', async () => {
+    const server = await createSubscriptionServer()
+    const onResponse = vi.fn()
+    const onError = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'network.browserTunnel',
+      {},
+      1000,
+      { onResponse, onError },
+      {
+        clientCapabilities: [BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY],
+        outboundQueue: { softCapBytes: 0, maxQueuedBytes: 1, maxQueuedFrames: 1 }
+      }
+    )
+
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await expect(server.nextAuth).resolves.toEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'device-token',
+      clientCapabilities: [
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+        BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+      ]
+    })
+    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'remote_runtime_unavailable' })
+    )
   })
 
   it('detaches subscription socket listeners after close', async () => {

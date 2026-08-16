@@ -61,5 +61,6 @@ export type BrowserNetworkTunnelSessionOptions = {
   tunnelGeneration: number
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  onClose?: () => void
 }
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'

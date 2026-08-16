@@ -11,7 +11,7 @@ import {
 
 type BrowserNetworkTunnelDestinationFlowActions = {
   isCurrent: () => boolean
-  sendData: (bytes: Uint8Array<ArrayBufferLike>) => void
+  sendData: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   sendHalfClose: () => void
   finalizeClose: () => void
 }
@@ -81,7 +81,9 @@ export function flushBrowserNetworkDestination(
       stream.sendCredit,
       BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
     )
-    actions.sendData(next.subarray(0, length))
+    if (!actions.sendData(next.subarray(0, length))) {
+      return
+    }
     stream.sendCredit -= length
     stream.pendingToClientBytes -= length
     if (length === next.byteLength) {

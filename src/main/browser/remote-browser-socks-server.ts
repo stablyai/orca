@@ -198,7 +198,7 @@ export class RemoteBrowserSocksServer {
               buffered = Buffer.alloc(0)
             }
             socket.pipe(upstream)
-            upstream.pipe(socket)
+            pipeUpstreamToClient(upstream, socket)
             upstream.once('error', () => socket.destroy())
             upstream.once('close', () => socket.destroy())
             socket.once('close', () => upstream.destroy())
@@ -210,6 +210,22 @@ export class RemoteBrowserSocksServer {
     socket.once('error', cleanup)
     socket.once('close', cleanup)
   }
+}
+
+function pipeUpstreamToClient(upstream: Duplex, socket: Socket): void {
+  upstream.on('data', (chunk: Buffer) => {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    const accepted = socket.write(bytes, (error) => {
+      if (!error && 'settleRead' in upstream && typeof upstream.settleRead === 'function') {
+        upstream.settleRead(bytes.byteLength)
+      }
+    })
+    if (!accepted) {
+      upstream.pause()
+    }
+  })
+  socket.on('drain', () => upstream.resume())
+  upstream.once('end', () => socket.end())
 }
 
 function parseSocksRequest(buffer: Uint8Array): SocksRequest | null | undefined {

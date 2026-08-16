@@ -26,7 +26,8 @@ import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+  type RuntimeCapability
 } from './protocol-version'
 // Re-export so existing value importers of `RemoteRuntimeClientError` are
 // unaffected; the class lives in a ws-free module so type-only consumers
@@ -83,6 +84,16 @@ export type RemoteRuntimeSubscriptionCallbacks<TResult = unknown> = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError: (error: RemoteRuntimeClientError) => void
   onClose?: () => void
+}
+
+export type RemoteRuntimeSubscriptionOptions = RemoteRuntimeSocketLivenessOptions & {
+  clientCapabilities?: readonly RuntimeCapability[]
+  perMessageDeflate?: boolean
+  outboundQueue?: {
+    softCapBytes: number
+    maxQueuedBytes: number
+    maxQueuedFrames: number
+  }
 }
 
 export function sendRemoteRuntimeRequest<TResult>(
@@ -501,7 +512,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
-  livenessOptions?: RemoteRuntimeSocketLivenessOptions
+  options?: RemoteRuntimeSubscriptionOptions
 ): Promise<RemoteRuntimeSubscription> {
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
@@ -513,12 +524,15 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: [
-      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-    ]
+    clientCapabilities: Array.from(
+      new Set([
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+        ...(options?.clientCapabilities ?? [])
+      ])
+    )
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()
@@ -599,7 +613,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
                 'remote_runtime_unavailable',
                 'Remote Orca runtime send buffer overflow; reconnecting.'
               )
-            )
+            ),
+          ...options?.outboundQueue
         })
       }
       return sendQueue
@@ -614,8 +629,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       ) {
         return false
       }
-      ensureSendQueue(ws).enqueue(Buffer.from(encryptBytes(bytes, sharedKey)))
-      return true
+      return ensureSendQueue(ws).enqueue(Buffer.from(encryptBytes(bytes, sharedKey)))
     }
 
     const succeed = (): void => {
@@ -644,7 +658,10 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     try {
-      ws = new WebSocket(pairing.endpoint, { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES })
+      ws = new WebSocket(pairing.endpoint, {
+        maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
+        ...(options?.perMessageDeflate === false ? { perMessageDeflate: false } : {})
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
@@ -755,7 +772,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
           // Best-effort terminate; the subscription is already settled.
         }
       },
-      options: livenessOptions
+      options
     })
 
     function handleReadyFrame(frame: string): void {

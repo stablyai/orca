@@ -50,6 +50,8 @@ function domainConnectRequest(host: string, port: number, command = 1): Uint8Arr
 describe('RemoteBrowserSocksServer', () => {
   it('passes domain names unchanged to the execution-host route', async () => {
     const upstream = new PassThrough()
+    const settleRead = vi.fn()
+    Object.assign(upstream, { settleRead })
     const open = vi.fn(async () => upstream)
     const server = new RemoteBrowserSocksServer({ open })
     servers.push(server)
@@ -63,6 +65,7 @@ describe('RemoteBrowserSocksServer', () => {
 
     socket.write('remote bytes')
     expect(new TextDecoder().decode(await readExact(socket, 12))).toBe('remote bytes')
+    await vi.waitFor(() => expect(settleRead).toHaveBeenCalledWith(12))
     socket.destroy()
   })
 

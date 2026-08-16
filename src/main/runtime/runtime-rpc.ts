@@ -13,7 +13,7 @@ import {
   type RuntimeMetadataOwnershipWatch
 } from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { RpcRequest, RpcResponse } from './rpc/core'
+import type { RpcAnyMethod, RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
 import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-mutation-executor'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
@@ -49,10 +49,8 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
-import {
-  decodeTerminalStreamFrame,
-  type TerminalStreamFrame
-} from '../../shared/terminal-stream-protocol'
+import type { TerminalStreamFrame } from '../../shared/terminal-stream-protocol'
+import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -79,6 +77,8 @@ type OrcaRuntimeRpcServerOptions = {
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
+  // Why: tests may inject inert protocol stages before production authorization registers them.
+  methods?: readonly RpcAnyMethod[]
 }
 
 export type PairingOfferUnavailableReason =
@@ -524,10 +524,7 @@ export class OrcaRuntimeRpcServer {
   private mobilePairingOfferGeneration = 0
   private onUnpairedDeviceAuthFailure: (() => void) | null = null
   private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
-  private readonly binaryStreamHandlers = new Map<
-    string,
-    Map<number, (frame: TerminalStreamFrame) => void>
-  >()
+  private readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()
   private readonly wsDispatchAbortStates = new Map<
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
@@ -549,10 +546,11 @@ export class OrcaRuntimeRpcServer {
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
-    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+    methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime })
+    this.dispatcher = new RpcDispatcher({ runtime, methods })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform
@@ -1005,37 +1003,18 @@ export class OrcaRuntimeRpcServer {
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ): () => void {
-    if (!connectionId || !Number.isInteger(streamId) || streamId < 0) {
-      return () => {}
-    }
-    let handlers = this.binaryStreamHandlers.get(connectionId)
-    if (!handlers) {
-      handlers = new Map()
-      this.binaryStreamHandlers.set(connectionId, handlers)
-    }
-    handlers.set(streamId, handler)
-    return () => {
-      const current = this.binaryStreamHandlers.get(connectionId)
-      if (!current || current.get(streamId) !== handler) {
-        return
-      }
-      current.delete(streamId)
-      if (current.size === 0) {
-        this.binaryStreamHandlers.delete(connectionId)
-      }
-    }
+    return this.binaryMessageRouter.registerTerminalStream(connectionId, streamId, handler)
+  }
+
+  private registerBinaryMessageHandler(
+    connectionId: string | undefined,
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ): () => void {
+    return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
   private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
-    if (!connectionId) {
-      return
-    }
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    this.binaryStreamHandlers.get(connectionId)?.get(frame.streamId)?.(frame)
+    this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }
 
   private registerWebSocketDispatchAbort(ws: WebSocket): {
@@ -1340,7 +1319,7 @@ export class OrcaRuntimeRpcServer {
         // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
-        this.binaryStreamHandlers.delete(socket.connectionId)
+        this.binaryMessageRouter.deleteConnection(socket.connectionId)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.deviceToken)
         }
@@ -1725,7 +1704,9 @@ export class OrcaRuntimeRpcServer {
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler)
+          this.registerBinaryStreamHandler(connectionId, streamId, handler),
+        registerBinaryMessageHandler: (handler) =>
+          this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
       abortRegistration?.dispose()

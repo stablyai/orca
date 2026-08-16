@@ -2581,26 +2581,35 @@
       "surfaces": [
         "client-hosted browser tunnel framing",
         "execution-host TCP credit flow",
-        "main-owned loopback SOCKS5 route"
+        "main-owned loopback SOCKS5 route",
+        "dedicated paired-runtime E2EE tunnel subscription"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Deterministic protocol, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact write-settlement credit, bounded receive windows, stale generations, retired stream IDs, half-close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, and unavailable routes. No native, paired, SSH, or WSL destination provider is covered yet.",
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Deterministic protocol, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, bounded receive bytes and chunks, stale generations, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. An explicitly injected paired-runtime E2EE method carries SOCKS and HTTP bytes over one dedicated capability- and paired-device-bound socket to a native execution-host destination, then proves route close destroys the destination socket. The production method remains unregistered until lease and route authorization exists. SSH and WSL providers remain uncovered.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
       ],
       "invariant": "A client-hosted browser network route preserves destination names for execution-host DNS, admits only versioned bounded frames, replenishes credit only after destination writes settle, rejects stale or reused stream identities, and never falls back to desktop DNS or sockets when the selected route is unavailable. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
       "oracle": "Encode and decode each tunnel boundary with exact generation, stream, length, opcode, payload, and credit assertions. Drive one injected destination through open, data, write settlement, receive-window exhaustion, half-close, duplicate stream, stale generation, and teardown. Drive a real loopback SOCKS client through greeting and domain CONNECT, assert the final connector receives the unchanged hostname, echo bytes through the injected route, normalize only listener wildcards, reject BIND, and return failure without another connection when the route is offline.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts"
       ],
       "testFiles": [
         "src/shared/browser-network-capabilities.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
         "src/main/browser/browser-network-tunnel-session.test.ts",
-        "src/main/browser/remote-browser-socks-server.test.ts"
+        "src/main/browser/browser-network-tunnel-client.test.ts",
+        "src/main/browser/paired-runtime-browser-network-route.test.ts",
+        "src/main/browser/remote-browser-socks-server.test.ts",
+        "src/main/runtime/runtime-binary-message-router.test.ts",
+        "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
+        "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "src/shared/remote-runtime-client.test.ts"
       ],
       "assertionRefs": [
         {
@@ -2618,10 +2627,57 @@
           ]
         },
         {
+          "file": "src/main/browser/browser-network-tunnel-client.test.ts",
+          "assertions": [
+            "source writes never exceed granted credit or the bounded data-frame size",
+            "destination credit tracks only browser-facing socket writes that settle after readable consumption",
+            "pending tiny frames stay chunk-bounded and data drains before remote close retirement",
+            "late local settlement after remote close sends no stale credit and leaves the tunnel usable",
+            "stale generations cannot open a stream and route close destroys every source"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-binary-message-router.test.ts",
+          "assertions": [
+            "dedicated raw tunnel traffic cannot replace or be decoded as terminal stream traffic on the same connection"
+          ]
+        },
+        {
           "file": "src/main/browser/remote-browser-socks-server.test.ts",
           "assertions": [
             "domain CONNECT preserves the final execution-host DNS target",
             "unsupported commands and unavailable routes open no fallback destination"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
+          "assertions": [
+            "the production RPC registry excludes the tunnel until route authorization exists",
+            "unnegotiated and mismatched browser hosts register no binary handler",
+            "subscription cleanup removes the exact connection-owned raw handler"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-network-route.test.ts",
+          "assertions": [
+            "route teardown closes a subscription that resolves after startup cancellation",
+            "close after subscription acquisition settles the pending readiness wait",
+            "post-auth readiness has a deadline and runtime close tears down the local route",
+            "listener teardown failures remain visible to the route owner"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+          "assertions": [
+            "SOCKS HTTP bytes cross the dedicated authenticated E2EE subscription to runtime-native TCP",
+            "closing the route destroys the execution-host destination socket"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-client.test.ts",
+          "assertions": [
+            "the authenticated socket binds the optional tunnel capability",
+            "the dedicated outbound queue reports hard overflow instead of dropping a frame"
           ]
         }
       ],
@@ -2632,36 +2688,55 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
-          "durationSeconds": 0.2,
+          "durationSeconds": 0.4,
           "summary": "Four files passed 25 deterministic capability, codec, credit, generation, half-close, SOCKS routing, remote-DNS, and fail-closed tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.7,
+          "summary": "Five files passed 19 source-flow, settled-consumption, chunk-bound, ordered-close, readiness-deadline, cleanup-failure, binary-routing, attach-authorization, and real paired-runtime E2EE SOCKS-to-HTTP tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.0,
+          "summary": "Seventeen authenticated subscription tests passed, including tunnel capability binding and hard outbound-queue overflow rejection."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 2,
-        "scope": "four deterministic protocol, injected-stream, and loopback-socket test files"
+        "p95Seconds": 5,
+        "scope": "ten deterministic protocol, flow-control, loopback, RPC, and paired-runtime test files"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The deterministic suite passed locally; CI and soak history have not started."
+        "evidence": "The deterministic and paired-runtime suites passed locally; CI and soak history have not started for the stacked route stage."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The same source checkout recorded the SOCKS oracle red before its route implementation and green after it. Mutation/revert evidence remains to be collected before promotion."
+        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The same source checkout recorded the SOCKS and source-multiplexer oracles red before their implementations and green afterward. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed unchanged while the production registry remained closed. Mutation/revert evidence remains to be collected before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Data frames, send credit, pending destination bytes and chunk counts, streams, SOCKS handshake and pipelined application bytes are bounded. Credit returns only from the destination write callback, and the injected transport must explicitly accept each frame. Aggregate route, browser-host, and process ledgers plus drain-aware fair scheduling remain required before live tunnel advertisement."
+        "evidence": "Data frames, send credit, pending bytes and chunk counts in both directions, streams, SOCKS handshake and pipelined application bytes are bounded. Credit returns only after the execution-host or browser-facing socket write settles, and the injected transport must explicitly accept each frame. Aggregate route, browser-host, and process ledgers plus drain-aware fair scheduling remain required before live tunnel advertisement."
       },
       "promotionCriteria": [
-        "Add aggregate route, browser-host, and process memory ledgers plus fair scheduling.",
+        "Bind the method to a live browser-host lease, authority epoch, exact execution-host revision, and server-owned monotonic route generation before production registration.",
+        "Add bounded pending-open admission and open-rate limits plus aggregate route, browser-host, and process memory ledgers with runtime-wide fair scheduling.",
         "Approve all same-host local processes and users as inside the desktop trust boundary or replace SOCKS no-auth with Chromium-compatible process isolation.",
-        "Run one dedicated paired-runtime binary tunnel journey with old/new peer coverage.",
+        "Add old/new peer coverage to the dedicated paired-runtime binary tunnel journey.",
         "Add SSH2, system SSH, WSL, Linux, and physical Windows evidence.",
         "Prove an Electron partition routes loopback, DNS, HTTP, HTTPS, WebSocket, workers, and speculative traffic without desktop fallback."
       ],
       "knownGaps": [
-        "No runtime capability is advertised and no live paired tunnel or webview uses these primitives yet.",
-        "Aggregate encrypted-WebSocket and destination-buffer accounting is not implemented.",
+        "No runtime capability is advertised, the paired tunnel method is not registered in production, and no Electron webview selects it yet.",
+        "Pending-open and open-rate admission plus aggregate encrypted-WebSocket and destination-buffer accounting are not implemented.",
         "The loopback SOCKS endpoint uses Chromium-compatible no-auth and is not safe to activate until its desktop trust boundary is approved or isolated.",
         "SSH, WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."
       ],
