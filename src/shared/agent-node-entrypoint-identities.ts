@@ -26,5 +26,11 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     pattern: /(?:^|\/)node_modules\/prime-agent\/dist\/bundle\/cli\.js$/,
     agent: 'prime-agent',
     processName: 'prime-agent'
+  },
+  // Why: the public npm shim launches the package-root cli.js under Node on Windows.
+  {
+    pattern: /(?:^|\/)node_modules\/@minimax-ai\/code\/cli\.js$/,
+    agent: 'minimax-code',
+    processName: 'minimax-code'
   }
 ]

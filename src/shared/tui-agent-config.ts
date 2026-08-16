@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import { MINIMAX_CODE_TUI_AGENT_CONFIG } from './minimax-code-tui-agent-config'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -133,6 +134,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: mirrors opencode's cursor-gated signal by parity; mimo's startup stream isn't separately validated.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  'minimax-code': MINIMAX_CODE_TUI_AGENT_CONFIG,
   pi: {
     detectCmd: 'pi',
     launchCmd: 'pi',

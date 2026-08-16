@@ -43,4 +43,12 @@ describe('mobile agent catalog', () => {
       expect.not.objectContaining({ faviconDomain: expect.any(String) })
     )
   })
+
+  it('exposes MiniMax Code with its product label and icon source', () => {
+    expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'minimax-code')).toEqual({
+      id: 'minimax-code',
+      label: 'MiniMax Code',
+      faviconDomain: 'agent.minimax.io'
+    })
+  })
 })

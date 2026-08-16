@@ -181,6 +181,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'mimo')) {
     return 'MiMo Code'
   }
+  if (titleHasAgentName(title, 'minimax code')) {
+    return 'MiniMax Code'
+  }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
@@ -221,6 +224,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'MiMo Code': 'mimo-code',
+  'MiniMax Code': 'minimax-code',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',

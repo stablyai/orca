@@ -191,6 +191,55 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('qwen')).toBe(true)
   })
 
+  it('recognizes MiniMax Code by its launcher, runtime process, and npm entrypoint', () => {
+    expect(recognizeAgentProcess('/usr/local/bin/mcode')).toEqual({
+      agent: 'minimax-code',
+      processName: 'mcode'
+    })
+    expect(recognizeAgentProcess('minimax-code')).toEqual({
+      agent: 'minimax-code',
+      processName: 'minimax-code'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\mcode.cmd`)).toEqual({
+      agent: 'minimax-code',
+      processName: 'mcode'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/@minimax-ai/code/cli.js'
+      )
+    ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@minimax-ai\code\cli.js`
+      )
+    ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
+  })
+
+  it('does not classify MiniMax Code non-TUI commands as interactive agents', () => {
+    for (const command of [
+      'init .',
+      'exec fix the bug',
+      'acp',
+      'login',
+      'logout',
+      'update',
+      'provider',
+      'plugin'
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(`mcode ${command}`)).toBeNull()
+    }
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/@minimax-ai/code/cli.js acp'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('mcode -- "exec the release plan"')).toEqual({
+      agent: 'minimax-code',
+      processName: 'mcode'
+    })
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
@@ -346,6 +395,11 @@ describe('agent process recognition', () => {
     expect(
       recognizeAgentProcessFromCommandLine(
         String.raw`node C:\repo\node_modules\@example\pi-coding-agent\dist\cli.js`
+      )
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\repo\node_modules\@example\code\cli.js`
       )
     ).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`python C:\repo\aider.py`)).toBeNull()

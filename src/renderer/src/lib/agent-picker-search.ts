@@ -84,6 +84,9 @@ export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
 }
 
 function scoreAgent(agent: AgentCatalogEntry, query: string): number {
+  if (normalizeSearchText(agent.cmd) === query) {
+    return -1
+  }
   return Math.min(
     scoreCandidate(query, agent.label, 0),
     scoreCandidate(query, agent.id, 600),

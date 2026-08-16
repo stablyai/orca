@@ -15,6 +15,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   copilot: require('../../../src/shared/agent-icons/copilot.png'),
   opencode: require('../../../src/shared/agent-icons/opencode.png'),
   'mimo-code': require('../../../src/shared/agent-icons/mimo-code.png'),
+  'minimax-code': require('../../../src/shared/agent-icons/minimax-code.png'),
   ante: require('../../../src/shared/agent-icons/ante.png'),
   trae: require('../../../src/shared/agent-icons/trae.png'),
   'prime-agent': require('../../../src/shared/agent-icons/prime-agent.png'),

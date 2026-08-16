@@ -71,6 +71,7 @@ export const AGENT_KIND_VALUES = [
   'autohand',
   'opencode',
   'mimo-code',
+  'minimax-code',
   'pi',
   'omp',
   'prime-agent',
