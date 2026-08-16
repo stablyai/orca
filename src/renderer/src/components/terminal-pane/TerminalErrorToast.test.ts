@@ -21,6 +21,9 @@ import {
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
 
+const PASTE_FOCUS_CANCEL =
+  'Paste cancelled: terminal focus changed before paste started.'
+
 beforeEach(() => {
   environmentMocks.resolveFooter.mockReset()
   environmentMocks.resolveFooter.mockResolvedValue(
@@ -257,6 +260,116 @@ describe('shouldOfferDaemonRestart', () => {
   it('does not match unrelated terminal spawn errors', () => {
     expect(shouldOfferDaemonRestart('SSH connection is not active.')).toBe(false)
     expect(shouldOfferDaemonRestart('node-pty: open_slave failed: EMFILE (errno 24)')).toBe(false)
+  })
+})
+
+describe('TerminalErrorToast paste cancellation surface', () => {
+  it('omits the issue link and environment footer for pure paste focus cancellation', async () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: PASTE_FOCUS_CANCEL,
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent).toContain(PASTE_FOCUS_CANCEL)
+    expect(view.container.textContent).not.toContain('file an issue')
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('auto-dismisses pure paste focus cancellation after a short delay', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    try {
+      render(
+        React.createElement(TerminalErrorToast, {
+          error: PASTE_FOCUS_CANCEL,
+          onDismiss
+        })
+      )
+
+      expect(onDismiss).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('auto-dismisses pure multi-line paste-cancel aggregates without stacking dismissals', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    const pureCancels = [
+      PASTE_FOCUS_CANCEL,
+      'Paste cancelled: terminal disconnected before paste completed.'
+    ].join('\n')
+    try {
+      render(
+        React.createElement(TerminalErrorToast, {
+          error: pureCancels,
+          onDismiss
+        })
+      )
+
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps durable paste failures until the user dismisses them', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    try {
+      const view = render(
+        React.createElement(TerminalErrorToast, {
+          error: 'Paste failed.',
+          onDismiss
+        })
+      )
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(onDismiss).not.toHaveBeenCalled()
+      expect(view.container.textContent).toContain('file an issue')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not auto-dismiss mixed durable+cancel aggregates and keeps the issue link', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    const mixed = `Paste failed.\n${PASTE_FOCUS_CANCEL}`
+    try {
+      const view = render(
+        React.createElement(TerminalErrorToast, {
+          error: mixed,
+          onDismiss
+        })
+      )
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(onDismiss).not.toHaveBeenCalled()
+      expect(view.container.textContent).toContain('Paste failed.')
+      expect(view.container.textContent).toContain(PASTE_FOCUS_CANCEL)
+      expect(view.container.textContent).toContain('file an issue')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains the environment footer for mixed durable+cancel aggregates', async () => {
+    const mixed = `Paste failed.\n${PASTE_FOCUS_CANCEL}`
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: mixed,
+        onDismiss: vi.fn()
+      })
+    )
+
+    await waitFor(() => expect(view.container.textContent).toContain('Orca: 1.4.178-rc.2'))
+    expect(view.container.textContent).toContain('file an issue')
   })
 })
 
