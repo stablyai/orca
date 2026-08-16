@@ -25,6 +25,10 @@ const TAB_ID = 'chat-tab-1'
 const SESSION_ID = 'mock-chat-session'
 const TRANSCRIPT_PATH = join(tmpdir(), 'mock-transcript.jsonl')
 const MOCK_IMAGE_PATH = join(tmpdir(), 'mock-image.png')
+// Why: omp is the one supported agent whose hook reports no transcript path
+// (`extractAgentProviderSession` keeps only its session id), so the scenario
+// must be able to present that shape — mobile gates omp chat on readability.
+const CHAT_AGENT = process.env.MOCK_CHAT_AGENT === 'omp' ? 'omp' : 'claude'
 
 function readControl(file: string): string {
   try {
@@ -41,28 +45,27 @@ const agentStatus: AgentStatusEntry = {
   prompt: '',
   updatedAt: Date.now(),
   stateStartedAt: Date.now(),
-  agentType: 'claude',
+  agentType: CHAT_AGENT,
   paneKey: `${TAB_ID}:leaf-1`,
   terminalHandle: TERMINAL_HANDLE,
   stateHistory: [],
-  providerSession: {
-    key: 'session_id',
-    id: SESSION_ID,
-    transcriptPath: TRANSCRIPT_PATH
-  }
+  providerSession:
+    CHAT_AGENT === 'omp'
+      ? { key: 'session_id', id: SESSION_ID }
+      : { key: 'session_id', id: SESSION_ID, transcriptPath: TRANSCRIPT_PATH }
 }
 
 function buildTab(): RuntimeMobileSessionTerminalClientTab {
   return {
     type: 'terminal',
     id: TAB_ID,
-    title: 'Claude Code',
+    title: CHAT_AGENT === 'omp' ? 'OMP' : 'Claude Code',
     parentTabId: TAB_ID,
     leafId: 'leaf-1',
     ptyId: 'pty-1',
     status: 'ready',
     terminal: TERMINAL_HANDLE,
-    launchAgent: 'claude',
+    launchAgent: CHAT_AGENT,
     agentStatus,
     viewMode: 'chat',
     isActive: true
@@ -102,6 +105,51 @@ function tabsResultIfChanged(worktree: string): RuntimeMobileSessionTabsResult |
 function worktreeOf(request: RpcRequest): string {
   const raw = request.params?.worktree
   return typeof raw === 'string' ? raw : 'id:mock-worktree'
+}
+
+// Why: shapes mirror what the runtime's omp decoder emits for a real session
+// (thinking→text on the assistant turn, toolCall blocks, toolResult turns), so
+// the phone exercises the same render path a live omp pane would.
+function mockTranscript(): unknown[] {
+  if (CHAT_AGENT !== 'omp') {
+    return []
+  }
+  const t = Date.now() - 1000 * 60 * 5
+  return [
+    {
+      id: 'omp-1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'why is my deploy failing?' }],
+      timestamp: t,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-2',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Let me check the deploy logs first.' },
+        { type: 'tool-call', name: 'bash', input: { command: 'kubectl get pods' } }
+      ],
+      timestamp: t + 1000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-3',
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'api-7f9c 0/1 CrashLoopBackOff' }],
+      timestamp: t + 2000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-4',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'The API pod is crash-looping. Check its logs with kubectl logs.' }
+      ],
+      timestamp: t + 3000,
+      source: 'transcript'
+    }
+  ]
 }
 
 // Why: unsubscribe correlates by worktree, not request id, and a socket that
@@ -209,11 +257,13 @@ export function handleMockNativeChatRequest(
     }
 
     case 'nativeChat.subscribe':
-      respond(success(request.id, { type: 'snapshot', messages: [], hasMore: false }, true))
+      respond(
+        success(request.id, { type: 'snapshot', messages: mockTranscript(), hasMore: false }, true)
+      )
       return true
 
     case 'nativeChat.readSession':
-      respond(success(request.id, { messages: [], hasMore: false }))
+      respond(success(request.id, { messages: mockTranscript(), hasMore: false }))
       return true
 
     case 'terminal.subscribe': {
