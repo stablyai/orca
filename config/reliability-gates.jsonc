@@ -10316,7 +10316,7 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
           "result": "failed",
-          "durationSeconds": 1,
+          "durationSeconds": 4,
           "summary": "The byte-identical 12-case oracle passed 2/12 on latest main 17ef6ccce6 and failed ten authority-boundary cases, including cross-Run disclosure, spoofed handles, malformed evidence, and exact-worker isolation."
         },
         {
@@ -10325,8 +10325,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
           "result": "passed",
-          "durationSeconds": 1,
-          "summary": "The final candidate 706a932ad1 passed all 12 deterministic cases, including unchanged-row snapshots, indistinguishable foreign/absent results, attestation, spoof rejection, settled exact-worker inspection, independent callers, rebinding, mixed-version evidence, trusted presentation, and persisted Run mismatch."
+          "durationSeconds": 5,
+          "summary": "The reconciled final candidate 35d4fed983 passed all 12 deterministic cases with oracle blob 098dc85e769309181b9e9d8e3479210bdefba2a0, including targeted unchanged-row snapshots, indistinguishable foreign/absent results, attestation, zero lookup for invalid evidence, spoof rejection, settled exact-worker inspection, independent callers, rebinding, mixed-version evidence, trusted presentation, and persisted Run mismatch."
         },
         {
           "date": "2026-08-16",
@@ -10334,8 +10334,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
           "result": "failed",
-          "durationSeconds": 1,
-          "summary": "The same oracle passed only 6/12 after reverse-applying attestation hardening commit 33fcd01eb0 while retaining the original Run-boundary design, reproducing handle authority, unknown/stale identity, settled-worker, and compatibility gaps."
+          "durationSeconds": 4,
+          "summary": "The same oracle blob passed only 5/12 on hardening-disabled candidate e1ccc424da after reverse-applying attestation hardening while retaining the original Run-boundary design, reproducing handle authority, unknown/stale identity, trusted-presentation mismatch, settled-worker, and compatibility gaps."
         },
         {
           "date": "2026-08-16",
@@ -10357,7 +10357,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical 12-case oracle is red 10/12 on latest main 17ef6ccce6, green 12/12 on candidate 706a932ad1, and red 6/12 when only attestation hardening commit 33fcd01eb0 is reverse-applied while retaining the original Run-boundary design."
+        "evidence": "Oracle blob 098dc85e769309181b9e9d8e3479210bdefba2a0 is red 10/12 on latest main 17ef6ccce6, green 12/12 on reconciled candidate 35d4fed983, and red 7/12 on hardening-disabled candidate e1ccc424da while retaining the original Run-boundary design."
       },
       "performanceBudget": {
         "required": true,
