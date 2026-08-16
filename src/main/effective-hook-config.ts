@@ -77,21 +77,7 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
-  const commands = (hooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      // Why: committed env is trust-relevant too — it can redirect binaries (PATH) or pull 1Password secrets (op:// refs).
-      const envLines = Object.entries(tab.env ?? {}).map(([key, value]) => `${key}=${value}`)
-      if (!command && envLines.length === 0) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${[...envLines, command].filter(Boolean).join('\n')}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
-}
+export { getDefaultTabCommandTrustContent } from '../shared/default-tab-trust-content'
 
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,

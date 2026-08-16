@@ -59,14 +59,16 @@ export type SetupConfig = {
 }
 
 function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
+  // Why: preview what the trust gate actually hashes, env included — otherwise the prompt hides what is being approved.
   return (yamlHooks?.defaultTabs ?? [])
     .map((tab, index) => {
       const command = tab.command?.trim()
-      if (!command) {
+      const envLines = Object.entries(tab.env ?? {}).map(([key, value]) => `${key}=${value}`)
+      if (!command && envLines.length === 0) {
         return null
       }
       const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
+      return `# defaultTabs[${index + 1}]${label}\n${[...envLines, command].filter(Boolean).join('\n')}`
     })
     .filter((entry): entry is string => entry !== null)
     .join('\n\n')

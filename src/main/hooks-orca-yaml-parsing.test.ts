@@ -221,6 +221,19 @@ describe('parseOrcaYaml', () => {
     expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES).padStart(3, '0')}`]).toBeUndefined()
   })
 
+  it('drops env values containing NUL, which would split into a second variable on Windows', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      SAFE: "x\\0NODE_OPTIONS=--require ./payload.js"',
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env).toEqual({ GOOD: 'keep' })
+  })
+
   it('parses default tab env maps, dropping invalid names and non-string values', () => {
     const yaml = [
       'defaultTabs:',

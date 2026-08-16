@@ -104,3 +104,42 @@ describe('maybeWrapStartupCommandWithOpRun', () => {
     )
   })
 })
+
+describe('op run gating and shell-assignment commands (Codex review)', () => {
+  const env = { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key' }
+
+  it('leaves runtime-owned daemon spawns literal — op resolves against the user account, not the runtime', () => {
+    expect(
+      maybeWrapStartupCommandWithOpRun('claude', env, {
+        enabled: true,
+        connectionId: null,
+        daemonHostSpawn: true
+      })
+    ).toBe('claude')
+  })
+
+  it('still wraps local provider spawns when daemonHostSpawn is false', () => {
+    expect(
+      maybeWrapStartupCommandWithOpRun('claude', env, {
+        enabled: true,
+        connectionId: null,
+        daemonHostSpawn: false
+      })
+    ).toBe('op run -- claude')
+  })
+
+  it('sh -c wraps commands that lead with env assignments instead of exec-ing "FOO=bar"', () => {
+    expect(wrapStartupCommandWithOpRun('FOO=bar claude', 'linux')).toBe(
+      "op run -- sh -c 'FOO=bar claude'"
+    )
+    expect(wrapStartupCommandWithOpRun('  NODE_ENV=production pnpm dev', 'darwin')).toBe(
+      "op run -- sh -c '  NODE_ENV=production pnpm dev'"
+    )
+  })
+
+  it('does not mistake an equals sign later in the command for an assignment', () => {
+    expect(wrapStartupCommandWithOpRun('claude --flag=value', 'linux')).toBe(
+      'op run -- claude --flag=value'
+    )
+  })
+})

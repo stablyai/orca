@@ -445,3 +445,32 @@ describe('getDefaultTabCommandTrustContent', () => {
     expect(getDefaultTabCommandTrustContent(hooks)).toContain('LD_PRELOAD=/evil.so')
   })
 })
+
+describe('trust content is shared with the renderer (Codex review)', () => {
+  it('changes when only committed env changes, so an added NODE_OPTIONS re-prompts trust', () => {
+    const before = {
+      scripts: {},
+      defaultTabs: [{ title: 'Claude', command: 'claude' }]
+    } as unknown as OrcaHooks
+    const after = {
+      scripts: {},
+      defaultTabs: [
+        { title: 'Claude', command: 'claude', env: { NODE_OPTIONS: '--require ./payload.js' } }
+      ]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabCommandTrustContent(after)).not.toBe(
+      getDefaultTabCommandTrustContent(before)
+    )
+    expect(getDefaultTabCommandTrustContent(after)).toContain('NODE_OPTIONS=--require ./payload.js')
+  })
+
+  it('produces non-empty content for env-only tabs so they cannot auto-accept', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Shell', env: { PATH: '/tmp/evil:/usr/bin' } }]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabCommandTrustContent(hooks)).not.toBe('')
+  })
+})

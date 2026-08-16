@@ -8,10 +8,17 @@
  * fix (#6996/#8985) and revive its permission-prompt storm.
  */
 
-const OP_SECRET_REFERENCE_PREFIX = 'op://'
+export const OP_SECRET_REFERENCE_PREFIX = 'op://'
 
 // Why: chained/multiline commands must stay inside `op run`'s env — `op run -- a && b` would run `b` unresolved.
 const SHELL_METACHAR_RE = /[|&;<>()`$\r\n]/
+
+// Why: `FOO=bar cmd` is shell assignment syntax, not an argv — `op run -- FOO=bar cmd` would exec "FOO=bar".
+const LEADING_ENV_ASSIGNMENT_RE = /^\s*[A-Za-z_][A-Za-z0-9_]*=/
+
+function needsShellWrapping(command: string): boolean {
+  return SHELL_METACHAR_RE.test(command) || LEADING_ENV_ASSIGNMENT_RE.test(command)
+}
 
 export function hasOpSecretReferences(env: Record<string, string> | undefined): boolean {
   if (!env) {
@@ -28,7 +35,7 @@ export function wrapStartupCommandWithOpRun(
   command: string,
   platform: NodeJS.Platform = process.platform
 ): string {
-  if (SHELL_METACHAR_RE.test(command)) {
+  if (needsShellWrapping(command)) {
     // Why: no portable single-line quoting for cmd/powershell — leave chained commands untouched on Windows (documented limitation).
     if (platform === 'win32') {
       return command
@@ -41,11 +48,17 @@ export function wrapStartupCommandWithOpRun(
 export function maybeWrapStartupCommandWithOpRun(
   command: string | undefined,
   env: Record<string, string> | undefined,
-  opts: { enabled: boolean; connectionId: string | null | undefined; platform?: NodeJS.Platform }
+  opts: {
+    enabled: boolean
+    connectionId: string | null | undefined
+    daemonHostSpawn?: boolean
+    platform?: NodeJS.Platform
+  }
 ): string | undefined {
   if (
     !opts.enabled ||
     opts.connectionId || // op is a local-machine assumption; never rewrite remote spawns
+    opts.daemonHostSpawn || // runtime-owned tabs resolve against the runtime's account, not the user's — keep refs literal
     command === undefined ||
     command.trim().length === 0 ||
     !hasOpSecretReferences(env)

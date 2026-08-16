@@ -91,6 +91,8 @@ function normalizeTabEnv(value: unknown): Record<string, string> | undefined {
       !ENV_VAR_NAME_RE.test(key) ||
       UNSAFE_ENV_KEYS.has(key) ||
       typeof raw !== 'string' ||
+      // Why: NUL terminates an env entry — a value carrying one splits into a second, unreviewed variable on Windows.
+      raw.includes('\0') ||
       !isOrcaYamlFieldWithinLimit(key) ||
       !isOrcaYamlFieldWithinLimit(raw)
     ) {

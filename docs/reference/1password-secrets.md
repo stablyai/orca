@@ -37,7 +37,8 @@ If `op` is missing, the tab prints `op: command not found` — the integration i
 
 - **Local spawns only.** Remote (SSH) tabs and runtime-owned (per-workspace environment) tabs are never wrapped — `op` is a local-machine assumption. Their env keeps any `op://` strings as literals.
 - **Command-less tabs are not wrapped.** A plain shell tab with `op://` env keeps the literal refs; run `op run -- <cmd>` manually.
-- **Windows chained commands.** Commands containing shell metacharacters are wrapped via `sh -c` on POSIX; on Windows there is no portable single-line quoting, so chained commands are left unwrapped there.
+- **Windows chained commands.** Commands containing shell metacharacters — or leading `FOO=bar` assignments — are wrapped via `sh -c` on POSIX; on Windows there is no portable single-line quoting, so chained commands are left unwrapped. This is keyed off the host platform, so a Git Bash pane on Windows is treated as Windows and also left unwrapped even though `sh -c` would work there.
+- **Environment values are capped by the generic 64 KiB orca.yaml field limit,** which is larger than the 32,767-character maximum Windows allows for a single environment variable. The cap is deliberately platform-independent: `parseOrcaYaml` feeds the command-trust hash, so a platform-dependent parse would change that hash between macOS and Windows and re-prompt on every switch. A value above the Windows limit therefore parses everywhere but can fail at spawn time on Windows.
 - **Setup scripts and environment-recipe lifecycle scripts** are not covered yet (planned follow-up). Recipes run from the main process, so their `op` path additionally needs the macOS TCC login-shell attribution wrapper.
 
 ## Why in-PTY instead of resolving in the main process

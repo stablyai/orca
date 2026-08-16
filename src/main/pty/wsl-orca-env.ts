@@ -9,6 +9,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { OP_SECRET_REFERENCE_PREFIX } from './op-run-secret-injection'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -38,6 +39,13 @@ function applyWslenvPassthrough(
     }
   }
   env.WSLENV = entries.join(WSLENV_ENTRY_SEPARATOR)
+}
+
+function opSecretReferenceWslenvEntries(env: Record<string, string | undefined>): string[] {
+  // Why: wsl.exe imports only named vars; op:// pointers must cross untranslated.
+  return Object.entries(env)
+    .filter(([, value]) => value?.startsWith(OP_SECRET_REFERENCE_PREFIX))
+    .map(([name]) => `${name}/u`)
 }
 
 function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): string[] {
@@ -98,7 +106,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
     'ORCA_OMP_STATUS_EXTENSION/p',
-    ...worktreeSetupWslenvEntries(env)
+    ...worktreeSetupWslenvEntries(env),
+    ...opSecretReferenceWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)
 }
