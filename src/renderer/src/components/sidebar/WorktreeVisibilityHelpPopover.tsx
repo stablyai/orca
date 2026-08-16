@@ -26,7 +26,6 @@ export default function WorktreeVisibilityHelpPopover(): React.JSX.Element {
             className="size-5 text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent"
             aria-label={title}
             aria-expanded={open}
-            title={title}
             onClick={() => setOpen(true)}
           >
             <CircleHelp className="size-3.5" />
@@ -50,14 +49,14 @@ export default function WorktreeVisibilityHelpPopover(): React.JSX.Element {
             </li>
             <li>
               {translate(
-                'auto.components.sidebar.WorktreeVisibilityHelpPopover.54a7c2f183',
-                'For newly added repositories, worktrees created manually or by another tool are hidden by default to avoid unexpected sidebar clutter.'
+                'auto.components.sidebar.WorktreeVisibilityHelpPopover.ec1e6a10fb',
+                'Other worktrees start hidden to avoid unexpected sidebar clutter.'
               )}
             </li>
             <li>
               {translate(
-                'auto.components.sidebar.WorktreeVisibilityHelpPopover.b9e0d43675',
-                'Always show includes current and future non-Orca worktrees, including agent worktrees under .claude/worktrees/* and .gsd-workspaces/*. When it is off, use Show below to add one individually.'
+                'auto.components.sidebar.WorktreeVisibilityHelpPopover.1c68c9cf77',
+                'Enable a source for all current and future worktrees, or show individual worktrees below.'
               )}
             </li>
           </ul>

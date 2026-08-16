@@ -420,6 +420,37 @@ describe('AgentTerminalPreview', () => {
     expect(input).toHaveBeenCalledWith('pty-1', 'clip-text')
   })
 
+  it('encodes a leading newline for a remote Windows Codex preview without submitting', async () => {
+    readClipboardText.mockResolvedValueOnce('\nsecond line')
+    const view = render(
+      <AgentTerminalPreview
+        ptyId="remote:windows-box@@pty-1"
+        terminalInput={{
+          hostPlatform: 'win32',
+          localWindowsConpty: false,
+          windowsShiftEnterEncoding: 'alt-enter',
+          windowsInputRecordPasteNewline: 'alt-enter',
+          ctrlEnterCsiU: false,
+          kittyKeyboardAdvertised: false
+        }}
+      />
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const focusTarget = document.createElement('input')
+    host.appendChild(focusTarget)
+    focusTarget.focus()
+
+    act(() => emitAppMenuPaste!())
+
+    await waitFor(() =>
+      expect(input).toHaveBeenCalledWith('remote:windows-box@@pty-1', '\x1b\rsecond line')
+    )
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\rsecond line')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
   it('handles app-menu selection actions while the preview owns focus', async () => {
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))

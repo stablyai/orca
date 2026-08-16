@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -362,7 +362,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
-        'Branch naming, base refs, attribution, and Git AI Author.'
+        'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
       // Why: Git AI Author is rendered inside Git, so shared

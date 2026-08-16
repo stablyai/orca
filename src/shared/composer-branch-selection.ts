@@ -1,4 +1,4 @@
-import type { GitPushTarget } from './types'
+import type { GitPushTarget } from './worktree/types'
 
 export type ComposerBranchSelection = {
   baseBranch: string

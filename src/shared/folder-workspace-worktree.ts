@@ -1,4 +1,5 @@
-import type { FolderWorkspace, Worktree } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'

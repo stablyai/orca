@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from './types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 
 export type RemoteWorkspaceTerminalTab = Omit<TerminalTab, 'worktreeId'> & {
   worktreePath: string

@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
@@ -61,54 +62,55 @@ import type {
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
+import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
+import type { SearchResult } from '../shared/code-search-types'
 import type {
-  BaseRefSearchResult,
-  BaseRefDefaultResult,
-  BrowserViewportOverride,
-  CustomPet,
-  FsChangedPayload,
   FilesystemPathFlavor,
-  GetRateLimitResult,
+  FsChangedPayload,
+  MarkdownDocument
+} from '../shared/filesystem-entry-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../shared/git-fork-sync'
+import type { GitStagingArea, GitUpstreamStatus } from '../shared/git-status-types'
+import type { GitHubCommentResult, GitHubReactionContent } from '../shared/github/comment-types'
+import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
-  GitHubPRRefreshReason,
-  GitHubAssignableUser,
-  GitHubCommentResult,
-  GitHubCreateIssueResult,
-  GitHubOwnerRepo,
-  GitHubReactionContent,
-  GitHubWorkItem,
-  JiraProjectStatusOrder,
-  GitPushTarget,
-  GitStagingArea,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitUpstreamStatus,
-  GhosttyImportPreview,
-  ListWorkItemsResult,
-  LinearProjectDetail,
-  MemorySnapshot,
+  GitHubPRRefreshReason
+} from '../shared/github/pull-request-refresh-types'
+import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
+import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
+import type { GhosttyImportPreview } from '../shared/global-settings-types'
+import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
+import type { JiraProjectStatusOrder } from '../shared/jira-types'
+import type { LinearProjectDetail } from '../shared/linear/project-types'
+import type {
+  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchResult,
-  NotificationDeliveryProbeResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
-  NotificationSoundResult,
-  NestedRepoScanResult,
-  OnboardingState,
-  PersistedUIState,
-  FloatingTerminalCwdRequest,
-  MarkdownDocument,
-  SearchResult,
-  TuiAgent,
-  UpdateStatus,
+  NotificationSoundResult
+} from '../shared/notification-settings-types'
+import type { OnboardingState } from '../shared/onboarding-state-types'
+import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { CustomPet } from '../shared/pet-types'
+import type { MemorySnapshot } from '../shared/process-stats-types'
+import type { NestedRepoScanResult } from '../shared/project-group-types'
+import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
+import type { TuiAgent } from '../shared/tui-agent'
+import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
+import type { UpdateStatus } from '../shared/update-status-types'
+import type {
   WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../shared/worktree/base-ref-drift-types'
+import type {
   WorktreeDefaultTabsLaunch,
-  WorktreeHeadIdentity,
-  WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch
-} from '../shared/types'
+} from '../shared/worktree/launch-types'
+import type { GitPushTarget, WorktreeHeadIdentity } from '../shared/worktree/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
@@ -137,9 +139,9 @@ import type {
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
-  RuntimeSyncWindowGraph,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -160,36 +162,38 @@ import type {
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
-import type { GhAuthDiagnostic } from '../shared/github-auth-types'
+import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type {
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugResult,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefResult
+} from '../shared/github/project-result-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
   GetProjectViewTableArgs,
-  GetProjectViewTableResult,
-  GitHubProjectCommentMutationResult,
-  GitHubProjectMutationResult,
   ListAccessibleProjectsArgs,
-  ListAccessibleProjectsResult,
   ListAssignableUsersBySlugArgs,
-  ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugArgs,
-  ListIssueTypesBySlugResult,
   ListLabelsBySlugArgs,
-  ListLabelsBySlugResult,
   ListProjectViewsArgs,
-  ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugArgs,
-  ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefArgs,
-  ResolveProjectRefResult,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../shared/github-project-types'
+} from '../shared/github/project-request-types'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
@@ -225,6 +229,10 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import {
+  KEYBOARD_LAYOUT_CHANGED_CHANNEL,
+  type KeyboardLayoutChangeEvent
+} from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -533,6 +541,19 @@ const api = {
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
+    getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
+      ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
+    getKeyboardLayoutSnapshot: () => ipcRenderer.invoke('app:getKeyboardLayoutSnapshot'),
+    onKeyboardLayoutChanged: (
+      callback: (event: KeyboardLayoutChangeEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: KeyboardLayoutChangeEvent
+      ): void => callback(event)
+      ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+    },
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
@@ -782,6 +803,7 @@ const api = {
 
   worktrees: {
     list: (args) => ipcRenderer.invoke('worktrees:list', args),
+    listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
@@ -796,6 +818,8 @@ const api = {
     listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
+
+    adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
@@ -905,14 +929,23 @@ const api = {
         .invoke('workspaceCleanup:scan', { ...args, scanId })
         .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
     },
+    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
+    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
+      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
+    beginRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
+    recordRemovalSnapshotPrune: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
+    finishRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
     analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
+    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
     cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
     onProgress: (callback) => {
       const listener = (
@@ -946,6 +979,7 @@ const api = {
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string
+      commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
@@ -3034,6 +3068,7 @@ const api = {
     suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
     resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
     cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
+    stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
     getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
   } satisfies PreloadApi['ephemeralVm'],
 
@@ -3649,6 +3684,7 @@ const api = {
         requestId: string
         url: string
         worktreeId?: string
+        browserPageId?: string
         sessionProfileId?: string | null
         sessionPartition?: string
         activate?: boolean
@@ -3660,6 +3696,7 @@ const api = {
           requestId: string
           url: string
           worktreeId?: string
+          browserPageId?: string
           sessionProfileId?: string | null
           sessionPartition?: string
           activate?: boolean
@@ -3708,7 +3745,11 @@ const api = {
       ipcRenderer.on('browser:requestTabClose', listener)
       return () => ipcRenderer.removeListener('browser:requestTabClose', listener)
     },
-    replyTabClose: (reply: { requestId: string; error?: string }): void => {
+    replyTabClose: (reply: {
+      requestId: string
+      error?: string
+      code?: 'browser_tab_not_found'
+    }): void => {
       ipcRenderer.send('browser:tabCloseReply', reply)
     },
     onNewTerminalTab: (callback: () => void): (() => void) => {
@@ -4305,7 +4346,9 @@ const api = {
   },
 
   runtime: {
-    syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
+    syncWindowGraph: (
+      graph: RuntimeRendererSyncWindowGraph
+    ): Promise<RuntimeSyncWindowGraphResult> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>

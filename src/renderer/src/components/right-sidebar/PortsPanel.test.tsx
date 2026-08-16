@@ -319,7 +319,7 @@ describe('PortsPanel runtime routing', () => {
     ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
   })
 
-  it('opens remote workspace ports in the server-side browser and binds the local page handle', async () => {
+  it('reuses the capability verdict across remote port opens', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
       Promise.resolve({
         id: method,
@@ -340,10 +340,20 @@ describe('PortsPanel runtime routing', () => {
         setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never
       })
     ).resolves.toEqual({ ok: true })
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never
+      })
+    ).resolves.toEqual({ ok: true })
 
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledTimes(2)
     expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('repo::/workspace/app')
     expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
       'status.get',
+      'browser.tabCreate',
       'browser.tabCreate'
     ])
     expect(runtimeEnvironmentCall.mock.calls[1][0].params).toEqual({

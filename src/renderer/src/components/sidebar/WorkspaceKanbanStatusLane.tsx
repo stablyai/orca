@@ -1,11 +1,11 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN

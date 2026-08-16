@@ -98,6 +98,7 @@ describe('openReadonlySyncDatabase', () => {
     writer.close()
 
     const db = openReadonlySyncDatabase(dbPath)
+    expect(db.pragma('query_only', { simple: true })).toBe(1)
     expect(() => db.exec('INSERT INTO items VALUES (2)')).toThrow()
     db.close()
   })

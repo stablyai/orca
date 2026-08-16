@@ -1,6 +1,7 @@
 import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
 import { searchWorktrees, type PaletteMatchedField } from '@/lib/worktree-palette-search'
-import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 
 export type WorkspaceKanbanLaneView = {
   items: readonly Worktree[]

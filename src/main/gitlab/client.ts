@@ -1,26 +1,26 @@
 /* eslint-disable max-lines -- co-locates GitLab MR/issue/work-item operations sharing one acquire/release pattern. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
+  GetGitLabRateLimitResult,
   GitLabAssignableUser,
   GitLabAuthDiagnostic,
   GitLabDiscussionResolveResult,
   GitLabJobTraceResult,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
   GitLabPagedResult,
   GitLabPipelineJob,
   GitLabRateLimitSnapshot,
-  GitLabMRInlineCommentInput,
-  GitLabMRReviewersUpdateResult,
   GitLabRetryJobResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
-  GetGitLabRateLimitResult,
-  IssueSourcePreference,
   ListMergeRequestsResult,
   MRComment,
   MRInfo,
   MRListState
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { derivePipelineStatus, mapIssueToWorkItem, mapMRInfo, mapMRToWorkItem } from './mappers'
 import {
   acquire,
@@ -1370,15 +1370,9 @@ export async function updateMR(
 
 /** Re-export so callers don't need to know the gl-utils module split. */
 export { _resetProjectRefCache } from './gl-utils'
-export {
-  addIssueComment,
-  createIssue,
-  getIssue,
-  listAssignableUsers,
-  listIssues,
-  listLabels,
-  updateIssue
-} from './issues'
+export { addIssueComment, createIssue, getIssue, listIssues } from './issues'
+export { updateIssue } from './issue-update'
+export { listAssignableUsers, listLabels } from './project-label-and-member-lookup'
 
 // Re-exported so paste-URL call sites don't import getProjectRefForRemote from gl-utils directly.
 export { getProjectRefForRemote }

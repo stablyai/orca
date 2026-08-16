@@ -2,7 +2,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'

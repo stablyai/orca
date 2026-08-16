@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsShellLaunchArgs
+} from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -12,7 +15,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
@@ -26,19 +29,16 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
+import { getMarkerlessShellLaunchConfig, getShellReadyLaunchConfig } from './local-pty-shell-ready'
 import {
-  getAttributionShellLaunchConfig,
-  getShellReadyLaunchConfig,
-  createShellReadyScanState,
-  drainShellReadyHeldBytes,
-  scanForShellReady,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
-} from './local-pty-shell-ready'
-import type { ShellReadySignal } from './local-pty-shell-ready'
+} from './local-pty-shell-ready-startup-command'
+import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -76,10 +76,10 @@ import {
   readPtySlavePath
 } from '../../shared/pty-slave-line-discipline-echo'
 import {
-  createShellStartupIdentityScanState,
-  drainShellStartupIdentityHeldBytes,
-  scanForShellStartupIdentity
-} from '../shell-startup-identity-scanner'
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
 import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
@@ -779,6 +779,30 @@ export class LocalPtyProvider implements IPtyProvider {
         delete finalEnv.CODEX_HOME
         delete finalEnv.ORCA_CODEX_HOME
       }
+
+      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+      const codexLaunchPreflightCommand = finalEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+      if (
+        codexLaunchPreflightCommand &&
+        (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(shellPath))
+      ) {
+        if (shellBasename === 'cmd.exe') {
+          // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+          finalEnv[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+        }
+        const resolved = resolveWindowsShellLaunchArgs(
+          shellPath,
+          cwd,
+          defaultCwd,
+          launchWslContext,
+          args.command,
+          codexLaunchPreflightCommand
+        )
+        shellArgs = resolved.shellArgs
+        effectiveCwd = resolved.effectiveCwd
+        validationCwd = resolved.validationCwd
+        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      }
     }
     seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })
     if (
@@ -791,7 +815,6 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!wslInfo && process.platform !== 'win32') {
       // Why: OpenCode/Codex PATH restoration and OMP's status wrapper need shell-ready code after user startup files run.
       const needsNoMarkerWrapper =
-        finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
         finalEnv.ORCA_MIMOCODE_HOME ||
         finalEnv.ORCA_OMP_STATUS_EXTENSION ||
@@ -808,16 +831,16 @@ export class LocalPtyProvider implements IPtyProvider {
         getFallbackShellReadyConfig = (shell) =>
           shouldWaitForShellReady
             ? getShellReadyLaunchConfig(shell)
-            : getAttributionShellLaunchConfig(shell)
+            : getMarkerlessShellLaunchConfig(shell)
         shellLaunch = shouldWaitForShellReady
           ? getShellReadyLaunchConfig(shellPath)
-          : getAttributionShellLaunchConfig(shellPath)
+          : getMarkerlessShellLaunchConfig(shellPath)
       } else if (args.command) {
         getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
         shellLaunch = getShellReadyLaunchConfig(shellPath)
       } else if (needsNoMarkerWrapper) {
-        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
-        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+        getFallbackShellReadyConfig = (shell) => getMarkerlessShellLaunchConfig(shell)
+        shellLaunch = getMarkerlessShellLaunchConfig(shellPath)
       } else {
         getFallbackShellReadyConfig = undefined
       }
@@ -833,6 +856,8 @@ export class LocalPtyProvider implements IPtyProvider {
       finalEnv,
       requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
     )
+    // Why: raw requested PATH promotion runs after the host-env scrub.
+    stripLegacyTerminalShimEnv(finalEnv, process.platform)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -962,11 +987,8 @@ export class LocalPtyProvider implements IPtyProvider {
     let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
     let shellStartupPid: number | null = null
     let shellPromptReadinessProbe: ShellPromptReadinessProbe | null = null
-    let shellStartupIdentityScanState = shellReadyLaunch?.supportsReadyMarker
-      ? createShellStartupIdentityScanState()
-      : null
-    const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
-      ? createShellReadyScanState()
+    let shellStartupOutputScanState = shellReadyLaunch?.supportsReadyMarker
+      ? createShellStartupOutputScanState()
       : null
     const shellReadyPromise = args.command
       ? new Promise<ShellReadySignal>((resolve) => {
@@ -988,23 +1010,17 @@ export class LocalPtyProvider implements IPtyProvider {
       resolve(signal)
     }
     const releaseHeldShellReadyBytes = (): void => {
-      if (!shellReadyScanState) {
+      if (!shellStartupOutputScanState) {
         return
       }
-      let heldBytes = shellStartupIdentityScanState
-        ? drainShellStartupIdentityHeldBytes(shellStartupIdentityScanState)
-        : ''
-      shellStartupIdentityScanState = null
-      if (heldBytes) {
-        heldBytes = scanForShellReady(shellReadyScanState, heldBytes).output
-      }
-      heldBytes += drainShellReadyHeldBytes(shellReadyScanState)
+      const heldBytes = drainShellStartupOutputScanState(shellStartupOutputScanState)
+      shellStartupOutputScanState = null
       if (heldBytes.length === 0) {
         return
       }
       startupIngress.accept(heldBytes)
     }
-    if (shellReadyScanState) {
+    if (shellStartupOutputScanState) {
       shellPromptReadinessProbe = createShellPromptReadinessProbe({
         slavePath: readPtySlavePath(proc),
         shellPath,
@@ -1049,18 +1065,13 @@ export class LocalPtyProvider implements IPtyProvider {
     const disposables: { dispose: () => void }[] = []
     const onDataDisposable = proc.onData((rawData) => {
       let data = rawData
-      if (shellStartupIdentityScanState && resolveShellReady) {
-        const scanned = scanForShellStartupIdentity(shellStartupIdentityScanState, data)
+      if (shellStartupOutputScanState && resolveShellReady) {
+        const scanned = scanShellStartupOutput(shellStartupOutputScanState, data)
         data = scanned.output
         if (scanned.shellPid) {
           shellStartupPid = scanned.shellPid
-          shellStartupIdentityScanState = null
         }
-      }
-      if (shellReadyScanState && resolveShellReady) {
-        const scanned = scanForShellReady(shellReadyScanState, data)
-        data = scanned.output
-        if (scanned.matched) {
+        if (scanned.ready) {
           finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
@@ -1138,15 +1149,20 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
-  write(id: string, data: string): void {
+  write(id: string, data: string): boolean {
     // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
     if (extractOnlyCookedEchoSafeQueryReplies(data)) {
       const ingress = startupIngressByPty.get(id)
       if (ingress?.answerLiveQueryReply(data)) {
-        return
+        return true
       }
     }
-    ptyProcesses.get(id)?.write(data)
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    proc.write(data)
+    return true
   }
   resize(id: string, cols: number, rows: number): void {
     ptyProcesses.get(id)?.resize(cols, rows)

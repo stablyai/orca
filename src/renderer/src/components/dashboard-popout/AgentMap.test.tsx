@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentMap } from './AgentMap'
-import { agentMapAttentionMarkerScale } from './AgentMapWorktreeRingNode'
+import { agentMapAttentionMarkerScale } from './agent-map-node-presentation'
 import type { AgentMapState } from './agent-map-filter'
+import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
 import { AGENT_MAP_AGENT_RADIUS } from './agent-map-layout'
 import { card, installAgentMapEnvironment, NOW, renderMap } from './agent-map-render-test-harness'
 
@@ -160,6 +162,20 @@ describe('AgentMap', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Agent alpha/ })[1])
     expect(onOpenTerminal).toHaveBeenCalledWith(running)
     expect(ring).not.toHaveClass('is-open')
+  })
+
+  it('counts acknowledged completions as done in worktree details', () => {
+    renderMap([
+      card({
+        bucket: 'idle',
+        dotState: 'done',
+        unseen: false,
+        finishedAt: NOW - 60_000
+      })
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agent map worktree details' }))
+
+    expect(screen.getByText('1 agent · 0 active · 1 done')).toBeInTheDocument()
   })
 
   it('starts a new agent from the worktree details picker', () => {
@@ -397,7 +413,7 @@ describe('AgentMap', () => {
   })
 
   it('keeps a selected node visible while compacting around an adjacent terminal', () => {
-    const { container } = renderMap([card()], { selectedPaneKey: 'pane-1', compact: true })
+    const { container } = renderMap([card()], { selectedPaneKey: 'pane-1' })
 
     const selectedNode = screen.getByRole('button', { name: /Agent alpha/ })
     expect(selectedNode).toHaveClass('is-selected')
@@ -410,7 +426,34 @@ describe('AgentMap', () => {
     expect(label.querySelector('rect')).not.toBeInTheDocument()
     expect(screen.getByText('270%')).toBeInTheDocument()
     expect(screen.queryByText('Map filters')).not.toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Host filter' })).not.toBeInTheDocument()
+  })
+
+  it('narrows the map to the enabled hosts', () => {
+    render(
+      <TooltipProvider>
+        <AgentMap
+          cards={[
+            card({ paneKey: 'pane-local' }),
+            card({
+              paneKey: 'pane-ssh',
+              worktreeId: 'worktree-2',
+              worktreeName: 'Remote map',
+              hostKind: 'ssh'
+            })
+          ]}
+          now={NOW}
+          enabledHosts={new Set<DashboardCardHostKind>(['ssh'])}
+          onOpenTerminal={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Open Agent map worktree details' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Open Remote map worktree details' })
+    ).toBeInTheDocument()
   })
 
   it('eases the viewport into the selected agent', () => {
@@ -574,7 +617,7 @@ describe('AgentMap', () => {
     expect(quietGroup).not.toHaveClass('is-visible')
   })
 
-  it('shows unseen completions as Done and acknowledged completions as Idle by default', () => {
+  it('keeps acknowledged completions green and distinct from both unseen and idle', () => {
     const seenResult = card({
       paneKey: 'seen',
       conversationName: 'Seen result',
@@ -595,7 +638,13 @@ describe('AgentMap', () => {
 
     expect(screen.getByRole('button', { name: /Agent alpha/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /New result/ })).toHaveClass('fleet-status-done')
-    expect(screen.getByRole('button', { name: /Seen result/ })).toHaveClass('fleet-status-idle')
+    // Not `fleet-status-idle`: acknowledging a finish demotes it, but the work is still
+    // yours to land, so it must not look like a workspace that never ran.
+    const seen = screen.getByRole('button', { name: /Seen result/ })
+    expect(seen).toHaveClass('fleet-status-done-seen')
+    expect(seen).not.toHaveClass('fleet-status-idle')
+    expect(seen).not.toHaveClass('fleet-status-done')
+    expect(seen.querySelector('[data-agent-map-agent-status-glow]')).not.toBeInTheDocument()
   })
 
   it('hides the states the toolbar filter has muted', () => {

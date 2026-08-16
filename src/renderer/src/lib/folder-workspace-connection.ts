@@ -1,4 +1,6 @@
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
 import { parseExecutionHostId } from '../../../shared/execution-host'

@@ -106,11 +106,11 @@ describe('daemon pty foreground degraded-scan handling', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  function spawnWindowsShell() {
+  async function spawnWindowsShell() {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const proc = mockPtyProcess('powershell.exe')
     spawnMock.mockReturnValue(proc)
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
     return { proc, handle }
   }
 
@@ -118,7 +118,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: false, processName: null })
-    const { handle } = spawnWindowsShell()
+    const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0) // establishes 'claude'
     expect(await readForegroundAt(handle, 1_000)).toBe('claude') // refresh returns degraded → keep
@@ -132,7 +132,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
     readConptyMock.mockResolvedValue(new Set([12345, 999])) // child still attached
-    const { handle } = spawnWindowsShell()
+    const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
     expect(await readForegroundAt(handle, 1_000)).toBe('claude')
@@ -144,7 +144,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
     readConptyMock.mockResolvedValue(new Set([12345]))
-    const { handle } = spawnWindowsShell()
+    const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
     await readForegroundAt(handle, 1_000) // refresh clears the cache
@@ -157,7 +157,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
     readConptyMock.mockResolvedValue(null)
-    const { handle } = spawnWindowsShell()
+    const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
     expect(await readForegroundAt(handle, 1_000)).toBe('claude')
