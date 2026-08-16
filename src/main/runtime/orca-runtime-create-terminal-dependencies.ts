@@ -1,4 +1,5 @@
 export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+export { foldDefaultTabEnv } from './runtime-terminal-contracts'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {
   createTerminalRevealWarning,

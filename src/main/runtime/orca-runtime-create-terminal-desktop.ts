@@ -17,7 +17,7 @@ export async function createDesktopTerminal(
     : null
   const launchOpts = workspace
     ? await runtime.resolveAgentTerminalCreateOptions(workspace, opts)
-    : opts
+    : dependencies.foldDefaultTabEnv(opts)
   const worktreeId = workspace?.id
   const cwd = workspace
     ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)

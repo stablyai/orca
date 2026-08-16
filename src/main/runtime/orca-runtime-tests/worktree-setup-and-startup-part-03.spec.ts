@@ -47,7 +47,7 @@ describe('runtime-owned default tab env', () => {
 
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',
-      expect.objectContaining({ command: 'claude', env: { TOKEN: 'op://V/I/F' } })
+      expect.objectContaining({ command: 'claude', defaultTabEnv: { TOKEN: 'op://V/I/F' } })
     )
   })
 
@@ -68,8 +68,60 @@ describe('runtime-owned default tab env', () => {
 
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',
-      expect.objectContaining({ env: { TOKEN: 'op://V/I/F' } })
+      expect.objectContaining({ defaultTabEnv: { TOKEN: 'op://V/I/F' } })
     )
+  })
+})
+
+describe('committed tab env and agent resolution', () => {
+  const scope = {
+    id: 'repo-1::/tmp/wt',
+    path: '/tmp/wt',
+    connectionId: null,
+    repo: { id: 'repo-1', path: '/tmp/repo', displayName: 'Repo One' },
+    folderWorkspace: null
+  }
+
+  const resolve = async (runtime: InstanceType<typeof OrcaRuntimeService>, opts: object) =>
+    (
+      runtime as unknown as {
+        resolveAgentTerminalCreateOptions: (
+          workspace: unknown,
+          options: unknown
+        ) => Promise<Record<string, unknown>>
+      }
+    ).resolveAgentTerminalCreateOptions(scope, opts)
+
+  it('does not suppress bare-agent resolution', async () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: { codex: 'codex --sandbox' }
+      })
+    } as never)
+
+    const withEnv = await resolve(runtime, {
+      command: 'codex',
+      defaultTabEnv: { TOKEN: 'op://V/I/F' }
+    })
+    const withoutEnv = await resolve(runtime, { command: 'codex' })
+
+    expect(withoutEnv.command).not.toBe('codex')
+    expect(withEnv.command).toBe(withoutEnv.command)
+    expect(withEnv.launchAgent).toBe('codex')
+  })
+
+  it('folds the private channel after resolution with launch env precedence', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolved = await resolve(runtime, {
+      command: 'sh -c true',
+      env: { SHARED: 'from-launch' },
+      defaultTabEnv: { SHARED: 'from-tab', ONLY_TAB: 'kept' }
+    })
+
+    expect(resolved.env).toEqual({ SHARED: 'from-launch', ONLY_TAB: 'kept' })
+    expect(resolved.defaultTabEnv).toBeUndefined()
   })
 })
 

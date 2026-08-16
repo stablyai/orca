@@ -23,6 +23,8 @@ export type TerminalCreateOptions = {
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
+  /** Committed tab env, folded in after bare-agent launch resolution. */
+  defaultTabEnv?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
@@ -52,6 +54,14 @@ export type TerminalCreateOptions = {
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
   deferMobileSessionPublish?: boolean
+}
+
+export function foldDefaultTabEnv(opts: TerminalCreateOptions): TerminalCreateOptions {
+  if (!opts.defaultTabEnv) {
+    return opts
+  }
+  const { defaultTabEnv, ...rest } = opts
+  return { ...rest, env: { ...defaultTabEnv, ...rest.env } }
 }
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */
