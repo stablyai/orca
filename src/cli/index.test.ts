@@ -2135,6 +2135,7 @@ describe('orca cli worktree awareness', () => {
   it('uses slash-containing --name as branchNameOverride when --branch is omitted', async () => {
     queueFixtures(
       callMock,
+      okFixture('req_repo_show', { repo: { id: 'repo-1', kind: 'git' } }),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo/prefix-test', 'abc', 'repo-1'),
         lineage: null,
@@ -2166,6 +2167,37 @@ describe('orca cli worktree awareness', () => {
         noParent: true
       })
     )
+  })
+
+  it('omits an inferred branchNameOverride for folder workspace repos', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_show', { repo: { id: 'folder-1', kind: 'folder' } }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/folder/yoyo-prefix-test', '', 'abc', 'folder-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:folder-1',
+        '--name',
+        'yoyo/prefix-test',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/folder'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'repo.show', { repo: 'id:folder-1' })
+    const createCall = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
+    expect(createCall?.[1]).not.toHaveProperty('branchNameOverride')
   })
 
   it('omits branchNameOverride for plain --name without --branch', async () => {

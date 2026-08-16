@@ -170,20 +170,14 @@ async function getCreateRepoSelector(
   )
 }
 
-/** Folder workspaces have no git branch; reject explicit --branch before create. */
-async function assertBranchFlagSupportedForRepo(
+async function repoSupportsBranch(
   client: Parameters<CommandHandler>[0]['client'],
   repoSelector: string
-): Promise<void> {
+): Promise<boolean> {
   const result = await client.call<{ repo: { kind?: string } }>('repo.show', {
     repo: repoSelector
   })
-  if (result.result.repo.kind === 'folder') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--branch is only supported for git repositories, not folder workspaces.'
-    )
-  }
+  return result.result.repo.kind !== 'folder'
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
@@ -249,13 +243,19 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const name = getRequiredStringFlag(flags, 'name')
     // Why: --branch is optional but when present must have a value (not --branch alone).
     const explicitBranch = getPresentStringFlag(flags, 'branch')
-    const branchNameOverride = resolveCliWorktreeCreateBranchNameOverride({
+    let branchNameOverride = resolveCliWorktreeCreateBranchNameOverride({
       name,
       branch: explicitBranch
     })
     const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
-    if (explicitBranch) {
-      await assertBranchFlagSupportedForRepo(client, repo)
+    if (branchNameOverride && !(await repoSupportsBranch(client, repo))) {
+      if (explicitBranch) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--branch is only supported for git repositories, not folder workspaces.'
+        )
+      }
+      branchNameOverride = undefined
     }
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo,

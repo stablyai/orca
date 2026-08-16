@@ -115,7 +115,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
-      'The worktree directory name is always filesystem-sanitized. Pass --branch to set the git branch independently (including names with `/`). When --name itself contains `/` and --branch is omitted, that raw name is used as the branch (same as the UI composer).',
+      'The worktree directory name is always filesystem-sanitized. For Git-backed worktrees, pass --branch to set the Git branch independently (including names with `/`); folder workspaces reject --branch. When --name itself contains `/` and --branch is omitted, that raw name is used as the Git branch.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
       'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
