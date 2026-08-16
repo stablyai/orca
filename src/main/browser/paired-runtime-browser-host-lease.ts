@@ -5,10 +5,6 @@ import {
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
-import {
-  isRecoverableRemoteRuntimeConnectionError,
-  toRemoteRuntimeClientErrorLike
-} from '../../shared/remote-runtime-client-error-classification'
 import { assertBrowserClientHostAttachOptions } from './browser-client-host-attach-request'
 import {
   BrowserHostReconnectDelay,
@@ -22,6 +18,10 @@ import {
 } from './browser-host-command-result-settler'
 import { PairedRuntimeBrowserHostLeaseConnection } from './paired-runtime-browser-host-lease-connection'
 import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'
+import {
+  attachBrowserHostWithInitialAdmissionRetry,
+  isRecoverableBrowserHostLeaseError
+} from './browser-host-admission-recovery'
 
 export class PairedRuntimeBrowserHostLease {
   private connection: PairedRuntimeBrowserHostLeaseConnection | null = null
@@ -70,7 +70,14 @@ export class PairedRuntimeBrowserHostLease {
 
   private async startLease(): Promise<BrowserClientHostLeaseAuthority> {
     try {
-      return await this.attach(false, this.options.timeoutMs ?? 15_000)
+      return await attachBrowserHostWithInitialAdmissionRetry({
+        attach: (timeoutMs) => this.attach(false, timeoutMs),
+        browserHostClientId: this.options.browserHostClientId,
+        delay: this.reconnectDelay,
+        isClosed: () => this.closed,
+        retryDelayMs: this.reconnectRetryDelayMs,
+        timeoutMs: this.options.timeoutMs ?? 15_000
+      })
     } catch (error) {
       const leaseError = asError(error)
       this.failTerminal(leaseError)
@@ -184,7 +191,7 @@ export class PairedRuntimeBrowserHostLease {
   private canReconnect(error: Error): boolean {
     return (
       this.authority?.leaseReconnectProtocolVersion === 1 &&
-      isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
+      isRecoverableBrowserHostLeaseError(error)
     )
   }
 
@@ -302,9 +309,7 @@ export class PairedRuntimeBrowserHostLease {
   private reportError(error: Error): void {
     try {
       this.options.onError?.(error)
-    } catch {
-      // A reporting callback cannot prevent lease cleanup.
-    }
+    } catch {}
   }
 }
 

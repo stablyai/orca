@@ -158,8 +158,10 @@ const LONG_POLL_CAP = 16
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
 // clients sharing this runtime. Reserve half the budget for the other classes.
 const ASK_LONG_POLL_SHARE = 0.5
-// Why: permanent browser-host leases may use only one quarter, preserving capacity for waits and asks.
-const BROWSER_HOST_LONG_POLL_SHARE = 0.25
+// Why: eight host slots preserve four-host overlap for two independently paired desktops.
+const BROWSER_HOST_LONG_POLL_SHARE = 0.5
+// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -507,6 +509,8 @@ export class OrcaRuntimeRpcServer {
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
   private readonly browserHostLongPollCap: number
+  private readonly browserHostLongPollCapPerDevice: number
+  private readonly specializedLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -540,6 +544,7 @@ export class OrcaRuntimeRpcServer {
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   private activeAskLongPolls = 0
   private activeBrowserHostLongPolls = 0
+  private readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
 
   constructor({
     runtime,
@@ -575,6 +580,8 @@ export class OrcaRuntimeRpcServer {
       1,
       Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)
     )
+    this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
+    this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -1546,19 +1553,33 @@ export class OrcaRuntimeRpcServer {
   // Why: one fence for both transports — the total cap protects short RPCs, the ask
   // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
   // Returns the rejection message, or null once the slot is reserved.
-  private admitLongPoll(longPoll: RuntimeLongPollClass | null): string | null {
+  private admitLongPoll(
+    longPoll: RuntimeLongPollClass | null,
+    pairedDeviceId?: string
+  ): string | null {
     if (!longPoll) {
       return null
     }
     if (this.activeLongPolls >= this.longPollCap) {
       return 'long-poll capacity reached; retry with backoff'
     }
+    if (
+      (longPoll === 'ask' || longPoll === 'browser-host') &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+    ) {
+      return longPoll === 'ask'
+        ? 'orchestration.ask capacity reached; retry with backoff'
+        : 'browser-host capacity reached; retry with backoff'
+    }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
     }
     if (
       longPoll === 'browser-host' &&
-      this.activeBrowserHostLongPolls >= this.browserHostLongPollCap
+      (this.activeBrowserHostLongPolls >= this.browserHostLongPollCap ||
+        (pairedDeviceId !== undefined &&
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) >=
+            this.browserHostLongPollCapPerDevice))
     ) {
       return 'browser-host capacity reached; retry with backoff'
     }
@@ -1567,11 +1588,17 @@ export class OrcaRuntimeRpcServer {
       this.activeAskLongPolls += 1
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls += 1
+      if (pairedDeviceId !== undefined) {
+        this.activeBrowserHostLongPollsByDevice.set(
+          pairedDeviceId,
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) + 1
+        )
+      }
     }
     return null
   }
 
-  private releaseLongPoll(longPoll: RuntimeLongPollClass | null): void {
+  private releaseLongPoll(longPoll: RuntimeLongPollClass | null, pairedDeviceId?: string): void {
     if (!longPoll) {
       return
     }
@@ -1580,6 +1607,14 @@ export class OrcaRuntimeRpcServer {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
+      if (pairedDeviceId !== undefined) {
+        const remaining = (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 1) - 1
+        if (remaining > 0) {
+          this.activeBrowserHostLongPollsByDevice.set(pairedDeviceId, remaining)
+        } else {
+          this.activeBrowserHostLongPollsByDevice.delete(pairedDeviceId)
+        }
+      }
     }
   }
 
@@ -1672,7 +1707,7 @@ export class OrcaRuntimeRpcServer {
     }
 
     const longPoll = classifyRuntimeLongPoll(request)
-    const rejection = this.admitLongPoll(longPoll)
+    const rejection = this.admitLongPoll(longPoll, device.deviceId)
     if (rejection) {
       reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
@@ -1731,7 +1766,7 @@ export class OrcaRuntimeRpcServer {
       })
     } finally {
       abortRegistration?.dispose()
-      this.releaseLongPoll(longPoll)
+      this.releaseLongPoll(longPoll, device.deviceId)
     }
   }
 

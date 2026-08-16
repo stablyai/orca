@@ -1,6 +1,6 @@
 # STA-4150 Client-Hosted Browser Progress
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 This is the durable ownership ledger for
 [STA-4150](https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews).
@@ -36,15 +36,24 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-tunnel-retired-frame-isolation`, draft PR
-  [#14694](https://github.com/stablyai/orca/pull/14694), stacked on reconnect PR
-  [#14691](https://github.com/stablyai/orca/pull/14691). The stack is rebased onto
-  `origin/main@3908978ba4`.
+- Latest published stack tip: `sta-4150-browser-host-admission-fairness`, draft PR
+  [#14747](https://github.com/stablyai/orca/pull/14747), stacked on retired-frame PR
+  [#14694](https://github.com/stablyai/orca/pull/14694). #14694's rerun packaging job passed and
+  its workflow completed successfully.
+- All 31 published patches plus the local admission stage are rebased onto
+  `origin/main@5b7f44278a`. Range-diff marks all 32 patches identical. The rewritten public
+  branches have not been force-pushed yet.
 - The reconnect stage preserves exact client-host authority and page/executor lifetime through a
   negotiated, bounded same-client reconnect grace. Its pre-ledger, pre-replay-fix tip was
   `1093072a0b`; the reviewed fix was first committed at `5374c561a6` before this final ledger amend.
 - Published retired-frame stage `sta-4150-browser-tunnel-retired-frame-isolation` prevents one late
   frame for a retired stream from destroying healthy concurrent tunnel streams.
+- Published admission stage: `sta-4150-browser-host-admission-fairness`. It reserves browser-host
+  capacity per authenticated paired device, keeps ordinary waits available, and retries explicit
+  admission pressure inside existing attach/reconnect deadlines.
+- Current main has one unrelated type-aware lint warning in
+  `config/scripts/pr-test-loc-summary.test.mjs:88`, introduced by #14738 and byte-identical on this
+  branch. STA-4150 changed-code quality is clean; do not mix that CI-script fix into this stage.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
 - Published bridge branch: `sta-4150-browser-client-page-mount-bridge` locally rebased to
   `830cb95c25`, draft PR [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566;
@@ -65,38 +74,39 @@ Old clients and callers that omit placement must retain current server-hosted be
 All entries below remain staged and reviewable; do not merge or mark ready as part of autonomous
 ownership.
 
-| PR                                                    | Stage             | What it establishes                                                       |
-| ----------------------------------------------------- | ----------------- | ------------------------------------------------------------------------- |
-| [#14440](https://github.com/stablyai/orca/pull/14440) | Contracts         | Optional host/tunnel contracts without advertisement                      |
-| [#14470](https://github.com/stablyai/orca/pull/14470) | Paired tunnel     | Dedicated paired browser tunnel                                           |
-| [#14484](https://github.com/stablyai/orca/pull/14484) | Host lease        | Exact lease authority and generations                                     |
-| [#14493](https://github.com/stablyai/orca/pull/14493) | Admission         | Bounded browser-host admission                                            |
-| [#14495](https://github.com/stablyai/orca/pull/14495) | Route budgets     | Bounded tunnel resources                                                  |
-| [#14504](https://github.com/stablyai/orca/pull/14504) | Memory            | Host/process tunnel memory accounting                                     |
-| [#14507](https://github.com/stablyai/orca/pull/14507) | Reconnect         | Fenced tunnel generation replacement                                      |
-| [#14513](https://github.com/stablyai/orca/pull/14513) | Execution host    | Exact native/SSH execution-host routes                                    |
-| [#14516](https://github.com/stablyai/orca/pull/14516) | Partitions        | Route/profile-scoped Electron sessions                                    |
-| [#14517](https://github.com/stablyai/orca/pull/14517) | Guest quarantine  | Blank, popup-denied WebContents admission                                 |
-| [#14518](https://github.com/stablyai/orca/pull/14518) | Release barrier   | Route policy held through destruction                                     |
-| [#14519](https://github.com/stablyai/orca/pull/14519) | Crash fencing     | Guest/renderer process-loss retirement                                    |
-| [#14520](https://github.com/stablyai/orca/pull/14520) | Renderer owner    | Prepared pages fenced to one renderer                                     |
-| [#14529](https://github.com/stablyai/orca/pull/14529) | Placement         | Runtime-owned client page placement                                       |
-| [#14531](https://github.com/stablyai/orca/pull/14531) | Host selection    | Capability-qualified client placement                                     |
-| [#14536](https://github.com/stablyai/orca/pull/14536) | Replacement       | Exact retirement before placement replacement                             |
-| [#14539](https://github.com/stablyai/orca/pull/14539) | Retirement        | Two-phase page-retirement settlement                                      |
-| [#14544](https://github.com/stablyai/orca/pull/14544) | Page commands     | Optional, negotiated create/navigate contracts                            |
-| [#14550](https://github.com/stablyai/orca/pull/14550) | Dispatch          | Bounded FIFO/dedupe/replay command handling                               |
-| [#14553](https://github.com/stablyai/orca/pull/14553) | Results           | Exact authenticated result admission                                      |
-| [#14557](https://github.com/stablyai/orca/pull/14557) | Transport         | Same-socket command/result settlement                                     |
-| [#14558](https://github.com/stablyai/orca/pull/14558) | Lifecycle         | Lease plus command-dispatch composition                                   |
-| [#14566](https://github.com/stablyai/orca/pull/14566) | Electron main     | Route, partition, blank mount, exact guest claim, navigation, and cleanup |
-| [#14578](https://github.com/stablyai/orca/pull/14578) | Renderer bridge   | Exact main-frame mount and retire IPC admission                           |
-| [#14596](https://github.com/stablyai/orca/pull/14596) | Renderer registry | Bounded document-owned blank guest retention and lifecycle                |
-| [#14613](https://github.com/stablyai/orca/pull/14613) | Host composition  | Environment-scoped host, executor, renderer, and route composition        |
-| [#14617](https://github.com/stablyai/orca/pull/14617) | Reconciliation    | Bounded retain, reclaim, restore, and close semantics                     |
-| [#14648](https://github.com/stablyai/orca/pull/14648) | Page inventory    | Optional authenticated complete client-page snapshot                      |
-| [#14691](https://github.com/stablyai/orca/pull/14691) | Reconnect grace   | Negotiated same-client authority and page lifetime preservation           |
-| [#14694](https://github.com/stablyai/orca/pull/14694) | Tunnel isolation  | Late retired-stream frames cannot collapse healthy concurrent streams     |
+| PR                                                    | Stage              | What it establishes                                                       |
+| ----------------------------------------------------- | ------------------ | ------------------------------------------------------------------------- |
+| [#14440](https://github.com/stablyai/orca/pull/14440) | Contracts          | Optional host/tunnel contracts without advertisement                      |
+| [#14470](https://github.com/stablyai/orca/pull/14470) | Paired tunnel      | Dedicated paired browser tunnel                                           |
+| [#14484](https://github.com/stablyai/orca/pull/14484) | Host lease         | Exact lease authority and generations                                     |
+| [#14493](https://github.com/stablyai/orca/pull/14493) | Admission          | Bounded browser-host admission                                            |
+| [#14495](https://github.com/stablyai/orca/pull/14495) | Route budgets      | Bounded tunnel resources                                                  |
+| [#14504](https://github.com/stablyai/orca/pull/14504) | Memory             | Host/process tunnel memory accounting                                     |
+| [#14507](https://github.com/stablyai/orca/pull/14507) | Reconnect          | Fenced tunnel generation replacement                                      |
+| [#14513](https://github.com/stablyai/orca/pull/14513) | Execution host     | Exact native/SSH execution-host routes                                    |
+| [#14516](https://github.com/stablyai/orca/pull/14516) | Partitions         | Route/profile-scoped Electron sessions                                    |
+| [#14517](https://github.com/stablyai/orca/pull/14517) | Guest quarantine   | Blank, popup-denied WebContents admission                                 |
+| [#14518](https://github.com/stablyai/orca/pull/14518) | Release barrier    | Route policy held through destruction                                     |
+| [#14519](https://github.com/stablyai/orca/pull/14519) | Crash fencing      | Guest/renderer process-loss retirement                                    |
+| [#14520](https://github.com/stablyai/orca/pull/14520) | Renderer owner     | Prepared pages fenced to one renderer                                     |
+| [#14529](https://github.com/stablyai/orca/pull/14529) | Placement          | Runtime-owned client page placement                                       |
+| [#14531](https://github.com/stablyai/orca/pull/14531) | Host selection     | Capability-qualified client placement                                     |
+| [#14536](https://github.com/stablyai/orca/pull/14536) | Replacement        | Exact retirement before placement replacement                             |
+| [#14539](https://github.com/stablyai/orca/pull/14539) | Retirement         | Two-phase page-retirement settlement                                      |
+| [#14544](https://github.com/stablyai/orca/pull/14544) | Page commands      | Optional, negotiated create/navigate contracts                            |
+| [#14550](https://github.com/stablyai/orca/pull/14550) | Dispatch           | Bounded FIFO/dedupe/replay command handling                               |
+| [#14553](https://github.com/stablyai/orca/pull/14553) | Results            | Exact authenticated result admission                                      |
+| [#14557](https://github.com/stablyai/orca/pull/14557) | Transport          | Same-socket command/result settlement                                     |
+| [#14558](https://github.com/stablyai/orca/pull/14558) | Lifecycle          | Lease plus command-dispatch composition                                   |
+| [#14566](https://github.com/stablyai/orca/pull/14566) | Electron main      | Route, partition, blank mount, exact guest claim, navigation, and cleanup |
+| [#14578](https://github.com/stablyai/orca/pull/14578) | Renderer bridge    | Exact main-frame mount and retire IPC admission                           |
+| [#14596](https://github.com/stablyai/orca/pull/14596) | Renderer registry  | Bounded document-owned blank guest retention and lifecycle                |
+| [#14613](https://github.com/stablyai/orca/pull/14613) | Host composition   | Environment-scoped host, executor, renderer, and route composition        |
+| [#14617](https://github.com/stablyai/orca/pull/14617) | Reconciliation     | Bounded retain, reclaim, restore, and close semantics                     |
+| [#14648](https://github.com/stablyai/orca/pull/14648) | Page inventory     | Optional authenticated complete client-page snapshot                      |
+| [#14691](https://github.com/stablyai/orca/pull/14691) | Reconnect grace    | Negotiated same-client authority and page lifetime preservation           |
+| [#14694](https://github.com/stablyai/orca/pull/14694) | Tunnel isolation   | Late retired-stream frames cannot collapse healthy concurrent streams     |
+| [#14747](https://github.com/stablyai/orca/pull/14747) | Admission fairness | Per-device host capacity, wait reservation, and bounded pressure recovery |
 
 ## Current stage: exact renderer bridge
 
@@ -454,6 +464,56 @@ Deterministic evidence:
 - No payload, opcode, capability, field, limit, or publication changes. New/new peers avoid the
   teardown race; an older peer may retain its conservative whole-tunnel close until upgraded.
 
+## Published stage: admission fairness and recovery (#14747)
+
+The original global browser-host cap allowed one authenticated paired device's four host leases
+to consume every host slot. A second paired desktop received `runtime_busy`, and both initial
+attach and reconnect treated that explicit capacity response as terminal.
+
+Deterministic baseline:
+
+- Four hosts from device A filled the old global host budget, so device B could not attach.
+- Raising only that budget let asks plus hosts consume every long-poll slot and starve ordinary
+  waits.
+- One initial `runtime_busy` ended startup instead of recovering when capacity returned.
+- One reconnect `runtime_busy` ended preserved authority instead of staying inside its negotiated
+  grace.
+
+Implemented:
+
+- Browser hosts use at most 8 of 16 long-poll slots and at most 4 per authenticated paired device.
+- Asks plus hosts use at most 12 slots, preserving 4 for ordinary waits.
+- Initial and negotiated reconnect `runtime_busy` responses retry with deterministic,
+  client-specific jitter inside the existing attach timeout or reconnect grace.
+- Exact socket close, explicit lease close, and timeout release global, class, device, timer, and
+  subscription ownership independently.
+
+Compatibility and scope:
+
+- No exchanged field, opcode, capability, payload, placement, publication, or server-hosted
+  browser behavior changes.
+- New clients recover against old servers; old clients keep terminal retry behavior but benefit
+  from fairer new-server admission; new/new peers recover automatically.
+- `runtime_busy` remains browser-host-local and was not added to shared recoverable errors.
+- SSH, WSL, headed/headless/browserless hosts, folder workspaces, worktrees, and browser placement
+  are untouched.
+- The global capacity guarantees two saturated four-host devices, not arbitrary fairness for every
+  later device; later devices retry until a slot returns.
+
+Validation and review:
+
+- Focused causal gate: 2 files / 16 tests passed in 7.89 seconds on `origin/main@5b7f44278a`.
+- Broader attach/reconnect/authority package: 15 files / 159 tests passed in 7.18 seconds on the
+  same base.
+- Full Node/CLI/web typecheck, root lint, native audit, 87-gate reliability manifest, max-lines
+  ratchet, localization, formatting, diff checks, and STA-4150 changed-code quality pass. The full
+  type-aware audit is blocked only by current main's unrelated
+  `config/scripts/pr-test-loc-summary.test.mjs:88` warning; this branch does not modify that file.
+- One OpenCode review found wait starvation in the first capacity split and reconnect
+  `runtime_busy` as a resilience gap. The shared ceiling and reconnect retry tests resolved both;
+  no blocking correctness, cleanup, race, or wire-compatibility finding remained, and the tab was
+  closed.
+
 ## Acceptance matrix
 
 | Requirement                                                        | State                     | Evidence or blocker                                                                                               |
@@ -479,10 +539,10 @@ Deterministic evidence:
 
 ## Remaining implementation order
 
-1. Monitor #14691 and #14694 CI without merging or marking either ready.
-2. Make long-poll admission fair/recoverable across paired devices, retire placements when
-   fencing a lease, and enforce main-owned webview navigation grants before activating any
-   client-host capability.
+1. Monitor #14747 CI without merging or marking it ready; the current-main type-aware warning is
+   upstream and must not be folded into this browser stage.
+2. Retire placements when fencing a lease and enforce main-owned webview navigation grants before
+   activating any client-host capability.
 3. Execute the pinned reclaim/restore/close reconciliation plan against authenticated runtime
    intent and the preserved reconnect inventory before recovering ambiguous slots or routes.
 4. Add optional placement to logical session-tab publication and renderer state. Follow
@@ -565,10 +625,24 @@ Published retired-frame isolation stage (#14694):
 
 - Baseline/candidate oracle: 2 failed / 26 passed before the fix, 28/28 passed after it.
 - Full affected browser-network/control gate: 16 files / 198 tests passed.
-- Full Node/CLI/web typecheck, lint/audits, 87-gate manifest, max-lines, localization, formatting,
-  diff checks, and changed-code quality pass.
+- Full Node/CLI/web typecheck, root lint, native audit, 87-gate manifest, max-lines, localization,
+  formatting, diff checks, and changed-code quality pass. Full type-aware audit is clean for the
+  changed stack and otherwise has the single upstream #14738 warning at
+  `config/scripts/pr-test-loc-summary.test.mjs:88`.
 - The full 31-patch stack rebased conflict-free onto `origin/main@3908978ba4`; `git range-diff`
   marked every patch identical before this ledger amend.
+
+Published admission-fairness stage (#14747):
+
+- Baseline: device A exhausted the old global host cap; device B, initial retry, and reconnect
+  recovery failed. A naïve larger host share then starved ordinary waits.
+- Candidate: focused 2 files / 16 tests and broader 15 files / 159 tests passed.
+- Full Node/CLI/web typecheck, lint/audits, 87-gate manifest, max-lines, localization, formatting,
+  diff checks, and changed-code quality pass.
+- No live Electron claim is added; this stage changes admission and recovery contracts below the
+  renderer and needs no rendered UI proof.
+- The 32-patch stack rebased cleanly onto `origin/main@5b7f44278a`; range-diff marks every patch
+  identical.
 
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
@@ -616,6 +690,18 @@ topology, versions, and explicit gaps at every later checkpoint.
   or marked ready.
 - GitHub attached #14694 to STA-4150 automatically; posted exactly one retired-frame checkpoint
   comment and kept the ticket In Progress.
+- Locally rebased all 31 published patches plus the admission-fairness patch onto
+  `origin/main@5b7f44278a`. No rewritten branch, new branch, PR, or Linear mutation has been
+  published at this checkpoint.
+- Atomically force-pushed all 30 existing public stack branches with exact remote-OID leases and
+  created `sta-4150-browser-host-admission-fairness` with a must-not-exist lease. The first local
+  refspec construction failed before any remote update; the corrected atomic transaction updated
+  all 31 refs together.
+- Opened draft PR [#14747](https://github.com/stablyai/orca/pull/14747) on #14694. Its initial
+  inline shell argument expanded Markdown backticks; immediately replaced the description through
+  literal stdin and verified the final title, body, base, head, and draft state.
+- GitHub auto-attached #14747 to STA-4150. Posted exactly one admission-fairness checkpoint comment
+  and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

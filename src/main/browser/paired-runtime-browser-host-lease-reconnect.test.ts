@@ -34,6 +34,97 @@ afterEach(() => {
 })
 
 describe('PairedRuntimeBrowserHostLease reconnect', () => {
+  it('retries initial runtime_busy admission and attaches when capacity returns', async () => {
+    vi.useFakeTimers()
+    const attempts = mockAttempts()
+    const onError = vi.fn()
+    const onReconnected = vi.fn()
+    const onTransportLost = vi.fn()
+    const lease = createReconnectLease({
+      timeoutMs: 500,
+      reconnectRetryDelayMs: 50,
+      onError,
+      onReconnected,
+      onTransportLost
+    })
+    const starting = lease.start()
+    void starting.catch(() => undefined)
+    await Promise.resolve()
+
+    attempts[0]!.callbacks.onError(capacityError())
+    await vi.advanceTimersByTimeAsync(50)
+    expect(attempts).toHaveLength(2)
+    attempts[1]!.callbacks.onResponse(readyResponse(true))
+
+    await expect(starting).resolves.toMatchObject({ browserHostGeneration: 4 })
+    expect(attempts[0]!.close).toHaveBeenCalledOnce()
+    expect(onTransportLost).not.toHaveBeenCalled()
+    expect(onReconnected).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+    await lease.close()
+    expect(attempts[1]!.close).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('bounds initial runtime_busy retries and releases every attempt', async () => {
+    vi.useFakeTimers()
+    const closes: ReturnType<typeof vi.fn>[] = []
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+        const callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+        const close = vi.fn()
+        closes.push(close)
+        queueMicrotask(() => callbacks.onError(capacityError()))
+        return {
+          requestId: `browser-host-${closes.length}`,
+          close,
+          sendBinary: () => false
+        }
+      }
+    )
+    const onError = vi.fn()
+    const lease = createReconnectLease({
+      timeoutMs: 250,
+      reconnectRetryDelayMs: 50,
+      onError
+    })
+    const starting = lease.start()
+    void starting.catch(() => undefined)
+
+    await vi.advanceTimersByTimeAsync(300)
+
+    await expect(starting).rejects.toThrow('attach capacity retry expired')
+    expect(closes.length).toBeGreaterThan(1)
+    expect(closes.every((close) => close.mock.calls.length === 1)).toBe(true)
+    expect(onError).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels initial admission backoff without retaining a subscription', async () => {
+    vi.useFakeTimers()
+    const attempts = mockAttempts()
+    const onError = vi.fn()
+    const lease = createReconnectLease({
+      timeoutMs: 500,
+      reconnectRetryDelayMs: 50,
+      onError
+    })
+    const starting = lease.start()
+    void starting.catch(() => undefined)
+    await Promise.resolve()
+
+    attempts[0]!.callbacks.onError(capacityError())
+    await vi.advanceTimersByTimeAsync(0)
+    await lease.close()
+
+    await expect(starting).rejects.toThrow('Browser host lease is closed')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0]!.close).toHaveBeenCalledOnce()
+    expect(onError).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('restores exact authority across repeated loss and ignores stale callbacks', async () => {
     const attempts = mockAttempts()
     const onTransportLost = vi.fn()
@@ -65,6 +156,39 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     await lease.close()
     expect(attempts[1]!.close).toHaveBeenCalledOnce()
     expect(attempts[2]!.close).toHaveBeenCalledOnce()
+  })
+
+  it('retries runtime_busy during reconnect grace without replacing authority', async () => {
+    vi.useFakeTimers()
+    const attempts = mockAttempts()
+    const onError = vi.fn()
+    const onReconnected = vi.fn()
+    const lease = createReconnectLease({
+      reconnectGraceMs: 500,
+      reconnectRetryDelayMs: 50,
+      timeoutMs: 100,
+      onError,
+      onReconnected
+    })
+    const starting = lease.start()
+    await Promise.resolve()
+    attempts[0]!.callbacks.onResponse(readyResponse(true))
+    const authority = await starting
+
+    attempts[0]!.callbacks.onError(recoverableError())
+    await vi.advanceTimersByTimeAsync(50)
+    expect(attempts).toHaveLength(2)
+    attempts[1]!.callbacks.onError(capacityError())
+    await vi.advanceTimersByTimeAsync(100)
+    expect(attempts).toHaveLength(3)
+    attempts[2]!.callbacks.onResponse(readyResponse(true))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onReconnected).toHaveBeenCalledWith(authority)
+    expect(onError).not.toHaveBeenCalled()
+    await lease.close()
+    expect(attempts.every((attempt) => attempt.close.mock.calls.length === 1)).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('does not double-charge result capacity when outstanding commands replay', async () => {
@@ -359,6 +483,13 @@ function readyResponse(reconnect: boolean, browserHostGeneration = 4) {
 
 function recoverableError(): RemoteRuntimeClientError {
   return new RemoteRuntimeClientError('remote_runtime_unavailable', 'transport failed')
+}
+
+function capacityError(): RemoteRuntimeClientError {
+  return new RemoteRuntimeClientError(
+    'runtime_busy',
+    'browser-host capacity reached; retry with backoff'
+  )
 }
 
 function deferredCommandResult(): {
