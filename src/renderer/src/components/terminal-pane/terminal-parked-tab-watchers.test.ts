@@ -206,14 +206,6 @@ describe('terminal-parked-tab-watchers', () => {
     expect(startedWatchers[0].options.restoreTitleOnRegister).toBe(true)
   })
 
-  it('routes watcher sendInput to window.api.pty.write for the watched PTY', () => {
-    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
-    syncParked()
-
-    startedWatchers[0].options.sendInput('\x1b[?2031;1$y')
-    expect(ptyWrite).toHaveBeenCalledWith(PTY_ID, '\x1b[?2031;1$y')
-  })
-
   it('skips legacy non-UUID leaf ids instead of throwing in makePaneKey', () => {
     capturePanes([
       { ptyId: PTY_ID, paneId: 1, leafId: 'legacy-leaf-1', drivesTabTitle: true },

@@ -41,18 +41,6 @@ vi.mock('lucide-react-native', () => ({
   RefreshCw: 'RefreshCw'
 }))
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 // Why: mounting TerminalWebView arms the web-ready watchdog; tests must
 // unmount so the timer can't survive into later tests and fire in teardown.
 let activeRenderer: ReactTestRenderer | null = null
@@ -62,14 +50,9 @@ function createTerminalWebViewRenderer(
   props: Record<string, unknown> = {}
 ) {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  act(() => {
+    renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
+  })
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }

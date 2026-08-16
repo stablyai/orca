@@ -64,7 +64,12 @@ export function softSplitPaletteSection<T>(
  * it is not buried under ~50 leading rows. Remaining rows of both sections
  * follow (still under the hard cap). Projects/middle stay after both primaries.
  *
- * `leadingMoreCount` is the mid-list soft hint (rest + hard-cap overflow).
+ * Callers must re-emit the section header before each remainder — the interleave
+ * puts `leadingRest` after the trailing header, so unlabelled rows read as the
+ * wrong section.
+ *
+ * `leadingMoreCount` is the mid-list soft hint (rest resuming below + hard-cap
+ * overflow).
  * `trailingHardOverflowCount` is only rows past the hard cap — trailing rest is
  * already rendered, so a soft “more” would double-count scrollable rows.
  */

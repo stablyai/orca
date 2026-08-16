@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -93,7 +92,7 @@ export function ProjectGroupNameDialog({
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
-        <ImeEnterGuardedForm className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
               {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
@@ -130,7 +129,7 @@ export function ProjectGroupNameDialog({
                 : confirmLabel}
             </Button>
           </DialogFooter>
-        </ImeEnterGuardedForm>
+        </form>
       </DialogContent>
     </Dialog>
   )

@@ -33,6 +33,10 @@ function setState(overrides: Record<string, unknown> = {}): void {
     setHideCliCreatedWorkspaces: vi.fn(),
     hideDetachedHeadWorkspaces: false,
     setHideDetachedHeadWorkspaces: vi.fn(),
+    hideWorkspacesFromOtherDevices: false,
+    setHideWorkspacesFromOtherDevices: vi.fn(),
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: true,
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: vi.fn(),
     ...overrides
@@ -82,5 +86,35 @@ describe('SidebarWorkspaceFilterSection', () => {
     setState({ showSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false })
     render()
     expect(rowLabels()).not.toContain(EXEMPTION_LABEL)
+  })
+
+  it('shows the other-client filter when a remote server is configured', () => {
+    setState({
+      runtimeEnvironments: [{ id: 'server' }]
+    })
+    render()
+
+    expect(rowLabels()).toContain('Hide other-client workspaces')
+  })
+
+  it('keeps the other-client filter visible while the remote catalog loads', () => {
+    setState({ runtimeEnvironmentCatalogHydrated: false })
+    render()
+
+    expect(rowLabels()).toContain('Hide other-client workspaces')
+  })
+
+  it('hides the other-client filter for local-only clients', () => {
+    setState({ runtimeEnvironmentCatalogHydrated: true })
+    render()
+
+    expect(rowLabels()).not.toContain('Hide other-client workspaces')
+  })
+
+  it('keeps an enabled other-client filter available to turn off', () => {
+    setState({ hideWorkspacesFromOtherDevices: true })
+    render()
+
+    expect(rowLabels()).toContain('Hide other-client workspaces')
   })
 })

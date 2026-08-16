@@ -1,10 +1,10 @@
 import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { LinearWorkspace } from '../../../shared/types'
+import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
-} from '../../../shared/linear-links'
+} from '../../../shared/linear/links'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -20,7 +20,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
@@ -127,10 +126,6 @@ export function LinearApiKeyDialog({
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
         onKeyDown={(event) => {
-          // Bubbled from the field, so this still carries the IME state of the composing input.
-          if (isImeOwnedKeyboardEvent(event)) {
-            return
-          }
           if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
             event.preventDefault()
             void handleConnect()

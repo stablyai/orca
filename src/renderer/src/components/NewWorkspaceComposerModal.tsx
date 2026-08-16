@@ -19,13 +19,10 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import type {
-  GitHubWorkItem,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
@@ -271,12 +268,6 @@ function QuickTabBody({
         }
         event.preventDefault()
         onDismiss()
-        return
-      }
-
-      // Closes the gap isScreenSubmitShortcut leaves: it reads only isComposing, so an
-      // IME that reports keyCode 229 without it would still submit mid-composition.
-      if (isImeOwnedKeyboardEvent(event)) {
         return
       }
 

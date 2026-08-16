@@ -98,8 +98,13 @@ function replayEvent(textarea: HTMLTextAreaElement, recorded: RecordedEvent): vo
   textarea.dispatchEvent(buildEvent(recorded))
 }
 
-async function replayTrace(trace: RecordedTrace): Promise<string> {
+type PreeditSample = { data: string; shown: boolean }
+
+async function replayTrace(
+  trace: RecordedTrace
+): Promise<{ stream: string; preedits: PreeditSample[] }> {
   const { emitted, terminal, textarea } = openTerminal()
+  const preedits: PreeditSample[] = []
   for (const recorded of trace.dom) {
     // Keys were driven 20 ms apart, so every physical key event began its own task; the composition
     // and input events the IME derived from one key stay in that key's task, which is what lets
@@ -108,12 +113,16 @@ async function replayTrace(trace: RecordedTrace): Promise<string> {
       await nextEventLoop()
     }
     replayEvent(textarea, recorded)
+    if (recorded.type === 'compositionupdate' && recorded.data) {
+      const view = terminal.element?.querySelector('.composition-view')
+      preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
+    }
   }
   // Two turns: the commit's deferred send, then the late-native-commit window it opens.
   await nextEventLoop()
   await nextEventLoop()
   terminal.dispose()
-  return emitted.join('')
+  return { stream: emitted.join(''), preedits }
 }
 
 describe.each([
@@ -132,11 +141,11 @@ describe.each([
   })
 
   it('reproduces the recorded onData stream exactly', async () => {
-    expect(await replayTrace(trace)).toBe(trace.onData.join(''))
+    expect((await replayTrace(trace)).stream).toBe(trace.onData.join(''))
   })
 
   it('sends each committed syllable once per repetition', async () => {
-    const stream = await replayTrace(trace)
+    const { stream } = await replayTrace(trace)
     expect(stream.match(/한/g)).toHaveLength(trace.repetitions)
     expect(stream.match(/글/g)).toHaveLength(trace.repetitions)
     // The ASCII typed between the two commits is the part a mis-scoped commit swallows.
@@ -144,9 +153,18 @@ describe.each([
   })
 
   it('matches the bytes the PTY received on the recorded run', async () => {
-    const stream = await replayTrace(trace)
+    const { stream } = await replayTrace(trace)
     // The tty turned each CR into LF, so compare against the recorded lines plus that conversion.
     const lines = Buffer.from(trace.receivedBytes.join(''), 'hex').toString('utf8')
     expect(stream.replaceAll('\r', '\n')).toBe(lines)
+  })
+
+  // Why: bytes reaching the PTY say nothing about whether the user could SEE what they were
+  // composing. A preedit written into a hidden overlay types blind and still passes every
+  // onData assertion above, which is how that class of defect has shipped before.
+  it('keeps the preedit visible for every recorded composition update', async () => {
+    const { preedits } = await replayTrace(trace)
+    expect(preedits.length).toBeGreaterThan(0)
+    expect(preedits.filter((sample) => !sample.shown)).toEqual([])
   })
 })

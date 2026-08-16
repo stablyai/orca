@@ -252,6 +252,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+    forwardElectronProcessLogs(app, testInfo)
     try {
       const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
@@ -261,7 +262,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
-    forwardElectronProcessLogs(app, testInfo)
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.

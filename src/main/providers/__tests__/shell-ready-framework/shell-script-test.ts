@@ -62,6 +62,8 @@ export async function shellScriptTest(
 
     const env: Record<string, string> = {
       ...config.env,
+      // Why: these examples inspect startup-file discovery, not the PTY-owner protocol stream.
+      ORCA_SHELL_STARTUP_IDENTITY: '0',
       // Why: the framework creates user startup files under testHome after
       // computing the wrapper config; route wrapper discovery to that fixture.
       HOME: testHome,

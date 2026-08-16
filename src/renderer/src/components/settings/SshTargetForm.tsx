@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileKey } from 'lucide-react'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -107,7 +106,7 @@ export function SshTargetForm({
         onPointerDownOutside={preventOutsideDismiss}
         onInteractOutside={preventOutsideDismiss}
       >
-        <ImeEnterGuardedForm
+        <form
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(e) => {
             e.preventDefault()
@@ -259,7 +258,7 @@ export function SshTargetForm({
                 : translate('auto.components.settings.SshTargetForm.9518545cb6', 'Add Target')}
             </Button>
           </DialogFooter>
-        </ImeEnterGuardedForm>
+        </form>
       </DialogContent>
     </Dialog>
   )

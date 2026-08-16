@@ -5,22 +5,18 @@ import {
 } from '../ai-vault/cached-session-list'
 import { deleteAiVaultSessionFile } from '../ai-vault/session-delete'
 import { invalidateSessionParseCacheEntry } from '../ai-vault/session-scanner-parse-cache'
+import { invalidateAiVaultBackgroundCache } from '../ai-vault/session-scanner-background'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
   AiVaultDeleteSessionArgs,
-  AiVaultDeleteSessionResult,
-  AiVaultSessionLiveness
+  AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
 
 // Which cache backs the multi-host list is ai-vault.ts's concern, so its
 // invalidation is injected rather than reached into from here.
 type AiVaultDeleteDeps = {
   invalidateMultiHostListCache: () => void
-  getSessionLiveness: (target: {
-    agent: AiVaultAgent
-    sessionId: string | undefined
-    filePath: string
-  }) => Promise<AiVaultSessionLiveness>
+  invalidateBackgroundCache?: (paths: string[]) => Promise<void>
 }
 
 // Binds the delete orchestration to the caller's cache-invalidation seam.
@@ -40,16 +36,13 @@ export async function deleteAiVaultSession(
   // The validator tolerates a malformed agent/filePath but destructures `args`,
   // so an absent payload is defaulted here to keep the never-throws boundary.
   const wslHomeDirs = await getAiVaultWslHomeDirs()
-  const result = await deleteAiVaultSessionFile(
-    {
-      agent: args?.agent as AiVaultAgent,
-      sessionId: args?.sessionId,
-      filePath: args?.filePath ?? '',
-      executionHostId: args?.executionHostId,
-      wslHomeDirs
-    },
-    deps
-  )
+  const result = await deleteAiVaultSessionFile({
+    agent: args?.agent as AiVaultAgent,
+    sessionId: args?.sessionId,
+    filePath: args?.filePath ?? '',
+    executionHostId: args?.executionHostId,
+    wslHomeDirs
+  })
 
   if (result.outcome === 'deleted') {
     // Three caches could otherwise resurrect it: the desktop per-host leg
@@ -61,6 +54,11 @@ export async function deleteAiVaultSession(
     // what the renderer echoes back as filePath), so invalidate with that exact
     // key — resolve() could normalise it away from the stored key and miss.
     invalidateSessionParseCacheEntry(args?.filePath ?? '')
+    await (deps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)([
+      args?.filePath ?? ''
+    ]).catch((error) => {
+      console.warn('[ai-vault] background cache invalidation failed:', error)
+    })
   }
 
   return result

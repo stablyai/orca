@@ -183,6 +183,57 @@ describe('closeTerminalTab', () => {
     isWebTerminalSurfaceTabIdMock.mockReturnValue(false)
   })
 
+  it('retires exact resume authority when explicit cleanup arrives after the tab disappeared', () => {
+    const closeTab = vi.fn()
+    const onClosed = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('retired-worker-tab', {
+      hostCloseReason: 'cleanup',
+      localPtyTeardownOwnedExternally: true,
+      onClosed
+    })
+
+    expect(closeTab).toHaveBeenCalledWith('retired-worker-tab', {
+      reason: 'cleanup',
+      localPtyTeardownOwnedExternally: true
+    })
+    expect(onClosed).toHaveBeenCalledOnce()
+  })
+
+  it('retires exact resume authority when a user close arrives after the tab disappeared', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('retired-worker-tab')
+
+    expect(closeTab).toHaveBeenCalledWith('retired-worker-tab', { reason: 'user' })
+  })
+
+  it.each([
+    ['local PTY exit', { reason: 'pty-exit' as const }],
+    ['paired host PTY exit', { hostCloseReason: 'pty-exit' as const }]
+  ])('preserves missing-tab recovery authority for %s', (_label, options) => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('unexpectedly-lost-tab', options)
+
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
   it('delegates host-backed terminal closes to the paired runtime', () => {
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)

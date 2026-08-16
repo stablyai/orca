@@ -1,8 +1,0 @@
-{
-  "name": "@orca/react-native-terminal-input",
-  "version": "0.0.1",
-  "private": true,
-  "peerDependencies": {
-    "react-native": "*"
-  }
-}

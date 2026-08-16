@@ -1,7 +1,7 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
 import { Platform, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
-import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import {
   TerminalWebViewEngineErrorOverlay,

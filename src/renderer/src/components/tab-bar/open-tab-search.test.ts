@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  Tab,
-  TabContentType,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { Tab, TabContentType } from '../../../../shared/tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
 import type { SearchableSimulatorTab } from '@/lib/simulator-palette-search'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'

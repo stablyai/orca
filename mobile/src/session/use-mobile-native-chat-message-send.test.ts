@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
+const typeCommandWithOutcome = vi.fn()
 vi.mock('./mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
+  typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
   openMobileNativeChatSendBudget: () => Date.now() + 15_000,
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
@@ -80,11 +82,12 @@ describe('useMobileNativeChatMessageSend', () => {
     (clearInputWrite.mock.calls[0]?.[0] ?? {}) as { clearInput?: string }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     sendWithOutcome.mockReset()
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()
     clearInputWrite.mockResolvedValue(true)
+    typeCommandWithOutcome.mockReset()
+    typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
@@ -216,24 +219,46 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(onCommandSend).toHaveBeenCalledWith('/clear')
   })
 
-  it('never creates an optimistic echo for an unknown slash token', async () => {
-    // `/model` is not in Claude's autocomplete catalog, but the session-option
-    // recorder still recognizes it without claiming a generic command ran.
-    mount(() => null)
-    await act(async () => {
-      await api!.send('/model sonnet')
-    })
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
-  })
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s composer slash sends pasted',
+    async (agent) => {
+      // `/model` is not in Claude's autocomplete catalog, but the session-option
+      // recorder still recognizes it without claiming a generic command ran.
+      mount(() => null, agent)
+      await act(async () => {
+        await api!.send('/model sonnet')
+      })
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
+      expect(sendWithOutcome).toHaveBeenCalledOnce()
+      expect(typeCommandWithOutcome).not.toHaveBeenCalled()
+    }
+  )
 
-  it('classifies per agent: /model is a catalog command for Codex', async () => {
+  it('types Codex composer slash sends instead of pasting them', async () => {
     mount(() => null, 'codex')
     await act(async () => {
       await api!.send('/model')
     })
     expect(acceptSend).not.toHaveBeenCalled()
     expect(onCommandSend).toHaveBeenCalledWith('/model')
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('keeps Codex skill sends pasted', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.send('$ref-oss')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('$ref-oss')
+    expect(sendWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '$ref-oss', terminal: 'term' })
+    )
+    expect(typeCommandWithOutcome).not.toHaveBeenCalled()
   })
 
   it('holds only chat sends for transcript confirmation on a lost ack', async () => {
@@ -249,16 +274,44 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
   })
 
-  it('dispatchCommand surfaces the outcome without echo or composer sync', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s session-option commands pasted',
+    async (agent) => {
+      mount(() => ({ text: DRAFT, createdAt: 1 }), agent)
+      let outcome: string | undefined
+      await act(async () => {
+        outcome = await api!.dispatchCommand('/model sonnet', { delivery: 'type' })
+      })
+      expect(outcome).toBe('accepted')
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).not.toHaveBeenCalled()
+      expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+    }
+  )
+
+  it('routes typed picker commands around the pasted composer-text send', async () => {
+    mount(() => null, 'codex')
     let outcome: string | undefined
     await act(async () => {
-      outcome = await api!.dispatchCommand('/model sonnet')
+      outcome = await api!.dispatchCommand('/model', { delivery: 'type' })
     })
     expect(outcome).toBe('accepted')
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).not.toHaveBeenCalled()
-    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('types Codex session-option commands without caller delivery metadata', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.dispatchCommand('/model')
+    })
+
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
   })
 
   it('binds classification to the agent that started the send', async () => {

@@ -65,6 +65,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
+    onSelectAll: vi.fn(),
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
     onSplitDown: vi.fn(),
@@ -148,6 +149,7 @@ describe('TerminalContextMenu', () => {
     })
     const keybindings = {
       'terminal.copySelection': ['Ctrl+Shift+C', 'Ctrl+Insert', 'Ctrl+C'],
+      'terminal.selectAll': ['Ctrl+Shift+A'],
       'terminal.splitRight': ['Mod+Shift+D', 'Alt+Shift+Right'],
       'terminal.splitDown': ['Alt+Shift+D', 'Mod+Shift+Minus']
     } satisfies KeybindingOverrides
@@ -155,6 +157,7 @@ describe('TerminalContextMenu', () => {
     renderMenu({ keybindings })
 
     expect(shortcuts.list).toContain('Ctrl+Shift+C')
+    expect(shortcuts.list).toContain('Ctrl+Shift+A')
     expect(shortcuts.list).toContain('Ctrl+V')
     expect(shortcuts.list).toContain('Ctrl+Shift+D')
     expect(shortcuts.list).toContain('Alt+Shift+D')

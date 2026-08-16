@@ -1,13 +1,14 @@
 // Why: the slug → Repo cache and its synchronous lookup live here (separate from
 // repo-slug-index.ts) so store slices can import the sync lookup without pulling
 // in repo-slug-index's `@/store` dependency, which would form an import cycle.
-import type { GlobalSettings, Repo } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForRepoRuntimeOwner } from './repo-runtime-owner'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey
-} from '../../../shared/github-repository-identity-key'
+} from '../../../shared/github/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>

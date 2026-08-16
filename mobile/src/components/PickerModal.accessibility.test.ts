@@ -24,7 +24,6 @@ describe('PickerModal accessibility', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
         throw new Error(String(args[0]))

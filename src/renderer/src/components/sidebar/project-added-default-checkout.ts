@@ -5,7 +5,7 @@ import type {
   AddRepoDefaultCheckoutHandoffSource,
   EventProps
 } from '../../../../shared/telemetry-events'
-import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'

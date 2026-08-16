@@ -80,7 +80,7 @@ export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay
   const validated = MobileRelayHostOverlaySchema.parse(overlay)
   return mutateOverlays((overlays) => {
     const index = overlays.findIndex(({ hostId }) => hostId === validated.hostId)
-    if (index < 0) {
+    if (index === -1) {
       return [...overlays, validated]
     }
     const next = overlays.slice()

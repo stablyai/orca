@@ -164,7 +164,7 @@ describe('AgentKanbanBoard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
     expect(
-      await screen.findByText('0 of 0 agents shown', undefined, MAP_LOAD_TIMEOUT)
+      await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT)
     ).toBeInTheDocument()
     expect(screen.queryByText('Live containment map')).not.toBeInTheDocument()
     // The map has no rail of its own; its filters live in the shared toolbar.
@@ -189,17 +189,17 @@ describe('AgentKanbanBoard', () => {
       })
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
-    expect(
-      await screen.findByText('2 of 2 agents shown', undefined, MAP_LOAD_TIMEOUT)
-    ).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT))
+    // The count lives in the panel header now, beside the sections it explains.
+    const shown = await screen.findByText('of 2 agents shown')
+    expect(shown.parentElement).toHaveTextContent('2 of 2 agents shown')
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
-    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Working/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Agent states/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Working/ }))
 
-    expect(await screen.findByText('1 of 2 agents shown')).toBeInTheDocument()
-    // A muted state counts toward the Filter badge like any other filter. The
-    // open menu hides the trigger from the a11y tree, so read it by its label.
-    expect(screen.getByRole('menu')).toHaveAccessibleName('Filter 1')
+    expect(shown.parentElement).toHaveTextContent('1 of 2 agents shown')
+    // A muted state counts toward the Filter badge like any other filter.
+    expect(screen.getByRole('button', { name: /^Filter/ })).toHaveAccessibleName(/1/)
   })
 
   it('offers agent states only on the map, where no column separates them', async () => {
@@ -211,7 +211,7 @@ describe('AgentKanbanBoard', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT))
 
     expect(await screen.findByText('Agent states')).toBeInTheDocument()
   })
@@ -225,8 +225,9 @@ describe('AgentKanbanBoard', () => {
     expect(
       screen.queryByRole('button', { name: 'Open Empty child worktree details' })
     ).not.toBeInTheDocument()
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
-    const workspaceToggle = await screen.findByRole('menuitemcheckbox', {
+    fireEvent.click(screen.getByRole('button', { name: /^Filter/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Workspace/ }))
+    const workspaceToggle = await screen.findByRole('checkbox', {
       name: /Workspaces without agents/
     })
     fireEvent.click(workspaceToggle)
@@ -244,6 +245,103 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByText('Workspaces without agents')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(
+      screen.queryByRole('button', { name: 'Open Empty child worktree details' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('counts hidden orchestration links and restores them from the active chip', async () => {
+    renderBoard([
+      card({ paneKey: 'parent', worktreeId: 'parent-worktree' }),
+      card({ paneKey: 'child', worktreeId: 'child-worktree', parentPaneKey: 'parent' })
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT))
+    fireEvent.click(screen.getByRole('button', { name: /^Workspace/ }))
+
+    const linksToggle = screen.getByRole('checkbox', { name: /Orchestration links/ })
+    fireEvent.click(linksToggle)
+
+    expect(linksToggle).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: /^Filter/ })).toHaveAccessibleName(/1/)
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(screen.getByText('Orchestration links hidden')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Orchestration links hidden' }))
+    expect(screen.queryByText('Orchestration links hidden')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Filter/ })).not.toHaveAccessibleName(/1/)
+  })
+
+  it('shows agentless workspaces across hosts without a host filter', async () => {
+    renderBoard([card({ paneKey: 'busy' })], {
+      workspaces: [
+        workspace(),
+        workspace({ worktreeId: 'local-empty', worktreeName: 'Local empty' }),
+        workspace({
+          worktreeId: 'ssh-empty',
+          worktreeName: 'SSH empty',
+          hostKind: 'ssh',
+          executionHostId: 'ssh:test'
+        })
+      ]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT))
+    fireEvent.click(screen.getByRole('button', { name: /^Workspace/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Workspaces without agents/ }))
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: 'Open Local empty worktree details' },
+        MAP_LOAD_TIMEOUT
+      )
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: 'Open SSH empty worktree details' },
+        MAP_LOAD_TIMEOUT
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('replaces board and content filters when applying a quick view', async () => {
+    renderBoard(
+      [
+        card({
+          paneKey: 'one',
+          repoId: 'r1',
+          repoName: 'One',
+          workspaceStatusId: 'active',
+          workspaceStatusLabel: 'Active'
+        }),
+        card({ paneKey: 'two', repoId: 'r2', repoName: 'Two', worktreeId: 'w2' })
+      ],
+      {
+        workspaces: [workspace(), workspace({ worktreeId: 'empty', worktreeName: 'Empty child' })]
+      }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Map' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Filter/ }, MAP_LOAD_TIMEOUT))
+    fireEvent.click(screen.getByRole('button', { name: /^Project/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /One/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Workspace/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Active/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /No review/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Workspaces without agents/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Everything' }))
+
+    expect(screen.queryByText('One', { selector: 'span.rounded-full' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Active', { selector: 'span.rounded-full' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Review: No review')).not.toBeInTheDocument()
+    expect(screen.getByText('of 2 agents shown').parentElement).toHaveTextContent(
+      '2 of 2 agents shown'
+    )
+    fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(
       screen.queryByRole('button', { name: 'Open Empty child worktree details' })
     ).not.toBeInTheDocument()
@@ -370,7 +468,7 @@ describe('AgentKanbanBoard', () => {
     renderBoard([card({ bucket: 'done' })])
 
     expect(screen.getByText('完了')).toBeInTheDocument()
-    expect(screen.getByLabelText('エージェントを検索')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent を検索')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
   })
 
@@ -502,7 +600,7 @@ describe('AgentKanbanBoard', () => {
     expect(ackAgent).toHaveBeenCalledWith('pk-ack')
   })
 
-  it('keeps an acknowledged result visible as Idle in the map without review state', async () => {
+  it('keeps an acknowledged result visible as a seen finish in the map without review state', async () => {
     const fresh = card({
       paneKey: 'fresh-result',
       bucket: 'done',
@@ -530,7 +628,9 @@ describe('AgentKanbanBoard', () => {
         initialView="map"
       />
     )
-    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass(
+      'fleet-status-done-seen'
+    )
     expect(screen.getByTestId('terminal-panel')).toBeInTheDocument()
 
     view.unmount()
@@ -543,6 +643,8 @@ describe('AgentKanbanBoard', () => {
         initialView="map"
       />
     )
-    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass('fleet-status-idle')
+    expect(screen.getByRole('button', { name: /Fresh result/ })).toHaveClass(
+      'fleet-status-done-seen'
+    )
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
+import { githubAvatarIcon, githubAvatarSlug, sanitizeRepoIcon } from './repo-icon'
 
 const PNG_1X1_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
@@ -165,5 +165,26 @@ describe('sanitizeRepoIcon', () => {
     expect(
       githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'github.com@evil.example' })
     ).toMatchObject({ src: 'https://github.com/acme.png?size=64' })
+  })
+})
+
+describe('githubAvatarSlug', () => {
+  const upstream = { owner: 'upstream-org', repo: 'rocket' }
+
+  it('keeps the upstream owner for a same-name fork, case-insensitively', () => {
+    expect(githubAvatarSlug({ owner: 'acme', repo: 'rocket' }, upstream)).toEqual(upstream)
+    expect(githubAvatarSlug({ owner: 'acme', repo: 'RocKet' }, upstream)).toEqual(upstream)
+  })
+
+  it('keeps the fork own owner once it has been renamed', () => {
+    const origin = { owner: 'acme', repo: 'rocket-pro' }
+    expect(githubAvatarSlug(origin, upstream)).toEqual(origin)
+  })
+
+  it('falls back to whichever identity is known', () => {
+    const origin = { owner: 'acme', repo: 'rocket-pro' }
+    expect(githubAvatarSlug(origin, null)).toEqual(origin)
+    expect(githubAvatarSlug(null, upstream)).toEqual(upstream)
+    expect(githubAvatarSlug(null, undefined)).toBeNull()
   })
 })

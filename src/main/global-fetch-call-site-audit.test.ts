@@ -15,9 +15,10 @@ import { describe, expect, it } from 'vitest'
 // and update the count.
 const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // HTTP call sites — body consumed or cancelled on every path, including !ok
-  ['main/artifacts/artifact-cloud-service.ts', 1],
+  ['main/artifacts/artifact-cloud-request.ts', 1],
   ['main/azure-devops/azure-devops-api-request.ts', 1],
   ['main/bitbucket/client.ts', 1],
+  ['main/bitbucket/user-request.ts', 1],
   ['main/gitea/client.ts', 1],
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
@@ -27,7 +28,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/speech/openai-transcription-client.ts', 1],
   // fetch appears only inside injected-page script source strings, not as a
   // call this process makes
-  ['main/amp/hook-service.ts', 1],
+  ['main/amp/agent-status-plugin-source.ts', 1],
   ['main/opencode/hook-service.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP

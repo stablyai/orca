@@ -4,6 +4,7 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   commandSeparator,
+  isPosixStartupShell,
   quoteStartupArg,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
@@ -22,11 +23,15 @@ export function buildAiVaultResumeCommand(args: {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
-  // Why: OMP's `--resume` accepts an absolute transcript path, which resolves
-  // regardless of which session-dir root (custom OMP_CODING_AGENT_DIR / WSL
-  // home) the file was discovered under, where an id-prefix lookup scoped to
-  // the default store would miss it. Falls back to the id if no path is known.
-  const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
+  // Why: OMP's and Prime Agent's `--resume` accept an absolute transcript path,
+  // which resolves regardless of which session-dir root (custom
+  // OMP_CODING_AGENT_DIR / PRIME_AGENT_CODING_AGENT_DIR / WSL home) the file was
+  // discovered under, where an id-prefix lookup scoped to the default store
+  // would miss it. Falls back to the id if no path is known.
+  const resumeTarget =
+    (agent === 'omp' || agent === 'prime-agent') && resumeFilePath?.trim()
+      ? resumeFilePath.trim()
+      : sessionId
   const sessionArg =
     shell === 'cmd'
       ? quoteWindowsCmdArg(resumeTarget)
@@ -94,7 +99,7 @@ function buildResumeShellCommandForShell(args: {
   shell: Exclude<AgentStartupShell, 'cmd'>
 }): string {
   const { cwd, codexHome, shell } = args
-  if (shell === 'posix') {
+  if (isPosixStartupShell(shell)) {
     // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
     // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
     const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
@@ -167,10 +172,12 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
-    // Why: OMP resumes by absolute transcript path (see buildAiVaultResumeCommand),
-    // but the `--resume <arg>` invocation form is identical to the others here.
+    // Why: OMP and Prime Agent resume by absolute transcript path (see
+    // buildAiVaultResumeCommand), but the `--resume <arg>` invocation form is
+    // identical to the others here.
     // falls through
     case 'omp':
+    case 'prime-agent':
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`

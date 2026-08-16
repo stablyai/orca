@@ -2,13 +2,13 @@ export const DEFAULT_TERMINAL_FONT_WEIGHT = 500
 export const TERMINAL_FONT_WEIGHT_MIN = 100
 export const TERMINAL_FONT_WEIGHT_MAX = 900
 export const TERMINAL_FONT_WEIGHT_STEP = 100
-const DEFAULT_TERMINAL_FONT_WEIGHT_BOLD = 700
+export const DEFAULT_TERMINAL_FONT_WEIGHT_BOLD = 700
 
-export function normalizeTerminalFontWeight(fontWeight: number | null | undefined): number {
+function normalizeWeight(fontWeight: number | null | undefined, fallback: number): number {
   const numericFontWeight = typeof fontWeight === 'number' ? fontWeight : Number.NaN
 
   if (!Number.isFinite(numericFontWeight)) {
-    return DEFAULT_TERMINAL_FONT_WEIGHT
+    return fallback
   }
 
   return Math.min(
@@ -17,17 +17,24 @@ export function normalizeTerminalFontWeight(fontWeight: number | null | undefine
   )
 }
 
-export function resolveTerminalFontWeights(fontWeight: number | null | undefined): {
+export function normalizeTerminalFontWeight(fontWeight: number | null | undefined): number {
+  return normalizeWeight(fontWeight, DEFAULT_TERMINAL_FONT_WEIGHT)
+}
+
+export function normalizeTerminalFontWeightBold(fontWeight: number | null | undefined): number {
+  return normalizeWeight(fontWeight, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD)
+}
+
+// Numeric weight gaps do not guarantee distinct font faces, so bold stays independently configurable.
+export function resolveTerminalFontWeights(
+  fontWeight: number | null | undefined,
+  fontWeightBold: number | null | undefined
+): {
   fontWeight: number
   fontWeightBold: number
 } {
-  const normalizedFontWeight = normalizeTerminalFontWeight(fontWeight)
-
   return {
-    fontWeight: normalizedFontWeight,
-    fontWeightBold: Math.min(
-      TERMINAL_FONT_WEIGHT_MAX,
-      Math.max(DEFAULT_TERMINAL_FONT_WEIGHT_BOLD, normalizedFontWeight + 200)
-    )
+    fontWeight: normalizeTerminalFontWeight(fontWeight),
+    fontWeightBold: normalizeTerminalFontWeightBold(fontWeightBold)
   }
 }

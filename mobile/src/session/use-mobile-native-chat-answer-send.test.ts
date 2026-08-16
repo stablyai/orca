@@ -1,11 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { AgentType } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
-import type { AskPrompt } from './mobile-native-chat-ask'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
@@ -54,7 +54,6 @@ describe('useMobileNativeChatAnswerSend', () => {
   beforeEach(() => {
     onAccepted = vi.fn()
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
   })
@@ -93,20 +92,9 @@ describe('useMobileNativeChatAnswerSend', () => {
     mountedClient = client
     mountedOnSendError = onSendError
     mountedAgent = agent
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { enabled: true }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { enabled: true }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   async function setEnabled(enabled: boolean): Promise<void> {

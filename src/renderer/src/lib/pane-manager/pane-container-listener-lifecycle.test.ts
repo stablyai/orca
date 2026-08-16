@@ -28,6 +28,7 @@ function makePane(): ManagedPaneInternal {
     ligaturesAddon: null,
     panePointerDownHandler: vi.fn(),
     paneMouseEnterHandler: vi.fn(),
+    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }

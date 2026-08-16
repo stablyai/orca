@@ -117,7 +117,8 @@ describe('SshRelaySession managed hooks', () => {
     )
     expect(muxRequestMock.mock.calls[pluginsIndex]?.[1]).toMatchObject({
       piExtensionSource: expect.stringContaining('/hook/pi'),
-      ompExtensionSource: expect.stringContaining('/hook/omp')
+      ompExtensionSource: expect.stringContaining('/hook/omp'),
+      primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent')
     })
     expect(sftp).not.toHaveBeenCalled()
     expect(muxRequestMock.mock.invocationCallOrder[pluginsIndex]).toBeLessThan(

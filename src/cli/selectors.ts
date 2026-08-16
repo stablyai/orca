@@ -1,6 +1,7 @@
 import { resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
+  RuntimeTerminalListResult,
   RuntimeWorktreeListResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
@@ -178,20 +179,35 @@ export async function resolveTerminalSelector(
       'Empty pty id after pty:. Use a ptyId from `orca terminal list --json`.'
     )
   }
-  // Why: layouts are ~30% of large listings and unused for id resolve; only
-  // explicit false opts out of the pre-flag include default.
-  const listed = await client.call<{
-    terminals: { handle: string; ptyId: string | null }[]
-    totalCount?: number
-    truncated?: boolean
-  }>('terminal.list', { limit: 5000, includeVisualLayouts: false })
-  const match = listed.result.terminals.find((terminal) => terminal.ptyId === ptyId)
+  const params = {
+    limit: 200,
+    ptyId,
+    requireFreshPtyLiveness: true,
+    includeVisualLayouts: false
+  }
+  let listed: { result: RuntimeTerminalListResult }
+  try {
+    listed = await client.call<RuntimeTerminalListResult>('terminal.list', params)
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'terminal_liveness_unavailable') {
+      throw error
+    }
+    // Why: transient controller inventory gaps on SSH do not prove the cached terminal is dead.
+    listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
+      limit: params.limit,
+      ptyId,
+      includeVisualLayouts: false
+    })
+  }
+  const match = listed.result.terminals.find(
+    (terminal) => terminal.ptyId === ptyId && terminal.connected
+  )
   if (!match) {
     if (listed.result.truncated) {
       const total = listed.result.totalCount ?? listed.result.terminals.length
       throw new RuntimeClientError(
         'terminal_not_found',
-        `No terminal with ptyId ${ptyId} in the first ${listed.result.terminals.length} of ${total} terminals (list truncated). Re-list with a worktree filter if the fleet is large.`
+        `No terminal with ptyId ${ptyId} in the first ${listed.result.terminals.length} of ${total} terminals (list truncated). Upgrade the host, or re-list with a worktree filter and pass the resulting handle.`
       )
     }
     throw new RuntimeClientError(
@@ -279,6 +295,14 @@ export async function getEmulatorWorktreeSelector(
   }
   if (client.isRemote) {
     return undefined
+  }
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    return terminalWorktreeId
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  if (folderWorkspaceId?.startsWith('folder:')) {
+    return folderWorkspaceId
   }
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)

@@ -1,6 +1,9 @@
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerRuntimeHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
@@ -12,6 +15,7 @@ const ROWS = 24
 const openUrlMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
+const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
 const runtimeSourceOwner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
 const sshSourceOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
 
@@ -104,26 +108,34 @@ beforeEach(() => {
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock
   }))
+  registerRuntimeHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
 })
 
 afterEach(() => {
+  registerRuntimeHttpLinkBrowserOpener(null)
   vi.unstubAllGlobals()
 })
 
 describe('terminal HTTP links on a runtime-hosted pane', () => {
   const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
 
-  it('sends an OSC 8 hyperlink to the system browser', () => {
+  it('opens an OSC 8 hyperlink on the owning runtime', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, sourceOwner: runtimeSourceOwner })).toBe(
       true
     )
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: URL,
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'env-1'
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
-  it('sends a WebLinksAddon click to the system browser', () => {
+  it('opens a WebLinksAddon click on the owning runtime', () => {
     const { terminal } = makeTerminal()
 
     expect(
@@ -134,11 +146,14 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       })
     ).toBe(true)
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRuntimeEnvironmentId: 'env-1', url: URL })
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('sends a click-fallback activation to the system browser', () => {
+  it('opens a click-fallback activation on the owning runtime', () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
@@ -149,12 +164,15 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1](clickEvent())
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRuntimeEnvironmentId: 'env-1', url: URL })
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 
-  it('never prompts for the in-app routing preference it could not honor', () => {
+  it('uses the persisted routing preference without prompting again', () => {
     const requestOpenLinksInAppPreference = vi.fn(() => Promise.resolve(true))
 
     handleOscLink(URL, clickEvent(), {
@@ -164,7 +182,8 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
     })
 
     expect(requestOpenLinksInAppPreference).not.toHaveBeenCalled()
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 })
 

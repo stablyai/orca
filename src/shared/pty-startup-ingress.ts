@@ -6,6 +6,7 @@ import {
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
+import { answerEachCookedEchoSafeQueryReply } from './terminal-query-reply'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -90,6 +91,13 @@ export class PtyStartupIngress {
   snapshotBarrier(): number {
     this.enqueue({ kind: 'snapshot' })
     return this.rawHighWater
+  }
+
+  // Live color replies reuse startup's cooked-echo containment (#13137).
+  answerLiveQueryReply(reply: string): boolean {
+    return !this.closed && reply.length > 0
+      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part))
+      : false
   }
 
   drainAndClose(): number {

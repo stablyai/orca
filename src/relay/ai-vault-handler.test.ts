@@ -3,10 +3,18 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../shared/ai-vault-types'
-import { SSH_AI_VAULT_LIST_SESSIONS_METHOD } from '../shared/ssh-ai-vault-relay'
+import {
+  SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD
+} from '../shared/ssh-ai-vault-relay'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
+import type { RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
+import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
+import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { AiVaultHandler } from './ai-vault-handler'
+import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
+import type { RelayAiVaultServiceApi } from './ai-vault-service-client-state'
 
 type RequestHandler = (params: Record<string, unknown>, context: RequestContext) => Promise<unknown>
 
@@ -19,6 +27,49 @@ afterEach(async () => {
 })
 
 describe('AiVaultHandler', () => {
+  it('resolves an exact transcript title without invoking the broad scanner', async () => {
+    const remoteHome = await makeTemporaryHome()
+    const transcriptPath = join(remoteHome, 'session.jsonl')
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({
+          timestamp: '2026-07-26T01:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'ssh-session', cwd: join(remoteHome, 'repo') }
+        }),
+        JSON.stringify({
+          timestamp: '2026-07-26T01:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Resolve only this transcript' }]
+          }
+        })
+      ].join('\n')
+    )
+    const scanRemoteSessions = vi.fn().mockResolvedValue(emptyResult())
+    const dispatcher = createMockDispatcher()
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome,
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: createTestService(remoteHome, getRemoteHostPlatform('linux-x64'), scanRemoteSessions)
+    })
+
+    await expect(
+      dispatcher.call(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, {
+        requests: [
+          { agent: 'codex', sessionId: 'ssh-session', transcriptPath },
+          { agent: 'codex', sessionId: 'other', transcriptPath: '' }
+        ]
+      })
+    ).resolves.toEqual({
+      titles: [{ agent: 'codex', sessionId: 'ssh-session', title: 'Resolve only this transcript' }]
+    })
+    expect(scanRemoteSessions).not.toHaveBeenCalled()
+  })
+
   it('discovers and parses sessions entirely on the relay host', async () => {
     const remoteHome = await makeTemporaryHome()
     const transcriptPath = join(
@@ -53,7 +104,8 @@ describe('AiVaultHandler', () => {
     const dispatcher = createMockDispatcher()
     new AiVaultHandler(dispatcher.value, {
       remoteHome,
-      hostPlatform: getRemoteHostPlatform('linux-x64')
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: createTestService(remoteHome, getRemoteHostPlatform('linux-x64'))
     })
 
     const result = (await dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {
@@ -77,7 +129,11 @@ describe('AiVaultHandler', () => {
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
       hostPlatform: getRemoteHostPlatform('linux-x64'),
-      scanRemoteSessions
+      service: createTestService(
+        '/home/ada',
+        getRemoteHostPlatform('linux-x64'),
+        scanRemoteSessions
+      )
     })
     const scopePaths = Array.from({ length: 80 }, (_, index) => `/repo/${index}`)
 
@@ -110,7 +166,11 @@ describe('AiVaultHandler', () => {
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
       hostPlatform: getRemoteHostPlatform('linux-x64'),
-      scanRemoteSessions
+      service: createTestService(
+        '/home/ada',
+        getRemoteHostPlatform('linux-x64'),
+        scanRemoteSessions
+      )
     })
 
     await dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {
@@ -137,7 +197,11 @@ describe('AiVaultHandler', () => {
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
       hostPlatform: getRemoteHostPlatform('linux-x64'),
-      scanRemoteSessions: scanRemoteSessions as never
+      service: createTestService(
+        '/home/ada',
+        getRemoteHostPlatform('linux-x64'),
+        scanRemoteSessions as never
+      )
     })
     const firstController = new AbortController()
     const first = dispatcher.call(
@@ -173,7 +237,11 @@ describe('AiVaultHandler', () => {
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
       hostPlatform: getRemoteHostPlatform('linux-x64'),
-      scanRemoteSessions: scanRemoteSessions as never
+      service: createTestService(
+        '/home/ada',
+        getRemoteHostPlatform('linux-x64'),
+        scanRemoteSessions as never
+      )
     })
     const first = dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, { limit: 20 })
     await vi.waitFor(() => expect(signals).toHaveLength(1))
@@ -208,17 +276,101 @@ describe('AiVaultHandler', () => {
     }
   })
 
+  it('soft-disables the method instead of aborting relay startup when the service is missing', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      const dispatcher = createMockDispatcher()
+
+      expect(
+        () =>
+          new AiVaultHandler(dispatcher.value, {
+            remoteHome: '/home/ada',
+            hostPlatform: getRemoteHostPlatform('linux-x64')
+          })
+      ).not.toThrow()
+
+      expect(() => dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {})).toThrow(/No handler/)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('stops a relay-local scan when the owning request is cancelled', async () => {
     const dispatcher = createMockDispatcher()
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
-      hostPlatform: getRemoteHostPlatform('linux-x64')
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: createTestService('/home/ada', getRemoteHostPlatform('linux-x64'))
     })
     const controller = new AbortController()
     controller.abort()
 
     await expect(
       dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {}, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('returns a host issue when the sidecar is unavailable', async () => {
+    const dispatcher = createMockDispatcher()
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: {
+        listSessions: () => Promise.reject(new Error('sidecar crashed')),
+        resolveSessionTitles: () => Promise.resolve({ titles: [] })
+      }
+    })
+
+    await expect(dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {})).resolves.toMatchObject({
+      sessions: [],
+      issues: [
+        expect.objectContaining({ kind: 'host', message: expect.stringContaining('sidecar') })
+      ]
+    })
+  })
+
+  it('returns no titles instead of an RPC error when the sidecar is unavailable', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      const dispatcher = createMockDispatcher()
+      new AiVaultHandler(dispatcher.value, {
+        remoteHome: '/home/ada',
+        hostPlatform: getRemoteHostPlatform('linux-x64'),
+        service: {
+          listSessions: () => Promise.resolve(emptyResult()),
+          resolveSessionTitles: () => Promise.reject(new Error('sidecar crashed'))
+        }
+      })
+
+      await expect(
+        dispatcher.call(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, {
+          requests: [
+            { agent: 'codex', sessionId: 'ssh-session', transcriptPath: '/home/ada/s.jsonl' }
+          ]
+        })
+      ).resolves.toEqual({ titles: [] })
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('propagates title cancellation instead of degrading it', async () => {
+    const dispatcher = createMockDispatcher()
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: {
+        listSessions: () => Promise.resolve(emptyResult()),
+        resolveSessionTitles: () => {
+          const error = new Error('The operation was aborted.')
+          error.name = 'AbortError'
+          return Promise.reject(error)
+        }
+      }
+    })
+
+    await expect(
+      dispatcher.call(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, { requests: [] })
     ).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
@@ -231,6 +383,28 @@ async function makeTemporaryHome(): Promise<string> {
 
 function emptyResult(): AiVaultListResult {
   return { sessions: [], issues: [], scannedAt: '2026-07-26T00:00:00.000Z' }
+}
+
+function createTestService(
+  remoteHome: string,
+  hostPlatform: RemoteHostPlatform,
+  scan: typeof scanRemoteAiVaultSessions = scanRemoteAiVaultSessions
+): RelayAiVaultServiceApi {
+  return {
+    listSessions: (params, signal) =>
+      scan({
+        provider: createRelayAiVaultFilesystemProvider(),
+        executionHostId: 'local',
+        remoteHome,
+        hostPlatform,
+        limit: params.limit,
+        unlimited: params.unlimited,
+        scopePaths: params.scopePaths,
+        signal
+      }),
+    resolveSessionTitles: (requests, signal) =>
+      readAiVaultSessionTitlesFromFiles(requests, { signal })
+  }
 }
 
 function createMockDispatcher(): {

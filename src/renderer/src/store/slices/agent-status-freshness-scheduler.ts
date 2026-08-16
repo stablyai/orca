@@ -1,3 +1,4 @@
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 
@@ -21,6 +22,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
   // `dispose()` in teardown — otherwise a real 30-minute setTimeout leaks
   // into the test process.
   let timer: ReturnType<typeof setTimeout> | null = null
+  let lastCheckedAt: number | null = null
 
   const clear = (): void => {
     if (timer !== null) {
@@ -33,10 +35,12 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     clear()
     const entries = deps.getEntries()
     if (entries.length === 0) {
+      lastCheckedAt = null
       return
     }
     const now = Date.now()
     let nextExpiryAt = Number.POSITIVE_INFINITY
+    let crossedCompletionDeadline = false
     // Why: skip entries already past the stale boundary — they each contribute
     // exactly one epoch bump at crossing, and rescheduling on them would spin
     // the timer forever because the bump doesn't clear them from the map
@@ -47,9 +51,29 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     // freshness-aware selectors can decay them immediately on that render.
     for (const entry of entries) {
       const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
-      if (expiryAt > now) {
+      if (expiryAt >= now) {
         nextExpiryAt = Math.min(nextExpiryAt, expiryAt)
       }
+      // Completion and hook freshness have independent expiry times.
+      const completedAt = agentEntryCompletionAt(entry)
+      if (completedAt !== null) {
+        const completionExpiryAt = completedAt + AGENT_STATUS_STALE_AFTER_MS
+        // Detect a missed completion expiry before a same-state update extends hook freshness.
+        if (
+          lastCheckedAt !== null &&
+          completionExpiryAt >= lastCheckedAt &&
+          completionExpiryAt < now
+        ) {
+          crossedCompletionDeadline = true
+        }
+        if (completionExpiryAt >= now) {
+          nextExpiryAt = Math.min(nextExpiryAt, completionExpiryAt)
+        }
+      }
+    }
+    lastCheckedAt = now
+    if (crossedCompletionDeadline) {
+      deps.bumpEpochs()
     }
     if (!Number.isFinite(nextExpiryAt)) {
       return
@@ -62,6 +86,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     timer = setTimeout(() => {
       timer = null
       deps.bumpEpochs()
+      lastCheckedAt = Date.now()
       schedule()
     }, delayMs)
   }

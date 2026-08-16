@@ -60,16 +60,10 @@ export class MobileEndpointSupervisor {
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,
-      now: dependencies.now,
       isStopped: () => this.stopped,
       isForeground: () => this.foreground,
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
-      recoverAfterDeadProbe: (detail) => {
-        this.logRelay('relay probe failed; recovering', detail)
-        suspendRelayIfStillConnected(this.relayReconnect, this.logical)
-        void this.recoverRelay()
-      },
       scheduleDirectProbe: () => this.directProbe.schedule(0)
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -152,6 +146,7 @@ export class MobileEndpointSupervisor {
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
+        this.logical.setRecoveryPath(null)
         this.directGrace.clear()
         if (this.logical.getActivePath() !== 'relay') {
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
@@ -160,12 +155,16 @@ export class MobileEndpointSupervisor {
       } else {
         // Why: the direct client enters reconnecting after its first failed
         // dial and may never publish disconnected while its retry loop lives.
+        if (this.relayReconnect.needsRecovery(state)) {
+          this.logical.setRecoveryPath('relay')
+        }
         this.relayReconnect.handleStateFailure(this.logical, state)
       }
     })
     if (this.relayReconnect.needsRecovery(this.logical.getState())) {
       // Why: the first direct dial can fail while encrypted relay credentials
       // are still loading, before the supervisor subscribes to state changes.
+      this.logical.setRecoveryPath('relay')
       await this.recoverRelay()
     } else {
       this.directProbe.schedule()
@@ -177,6 +176,9 @@ export class MobileEndpointSupervisor {
     const wasForeground = this.foreground
     this.foreground = foreground
     if (foreground) {
+      if (this.relayReconnect.needsRecovery(this.logical.getState())) {
+        this.logical.setRecoveryPath('relay')
+      }
       this.relayReconnect.handleForeground(this.logical, wasForeground)
       this.directProbe.schedule(0)
       this.directGrace.arm()
@@ -187,6 +189,7 @@ export class MobileEndpointSupervisor {
       this.relayReconnect.clear()
       this.leaseRotation.clear()
       this.directGrace.clear()
+      this.logical.setRecoveryPath(null)
     }
   }
 
@@ -197,11 +200,11 @@ export class MobileEndpointSupervisor {
   stop(): void {
     this.stopped = true
     this.unsubscribeState?.()
-    this.unsubscribeState = null
     this.directProbe.clear()
     this.relayReconnect.clear()
     this.leaseRotation.clear()
     this.directGrace.clear()
+    this.logical.setRecoveryPath(null)
   }
 
   // forceReplacement: dial past the "direct still looks live" guard — a lease

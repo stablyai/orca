@@ -94,12 +94,6 @@
       }
     },
     {
-      "files": ["app/terminal-settings.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 514, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
       "files": ["scripts/mock-server.ts"],
       "rules": {
         "max-lines": ["error", { "max": 407, "skipBlankLines": true, "skipComments": true }]

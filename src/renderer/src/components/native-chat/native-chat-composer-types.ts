@@ -29,8 +29,6 @@ export type NativeChatComposerProps = {
   launchDraft?: NativeChatLaunchDraft | null
   /** True once the transcript shows the TUI-side draft was submitted or cleared. */
   launchDraftResolved?: boolean
-  /** Reports IME composition state so the view can defer an unmount that would abort it. */
-  onCompositionActiveChange?: (active: boolean) => void
 }
 
 export type NativeChatComposerHandle = {

@@ -5,18 +5,22 @@ import {
   type TakePendingOutputResult,
   type TerminalSnapshot
 } from './types'
-import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session-claim'
+import {
+  createOrAttachClaimedAgentSession,
+  type InternalCreateOrAttachOptions
+} from './terminal-host-agent-session-claim'
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
+import { TerminalAttachCanceledError } from './daemon-errors'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 export type { TerminalHostOptions } from './terminal-host-options'
@@ -25,6 +29,8 @@ const DEFAULT_MAX_TOMBSTONES = 1000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  // Serializes creates for one id across async spawn validation.
+  private pendingCreations = new Map<string, Promise<void>>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
@@ -44,36 +50,67 @@ export class TerminalHost {
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
   }
 
-  async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
-    return await createOrAttachClaimedAgentSession({
-      options: opts,
-      owners: this.agentSessionOwners,
-      isLive: (owner) =>
-        this.agentSessionGenerations.isCurrent(
-          owner,
-          Boolean(this.sessions.get(owner.ptyId)?.isAlive)
-        ),
-      createOrAttach: async (options) => {
-        if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
-          throw new Error('agent_session_claim_unavailable')
-        }
-        return await createOrAttachTerminalSession(options, {
-          sessions: this.sessions,
-          sessionTeardown: this.sessionTeardown,
-          killedTombstones: this.killedTombstones,
-          spawnSubprocess: this.spawnSubprocess,
-          creationFenced: this.creationFenced,
-          onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
-          onSessionCreated: (sessionId, generation, isAlive) =>
-            this.agentSessionGenerations.remember(sessionId, generation, isAlive),
-          onSessionExit: (sessionId, generation) => {
-            this.agentSessionOwners.release(sessionId, generation)
-            this.agentSessionGenerations.forget(sessionId, generation)
-            this.reapSession(sessionId)
+  async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
+    this.assertCreateOrAttachAllowed(opts)
+    for (
+      let inFlight = this.pendingCreations.get(opts.sessionId);
+      inFlight !== undefined;
+      inFlight = this.pendingCreations.get(opts.sessionId)
+    ) {
+      await inFlight
+    }
+    this.assertCreateOrAttachAllowed(opts)
+
+    let settleCreation: () => void = () => {}
+    this.pendingCreations.set(
+      opts.sessionId,
+      new Promise<void>((resolve) => {
+        settleCreation = resolve
+      })
+    )
+    try {
+      return await createOrAttachClaimedAgentSession({
+        options: opts,
+        owners: this.agentSessionOwners,
+        isLive: (owner) =>
+          this.agentSessionGenerations.isCurrent(
+            owner,
+            Boolean(this.sessions.get(owner.ptyId)?.isAlive)
+          ),
+        createOrAttach: async (options) => {
+          this.assertCreateOrAttachAllowed(options)
+          if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
+            throw new Error('agent_session_claim_unavailable')
           }
-        })
-      }
-    })
+          return await createOrAttachTerminalSession(options, {
+            sessions: this.sessions,
+            sessionTeardown: this.sessionTeardown,
+            killedTombstones: this.killedTombstones,
+            spawnSubprocess: this.spawnSubprocess,
+            onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
+            onSessionCreated: (sessionId, generation, isAlive) =>
+              this.agentSessionGenerations.remember(sessionId, generation, isAlive),
+            onSessionExit: (sessionId, generation) => {
+              this.agentSessionOwners.release(sessionId, generation)
+              this.agentSessionGenerations.forget(sessionId, generation)
+              this.reapSession(sessionId)
+            }
+          })
+        }
+      })
+    } finally {
+      this.pendingCreations.delete(opts.sessionId)
+      settleCreation()
+    }
+  }
+
+  private assertCreateOrAttachAllowed(opts: InternalCreateOrAttachOptions): void {
+    if (this.creationFenced) {
+      throw new Error('Terminal host is shutting down')
+    }
+    if (opts.isCanceled?.()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
   }
 
   write(sessionId: string, data: string): void {
@@ -114,7 +151,7 @@ export class TerminalHost {
     return Promise.resolve(killed)
   }
 
-  // Why: dispose a dead session's emulator so exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
+  // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session || session.isAlive) {
@@ -130,8 +167,13 @@ export class TerminalHost {
   }
 
   detach(sessionId: string, token: symbol): void {
-    const session = this.sessions.get(sessionId)
-    session?.detachClient(token)
+    this.detachClients([{ sessionId, token }])
+  }
+
+  detachClients(attachments: readonly { sessionId: string; token: symbol }[]): void {
+    for (const { sessionId, token } of attachments) {
+      this.sessions.get(sessionId)?.detachClient(token)
+    }
   }
 
   async getCwd(sessionId: string): Promise<string | null> {
@@ -235,6 +277,10 @@ export class TerminalHost {
   }
 
   private async disposeSessions(): Promise<void> {
+    if (this.pendingCreations.size > 0) {
+      // No spawn may publish a session after teardown completes.
+      await Promise.all(this.pendingCreations.values())
+    }
     await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }

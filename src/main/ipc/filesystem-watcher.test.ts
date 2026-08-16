@@ -60,7 +60,7 @@ import {
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 /** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
 const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {

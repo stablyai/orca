@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -9,7 +8,6 @@ import {
   View
 } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
-import { imeGuardedSubmitProps } from '../ime/ime-submit-carry'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
@@ -214,7 +212,7 @@ export function MobileSourceControlContent({ state }: Props) {
               placeholderTextColor={colors.textMuted}
               editable={busyAction === null && openingPath === null && openingBranchPath === null}
               returnKeyType="done"
-              {...imeGuardedSubmitProps(Platform.OS, primaryAction.onPress)}
+              onSubmitEditing={primaryAction.onPress}
             />
           )}
           {shouldShowGenerateButton ? (

@@ -9,6 +9,7 @@
 // reconnects via `relay.js --connect`, bridging the new SSH channel's stdio to the existing relay's socket.
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   unlinkSync,
@@ -41,7 +42,11 @@ import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
-import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import { createRelayAiVaultService } from './ai-vault-service-factory'
+import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
+import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { RelayAgentHookServer } from './agent-hook-server'
+import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
@@ -545,7 +550,7 @@ async function main(): Promise<void> {
     const marker = process.argv.indexOf('--orca-cli')
     await runOrcaCliMode(
       sockPath,
-      marker >= 0 ? process.argv.slice(marker + 1) : [],
+      marker !== -1 ? process.argv.slice(marker + 1) : [],
       endpointCredential
     )
     return
@@ -723,7 +728,17 @@ async function main(): Promise<void> {
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
 
-  const _aiVaultHandler = new AiVaultHandler(dispatcher)
+  const aiVaultRelayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
+  const aiVaultHostPlatform = aiVaultRelayPlatform
+    ? getRemoteHostPlatform(aiVaultRelayPlatform)
+    : undefined
+  const aiVaultService = aiVaultHostPlatform
+    ? createRelayAiVaultService(homedir(), aiVaultHostPlatform)
+    : null
+  const _aiVaultHandler = new AiVaultHandler(dispatcher, {
+    hostPlatform: aiVaultHostPlatform,
+    service: aiVaultService ?? undefined
+  })
   void _aiVaultHandler
 
   // Why: relay-hosted plugin provisioning is a later phase. Register the
@@ -766,7 +781,7 @@ async function main(): Promise<void> {
   )
 
   // ── Agent-hook server ─────────────────────────────────────────────
-  // Why: loopback HTTP receiver so remote-PTY agent CLIs post hook events locally, forwarded to Orca as agent.hook notifications. See docs/design/agent-status-over-ssh.md §2-§5.
+  // Why: loopback HTTP receiver so remote-PTY agent CLIs post hook events to a local port (they can't reach Orca's host); the relay forwards them as agent.hook notifications.
   const hookServer = new RelayAgentHookServer({
     // Why: scope endpoint.env/cmd by socket path so multiple relay daemons on one account can't overwrite each other's hook tokens.
     endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
@@ -843,11 +858,20 @@ async function main(): Promise<void> {
           env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
+      if (kind === 'prime-agent') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'prime-agent')
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'prime-agent', {
+          materializeDefaultHome: explicitKind === 'prime-agent'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
+        }
+      }
     }
     return env
   })
 
-  // Why: evict pane status cache + overlay dirs on PTY exit so panes don't ghost after reconnect (§5 Path 3) or leak dirs.
+  // Why: evict pane status cache + overlay dirs on PTY exit, else the next reconnect replays a dead pane's last status (ghost row) and overlay dirs leak.
   ptyHandler.setExitListener(({ paneKey, id }) => {
     if (paneKey) {
       hookServer.clearPaneState(paneKey)
@@ -855,7 +879,7 @@ async function main(): Promise<void> {
     pluginOverlay.clearOverlay(paneKey ?? id)
   })
 
-  // Why: forward cached entries as notifications before returning so the response trails all replays, closing a reconnect race. See docs/design/agent-status-over-ssh.md §5 Path 3.
+  // Why: forward cached entries as notifications before returning, so the response trails every replay and Orca can't treat replay as done while frames are still in flight.
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
     const replayed = hookServer.replayCachedPayloadsForPanes()
     return { replayed }
@@ -864,25 +888,29 @@ async function main(): Promise<void> {
   // Why: relay-local installers collapse hundreds of SFTP request/response RTTs to one RPC.
   registerManagedHookInstaller(dispatcher)
 
-  // Why: plugin sources ship over the wire so an Orca update doesn't force a relay redeploy; cache them per spawn. See docs/design/agent-status-over-ssh.md §4.
+  // Why: plugin sources ship over the wire — the relay is versioned independently of Orca, so bundling them would make every agent-event change a relay redeploy.
   // Why: bound per-source size so a buggy/hostile Orca can't OOM the relay by pushing a giant string.
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
       }
     }
   })
@@ -1272,7 +1300,12 @@ async function main(): Promise<void> {
     graceBranch = null
     void ptyHandler
       .dispose()
-      .then(() => {
+      .then(async () => {
+        await aiVaultService?.dispose().catch((error) => {
+          relayLogLine(
+            `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        })
         stopPoolWatch()
         stopPoolActiveWatch()
         dispatcher.dispose()

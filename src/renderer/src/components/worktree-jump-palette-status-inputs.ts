@@ -7,6 +7,8 @@ export type PaletteStatusInputsState = Pick<
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
   | 'tabsByWorktree'
+  | 'unreadTerminalTabs'
+  | 'unreadAgentCompletionPanes'
 >
 
 export type PaletteStatusInputs = Pick<
@@ -14,21 +16,27 @@ export type PaletteStatusInputs = Pick<
   'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'tabsByWorktree'
 >
 
-/** The two hottest maps, read as a snapshot rather than subscribed. See `selectPaletteIndexStatusSnapshot`. */
+/** The hottest maps, read as a snapshot rather than subscribed. See `selectPaletteIndexStatusSnapshot`. */
 export type PaletteIndexStatusSnapshot = Pick<
   PaletteStatusInputsState,
-  'agentStatusByPaneKey' | 'runtimePaneTitlesByTabId'
+  | 'agentStatusByPaneKey'
+  | 'runtimePaneTitlesByTabId'
+  | 'unreadTerminalTabs'
+  | 'unreadAgentCompletionPanes'
 >
 
 const EMPTY_PALETTE_INDEX_STATUS: PaletteIndexStatusSnapshot = Object.freeze({
   agentStatusByPaneKey: {},
-  runtimePaneTitlesByTabId: {}
+  runtimePaneTitlesByTabId: {},
+  unreadTerminalTabs: {},
+  unreadAgentCompletionPanes: {}
 })
 
 /**
- * The agent-status and pane-title maps as of *now*, for the palette's index, ordering and filters.
- * Snapshotted rather than subscribed because the dots own that churn (`PaletteLiveStatusProvider`),
- * leaving the index free to freeze on open.
+ * The agent-status, pane-title and unread maps as of *now*, for the palette's index, ordering,
+ * filters and recent-section membership. Snapshotted rather than subscribed because the dots own
+ * that churn (`PaletteLiveStatusProvider`), leaving the index free to freeze on open — membership
+ * and row order then agree on one open-time reading instead of half-live, half-frozen.
  */
 export function selectPaletteIndexStatusSnapshot(
   s: PaletteStatusInputsState,
@@ -39,7 +47,9 @@ export function selectPaletteIndexStatusSnapshot(
   }
   return {
     agentStatusByPaneKey: s.agentStatusByPaneKey,
-    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    unreadTerminalTabs: s.unreadTerminalTabs,
+    unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
   }
 }
 

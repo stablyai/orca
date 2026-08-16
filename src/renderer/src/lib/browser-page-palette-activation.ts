@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorktree } from './worktree-activation'
 
@@ -11,12 +12,14 @@ export type BrowserPagePaletteActivationResult =
   | { status: 'failed'; reason: BrowserPagePaletteActivationFailure }
 
 export type BrowserPagePaletteActivationTarget = {
+  executionHostId?: ExecutionHostId
   pageId: string
   workspaceId: string
   worktreeId: string
 }
 
 export function activateBrowserPagePaletteResult({
+  executionHostId,
   pageId,
   workspaceId,
   worktreeId
@@ -28,8 +31,13 @@ export function activateBrowserPagePaletteResult({
   const workspace = (initialState.browserTabsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.id === workspaceId
   )
-  const worktree = initialState.getKnownWorktreeById(worktreeId)
-  if (!page || !workspace || !worktree) {
+  const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
+  // Why worktree first: removing a worktree also purges its browser workspaces
+  // and pages, so a page-first check would report a dead workspace as a stale page.
+  if (!worktree) {
+    return { status: 'failed', reason: 'missing-worktree' }
+  }
+  if (!page || !workspace) {
     return { status: 'failed', reason: 'missing-page' }
   }
 
@@ -39,9 +47,10 @@ export function activateBrowserPagePaletteResult({
     ? 'address-bar'
     : 'webview'
 
+  const targetHostId = executionHostId ?? worktree.hostId
   const activated = activateAndRevealWorktree(
     worktree.id,
-    worktree.hostId ? { executionHostId: worktree.hostId } : {}
+    targetHostId ? { executionHostId: targetHostId } : {}
   )
   if (!activated) {
     return { status: 'failed', reason: 'missing-worktree' }

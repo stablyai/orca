@@ -4,7 +4,6 @@ import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
@@ -42,7 +41,6 @@ export default function BrowserAddressBar({
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
   const slotRef = useRef<HTMLDivElement | null>(null)
-  const imeEnter = useImeEnterGestureOwnership()
   const [inlineWidth, setInlineWidth] = useState<number | null>(null)
 
   // Why: the slot keeps its flex width even while the bar overlays the toolbar,
@@ -188,7 +186,6 @@ export default function BrowserAddressBar({
   }, [inputRef])
 
   const handleBlur = useCallback(() => {
-    imeEnter.reset()
     // Why: delay close so that clicking a suggestion item registers before
     // the popover unmounts. Without this, onSelect never fires because the
     // mousedown on PopoverContent triggers input blur first.
@@ -211,7 +208,7 @@ export default function BrowserAddressBar({
       restoreTypedQuery()
       setOpen(false)
     }, 200)
-  }, [imeEnter, inputRef, restoreTypedQuery])
+  }, [inputRef, restoreTypedQuery])
 
   const handleSelect = useCallback(
     (url: string) => {
@@ -232,11 +229,6 @@ export default function BrowserAddressBar({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (imeEnter.ownsKeyDown(event)) {
-        event.preventDefault()
-        event.stopPropagation()
-        return
-      }
       if (event.key === 'Escape') {
         cancelSuggestionPreview()
         return
@@ -288,7 +280,6 @@ export default function BrowserAddressBar({
       }
     },
     [
-      imeEnter,
       open,
       suggestions,
       selectedValue,
@@ -418,10 +409,7 @@ export default function BrowserAddressBar({
               value={value}
               onFocus={handleFocus}
               onBlur={handleBlur}
-              onCompositionStart={() => imeEnter.setComposing(true)}
-              onCompositionEnd={() => imeEnter.setComposing(false)}
               onKeyDown={handleKeyDown}
-              onKeyUp={imeEnter.onKeyUp}
               data-orca-browser-address-bar="true"
               className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
               spellCheck={false}

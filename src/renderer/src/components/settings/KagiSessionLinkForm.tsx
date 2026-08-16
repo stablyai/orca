@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { translate } from '@/i18n/i18n'
@@ -80,7 +79,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
   }
 
   return (
-    <ImeEnterGuardedForm
+    <form
       className="flex flex-col items-end gap-1.5"
       onSubmit={(e) => {
         e.preventDefault()
@@ -136,6 +135,6 @@ export function KagiSessionLinkForm(): React.JSX.Element {
           </Button>
         ) : null}
       </div>
-    </ImeEnterGuardedForm>
+    </form>
   )
 }

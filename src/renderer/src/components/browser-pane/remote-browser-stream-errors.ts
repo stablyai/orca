@@ -48,10 +48,6 @@ function readErrorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
-export function isRemoteBrowserStreamUnsupportedError(error: unknown): boolean {
-  return readErrorCode(error) === REMOTE_BROWSER_STREAM_UNSUPPORTED
-}
-
 export function isRemoteBrowserPageMissingCode(code: unknown): boolean {
   return typeof code === 'string' && REMOTE_BROWSER_PAGE_MISSING_CODES.has(code)
 }

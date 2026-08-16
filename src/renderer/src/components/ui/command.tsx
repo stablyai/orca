@@ -5,57 +5,12 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
-import {
-  isImeOwnedKeyboardEvent,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 
-/**
- * Why: cmdk owns the Enter->select dispatch on this root div, guarded by only
- * `isComposing || keyCode === 229`. macOS redispatches the Enter that merely
- * confirms a CJK composition as an unmarked `Enter`/13, which sails past that
- * guard and selects whatever row is highlighted while the user is still
- * mid-word. The guard lives in a dependency, but cmdk calls this handler before
- * its own switch and skips on `defaultPrevented`, so vetoing here is the single
- * seam that covers every CommandInput surface.
- */
-function Command({
-  className,
-  onCompositionEnd,
-  onCompositionStart,
-  onKeyDown,
-  onKeyUp,
-  ...props
-}: React.ComponentProps<typeof CommandPrimitive>) {
-  const imeEnter = useImeEnterGestureOwnership()
-
+function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
       data-slot="command"
-      onKeyDown={(event) => {
-        if (imeEnter.ownsKeyDown(event)) {
-          // The hook cancels the carried redispatch itself; only an Enter marked
-          // by composition state alone still needs the veto cmdk would miss.
-          if (!isImeOwnedKeyboardEvent(event)) {
-            event.preventDefault()
-          }
-          return
-        }
-        onKeyDown?.(event)
-      }}
-      onKeyUp={(event) => {
-        imeEnter.onKeyUp(event)
-        onKeyUp?.(event)
-      }}
-      onCompositionStart={(event) => {
-        imeEnter.setComposing(true)
-        onCompositionStart?.(event)
-      }}
-      onCompositionEnd={(event) => {
-        imeEnter.setComposing(false)
-        onCompositionEnd?.(event)
-      }}
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
         className
@@ -138,6 +93,7 @@ function CommandInput({
   wrapperClassName,
   iconClassName,
   trailing,
+  ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & {
   wrapperClassName?: string
@@ -155,6 +111,7 @@ function CommandInput({
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
       <CommandPrimitive.Input
+        ref={ref}
         data-slot="command-input"
         className={cn(
           'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
