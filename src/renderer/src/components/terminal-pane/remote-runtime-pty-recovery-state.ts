@@ -147,6 +147,7 @@ export class RemoteRuntimePtyRecoveryState {
       // Why: the deadline only stops auto-retry; an explicit trigger opens a fresh recovery window.
       this.epoch += 1
       this.attempt = 0
+      this.autoRecoveryWindowSpentByDeadline = false
       this.armDeadline(this.epoch)
     }
     const epoch = this.epoch

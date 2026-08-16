@@ -197,6 +197,25 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     state.dispose()
   })
 
+  it('resets deadline-spent state when retryNow starts a new epoch', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const firstEpoch = state.begin()
+    state.parkRetryForExternalTrigger(firstEpoch, retry)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    expect(state.didSpendAutoRecoveryWindow).toBe(true)
+
+    expect(state.retryNow()).toBe(true)
+    expect(retry).toHaveBeenCalledWith(firstEpoch + 1)
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    expect(state.didSpendAutoRecoveryWindow).toBe(true)
+    state.dispose()
+  })
+
   it('revives a parked retry that never armed a backoff timer', async () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
