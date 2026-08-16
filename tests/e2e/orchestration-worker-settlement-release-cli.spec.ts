@@ -184,7 +184,10 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     .toContain('ACK')
   const dispatch = await client.call<{ dispatch: { id: string; status: string } | null }>(
     'orchestration.dispatchShow',
-    { task: task.result.task.id }
+    {
+      task: task.result.task.id,
+      callerTerminalHandle: coordinator.result.terminal.handle
+    }
   )
   expect(dispatch.result.dispatch?.status).toBe('dispatched')
 
@@ -207,7 +210,10 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   })
   const stillDispatched = await client.call<{ dispatch: { status: string } | null }>(
     'orchestration.dispatchShow',
-    { task: task.result.task.id }
+    {
+      task: task.result.task.id,
+      callerTerminalHandle: coordinator.result.terminal.handle
+    }
   )
   expect(stillDispatched.result.dispatch?.status).toBe('dispatched')
 
@@ -227,7 +233,10 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     .poll(async () => {
       const current = await client.call<{ dispatch: { status: string } | null }>(
         'orchestration.dispatchShow',
-        { task: task.result.task.id }
+        {
+          task: task.result.task.id,
+          callerTerminalHandle: coordinator.result.terminal.handle
+        }
       )
       return current.result.dispatch?.status
     })

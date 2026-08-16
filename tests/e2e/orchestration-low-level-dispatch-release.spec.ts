@@ -45,7 +45,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
     abandonedTask,
     terminalHandle
   )
-  const shownBeforeAbandon = await showDispatch(client, abandonedTask)
+  const shownBeforeAbandon = await showDispatch(client, abandonedTask, terminalHandle)
   expect(shownBeforeAbandon.id).toBe(abandonedDispatch)
   expect(shownBeforeAbandon.status).toBe('dispatched')
 
@@ -59,7 +59,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
       processAction: 'none'
     }
   })
-  expect(await showDispatch(client, abandonedTask)).toMatchObject({
+  expect(await showDispatch(client, abandonedTask, terminalHandle)).toMatchObject({
     status: 'failed',
     last_failure: 'abandoned'
   })
@@ -77,7 +77,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
       warning: expect.stringContaining('without closing')
     }
   })
-  expect(await showDispatch(client, stoppedTask)).toMatchObject({
+  expect(await showDispatch(client, stoppedTask, terminalHandle)).toMatchObject({
     status: 'failed',
     last_failure: 'stopped'
   })
@@ -127,11 +127,12 @@ async function dispatchTask(
 
 async function showDispatch(
   client: RuntimeClient,
-  taskId: string
+  taskId: string,
+  callerTerminalHandle: string
 ): Promise<{ id: string; status: string; last_failure: string | null }> {
   const shown = await client.call<{
     dispatch: { id: string; status: string; last_failure: string | null }
-  }>('orchestration.dispatchShow', { task: taskId })
+  }>('orchestration.dispatchShow', { task: taskId, callerTerminalHandle })
   return shown.result.dispatch
 }
 
