@@ -11,6 +11,10 @@ type RendererPageRegistry = {
   dispose(): void
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile
   mountPage(page: BrowserClientPageRendererRequest['page']): Promise<{ webContentsId: number }>
+  rekeyPage(
+    previous: BrowserClientPageRendererRequest['page'],
+    next: BrowserClientPageRendererRequest['page']
+  ): void
   retirePage(page: BrowserClientPageRendererRequest['page']): void
 }
 
@@ -72,6 +76,10 @@ async function handleRequest(
     if (request.type === 'mountPage') {
       const mounted = await registry.mountPage(request.page)
       return { type: 'mounted', webContentsId: mounted.webContentsId }
+    }
+    if (request.type === 'rekeyPage') {
+      registry.rekeyPage(request.page, request.nextPage)
+      return { type: 'rekeyed' }
     }
     registry.retirePage(request.page)
     return { type: 'retired' }

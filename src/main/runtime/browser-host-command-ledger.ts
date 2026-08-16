@@ -19,6 +19,8 @@ import {
   type BrowserHostCommandRecord,
   type BrowserHostCommandResultParams,
   positiveBrowserHostCommandLimit,
+  recordBrowserHostCommandOrder,
+  snapshotBrowserHostPageCommand,
   sameBrowserHostCommandResult
 } from './browser-host-command-state'
 import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
@@ -108,6 +110,7 @@ export class BrowserHostCommandLedger {
     }
     assertBrowserHostCommandOrder(page, command)
     admission.commit()
+    recordBrowserHostCommandOrder(page, command)
     const commandSequence = page.nextIssueSequence
     const event = Object.freeze({
       type: 'command' as const,
@@ -117,7 +120,7 @@ export class BrowserHostCommandLedger {
       pageHostGeneration: input.pageHostGeneration,
       commandSequence,
       commandId: this.createCommandId(commandSequence),
-      command: Object.freeze(command)
+      command: snapshotBrowserHostPageCommand(command)
     })
     const record = createBrowserHostCommandRecord(event)
     page.records.set(commandSequence, record)
@@ -224,7 +227,8 @@ export class BrowserHostCommandLedger {
       nextSettlementSequence: 1,
       records: new Map(),
       outstanding: 0,
-      settledSequences: []
+      settledSequences: [],
+      terminalCommandIssued: false
     }
     return {
       page,

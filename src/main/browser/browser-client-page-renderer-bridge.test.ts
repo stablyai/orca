@@ -9,6 +9,50 @@ import {
 } from './browser-client-page-renderer-bridge-test-rig'
 
 describe('BrowserClientPageRendererBridgeRegistry', () => {
+  it('rekeys only after an exact current-document echo', async () => {
+    const harness = createHarness()
+    const renderer = harness.registry.attachRenderer(harness.endpoint)
+    const next = { ...page, pageHostGeneration: 8 }
+    const rekeyed = renderer.rekeyPage!(page, next, new AbortController().signal)
+    const request = sentRequest(harness.endpoint)
+
+    expect(request).toMatchObject({ type: 'rekeyPage', page, nextPage: next })
+    harness.reply(harness.endpoint, {
+      type: 'rekeyed',
+      requestId: request.requestId,
+      page: request.page,
+      nextPage: next
+    })
+    await expect(rekeyed).resolves.toBeUndefined()
+  })
+
+  it('accepts exact rekey failure and rejects a changed next-page echo', async () => {
+    const harness = createHarness()
+    const renderer = harness.registry.attachRenderer(harness.endpoint)
+    const next = { ...page, pageHostGeneration: 8 }
+    const failed = renderer.rekeyPage!(page, next, new AbortController().signal)
+    let request = sentRequest(harness.endpoint)
+
+    harness.reply(harness.endpoint, {
+      type: 'failed',
+      operation: 'rekeyPage',
+      requestId: request.requestId,
+      page: request.page,
+      errorCode: 'browser_client_page_renderer_rekey_stale'
+    })
+    await expect(failed).rejects.toThrow('browser_client_page_renderer_rekey_stale')
+
+    const mismatched = renderer.rekeyPage!(page, next, new AbortController().signal)
+    request = sentRequest(harness.endpoint)
+    harness.reply(harness.endpoint, {
+      type: 'rekeyed',
+      requestId: request.requestId,
+      page: request.page,
+      nextPage: { ...next, pageHostGeneration: 9 }
+    })
+    await expect(mismatched).rejects.toThrow('browser_client_page_renderer_reply_invalid')
+  })
+
   it('mounts only through the exact current main-frame document and carries no target URL', async () => {
     const harness = createHarness()
     const renderer = harness.registry.attachRenderer(harness.endpoint)
@@ -184,6 +228,42 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
       const replacement = renderer.mountPage(page, new AbortController().signal)
       completeMount(harness)
       await expect(replacement).resolves.toEqual({ webContentsId: 91 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a late rekey reply after timeout and admits an exact replacement', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ maxPending: 1, timeoutMs: 25 })
+      const renderer = harness.registry.attachRenderer(harness.endpoint)
+      const next = { ...page, pageHostGeneration: 8 }
+      const timedOut = renderer.rekeyPage!(page, next, new AbortController().signal)
+      const staleRequest = sentRequest(harness.endpoint)
+      const timedOutExpectation = expect(timedOut).rejects.toThrow(
+        'browser_client_page_renderer_request_timeout'
+      )
+
+      await vi.advanceTimersByTimeAsync(25)
+      await timedOutExpectation
+      harness.reply(harness.endpoint, {
+        type: 'rekeyed',
+        requestId: staleRequest.requestId,
+        page: staleRequest.page,
+        nextPage: next
+      })
+
+      const replacement = renderer.rekeyPage!(page, next, new AbortController().signal)
+      const currentRequest = sentRequest(harness.endpoint)
+      expect(currentRequest.requestId).not.toBe(staleRequest.requestId)
+      harness.reply(harness.endpoint, {
+        type: 'rekeyed',
+        requestId: currentRequest.requestId,
+        page: currentRequest.page,
+        nextPage: next
+      })
+      await expect(replacement).resolves.toBeUndefined()
     } finally {
       vi.useRealTimers()
     }

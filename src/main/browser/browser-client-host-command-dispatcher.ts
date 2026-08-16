@@ -12,6 +12,9 @@ import { joinBrowserClientHostCommands } from './browser-client-host-command-joi
 import {
   assertNewPageCommand,
   findExistingCommand,
+  isBrowserClientPageBootstrapCommand,
+  recordBrowserClientPageCommandResult,
+  recordNewPageCommand,
   removeScheduledCommandPage,
   selectCommandPage
 } from './browser-client-host-command-page'
@@ -96,6 +99,7 @@ export class BrowserClientHostCommandDispatcher {
     }
     const previousPage = this.pages.get(acceptedCommand.browserPageId)
     admission.commit()
+    recordNewPageCommand(page, acceptedCommand)
     if (previousPage && previousPage !== page) {
       this.resultCache.releasePage(previousPage)
     }
@@ -182,6 +186,7 @@ export class BrowserClientHostCommandDispatcher {
     if (
       this.closed ||
       page.retiring ||
+      page.retired ||
       page.queue[0]?.status !== 'queued' ||
       this.readyPageIds.has(page.browserPageId)
     ) {
@@ -245,16 +250,13 @@ export class BrowserClientHostCommandDispatcher {
     this.runningHandlers -= 1
     if (record.status === 'running') {
       resolveCommandRecord(record, result)
-      if (record.event.command.type === 'createPage') {
-        page.created = result.status === 'completed'
-        page.createFailed = !page.created
-      }
+      recordBrowserClientPageCommandResult(page, record.event.command, result)
     }
     record.status = 'settled'
     record.controller = undefined
     record.handlerPromise = undefined
     this.removeActiveRecord(page, record)
-    if (record.event.command.type === 'createPage' && !page.created) {
+    if (isBrowserClientPageBootstrapCommand(record.event.command) && !page.created) {
       this.cancelPage(page, 'browser_host_command_dependency_failed')
     }
     if (page.retiring && page.queue.length === 0) {

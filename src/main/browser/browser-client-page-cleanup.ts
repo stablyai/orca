@@ -23,6 +23,11 @@ export type BrowserClientPageRenderer = {
     page: BrowserClientPageRendererIdentity,
     signal: AbortSignal
   ): Promise<{ webContentsId: number }>
+  rekeyPage?(
+    previous: BrowserClientPageRendererIdentity,
+    next: BrowserClientPageRendererIdentity,
+    signal: AbortSignal
+  ): Promise<void>
   retirePage(page: BrowserClientPageRendererIdentity): void | Promise<void>
 }
 
@@ -32,7 +37,7 @@ export async function cleanupBrowserClientPage(
     guestMayExist: boolean
     lifecycleClaim: BrowserRouteGuestLifecycleClaim | null
     renderer: BrowserClientPageRenderer | null
-    rendererPage: BrowserClientPageRendererIdentity | null
+    rendererPages: readonly BrowserClientPageRendererIdentity[]
     routeSession: BrowserRouteSessionHandle | null
     route: BrowserClientPageNetworkRoute | null
   }
@@ -53,9 +58,10 @@ export async function cleanupBrowserClientPage(
     }
   }
   const renderer = target.renderer
-  const rendererPage = target.rendererPage
-  if (renderer && rendererPage) {
-    await collectCleanupFailure(() => renderer.retirePage(rendererPage), failures)
+  if (renderer) {
+    for (const rendererPage of target.rendererPages) {
+      await collectCleanupFailure(() => renderer.retirePage(rendererPage), failures)
+    }
   }
   if (guestDestruction) {
     guestDestroyed = await collectCleanupFailure(() => guestDestruction, failures)

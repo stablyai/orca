@@ -23,13 +23,18 @@ const RendererRequestBase = z.object({
 
 export const BrowserClientPageRendererRequest = z.discriminatedUnion('type', [
   RendererRequestBase.extend({ type: z.literal('mountPage') }),
-  RendererRequestBase.extend({ type: z.literal('retirePage') })
+  RendererRequestBase.extend({ type: z.literal('retirePage') }),
+  RendererRequestBase.extend({
+    type: z.literal('rekeyPage'),
+    nextPage: BrowserClientPageRendererIdentity
+  })
 ])
 export type BrowserClientPageRendererRequest = z.infer<typeof BrowserClientPageRendererRequest>
 
 export const BrowserClientPageRendererOutcome = z.discriminatedUnion('type', [
   z.object({ type: z.literal('mounted'), webContentsId: WebContentsId }),
   z.object({ type: z.literal('retired') }),
+  z.object({ type: z.literal('rekeyed') }),
   z.object({ type: z.literal('failed'), errorCode: Identity })
 ])
 export type BrowserClientPageRendererOutcome = z.infer<typeof BrowserClientPageRendererOutcome>
@@ -43,8 +48,12 @@ export const BrowserClientPageRendererReply = z.discriminatedUnion('type', [
   }),
   RendererReplyBase.extend({ type: z.literal('retired') }),
   RendererReplyBase.extend({
+    type: z.literal('rekeyed'),
+    nextPage: BrowserClientPageRendererIdentity
+  }),
+  RendererReplyBase.extend({
     type: z.literal('failed'),
-    operation: z.enum(['mountPage', 'retirePage']),
+    operation: z.enum(['mountPage', 'retirePage', 'rekeyPage']),
     errorCode: Identity
   })
 ])

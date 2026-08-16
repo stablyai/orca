@@ -41,6 +41,8 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   getPartitionForSession: (routeSession) =>
     browserRouteSessionRegistry.getPartitionForSession(routeSession),
   getPreparedPageAuthority: (page) => browserRouteSessionRegistry.getPreparedPageAuthority(page),
+  rekeyPreparedPage: (previous, next) =>
+    browserRouteSessionRegistry.rekeyPreparedPage(previous, next),
   retirePreparedPage: (page) => browserRouteSessionRegistry.retirePreparedPage(page),
   retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId)

@@ -8,25 +8,23 @@ import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   cleanupBrowserClientPage,
   type BrowserClientPageNetworkRoute as RetainedNetworkRoute,
-  type BrowserClientPageRenderer
+  type BrowserClientPageRenderer,
+  type BrowserClientPageRendererIdentity
 } from './browser-client-page-cleanup'
+import { createReservedBrowserClientPage } from './browser-client-page-creation'
 import {
   assertBrowserClientPageCommandNotAborted,
   assertCurrentBrowserClientPageRenderer,
   browserClientPageIdentity
 } from './browser-client-page-command-admission'
-import type {
-  BrowserRouteGuestLifecycleClaim,
-  BrowserRoutePageGuestIdentity
-} from './browser-route-page-authority'
 import type { BrowserRouteSessionRegistry } from './browser-route-session-registry'
-import type { BrowserRouteSessionHandle } from './browser-route-session-state'
 import {
   browserClientPageCommandFailureCode,
   BrowserClientPageCommandError,
   isBrowserClientPageCleanupFailure
 } from './browser-client-page-command-failure'
 import { BrowserClientPageNavigationFence } from './browser-client-page-navigation-fence'
+import { executeBrowserClientPageReconciliationCommand } from './browser-client-page-reconciliation'
 import type {
   BrowserClientPageLifecycleRegistry,
   BrowserClientRetainedPage
@@ -75,12 +73,37 @@ export class BrowserClientPageCommandExecutor {
       return { status: 'failed', errorCode: 'browser_client_page_executor_closed' }
     }
     try {
-      await (event.command.type === 'createPage'
-        ? this.createPage(event, signal)
-        : this.navigate(event, signal))
+      await this.executeCommand(event, signal)
       return { status: 'completed' }
     } catch (error) {
       return { status: 'failed', errorCode: browserClientPageCommandFailureCode(error, signal) }
+    }
+  }
+
+  private executeCommand(event: BrowserClientHostCommandEvent, signal: AbortSignal): Promise<void> {
+    switch (event.command.type) {
+      case 'createPage':
+        return this.createPage(event, signal)
+      case 'navigate':
+        return this.navigate(event, signal)
+      case 'reclaimPage':
+      case 'closePage':
+      case 'restorePage':
+        return executeBrowserClientPageReconciliationCommand(
+          {
+            pages: this.pages,
+            failedPages: this.failedPages,
+            routeWebContents: this.dependencies.routeWebContents,
+            assertAvailable: () => this.navigationFence.assertAvailable(this.closed),
+            createPage: (command, commandSignal) => this.createPage(command, commandSignal),
+            navigate: (command, commandSignal) => this.navigate(command, commandSignal),
+            retirePage: (browserPageId, generation) => this.retirePage(browserPageId, generation),
+            cleanupPage: (page, previousRendererPage) =>
+              this.cleanupPage(page, previousRendererPage)
+          },
+          event,
+          signal
+        )
     }
   }
 
@@ -121,7 +144,18 @@ export class BrowserClientPageCommandExecutor {
       return false
     }
     page.retiring ??= this.cleanupPage(page)
-    await page.retiring
+    try {
+      await page.retiring
+    } catch (error) {
+      if (this.pages.get(browserPageId) === page) {
+        this.pages.delete(browserPageId)
+      }
+      this.failedPages.set(
+        browserPageId,
+        Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
+      )
+      throw error
+    }
     if (this.pages.get(browserPageId) === page) {
       this.pages.delete(browserPageId)
     }
@@ -163,93 +197,13 @@ export class BrowserClientPageCommandExecutor {
     event: BrowserClientHostCommandEvent,
     signal: AbortSignal
   ): Promise<void> {
-    if (event.command.type !== 'createPage') {
-      throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
-    }
-    assertBrowserClientPageCommandNotAborted(signal)
-    let route: RetainedNetworkRoute | null = null
-    let routeSession: BrowserRouteSessionHandle | null = null
-    let renderer: BrowserClientPageRenderer | null = null
-    let registration: BrowserRoutePageGuestIdentity | null = null
-    let lifecycleClaim: BrowserRouteGuestLifecycleClaim | null = null
-    let mountAttempted = false
-    try {
-      route = await this.dependencies.retainNetworkRoute(event.command.executionHostKey, signal)
-      if (route.key !== event.command.executionHostKey) {
-        throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
-      }
-      assertBrowserClientPageCommandNotAborted(signal)
-      this.navigationFence.assertAvailable(this.closed)
-      renderer = this.dependencies.selectRenderer()
-      assertCurrentBrowserClientPageRenderer(renderer)
-      routeSession = await this.dependencies.routeSessions.preparePage({
-        identity: {
-          orcaProfileId: this.dependencies.orcaProfileId,
-          browserProfileId: event.command.browserProfileId,
-          authorityConnectionIdentity: this.dependencies.authorityConnectionIdentity,
-          executionHostIdentity: route.executionHostIdentity
-        },
-        browserPageId: event.browserPageId,
-        pageHostGeneration: event.pageHostGeneration,
-        rendererWebContentsId: renderer.rendererWebContentsId,
-        proxyEndpoint: route.proxyEndpoint
-      })
-      assertBrowserClientPageCommandNotAborted(signal)
-      this.navigationFence.assertAvailable(this.closed)
-      assertCurrentBrowserClientPageRenderer(renderer)
-      const page = browserClientPageIdentity(event, routeSession.partition)
-      mountAttempted = true
-      const mounted = await renderer.mountPage(page, signal)
-      registration = {
-        ...page,
-        rendererWebContentsId: renderer.rendererWebContentsId,
-        webContentsId: mounted.webContentsId
-      }
-      lifecycleClaim = this.dependencies.routeWebContents.claimGuestLifecycle(registration)
-      if (!lifecycleClaim) {
-        throw new BrowserClientPageCommandError('browser_client_page_guest_observation_failed')
-      }
-      assertBrowserClientPageCommandNotAborted(signal)
-      this.navigationFence.assertAvailable(this.closed)
-      assertCurrentBrowserClientPageRenderer(renderer)
-      if (!this.dependencies.routeWebContents.registerGuest(registration)) {
-        throw new BrowserClientPageCommandError('browser_client_page_guest_registration_failed')
-      }
-      if (!this.dependencies.routeWebContents.grantNavigation(registration)) {
-        throw new BrowserClientPageCommandError('browser_client_page_navigation_grant_failed')
-      }
-      if (this.closed || this.navigationFence.isFenced) {
-        throw new BrowserClientPageCommandError('browser_client_page_executor_closed')
-      }
-      this.pages.set(event.browserPageId, {
-        generation: event.pageHostGeneration,
-        inventory: createBrowserClientPageInventory(event, 'active'),
-        registration,
-        lifecycleClaim,
-        renderer,
-        route,
-        routeSession,
-        retiring: null
-      })
-    } catch (error) {
-      try {
-        await cleanupBrowserClientPage(this.dependencies.routeWebContents, {
-          guestMayExist: mountAttempted,
-          lifecycleClaim,
-          renderer,
-          rendererPage: routeSession
-            ? browserClientPageIdentity(event, routeSession.partition)
-            : null,
-          route,
-          routeSession
-        })
-      } catch (cleanupError) {
-        throw new BrowserClientPageCommandError('browser_client_page_cleanup_failed', {
-          cause: new AggregateError([error, cleanupError], 'Browser client page creation failed')
-        })
-      }
-      throw error
-    }
+    await createReservedBrowserClientPage(
+      this.dependencies,
+      event,
+      signal,
+      () => this.navigationFence.assertAvailable(this.closed),
+      (page) => this.pages.set(event.browserPageId, page)
+    )
   }
 
   private async navigate(event: BrowserClientHostCommandEvent, signal: AbortSignal): Promise<void> {
@@ -257,7 +211,12 @@ export class BrowserClientPageCommandExecutor {
       throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
     }
     const page = this.pages.get(event.browserPageId)
-    if (!page || page.generation !== event.pageHostGeneration || page.retiring) {
+    if (
+      !page ||
+      page.generation !== event.pageHostGeneration ||
+      page.retiring ||
+      page.reconciling
+    ) {
       throw new BrowserClientPageCommandError('browser_client_page_generation_stale')
     }
     assertBrowserClientPageCommandNotAborted(signal)
@@ -276,12 +235,21 @@ export class BrowserClientPageCommandExecutor {
     page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, normalized)
   }
 
-  private async cleanupPage(page: BrowserClientRetainedPage): Promise<void> {
+  private async cleanupPage(
+    page: BrowserClientRetainedPage,
+    previousRendererPage?: BrowserClientPageRendererIdentity
+  ): Promise<void> {
+    const currentRendererPage = browserClientPageIdentity(
+      page.registration,
+      page.registration.partition
+    )
     return cleanupBrowserClientPage(this.dependencies.routeWebContents, {
       guestMayExist: true,
       lifecycleClaim: page.lifecycleClaim,
       renderer: page.renderer,
-      rendererPage: browserClientPageIdentity(page.registration, page.registration.partition),
+      rendererPages: previousRendererPage
+        ? [currentRendererPage, previousRendererPage]
+        : [currentRendererPage],
       route: page.route,
       routeSession: page.routeSession
     })

@@ -38,18 +38,59 @@ export type BrowserHostCommandPageState = {
   records: Map<number, BrowserHostCommandRecord>
   outstanding: number
   settledSequences: number[]
+  terminalCommandIssued: boolean
 }
 
 export function assertBrowserHostCommandOrder(
   page: BrowserHostCommandPageState,
   command: BrowserClientHostCommandEvent['command']
 ): void {
-  if (page.nextIssueSequence === 1 && command.type !== 'createPage') {
+  if (page.nextIssueSequence === 1 && command.type === 'navigate') {
     throw new Error('browser_host_command_create_required')
   }
-  if (page.nextIssueSequence > 1 && command.type === 'createPage') {
-    throw new Error('browser_host_command_create_repeated')
+  if (page.nextIssueSequence > 1) {
+    if (page.terminalCommandIssued) {
+      throw new Error('browser_host_command_page_terminal')
+    }
+    if (
+      command.type === 'createPage' ||
+      command.type === 'reclaimPage' ||
+      command.type === 'restorePage'
+    ) {
+      throw new Error(
+        command.type === 'createPage'
+          ? 'browser_host_command_create_repeated'
+          : 'browser_host_command_bootstrap_repeated'
+      )
+    }
   }
+}
+
+export function recordBrowserHostCommandOrder(
+  page: BrowserHostCommandPageState,
+  command: BrowserClientHostCommandEvent['command']
+): void {
+  if (command.type === 'closePage') {
+    page.terminalCommandIssued = true
+  }
+}
+
+export function snapshotBrowserHostPageCommand(
+  command: BrowserClientHostCommandEvent['command']
+): BrowserClientHostCommandEvent['command'] {
+  if (command.type === 'reclaimPage') {
+    return Object.freeze({
+      ...command,
+      previousAuthority: Object.freeze({ ...command.previousAuthority })
+    })
+  }
+  if (command.type === 'closePage') {
+    return Object.freeze({
+      ...command,
+      targetAuthority: Object.freeze({ ...command.targetAuthority })
+    })
+  }
+  return Object.freeze({ ...command })
 }
 
 export type BrowserHostCommandLedgerOptions = {

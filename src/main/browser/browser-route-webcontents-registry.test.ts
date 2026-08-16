@@ -15,7 +15,25 @@ function createHarness(options: { maxGuests?: number } = {}) {
   const routeSession = { marker: 'route-session' } as unknown as Session
   let prepared = true
   let pageAuthority = Symbol('page-authority')
+  let pageHostGeneration = page.pageHostGeneration
   const retirePreparedPagesOwnedByRenderer = vi.fn(() => 0)
+  const rekeyPreparedPage = vi.fn((previous, next) => {
+    if (
+      !prepared ||
+      previous.pageAuthority !== pageAuthority ||
+      previous.pageHostGeneration !== pageHostGeneration ||
+      next.partition !== partition ||
+      next.browserPageId !== page.browserPageId ||
+      next.rendererWebContentsId !== page.rendererWebContentsId
+    ) {
+      return null
+    }
+    pageHostGeneration = next.pageHostGeneration
+    return {
+      page: { ...next, pageAuthority },
+      routeSession: { partition, release: vi.fn() }
+    }
+  })
   let registry: BrowserRouteWebContentsRegistry
   registry = new BrowserRouteWebContentsRegistry({
     getPartitionForSession: (session) => (session === routeSession ? partition : null),
@@ -23,7 +41,7 @@ function createHarness(options: { maxGuests?: number } = {}) {
       prepared &&
       input.partition === partition &&
       input.browserPageId === page.browserPageId &&
-      input.pageHostGeneration === page.pageHostGeneration &&
+      input.pageHostGeneration === pageHostGeneration &&
       input.rendererWebContentsId === page.rendererWebContentsId
         ? pageAuthority
         : null,
@@ -35,12 +53,14 @@ function createHarness(options: { maxGuests?: number } = {}) {
       registry.retirePageAuthority({ ...input, onRetired: vi.fn() })
       return true
     },
+    rekeyPreparedPage,
     retirePreparedPagesOwnedByRenderer,
     maxGuests: options.maxGuests
   })
   return {
     getPageAuthority: () => pageAuthority,
     registry,
+    rekeyPreparedPage,
     retirePreparedPagesOwnedByRenderer,
     routeSession,
     setPrepared: (value: boolean) => {
@@ -128,6 +148,34 @@ function requireLifecycleClaim(registry: BrowserRouteWebContentsRegistry, regist
 }
 
 describe('BrowserRouteWebContentsRegistry', () => {
+  it('atomically rekeys the prepared page, guest index, lifecycle claim, and navigation grant', async () => {
+    const { registry, rekeyPreparedPage, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession })
+    expect(registry.attachGuest(guest.guest)).toBe(true)
+    expect(registry.registerGuest(page)).toBe(true)
+    const previousClaim = requireLifecycleClaim(registry)
+    expect(registry.grantNavigation(page)).toBe(true)
+    await expect(
+      registry.navigateGuest(previousClaim, 'https://before-rekey.internal/')
+    ).resolves.toBe(true)
+    expect(registry.revokeNavigation(previousClaim)).toBe(true)
+    const next = { ...page, pageHostGeneration: 8 }
+
+    const rekeyed = registry.rekeyGuestLifecycle(previousClaim, next)
+
+    expect(rekeyed?.lifecycleClaim.registration).toEqual(next)
+    expect(rekeyPreparedPage).toHaveBeenCalledOnce()
+    expect(previousClaim.isCurrent()).toBe(false)
+    expect(rekeyed?.lifecycleClaim.isCurrent()).toBe(true)
+    expect(registry.grantReconciledNavigation(rekeyed!.lifecycleClaim)).toBe(true)
+    await expect(registry.navigateGuest(previousClaim, 'https://stale.invalid/')).resolves.toBe(
+      false
+    )
+    await expect(
+      registry.navigateGuest(rekeyed!.lifecycleClaim, 'https://remote.internal/')
+    ).resolves.toBe(true)
+  })
+
   it('holds navigation and popups until exact registration and an explicit grant', () => {
     const { registry, routeSession } = createHarness()
     const guest = createGuest({ session: routeSession })

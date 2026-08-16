@@ -57,6 +57,22 @@ afterEach(() => {
 })
 
 describe('browser client page retained registry', () => {
+  it('rekeys an attached guest without remounting or changing its WebContents', async () => {
+    const { registry, webviews } = createRig()
+    const mounting = registry.mountPage(PAGE)
+    attach(webviews[0]!)
+    await expect(mounting).resolves.toEqual({ webContentsId: 41 })
+    const next = { ...PAGE, pageHostGeneration: 8 }
+
+    registry.rekeyPage(PAGE, next)
+
+    await expect(registry.mountPage(next)).resolves.toEqual({ webContentsId: 41 })
+    expect(webviews).toHaveLength(1)
+    expect(() => registry.rekeyPage(PAGE, { ...next, pageHostGeneration: 9 })).toThrow(
+      'browser_client_page_renderer_rekey_stale'
+    )
+  })
+
   it('mounts only about:blank in a stable document-level host', async () => {
     const { registry, webviews } = createRig()
     const mounted = registry.mountPage(PAGE)

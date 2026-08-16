@@ -36,11 +36,11 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-navigation-grant-lease-fencing`, draft PR
-  [#14754](https://github.com/stablyai/orca/pull/14754), stacked on lease-retirement PR
-  [#14753](https://github.com/stablyai/orca/pull/14753).
-- All 32 patches through the published admission stage are rebased onto
-  `origin/main@5b7f44278a`; range-diff marked every patch identical before the exact-lease push.
+- Latest published stack tip: `sta-4150-browser-page-reconciliation-adapters`, draft PR
+  [#14763](https://github.com/stablyai/orca/pull/14763), stacked on reconciliation-command PR
+  [#14759](https://github.com/stablyai/orca/pull/14759).
+- All 37 published patches are cascade-rebased onto `origin/main@c4e397bcdc`. Range-diff marked
+  every patch identical; the two intervening main commits touch no STA-4150 file.
 - Published lease-fence placement-retirement stage: draft PR
   [#14753](https://github.com/stablyai/orca/pull/14753). It makes exact terminal host-generation
   placement retirement non-cancellable without inferring destruction or releasing capacity.
@@ -114,8 +114,11 @@ ownership.
 | [#14747](https://github.com/stablyai/orca/pull/14747) | Admission fairness | Per-device host capacity, wait reservation, and bounded pressure recovery |
 | [#14753](https://github.com/stablyai/orca/pull/14753) | Lease retirement   | Terminal exact-host fencing makes placements non-cancellable pending      |
 | [#14754](https://github.com/stablyai/orca/pull/14754) | Navigation fence   | Terminal authority loss suspends routes and revokes exact guest grants    |
+| [#14756](https://github.com/stablyai/orca/pull/14756) | Plan execution     | Bounded two-phase reconciliation action execution                         |
+| [#14759](https://github.com/stablyai/orca/pull/14759) | Command contracts  | Negotiated reclaim, restore, and close command contracts                  |
+| [#14763](https://github.com/stablyai/orca/pull/14763) | Client adapters    | Exact retained-page reclaim, restore, close, and fail-closed cleanup      |
 
-## Current stage: exact renderer bridge
+## Published stage: exact renderer bridge (#14578)
 
 Baseline #14566 was deterministically red because the renderer bridge and local IPC contract did
 not exist.
@@ -532,7 +535,7 @@ Validation and review:
 | Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                     |
 | SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                         |
 | Agent/CLI routing by placement                                     | Missing                   | Only create/navigate command foundations exist; public browser methods still use current server behavior          |
-| Inventory/reconciliation after ambiguous outcomes and restart      | Partial                   | Planner, authenticated inventory, and bounded executor exist; concrete adapters and restart recovery remain       |
+| Inventory/reconciliation after ambiguous outcomes and restart      | Partial                   | Concrete client adapters exist; server action issuance, proof-driven placement rekey, and restart recovery remain |
 | Independent bounded control/tunnel/mirror/binary channels          | Partial                   | Control and tunnel are separate/bounded; mirror and large-result paths are incomplete                             |
 | Mixed client/server compatibility                                  | Partial                   | Optional/capability-gated contracts and cross-version tests exist; activated rolling-upgrade behavior is unproven |
 | Local pointer/keyboard/chrome with no runtime round trip           | Missing                   | Requires the renderer surface and interaction-owner fencing                                                       |
@@ -546,20 +549,22 @@ Validation and review:
 
 ## Remaining implementation order
 
-1. Monitor #14754 CI without merging or marking it ready; the current-main type-aware warning is
-   upstream and must not be folded into this browser stage.
-2. Bind the bounded reconciliation executor to authenticated runtime intent and preserved reconnect
-   inventory with exact generation-fenced reclaim, close, and restore adapters.
-3. Add optional placement to logical session-tab publication and renderer state. Follow
+1. Monitor #14763 CI without merging or marking it ready; production advertisement stays disabled.
+2. Add a dedicated authenticated server action-issuance path that binds one immutable plan to its
+   exact lease and client inventory. Preserve the client executor across the authority transition;
+   a transport or composition restart must not destroy the retained guest before reclaim.
+3. Rekey server placement only after the exact client command result proves reclaim or restore;
+   keep outcome-unknown inventory fenced and rerun a fresh plan after any phase-one failure.
+4. Add optional placement to logical session-tab publication and renderer state. Follow
    `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
-4. Route create and every existing browser command by explicit placement. Never silently fall
+5. Route create and every existing browser command by explicit placement. Never silently fall
    back or migrate a live page.
-5. Add local browser chrome and interaction-owner fencing for client placement.
-6. Add mobile mirroring and dedicated large-result channels without coupling them to control or
+6. Add local browser chrome and interaction-owner fencing for client placement.
+7. Add mobile mirroring and dedicated large-result channels without coupling them to control or
    terminal multiplexing.
-7. Run real Electron containment and traffic proof, then headed/headless/browserless paired
+8. Run real Electron containment and traffic proof, then headed/headless/browserless paired
    journeys and the physical platform/provider matrix.
-8. Enable client placement only behind a kill switch for newly created eligible desktop pages;
+9. Enable client placement only behind a kill switch for newly created eligible desktop pages;
    retain explicit server placement and rollback that does not move existing pages.
 
 ## Compatibility costs and risks
@@ -748,6 +753,39 @@ Published reconciliation-command-contract stage (#14759):
 - Draft PR [#14759](https://github.com/stablyai/orca/pull/14759) stacks on #14756 and remains draft.
   GitHub auto-attached it to STA-4150; the ticket remains In Progress.
 
+Published reconciliation-adapter stage (#14763):
+
+- Baseline: the client had negotiated command shapes but no concrete reclaim, restore, or close
+  adapter. The focused adapter suites failed because their modules and exact rekey operations did
+  not exist.
+- Candidate: reclaim rekeys the same guest across renderer retention, prepared Session authority,
+  WebContents lifecycle claims, and navigation authority without remounting. Restore creates a new
+  blank guest and applies optional initial navigation only after exact authority admission. Close
+  retires only an exact prior authority.
+- Revert oracles prove three review fixes: uncertain renderer rekey must retire both the old and new
+  exact renderer identities; failed cleanup must leave immutable `outcomeUnknown` inventory without
+  a retryable live-page handle; and a failed close must release its terminal command fence.
+- A fresh new-authority dispatcher successfully reclaims an old-authority executor page. A proposed
+  same-dispatcher create-to-reclaim test was rejected because reclaim is required to cross authority
+  epochs, while a dispatcher is bound to one immutable lease authority.
+- Focused changed surface: 19 files / 233 tests. Paired runtime/server: 13 files / 179 tests.
+  Isolated Electron lifecycle: 1/1. Cross-version terminal wire: 5/5. Node/CLI/web typecheck, full
+  lint and native/type-aware audits, 87 reliability gates, max-lines, skill/localization checks,
+  formatting, diff checks, and changed-code quality pass with zero findings.
+- One Electron invocation run concurrently with typecheck and the wire journey observed Chromium's
+  transient empty initial URL; the required standalone rerun passed 1/1. Keep this real-Electron
+  file isolated from broad parallel suites.
+- Fresh security, lifecycle, and portability reviews found and drove the cleanup fixes above. The
+  remaining activation blocker is architectural: a terminal authority change currently tears down
+  the composition/executor that owns the retained page. Server reconciliation must preserve that
+  client state, issue actions through a dedicated authenticated path, and rekey placement only after
+  client proof.
+- Production advertisement remains disabled. Old clients, server/offscreen placement, browserless
+  hosts, SSH/WSL routes, folder workspaces, git worktrees, and existing browser behavior are
+  unchanged by this stage.
+- Draft PR [#14763](https://github.com/stablyai/orca/pull/14763) stacks on #14759 and remains
+  draft. GitHub auto-attached it to STA-4150; the ticket remains In Progress.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -756,7 +794,7 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Pushed the STA-4150 staged branches listed in the draft-stack table.
 - Opened and maintained their linked draft PRs; none were merged or marked ready.
 - Attached draft PRs and posted one concise checkpoint per stage on STA-4150.
-- Latest public checkpoint: GitHub auto-attached draft PR #14754 and one Linear checkpoint was
+- Latest public checkpoint: GitHub auto-attached draft PR #14763 and one Linear checkpoint was
   posted; CI is running.
 - Updated the Orca worktree comment/status at context, reproduction, fix, validation, and review
   checkpoints.
@@ -833,6 +871,17 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Opened draft PR [#14759](https://github.com/stablyai/orca/pull/14759) on #14756. GitHub
   auto-attached it to STA-4150; posted exactly one reconciliation-contract checkpoint comment
   (`b775afbd-fb75-42bf-bee3-8d8ca0877b33`) and kept the ticket In Progress.
+- Locally cascade-rebased all 36 published patches plus the reconciliation-adapter patch onto
+  `origin/main@c4e397bcdc`; range-diff marked all 37 patches identical. Safety pointer
+  `sta-4150-safety-pre-c4e-rebase-20260815` retains the prior series. No rewritten branch or new
+  stage branch has been pushed at this checkpoint.
+- The first atomic-push command constructed invalid zsh refspecs and failed before any remote
+  update. The corrected transaction atomically force-pushed all 35 existing public stack branches
+  with exact remote-OID leases and created `sta-4150-browser-page-reconciliation-adapters` with a
+  must-not-exist lease.
+- Opened draft PR [#14763](https://github.com/stablyai/orca/pull/14763) on #14759. GitHub
+  auto-attached it to STA-4150; posted exactly one reconciliation-adapter checkpoint comment
+  (`de3e18d0-c24d-433b-ad67-3943c68d4129`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

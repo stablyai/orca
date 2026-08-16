@@ -1,4 +1,7 @@
-import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostCommandResult
+} from '../../shared/browser-client-host-protocol'
 import {
   createPageState,
   type CommandRecord,
@@ -94,6 +97,23 @@ function commandsMatch(
       first.command.executionHostKey === second.command.executionHostKey
     )
   }
+  if (first.command.type === 'restorePage' && second.command.type === 'restorePage') {
+    return (
+      first.command.browserProfileId === second.command.browserProfileId &&
+      first.command.executionHostKey === second.command.executionHostKey &&
+      first.command.url === second.command.url
+    )
+  }
+  if (first.command.type === 'reclaimPage' && second.command.type === 'reclaimPage') {
+    return (
+      first.command.browserProfileId === second.command.browserProfileId &&
+      first.command.executionHostKey === second.command.executionHostKey &&
+      sameCommandAuthority(first.command.previousAuthority, second.command.previousAuthority)
+    )
+  }
+  if (first.command.type === 'closePage' && second.command.type === 'closePage') {
+    return sameCommandAuthority(first.command.targetAuthority, second.command.targetAuthority)
+  }
   return false
 }
 
@@ -101,14 +121,63 @@ export function assertNewPageCommand(
   page: PageState,
   command: BrowserClientHostCommandEvent
 ): void {
-  if (page.nextSequence === 1 && command.command.type !== 'createPage') {
+  if (page.nextSequence === 1 && command.command.type === 'navigate') {
     throw new Error('browser_host_command_create_required')
   }
-  if (page.nextSequence > 1 && command.command.type === 'createPage') {
-    throw new Error('browser_host_command_create_repeated')
+  if (page.nextSequence > 1) {
+    if (page.terminalCommandIssued) {
+      throw new Error('browser_host_command_page_terminal')
+    }
+    if (
+      command.command.type === 'createPage' ||
+      command.command.type === 'reclaimPage' ||
+      command.command.type === 'restorePage'
+    ) {
+      throw new Error(
+        command.command.type === 'createPage'
+          ? 'browser_host_command_create_repeated'
+          : 'browser_host_command_bootstrap_repeated'
+      )
+    }
   }
   if (page.createFailed) {
     throw new Error('browser_host_command_dependency_failed')
+  }
+}
+
+export function recordNewPageCommand(
+  page: PageState,
+  command: BrowserClientHostCommandEvent
+): void {
+  if (command.command.type === 'closePage') {
+    page.terminalCommandIssued = true
+  }
+}
+
+export function isBrowserClientPageBootstrapCommand(
+  command: BrowserClientHostCommandEvent['command']
+): boolean {
+  return (
+    command.type === 'createPage' ||
+    command.type === 'reclaimPage' ||
+    command.type === 'restorePage'
+  )
+}
+
+export function recordBrowserClientPageCommandResult(
+  page: PageState,
+  command: BrowserClientHostCommandEvent['command'],
+  result: BrowserClientHostCommandResult
+): void {
+  if (isBrowserClientPageBootstrapCommand(command)) {
+    page.created = result.status === 'completed'
+    page.createFailed = !page.created
+  }
+  if (command.type === 'closePage' && result.status === 'completed') {
+    page.retired = true
+  }
+  if (command.type === 'closePage' && result.status === 'failed') {
+    page.terminalCommandIssued = false
   }
 }
 
@@ -123,4 +192,29 @@ export function removeScheduledCommandPage(
       readyPages.splice(index, 1)
     }
   }
+}
+
+function sameCommandAuthority(
+  left: {
+    authorityRuntimeId: string
+    authorityEpoch: string
+    browserHostClientId: string
+    browserHostGeneration: number
+    pageHostGeneration: number
+  },
+  right: {
+    authorityRuntimeId: string
+    authorityEpoch: string
+    browserHostClientId: string
+    browserHostGeneration: number
+    pageHostGeneration: number
+  }
+): boolean {
+  return (
+    left.authorityRuntimeId === right.authorityRuntimeId &&
+    left.authorityEpoch === right.authorityEpoch &&
+    left.browserHostClientId === right.browserHostClientId &&
+    left.browserHostGeneration === right.browserHostGeneration &&
+    left.pageHostGeneration === right.pageHostGeneration
+  )
 }

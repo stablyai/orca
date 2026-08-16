@@ -229,6 +229,7 @@ class BrowserClientPageRendererRequests {
   }
 
   private sendReply(request: RendererRequest, outcome: RendererOutcome): void {
+    const nextPage = request.type === 'rekeyPage' ? { nextPage: request.nextPage } : {}
     const reply = BrowserClientPageRendererReply.safeParse(
       outcome.type === 'failed'
         ? {
@@ -237,7 +238,7 @@ class BrowserClientPageRendererRequests {
             page: request.page,
             operation: request.type
           }
-        : { ...outcome, requestId: request.requestId, page: request.page }
+        : { ...outcome, requestId: request.requestId, page: request.page, ...nextPage }
     )
     if (!reply.success) {
       return
@@ -257,13 +258,18 @@ function readTopFrame(isTopFrame: () => boolean): boolean {
 }
 
 function freezeRequest(request: RendererRequest): RendererRequest {
-  return Object.freeze({ ...request, page: Object.freeze({ ...request.page }) })
+  return Object.freeze({
+    ...request,
+    page: Object.freeze({ ...request.page }),
+    ...(request.type === 'rekeyPage' ? { nextPage: Object.freeze({ ...request.nextPage }) } : {})
+  })
 }
 
 function outcomeMatchesRequest(outcome: RendererOutcome, request: RendererRequest): boolean {
   return (
     outcome.type === 'failed' ||
     (request.type === 'mountPage' && outcome.type === 'mounted') ||
-    (request.type === 'retirePage' && outcome.type === 'retired')
+    (request.type === 'retirePage' && outcome.type === 'retired') ||
+    (request.type === 'rekeyPage' && outcome.type === 'rekeyed')
   )
 }

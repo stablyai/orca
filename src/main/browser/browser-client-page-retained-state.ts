@@ -18,7 +18,9 @@ export type BrowserClientPageLifecycleRegistry = Pick<
   | 'revokeNavigation'
   | 'navigateGuest'
   | 'beginGuestRetirement'
->
+> &
+  Partial<Pick<BrowserRouteWebContentsRegistry, 'rekeyGuestLifecycle'>> &
+  Partial<Pick<BrowserRouteWebContentsRegistry, 'grantReconciledNavigation'>>
 
 export type BrowserClientRetainedPage = {
   generation: number
@@ -29,4 +31,5 @@ export type BrowserClientRetainedPage = {
   route: BrowserClientPageNetworkRoute
   routeSession: BrowserRouteSessionHandle
   retiring: Promise<void> | null
+  reconciling: boolean
 }

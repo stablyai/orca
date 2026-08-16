@@ -35,6 +35,7 @@ export type PageState = {
   createFailed: boolean
   retiring: boolean
   retired: boolean
+  terminalCommandIssued: boolean
   retirementPromise?: Promise<boolean>
   queue: CommandRecord[]
   records: Map<number, CommandRecord>
@@ -99,7 +100,7 @@ export function createCommandRecord(event: BrowserClientHostCommandEvent): Comma
 export function snapshotCommandEvent(
   event: BrowserClientHostCommandEvent
 ): BrowserClientHostCommandEvent {
-  const command = Object.freeze({ ...event.command })
+  const command = snapshotPageCommand(event.command)
   return Object.freeze({ ...event, command })
 }
 
@@ -112,11 +113,30 @@ export function createPageState(browserPageId: string, generation: number): Page
     createFailed: false,
     retiring: false,
     retired: false,
+    terminalCommandIssued: false,
     queue: [],
     records: new Map(),
     sequencesByCommandId: new Map(),
     settledSequences: []
   }
+}
+
+function snapshotPageCommand(
+  command: BrowserClientHostCommandEvent['command']
+): BrowserClientHostCommandEvent['command'] {
+  if (command.type === 'reclaimPage') {
+    return Object.freeze({
+      ...command,
+      previousAuthority: Object.freeze({ ...command.previousAuthority })
+    })
+  }
+  if (command.type === 'closePage') {
+    return Object.freeze({
+      ...command,
+      targetAuthority: Object.freeze({ ...command.targetAuthority })
+    })
+  }
+  return Object.freeze({ ...command })
 }
 
 export function failedCommandResult(errorCode: string): BrowserClientHostCommandResult {

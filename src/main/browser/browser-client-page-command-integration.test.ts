@@ -1,6 +1,7 @@
 import type { Session, WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
+import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
@@ -29,15 +30,19 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     webContentsRegistry = new BrowserRouteWebContentsRegistry({
       getPartitionForSession: (session) => sessionRegistry.getPartitionForSession(session),
       getPreparedPageAuthority: (page) => sessionRegistry.getPreparedPageAuthority(page),
+      rekeyPreparedPage: (previous, next) => sessionRegistry.rekeyPreparedPage(previous, next),
       retirePreparedPage: (page) => sessionRegistry.retirePreparedPage(page),
       retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
         sessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId)
     })
+    const rekeyGuestLifecycle = vi.spyOn(webContentsRegistry, 'rekeyGuestLifecycle')
+    const grantReconciledNavigation = vi.spyOn(webContentsRegistry, 'grantReconciledNavigation')
     const guest = createGuest(routeSession as unknown as Session)
     const routeRelease = vi.fn()
     const rendererRetire = vi.fn(async () => {
       guest.destroy()
     })
+    const rendererRekey = vi.fn(async () => {})
     const executor = new BrowserClientPageCommandExecutor({
       orcaProfileId: 'orca-profile-a',
       authorityConnectionIdentity: 'authority-record-a',
@@ -54,6 +59,7 @@ describe('BrowserClientPageCommandExecutor integration', () => {
           expect(webContentsRegistry?.attachGuest(guest.webContents)).toBe(true)
           return { webContentsId: 41 }
         },
+        rekeyPage: rendererRekey,
         retirePage: rendererRetire
       }),
       routeSessions: sessionRegistry,
@@ -70,11 +76,32 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     })
     expect(guest.url()).toBe('https://example.internal/path')
 
+    const reclaim = createCommand('reclaimPage')
+    const dispatcher = new BrowserClientHostCommandDispatcher({
+      authority: reclaim,
+      handler: (event, commandSignal) => executor.handle(event, commandSignal)
+    })
+    const reclaimed = await dispatcher.dispatch(reclaim)
+    expect(rekeyGuestLifecycle).toHaveReturnedWith(expect.any(Object))
+    expect(grantReconciledNavigation).toHaveReturnedWith(true)
+    expect(reclaimed).toEqual({ status: 'completed' })
+    expect(rendererRekey).toHaveBeenCalledOnce()
+    expect(executor.hasPage('page-a', 7)).toBe(false)
+    expect(executor.hasPage('page-a', 8)).toBe(true)
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({
+        authorityEpoch: 'epoch-new',
+        pageHostGeneration: 8,
+        currentUrl: 'https://example.internal/path',
+        state: 'active'
+      })
+    ])
+
     guest.destroy()
     expect(executor.snapshotPageInventory()).toEqual([
       expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
     ])
-    await expect(executor.retirePage('page-a', 7)).resolves.toBe(true)
+    await expect(executor.retirePage('page-a', 8)).resolves.toBe(true)
     expect(guest.webContents.close).not.toHaveBeenCalled()
     expect(rendererRetire).toHaveBeenCalledOnce()
     expect(routeRelease).toHaveBeenCalledOnce()
@@ -83,17 +110,27 @@ describe('BrowserClientPageCommandExecutor integration', () => {
   })
 })
 
-function createCommand(type: 'createPage' | 'navigate'): BrowserClientHostCommandEvent {
-  return {
-    type: 'command',
+function createCommand(
+  type: 'createPage' | 'navigate' | 'reclaimPage'
+): BrowserClientHostCommandEvent {
+  const previousAuthority = {
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a',
     browserHostClientId: 'client-a',
     browserHostGeneration: 3,
+    pageHostGeneration: 7
+  }
+  return {
+    type: 'command',
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: type === 'reclaimPage' ? 'epoch-new' : 'epoch-a',
+    browserHostClientId: 'client-a',
+    browserHostGeneration: type === 'reclaimPage' ? 4 : 3,
     pageCommandProtocolVersion: 1,
+    pageReconciliationProtocolVersion: 1,
     browserPageId: 'page-a',
-    pageHostGeneration: 7,
-    commandSequence: type === 'createPage' ? 1 : 2,
+    pageHostGeneration: type === 'reclaimPage' ? 8 : 7,
+    commandSequence: type === 'createPage' || type === 'reclaimPage' ? 1 : 2,
     commandId: `${type}-a`,
     command:
       type === 'createPage'
@@ -102,7 +139,14 @@ function createCommand(type: 'createPage' | 'navigate'): BrowserClientHostComman
             browserProfileId: 'profile-a',
             executionHostKey: 'execution-host-a'
           }
-        : { type: 'navigate', url: 'example.internal/path' }
+        : type === 'navigate'
+          ? { type: 'navigate', url: 'example.internal/path' }
+          : {
+              type: 'reclaimPage',
+              previousAuthority,
+              browserProfileId: 'profile-a',
+              executionHostKey: 'execution-host-a'
+            }
   }
 }
 

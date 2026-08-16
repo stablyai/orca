@@ -507,7 +507,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     ])
   })
 
-  it('attempts every cleanup and keeps a failed retirement fenced', async () => {
+  it('moves a failed retirement into immutable outcome-unknown inventory', async () => {
     const { executor, order, renderer } = createHarness()
     await executor.handle(createCommand('createPage'), new AbortController().signal)
     renderer.retirePage.mockImplementationOnce(async () => {
@@ -524,7 +524,14 @@ describe('BrowserClientPageCommandExecutor', () => {
       'release-session',
       'release-route'
     ])
-    expect(executor.hasPage('page-a', 7)).toBe(true)
+    expect(executor.hasPage('page-a', 7)).toBe(false)
+    expect(executor.hasUnresolvedPage('page-a', 7)).toBe(true)
+    const inventory = executor.snapshotPageInventory()
+    expect(inventory).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
+    expect(Object.isFrozen(inventory[0])).toBe(true)
+    await expect(executor.retirePage('page-a', 7)).resolves.toBe(false)
     await expect(
       executor.handle(
         createCommand('createPage', { pageHostGeneration: 8 }),

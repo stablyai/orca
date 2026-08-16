@@ -13,7 +13,6 @@ import {
   isRouteGuestDestroyed,
   isRouteGuestOwnedByRenderer,
   isValidBlankRouteGuest,
-  isValidRoutePageRegistration,
   isValidRoutePageRetirement
 } from './browser-route-guest-guard'
 import { claimBrowserRouteGuestLifecycle } from './browser-route-guest-lifecycle-claim'
@@ -30,10 +29,21 @@ import {
   navigateBrowserRouteGuest
 } from './browser-route-guest-lifecycle'
 import type { BrowserRouteGuestState as GuestState } from './browser-route-webcontents-state'
+import type { BrowserRouteSessionRekey } from './browser-route-session-state'
+import {
+  grantReconciledBrowserRouteGuestNavigation,
+  rekeyBrowserRouteGuest,
+  type BrowserRouteGuestLifecycleRekey
+} from './browser-route-webcontents-rekey'
+import { registerBrowserRouteGuest } from './browser-route-webcontents-registration'
 
 type BrowserRouteWebContentsRegistryDependencies = {
   getPartitionForSession(session: Session): string | null
   getPreparedPageAuthority(input: BrowserRoutePageOwnerIdentity): symbol | null
+  rekeyPreparedPage?(
+    previous: BrowserRoutePageAuthority,
+    next: BrowserRoutePageOwnerIdentity
+  ): BrowserRouteSessionRekey | null
   retirePreparedPage(input: BrowserRoutePageAuthority): boolean
   retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number
   maxGuests?: number
@@ -89,47 +99,43 @@ export class BrowserRouteWebContentsRegistry {
   }
 
   registerGuest(registration: GuestIdentity): boolean {
-    if (!isValidRoutePageRegistration(registration)) {
-      return false
-    }
-    const state = this.guests.get(registration.webContentsId)
-    if (
-      !state ||
-      state.retirementRequested ||
-      !isBlankRouteGuest(state.guest) ||
-      !this.registrationMatchesGuest(state, registration)
-    ) {
-      return false
-    }
-    const pageAuthority = this.dependencies.getPreparedPageAuthority(registration)
-    if (pageAuthority === null) {
-      return false
-    }
-    const pageKey = browserRoutePageKey(registration)
-    const existingPage = this.guestsByPage.get(pageKey)
-    if (existingPage && existingPage !== state && this.hasLivePageAuthority(existingPage)) {
-      return false
-    }
-    if (state.registration) {
-      return (
-        browserRoutePageKey(state.registration) === pageKey && state.pageAuthority === pageAuthority
-      )
-    }
-    if (existingPage && existingPage !== state) {
-      existingPage.registration = null
-      existingPage.pageAuthority = null
-    }
-    state.registration = { ...registration }
-    state.pageAuthority = pageAuthority
-    this.guestsByPage.set(pageKey, state)
-    return true
+    return registerBrowserRouteGuest({
+      registration,
+      state: this.guests.get(registration.webContentsId),
+      guestsByPage: this.guestsByPage,
+      getPreparedPageAuthority: (page) => this.dependencies.getPreparedPageAuthority(page),
+      registrationMatchesGuest: (state, page) => this.registrationMatchesGuest(state, page),
+      hasLivePageAuthority: (state) => this.hasLivePageAuthority(state)
+    })
   }
 
   claimGuestLifecycle(registration: GuestIdentity): BrowserRouteGuestLifecycleClaim | null {
     const state = this.guests.get(registration.webContentsId)
     return claimBrowserRouteGuestLifecycle(registration, state, () =>
-      Boolean(state && this.registrationMatchesGuest(state, registration))
+      Boolean(
+        state &&
+        (!state.registration ||
+          (browserRoutePageKey(state.registration) === browserRoutePageKey(registration) &&
+            this.hasLivePageAuthority(state))) &&
+        this.registrationMatchesGuest(state, registration)
+      )
     )
+  }
+
+  rekeyGuestLifecycle(
+    claim: BrowserRouteGuestLifecycleClaim,
+    next: GuestIdentity
+  ): BrowserRouteGuestLifecycleRekey | null {
+    return rekeyBrowserRouteGuest({
+      claim,
+      next,
+      state: this.guests.get(claim.registration.webContentsId),
+      guestsByPage: this.guestsByPage,
+      dependencies: this.dependencies,
+      registrationMatchesGuest: (state, registration) =>
+        this.registrationMatchesGuest(state, registration),
+      claimGuestLifecycle: (registration) => this.claimGuestLifecycle(registration)
+    })
   }
 
   grantNavigation(registration: GuestIdentity): boolean {
@@ -144,6 +150,16 @@ export class BrowserRouteWebContentsRegistry {
           this.registrationMatchesGuest(state, registration)
         ),
       hasLivePageAuthority: () => Boolean(state && this.hasLivePageAuthority(state))
+    })
+  }
+
+  grantReconciledNavigation(claim: BrowserRouteGuestLifecycleClaim): boolean {
+    return grantReconciledBrowserRouteGuestNavigation({
+      claim,
+      state: this.guests.get(claim.registration.webContentsId),
+      registrationMatchesGuest: (state, registration) =>
+        this.registrationMatchesGuest(state, registration),
+      hasLivePageAuthority: (state) => this.hasLivePageAuthority(state)
     })
   }
 

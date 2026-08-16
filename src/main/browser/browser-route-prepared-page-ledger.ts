@@ -57,6 +57,31 @@ export class BrowserRoutePreparedPageLedger {
     return page
   }
 
+  rekey(
+    previous: BrowserRoutePageAuthority,
+    next: BrowserRoutePageOwnerIdentity
+  ): BrowserRoutePageAuthority | null {
+    if (
+      !this.isExactActivePage(previous) ||
+      !isValidBrowserRoutePageOwnerIdentity(next) ||
+      next.partition !== this.partition ||
+      next.browserPageId !== previous.browserPageId ||
+      next.rendererWebContentsId !== previous.rendererWebContentsId ||
+      next.pageHostGeneration === previous.pageHostGeneration
+    ) {
+      return null
+    }
+    const previousKey = pageKey(previous)
+    const nextKey = pageKey(next)
+    if (this.active.has(nextKey) || this.retiring.has(nextKey)) {
+      return null
+    }
+    const rekeyed = { ...next, pageAuthority: previous.pageAuthority }
+    this.active.delete(previousKey)
+    this.active.set(nextKey, rekeyed)
+    return rekeyed
+  }
+
   beginRetirement(page: BrowserRoutePageAuthority): boolean {
     if (!this.isExactActivePage(page)) {
       return false

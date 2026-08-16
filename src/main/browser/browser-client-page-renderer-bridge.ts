@@ -49,6 +49,12 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+type RendererRequestInput = RendererRequest extends infer Request
+  ? Request extends { requestId: string }
+    ? Omit<Request, 'requestId'>
+    : never
+  : never
+
 export class BrowserClientPageRendererBridgeRegistry {
   private readonly maxPending: number
   private readonly timeoutMs: number
@@ -95,6 +101,11 @@ export class BrowserClientPageRendererBridgeRegistry {
       isCurrent: () => this.isCurrent(state),
       mountPage: (page: RendererPageIdentity, signal: AbortSignal) =>
         this.mountPage(state, page, signal),
+      rekeyPage: (
+        previous: RendererPageIdentity,
+        next: RendererPageIdentity,
+        signal: AbortSignal
+      ) => this.rekeyPage(state, previous, next, signal),
       retirePage: (page: RendererPageIdentity) => this.retirePage(state, page)
     })
     state.bridge = bridge
@@ -159,9 +170,25 @@ export class BrowserClientPageRendererBridgeRegistry {
     }
   }
 
+  private async rekeyPage(
+    state: RendererState,
+    previousCandidate: RendererPageIdentity,
+    nextCandidate: RendererPageIdentity,
+    signal: AbortSignal
+  ): Promise<void> {
+    const page = BrowserClientPageRendererIdentity.parse(previousCandidate)
+    const nextPage = BrowserClientPageRendererIdentity.parse(nextCandidate)
+    const reply = await this.request(state, { type: 'rekeyPage', page, nextPage }, signal)
+    if (reply.type !== 'rekeyed') {
+      throw new Error(
+        reply.type === 'failed' ? reply.errorCode : 'browser_client_page_rekey_failed'
+      )
+    }
+  }
+
   private request(
     state: RendererState,
-    input: Omit<RendererRequest, 'requestId'>,
+    input: RendererRequestInput,
     signal: AbortSignal | null
   ): Promise<RendererReply> {
     if (!this.isCurrent(state)) {

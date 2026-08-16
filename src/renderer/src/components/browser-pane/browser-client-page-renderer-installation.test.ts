@@ -33,7 +33,7 @@ describe('browser client page renderer installation', () => {
     expect(subscribe).not.toHaveBeenCalled()
   })
 
-  it('routes mount and idempotent retirement through one subscriber', async () => {
+  it('routes mount, rekey, and idempotent retirement through one subscriber', async () => {
     let callback: RequestCallback | null = null
     const unsubscribe = vi.fn()
     const subscribe = vi.fn((next: typeof callback) => {
@@ -50,6 +50,7 @@ describe('browser client page renderer installation', () => {
         partitionCount: 1
       })),
       mountPage: vi.fn(async () => ({ webContentsId: 41 })),
+      rekeyPage: vi.fn(),
       retirePage: vi.fn()
     }
     const installation = installBrowserClientPageRenderer({ registry, subscribe })!
@@ -57,10 +58,15 @@ describe('browser client page renderer installation', () => {
     await expect(
       Promise.resolve(callback!({ requestId: 'mount-a', type: 'mountPage', page: PAGE }))
     ).resolves.toEqual({ type: 'mounted', webContentsId: 41 })
+    const nextPage = { ...PAGE, pageHostGeneration: 8 }
+    await expect(
+      Promise.resolve(callback!({ requestId: 'rekey-a', type: 'rekeyPage', page: PAGE, nextPage }))
+    ).resolves.toEqual({ type: 'rekeyed' })
     await expect(
       Promise.resolve(callback!({ requestId: 'retire-a', type: 'retirePage', page: PAGE }))
     ).resolves.toEqual({ type: 'retired' })
     expect(registry.mountPage).toHaveBeenCalledWith(PAGE)
+    expect(registry.rekeyPage).toHaveBeenCalledWith(PAGE, nextPage)
     expect(registry.retirePage).toHaveBeenCalledWith(PAGE)
     expect(installation.getMemoryProfile().retainedPageCount).toBe(1)
 
@@ -78,6 +84,7 @@ describe('browser client page renderer installation', () => {
       mountPage: vi.fn(async () => {
         throw new Error('browser_client_page_renderer_attach_timeout')
       }),
+      rekeyPage: vi.fn(),
       retirePage: vi.fn(() => {
         throw new Error('sensitive renderer detail')
       })

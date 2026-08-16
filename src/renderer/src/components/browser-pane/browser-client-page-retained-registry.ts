@@ -10,30 +10,12 @@ import {
   readBrowserClientPageAttachedGuestId
 } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
+import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-rekey'
+import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
 const DEFAULT_MAX_PAGES = 256
 const DEFAULT_MAX_PAGES_PER_PARTITION = 64
 const DEFAULT_ATTACH_TIMEOUT_MS = 5_000
-
-type RetainedPageStatus = 'attaching' | 'attached' | 'retiring'
-
-type RetainedPage = {
-  key: string
-  identity: RendererPageIdentity
-  host: HTMLDivElement
-  webview: Electron.WebviewTag
-  status: RetainedPageStatus
-  webContentsId: number | null
-  attachmentObserved: boolean
-  mount: Promise<{ webContentsId: number }>
-  resolveMount: (value: { webContentsId: number }) => void
-  rejectMount: (error: Error) => void
-  attachTimer: ReturnType<typeof setTimeout>
-  onAttached: EventListener
-  onReady: EventListener
-  onDestroyed: EventListener
-  onRendererGone: EventListener
-}
 
 export type BrowserClientPageRendererMemoryProfile = {
   retainedPageCount: number
@@ -134,6 +116,12 @@ export class BrowserClientPageRetainedRegistry {
     ) {
       this.releasePage(page)
     }
+  }
+
+  rekeyPage(previousCandidate: RendererPageIdentity, nextCandidate: RendererPageIdentity): void {
+    rekeyBrowserClientRetainedPage(this.pages, previousCandidate, nextCandidate, (page) =>
+      this.fenceRendererLoss(page)
+    )
   }
 
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile {

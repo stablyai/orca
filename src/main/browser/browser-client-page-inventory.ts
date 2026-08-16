@@ -55,6 +55,7 @@ export function snapshotBrowserClientPageInventoryList(
     lifecycleClaim: BrowserRouteGuestLifecycleClaim
     renderer: BrowserClientPageRenderer
     retiring: Promise<void> | null
+    reconciling: boolean
   }>,
   failedPages: ReadonlyMap<string, BrowserClientHostedPageInventory>
 ): readonly BrowserClientHostedPageInventory[] {
@@ -66,7 +67,7 @@ export function snapshotBrowserClientPageInventoryList(
         page.inventory,
         page.renderer,
         page.lifecycleClaim,
-        page.retiring !== null
+        page.retiring !== null || page.reconciling
       )
     )
   }

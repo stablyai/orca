@@ -45,12 +45,19 @@ export function rendererReplyMatchesRequest(
   reply: RendererReply,
   request: RendererRequest
 ): boolean {
-  const expectedType = request.type === 'mountPage' ? 'mounted' : 'retired'
+  const expectedType =
+    request.type === 'mountPage' ? 'mounted' : request.type === 'retirePage' ? 'retired' : 'rekeyed'
   return Boolean(
     (reply.type === expectedType ||
       (reply.type === 'failed' && reply.operation === request.type)) &&
     reply.page.partition === request.page.partition &&
     reply.page.browserPageId === request.page.browserPageId &&
-    reply.page.pageHostGeneration === request.page.pageHostGeneration
+    reply.page.pageHostGeneration === request.page.pageHostGeneration &&
+    (request.type !== 'rekeyPage' ||
+      reply.type === 'failed' ||
+      (reply.type === 'rekeyed' &&
+        reply.nextPage.partition === request.nextPage.partition &&
+        reply.nextPage.browserPageId === request.nextPage.browserPageId &&
+        reply.nextPage.pageHostGeneration === request.nextPage.pageHostGeneration))
   )
 }

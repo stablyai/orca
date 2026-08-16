@@ -2609,6 +2609,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts src/main/runtime/browser-host-page-reconciliation-executor.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-reconciliation-command-order.test.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
@@ -2656,9 +2657,12 @@
         "src/main/browser/paired-runtime-browser-client-host-registry.test.ts",
         "src/main/browser/paired-runtime-browser-client-host-runtime.test.ts",
         "src/main/browser/browser-client-host-attach-request.test.ts",
+        "src/main/browser/browser-client-host-reconciliation-command-order.test.ts",
         "src/main/browser/browser-client-page-command-executor.test.ts",
         "src/main/browser/browser-client-page-command-integration.test.ts",
+        "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
         "src/main/browser/browser-client-page-inventory.test.ts",
+        "src/main/browser/browser-route-prepared-page-rekey.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
         "src/main/ipc/runtime-environments-subscription-teardown.test.ts",
         "src/main/browser/browser-client-host-command-dispatcher.test.ts",
@@ -2871,6 +2875,15 @@
           ]
         },
         {
+          "file": "src/main/browser/browser-client-host-reconciliation-command-order.test.ts",
+          "assertions": [
+            "reclaim, restore, and close are valid first commands only after exact reconciliation negotiation",
+            "reclaim and restore failure cancels later navigation without running it",
+            "nested prior authority is immutable and exact duplicate matching rejects mutation on both ledgers",
+            "successful close is terminal while failed close releases the fence and successful reclaim can continue with navigation"
+          ]
+        },
+        {
           "file": "src/main/browser/browser-client-page-command-executor.test.ts",
           "assertions": [
             "in-flight create, ambiguous cleanup, and stale renderer authority snapshot as outcome unknown",
@@ -2879,8 +2892,25 @@
             "successful normalized navigation updates the immutable current URL snapshot unless normalization exceeds the URL field bound",
             "legacy-valid command identities remain executable even when optional inventory cannot encode them",
             "executor capacity cannot exceed the shared 256-page attach limit",
+            "failed retirement leaves immutable outcome-unknown inventory without a retryable live-page handle",
             "terminal navigation fencing revokes retained grants once and blocks late in-flight creation without inferring destruction",
             "revocation failure remains observable while exact guest, renderer, Session, and route cleanup still run"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+          "assertions": [
+            "reclaim moves one exact retained guest to a new authority without remounting",
+            "restore creates fresh authority and destroys it when initial navigation cannot be proven",
+            "close targets only exact prior authority",
+            "renderer failure or abort after main rekey retires both possible exact renderer identities, preserves unrelated pages, destroys the guest, and reports outcome unknown"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+          "assertions": [
+            "prepared authority rekeys without changing its opaque capability token",
+            "stale, occupied, cross-page, and cross-renderer targets fail without mutation"
           ]
         },
         {
@@ -3386,7 +3416,7 @@
         "The system-SSH adapter opens another no-auth loopback SOCKS listener outside tunnel accounting; its release-and-bind port can be claimed by a sibling process, and readiness proves only that some TCP listener answered.",
         "Standalone system-SSH cleanup is exact, but targets that require an already-authenticated ControlMaster, passphrase, PIN, or keyboard-interactive prompt can fail non-interactive route startup.",
         "Execution-host grant keys are not independently capped or ref-counted; activation requires one server-owned page or partition lifetime and bounded per-lease grant admission.",
-        "Same-authority command replay is deterministic, but applying the authenticated inventory reconciliation plan after runtime restart remains unimplemented.",
+        "Same-authority replay and concrete client reclaim, restore, and close application are deterministic, but server placement reconciliation still lacks dedicated authenticated command issuance and proof-driven placement rekey after runtime restart.",
         "SSH2 and system OpenSSH have isolated Docker evidence, but WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."
       ],
       "demotionRule": "Keep experimental or demote if a self-asserted or ambiguous host can receive a route, an SSH descriptor bypasses capability, lease-bound grant, or provider-authority checks, late cleanup can remove a replacement, a route can resolve names on the desktop, exceed a byte or stream bound, replenish credit before destination settlement, accept a stale or non-increasing generation, reuse a stream ID within one generation, lose or bypass its fail-closed listener during reconnect, expose the SOCKS listener off-loopback, accept BIND/UDP, or fall back when the selected route is unavailable."
@@ -3538,15 +3568,18 @@
       "oracle": "Prepare a page for one renderer and require authority lookup and registration by a sibling renderer to fail; reject owner replacement while the generation is active or retiring, then lose the owning renderer before guest registration and require only its prepared pages to retire. Pause partition setup, lose the owner, and require its waiter to fail without authority; add a live sibling waiter to the same pending setup and require only that waiter to admit; exceed the configured waiter cap and require immediate refusal. Make policy cleanup throw in the first of two owned partitions and require the sweep to retire both without restoring admission. Through the inert executor, retain one exact route, prepare its partition, mount blank on one current renderer, register and grant the exact guest in order, then load only its normalized HTTP(S) URL. Queue renderer requests before subscription, replace one subscriber, overflow both request and page budgets, race attachment with retirement, delay guest identity until DOM readiness, lose the guest renderer, and require exact bounded settlement without reparenting or cross-partition collision. Under real Electron, require the main bridge to accept only the actual main-frame reply, match the positive renderer WebContents ID to did-attach-webview, destroy it on retirement, and reject and remove a denied unprepared guest. Reject a mismatched route, stale renderer or page generation, and file URL without touching Chromium. Abort or fail registration after mount and require exact guest, renderer, Session, and route cleanup in that order; make renderer cleanup reject but require destruction before later release, and keep the generation fenced from replacement. Make guest retirement fail or mount outcome ambiguous and require every safe cleanup while Session and route remain retained. Destroy a guest spontaneously before command cleanup, reuse its WebContents identity, and require the old opaque claim not to retire the replacement while the replacement claim still can. Attach a blank route guest and require nonblank navigation plus every popup to be denied. Reject a wrong renderer, wrong page generation, nonblank initial document, wrong WebContents type, destroyed guest, and excess attachment; delay or fail its close and require navigation and popups to remain denied. Register the exact prepared tuple and prove navigation remains denied until a second grant; then allow repeated HTTP(S) navigation while continuing to deny file navigation and popups. Release logical page authority with delayed guest close; require immediate navigation revocation, one exact close, no partition admission, no policy cleanup, and same-tuple preparation refusal until destroyed acknowledgement. Make destroyed inspection throw and require retirement plus navigation to remain fail-closed until the explicit destroyed event. Acknowledge destruction, require one policy cleanup, reprepare the tuple, replay stale acknowledgement, and prove the replacement remains admitted. Make retirement startup throw and require policy plus capacity to remain fail-closed. Retire two pages sharing one partition and require cleanup only after both exact acknowledgements. Emit guest render-process-gone and destroyed, and emit owning-renderer process loss through the main-window boundary; require exact logical retirement, close, and grant revocation while unrelated renderer guests and prepared pages survive. Reject retirement for the wrong opaque authority. Reprepare after ordinary release, require a new opaque authority, deny the stale guest, and admit an exact replacement. Destroy a registered guest under real destroyed state, verify best-effort listener release, replay stale cleanup, and prove its replacement remains grantable. Mutate caller input after registration and prove main-owned authority is unchanged. Attach a normal browser Session and require no route-registry mutation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/preload/browser-client-page-renderer-requests.test.ts src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts"
       ],
       "testFiles": [
         "src/main/browser/browser-client-page-command-executor.test.ts",
         "src/main/browser/browser-client-page-command-integration.test.ts",
+        "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
         "src/main/browser/browser-client-page-renderer-bridge.test.ts",
         "src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts",
         "src/main/browser/browser-client-page-renderer-runtime.test.ts",
         "src/main/browser/browser-route-session-registry.test.ts",
+        "src/main/browser/browser-route-prepared-page-rekey.test.ts",
         "src/main/browser/browser-route-webcontents-registry.test.ts",
         "src/preload/browser-client-page-renderer-requests.test.ts",
         "src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts",
@@ -3568,7 +3601,14 @@
         {
           "file": "src/main/browser/browser-client-page-command-integration.test.ts",
           "assertions": [
-            "real route Session and WebContents registries compose create, navigate, destroyed acknowledgement, policy cleanup, and route release"
+            "a fresh new-authority dispatcher reclaims an old-authority executor page while real route Session and WebContents registries preserve exact cleanup"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+          "assertions": [
+            "exact reclaim preserves the guest while rekeying renderer, Session, lifecycle claim, and navigation authority",
+            "rekey uncertainty retires both possible renderer identities and failed restore navigation destroys the affected guest before releasing retained resources"
           ]
         },
         {
@@ -3617,6 +3657,13 @@
             "prepared authority is bound to one renderer and owner loss retires unregistered pages",
             "page release removes logical authority and tuple reuse receives a new opaque token",
             "route policy stays installed and tuple reuse stays blocked until delayed exact-guest destruction settles"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+          "assertions": [
+            "prepared authority moves only across an exact same-page same-renderer generation change",
+            "rekey preserves the opaque authority and leaves stale or conflicting input unchanged"
           ]
         },
         {

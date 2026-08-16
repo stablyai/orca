@@ -121,6 +121,35 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe('BrowserRouteSessionRegistry', () => {
+  it('rekeys one prepared authority and makes the old release handle inert', async () => {
+    const { dependencies, registry } = createHarness()
+    const previousHandle = await prepare(registry)
+    const previousOwner = {
+      partition: previousHandle.partition,
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      rendererWebContentsId: 11
+    }
+    const pageAuthority = registry.getPreparedPageAuthority(previousOwner)
+    expect(pageAuthority).not.toBeNull()
+    const nextOwner = { ...previousOwner, pageHostGeneration: 2 }
+
+    const rekeyed = registry.rekeyPreparedPage(
+      { ...previousOwner, pageAuthority: pageAuthority! },
+      nextOwner
+    )
+
+    expect(rekeyed?.page).toMatchObject(nextOwner)
+    expect(rekeyed?.page.pageAuthority).toBe(pageAuthority)
+    expect(registry.getPreparedPageAuthority(previousOwner)).toBeNull()
+    expect(registry.getPreparedPageAuthority(nextOwner)).toBe(pageAuthority)
+    previousHandle.release()
+    expect(registry.getPreparedPageAuthority(nextOwner)).toBe(pageAuthority)
+    rekeyed?.routeSession.release()
+    expect(registry.getPreparedPageAuthority(nextOwner)).toBeNull()
+    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
+  })
+
   it('applies and verifies the exact fail-closed proxy before allowlisting', async () => {
     const { dependencies, order, registry, session } = createHarness()
 

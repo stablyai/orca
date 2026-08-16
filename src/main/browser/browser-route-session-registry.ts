@@ -3,10 +3,9 @@ import {
   type BrowserRoutePartitionIdentity,
   type DerivedBrowserRoutePartition
 } from './browser-route-identity'
-import {
-  isValidBrowserRoutePageOwnerIdentity,
-  type BrowserRoutePageAuthority,
-  type BrowserRoutePageOwnerIdentity
+import type {
+  BrowserRoutePageAuthority,
+  BrowserRoutePageOwnerIdentity
 } from './browser-route-page-authority'
 import {
   assertBrowserRoutePreparedPageOwner,
@@ -24,8 +23,15 @@ import {
   type BrowserRouteProxyEndpoint as ProxyEndpoint
 } from './browser-route-session-policy'
 import type { BrowserRouteSessionRegistryDependencies } from './browser-route-session-registry-contract'
+import {
+  getBrowserRoutePreparedPageAuthority,
+  rekeyBrowserRouteSessionPage
+} from './browser-route-session-rekey'
+import { retireBrowserRouteSessionRendererPages } from './browser-route-session-renderer-retirement'
+import { retireBrowserRouteSessionPage } from './browser-route-session-retirement'
 import type {
   BrowserRouteSessionHandle,
+  BrowserRouteSessionRekey,
   PendingBrowserRoutePartition as PendingPartition,
   PreparedBrowserRoutePartition as PreparedPartition
 } from './browser-route-session-state'
@@ -64,40 +70,34 @@ export class BrowserRouteSessionRegistry {
   }
 
   getPreparedPageAuthority(input: BrowserRoutePageOwnerIdentity): symbol | null {
-    const state = this.live.get(input.partition)
-    if (!state || !isValidBrowserRoutePageOwnerIdentity(input)) {
-      return null
-    }
-    return state.pages.getAuthority(input)
+    return getBrowserRoutePreparedPageAuthority(this.live, input)
+  }
+
+  rekeyPreparedPage(
+    previous: BrowserRoutePageAuthority,
+    next: BrowserRoutePageOwnerIdentity
+  ): BrowserRouteSessionRekey | null {
+    return rekeyBrowserRouteSessionPage(
+      this.live,
+      previous,
+      next,
+      this.retirePreparedPage.bind(this)
+    )
   }
 
   retirePreparedPage(input: BrowserRoutePageAuthority): boolean {
-    const state = this.live.get(input.partition)
-    if (!state || !state.pages.beginRetirement(input)) {
-      return false
-    }
-    this.settlePageRetirement(state, input)
-    return true
+    return retireBrowserRouteSessionPage(this.live, input, (state, page) =>
+      this.settlePageRetirement(state, page)
+    )
   }
 
   retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number {
-    if (!Number.isInteger(rendererWebContentsId) || rendererWebContentsId <= 0) {
-      return 0
-    }
-    this.rendererPrepareFences.retire(rendererWebContentsId)
-    const retirements: { state: PreparedPartition; pages: BrowserRoutePageAuthority[] }[] = []
-    for (const state of Array.from(this.live.values())) {
-      const pages = state.pages.beginRendererRetirements(rendererWebContentsId)
-      retirements.push({ state, pages })
-    }
-    let retiredCount = 0
-    for (const { state, pages } of retirements) {
-      retiredCount += pages.length
-      for (const page of pages) {
-        this.settlePageRetirement(state, page)
-      }
-    }
-    return retiredCount
+    return retireBrowserRouteSessionRendererPages({
+      rendererWebContentsId,
+      rendererPrepareFences: this.rendererPrepareFences,
+      live: this.live,
+      settle: (state, page) => this.settlePageRetirement(state, page)
+    })
   }
 
   async preparePage(input: {

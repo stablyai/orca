@@ -43,7 +43,7 @@ const PAGE = {
 
 function request(
   requestId: string,
-  type: BrowserClientPageRendererRequest['type'] = 'mountPage'
+  type: Exclude<BrowserClientPageRendererRequest['type'], 'rekeyPage'> = 'mountPage'
 ): BrowserClientPageRendererRequest {
   return { requestId, type, page: PAGE }
 }
@@ -58,6 +58,32 @@ afterEach(() => {
 })
 
 describe('browser client page renderer preload requests', () => {
+  it('echoes the exact immutable rekey target through the current subscriber', async () => {
+    const ipc = new FakeIpc()
+    const requests = createBrowserClientPageRendererRequests({ ipc, isTopFrame: () => true })
+    const nextPage = { ...PAGE, pageHostGeneration: 8 }
+    const callback = vi.fn(() => ({ type: 'rekeyed' as const }))
+    requests.subscribe(callback)
+
+    ipc.emit({ requestId: 'rekey-a', type: 'rekeyPage', page: PAGE, nextPage })
+    nextPage.pageHostGeneration = 9
+    await flush()
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'rekeyPage',
+        page: PAGE,
+        nextPage: { ...PAGE, pageHostGeneration: 8 }
+      })
+    )
+    expect(ipc.sent[0]?.reply).toEqual({
+      type: 'rekeyed',
+      requestId: 'rekey-a',
+      page: PAGE,
+      nextPage: { ...PAGE, pageHostGeneration: 8 }
+    })
+  })
+
   it('queues before subscription and dispatches in arrival order', async () => {
     const ipc = new FakeIpc()
     const requests = createBrowserClientPageRendererRequests({ ipc, isTopFrame: () => true })
