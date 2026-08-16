@@ -5290,6 +5290,23 @@
           "89385db176": "Dismiss",
           "ca4a7892af": "Connecting...",
           "4afcca1d24": "Reconnect"
+        },
+        "WorktreeCardDisplayMenuSection": {
+          "511f830c30": "Agent row fields"
+        },
+        "agent": {
+          "row": {
+            "display": {
+              "field": {
+                "options": {
+                  "532b553f3c": "Provider icon",
+                  "48988dc775": "Secondary status",
+                  "345859b152": "Model label",
+                  "fc775c8e7a": "Relative time"
+                }
+              }
+            }
+          }
         }
       },
       "shared": {

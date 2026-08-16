@@ -9,7 +9,7 @@ export const AGENT_ROW_DISPLAY_FIELD_OPTIONS: {
     id: 'provider-icon',
     get label() {
       return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowProviderIcon',
+        'auto.components.sidebar.agent.row.display.field.options.532b553f3c',
         'Provider icon'
       )
     }
@@ -18,7 +18,7 @@ export const AGENT_ROW_DISPLAY_FIELD_OPTIONS: {
     id: 'secondary-status',
     get label() {
       return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowSecondaryStatus',
+        'auto.components.sidebar.agent.row.display.field.options.48988dc775',
         'Secondary status'
       )
     }
@@ -27,7 +27,7 @@ export const AGENT_ROW_DISPLAY_FIELD_OPTIONS: {
     id: 'model',
     get label() {
       return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowModel',
+        'auto.components.sidebar.agent.row.display.field.options.345859b152',
         'Model label'
       )
     }
@@ -36,7 +36,7 @@ export const AGENT_ROW_DISPLAY_FIELD_OPTIONS: {
     id: 'relative-time',
     get label() {
       return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowRelativeTime',
+        'auto.components.sidebar.agent.row.display.field.options.fc775c8e7a',
         'Relative time'
       )
     }

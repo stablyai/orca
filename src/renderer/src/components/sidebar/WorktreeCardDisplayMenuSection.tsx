@@ -103,7 +103,7 @@ export function WorktreeCardDisplayMenuSection({
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
             {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowFields',
+              'auto.components.sidebar.WorktreeCardDisplayMenuSection.511f830c30',
               'Agent row fields'
             )}
           </DropdownMenuLabel>
@@ -228,7 +228,7 @@ export function WorktreeCardDisplayMenuSection({
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
             {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowFields',
+              'auto.components.sidebar.WorktreeCardDisplayMenuSection.511f830c30',
               'Agent row fields'
             )}
           </DropdownMenuLabel>
