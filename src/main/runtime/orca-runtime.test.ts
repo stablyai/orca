@@ -16818,6 +16818,7 @@ describe('OrcaRuntimeService', () => {
           if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
             setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25hcomposer redraw', Date.now()), 1)
           }
+          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
           return true
         },
         kill: () => true,
@@ -16873,6 +16874,66 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('fails a Codex composer wait immediately when its PTY exits', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+      let failure: unknown
+      const sendPromise = runtime
+        .sendTerminalAgentPrompt(handle, 'review this change')
+        .catch((error: unknown) => {
+          failure = error
+        })
+
+      runtime.onPtyExit('pty-bg', 7)
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(failure).toMatchObject({ message: 'terminal_exited' })
+      expect(writes).toEqual([])
+      await sendPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('revalidates the PTY generation after Codex composer readiness', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      launchAgent: 'codex'
+    })
+
+    const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+    const rejection = expect(sendPromise).rejects.toThrow('terminal_exited')
+    runtime.onPtyData('pty-bg', CODEX_COMPOSER_READY_BYTES, Date.now())
+    runtime.onPtyExit('pty-bg', 7)
+
+    await rejection
+    expect(writes).toEqual([])
   })
 
   it.each(['claude', 'codex'] as const)(

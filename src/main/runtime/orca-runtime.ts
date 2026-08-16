@@ -18237,7 +18237,14 @@ export class OrcaRuntimeService {
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      await this.waitForCodexPromptComposer(pty.pty.ptyId)
+      await this.waitForCodexPromptComposer(handle, pty.pty.ptyId)
+      if (
+        this.getPtyLifecycleGeneration(pty.pty.ptyId) !== generation ||
+        this.ptysById.get(pty.pty.ptyId) !== pty.pty ||
+        !pty.pty.connected
+      ) {
+        throw new Error('terminal_exited')
+      }
       const submits = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
         generation,
@@ -18267,23 +18274,31 @@ export class OrcaRuntimeService {
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    await this.waitForCodexPromptComposer(leaf.ptyId)
-    const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+    const ptyId = leaf.ptyId
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await this.waitForCodexPromptComposer(handle, ptyId)
+    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      throw new Error('terminal_exited')
+    }
+    const current = this.getLiveLeafForHandle(handle).leaf
+    if (!current.writable || current.ptyId !== ptyId || (await this.isLeafPtyProvenAbsent(ptyId))) {
+      throw new Error('terminal_not_writable')
+    }
+    const submits = await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      return await this.writeTerminalAgentPrompt(handle, ptyId, generation, payload, options)
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
   }
 
-  private async waitForCodexPromptComposer(ptyId: string): Promise<void> {
+  private async waitForCodexPromptComposer(handle: string, ptyId: string): Promise<void> {
     const pty = this.ptysById.get(ptyId)
     if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'codex') {
       return
     }
-    if (!(await this.waitForPtyDraftInputReady(ptyId, 'codex'))) {
+    if (!(await this.waitForPtyDraftInputReady(ptyId, 'codex', handle))) {
       throw new Error('agent_composer_not_ready')
     }
   }
@@ -23563,24 +23578,28 @@ export class OrcaRuntimeService {
     if (!ptyId) {
       return Promise.resolve(null)
     }
-    return this.waitForPtyDraftInputReady(ptyId, agent).then((ready) => (ready ? ptyId : null))
+    return this.waitForPtyDraftInputReady(ptyId, agent, handle).then((ready) =>
+      ready ? ptyId : null
+    )
   }
 
-  private waitForPtyDraftInputReady(ptyId: string, agent: TuiAgent): Promise<boolean> {
+  private waitForPtyDraftInputReady(
+    ptyId: string,
+    agent: TuiAgent,
+    handle: string
+  ): Promise<boolean> {
     const readySignal =
       TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean>((resolve, reject) => {
       let settled = false
       const scanner = createDraftPasteReadyScanner(readySignal)
       let quietTimer: NodeJS.Timeout | null = null
       let hardTimer: NodeJS.Timeout | null = null
       let unsubscribe: (() => void) | null = null
+      const exitAbort = new AbortController()
 
-      const finish = (value: boolean): void => {
-        if (settled) {
-          return
-        }
-        settled = true
+      const cleanup = (): void => {
+        exitAbort.abort()
         if (quietTimer) {
           clearTimeout(quietTimer)
         }
@@ -23588,7 +23607,24 @@ export class OrcaRuntimeService {
           clearTimeout(hardTimer)
         }
         unsubscribe?.()
+      }
+
+      const finish = (value: boolean): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
         resolve(value)
+      }
+
+      const fail = (error: unknown): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
       }
 
       const armQuietTimer = (): void => {
@@ -23616,6 +23652,12 @@ export class OrcaRuntimeService {
       }
       if (!settled) {
         hardTimer = setTimeout(() => finish(false), resolveDraftPasteReadyTimeoutMs(agent))
+        void this.waitForTerminal(handle, {
+          condition: 'exit',
+          signal: exitAbort.signal
+        })
+          .then(() => fail(new Error('terminal_exited')))
+          .catch((error) => fail(error))
       }
     })
   }
