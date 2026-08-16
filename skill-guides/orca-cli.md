@@ -394,10 +394,15 @@ ORCA emulator attach "iPhone 17 Pro" --json
 ORCA emulator tap 0.5 0.7 --json
 ORCA emulator type "hello" --json
 ORCA emulator gesture '[{"type":"begin","x":0.5,"y":0.8},{"type":"move","x":0.5,"y":0.4},{"type":"end","x":0.5,"y":0.2}]' --json
-# cmd.exe: ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json
 ORCA emulator button home --json
 ORCA emulator exec --command "tap 0.5 0.7" --json   # no "serve-sim" in the command string
 ORCA emulator kill --json
+```
+
+On cmd.exe, replace the single-quoted gesture command above with:
+
+```text
+ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json
 ```
 
 Rules (mirror browser):

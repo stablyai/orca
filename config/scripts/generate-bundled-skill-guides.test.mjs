@@ -188,6 +188,7 @@ describe('bundled skill guide generator', () => {
       expect(source).toMatch(/gesture/i)
       expect(source).toMatch(/cmd\.exe/i)
       expect(source).toMatch(/double quotes|escaped inner|backslash-escape|\\"/i)
+      expect(source).not.toMatch(/^# cmd\.exe:/im)
     }
     const computerUse = await readFile(
       path.join(projectDir, 'skill-guides', 'computer-use.md'),
