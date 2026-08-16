@@ -2582,26 +2582,32 @@
         "client-hosted browser tunnel framing",
         "execution-host TCP credit flow",
         "main-owned loopback SOCKS5 route",
+        "runtime-owned browser-host lease and placement authority",
         "dedicated paired-runtime E2EE tunnel subscription"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Deterministic protocol, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, bounded receive bytes and chunks, stale generations, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. An explicitly injected paired-runtime E2EE method carries SOCKS and HTTP bytes over one dedicated capability- and paired-device-bound socket to a native execution-host destination, then proves route close destroys the destination socket. The production method remains unregistered until lease and route authorization exists. SSH and WSL providers remain uncovered.",
+      "coverageNotes": "Deterministic protocol, registry, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, bounded receive bytes and chunks, authority epochs, exact host selection, monotonic host/page/route generations, connection-owned cleanup, exact client revocation, stale and replaced fences, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. Explicitly injected browser-host and paired-runtime tunnel methods lease one exact host, then carry SOCKS and HTTP bytes over a dedicated E2EE socket to the fenced native execution-host revision and prove route close destroys the destination socket. Both methods and capabilities remain disabled in production. SSH and WSL providers remain uncovered.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
       ],
-      "invariant": "A client-hosted browser network route preserves destination names for execution-host DNS, admits only versioned bounded frames, replenishes credit only after destination writes settle, rejects stale or reused stream identities, and never falls back to desktop DNS or sockets when the selected route is unavailable. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
-      "oracle": "Encode and decode each tunnel boundary with exact generation, stream, length, opcode, payload, and credit assertions. Drive one injected destination through open, data, write settlement, receive-window exhaustion, half-close, duplicate stream, stale generation, and teardown. Drive a real loopback SOCKS client through greeting and domain CONNECT, assert the final connector receives the unchanged hostname, echo bytes through the injected route, normalize only listener wildcards, reject BIND, and return failure without another connection when the route is offline.",
+      "invariant": "A client-hosted browser network route exists only for an exact live server-owned browser-host lease, authority epoch, host generation, paired identity, execution-host revision, and server-owned route generation. Host selection never chooses arbitrarily, stale cleanup cannot remove a replacement, destination names remain unresolved until the execution host, credit returns only after writes settle, and route loss never falls back to desktop DNS or sockets. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
+      "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Reject missing, stale, wrong-device, wrong-epoch, and wrong-execution-revision tunnel requests before binary registration. Drive the accepted lease through a real paired E2EE SOCKS-to-HTTP journey, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts"
       ],
       "testFiles": [
         "src/shared/browser-network-capabilities.test.ts",
+        "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
+        "src/main/runtime/browser-host-lease-registry.test.ts",
+        "src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "src/main/browser/paired-runtime-browser-host-lease.test.ts",
         "src/main/browser/browser-network-tunnel-session.test.ts",
         "src/main/browser/browser-network-tunnel-client.test.ts",
         "src/main/browser/paired-runtime-browser-network-route.test.ts",
@@ -2612,6 +2618,23 @@
         "src/shared/remote-runtime-client.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/browser-host-lease-registry.test.ts",
+          "assertions": [
+            "multiple live hosts require exact selection instead of first-connected routing",
+            "same-device replacement increments generation and fences the old connection",
+            "late cleanup cannot remove a newer lease or route generation",
+            "page placement generations are monotonic and stale lease authority is rejected"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "assertions": [
+            "the control method stays out of production registration",
+            "only a negotiated authenticated paired-runtime connection receives a server-owned epoch and generation",
+            "connection cleanup releases the exact lease and replacement emits an epoch-and-generation-bound revocation"
+          ]
+        },
         {
           "file": "src/shared/browser-network-tunnel-protocol.test.ts",
           "assertions": [
@@ -2653,7 +2676,8 @@
           "file": "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
           "assertions": [
             "the production RPC registry excludes the tunnel until route authorization exists",
-            "unnegotiated and mismatched browser hosts register no binary handler",
+            "unnegotiated, self-asserted, stale, and wrong-execution-revision browser hosts register no binary handler",
+            "the server allocates route generations and fences the replaced route",
             "subscription cleanup removes the exact connection-owned raw handler"
           ]
         },
@@ -2682,6 +2706,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.4,
+          "summary": "Ten files passed 60 lease, authority, placement, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
+        },
         {
           "date": "2026-08-13",
           "runner": "local",
@@ -2712,7 +2745,7 @@
       ],
       "runtimeBudget": {
         "p95Seconds": 5,
-        "scope": "ten deterministic protocol, flow-control, loopback, RPC, and paired-runtime test files"
+        "scope": "deterministic lease, protocol, flow-control, loopback, RPC, and paired-runtime test files"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -2720,14 +2753,13 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The same source checkout recorded the SOCKS and source-multiplexer oracles red before their implementations and green afterward. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed unchanged while the production registry remained closed. Mutation/revert evidence remains to be collected before promotion."
+        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The lease registry and control-client suites were recorded red at missing modules before implementation. The unchanged tunnel authorization oracle was behaviorally red because an authenticated socket could self-assert its paired device ID and received ready generation 7 without a lease; it is green after server-owned lease and route fencing. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed with an exact control lease while both production registries remained closed. Full mutation/revert evidence remains to be collected before promotion."
       },
       "performanceBudget": {
         "required": true,
         "evidence": "Data frames, send credit, pending bytes and chunk counts in both directions, streams, SOCKS handshake and pipelined application bytes are bounded. Credit returns only after the execution-host or browser-facing socket write settles, and the injected transport must explicitly accept each frame. Aggregate route, browser-host, and process ledgers plus drain-aware fair scheduling remain required before live tunnel advertisement."
       },
       "promotionCriteria": [
-        "Bind the method to a live browser-host lease, authority epoch, exact execution-host revision, and server-owned monotonic route generation before production registration.",
         "Add bounded pending-open admission and open-rate limits plus aggregate route, browser-host, and process memory ledgers with runtime-wide fair scheduling.",
         "Approve all same-host local processes and users as inside the desktop trust boundary or replace SOCKS no-auth with Chromium-compatible process isolation.",
         "Add old/new peer coverage to the dedicated paired-runtime binary tunnel journey.",
@@ -2740,7 +2772,7 @@
         "The loopback SOCKS endpoint uses Chromium-compatible no-auth and is not safe to activate until its desktop trust boundary is approved or isolated.",
         "SSH, WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."
       ],
-      "demotionRule": "Keep experimental or demote if a route can resolve names on the desktop, exceed a byte or stream bound, replenish credit before destination settlement, accept a stale generation or reused stream ID, expose the SOCKS listener off-loopback, accept BIND/UDP, or fall back when the selected route is unavailable."
+      "demotionRule": "Keep experimental or demote if a self-asserted or ambiguous host can receive a route, late cleanup can remove a replacement, a route can resolve names on the desktop, exceed a byte or stream bound, replenish credit before destination settlement, accept a stale generation or reused stream ID, expose the SOCKS listener off-loopback, accept BIND/UDP, or fall back when the selected route is unavailable."
     },
     {
       "id": "browser-stream.bounded-reconnect",

@@ -25,6 +25,13 @@ const pairing = {
   scope: 'runtime'
 } as PairingOffer
 
+const lease = {
+  authorityRuntimeId: 'runtime-a',
+  authorityEpoch: 'epoch-a',
+  browserHostClientId: 'host-a',
+  browserHostGeneration: 3
+}
+
 afterEach(() => {
   subscribeRemoteRuntimeRequestMock.mockReset()
   vi.restoreAllMocks()
@@ -42,9 +49,8 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     )
     const route = new PairedRuntimeBrowserNetworkRoute({
       pairing,
-      authorityRuntimeId: 'runtime-a',
-      browserHostClientId: 'device-a',
-      tunnelGeneration: 7
+      lease,
+      executionHostRevision: 1
     })
 
     const starting = route.start()
@@ -192,9 +198,8 @@ function createRoute(
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({
     pairing,
-    authorityRuntimeId: 'runtime-a',
-    browserHostClientId: 'device-a',
-    tunnelGeneration: 7,
+    lease,
+    executionHostRevision: 1,
     ...overrides
   })
 }

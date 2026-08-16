@@ -1,11 +1,18 @@
 import type { PairingOffer } from '../../shared/pairing'
 import {
+  BrowserNetworkTunnelEvent,
+  type BrowserHostLeaseAuthority
+} from '../../shared/browser-client-host-protocol'
+import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription,
   type RemoteRuntimeSubscriptionOptions
 } from '../../shared/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
-import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import { RemoteBrowserSocksServer } from './remote-browser-socks-server'
 
@@ -14,9 +21,8 @@ const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
 
 type PairedRuntimeBrowserNetworkRouteOptions = {
   pairing: PairingOffer
-  authorityRuntimeId: string
-  browserHostClientId: string
-  tunnelGeneration: number
+  lease: BrowserHostLeaseAuthority
+  executionHostRevision: number
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
   onError?: (error: Error) => void
@@ -24,7 +30,7 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
 
 export class PairedRuntimeBrowserNetworkRoute {
   private readonly options: PairedRuntimeBrowserNetworkRouteOptions
-  private readonly tunnel: BrowserNetworkTunnelClient
+  private tunnel: BrowserNetworkTunnelClient | null = null
   private readonly socks: RemoteBrowserSocksServer
   private subscription: RemoteRuntimeSubscription | null = null
   private startPromise: Promise<{ host: string; port: number }> | null = null
@@ -35,11 +41,9 @@ export class PairedRuntimeBrowserNetworkRoute {
 
   constructor(options: PairedRuntimeBrowserNetworkRouteOptions) {
     this.options = options
-    this.tunnel = new BrowserNetworkTunnelClient({
-      tunnelGeneration: options.tunnelGeneration,
-      sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false
+    this.socks = new RemoteBrowserSocksServer({
+      open: (target) => this.requireTunnel().open(target)
     })
-    this.socks = new RemoteBrowserSocksServer({ open: (target) => this.tunnel.open(target) })
   }
 
   start(): Promise<{ host: string; port: number }> {
@@ -75,33 +79,67 @@ export class PairedRuntimeBrowserNetworkRoute {
         this.options.pairing,
         'network.browserTunnel',
         {
-          authorityRuntimeId: this.options.authorityRuntimeId,
-          browserHostClientId: this.options.browserHostClientId,
-          executionHost: { kind: 'native' },
-          tunnelGeneration: this.options.tunnelGeneration
+          ...this.options.lease,
+          executionHost: {
+            kind: 'native',
+            runtimeId: this.options.lease.authorityRuntimeId,
+            revision: this.options.executionHostRevision
+          }
         },
         timeoutMs,
         {
           onResponse: (response) => {
             if (!response.ok) {
-              rejectReady(new RemoteRuntimeClientError(response.error.code, response.error.message))
+              this.fail(
+                new RemoteRuntimeClientError(response.error.code, response.error.message),
+                rejectReady
+              )
               return
             }
-            const result = response.result as { type?: unknown; tunnelGeneration?: unknown }
+            const parsed = BrowserNetworkTunnelEvent.safeParse(response.result)
             if (
-              result.type === 'ready' &&
-              result.tunnelGeneration === this.options.tunnelGeneration
+              !parsed.success ||
+              response._meta.runtimeId !== this.options.lease.authorityRuntimeId
             ) {
+              this.fail(new Error('Invalid browser network route response'), rejectReady)
+              return
+            }
+            const result = parsed.data
+            if (result.type === 'ready') {
+              if (this.tunnel) {
+                if (this.tunnel.generation !== result.tunnelGeneration) {
+                  this.fail(
+                    new Error('Browser network route generation changed in place'),
+                    rejectReady
+                  )
+                }
+                return
+              }
+              this.tunnel = new BrowserNetworkTunnelClient({
+                tunnelGeneration: result.tunnelGeneration,
+                sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false
+              })
               this.ready = true
               resolveReady()
-            } else if (
-              result.type === 'closed' &&
-              result.tunnelGeneration === this.options.tunnelGeneration
-            ) {
+            } else if (this.tunnel?.generation === result.tunnelGeneration) {
               this.fail(new Error('Browser network route closed by the runtime'), rejectReady)
+            } else {
+              this.fail(
+                new Error('Browser network route closed with an unknown generation'),
+                rejectReady
+              )
             }
           },
-          onBinary: (bytes) => this.tunnel.handleBinary(bytes),
+          onBinary: (bytes) => {
+            if (!this.tunnel) {
+              this.fail(
+                new Error('Browser network route received binary data before readiness'),
+                rejectReady
+              )
+              return
+            }
+            this.tunnel.handleBinary(bytes)
+          },
           onError: (routeError) => this.fail(routeError, rejectReady),
           onClose: () => this.fail(new Error('Browser network route transport closed'), rejectReady)
         },
@@ -115,6 +153,7 @@ export class PairedRuntimeBrowserNetworkRoute {
           },
           clientCapabilities: [
             ...(this.options.subscription?.clientCapabilities ?? []),
+            BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
             BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
           ]
         }
@@ -175,7 +214,8 @@ export class PairedRuntimeBrowserNetworkRoute {
   }
 
   private async closeRoute(error: Error): Promise<void> {
-    this.tunnel.close(error)
+    this.tunnel?.close(error)
+    this.tunnel = null
     const failures: Error[] = []
     try {
       this.subscription?.close()
@@ -202,5 +242,12 @@ export class PairedRuntimeBrowserNetworkRoute {
     } catch {
       // A reporting callback cannot prevent route cleanup.
     }
+  }
+
+  private requireTunnel(): BrowserNetworkTunnelClient {
+    if (!this.tunnel) {
+      throw new Error('Browser network route is not ready')
+    }
+    return this.tunnel
   }
 }

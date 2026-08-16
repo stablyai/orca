@@ -50,6 +50,10 @@ export class BrowserNetworkTunnelClient {
     )
   }
 
+  get generation(): number {
+    return this.tunnelGeneration
+  }
+
   open(target: BrowserNetworkTunnelOpen): Promise<BrowserNetworkTunnelDuplex> {
     if (this.closed) {
       return Promise.reject(new Error('Browser tunnel is closed'))
