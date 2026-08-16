@@ -5,6 +5,17 @@ import { formatCommandHelp, printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
+const TERMINAL_SELECTOR_COMMANDS = [
+  'show',
+  'read',
+  'send',
+  'wait',
+  'switch',
+  'close',
+  'rename',
+  'split'
+] as const
+
 describe('terminal close CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -65,7 +76,11 @@ describe('terminal close CLI', () => {
 })
 
 describe('terminal selector help', () => {
-  it.each(['show', 'read', 'send', 'wait', 'switch', 'close', 'rename', 'split'])(
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each(TERMINAL_SELECTOR_COMMANDS)(
     'documents the stable pty selector for terminal %s',
     (command) => {
       const spec = COMMAND_SPECS.find(
@@ -95,7 +110,7 @@ describe('terminal selector help', () => {
     printHelp(COMMAND_SPECS, [])
 
     const help = String(log.mock.calls[0]?.[0])
-    for (const command of ['show', 'read', 'send', 'wait', 'split', 'switch', 'close']) {
+    for (const command of TERMINAL_SELECTOR_COMMANDS) {
       expect(help).toMatch(new RegExp(`orca terminal ${command} .*pty:<ptyId>`))
     }
   })
