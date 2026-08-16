@@ -1,4 +1,4 @@
-import type { Event, Session, WebContents } from 'electron'
+import type { Session, WebContents } from 'electron'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
@@ -6,7 +6,7 @@ import {
   type BrowserRoutePageAuthority,
   type BrowserRoutePageAuthorityRetirement,
   type BrowserRoutePageGuestIdentity,
-  type BrowserRoutePageIdentity
+  type BrowserRoutePageOwnerIdentity
 } from './browser-route-page-authority'
 import {
   closeRouteGuest,
@@ -17,25 +17,14 @@ import {
   isValidRoutePageRegistration,
   isValidRoutePageRetirement
 } from './browser-route-guest-guard'
+import type { BrowserRouteGuestState as GuestState } from './browser-route-webcontents-state'
 
 type BrowserRouteWebContentsRegistryDependencies = {
   getPartitionForSession(session: Session): string | null
-  getPreparedPageAuthority(input: BrowserRoutePageIdentity): symbol | null
+  getPreparedPageAuthority(input: BrowserRoutePageOwnerIdentity): symbol | null
   retirePreparedPage(input: BrowserRoutePageAuthority): boolean
+  retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number
   maxGuests?: number
-}
-
-type GuestState = {
-  guest: WebContents
-  partition: string
-  registration: BrowserRoutePageGuestIdentity | null
-  pageAuthority: symbol | null
-  navigationGranted: boolean
-  retirementRequested: boolean
-  retirementCallback: (() => void) | null
-  onNavigate: (event: Event, url: string) => void
-  onRenderProcessGone: () => void
-  onDestroyed: () => void
 }
 
 export class BrowserRouteWebContentsRegistry {
@@ -94,6 +83,7 @@ export class BrowserRouteWebContentsRegistry {
     const state = this.guests.get(registration.webContentsId)
     if (
       !state ||
+      state.retirementRequested ||
       !isBlankRouteGuest(state.guest) ||
       !this.registrationMatchesGuest(state, registration)
     ) {
@@ -170,6 +160,11 @@ export class BrowserRouteWebContentsRegistry {
       if (isRouteGuestOwnedByRenderer(state.guest, state.registration, rendererWebContentsId)) {
         this.retireGuestPage(state)
       }
+    }
+    try {
+      this.dependencies.retirePreparedPagesOwnedByRenderer(rendererWebContentsId)
+    } catch {
+      // Attached guests stay revoked even if logical owner cleanup is unavailable.
     }
   }
 
@@ -277,6 +272,7 @@ export class BrowserRouteWebContentsRegistry {
         partition: registration.partition,
         browserPageId: registration.browserPageId,
         pageHostGeneration: registration.pageHostGeneration,
+        rendererWebContentsId: registration.rendererWebContentsId,
         pageAuthority
       })
     } catch {

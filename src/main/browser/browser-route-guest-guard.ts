@@ -2,7 +2,7 @@ import type { WebContents } from 'electron'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import {
-  isValidBrowserRoutePageIdentity,
+  isValidBrowserRoutePageOwnerIdentity,
   type BrowserRoutePageAuthorityRetirement,
   type BrowserRoutePageGuestIdentity
 } from './browser-route-page-authority'
@@ -29,17 +29,15 @@ export function isBlankRouteGuest(guest: WebContents): boolean {
 
 export function isValidRoutePageRegistration(value: BrowserRoutePageGuestIdentity): boolean {
   return Boolean(
-    isValidBrowserRoutePageIdentity(value) &&
+    isValidBrowserRoutePageOwnerIdentity(value) &&
     Number.isInteger(value.webContentsId) &&
-    value.webContentsId > 0 &&
-    Number.isInteger(value.rendererWebContentsId) &&
-    value.rendererWebContentsId > 0
+    value.webContentsId > 0
   )
 }
 
 export function isValidRoutePageRetirement(value: BrowserRoutePageAuthorityRetirement): boolean {
   return Boolean(
-    isValidBrowserRoutePageIdentity(value) &&
+    isValidBrowserRoutePageOwnerIdentity(value) &&
     typeof value.pageAuthority === 'symbol' &&
     typeof value.onRetired === 'function'
   )

@@ -4,70 +4,40 @@ import {
   type DerivedBrowserRoutePartition
 } from './browser-route-identity'
 import {
-  browserRouteLogicalPageKey as pageKey,
-  isValidBrowserRoutePageIdentity,
+  isValidBrowserRoutePageOwnerIdentity,
   type BrowserRoutePageAuthority,
-  type BrowserRoutePageAuthorityRetirement
+  type BrowserRoutePageOwnerIdentity
 } from './browser-route-page-authority'
+import {
+  assertBrowserRoutePreparedPageOwner,
+  BrowserRoutePreparedPageLedger
+} from './browser-route-prepared-page-ledger'
+import {
+  BrowserRouteRendererPrepareFenceRegistry,
+  type BrowserRouteRendererPrepareFence
+} from './browser-route-renderer-prepare-fence'
+import {
+  assertBrowserRouteProxyEndpoint,
+  prepareBrowserRouteSessionPolicy,
+  sameBrowserRouteProxyEndpoint,
+  type BrowserRouteElectronSession,
+  type BrowserRouteProxyEndpoint as ProxyEndpoint
+} from './browser-route-session-policy'
+import type { BrowserRouteSessionRegistryDependencies } from './browser-route-session-registry-contract'
+import type {
+  BrowserRouteSessionHandle,
+  PendingBrowserRoutePartition as PendingPartition,
+  PreparedBrowserRoutePartition as PreparedPartition
+} from './browser-route-session-state'
+
+export type { BrowserRouteElectronSession } from './browser-route-session-policy'
+export type {
+  BrowserRoutePartitionBindingStore,
+  BrowserRouteSessionRegistryDependencies
+} from './browser-route-session-registry-contract'
 
 const DEFAULT_MAX_LIVE_PARTITIONS = 64
 const DEFAULT_MAX_PAGES_PER_PARTITION = 64
-const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
-
-export type BrowserRouteElectronSession = {
-  setProxy(config: {
-    mode: 'fixed_servers'
-    proxyRules: string
-    proxyBypassRules: string
-  }): Promise<void>
-  closeAllConnections(): Promise<void>
-  resolveProxy(url: string): Promise<string>
-}
-
-export type BrowserRoutePartitionBindingStore = {
-  get(partition: string): string | null
-  set(partition: string, fingerprint: string): void
-}
-
-export type BrowserRouteSessionRegistryDependencies = {
-  derivePartition?: (identity: BrowserRoutePartitionIdentity) => DerivedBrowserRoutePartition
-  validateProfile(browserProfileId: string): void
-  getSession(partition: string): BrowserRouteElectronSession
-  setupPolicies(input: {
-    partition: string
-    browserProfileId: string
-    session: BrowserRouteElectronSession
-  }): void
-  clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
-  retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean
-  bindingStore: BrowserRoutePartitionBindingStore
-  maxLivePartitions?: number
-  maxPagesPerPartition?: number
-}
-
-export type BrowserRouteSessionHandle = Readonly<{
-  partition: string
-  release: () => void
-}>
-
-type ProxyEndpoint = Readonly<{ host: '127.0.0.1'; port: number }>
-
-type PreparedPartition = {
-  partition: string
-  bindingFingerprint: string
-  browserProfileId: string
-  proxyEndpoint: ProxyEndpoint
-  session: BrowserRouteElectronSession
-  pageTokens: Map<string, symbol>
-  pageRetirements: Map<string, symbol>
-}
-
-type PendingPartition = {
-  bindingFingerprint: string
-  proxyEndpoint: ProxyEndpoint
-  promise: Promise<PreparedPartition>
-}
-
 export class BrowserRouteSessionRegistry {
   private readonly derivePartition: NonNullable<
     BrowserRouteSessionRegistryDependencies['derivePartition']
@@ -77,6 +47,7 @@ export class BrowserRouteSessionRegistry {
   private readonly live = new Map<string, PreparedPartition>()
   private readonly pending = new Map<string, PendingPartition>()
   private readonly partitionBySession = new WeakMap<BrowserRouteElectronSession, string>()
+  private readonly rendererPrepareFences = new BrowserRouteRendererPrepareFenceRegistry()
 
   constructor(private readonly dependencies: BrowserRouteSessionRegistryDependencies) {
     this.derivePartition = dependencies.derivePartition ?? deriveBrowserRoutePartition
@@ -85,60 +56,102 @@ export class BrowserRouteSessionRegistry {
   }
 
   isAllowedPartition(partition: string): boolean {
-    return Boolean(this.live.get(partition)?.pageTokens.size)
+    return this.live.get(partition)?.pages.hasActivePages() ?? false
   }
 
   getPartitionForSession(session: BrowserRouteElectronSession): string | null {
     return this.partitionBySession.get(session) ?? null
   }
 
-  getPreparedPageAuthority(input: {
-    partition: string
-    browserPageId: string
-    pageHostGeneration: number
-  }): symbol | null {
+  getPreparedPageAuthority(input: BrowserRoutePageOwnerIdentity): symbol | null {
     const state = this.live.get(input.partition)
-    if (!state || !isValidBrowserRoutePageIdentity(input)) {
+    if (!state || !isValidBrowserRoutePageOwnerIdentity(input)) {
       return null
     }
-    return state.pageTokens.get(pageKey(input.browserPageId, input.pageHostGeneration)) ?? null
+    return state.pages.getAuthority(input)
   }
 
   retirePreparedPage(input: BrowserRoutePageAuthority): boolean {
-    if (!isValidBrowserRoutePageIdentity(input) || typeof input.pageAuthority !== 'symbol') {
-      return false
-    }
     const state = this.live.get(input.partition)
-    const key = pageKey(input.browserPageId, input.pageHostGeneration)
-    if (!state || state.pageTokens.get(key) !== input.pageAuthority) {
+    if (!state || !state.pages.beginRetirement(input)) {
       return false
     }
-    this.beginPageRetirement(state, key, input)
+    this.settlePageRetirement(state, input)
     return true
+  }
+
+  retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number {
+    if (!Number.isInteger(rendererWebContentsId) || rendererWebContentsId <= 0) {
+      return 0
+    }
+    this.rendererPrepareFences.retire(rendererWebContentsId)
+    const retirements: { state: PreparedPartition; pages: BrowserRoutePageAuthority[] }[] = []
+    for (const state of Array.from(this.live.values())) {
+      const pages = state.pages.beginRendererRetirements(rendererWebContentsId)
+      retirements.push({ state, pages })
+    }
+    let retiredCount = 0
+    for (const { state, pages } of retirements) {
+      retiredCount += pages.length
+      for (const page of pages) {
+        this.settlePageRetirement(state, page)
+      }
+    }
+    return retiredCount
   }
 
   async preparePage(input: {
     identity: BrowserRoutePartitionIdentity
     browserPageId: string
     pageHostGeneration: number
+    rendererWebContentsId: number
     proxyEndpoint: ProxyEndpoint
   }): Promise<BrowserRouteSessionHandle> {
-    assertProxyEndpoint(input.proxyEndpoint)
-    assertPageIdentity(input.browserPageId, input.pageHostGeneration)
+    assertBrowserRouteProxyEndpoint(input.proxyEndpoint)
+    assertBrowserRoutePreparedPageOwner(
+      input.browserPageId,
+      input.pageHostGeneration,
+      input.rendererWebContentsId
+    )
+    const rendererFence = this.rendererPrepareFences.begin(input.rendererWebContentsId)
+    try {
+      const handle = await this.preparePageForCurrentRenderer(input, rendererFence)
+      rendererFence.assertCurrent()
+      return handle
+    } finally {
+      rendererFence.release()
+    }
+  }
+
+  private async preparePageForCurrentRenderer(
+    input: {
+      identity: BrowserRoutePartitionIdentity
+      browserPageId: string
+      pageHostGeneration: number
+      rendererWebContentsId: number
+      proxyEndpoint: ProxyEndpoint
+    },
+    rendererFence: BrowserRouteRendererPrepareFence
+  ): Promise<BrowserRouteSessionHandle> {
     const derived = this.derivePartition(input.identity)
     this.dependencies.validateProfile(input.identity.browserProfileId)
     this.assertBinding(derived)
     let state = this.live.get(derived.partition)
     if (state) {
       this.assertReusable(state, derived, input.proxyEndpoint)
-      return this.linkPage(state, input.browserPageId, input.pageHostGeneration)
+      rendererFence.assertCurrent()
+      return this.linkPage(
+        state,
+        input.browserPageId,
+        input.pageHostGeneration,
+        input.rendererWebContentsId
+      )
     }
 
     const pending = this.pending.get(derived.partition)
     if (pending) {
       this.assertReusable(pending, derived, input.proxyEndpoint)
-      state = await pending.promise
-      return this.linkPage(state, input.browserPageId, input.pageHostGeneration)
+      return this.linkPendingPage(pending, input, rendererFence)
     }
 
     if (this.live.size + this.pending.size >= this.maxLivePartitions) {
@@ -153,21 +166,62 @@ export class BrowserRouteSessionRegistry {
       input.proxyEndpoint
     )
     const pendingState = {
+      partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
       proxyEndpoint: input.proxyEndpoint,
-      promise
+      promise,
+      state: null,
+      waiters: 0,
+      admitted: false
     }
     this.pending.set(derived.partition, pendingState)
+    return this.linkPendingPage(pendingState, input, rendererFence)
+  }
+
+  private async linkPendingPage(
+    pending: PendingPartition,
+    input: {
+      browserPageId: string
+      pageHostGeneration: number
+      rendererWebContentsId: number
+    },
+    rendererFence: BrowserRouteRendererPrepareFence
+  ): Promise<BrowserRouteSessionHandle> {
+    if (pending.waiters >= this.maxPagesPerPartition) {
+      throw new Error('browser_route_partition_pending_capacity')
+    }
+    pending.waiters += 1
     try {
-      state = await promise
-      this.live.set(derived.partition, state)
-      this.partitionBySession.set(state.session, state.partition)
+      const state = await pending.promise
+      pending.state = state
+      rendererFence.assertCurrent()
+      if (!pending.admitted) {
+        this.live.set(state.partition, state)
+        this.partitionBySession.set(state.session, state.partition)
+        pending.admitted = true
+      }
+      try {
+        return this.linkPage(
+          state,
+          input.browserPageId,
+          input.pageHostGeneration,
+          input.rendererWebContentsId
+        )
+      } catch (error) {
+        this.finalizePartitionIfIdle(state)
+        throw error
+      }
     } finally {
-      if (this.pending.get(derived.partition) === pendingState) {
-        this.pending.delete(derived.partition)
+      pending.waiters -= 1
+      if (pending.waiters === 0) {
+        if (this.pending.get(pending.partition) === pending) {
+          this.pending.delete(pending.partition)
+        }
+        if (!pending.admitted && pending.state) {
+          this.clearUnadmittedPartition(pending.state)
+        }
       }
     }
-    return this.linkPage(state, input.browserPageId, input.pageHostGeneration)
   }
 
   private assertBinding(derived: DerivedBrowserRoutePartition): void {
@@ -185,7 +239,7 @@ export class BrowserRouteSessionRegistry {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
       throw new Error('browser_route_partition_binding_conflict')
     }
-    if (!sameProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
+    if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')
     }
   }
@@ -195,135 +249,73 @@ export class BrowserRouteSessionRegistry {
     browserProfileId: string,
     proxyEndpoint: ProxyEndpoint
   ): Promise<PreparedPartition> {
-    const session = this.dependencies.getSession(derived.partition)
-    try {
-      this.dependencies.setupPolicies({ partition: derived.partition, browserProfileId, session })
-      await session.setProxy({
-        mode: 'fixed_servers',
-        proxyRules: `socks5://${proxyEndpoint.host}:${proxyEndpoint.port}`,
-        proxyBypassRules: '<-loopback>'
-      })
-      await session.closeAllConnections()
-      const resolved = await session.resolveProxy(PROXY_PROBE_URL)
-      if (resolved.trim() !== `SOCKS5 ${proxyEndpoint.host}:${proxyEndpoint.port}`) {
-        throw new Error('browser_route_partition_proxy_verification_failed')
-      }
-    } catch (error) {
-      try {
-        this.dependencies.clearPolicies({ partition: derived.partition, session })
-      } catch {
-        // The partition remains outside the allowlist even if policy cleanup fails.
-      }
-      throw error
-    }
+    const session = await prepareBrowserRouteSessionPolicy({
+      partition: derived.partition,
+      browserProfileId,
+      proxyEndpoint,
+      dependencies: this.dependencies
+    })
     return {
       partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
       browserProfileId,
       proxyEndpoint,
       session,
-      pageTokens: new Map(),
-      pageRetirements: new Map()
+      pages: new BrowserRoutePreparedPageLedger(derived.partition, this.maxPagesPerPartition)
     }
   }
 
   private linkPage(
     state: PreparedPartition,
     browserPageId: string,
-    pageHostGeneration: number
+    pageHostGeneration: number,
+    rendererWebContentsId: number
   ): BrowserRouteSessionHandle {
-    const key = pageKey(browserPageId, pageHostGeneration)
-    if (state.pageRetirements.has(key)) {
-      throw new Error('browser_route_partition_page_retiring')
-    }
-    if (
-      !state.pageTokens.has(key) &&
-      state.pageTokens.size + state.pageRetirements.size >= this.maxPagesPerPartition
-    ) {
-      throw new Error('browser_route_partition_page_capacity')
-    }
-    const token = Symbol(key)
-    state.pageTokens.set(key, token)
+    const page = state.pages.link(browserPageId, pageHostGeneration, rendererWebContentsId)
     return {
       partition: state.partition,
-      release: () =>
-        void this.retirePreparedPage({
-          partition: state.partition,
-          browserPageId,
-          pageHostGeneration,
-          pageAuthority: token
-        })
+      release: () => void this.retirePreparedPage(page)
     }
   }
 
-  private beginPageRetirement(
-    state: PreparedPartition,
-    key: string,
-    page: BrowserRoutePageAuthority
-  ): void {
-    state.pageTokens.delete(key)
-    state.pageRetirements.set(key, page.pageAuthority)
+  private settlePageRetirement(state: PreparedPartition, page: BrowserRoutePageAuthority): void {
     let retired = false
     try {
       retired = this.dependencies.retirePageAuthority({
         ...page,
-        onRetired: () => this.completePageRetirement(state, key, page.pageAuthority)
+        onRetired: () => this.completePageRetirement(state, page)
       })
     } catch {
       // Keep route policy installed until exact guest destruction can be confirmed.
     }
-    if (retired && state.pageRetirements.get(key) === page.pageAuthority) {
-      state.pageRetirements.delete(key)
+    if (retired) {
+      state.pages.completeRetirement(page)
     }
     this.finalizePartitionIfIdle(state)
   }
 
-  private completePageRetirement(state: PreparedPartition, key: string, token: symbol): void {
-    if (state.pageRetirements.get(key) !== token) {
-      return
-    }
-    state.pageRetirements.delete(key)
+  private completePageRetirement(state: PreparedPartition, page: BrowserRoutePageAuthority): void {
+    state.pages.completeRetirement(page)
     this.finalizePartitionIfIdle(state)
+  }
+
+  private clearUnadmittedPartition(state: PreparedPartition): void {
+    try {
+      this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
+    } catch {
+      // Unadmitted partitions remain outside every route index.
+    }
   }
 
   private finalizePartitionIfIdle(state: PreparedPartition): void {
-    if (
-      state.pageTokens.size !== 0 ||
-      state.pageRetirements.size !== 0 ||
-      this.live.get(state.partition) !== state
-    ) {
+    if (!state.pages.isIdle() || this.live.get(state.partition) !== state) {
       return
     }
     this.live.delete(state.partition)
-    this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
-  }
-}
-
-function assertProxyEndpoint(
-  endpoint: Readonly<{ host: string; port: number }>
-): asserts endpoint is ProxyEndpoint {
-  if (
-    endpoint.host !== '127.0.0.1' ||
-    !Number.isInteger(endpoint.port) ||
-    endpoint.port < 1 ||
-    endpoint.port > 65_535
-  ) {
-    throw new Error('browser_route_partition_proxy_invalid')
-  }
-}
-
-function sameProxyEndpoint(left: ProxyEndpoint, right: ProxyEndpoint): boolean {
-  return left.host === right.host && left.port === right.port
-}
-
-function assertPageIdentity(browserPageId: string, pageHostGeneration: number): void {
-  if (
-    !isValidBrowserRoutePageIdentity({
-      partition: 'route',
-      browserPageId,
-      pageHostGeneration
-    })
-  ) {
-    throw new Error('browser_route_partition_page_invalid')
+    try {
+      this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
+    } catch {
+      // Retired partitions remain outside admission when policy cleanup is unavailable.
+    }
   }
 }

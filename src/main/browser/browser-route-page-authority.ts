@@ -7,13 +7,17 @@ export type BrowserRoutePageIdentity = Readonly<{
   pageHostGeneration: number
 }>
 
-export type BrowserRoutePageGuestIdentity = BrowserRoutePageIdentity &
+export type BrowserRoutePageOwnerIdentity = BrowserRoutePageIdentity &
   Readonly<{
-    webContentsId: number
     rendererWebContentsId: number
   }>
 
-export type BrowserRoutePageAuthority = BrowserRoutePageIdentity &
+export type BrowserRoutePageGuestIdentity = BrowserRoutePageOwnerIdentity &
+  Readonly<{
+    webContentsId: number
+  }>
+
+export type BrowserRoutePageAuthority = BrowserRoutePageOwnerIdentity &
   Readonly<{
     pageAuthority: symbol
   }>
@@ -33,6 +37,16 @@ export function isValidBrowserRoutePageIdentity(value: BrowserRoutePageIdentity)
     Number.isInteger(value.pageHostGeneration) &&
     value.pageHostGeneration > 0 &&
     value.pageHostGeneration <= MAX_PAGE_HOST_GENERATION
+  )
+}
+
+export function isValidBrowserRoutePageOwnerIdentity(
+  value: BrowserRoutePageOwnerIdentity
+): boolean {
+  return Boolean(
+    isValidBrowserRoutePageIdentity(value) &&
+    Number.isInteger(value.rendererWebContentsId) &&
+    value.rendererWebContentsId > 0
   )
 }
 

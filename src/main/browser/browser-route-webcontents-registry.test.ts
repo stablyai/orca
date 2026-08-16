@@ -15,6 +15,7 @@ function createHarness(options: { maxGuests?: number } = {}) {
   const routeSession = { marker: 'route-session' } as unknown as Session
   let prepared = true
   let pageAuthority = Symbol('page-authority')
+  const retirePreparedPagesOwnedByRenderer = vi.fn(() => 0)
   let registry: BrowserRouteWebContentsRegistry
   registry = new BrowserRouteWebContentsRegistry({
     getPartitionForSession: (session) => (session === routeSession ? partition : null),
@@ -22,7 +23,8 @@ function createHarness(options: { maxGuests?: number } = {}) {
       prepared &&
       input.partition === partition &&
       input.browserPageId === page.browserPageId &&
-      input.pageHostGeneration === page.pageHostGeneration
+      input.pageHostGeneration === page.pageHostGeneration &&
+      input.rendererWebContentsId === page.rendererWebContentsId
         ? pageAuthority
         : null,
     retirePreparedPage: (input) => {
@@ -33,11 +35,13 @@ function createHarness(options: { maxGuests?: number } = {}) {
       registry.retirePageAuthority({ ...input, onRetired: vi.fn() })
       return true
     },
+    retirePreparedPagesOwnedByRenderer,
     maxGuests: options.maxGuests
   })
   return {
     getPageAuthority: () => pageAuthority,
     registry,
+    retirePreparedPagesOwnedByRenderer,
     routeSession,
     setPrepared: (value: boolean) => {
       prepared = value
@@ -142,6 +146,16 @@ describe('BrowserRouteWebContentsRegistry', () => {
     guest.emit('will-navigate', laterNavigation, 'https://example.org/')
     expect(laterNavigation.preventDefault).not.toHaveBeenCalled()
     expect(guest.openWindow()).toEqual({ action: 'deny' })
+  })
+
+  it('rejects a guest whose renderer does not own the prepared authority', () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, rendererWebContentsId: 12 })
+    const siblingClaim = { ...page, rendererWebContentsId: 12 }
+
+    expect(registry.attachGuest(guest.guest)).toBe(true)
+    expect(registry.registerGuest(siblingClaim)).toBe(false)
+    expect(registry.grantNavigation(siblingClaim)).toBe(false)
   })
 
   it('allows blank navigation while quarantined but blocks invalid schemes after a grant', () => {
@@ -295,10 +309,12 @@ describe('BrowserRouteWebContentsRegistry', () => {
         partition,
         browserPageId: page.browserPageId,
         pageHostGeneration: page.pageHostGeneration,
+        rendererWebContentsId: page.rendererWebContentsId,
         pageAuthority: getPageAuthority(),
         onRetired: retired
       })
     ).toBe(false)
+    expect(registry.registerGuest(page)).toBe(false)
     const navigation = navigationEvent()
     guest.emit('will-navigate', navigation, 'https://example.com/')
     expect(navigation.preventDefault).toHaveBeenCalledOnce()
@@ -310,6 +326,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
         partition,
         browserPageId: page.browserPageId,
         pageHostGeneration: page.pageHostGeneration,
+        rendererWebContentsId: page.rendererWebContentsId,
         pageAuthority: getPageAuthority(),
         onRetired: duplicateRetired
       })
@@ -332,6 +349,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
         partition,
         browserPageId: page.browserPageId,
         pageHostGeneration: page.pageHostGeneration,
+        rendererWebContentsId: page.rendererWebContentsId,
         pageAuthority: Symbol('wrong-authority'),
         onRetired: vi.fn()
       })
@@ -358,6 +376,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
         partition,
         browserPageId: page.browserPageId,
         pageHostGeneration: page.pageHostGeneration,
+        rendererWebContentsId: page.rendererWebContentsId,
         pageAuthority: getPageAuthority(),
         onRetired: retired
       })
@@ -388,7 +407,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
   })
 
   it('retires every page owned by a crashed host renderer', () => {
-    const { registry, routeSession } = createHarness()
+    const { registry, retirePreparedPagesOwnedByRenderer, routeSession } = createHarness()
     const first = createGuest({ session: routeSession })
     const unregisteredSibling = createGuest({ id: 42, session: routeSession })
     const unrelated = createGuest({ id: 43, rendererWebContentsId: 12, session: routeSession })
@@ -404,6 +423,19 @@ describe('BrowserRouteWebContentsRegistry', () => {
     expect(unregisteredSibling.guest.close).toHaveBeenCalledOnce()
     expect(unrelated.guest.close).not.toHaveBeenCalled()
     expect(registry.grantNavigation(page)).toBe(false)
+    expect(retirePreparedPagesOwnedByRenderer).toHaveBeenCalledWith(page.rendererWebContentsId)
+  })
+
+  it('keeps renderer retirement fail-closed when logical-owner cleanup throws', () => {
+    const { registry, retirePreparedPagesOwnedByRenderer, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    registry.attachGuest(guest.guest)
+    retirePreparedPagesOwnedByRenderer.mockImplementation(() => {
+      throw new Error('owner cleanup unavailable')
+    })
+
+    expect(() => registry.retireRenderer(page.rendererWebContentsId)).not.toThrow()
+    expect(guest.guest.close).toHaveBeenCalledOnce()
   })
 
   it('fails closed when Electron guest inspection races destruction', () => {
