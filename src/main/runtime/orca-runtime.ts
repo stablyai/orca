@@ -962,6 +962,7 @@ import {
 import type {
   PlaneConnectArgs,
   PlaneCreateIssueArgs,
+  PlaneIssueQuery,
   PlaneIssueUpdate,
   PlaneOAuthConnectArgs
 } from '../../shared/plane/types'
@@ -36732,7 +36733,7 @@ export class OrcaRuntimeService {
   }
 
   planeListIssues(
-    filter?: PlaneListFilter,
+    filter?: PlaneListFilter | PlaneIssueQuery,
     limit = 30,
     instanceId?: string
   ): ReturnType<typeof listPlaneIssues> {

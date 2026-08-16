@@ -2,31 +2,30 @@ import { getClient, getClients } from './client'
 import { apiPath, planeFetch } from './api-request'
 import { arrayFromResponse, mapWorkItem, notNull } from './response-mappers'
 import { listProjects } from './project-resources'
+import { matchesListFilter } from './issue-query'
+import { fetchProjectWorkItemPage, fetchWorkItemQueryPage } from './issue-pages'
 import type {
   PlaneCollectionResult,
   PlaneCreateIssueArgs,
+  PlaneIssueQuery,
   PlaneIssueUpdate,
   PlaneListFilter,
-  PlaneProject,
   PlaneWorkItem
 } from '../../shared/plane/types'
 import { parsePlaneIssueLink } from '../../shared/plane/links'
 
 type PlaneClient = ReturnType<typeof getClient>
-const WORK_ITEM_EXPAND = 'assignees,labels,state,project,module,type'
-const PAGE_SIZE_MAX = 100
-
-type PlanePage = {
-  items: unknown[]
-  nextCursor: string | null
-  hasNext: boolean
-}
+const WORK_ITEM_EXPAND = 'assignees,labels,state,project,cycle,module,type'
 
 export async function listIssues(
-  filter: PlaneListFilter = 'all',
+  filterOrQuery: PlaneListFilter | PlaneIssueQuery = 'all',
   limit = 30,
   instanceId?: string
 ): Promise<PlaneCollectionResult<PlaneWorkItem>> {
+  if (typeof filterOrQuery !== 'string') {
+    return listIssuesByQuery(filterOrQuery, limit, instanceId)
+  }
+  const filter = filterOrQuery
   const clients = getClients(instanceId as string | undefined)
   const items: PlaneWorkItem[] = []
   for (let clientIndex = 0; clientIndex < clients.length; clientIndex += 1) {
@@ -36,7 +35,13 @@ export async function listIssues(
       const project = projects[projectIndex]
       let cursor: string | null = null
       do {
-        const page = await fetchProjectWorkItemPage(client, project, cursor, limit)
+        const page = await fetchProjectWorkItemPage(
+          client,
+          project,
+          cursor,
+          limit,
+          WORK_ITEM_EXPAND
+        )
         cursor = page.nextCursor
         items.push(
           ...page.items
@@ -49,6 +54,39 @@ export async function listIssues(
         const unvisitedProjects =
           projectIndex < projects.length - 1 || clientIndex < clients.length - 1
         return { items: items.slice(0, limit), hasMore: cursor !== null || unvisitedProjects }
+      }
+    }
+  }
+  return { items: items.slice(0, limit) }
+}
+
+async function listIssuesByQuery(
+  query: PlaneIssueQuery,
+  limit: number,
+  instanceId?: string
+): Promise<PlaneCollectionResult<PlaneWorkItem>> {
+  const items: PlaneWorkItem[] = []
+  for (const client of getClients(instanceId as string | undefined)) {
+    const allProjects = await listProjects(client.instance.id)
+    const projects = query.projectId
+      ? allProjects.filter((project) => project.id === query.projectId)
+      : allProjects
+    for (const project of projects) {
+      let cursor: string | null = null
+      do {
+        const page = await fetchWorkItemQueryPage(
+          client,
+          project,
+          query,
+          cursor,
+          limit,
+          WORK_ITEM_EXPAND
+        )
+        cursor = page.nextCursor
+        items.push(...page.items.map((item) => mapWorkItem(client, project, item)).filter(notNull))
+      } while (cursor && items.length < limit)
+      if (items.length >= limit) {
+        return { items: items.slice(0, limit), hasMore: cursor !== null }
       }
     }
   }
@@ -238,55 +276,6 @@ async function readIssueById(client: PlaneClient, id: string): Promise<PlaneWork
     } catch {}
   }
   return null
-}
-
-async function fetchProjectWorkItemPage(
-  client: PlaneClient,
-  project: PlaneProject,
-  cursor: string | null,
-  limit: number
-): Promise<PlanePage> {
-  const query = new URLSearchParams({
-    per_page: String(Math.min(Math.max(1, limit), PAGE_SIZE_MAX)),
-    expand: WORK_ITEM_EXPAND,
-    order_by: '-updated_at'
-  })
-  if (cursor) {
-    query.set('cursor', cursor)
-  }
-  const data = await planeFetch<unknown>(
-    client,
-    apiPath(client, `/projects/${encodeURIComponent(project.id)}/work-items/?${query}`)
-  )
-  const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
-  return {
-    items: arrayFromResponse(data),
-    nextCursor: typeof raw.next_cursor === 'string' && raw.next_cursor ? raw.next_cursor : null,
-    hasNext: raw.next_page_results === true
-  }
-}
-
-function matchesListFilter(
-  client: PlaneClient,
-  issue: PlaneWorkItem,
-  filter: PlaneListFilter
-): boolean {
-  if (filter === 'all') {
-    return true
-  }
-  if (filter === 'completed') {
-    return issue.state?.group === 'completed'
-  }
-  if (filter === 'open') {
-    return issue.state?.group !== 'completed' && issue.state?.group !== 'cancelled'
-  }
-  if (filter === 'assigned') {
-    return Boolean(client.instance.userId && issue.assigneeIds?.includes(client.instance.userId))
-  }
-  if (filter === 'created') {
-    return Boolean(client.instance.userId && issue.createdById === client.instance.userId)
-  }
-  return true
 }
 
 export type { PlaneListFilter }

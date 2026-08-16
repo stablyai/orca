@@ -61,6 +61,8 @@ export function mapWorkItem(
   const identifier =
     stringField(raw, 'identifier') ??
     (projectIdentifier && sequenceId ? `${projectIdentifier}-${sequenceId}` : id)
+  const assigneeIds = idArray(raw.assignees)
+  const labelIds = idArray(raw.labels)
   return {
     id,
     identifier,
@@ -76,16 +78,16 @@ export function mapWorkItem(
     state: mapState(raw.state ?? raw.state_detail),
     assignee: Array.isArray(raw.assignees) ? mapMember(raw.assignees[0]) : mapMember(raw.assignee),
     assignees: Array.isArray(raw.assignees) ? raw.assignees.map(mapMember).filter(notNull) : [],
-    assigneeIds: idArray(raw.assignees),
+    assigneeIds: assigneeIds.length > 0 ? assigneeIds : idArray(raw.assignee_ids),
     createdBy: mapMember(raw.created_by ?? raw.created_by_detail ?? raw.created_by_member),
     createdById: idValue(raw.created_by ?? raw.created_by_detail ?? raw.created_by_member),
     labels: Array.isArray(raw.labels) ? raw.labels.map(mapLabel).filter(notNull) : [],
-    labelIds: idArray(raw.labels),
+    labelIds: labelIds.length > 0 ? labelIds : idArray(raw.label_ids),
     priority: stringField(raw, 'priority'),
-    cycleId: idValue(raw.cycle),
+    cycleId: idValue(raw.cycle) ?? idValue(raw.cycle_id),
     estimatePoint: estimatePointValue(raw.estimate_point),
-    typeId: idValue(raw.type),
-    moduleId: idValue(raw.module),
+    typeId: idValue(raw.type) ?? idValue(raw.type_id),
+    moduleId: idValue(raw.module) ?? firstIdValue(raw.module_ids),
     updatedAt: stringField(raw, 'updated_at'),
     createdAt: stringField(raw, 'created_at'),
     workspaceSlug: client.instance.workspaceSlug,
@@ -221,6 +223,10 @@ function idArray(input: unknown): string[] {
   return input
     .map((item) => (typeof item === 'string' ? item : stringField(record(item), 'id')))
     .filter((item): item is string => Boolean(item))
+}
+
+function firstIdValue(input: unknown): string | null {
+  return idArray(input)[0] ?? null
 }
 
 function estimatePointValue(input: unknown): string | number | null {

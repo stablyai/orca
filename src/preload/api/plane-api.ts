@@ -8,6 +8,7 @@ import type {
   PlaneEstimate,
   PlaneIssueAttachment,
   PlaneIssueLink,
+  PlaneIssueQuery,
   PlaneIssueUpdate,
   PlaneLabel,
   PlaneListFilter,
@@ -52,6 +53,7 @@ export type PlaneApi = {
   }) => Promise<PlaneWorkItem[]>
   listIssues: (args?: {
     filter?: PlaneListFilter
+    query?: PlaneIssueQuery
     limit?: number
     instanceId?: string
   }) => Promise<PlaneCollectionResult<PlaneWorkItem>>

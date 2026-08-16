@@ -218,3 +218,37 @@ export type PlaneCreateIssueArgs = {
 }
 
 export type PlaneListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
+
+export type PlaneStateGroup = 'backlog' | 'unstarted' | 'started' | 'completed' | 'cancelled'
+
+export type PlanePriority = 'urgent' | 'high' | 'medium' | 'low' | 'none'
+
+export type PlaneIssueSort =
+  | '-updated_at'
+  | 'updated_at'
+  | '-created_at'
+  | 'created_at'
+  | 'priority'
+  | '-priority'
+  | 'state'
+  | '-state'
+  | 'name'
+  | '-name'
+  | 'sort_order'
+  | '-sort_order'
+
+export type PlaneIssueQuery = {
+  preset?: PlaneListFilter
+  query?: string
+  projectId?: string
+  stateGroup?: PlaneStateGroup
+  stateId?: string
+  priority?: PlanePriority
+  assigneeId?: string | 'unassigned'
+  labelId?: string | 'none'
+  cycleId?: string | 'none'
+  moduleId?: string | 'none'
+  typeId?: string
+  estimatePoint?: PlaneEstimatePointValue
+  orderBy?: PlaneIssueSort
+}

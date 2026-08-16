@@ -1,4 +1,4 @@
-import type { PlaneIssueUpdate } from '../../shared/plane/types'
+import type { PlaneIssueQuery, PlaneIssueUpdate } from '../../shared/plane/types'
 import type { PlaneListFilter } from '../plane/issues'
 
 const VALID_FILTERS = new Set<PlaneListFilter>(['assigned', 'created', 'all', 'completed', 'open'])
@@ -25,6 +25,47 @@ export function optionalLimit(value: unknown, fallback: number): number {
 
 export function normalizeFilter(value: unknown): PlaneListFilter | undefined {
   return VALID_FILTERS.has(value as PlaneListFilter) ? (value as PlaneListFilter) : undefined
+}
+
+export function normalizeIssueQuery(value: unknown): PlaneIssueQuery | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const raw = value as Record<string, unknown>
+  return {
+    preset: normalizeFilter(raw.preset),
+    query: optionalString(raw.query),
+    projectId: optionalString(raw.projectId),
+    stateGroup: optionalEnum(raw.stateGroup, [
+      'backlog',
+      'unstarted',
+      'started',
+      'completed',
+      'cancelled'
+    ]),
+    stateId: optionalString(raw.stateId),
+    priority: optionalEnum(raw.priority, ['urgent', 'high', 'medium', 'low', 'none']),
+    assigneeId: optionalString(raw.assigneeId),
+    labelId: optionalString(raw.labelId),
+    cycleId: optionalString(raw.cycleId),
+    moduleId: optionalString(raw.moduleId),
+    typeId: optionalString(raw.typeId),
+    estimatePoint: optionalEstimatePointValue(raw.estimatePoint),
+    orderBy: optionalEnum(raw.orderBy, [
+      '-updated_at',
+      'updated_at',
+      '-created_at',
+      'created_at',
+      'priority',
+      '-priority',
+      'state',
+      '-state',
+      'name',
+      '-name',
+      'sort_order',
+      '-sort_order'
+    ])
+  }
 }
 
 export function normalizeCreateArgs(args: Record<string, unknown>) {
@@ -98,6 +139,10 @@ function optionalStringList(value: unknown, fieldName: string): string[] | undef
     throw new Error(`Invalid ${fieldName}`)
   }
   return value.map((item) => item.trim())
+}
+
+function optionalEnum<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return allowed.includes(value as T) ? (value as T) : undefined
 }
 
 function optionalNullableString(value: unknown, fieldName: string): string | null {

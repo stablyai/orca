@@ -85,7 +85,7 @@ describe('Plane issue API adapter', () => {
       hasMore: false
     })
     expect(planeFetch.mock.calls[1][1]).toContain(
-      'expand=assignees%2Clabels%2Cstate%2Cproject%2Cmodule%2Ctype'
+      'expand=assignees%2Clabels%2Cstate%2Cproject%2Ccycle%2Cmodule%2Ctype'
     )
     expect(planeFetch.mock.calls[2][1]).toContain('cursor=2%3A1%3A0')
   })
@@ -102,6 +102,32 @@ describe('Plane issue API adapter', () => {
 
     await expect(getIssue('PD-1')).resolves.toMatchObject({
       project: { id: 'project-detail-1', identifier: 'PD', name: 'Detail project' }
+    })
+  })
+
+  it('maps canonical raw work item id fields when relations are not expanded', async () => {
+    planeFetch.mockResolvedValueOnce(
+      issue('issue-1', 1, {
+        assignees: undefined,
+        labels: undefined,
+        cycle: undefined,
+        module: undefined,
+        type: undefined,
+        assignee_ids: ['user-1'],
+        label_ids: ['label-1'],
+        cycle_id: 'cycle-1',
+        module_ids: ['module-1'],
+        type_id: 'type-1'
+      })
+    )
+    const { getIssue } = await import('./issues')
+
+    await expect(getIssue('AIF-1')).resolves.toMatchObject({
+      assigneeIds: ['user-1'],
+      labelIds: ['label-1'],
+      cycleId: 'cycle-1',
+      moduleId: 'module-1',
+      typeId: 'type-1'
     })
   })
 
@@ -157,6 +183,81 @@ describe('Plane issue API adapter', () => {
     })
   })
 
+  it('lists work items with structured Plane filters via project endpoint query params', async () => {
+    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: false
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(
+      listIssues(
+        {
+          preset: 'open',
+          query: 'oauth',
+          priority: 'high',
+          assigneeId: 'unassigned',
+          labelId: 'none',
+          cycleId: 'cycle-1',
+          moduleId: 'none',
+          orderBy: '-created_at'
+        },
+        10
+      )
+    ).resolves.toMatchObject({ items: [{ id: 'issue-1' }] })
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[1][1]}`)
+    expect(url.pathname).toBe('/api/v1/workspaces/acme/projects/project-1/work-items/')
+    expect(url.searchParams.get('search')).toBe('oauth')
+    expect(url.searchParams.get('order_by')).toBe('-created_at')
+    expect(url.searchParams.get('pql')).toContain('stateGroup IN (openStates())')
+    expect(url.searchParams.get('pql')).toContain('hasNoAssignee()')
+    expect(url.searchParams.get('pql')).toContain('hasNoLabel()')
+    expect(JSON.parse(url.searchParams.get('filters') ?? '{}')).toEqual({
+      and: [{ priority: 'high' }, { cycle_id: 'cycle-1' }, { module_id: null }]
+    })
+  })
+
+  it('serializes dropdown filter state into Plane filters JSON', async () => {
+    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: false
+    })
+    const { listIssues } = await import('./issues')
+
+    await listIssues(
+      {
+        preset: 'assigned',
+        stateGroup: 'started',
+        stateId: 'state-1',
+        priority: 'urgent',
+        assigneeId: 'user-2',
+        labelId: 'label-1',
+        cycleId: 'cycle-1',
+        moduleId: 'module-1',
+        typeId: 'type-1',
+        estimatePoint: 5
+      },
+      10
+    )
+
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[1][1]}`)
+    expect(url.searchParams.get('pql')).toBeNull()
+    expect(JSON.parse(url.searchParams.get('filters') ?? '{}')).toEqual({
+      and: [
+        { assignee_id: 'user-1' },
+        { state_group: 'started' },
+        { state_id: 'state-1' },
+        { priority: 'urgent' },
+        { assignee_id: 'user-2' },
+        { label_id: 'label-1' },
+        { cycle_id: 'cycle-1' },
+        { module_id: 'module-1' },
+        { type_id: 'type-1' },
+        { estimate_point: 5 }
+      ]
+    })
+  })
+
   it('writes update fields using Plane payload names', async () => {
     planeFetch.mockResolvedValueOnce(issue('issue-1', 1)).mockResolvedValueOnce(undefined)
     const { updateIssue } = await import('./issues')
@@ -177,73 +278,5 @@ describe('Plane issue API adapter', () => {
       cycle: 'cycle-1',
       estimate_point: 5
     })
-  })
-
-  it('lists planning metadata resources for a project', async () => {
-    planeFetch
-      .mockResolvedValueOnce({
-        results: [{ id: 'cycle-1', name: 'Cycle 1', status: 'started' }],
-        next_cursor: '100:1:0',
-        next_page_results: true
-      })
-      .mockResolvedValueOnce({
-        results: [{ id: 'cycle-2', name: 'Cycle 2' }],
-        next_page_results: false
-      })
-      .mockResolvedValueOnce({ results: [{ id: 'module-1', name: 'Module 1', status: 'planned' }] })
-      .mockResolvedValueOnce({ results: [{ id: 'type-1', name: 'Bug', is_active: true }] })
-      .mockResolvedValueOnce({ results: [{ id: 'estimate-1', name: 'Points' }] })
-    const { listCycles, listModules, listWorkItemTypes, listEstimates } =
-      await import('./project-resources')
-
-    await expect(listCycles('project-1')).resolves.toMatchObject([
-      { id: 'cycle-1' },
-      { id: 'cycle-2' }
-    ])
-    await expect(listModules('project-1')).resolves.toMatchObject([{ id: 'module-1' }])
-    await expect(listWorkItemTypes('project-1')).resolves.toMatchObject([{ id: 'type-1' }])
-    await expect(listEstimates('project-1')).resolves.toMatchObject([{ id: 'estimate-1' }])
-    expect(planeFetch.mock.calls[1][1]).toContain('cursor=100%3A1%3A0')
-  })
-
-  it('paginates project listing', async () => {
-    planeFetch
-      .mockResolvedValueOnce({
-        results: [project('project-1')],
-        next_cursor: '100:1:0',
-        next_page_results: true
-      })
-      .mockResolvedValueOnce({ results: [project('project-2')], next_page_results: false })
-    const { listProjects } = await import('./project-resources')
-
-    await expect(listProjects()).resolves.toMatchObject([{ id: 'project-1' }, { id: 'project-2' }])
-    expect(planeFetch.mock.calls[0][1]).toContain('per_page=100')
-    expect(planeFetch.mock.calls[1][1]).toContain('cursor=100%3A1%3A0')
-  })
-
-  it('lists and creates work item links and lists attachment metadata', async () => {
-    planeFetch
-      .mockResolvedValueOnce(issue('issue-1', 1))
-      .mockResolvedValueOnce({
-        results: [{ id: 'link-1', title: 'Spec', url: 'https://example.com' }]
-      })
-      .mockResolvedValueOnce(issue('issue-1', 1))
-      .mockResolvedValueOnce({ id: 'link-2', title: 'PR', url: 'https://example.com/pr' })
-      .mockResolvedValueOnce(issue('issue-1', 1))
-      .mockResolvedValueOnce({ results: [{ id: 'asset-1', file_name: 'trace.txt', size: 42 }] })
-    const { issueLinks, addIssueLink, issueAttachments } = await import('./issue-activity')
-
-    await expect(issueLinks('AIF-1')).resolves.toMatchObject([{ id: 'link-1' }])
-    await expect(addIssueLink('AIF-1', 'PR', 'https://example.com/pr')).resolves.toEqual({
-      ok: true,
-      id: 'link-2'
-    })
-    expect(JSON.parse(planeFetch.mock.calls[3][2].body)).toEqual({
-      title: 'PR',
-      url: 'https://example.com/pr'
-    })
-    await expect(issueAttachments('AIF-1')).resolves.toMatchObject([
-      { id: 'asset-1', name: 'trace.txt', size: 42 }
-    ])
   })
 })

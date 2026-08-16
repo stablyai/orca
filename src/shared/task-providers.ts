@@ -1,6 +1,12 @@
 export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'plane'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'plane']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'plane'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -45,6 +51,10 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
     if (!normalized.includes(provider as TaskProvider)) {
       normalized.push(provider as TaskProvider)
     }
+  }
+
+  if (normalized.length > 0 && !normalized.includes('plane')) {
+    normalized.push('plane')
   }
 
   // Why: at least one provider must remain visible so the Tasks surface always
@@ -106,8 +116,10 @@ function isTaskProviderAvailable(
   if (provider === 'jira') {
     return true
   }
+  // Why: Plane can be connected from the Tasks surface, like Jira; hiding it
+  // when disconnected removes the first-time setup and error recovery path.
   if (provider === 'plane') {
-    return availability.planeConnected ?? true
+    return true
   }
   return availability.linearConnected
 }

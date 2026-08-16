@@ -9,6 +9,7 @@ import type {
   PlaneEstimate,
   PlaneIssueAttachment,
   PlaneIssueLink,
+  PlaneIssueQuery,
   PlaneIssueUpdate,
   PlaneLabel,
   PlaneListFilter,
@@ -107,7 +108,14 @@ async function localCall<T>(method: string, params?: unknown): Promise<T> {
       ) as Promise<T>
     case 'plane.listIssues':
       return api.listIssues(
-        params as { filter?: 'all'; limit?: number; instanceId?: string } | undefined
+        params as
+          | {
+              filter?: PlaneListFilter
+              query?: PlaneIssueQuery
+              limit?: number
+              instanceId?: string
+            }
+          | undefined
       ) as Promise<T>
     case 'plane.getIssue':
       return api.getIssue(params as { id: string; instanceId?: string }) as Promise<T>
@@ -207,11 +215,15 @@ export const planeSearchIssues = (
   planeCall(settings, 'plane.searchIssues', { query, limit, instanceId })
 export const planeListIssues = (
   settings: RuntimePlaneSettings,
-  filter?: PlaneListFilter,
+  filter?: PlaneListFilter | PlaneIssueQuery,
   limit?: number,
   instanceId?: string
 ): Promise<PlaneCollectionResult<PlaneWorkItem>> =>
-  planeCall(settings, 'plane.listIssues', { filter, limit, instanceId })
+  planeCall(settings, 'plane.listIssues', {
+    ...(typeof filter === 'string' ? { filter } : { query: filter }),
+    limit,
+    instanceId
+  })
 export const planeGetIssue = (
   settings: RuntimePlaneSettings,
   id: string,

@@ -37,6 +37,7 @@ import type { PlaneIssueUpdate } from '../../shared/plane/types'
 import {
   normalizeCreateArgs,
   normalizeFilter,
+  normalizeIssueQuery,
   normalizeUpdates,
   optionalLimit,
   optionalString,
@@ -135,9 +136,12 @@ export function registerPlaneHandlers(): void {
   )
   ipcMain.handle(
     'plane:listIssues',
-    async (_event, args?: { filter?: PlaneListFilter; limit?: number; instanceId?: string }) =>
+    async (
+      _event,
+      args?: { filter?: PlaneListFilter; query?: unknown; limit?: number; instanceId?: string }
+    ) =>
       listIssues(
-        normalizeFilter(args?.filter),
+        normalizeIssueQuery(args?.query) ?? normalizeFilter(args?.filter),
         optionalLimit(args?.limit, 30),
         optionalString(args?.instanceId)
       )
