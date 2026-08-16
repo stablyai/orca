@@ -48,11 +48,12 @@ describe('browser page placement replacement barrier', () => {
       'browser_page_replacement_requires_retirement'
     )
     expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
-    expect(pages.retirePage('page-a', original)).toBe(true)
+    const retirement = pages.beginPageRetirement('page-a', original)
+    expect(pages.completePageRetirement(retirement)).toBe(true)
 
     const replacement = pages.placeClientPage('page-a', host)
     expect(replacement.pageHostGeneration).toBe(original.pageHostGeneration + 1)
-    expect(pages.retirePage('page-a', original)).toBe(false)
+    expect(pages.completePageRetirement(retirement)).toBe(false)
     expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
     expect(pages.getPlacement('page-a')).toBe(replacement)
   })

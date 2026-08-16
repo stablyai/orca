@@ -72,7 +72,8 @@ describe('browser host capability selection', () => {
       'browser_page_replacement_requires_retirement'
     )
     expect(leases.getPlacement('page-a')).toBe(placement)
-    expect(leases.retirePage('page-a', placement)).toBe(true)
+    const retirement = leases.beginPageRetirement('page-a', placement)
+    expect(leases.completePageRetirement(retirement)).toBe(true)
     expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
       'browser_host_capability_unavailable'
     )

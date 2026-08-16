@@ -3,6 +3,7 @@ import { BrowserExecutionHostGrantRegistry } from './browser-execution-host-gran
 import {
   BrowserHostPagePlacementRegistry,
   type BrowserClientPageAuthority,
+  type BrowserPageRetirement,
   type RuntimeBrowserClientPlacement,
   type RuntimeBrowserPlacement
 } from './browser-host-page-placement'
@@ -21,7 +22,7 @@ const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
 // Why: tolerate brief desktop restart/update overlap while keeping one paired identity bounded.
 const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
 
-export type { RuntimeBrowserPlacement } from './browser-host-page-placement'
+export type { BrowserPageRetirement, RuntimeBrowserPlacement } from './browser-host-page-placement'
 
 export type BrowserHostLease = Readonly<{
   authorityRuntimeId: string
@@ -205,8 +206,19 @@ export class BrowserHostLeaseRegistry {
     return this.pagePlacements.getPlacement(browserPageId)
   }
 
-  retirePage(browserPageId: string, expected: RuntimeBrowserPlacement): boolean {
-    return this.pagePlacements.retirePage(browserPageId, expected)
+  beginPageRetirement(
+    browserPageId: string,
+    expected: RuntimeBrowserPlacement
+  ): BrowserPageRetirement {
+    return this.pagePlacements.beginPageRetirement(browserPageId, expected)
+  }
+
+  cancelPageRetirement(retirement: BrowserPageRetirement): boolean {
+    return this.pagePlacements.cancelPageRetirement(retirement)
+  }
+
+  completePageRetirement(retirement: BrowserPageRetirement): boolean {
+    return this.pagePlacements.completePageRetirement(retirement)
   }
 
   openTunnel(

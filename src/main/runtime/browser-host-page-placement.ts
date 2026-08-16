@@ -10,6 +10,10 @@ export type RuntimeBrowserClientPlacement = {
   pageHostGeneration: number
 }
 export type RuntimeBrowserPlacement = RuntimeBrowserServerPlacement | RuntimeBrowserClientPlacement
+export type BrowserPageRetirement = Readonly<{
+  browserPageId: string
+  placement: RuntimeBrowserPlacement
+}>
 
 export type BrowserClientPageAuthority = Readonly<{
   authorityRuntimeId: string
@@ -25,9 +29,14 @@ type BrowserHostPlacementIdentity = Readonly<{
   browserHostGeneration: number
 }>
 
+type BrowserPagePlacementState = {
+  placement: RuntimeBrowserPlacement
+  retirement?: BrowserPageRetirement
+}
+
 export class BrowserHostPagePlacementRegistry {
   private nextPageGeneration = 1
-  private readonly placementsByPageId = new Map<string, RuntimeBrowserPlacement>()
+  private readonly placementsByPageId = new Map<string, BrowserPagePlacementState>()
   private readonly maxPagePlacements: number
 
   constructor(
@@ -40,7 +49,7 @@ export class BrowserHostPagePlacementRegistry {
   placeServerPage(browserPageId: string): RuntimeBrowserServerPlacement {
     this.assertPlacementAdmission(browserPageId)
     const placement = Object.freeze({ kind: 'server' as const })
-    this.placementsByPageId.set(browserPageId, placement)
+    this.placementsByPageId.set(browserPageId, { placement })
     return placement
   }
 
@@ -56,12 +65,13 @@ export class BrowserHostPagePlacementRegistry {
       browserHostGeneration: host.browserHostGeneration,
       pageHostGeneration: this.takePageGeneration()
     })
-    this.placementsByPageId.set(browserPageId, placement)
+    this.placementsByPageId.set(browserPageId, { placement })
     return placement
   }
 
   requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {
-    const placement = this.placementsByPageId.get(authority.browserPageId)
+    const state = this.placementsByPageId.get(authority.browserPageId)
+    const placement = state?.placement
     if (placement?.kind !== 'client') {
       throw new Error('browser_client_page_placement_required')
     }
@@ -74,18 +84,47 @@ export class BrowserHostPagePlacementRegistry {
     ) {
       throw new Error('browser_page_placement_stale')
     }
+    if (state?.retirement) {
+      throw new Error('browser_page_retirement_pending')
+    }
     return placement
   }
 
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {
-    return this.placementsByPageId.get(browserPageId)
+    return this.placementsByPageId.get(browserPageId)?.placement
   }
 
-  retirePage(browserPageId: string, expected: RuntimeBrowserPlacement): boolean {
-    if (this.placementsByPageId.get(browserPageId) !== expected) {
+  beginPageRetirement(
+    browserPageId: string,
+    expected: RuntimeBrowserPlacement
+  ): BrowserPageRetirement {
+    const state = this.placementsByPageId.get(browserPageId)
+    if (state?.placement !== expected) {
+      throw new Error('browser_page_placement_stale')
+    }
+    if (state.retirement) {
+      return state.retirement
+    }
+    const retirement = Object.freeze({ browserPageId, placement: expected })
+    state.retirement = retirement
+    return retirement
+  }
+
+  cancelPageRetirement(retirement: BrowserPageRetirement): boolean {
+    const state = this.placementsByPageId.get(retirement.browserPageId)
+    if (state?.retirement !== retirement) {
       return false
     }
-    return this.placementsByPageId.delete(browserPageId)
+    state.retirement = undefined
+    return true
+  }
+
+  completePageRetirement(retirement: BrowserPageRetirement): boolean {
+    const state = this.placementsByPageId.get(retirement.browserPageId)
+    if (state?.retirement !== retirement) {
+      return false
+    }
+    return this.placementsByPageId.delete(retirement.browserPageId)
   }
 
   assertPlacementAdmission(browserPageId: string): void {

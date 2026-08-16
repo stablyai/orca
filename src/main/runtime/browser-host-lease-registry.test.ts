@@ -135,7 +135,8 @@ describe('BrowserHostLeaseRegistry', () => {
 
     const server = leases.placeServerPage('page-a')
     expect(server).toEqual({ kind: 'server' })
-    expect(leases.retirePage('page-a', server)).toBe(true)
+    const serverRetirement = leases.beginPageRetirement('page-a', server)
+    expect(leases.completePageRetirement(serverRetirement)).toBe(true)
     const client = leases.placeClientPage('page-a', 'host-a')
     expect(client).toEqual({
       kind: 'client',
@@ -159,7 +160,8 @@ describe('BrowserHostLeaseRegistry', () => {
         pairedDeviceId: 'device-a'
       })
     ).toThrow('browser_host_lease_stale')
-    expect(leases.retirePage('page-a', client)).toBe(true)
+    const clientRetirement = leases.beginPageRetirement('page-a', client)
+    expect(leases.completePageRetirement(clientRetirement)).toBe(true)
     expect(leases.placeClientPage('page-a', 'host-a')).toMatchObject({
       browserHostGeneration: 2,
       pageHostGeneration: 2
@@ -176,7 +178,8 @@ describe('BrowserHostLeaseRegistry', () => {
     })
     const first = leases.placeClientPage('page-a', 'host-a')
 
-    expect(leases.retirePage('page-a', first)).toBe(true)
+    const retirement = leases.beginPageRetirement('page-a', first)
+    expect(leases.completePageRetirement(retirement)).toBe(true)
 
     expect(leases.getPlacement('page-a')).toBeUndefined()
     expect(leases.placeClientPage('page-a', 'host-a')).toMatchObject({
@@ -193,16 +196,19 @@ describe('BrowserHostLeaseRegistry', () => {
       hostCapabilities: ['webview']
     })
     const first = leases.placeClientPage('page-a', 'host-a')
-    expect(leases.retirePage('page-a', first)).toBe(true)
+    const firstRetirement = leases.beginPageRetirement('page-a', first)
+    expect(leases.completePageRetirement(firstRetirement)).toBe(true)
     const replacement = leases.placeClientPage('page-a', 'host-a')
 
-    expect(leases.retirePage('page-a', first)).toBe(false)
+    expect(leases.completePageRetirement(firstRetirement)).toBe(false)
     expect(leases.getPlacement('page-a')).toBe(replacement)
-    expect(leases.retirePage('page-a', replacement)).toBe(true)
+    const replacementRetirement = leases.beginPageRetirement('page-a', replacement)
+    expect(leases.completePageRetirement(replacementRetirement)).toBe(true)
     const server = leases.placeServerPage('page-a')
-    expect(leases.retirePage('page-a', replacement)).toBe(false)
+    expect(leases.completePageRetirement(replacementRetirement)).toBe(false)
     expect(leases.getPlacement('page-a')).toBe(server)
-    expect(leases.retirePage('page-a', server)).toBe(true)
+    const serverRetirement = leases.beginPageRetirement('page-a', server)
+    expect(leases.completePageRetirement(serverRetirement)).toBe(true)
   })
 
   it('binds tunnel generations to the lease and fences replaced routes', async () => {
