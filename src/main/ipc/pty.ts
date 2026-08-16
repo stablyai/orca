@@ -5434,6 +5434,10 @@ export function registerPtyHandlers(
         return false
       }
     },
+    // #14832: expose the last writePtyInput timestamp for the orchestration
+    // pointer's user-input quiesce guard. performance.now() — same clock
+    // lastInputAtByPty stores.
+    lastUserInputAt: (ptyId) => lastInputAtByPty.get(ptyId),
     probePtyLiveness: async (ptyId) => {
       try {
         // Why: no locally routed provider can authoritatively answer for a

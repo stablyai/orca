@@ -1756,6 +1756,10 @@ type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
+  /** #14832: last time writePtyInput routed user keystrokes into this pty
+   * (undefined if never). The orchestration pointer defers when this is
+   * recent, so push-on-idle never types into a prompt the user is editing. */
+  lastUserInputAt?(ptyId: string): number | undefined
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -33225,6 +33229,20 @@ export class OrcaRuntimeService {
     // forever. Only an armed Enter hands settling to its own callback.
     let settlesInEnterCallback = false
     try {
+      // #14832: defer the pointer AND the delayed Enter when the user typed
+      // into this PTY recently — push-on-idle must never inject into a prompt
+      // the user is actively editing (then auto-submit it).
+      const USER_INPUT_QUIESCE_MS = 5_000
+      const lastInput = this.ptyController?.lastUserInputAt?.(deliveryPtyId)
+      if (lastInput !== undefined) {
+        const now = performance.now()
+        if (now - lastInput < USER_INPUT_QUIESCE_MS) {
+          const retryIn = USER_INPUT_QUIESCE_MS - (now - lastInput)
+          this.mailPointerRepointScheduler.schedule(handle, retryIn)
+          return
+        }
+      }
+
       const payload = formatMessagePointer(unread.length)
       const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
       if (!wrote) {
