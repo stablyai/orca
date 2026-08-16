@@ -10,7 +10,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { ProjectHostSetup, DetectedWorktreeListResult } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -485,5 +486,27 @@ describe('purgeStaleRuntimeHostState', () => {
     const s = store.getState()
     expect(s.activeRepoId).toBeNull()
     expect(s.filterRepoIds).toEqual(['repo1'])
+  })
+
+  it('purges visibility state even when the removed host has no catalog rows', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      worktreeVisibilityDefaultsByHost: {
+        local: { external: 'hide' },
+        [RUNTIME_A]: { external: 'show' }
+      },
+      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: 'env-a',
+      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: 'env-a'
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    expect(store.getState().worktreeVisibilityDefaultsByHost).toEqual({
+      local: { external: 'hide' }
+    })
+    expect(store.getState().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId).toBeNull()
+    expect(
+      store.getState().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
+    ).toBeNull()
   })
 })

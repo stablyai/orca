@@ -12,9 +12,7 @@ import {
 } from './workspace-cleanup-slice-test-harness'
 
 describe('workspace cleanup removal and protection', () => {
-  it('preflights cleanup removals concurrently and deletes nested workspaces globally deepest first', async () => {
-    let activePreflights = 0
-    let maxActivePreflights = 0
+  it('preflights cleanup removals in one batched scan and deletes nested workspaces globally deepest first', async () => {
     let activeDeletes = 0
     let maxActiveDeletes = 0
     const deleteOrder: string[] = []
@@ -41,14 +39,11 @@ describe('workspace cleanup removal and protection', () => {
       })
     ]
     const candidateById = new Map(candidates.map((candidate) => [candidate.worktreeId, candidate]))
-    const scan = vi.fn(async (args?: { worktreeId?: string }) => {
-      activePreflights += 1
-      maxActivePreflights = Math.max(maxActivePreflights, activePreflights)
+    const scan = vi.fn(async (args?: { worktreeIds?: string[] }) => {
       await new Promise((resolve) => setTimeout(resolve, 5))
-      activePreflights -= 1
       return {
         scannedAt: NOW,
-        candidates: args?.worktreeId ? [candidateById.get(args.worktreeId)!] : [],
+        candidates: (args?.worktreeIds ?? []).map((id) => candidateById.get(id)!),
         errors: []
       } satisfies WorkspaceCleanupScanResult
     })
@@ -76,7 +71,8 @@ describe('workspace cleanup removal and protection', () => {
       failures: []
     })
 
-    expect(maxActivePreflights).toBeGreaterThan(1)
+    // Why: one batched scan covers every selected row; deletes stay serial.
+    expect(scan).toHaveBeenCalledTimes(1)
     expect(maxActiveDeletes).toBe(1)
     expect(deleteOrder).toEqual([
       'repo-b::/repo/parent/child',
@@ -118,6 +114,24 @@ describe('workspace cleanup removal and protection', () => {
     })
     expect(removeWorktree).toHaveBeenCalledWith(candidate.worktreeId, false, {
       suppressPreservedBranchToast: true
+    })
+  })
+
+  it('forwards the snapshot batch through each successful removal', async () => {
+    const candidate = makeCandidate({ executionHostId: 'ssh:ssh-1' })
+    installWorkspaceCleanupApi(
+      vi.fn(async () => ({ scannedAt: NOW, candidates: [candidate], errors: [] }))
+    )
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+
+    await store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId], {
+      snapshotPruneBatchId: 'batch-1'
+    })
+
+    expect(removeWorktree).toHaveBeenCalledWith(candidate.worktreeId, false, {
+      suppressPreservedBranchToast: true,
+      snapshotPruneBatchId: 'batch-1'
     })
   })
 
@@ -269,6 +283,8 @@ describe('workspace cleanup removal and protection', () => {
 
     expect(scan).toHaveBeenCalledWith(
       {
+        includeAllWorkspaces: true,
+        scanId: expect.any(String),
         skipGitWorktreeIds: expect.arrayContaining([WORKTREE_ID, 'repo1::/tmp/terminal-workspace'])
       },
       expect.any(Function)
@@ -300,7 +316,11 @@ describe('workspace cleanup removal and protection', () => {
 
     await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
 
-    expect(scan).toHaveBeenCalledWith({ worktreeId: WORKTREE_ID })
+    expect(scan).toHaveBeenCalledWith({
+      worktreeIds: [WORKTREE_ID],
+      scanId: expect.any(String),
+      refreshActivity: true
+    })
   })
 
   it('lets explicitly selected not-suggested workspaces reach the removal path', async () => {

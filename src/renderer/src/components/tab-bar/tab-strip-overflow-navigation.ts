@@ -6,11 +6,6 @@ import {
   type TabStripScrollMetrics
 } from './tab-strip-scroll-metrics'
 import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
-import {
-  findLastTabStripTab,
-  scrollTabStripTabIntoView,
-  syncTabStripEndPad
-} from './tab-strip-active-tab-scroll'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -56,10 +51,6 @@ export function useTabStripOverflowNavigation({
   const tabStripRef = useRef<HTMLDivElement>(null)
   const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
   const stickToEndRef = useRef(false)
-  const activeVisibleTabIdRef = useRef(activeVisibleTabId)
-  useLayoutEffect(() => {
-    activeVisibleTabIdRef.current = activeVisibleTabId
-  })
   const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripScrollMetrics>(
     EMPTY_TAB_STRIP_OVERFLOW_STATE
   )
@@ -118,7 +109,6 @@ export function useTabStripOverflowNavigation({
     onScroll()
 
     const handleStripResize = (): void => {
-      syncTabStripEndPad(el)
       updateTabStripOverflowState()
       // If the user is pinned to the right edge, keep it pinned even as tab
       // labels (e.g. "Terminal 5" -> branch name) expand and change scrollWidth.
@@ -148,7 +138,6 @@ export function useTabStripOverflowNavigation({
     }
     if (!prev || prev.worktreeId !== worktreeId) {
       prevStripLenRef.current = { worktreeId, len: tabCount }
-      syncTabStripEndPad(strip)
       updateTabStripOverflowState()
       return
     }
@@ -159,7 +148,6 @@ export function useTabStripOverflowNavigation({
         if (!el) {
           return
         }
-        syncTabStripEndPad(el)
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
         updateTabStripOverflowState()
       }
@@ -167,28 +155,17 @@ export function useTabStripOverflowNavigation({
       requestAnimationFrame(scrollToEnd)
     }
     if (tabCount > prev.len && !pointerGestureActive) {
-      const revealNewEndTab = (): void => {
+      const scrollToEnd = (): void => {
         const el = tabStripRef.current
         if (!el) {
           return
         }
-        syncTabStripEndPad(el)
-        const lastTab = findLastTabStripTab(el)
-        const activeId = activeVisibleTabIdRef.current
-        const activeTab =
-          activeId == null
-            ? null
-            : el.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(activeId)}"]`)
-        // Why: only a newly opened last tab should pin to the end; a restored
-        // mid-strip tab must not yank the viewport to the last tab.
-        if (lastTab && (activeTab == null || lastTab === activeTab)) {
-          scrollTabStripTabIntoView(el, lastTab, 'center')
-          stickToEndRef.current = true
-        }
+        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+        stickToEndRef.current = true
         updateTabStripOverflowState()
       }
-      revealNewEndTab()
-      requestAnimationFrame(revealNewEndTab)
+      scrollToEnd()
+      requestAnimationFrame(scrollToEnd)
     }
     prevStripLenRef.current = { worktreeId, len: tabCount }
     updateTabStripOverflowState()
@@ -212,8 +189,7 @@ export function useTabStripOverflowNavigation({
       requestAnimationFrame(updateTabStripOverflowState)
       return
     }
-    syncTabStripEndPad(strip)
-    scrollTabStripTabIntoView(strip, activeTab, 'nearest')
+    activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     requestAnimationFrame(updateTabStripOverflowState)
   }, [activeVisibleTabId, updateTabStripOverflowState])
 

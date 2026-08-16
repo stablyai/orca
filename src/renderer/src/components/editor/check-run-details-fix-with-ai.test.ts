@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRInfo,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCheckRunDetailsFixDisabledReason,
   isCheckRunDetailsFixCandidate,

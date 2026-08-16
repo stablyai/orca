@@ -20,16 +20,16 @@ import type {
   BrowserPopupEvent
 } from '../../shared/browser-guest-events'
 import type {
-  BrowserCookieImportResult,
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
+  BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 
 export type BrowserApi = {
   registerGuest: (args: {

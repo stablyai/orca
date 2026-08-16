@@ -71,7 +71,7 @@ import {
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
+import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -186,22 +186,22 @@ import {
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 import type {
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
+  PRComment
+} from '../../../shared/github/comment-types'
+import type {
+  GitHubAssignableUser,
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubPRFileViewedState,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
-  GitHubIssueTimelineItem,
-  GitHubIssueTimelineTarget,
-  GitHubAssignableUser,
-  GitHubPRMergeMethod,
-  GitBranchChangeEntry,
-  GitDiffResult,
-  PRCheckDetail,
-  PRComment
-} from '../../../shared/types'
+  GitHubPRMergeMethod
+} from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,

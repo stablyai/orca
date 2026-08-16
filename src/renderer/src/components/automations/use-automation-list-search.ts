@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo } from 'react'
 import type { Automation } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   automationListSearchIndexMatches,
   buildAutomationListSearchIndex,

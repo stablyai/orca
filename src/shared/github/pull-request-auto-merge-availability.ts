@@ -1,4 +1,4 @@
-import type { PRMergeableState, PRReviewDecision, PRState } from '../types'
+import type { PRMergeableState, PRReviewDecision, PRState } from './pull-request-types'
 
 export type GitHubPRAutoMergeAvailabilityInput = {
   state: PRState | 'open' | 'closed' | 'merged' | 'draft'

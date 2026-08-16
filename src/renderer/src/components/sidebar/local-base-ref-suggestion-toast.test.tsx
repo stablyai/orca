@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/types'
+import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/worktree/base-ref-drift-types'
 import { showLocalBaseRefUpdateSuggestionToast } from './local-base-ref-suggestion-toast'
 
 vi.mock('sonner', () => ({

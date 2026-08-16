@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import {
   getOwnerRepoForRemote,

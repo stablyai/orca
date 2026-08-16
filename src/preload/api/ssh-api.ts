@@ -9,7 +9,7 @@ import type {
   SshTarget,
   SshTargetAddResult
 } from '../../shared/ssh-types'
-import type { FilesystemPathFlavor } from '../../shared/types'
+import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 
 export type SshApi = {
   listTargets: () => Promise<SshTarget[]>

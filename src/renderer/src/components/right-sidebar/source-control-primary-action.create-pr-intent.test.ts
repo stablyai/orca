@@ -4,7 +4,7 @@ import {
   resolvePrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveCreatePrHeaderAction } from './source-control-primary-create-pr-intent-action'
+import { resolveCreatePrHeaderAction } from './source-control/review/primary-create-pr-intent-action'
 
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {

@@ -1,11 +1,8 @@
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostSectionRow } from './host-section-rows'
-import {
-  PINNED_GROUP_KEY,
-  type PinnedWorktreeDisplayPolicy,
-  type WorktreeRow
-} from './worktree-list-groups'
+import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
 
 export function getPreferredWorktreeRows(
   rows: readonly WorktreeRow[],

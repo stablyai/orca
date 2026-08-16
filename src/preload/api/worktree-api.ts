@@ -9,6 +9,7 @@ import type {
   ProviderRequestId
 } from '../../shared/detected-worktree-provider-contract'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -17,28 +18,35 @@ import type {
   HostLineageSnapshot,
   ListDesktopLineageForHostArgs
 } from '../../shared/host-lineage-contract'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type {
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../../shared/worktree/base-ref-drift-types'
 import type {
   AdoptProvisionedRootArgs,
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  DetectedWorktreeListResult,
-  FolderWorkspace,
   ForceDeleteWorktreeBranchResult,
+  RemoveWorktreeResult,
+  SparsePreset
+} from '../../shared/worktree/create-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type {
+  DetectedWorktreeListResult,
   GitHubPrStartPoint,
   GitPushTarget,
-  RemoveWorktreeResult,
-  SparsePreset,
-  WorkspaceLineage,
   Worktree,
-  WorktreeBaseStatusEvent,
-  WorktreeHeadIdentity,
-  WorktreeLineage,
-  WorktreeMeta,
-  WorktreeRemoteBranchConflictEvent
-} from '../../shared/types'
+  WorktreeHeadIdentity
+} from '../../shared/worktree/types'
 
 export type WorktreeApi = {
   list: (args: { repoId: string }) => Promise<Worktree[]>
+  /** Generated names already spent in this repo, including deleted workspaces. Name suggestions
+   *  exclude these so a recreated workspace never lands on a prior occupant's path. Compacted: a
+   *  fully spent tier is reported as the watermark rather than as its 552 names. */
+  listRetiredNames: (args: { repoId: string }) => Promise<RetiredNameRegistry>
   listDetected: {
     (
       args: ListDetectedWorktreesArgs
@@ -90,11 +98,13 @@ export type WorktreeApi = {
     // may waive the proof that every PTY stopped.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
+    snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
   // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
   forgetLocal: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
+    snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
   forceDeletePreservedBranch: (args: {
     worktreeId: string

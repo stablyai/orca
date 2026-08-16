@@ -293,6 +293,7 @@ describe('dashboard payload validation', () => {
       localWindowsConpty: true,
       osRelease: '10.0.22631',
       windowsShiftEnterEncoding: 'alt-enter',
+      windowsInputRecordPasteNewline: 'alt-enter',
       ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
@@ -307,6 +308,8 @@ describe('dashboard payload validation', () => {
       { ...terminalInput, localWindowsConpty: 'true' },
       { ...terminalInput, osRelease: 'x'.repeat(1_025) },
       { ...terminalInput, windowsShiftEnterEncoding: 'enter' },
+      { ...terminalInput, forceBracketedMultilineTextPaste: false },
+      { ...terminalInput, windowsInputRecordPasteNewline: 'enter' },
       { ...terminalInput, ctrlEnterCsiU: 'true' },
       { ...terminalInput, kittyKeyboardAdvertised: 1 }
     ]) {

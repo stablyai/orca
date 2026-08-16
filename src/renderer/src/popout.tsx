@@ -13,7 +13,7 @@ import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 
 // Why: the pop-out window is a separate BrowserWindow with its own React root,

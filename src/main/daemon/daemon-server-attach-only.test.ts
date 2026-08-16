@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { DaemonClient } from './client'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | undefined

@@ -1,28 +1,31 @@
 /* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps acquire/release and error handling consistent. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
-  GitPushTarget,
-  IssueSourcePreference,
-  ListWorkItemsResult,
-  PRInfo,
-  PRConflictSummary,
-  PRRefreshOutcome,
-  PRMergeableState,
-  PRReviewDecision,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  GitHubCommentResult,
-  GitHubReactionContent,
-  GitHubPRReviewCommentInput,
-  PRComment,
-  GitHubViewer,
-  GitHubWorkItem,
-  GitHubPullRequestStateUpdate,
   GitHubRerunPRChecksResult,
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../shared/github/check-types'
+import type {
+  GitHubCommentResult,
+  GitHubPRReviewCommentInput,
+  GitHubReactionContent,
+  PRComment
+} from '../../shared/github/comment-types'
+import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type {
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
-  GitHubPRStack
-} from '../../shared/types'
+  GitHubPRStack,
+  GitHubViewer,
+  PRConflictSummary,
+  PRInfo,
+  PRMergeableState,
+  PRReviewDecision
+} from '../../shared/github/pull-request-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../../shared/github/work-item-types'
+import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -93,15 +96,11 @@ import {
 } from './github-api-repository'
 import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 export { _resetOwnerRepoCache } from './gh-utils'
-export {
-  getIssue,
-  listIssues,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  listLabels,
-  listAssignableUsers
-} from './issues'
+export { getIssue, listIssues } from './issues'
+export { createIssue } from './issue-create'
+export { updateIssue } from './issue-update'
+export { addIssueComment } from './issue-comment'
+export { listLabels, listAssignableUsers } from './issue-field-options'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,

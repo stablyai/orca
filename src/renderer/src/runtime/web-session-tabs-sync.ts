@@ -22,13 +22,10 @@ import type {
 import type {
   BrowserCertificateFailure,
   BrowserPage,
-  BrowserWorkspace,
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  TerminalLayoutSnapshot,
-  TerminalTab
-} from '../../../shared/types'
+  BrowserWorkspace
+} from '../../../shared/browser-workspace-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
@@ -99,6 +96,10 @@ import {
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
 import { suppressE2eWebRuntimeBrowserSnapshot } from './web-runtime-browser-creation-e2e-fault'
+import {
+  buildWebSessionExistingTabIndex,
+  type WebSessionExistingTabIndex
+} from './web-session-existing-tab-index'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -1397,24 +1398,11 @@ function buildEditorUnifiedTab(
   }
 }
 
-function findExistingEditorUnifiedTab(
-  state: WebSessionTabsSyncState,
-  worktreeId: string,
-  fileId: string,
-  hostTabId: string
-): Tab | null {
-  return (
-    (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (tab) => tab.contentType === 'editor' && (tab.id === hostTabId || tab.entityId === fileId)
-    ) ?? null
-  )
-}
-
 function buildMirroredEditorTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  state: WebSessionTabsSyncState,
   worktreeOpenFileById: ReadonlyMap<string, OpenFile>,
+  existingTabIndex: WebSessionExistingTabIndex,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
@@ -1423,12 +1411,7 @@ function buildMirroredEditorTabs(
   return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
     const fileId = localEditorFileId(tab)
     const existingFile = worktreeOpenFileById.get(fileId)
-    const existingUnifiedTab = findExistingEditorUnifiedTab(
-      state,
-      snapshot.worktree,
-      fileId,
-      tab.id
-    )
+    const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
     const sourceFileId = editorSourceFileId(tab)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const file: OpenFile = {
@@ -1853,8 +1836,9 @@ function buildMirroredHostGroups({
           validUnifiedTabIds.has(tabId) &&
           !clientGroupIdByLocalTabId.has(tabId)
       )
+    const localHostOrderIds = new Set(localHostOrder)
     const hostTabOrder = [
-      ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
+      ...(existing?.tabOrder.filter((tabId) => !localHostOrderIds.has(tabId)) ?? []),
       ...localHostOrder
     ]
     // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
@@ -2462,6 +2446,9 @@ function applyWebSessionTabsSnapshotWithContext(
 
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
+  const existingTabIndex = buildWebSessionExistingTabIndex({
+    unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? []
+  })
   const readyBrowserTabs = snapshot.tabs.filter(isReadyBrowserTab)
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
   const mirroredBrowserTabs = buildMirroredBrowserTabs(
@@ -2508,8 +2495,8 @@ function applyWebSessionTabsSnapshotWithContext(
   const mirroredEditorTabs = buildMirroredEditorTabs(
     snapshot,
     environmentId,
-    state,
     firstOpenFileByIdForWorktree(worktreeOpenFiles),
+    existingTabIndex,
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
@@ -2833,8 +2820,10 @@ function applyWebSessionTabsSnapshotWithContext(
           .filter((tabId): tabId is string => tabId !== undefined && validTabBarIds.has(tabId))
       ) ?? []
     const next: string[] = []
+    const seen = new Set<string>()
     const push = (tabId: string): void => {
-      if (validTabBarIds.has(tabId) && !next.includes(tabId)) {
+      if (validTabBarIds.has(tabId) && !seen.has(tabId)) {
+        seen.add(tabId)
         next.push(tabId)
       }
     }

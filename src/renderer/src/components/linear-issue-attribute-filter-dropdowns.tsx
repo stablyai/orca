@@ -12,7 +12,7 @@ import {
   emptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import {
   LinearIssueFilterSectionDetail,
   LinearIssueFilterSectionMenu,

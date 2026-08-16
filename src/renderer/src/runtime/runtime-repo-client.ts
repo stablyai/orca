@@ -1,4 +1,5 @@
-import type { BaseRefSearchResult, GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { BaseRefSearchResult } from '../../../shared/repo-types'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from './runtime-repo-search-bounds'

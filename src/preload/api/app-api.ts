@@ -5,12 +5,11 @@ import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal-render-desync-evidence'
-import type {
-  FloatingTerminalCwdRequest,
-  MarkdownDocument,
-  PersistedUIState,
-  WorkspaceSessionState
-} from '../../shared/types'
+import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
@@ -45,6 +44,8 @@ export type AppApi = {
    *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
    *  Returns null on non-Darwin or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
+  /** Physical Mission Control chords before layout resolution. */
+  getMacCapturedDigitRowChords: () => Promise<MacCapturedDigitRowChord[]>
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
   setUnreadDockBadgeCount: (count: number) => Promise<void>
   /** Resolves the launch directory for global Floating Terminal tabs. */

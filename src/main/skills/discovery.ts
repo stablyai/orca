@@ -2,7 +2,7 @@ import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -19,7 +19,12 @@ import {
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
-import { SkillScanCoalescer, type SkillScanOutcome } from './skill-scan-coalescer'
+import {
+  isSkillRootUnavailableError,
+  SkillScanCoalescer,
+  type SkillScanOutcome
+} from './skill-scan-coalescer'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
@@ -44,7 +49,7 @@ const MAX_CACHED_SKILL_ROOTS = 1_024
 // are not — a repo/plugin id is already a hash.
 export const MAX_LOGGED_ROOT_IDS = 12
 
-type RootScan = { exists: boolean; skills: ScannedSkill[] }
+type RootScan = { exists: boolean; skills: ScannedSkill[]; unavailable?: boolean }
 
 const rootScans = new SkillScanCoalescer<RootScan>(MAX_CACHED_SKILL_ROOTS)
 
@@ -89,14 +94,17 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(root: SkillScanRoot): Promise<ScannedSkill[]> {
+async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
   const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
-  const skillFiles = await findSkillFiles(root.path, maxDepth)
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
   // Why: a root can hold many packages and each one costs a summary read plus a
   // package walk. Unbounded fan-out here is what turned one scan into a burst of
   // filesystem-metadata work across every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
+      // Why: these tasks drain long after the walk, so an abandoned scan would
+      // keep spending a realpath + stat + read per remaining candidate.
+      signal.throwIfAborted()
       // Why: path identity belongs to the scanning host; canonicalizing before
       // returning prevents symlinked roots from becoming duplicate picker rows.
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
@@ -134,14 +142,32 @@ function rootScanKey(root: SkillScanRoot): string {
   return `${root.sourceKind}\0${root.path}`
 }
 
-function scanRootShared(
+async function scanRootShared(
   root: SkillScanRoot,
   refresh: boolean
 ): Promise<SkillScanOutcome<RootScan>> {
-  return rootScans.run(rootScanKey(root), { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh }, async () => {
-    const exists = await pathExists(root.path)
-    return { exists, skills: exists ? await scanRoot(root) : [] }
-  })
+  try {
+    return await rootScans.run(
+      rootScanKey(root),
+      { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
+      async (signal) => {
+        const exists = await pathExists(root.path)
+        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+      }
+    )
+  } catch (error) {
+    if (!isSkillRootUnavailableError(error)) {
+      throw error
+    }
+    // Why degrade instead of rejecting: one unreachable root must not fail the
+    // whole discovery and empty the picker for every healthy root beside it.
+    // `unavailable` keeps that distinct from a root that genuinely is not there.
+    //
+    // The abort case matters as much as the shed one: callers already waiting on
+    // a scan that is later abandoned for age see it reject, and re-throwing here
+    // would turn one slow root into a failed discovery for every root.
+    return { value: { exists: true, skills: [], unavailable: true }, cached: false }
+  }
 }
 
 function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSkill): void {
@@ -182,6 +208,7 @@ export async function discoverSkills(args: {
   homeDir?: string
   cwd?: string
   includeCwd?: boolean
+  providerRootOverrides?: SkillProviderRootOverrides
   refresh?: boolean
 }): Promise<SkillDiscoveryResult> {
   const startedAt = Date.now()
@@ -200,7 +227,11 @@ export async function discoverSkills(args: {
     ...root,
     providers: [...root.providers],
     exists: scans[index].value.exists,
-    skippedReason: scans[index].value.exists ? undefined : 'missing'
+    skippedReason: scans[index].value.unavailable
+      ? 'unavailable'
+      : scans[index].value.exists
+        ? undefined
+        : 'missing'
   }))
   const seen = new Map<string, DiscoveredSkill>()
   for (const { value } of scans) {

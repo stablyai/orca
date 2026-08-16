@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../shared/repo-kind'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import { hasLocalCommitObject, isFullGitObjectId } from './git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'

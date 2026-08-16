@@ -1,12 +1,14 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { wslUncDirectoryExists } from '../wsl'
+import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
+const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
 
 const UNIX_SHELL_FALLBACKS = ['/bin/zsh', '/bin/bash', '/bin/sh'] as const
 
@@ -145,6 +147,47 @@ export function validateWorkingDirectory(cwd: string): void {
     throwMissingWorkingDirectory(cwd)
   }
   if (!statSync(cwd).isDirectory()) {
+    throw new Error(`Working directory "${cwd}" is not a directory.`)
+  }
+}
+
+/** Validate a cwd without blocking the daemon's shared event loop. */
+export function validateWorkingDirectoryAsync(cwd: string): Promise<void> {
+  const key = cwd
+  const pending = pendingWorkingDirectoryValidations.get(key)
+  if (pending) {
+    return pending
+  }
+  const validation = validateWorkingDirectoryUncached(cwd)
+  pendingWorkingDirectoryValidations.set(key, validation)
+  const forget = (): void => {
+    if (pendingWorkingDirectoryValidations.get(key) === validation) {
+      pendingWorkingDirectoryValidations.delete(key)
+    }
+  }
+  void validation.then(forget, forget)
+  return validation
+}
+
+async function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
+  if (isWslUncPath(cwd)) {
+    const existsInDistro = await wslUncDirectoryExistsAsync(cwd)
+    if (existsInDistro === false) {
+      throwMissingWorkingDirectory(cwd)
+    }
+    if (existsInDistro === true) {
+      return
+    }
+  }
+
+  let stats: Awaited<ReturnType<typeof stat>>
+  try {
+    stats = await stat(cwd)
+  } catch {
+    // One stat avoids paying an unreachable filesystem timeout twice.
+    throwMissingWorkingDirectory(cwd)
+  }
+  if (!stats.isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
 }

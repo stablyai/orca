@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 // Why: displayName is typed non-optional but arrives undefined at runtime for
 // persisted/discovered worktrees (crash 99657ab1); coalesce so it can't throw.

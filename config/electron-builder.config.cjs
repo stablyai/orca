@@ -92,6 +92,7 @@ const winSpeechNativeResource = {
 module.exports = {
   appId,
   productName: 'Orca',
+  protocols: [{ name: 'Orca', schemes: ['orca'] }],
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion

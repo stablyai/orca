@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -38,10 +38,14 @@ export type TuiAgentConfig = {
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
   preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Renderer-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
+  /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Hard deadline for the agent's composer readiness signal. */
+  draftPasteReadyTimeoutMs?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
+  /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
+  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
 }
@@ -83,8 +87,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
+    windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
+    draftPasteReadyTimeoutMs: 20_000
   },
   autohand: {
     detectCmd: 'autohand',

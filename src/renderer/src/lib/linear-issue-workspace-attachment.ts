@@ -1,4 +1,5 @@
-import type { LinearIssue, Worktree } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   getLinearOrganizationUrlKeyFromIssueUrl,
   parseLinearIssueInput
