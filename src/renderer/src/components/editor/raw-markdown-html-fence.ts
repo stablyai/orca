@@ -23,10 +23,16 @@ export function consumeMarkdownFenceDelimiterLine(
   }
   const fenceChar = fenceMatch[1][0] as '`' | '~'
   const fenceLength = fenceMatch[1].length
+  const lineEnd = lineRest.indexOf('\n')
+  const suffix = lineRest.slice(fenceMatch[0].length, lineEnd === -1 ? undefined : lineEnd)
   if (state.activeFence === null) {
     state.activeFence = fenceChar
     state.activeFenceLength = fenceLength
-  } else if (state.activeFence === fenceChar && fenceLength >= state.activeFenceLength) {
+  } else if (
+    state.activeFence === fenceChar &&
+    fenceLength >= state.activeFenceLength &&
+    /^[ \t]*\r?$/.test(suffix)
+  ) {
     state.activeFence = null
     state.activeFenceLength = 0
   } else {
