@@ -22,17 +22,23 @@ const {
   statMock: vi.fn()
 }))
 
+const { openExternalMock, showMessageBoxMock } = vi.hoisted(() => ({
+  openExternalMock: vi.fn(),
+  showMessageBoxMock: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
   },
   shell: {
     showItemInFolder: showItemInFolderMock,
-    openExternal: vi.fn(),
+    openExternal: openExternalMock,
     openPath: openPathMock
   },
   dialog: {
-    showOpenDialog: showOpenDialogMock
+    showOpenDialog: showOpenDialogMock,
+    showMessageBox: showMessageBoxMock
   }
 }))
 
@@ -104,9 +110,11 @@ describe('registerShellHandlers', () => {
     handleMock.mockReset()
     getSpawnArgsForWindowsMock.mockReset()
     openPathMock.mockReset()
+    openExternalMock.mockReset()
     resolveCliCommandMock.mockReset()
     showItemInFolderMock.mockReset()
     showOpenDialogMock.mockReset()
+    showMessageBoxMock.mockReset()
     spawnMock.mockReset()
     statMock.mockReset()
     settings.activeRuntimeEnvironmentId = null
@@ -745,6 +753,47 @@ describe('registerShellHandlers', () => {
 
       await expect(handler({}, 'https://example.com/file.md')).resolves.toBeUndefined()
       expect(openPathMock).not.toHaveBeenCalled()
+    })
+
+    it('opens http URLs without a prompt', async () => {
+      openExternalMock.mockResolvedValueOnce(undefined)
+      const handler = getHandler('shell:openUrl')
+
+      await handler({}, 'https://example.com/docs')
+      expect(showMessageBoxMock).not.toHaveBeenCalled()
+      expect(openExternalMock).toHaveBeenCalledWith('https://example.com/docs')
+    })
+
+    it('prompts before opening custom app schemes and cancels by default', async () => {
+      showMessageBoxMock.mockResolvedValueOnce({ response: 1 })
+      const handler = getHandler('shell:openUrl')
+
+      await handler({}, 'obsidian://open?vault=notes')
+      expect(showMessageBoxMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('obsidian'),
+          detail: 'obsidian://open?vault=notes'
+        })
+      )
+      expect(openExternalMock).not.toHaveBeenCalled()
+    })
+
+    it('opens custom app schemes after the user confirms', async () => {
+      showMessageBoxMock.mockResolvedValueOnce({ response: 0 })
+      openExternalMock.mockResolvedValueOnce(undefined)
+      const handler = getHandler('shell:openUrl')
+
+      await handler({}, 'obsidian://open?vault=notes')
+      expect(openExternalMock).toHaveBeenCalledWith('obsidian://open?vault=notes')
+    })
+
+    it('never opens denied schemes', async () => {
+      const handler = getHandler('shell:openUrl')
+
+      await handler({}, 'javascript:alert(1)')
+      await handler({}, 'file:///etc/passwd')
+      expect(showMessageBoxMock).not.toHaveBeenCalled()
+      expect(openExternalMock).not.toHaveBeenCalled()
     })
 
     it('does not open remote file URIs', async () => {

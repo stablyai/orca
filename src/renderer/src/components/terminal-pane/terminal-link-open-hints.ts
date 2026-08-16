@@ -89,6 +89,13 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
 }
 
+/** Custom app schemes always go through confirm → openExternal registered app. */
+export function getTerminalCustomAppSchemeOpenHint(): string {
+  return isMacPlatform()
+    ? '⌘+click to open in the registered app'
+    : 'Ctrl+click to open in the registered app'
+}
+
 export function getTerminalUrlSystemBrowserHint(): string {
   return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
 }
