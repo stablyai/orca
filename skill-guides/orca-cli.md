@@ -2,12 +2,12 @@
 name: orca-cli
 description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, artifacts, worktree comments, and the browser
+  terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
   embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
   "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
   "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
-  "share HTML/Markdown", "public artifact link", or "control the browser inside
+  "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
   Orca". Prefer this over raw `git worktree`, ad hoc
   PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
   Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
@@ -272,6 +272,39 @@ ORCA artifacts delete <id> --json
 - `ORCA_CLOUD_AUTH_TOKEN` is a development-only authentication override. Prefer the active
   Orca profile's normal PropelAuth session and never expose the token in logs or agent output.
 
+## Skill Sharing
+
+Agents can publish one or more installed skills behind one unlisted link through the
+signed-in Orca account. The user must first grant the separate, default-off permission in
+Settings → Share Skills ("Allow agents and the Orca CLI to publish skill links"). There is
+no CLI or RPC way to grant it. Manual publishing from the reviewed desktop flow remains
+available without this agent permission.
+
+```text
+ORCA skills installed --json
+ORCA skills share --skill <selector> [--skill <selector> ...] --bundle-name <name> --json
+```
+
+- `skills installed` returns safe discovery IDs and names. It does not expose local skill
+  paths in CLI output. Sharing then verifies that each `SKILL.md` declares a portable
+  lowercase name containing only letters, numbers, and hyphens.
+- Each `--skill` must be an exact discovery ID or an unambiguous installed-skill name.
+  Use IDs when names collide.
+- Multiple `--skill` flags create one bundle and one link. `--all` and arbitrary paths are
+  intentionally unsupported; name every skill the user asked to publish.
+- Skill folders can contain scripts, configuration, credentials, or other private files.
+  Treat the permission as authority, not blanket intent: publish only the explicitly
+  requested skills and never widen the selection.
+- A denied command fails with `agent_skill_sharing_disabled`. Do not retry; ask the user to
+  enable the switch in the desktop app if they want this action.
+- Orca stages one agent-published bundle at a time per host. If another publish is active,
+  wait for it to finish before retrying `agent_skill_sharing_busy`.
+- Run the command in an Orca terminal on the machine that stores the skills. Forwarded WSL,
+  SSH, and paired-runtime invocations fail before discovery so Orca cannot read from the
+  wrong filesystem.
+- The JSON result contains the unlisted URL and public share/package/version IDs. It never
+  includes cloud authentication tokens.
+
 ## Built-In Browser
 
 The built-in browser is Orca's embedded browser tab surface, scoped to Orca worktrees; it is not Chrome/Safari or desktop app UI.
@@ -343,7 +376,7 @@ Common recoveries:
 
 ## Next Action
 
-Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, `artifacts list/share`, or built-in browser `snapshot`.
+Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, `artifacts list/share`, `skills installed/share`, or built-in browser `snapshot`.
 
 ## Mobile Emulator (iOS Simulator via serve-sim)
 
