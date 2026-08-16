@@ -163,6 +163,18 @@ describe('WorkspaceContextPanel', () => {
     ])
   })
 
+  it('filters to one section from the filter strip', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    const mcpTab = [...container.querySelectorAll('[role="tab"]')].find(
+      (el) => el.textContent === 'MCP'
+    ) as HTMLButtonElement
+    act(() => mcpTab.click())
+    const text = container.textContent ?? ''
+    expect(text).toContain('linear')
+    expect(text).not.toContain('/home/u/repo/CLAUDE.md')
+    expect(text).not.toContain('adhd@local')
+  })
+
   it('shows the empty state without an active worktree', () => {
     testState.worktree = null
     act(() => root.render(<WorkspaceContextPanel />))

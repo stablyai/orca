@@ -109,6 +109,72 @@ describe('inspectAgentContext', () => {
     ).toBe(false)
   })
 
+  it('merges Claude project-scoped servers from ~/.claude.json and reads Codex and OpenCode files', async () => {
+    await writeFile(
+      join(homeDir, '.claude.json'),
+      JSON.stringify({
+        mcpServers: { global: { command: 'g' } },
+        projects: {
+          [cwd]: {
+            mcpServers: { local: { url: 'http://localhost:1' }, global: { command: 'dup' } }
+          },
+          '/elsewhere': { mcpServers: { other: { command: 'x' } } }
+        }
+      })
+    )
+    await mkdir(join(homeDir, '.codex'), { recursive: true })
+    await writeFile(
+      join(homeDir, '.codex', 'config.toml'),
+      [
+        'model = "gpt-5"',
+        '',
+        '[mcp_servers.codegraph]',
+        'command = "codegraph"',
+        'args = ["serve", "--mcp"]',
+        '',
+        '[mcp_servers."remote one"]',
+        'url = "https://mcp.example" # trailing comment',
+        'enabled = false',
+        '',
+        '[[skills.config]]',
+        'path = "/x"'
+      ].join('\n')
+    )
+    await mkdir(join(homeDir, '.config', 'opencode'), { recursive: true })
+    await writeFile(
+      join(homeDir, '.config', 'opencode', 'opencode.json'),
+      JSON.stringify({ mcp: { oc: { type: 'local', command: ['bun', 'x'] } } })
+    )
+
+    const report = await inspectAgentContext({ target: { kind: 'native-host', homeDir, cwd } })
+    const claude = report.mcpFiles.find((file) => file.id === 'home-mcp:.claude.json')
+    expect(claude?.inspection.servers.map((server) => server.name)).toEqual(['global', 'local'])
+    const codex = report.mcpFiles.find((file) => file.id === 'home-mcp:.codex/config.toml')
+    expect(codex?.inspection.status).toBe('valid')
+    expect(codex?.inspection.servers).toEqual([
+      expect.objectContaining({
+        name: 'codegraph',
+        transport: 'stdio',
+        command: 'codegraph',
+        status: 'enabled'
+      }),
+      expect.objectContaining({
+        name: 'remote one',
+        transport: 'http',
+        url: 'https://mcp.example',
+        status: 'disabled'
+      })
+    ])
+    const opencode = report.mcpFiles.find((file) => file.id === 'home-mcp:opencode.json')
+    expect(opencode?.inspection.servers).toEqual([
+      expect.objectContaining({ name: 'oc', transport: 'stdio', command: 'bun' })
+    ])
+    expect(
+      report.mcpFiles.find((file) => file.id === 'project-mcp:.codex/config.toml')?.inspection
+        .exists
+    ).toBe(false)
+  })
+
   it('reports an invalid settings file instead of dropping it', async () => {
     await writeFile(join(homeDir, '.claude', 'settings.json'), '{')
     const report = await inspectAgentContext({ target: { kind: 'native-host', homeDir, cwd } })

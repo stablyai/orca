@@ -14940,7 +14940,10 @@
           "disabled": "disabled",
           "scopeProject": "Workspace",
           "scopeAncestor": "Parent folder",
-          "scopeHome": "User"
+          "scopeHome": "User",
+          "filterAll": "All",
+          "filterMcp": "MCP",
+          "filterLabel": "Filter sections"
         }
       },
       "link": {

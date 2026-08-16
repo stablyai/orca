@@ -14,12 +14,21 @@ import {
   groupInstructionFiles,
   groupSkillsBySource,
   isPathInside,
-  selectWorkspaceSkills,
-  sortByScope
+  selectWorkspaceSkills
 } from './workspace-context-model'
 import { ContextRow, ContextSection, EmptyRow, scopeLabel } from './workspace-context-rows'
+import { HookFilesBody, McpFilesBody, PluginsBody } from './workspace-context-sections'
 
 type SectionKey = 'instructions' | 'skills' | 'mcp' | 'hooks' | 'plugins'
+type SectionFilter = SectionKey | 'all'
+const SECTION_FILTERS: SectionFilter[] = [
+  'all',
+  'instructions',
+  'skills',
+  'mcp',
+  'hooks',
+  'plugins'
+]
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   instructions: true,
@@ -35,11 +44,33 @@ function relativeToWorkspace(pathValue: string, workspaceCwd: string): string {
   return normalized.slice(base.length + 1)
 }
 
+function sectionFilterLabel(key: SectionFilter): string {
+  switch (key) {
+    case 'all':
+      return translate('auto.components.rightSidebar.WorkspaceContextPanel.filterAll', 'All')
+    case 'instructions':
+      return translate(
+        'auto.components.rightSidebar.WorkspaceContextPanel.instructions',
+        'Instructions'
+      )
+    case 'skills':
+      return translate('auto.components.rightSidebar.WorkspaceContextPanel.skills', 'Skills')
+    case 'mcp':
+      return translate('auto.components.rightSidebar.WorkspaceContextPanel.filterMcp', 'MCP')
+    case 'hooks':
+      return translate('auto.components.rightSidebar.WorkspaceContextPanel.hooks', 'Hooks')
+    default:
+      return translate('auto.components.rightSidebar.WorkspaceContextPanel.plugins', 'Plugins')
+  }
+}
+
 export default function WorkspaceContextPanel(): React.JSX.Element {
   const worktree = useActiveWorktree()
   const openFile = useAppStore((s) => s.openFile)
   const { report, loading, error, skills, skillsLoading, refresh } = useWorkspaceAgentContext()
   const [showMissing, setShowMissing] = useState(false)
+  const [filter, setFilter] = useState<SectionFilter>('all')
+  const showSection = (key: SectionKey): boolean => filter === 'all' || filter === key
   const [open, setOpen] = useState<Record<SectionKey, boolean>>(DEFAULT_OPEN)
   const toggle = useCallback(
     (key: SectionKey) => setOpen((current) => ({ ...current, [key]: !current[key] })),
@@ -121,6 +152,32 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
         </button>
       </div>
+      <div
+        role="tablist"
+        aria-label={translate(
+          'auto.components.rightSidebar.WorkspaceContextPanel.filterLabel',
+          'Filter sections'
+        )}
+        className="flex flex-wrap gap-1 border-b border-border px-3 py-1.5"
+      >
+        {SECTION_FILTERS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={filter === key}
+            onClick={() => setFilter(key)}
+            className={cn(
+              'rounded-md px-2 py-0.5 text-[11px] transition-colors',
+              filter === key
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+            )}
+          >
+            {sectionFilterLabel(key)}
+          </button>
+        ))}
+      </div>
       <label className="flex cursor-pointer items-center gap-2 border-b border-border px-4 py-1.5 text-[11px] text-muted-foreground">
         <input
           type="checkbox"
@@ -137,255 +194,145 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
         <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>
       ) : null}
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
-        <ContextSection
-          title={translate(
-            'auto.components.rightSidebar.WorkspaceContextPanel.instructions',
-            'Instructions'
-          )}
-          count={report ? counts.instructionFiles : null}
-          open={open.instructions}
-          onToggle={() => toggle('instructions')}
-        >
-          {instructionGroups.length === 0 ? (
-            <EmptyRow
-              text={translate(
-                'auto.components.rightSidebar.WorkspaceContextPanel.noInstructions',
-                'No instruction files found for this workspace.'
-              )}
-            />
-          ) : (
-            instructionGroups.map((group) => (
-              <div key={group.scope}>
-                <div className="px-3 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {scopeLabel(group.scope)}
-                </div>
-                {group.files.map((file) => (
-                  <ContextRow
-                    key={file.id}
-                    primary={file.label}
-                    secondary={file.path}
-                    meta={
-                      file.entryCount !== undefined
-                        ? translate(
-                            'auto.components.rightSidebar.WorkspaceContextPanel.ruleCount',
-                            '{{value0}} rules',
-                            { value0: file.entryCount }
-                          )
-                        : file.exists
-                          ? formatBytes(file.sizeBytes)
-                          : translate(
-                              'auto.components.rightSidebar.WorkspaceContextPanel.missing',
-                              'not found'
-                            )
-                    }
-                    agents={file.agents}
-                    muted={!file.exists}
-                    onClick={
-                      file.exists && file.scope === 'project' && file.entryCount === undefined
-                        ? () => openInstructionFile(file)
-                        : undefined
-                    }
-                    title={file.path}
-                  />
-                ))}
-              </div>
-            ))
-          )}
-        </ContextSection>
-
-        <ContextSection
-          title={translate('auto.components.rightSidebar.WorkspaceContextPanel.skills', 'Skills')}
-          count={skillsLoading && workspaceSkills.length === 0 ? null : workspaceSkills.length}
-          open={open.skills}
-          onToggle={() => toggle('skills')}
-        >
-          {workspaceSkills.length === 0 ? (
-            <EmptyRow
-              text={
-                skillsLoading
-                  ? translate(
-                      'auto.components.rightSidebar.WorkspaceContextPanel.scanning',
-                      'Scanning…'
-                    )
-                  : translate(
-                      'auto.components.rightSidebar.WorkspaceContextPanel.noSkills',
-                      'No skills discovered.'
-                    )
-              }
-            />
-          ) : (
-            skillGroups.map((group) => (
-              <div key={group.label}>
-                <div className="flex items-baseline px-3 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <span className="min-w-0 flex-1 truncate">{group.label}</span>
-                  <span className="tabular-nums">{group.skills.length}</span>
-                </div>
-                {group.skills.map((skill) => (
-                  <ContextRow
-                    key={skill.id}
-                    primary={skill.name}
-                    secondary={skill.skillFilePath}
-                    agents={skill.providers.filter((provider) => provider !== 'agent-skills')}
-                    title={skill.description ?? skill.skillFilePath}
-                  />
-                ))}
-              </div>
-            ))
-          )}
-        </ContextSection>
-
-        <ContextSection
-          title={translate('auto.components.rightSidebar.WorkspaceContextPanel.mcp', 'MCP servers')}
-          count={report ? counts.mcpServers : null}
-          open={open.mcp}
-          onToggle={() => toggle('mcp')}
-        >
-          {report && report.mcpFiles.every((file) => !file.inspection.exists) && !showMissing ? (
-            <EmptyRow
-              text={translate(
-                'auto.components.rightSidebar.WorkspaceContextPanel.noMcp',
-                'No MCP config files found.'
-              )}
-            />
-          ) : (
-            sortByScope(report?.mcpFiles ?? [])
-              .filter((file) => file.inspection.exists || showMissing)
-              .map((file) => (
-                <div key={file.id}>
-                  <ContextRow
-                    primary={file.inspection.candidate.label}
-                    secondary={file.path}
-                    meta={
-                      !file.inspection.exists
-                        ? translate(
-                            'auto.components.rightSidebar.WorkspaceContextPanel.missing',
-                            'not found'
-                          )
-                        : file.inspection.status === 'invalid'
+        {showSection('instructions') && (
+          <ContextSection
+            title={translate(
+              'auto.components.rightSidebar.WorkspaceContextPanel.instructions',
+              'Instructions'
+            )}
+            count={report ? counts.instructionFiles : null}
+            open={filter === 'instructions' || open.instructions}
+            onToggle={() => toggle('instructions')}
+          >
+            {instructionGroups.length === 0 ? (
+              <EmptyRow
+                text={translate(
+                  'auto.components.rightSidebar.WorkspaceContextPanel.noInstructions',
+                  'No instruction files found for this workspace.'
+                )}
+              />
+            ) : (
+              instructionGroups.map((group) => (
+                <div key={group.scope}>
+                  <div className="px-3 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {scopeLabel(group.scope)}
+                  </div>
+                  {group.files.map((file) => (
+                    <ContextRow
+                      key={file.id}
+                      primary={file.label}
+                      secondary={file.path}
+                      meta={
+                        file.entryCount !== undefined
                           ? translate(
-                              'auto.components.rightSidebar.WorkspaceContextPanel.invalid',
-                              'invalid'
+                              'auto.components.rightSidebar.WorkspaceContextPanel.ruleCount',
+                              '{{value0}} rules',
+                              { value0: file.entryCount }
                             )
-                          : String(file.inspection.servers.length)
-                    }
-                    agents={file.agents}
-                    muted={!file.inspection.exists}
-                    title={file.inspection.error ?? file.path}
-                  />
-                  {file.inspection.servers.map((server) => (
-                    <div
-                      key={`${file.id}:${server.name}`}
-                      className="flex items-baseline gap-2 py-0.5 pl-6 pr-3 text-xs"
-                    >
-                      <span
-                        className={cn(
-                          'min-w-0 truncate',
-                          server.status === 'enabled'
-                            ? 'text-foreground'
-                            : 'text-muted-foreground line-through'
-                        )}
-                      >
-                        {server.name}
-                      </span>
-                      <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-                        {server.transport === 'http'
-                          ? (server.url ?? server.transport)
-                          : (server.command ?? server.transport)}
-                      </span>
-                    </div>
+                          : file.exists
+                            ? formatBytes(file.sizeBytes)
+                            : translate(
+                                'auto.components.rightSidebar.WorkspaceContextPanel.missing',
+                                'not found'
+                              )
+                      }
+                      agents={file.agents}
+                      muted={!file.exists}
+                      onClick={
+                        file.exists && file.scope === 'project' && file.entryCount === undefined
+                          ? () => openInstructionFile(file)
+                          : undefined
+                      }
+                      title={file.path}
+                    />
                   ))}
                 </div>
               ))
-          )}
-        </ContextSection>
+            )}
+          </ContextSection>
+        )}
 
-        <ContextSection
-          title={translate('auto.components.rightSidebar.WorkspaceContextPanel.hooks', 'Hooks')}
-          count={report ? counts.hooks : null}
-          open={open.hooks}
-          onToggle={() => toggle('hooks')}
-        >
-          {sortByScope(report?.hookFiles ?? [])
-            .filter((file) => file.hookCount > 0 || file.error || showMissing)
-            .map((file) => (
-              <ContextRow
-                key={file.id}
-                primary={
-                  file.error
+        {showSection('skills') && (
+          <ContextSection
+            title={translate('auto.components.rightSidebar.WorkspaceContextPanel.skills', 'Skills')}
+            count={skillsLoading && workspaceSkills.length === 0 ? null : workspaceSkills.length}
+            open={filter === 'skills' || open.skills}
+            onToggle={() => toggle('skills')}
+          >
+            {workspaceSkills.length === 0 ? (
+              <EmptyRow
+                text={
+                  skillsLoading
                     ? translate(
-                        'auto.components.rightSidebar.WorkspaceContextPanel.invalidSettings',
-                        'Invalid settings file'
+                        'auto.components.rightSidebar.WorkspaceContextPanel.scanning',
+                        'Scanning…'
                       )
-                    : file.events.length > 0
-                      ? file.events.join(', ')
-                      : translate(
-                          'auto.components.rightSidebar.WorkspaceContextPanel.noHooksInFile',
-                          'No hooks'
-                        )
-                }
-                secondary={file.path}
-                meta={
-                  file.exists
-                    ? String(file.hookCount)
                     : translate(
-                        'auto.components.rightSidebar.WorkspaceContextPanel.missing',
-                        'not found'
+                        'auto.components.rightSidebar.WorkspaceContextPanel.noSkills',
+                        'No skills discovered.'
                       )
                 }
-                agents={file.agents}
-                muted={!file.exists || file.hookCount === 0}
-                title={file.error ?? file.path}
               />
-            ))}
-          {report && counts.hooks === 0 && !showMissing ? (
-            <EmptyRow
-              text={translate(
-                'auto.components.rightSidebar.WorkspaceContextPanel.noHooks',
-                'No agent hooks configured.'
-              )}
-            />
-          ) : null}
-        </ContextSection>
-
-        <ContextSection
-          title={translate('auto.components.rightSidebar.WorkspaceContextPanel.plugins', 'Plugins')}
-          count={report ? counts.plugins : null}
-          open={open.plugins}
-          onToggle={() => toggle('plugins')}
-        >
-          {report && report.plugins.length === 0 ? (
-            <EmptyRow
-              text={translate(
-                'auto.components.rightSidebar.WorkspaceContextPanel.noPlugins',
-                'No plugin settings found.'
-              )}
-            />
-          ) : (
-            (report?.plugins ?? [])
-              .filter((plugin) => plugin.enabled || showMissing)
-              .map((plugin) => (
-                <ContextRow
-                  key={plugin.id}
-                  primary={plugin.name}
-                  secondary={plugin.sourcePath}
-                  meta={
-                    plugin.enabled
-                      ? translate(
-                          'auto.components.rightSidebar.WorkspaceContextPanel.enabled',
-                          'enabled'
-                        )
-                      : translate(
-                          'auto.components.rightSidebar.WorkspaceContextPanel.disabled',
-                          'disabled'
-                        )
-                  }
-                  agents={plugin.agents}
-                  muted={!plugin.enabled}
-                  title={plugin.sourcePath}
-                />
+            ) : (
+              skillGroups.map((group) => (
+                <div key={group.label}>
+                  <div className="flex items-baseline px-3 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                    <span className="tabular-nums">{group.skills.length}</span>
+                  </div>
+                  {group.skills.map((skill) => (
+                    <ContextRow
+                      key={skill.id}
+                      primary={skill.name}
+                      secondary={skill.skillFilePath}
+                      agents={skill.providers.filter((provider) => provider !== 'agent-skills')}
+                      title={skill.description ?? skill.skillFilePath}
+                    />
+                  ))}
+                </div>
               ))
-          )}
-        </ContextSection>
+            )}
+          </ContextSection>
+        )}
+
+        {showSection('mcp') && (
+          <ContextSection
+            title={translate(
+              'auto.components.rightSidebar.WorkspaceContextPanel.mcp',
+              'MCP servers'
+            )}
+            count={report ? counts.mcpServers : null}
+            open={filter === 'mcp' || open.mcp}
+            onToggle={() => toggle('mcp')}
+          >
+            <McpFilesBody report={report} showMissing={showMissing} />
+          </ContextSection>
+        )}
+
+        {showSection('hooks') && (
+          <ContextSection
+            title={translate('auto.components.rightSidebar.WorkspaceContextPanel.hooks', 'Hooks')}
+            count={report ? counts.hooks : null}
+            open={filter === 'hooks' || open.hooks}
+            onToggle={() => toggle('hooks')}
+          >
+            <HookFilesBody report={report} showMissing={showMissing} />
+          </ContextSection>
+        )}
+
+        {showSection('plugins') && (
+          <ContextSection
+            title={translate(
+              'auto.components.rightSidebar.WorkspaceContextPanel.plugins',
+              'Plugins'
+            )}
+            count={report ? counts.plugins : null}
+            open={filter === 'plugins' || open.plugins}
+            onToggle={() => toggle('plugins')}
+          >
+            <PluginsBody report={report} showMissing={showMissing} />
+          </ContextSection>
+        )}
       </div>
     </div>
   )

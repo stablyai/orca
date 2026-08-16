@@ -7,16 +7,19 @@ import type {
   AgentContextPlugin,
   AgentContextReport
 } from '../../shared/agent-context'
-import { inspectMcpConfigContent } from '../../shared/mcp-config'
+import { inspectMcpConfigContent, type McpConfigInspection } from '../../shared/mcp-config'
+import { inspectCodexMcpToml } from './codex-mcp-toml'
+import {
+  buildInstructionFileSources,
+  type AgentContextPathApi,
+  type InstructionFileSource
+} from './agent-context-sources'
 import {
   buildClaudeSettingsSources,
-  buildInstructionFileSources,
   buildMcpFileSources,
-  type AgentContextPathApi,
-  type InstructionFileSource,
   type McpFileSource,
   type SettingsFileSource
-} from './agent-context-sources'
+} from './agent-config-file-sources'
 
 // Why: settings and MCP files are small JSON; anything past this is not config.
 const MAX_CONFIG_BYTES = 4 * 1024 * 1024
@@ -93,6 +96,26 @@ async function inspectInstructionFile(
   return { ...base, exists: true, sizeBytes: fileStat.size, updatedAt: fileStat.mtimeMs }
 }
 
+/** Merges servers from every configured object path; the first path's inspection carries status. */
+function inspectJsonMcpFile(source: McpFileSource, content: string | null): McpConfigInspection {
+  const primary = inspectMcpConfigContent(source.candidate, content)
+  if (!source.extraServersPaths?.length || primary.status !== 'valid') {
+    return primary
+  }
+  const seen = new Set(primary.servers.map((server) => server.name))
+  const servers = [...primary.servers]
+  for (const serversPath of source.extraServersPaths) {
+    const extra = inspectMcpConfigContent({ ...source.candidate, serversPath }, content)
+    for (const server of extra.servers) {
+      if (!seen.has(server.name)) {
+        seen.add(server.name)
+        servers.push(server)
+      }
+    }
+  }
+  return { ...primary, servers }
+}
+
 async function inspectMcpFile(
   source: McpFileSource,
   toAccessPath: (displayPath: string) => string
@@ -103,7 +126,10 @@ async function inspectMcpFile(
     path: source.path,
     scope: source.scope,
     agents: [...source.agents],
-    inspection: inspectMcpConfigContent(source.candidate, content)
+    inspection:
+      source.format === 'codex-toml'
+        ? inspectCodexMcpToml(source.candidate, content)
+        : inspectJsonMcpFile(source, content)
   }
 }
 
