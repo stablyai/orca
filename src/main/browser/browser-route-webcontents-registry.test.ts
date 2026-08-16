@@ -82,6 +82,9 @@ function createGuest(options: {
         destroyed = true
       }
     }),
+    loadURL: vi.fn(async (url: string) => {
+      currentUrl = url
+    }),
     on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
       const eventListeners = listeners.get(event) ?? new Set()
       eventListeners.add(listener)
@@ -118,6 +121,12 @@ function navigationEvent(): { preventDefault: ReturnType<typeof vi.fn> } {
   return { preventDefault: vi.fn() }
 }
 
+function requireLifecycleClaim(registry: BrowserRouteWebContentsRegistry, registration = page) {
+  const claim = registry.claimGuestLifecycle(registration)
+  expect(claim).not.toBeNull()
+  return claim!
+}
+
 describe('BrowserRouteWebContentsRegistry', () => {
   it('holds navigation and popups until exact registration and an explicit grant', () => {
     const { registry, routeSession } = createHarness()
@@ -146,6 +155,65 @@ describe('BrowserRouteWebContentsRegistry', () => {
     guest.emit('will-navigate', laterNavigation, 'https://example.org/')
     expect(laterNavigation.preventDefault).not.toHaveBeenCalled()
     expect(guest.openWindow()).toEqual({ action: 'deny' })
+  })
+
+  it('loads only a normalized web URL on the exact registered guest', async () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession })
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+    const claim = requireLifecycleClaim(registry)
+
+    await expect(registry.navigateGuest(claim, 'example.com/path')).resolves.toBe(true)
+    expect(guest.guest.loadURL).toHaveBeenCalledWith('https://example.com/path')
+    await expect(
+      registry.navigateGuest(
+        { ...claim, registration: { ...page, pageHostGeneration: 8 } },
+        'https://a.test'
+      )
+    ).resolves.toBe(false)
+    await expect(registry.navigateGuest(claim, 'file:///etc/passwd')).resolves.toBe(false)
+    expect(guest.guest.loadURL).toHaveBeenCalledOnce()
+  })
+
+  it('retires an exact unregistered quarantined guest without touching a replacement', async () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession })
+    registry.attachGuest(guest.guest)
+
+    expect(registry.claimGuestLifecycle({ ...page, webContentsId: 42 })).toBeNull()
+    expect(guest.guest.close).not.toHaveBeenCalled()
+    await expect(
+      registry.beginGuestRetirement(requireLifecycleClaim(registry))
+    ).resolves.toBeUndefined()
+    expect(guest.guest.close).toHaveBeenCalledOnce()
+  })
+
+  it('does not join a different generation already retiring on the same guest', () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+
+    expect(registry.beginGuestRetirement(requireLifecycleClaim(registry))).not.toBeNull()
+    expect(registry.claimGuestLifecycle({ ...page, pageHostGeneration: 8 })).toBeNull()
+  })
+
+  it('settles exact guest retirement only after its destroyed acknowledgement', async () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    registry.attachGuest(guest.guest)
+
+    const retired = registry.beginGuestRetirement(requireLifecycleClaim(registry))
+    let settled = false
+    void retired?.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    guest.destroy()
+    await expect(retired).resolves.toBeUndefined()
   })
 
   it('rejects a guest whose renderer does not own the prepared authority', () => {
@@ -462,6 +530,31 @@ describe('BrowserRouteWebContentsRegistry', () => {
     const navigation = navigationEvent()
     expect(() => guest.emit('will-navigate', navigation, 'https://example.com/')).not.toThrow()
     expect(navigation.preventDefault).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a destroyed claim distinct from a reused WebContents identity', async () => {
+    const { registry, replaceAuthority, routeSession } = createHarness()
+    const first = createGuest({ session: routeSession })
+    registry.attachGuest(first.guest)
+    registry.registerGuest(page)
+    const firstClaim = requireLifecycleClaim(registry)
+    first.destroy()
+
+    replaceAuthority()
+    const replacement = createGuest({ session: routeSession })
+    registry.attachGuest(replacement.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+    const replacementClaim = requireLifecycleClaim(registry)
+
+    await expect(registry.navigateGuest(firstClaim, 'https://stale.test')).resolves.toBe(false)
+    await expect(registry.navigateGuest(replacementClaim, 'https://current.test')).resolves.toBe(
+      true
+    )
+    await expect(registry.beginGuestRetirement(firstClaim)).resolves.toBeUndefined()
+    expect(replacement.guest.close).not.toHaveBeenCalled()
+    await expect(registry.beginGuestRetirement(replacementClaim)).resolves.toBeUndefined()
+    expect(replacement.guest.close).toHaveBeenCalledOnce()
   })
 
   it('rejects registration without throwing when blank-document inspection fails', () => {

@@ -17,6 +17,12 @@ export type BrowserRoutePageGuestIdentity = BrowserRoutePageOwnerIdentity &
     webContentsId: number
   }>
 
+export type BrowserRouteGuestLifecycleClaim = Readonly<{
+  registration: BrowserRoutePageGuestIdentity
+  guestAuthority: symbol
+  whenDestroyed: Promise<void>
+}>
+
 export type BrowserRoutePageAuthority = BrowserRoutePageOwnerIdentity &
   Readonly<{
     pageAuthority: symbol
