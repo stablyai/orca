@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
 import { SkillDiscoveryTargetSchema, type SkillDiscoveryResult } from '../../shared/skills'
@@ -21,6 +21,7 @@ import {
 } from '../skills/skill-runtime-capability'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
+import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
 import {
   skillCloudBundlePackageVersionInstallSchema,
@@ -64,7 +65,7 @@ function registerSharingHandlers(
       createShare: (packageId, request) => runtime.createSkillPackageShare(packageId, request)
     }
   )
-  ipcMain.handle('skills:prepareShare', async (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:prepareShare', async (_event, value: unknown) => {
     const input = sharePrepareSchema.parse(value)
     const result = await discover(input.target)
     const requested = new Set(input.skillIds)
@@ -80,7 +81,7 @@ function registerSharingHandlers(
       packageId: input.packageId
     })
   })
-  ipcMain.handle('skills:publishShare', async (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:publishShare', async (_event, value: unknown) => {
     const input = sharePublishSchema.parse(value)
     return preparations.publish(input, (progress) => {
       for (const window of BrowserWindow.getAllWindows()) {
@@ -90,10 +91,10 @@ function registerSharingHandlers(
       }
     })
   })
-  ipcMain.handle('skills:cancelShare', (_event, id: unknown) => {
+  handleMainWindowSkillIpc('skills:cancelShare', (_event, id: unknown) => {
     preparations.cancel(z.string().uuid().parse(id))
   })
-  ipcMain.handle('skills:releaseShare', async (_event, id: unknown) => {
+  handleMainWindowSkillIpc('skills:releaseShare', async (_event, id: unknown) => {
     await preparations.release(z.string().uuid().parse(id))
   })
 }
@@ -153,13 +154,13 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       remoteInstallCancellation.finish(operationId, signal)
     }
   }
-  ipcMain.handle('skills:resolveShare', (_event, shareId: unknown) =>
+  handleMainWindowSkillIpc('skills:resolveShare', (_event, shareId: unknown) =>
     runtime.resolveSkillShare(z.string().min(1).max(128).parse(shareId), {})
   )
-  ipcMain.handle('skills:createDownloadGrant', (_event, shareId: unknown) =>
+  handleMainWindowSkillIpc('skills:createDownloadGrant', (_event, shareId: unknown) =>
     runtime.createSkillDownloadGrant(z.string().min(1).max(128).parse(shareId), {})
   )
-  ipcMain.handle('skills:installShare', async (event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:installShare', async (event, value: unknown) => {
     const parsed = skillCloudShareInstallSchema.parse(value)
     const input = { ...parsed, operationId: parsed.operationId ?? randomUUID() }
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
@@ -179,7 +180,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     }
     return grant.status === 'ok' ? installAuthorizedGrant(grant.value, input) : grant
   })
-  ipcMain.handle('skills:installBundleShare', async (event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:installBundleShare', async (event, value: unknown) => {
     const parsed = skillCloudBundleShareInstallSchema.parse(value)
     const input = { ...parsed, operationId: parsed.operationId ?? randomUUID() }
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
@@ -204,7 +205,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
         )
       : grant
   })
-  ipcMain.handle('skills:installPackageVersion', async (event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:installPackageVersion', async (event, value: unknown) => {
     const parsed = skillCloudPackageVersionInstallSchema.parse(value)
     const input = { ...parsed, operationId: parsed.operationId ?? randomUUID() }
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
@@ -225,7 +226,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     }
     return grant.status === 'ok' ? installAuthorizedGrant(grant.value, input) : grant
   })
-  ipcMain.handle('skills:installBundlePackageVersion', async (event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:installBundlePackageVersion', async (event, value: unknown) => {
     const parsed = skillCloudBundlePackageVersionInstallSchema.parse(value)
     const input = { ...parsed, operationId: parsed.operationId ?? randomUUID() }
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
@@ -251,7 +252,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
         )
       : grant
   })
-  ipcMain.handle('skills:cancelInstall', async (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:cancelInstall', async (_event, value: unknown) => {
     const input = z
       .object({
         operationId: z.string().min(1).max(128),
@@ -279,18 +280,18 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
         : false
     return { cancelled: transferCancelled || installCancelled }
   })
-  ipcMain.handle('skills:getPackage', (_event, packageId: unknown) =>
+  handleMainWindowSkillIpc('skills:getPackage', (_event, packageId: unknown) =>
     runtime.getSkillPackage(z.string().min(1).max(128).parse(packageId), {})
   )
-  ipcMain.handle('skills:listOwnedShares', () => runtime.listOwnedSkillShares({}))
-  ipcMain.handle('skills:revokeShare', (_event, shareId: unknown) =>
+  handleMainWindowSkillIpc('skills:listOwnedShares', () => runtime.listOwnedSkillShares({}))
+  handleMainWindowSkillIpc('skills:revokeShare', (_event, shareId: unknown) =>
     runtime.revokeSkillShare(z.string().min(1).max(128).parse(shareId), {})
   )
-  ipcMain.handle('skills:deletePackageVersion', (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:deletePackageVersion', (_event, value: unknown) => {
     const input = packageVersionSchema.parse(value)
     return runtime.deleteSkillPackageVersion(input.packageId, input.versionId, {})
   })
-  ipcMain.handle('skills:deletePackage', (_event, packageId: unknown) =>
+  handleMainWindowSkillIpc('skills:deletePackage', (_event, packageId: unknown) =>
     runtime.deleteSkillPackage(z.string().min(1).max(128).parse(packageId), {})
   )
 }

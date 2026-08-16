@@ -190,6 +190,7 @@ export function SkillInstallDialog({
       installProgress.begin(operationId)
       const operation = await window.api.skills.installShare({
         shareId: preview.shareId,
+        versionId: preview.version.versionId,
         operationId,
         ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId }),
         destination,

@@ -204,6 +204,34 @@ describe('SkillInstallDialog', () => {
     expect(request.providers).toContain('droid')
   })
 
+  it('pins installation to the version shown for review', async () => {
+    const skills = installApi(
+      vi.fn().mockResolvedValue({
+        status: 'ok',
+        value: {
+          name: 'private-skill',
+          packageDigest: DIGEST,
+          destinationIdentity: 'global:local',
+          currentState: 'missing',
+          providers: []
+        }
+      })
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills, preflight: detectionApi(['codex']) }
+    })
+    render(<SkillInstallDialog open onOpenChange={() => undefined} />)
+    await inspectSkill()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
+
+    await waitFor(() => expect(skills.installShare).toHaveBeenCalled())
+    expect(skills.installShare).toHaveBeenCalledWith(
+      expect.objectContaining({ shareId: 'share_1', versionId: 'ver_1' })
+    )
+  })
+
   // Why: checking agents the machine does not have would write placements no
   // agent reads, and make the user opt out of tools they never installed.
   it('starts from the agents the target machine has', async () => {
