@@ -4,7 +4,8 @@ import { normalizeCookieDomain } from './browser-cookie-import-policy'
 import type {
   CookieClearIdentity,
   CookieClearPartitionKey,
-  CookieClearStore
+  CookieClearStore,
+  CookieImportWriteStore
 } from './browser-cookie-import-clear'
 
 type CdpCookiePartitionKey = {
@@ -120,25 +121,24 @@ function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearId
   }
 }
 
-async function attachCookieClearSession(targetSession: Session): Promise<CookieClearSession> {
-  const existing = findPartitionWebContents(targetSession)
-  const window = existing
-    ? null
-    : new BrowserWindow({
-        show: false,
-        webPreferences: {
-          session: targetSession,
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false
-        }
-      })
-  try {
-    if (window) {
-      await window.loadURL('data:text/html,<!doctype html><title>cookie-clear</title>')
+function openHiddenCookieWindow(targetSession: Session): BrowserWindow {
+  return new BrowserWindow({
+    show: false,
+    webPreferences: {
+      session: targetSession,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
     }
-    const contents = existing ?? window?.webContents
-    if (!contents || contents.isDestroyed()) {
+  })
+}
+
+async function leaseHiddenCookieDebugger(targetSession: Session): Promise<CookieClearSession> {
+  const window = openHiddenCookieWindow(targetSession)
+  try {
+    await window.loadURL('data:text/html,<!doctype html><title>cookie-clear</title>')
+    const contents = window.webContents
+    if (contents.isDestroyed()) {
       throw new Error('Could not attach to the cookie session for an atomic clear')
     }
     const lease = acquireElectronDebugger(contents)
@@ -146,12 +146,27 @@ async function attachCookieClearSession(targetSession: Session): Promise<CookieC
       debugger: contents.debugger,
       dispose: () => {
         lease.release()
-        window?.destroy()
+        window.destroy()
       }
     }
   } catch (error) {
-    window?.destroy()
+    window.destroy()
     throw error
+  }
+}
+
+async function attachCookieClearSession(targetSession: Session): Promise<CookieClearSession> {
+  const existing = findPartitionWebContents(targetSession)
+  if (!existing) {
+    return leaseHiddenCookieDebugger(targetSession)
+  }
+  try {
+    const lease = acquireElectronDebugger(existing)
+    return { debugger: existing.debugger, dispose: () => lease.release() }
+  } catch {
+    // Why (STA-4300): every cookie write now needs this channel, and attaching to a live tab fails
+    // outright when DevTools already owns its debugger. A hidden window of our own always can.
+    return leaseHiddenCookieDebugger(targetSession)
   }
 }
 
@@ -191,7 +206,7 @@ export function cookieClearIdentitiesFromCdp(
   return identities
 }
 
-export function cdpRestoreParamsFromIdentity(
+export function cdpSetCookieParamsFromIdentity(
   identity: CookieClearIdentity
 ): Record<string, unknown> {
   const sameSite = cdpSameSite(identity.sameSite)
@@ -232,24 +247,34 @@ async function snapshotClearIdentitiesFromCdp(
   return cookieClearIdentitiesFromCdp(cookies, cdpCookiesFromCommand(result))
 }
 
+async function writeIdentityWithCdp(
+  cookieDebugger: CookieClearDebugger,
+  identity: CookieClearIdentity,
+  failureLabel: string
+): Promise<void> {
+  const result = await cookieDebugger.sendCommand(
+    'Network.setCookie',
+    cdpSetCookieParamsFromIdentity(identity)
+  )
+  // Why: Network.setCookie reports rejection in the reply rather than throwing, so an unchecked
+  // call reads as a successful write of a cookie that was never stored.
+  if (!cdpSetCookieSucceeded(result)) {
+    throw new Error(`Could not ${failureLabel} cookie ${identity.name}`)
+  }
+}
+
 async function restoreClearIdentitiesWithCdp(
   cookieDebugger: CookieClearDebugger,
   identities: readonly CookieClearIdentity[]
 ): Promise<void> {
   for (const identity of identities) {
-    const result = await cookieDebugger.sendCommand(
-      'Network.setCookie',
-      cdpRestoreParamsFromIdentity(identity)
-    )
-    if (!cdpSetCookieSucceeded(result)) {
-      throw new Error(`Could not restore cookie ${identity.name}`)
-    }
+    await writeIdentityWithCdp(cookieDebugger, identity, 'restore')
   }
 }
 
 export function openCookieClearStore(
   targetSession: Session
-): CookieClearStore & { dispose: () => void } {
+): CookieClearStore & CookieImportWriteStore & { dispose: () => void } {
   let attached: CookieClearSession | null = null
   let pendingAttach: Promise<CookieClearSession> | null = null
   let disposed = false
@@ -287,6 +312,8 @@ export function openCookieClearStore(
       snapshotClearIdentitiesFromCdp((await attach()).debugger, cookies),
     restoreClearIdentities: async (identities) =>
       restoreClearIdentitiesWithCdp((await attach()).debugger, identities),
+    writeCookieIdentity: async (identity) =>
+      writeIdentityWithCdp((await attach()).debugger, identity, 'import'),
     dispose: () => {
       disposed = true
       pendingAttach = null

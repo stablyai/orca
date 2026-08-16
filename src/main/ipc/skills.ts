@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   SkillDiscoveryTargetSchema,
   type SkillDiscoveryResult,
@@ -20,17 +19,8 @@ import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
-import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 
-export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeService): void {
-  const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
-    const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
-    const resolvedTarget = resolveSkillDiscoveryTarget(parsedTarget)
-    return discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
-      providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-      refresh: parsedTarget?.refresh === true
-    })
-  }
+export function registerSkillsHandlers(store: Store): void {
   const scanInventory = (): Promise<SkillFreshnessInventory> =>
     // Why: the update command targets this machine's global homes. WSL and SSH
     // inventories stay out until their installer rail has an equivalent proof.
@@ -65,12 +55,16 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
 
   ipcMain.handle(
     'skills:discover',
-    async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => discover(target)
+    async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
+      const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
+      return discoverSkillsOnTarget(
+        resolveSkillDiscoveryTarget(parsedTarget),
+        store.getRepos(),
+        // Why: only a caller that knows disk changed may bypass the shared scans.
+        { refresh: parsedTarget?.refresh === true }
+      )
+    }
   )
-
-  if (runtime) {
-    registerSkillCloudIpcHandlers(runtime, discover)
-  }
 
   ipcMain.handle('skills:freshnessInventory', async (): Promise<SkillFreshnessInventory> => {
     return scanInventory()

@@ -24,7 +24,6 @@ import {
   SkillScanCoalescer,
   type SkillScanOutcome
 } from './skill-scan-coalescer'
-import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
@@ -208,7 +207,6 @@ export async function discoverSkills(args: {
   homeDir?: string
   cwd?: string
   includeCwd?: boolean
-  providerRootOverrides?: SkillProviderRootOverrides
   refresh?: boolean
 }): Promise<SkillDiscoveryResult> {
   const startedAt = Date.now()

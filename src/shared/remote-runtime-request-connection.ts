@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import { abortSignalReason } from './abort-signal-reason'
 import type { PairingOffer } from './pairing'
-import { scheduleOrphanedRemoteRuntimeSocketClose } from './remote-runtime-abort-orphaned-socket'
 import { decrypt, encrypt } from './e2ee-crypto'
+import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import {
   serializeRemoteRuntimePayload,
   serializeRemoteRuntimeRpcRequest
@@ -20,11 +19,10 @@ import {
   invalidRemoteRuntimeResponseError,
   parseAuthenticatedFrame,
   parseReadyFrame,
+  parseRemoteRuntimeRpcFrame,
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
-import { settleRemoteRuntimeRequestRpcFrame } from './remote-runtime-request-rpc-frame'
-import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import {
   rejectRemoteRuntimeRequestReadyWaiters,
   resolveRemoteRuntimeRequestReadyWaiters,
@@ -32,8 +30,15 @@ import {
   type RemoteRuntimeRequestReadyWaiter
 } from './remote-runtime-request-ready-waiters'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
-import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from './protocol-version'
+
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
+
 const IDLE_CLOSE_MS = 60_000
 
 export class RemoteRuntimeRequestConnection {
@@ -50,12 +55,8 @@ export class RemoteRuntimeRequestConnection {
   request<TResult>(
     method: string,
     params: unknown,
-    timeoutMs: number,
-    signal?: AbortSignal
+    timeoutMs: number
   ): Promise<RuntimeRpcResponse<TResult>> {
-    if (signal?.aborted) {
-      return Promise.reject(abortSignalReason(signal))
-    }
     const requestId = randomUUID()
     let preparedRequest: RemoteRuntimePreparedRequest
     try {
@@ -72,17 +73,6 @@ export class RemoteRuntimeRequestConnection {
     }
     this.clearIdleCloseTimer()
     return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
-      const onAbort = (): void => {
-        const error = abortSignalReason(signal!)
-        this.rejectPendingRequest(requestId, error)
-        scheduleOrphanedRemoteRuntimeSocketClose(
-          () =>
-            this.pendingRequests.size === 0 &&
-            this.readyWaiters.length === 0 &&
-            this.state !== 'ready',
-          () => this.close(error)
-        )
-      }
       const timeout = setTimeout(() => {
         const pending = this.pendingRequests.get(requestId)
         if (!pending) {
@@ -95,24 +85,13 @@ export class RemoteRuntimeRequestConnection {
         this.close(error)
       }, timeoutMs)
       this.pendingRequests.set(requestId, {
-        resolve: (response) => {
-          signal?.removeEventListener('abort', onAbort)
-          resolve(response as RuntimeRpcResponse<TResult>)
-        },
-        reject: (error) => {
-          signal?.removeEventListener('abort', onAbort)
-          reject(error)
-        },
+        resolve: resolve as (response: RuntimeRpcResponse<unknown>) => void,
+        reject,
         timeout,
         preparedRequest
       })
-      signal?.addEventListener('abort', onAbort, { once: true })
-      if (signal?.aborted) {
-        onAbort()
-        return
-      }
 
-      void this.ensureReady(signal).then(
+      void this.ensureReady().then(
         () => this.sendRequest(requestId),
         (error) => this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
       )
@@ -144,13 +123,13 @@ export class RemoteRuntimeRequestConnection {
     }
   }
 
-  private ensureReady(signal?: AbortSignal): Promise<void> {
+  private ensureReady(): Promise<void> {
     const ws = this.ws
     if (this.state === 'ready' && ws?.readyState === WebSocket.OPEN && this.sharedKey) {
       return Promise.resolve()
     }
 
-    const promise = waitForRemoteRuntimeRequestReady(this.readyWaiters, signal)
+    const promise = waitForRemoteRuntimeRequestReady(this.readyWaiters)
 
     if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
       try {
@@ -233,7 +212,12 @@ export class RemoteRuntimeRequestConnection {
         serializeRemoteRuntimePayload({
           type: 'e2ee_auth',
           deviceToken: this.pairing.deviceToken,
-          clientCapabilities: remoteRuntimeClientCapabilities()
+          clientCapabilities: [
+            SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+            AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+            WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+            WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+          ]
         }),
         sharedKey
       )
@@ -252,17 +236,25 @@ export class RemoteRuntimeRequestConnection {
   }
 
   private handleRpcFrame(plaintext: string): void {
-    const result = settleRemoteRuntimeRequestRpcFrame({
-      plaintext,
-      pendingRequests: this.pendingRequests
-    })
-    if (result.error) {
-      this.close(result.error)
+    const parsed = parseRemoteRuntimeRpcFrame(plaintext)
+    if (parsed.type === 'keepalive') {
       return
     }
-    if (result.resolved) {
-      this.scheduleIdleCloseIfUnused()
+    if (parsed.type === 'error') {
+      this.close(parsed.error)
+      return
     }
+
+    const response = parsed.response
+    const pending = this.pendingRequests.get(response.id)
+    if (!pending) {
+      return
+    }
+    this.pendingRequests.delete(response.id)
+    clearTimeout(pending.timeout)
+    releaseRemoteRuntimePreparedRequest(pending)
+    pending.resolve(response)
+    this.scheduleIdleCloseIfUnused()
   }
 
   private sendRequest(requestId: string): void {

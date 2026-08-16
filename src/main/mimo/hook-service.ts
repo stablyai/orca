@@ -68,7 +68,7 @@ export class MimoCodeHookService {
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(
         join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
-        getOpenCodeFamilyPluginSource('/hook/mimo-code')
+        getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false })
       )
     } catch {
       return existingMimocodeHome ? { MIMOCODE_HOME: existingMimocodeHome } : {}

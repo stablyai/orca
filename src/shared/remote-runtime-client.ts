@@ -4,7 +4,6 @@
  * abstraction emerges. */
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import { abortSignalReason, throwIfSignalAborted } from './abort-signal-reason'
 import type { PairingOffer } from './pairing'
 import {
   decrypt,
@@ -23,7 +22,12 @@ import {
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
-import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from './protocol-version'
 // Re-export so existing value importers of `RemoteRuntimeClientError` are
 // unaffected; the class lives in a ws-free module so type-only consumers
 // (and mobile's typecheck) don't compile this file's Node-only deps.
@@ -86,18 +90,9 @@ export function sendRemoteRuntimeRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return sendRemoteRuntimeRequestOnSocket(
-    pairing,
-    method,
-    params,
-    timeoutMs,
-    envelope,
-    undefined,
-    signal
-  )
+  return sendRemoteRuntimeRequestOnSocket(pairing, method, params, timeoutMs, envelope)
 }
 
 export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
@@ -124,10 +119,8 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
-  signal?: AbortSignal
+  validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void
 ): Promise<RuntimeRpcResponse<TResult>> {
-  throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
@@ -146,7 +139,12 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: remoteRuntimeClientCapabilities()
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+    ]
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
@@ -177,7 +175,6 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           : 'runtime'
 
     const cleanupSocketListeners = (): void => {
-      signal?.removeEventListener('abort', onAbort)
       const socket = ws
       if (!socket) {
         return
@@ -204,10 +201,6 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           { pairingStage: getPairingStage() }
         )
       })
-    }
-
-    function onAbort(): void {
-      finish({ ok: false, error: abortSignalReason(signal!) })
     }
 
     function refreshTimeout(): void {
@@ -240,12 +233,6 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
       } else {
         resolve(result.response)
       }
-    }
-
-    signal?.addEventListener('abort', onAbort, { once: true })
-    if (signal?.aborted) {
-      onAbort()
-      return
     }
 
     try {
@@ -526,7 +513,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: remoteRuntimeClientCapabilities()
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+      WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+    ]
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()

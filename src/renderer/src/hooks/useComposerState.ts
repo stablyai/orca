@@ -2796,21 +2796,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
       const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
-      const target =
-        option?.kind === 'ready'
-          ? option
-          : // Why: a just-created setup lands in the store before the memoized picker options refresh.
-            useAppStore
-              .getState()
-              .projectHostSetups.find(
-                (candidate) => candidate.id === setupId && candidate.setupState === 'ready'
-              )
-      if (!target) {
+      if (!option || option.kind !== 'ready') {
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
-      setSelectedProjectHostSetupOverrideId(target.id)
-      handleRepoChange(target.repoId, {
+      setSelectedProjectHostSetupOverrideId(option.id)
+      handleRepoChange(option.repoId, {
         preserveStartFrom: true,
         forceResetStartFrom: true
       })

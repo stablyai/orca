@@ -83,7 +83,6 @@ import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
 import { DispatcherClientWriter } from './dispatcher-client-writer'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
-import { SKILL_RELAY_CAPABILITIES, SkillInstallHandler } from './skill-install-handler'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -716,10 +715,8 @@ async function main(): Promise<void> {
   const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
-  const _skillInstallHandler = new SkillInstallHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
   void _preflightHandler
-  void _skillInstallHandler
   void _externalAutomationsHandler
 
   const _portScanHandler = new PortScanHandler(dispatcher)
@@ -933,7 +930,6 @@ async function main(): Promise<void> {
   let graceBranch: RelayGraceBranch | null = null
 
   dispatcher.onRequest('relay.status', async () => ({
-    capabilities: SKILL_RELAY_CAPABILITIES,
     pid: process.pid,
     uptimeMs: Date.now() - startedAt,
     detached,

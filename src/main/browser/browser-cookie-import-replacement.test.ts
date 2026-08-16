@@ -38,10 +38,15 @@ vi.mock('./browser-cookie-clear-store', () => ({
     cookies: {
       get: (filter: object) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
+      set?: (details: Record<string, unknown>) => Promise<void>
     }
   }) => ({
     get: (filter: object) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
+    // a missing method cannot silently reroute every write down the rejected-cookie path.
+    writeCookieIdentity: (identity: Record<string, unknown>) =>
+      targetSession.cookies.set!(identity),
     snapshotClearIdentities: snapshotClearIdentitiesMock,
     restoreClearIdentities: restoreClearIdentitiesMock,
     dispose: disposeClearStoreMock
@@ -248,7 +253,8 @@ describe('native Chromium integrity-cookie accounting', () => {
         remove: vi.fn().mockResolvedValue(undefined),
         set: cookiesSetMock
       },
-      clearData: clearDataMock
+      clearData: clearDataMock,
+      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
     })
   })
 

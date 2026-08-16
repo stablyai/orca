@@ -3,7 +3,6 @@ import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/sk
 import { getDefaultWslDistro, getWslHome, parseWslPath, toLinuxPath } from '../wsl'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
 import { discoverSkillsInWsl } from './skill-discovery-wsl'
-import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { stablePathId } from './skill-discovery-sources'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
@@ -88,55 +87,33 @@ function repoDigest(repos: readonly Repo[]): string {
 }
 
 // Keys use exact paths — lowercasing would alias two roots that are distinct on Linux.
-function scanKey(
-  target: ResolvedSkillDiscoveryTarget,
-  repos: readonly Repo[],
-  providerRootOverrides: SkillProviderRootOverrides | undefined
-): string {
-  const providerRoots = stablePathId(
-    Object.entries(providerRootOverrides ?? {})
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([provider, root]) => `${provider}\0${root}`)
-      .join('\0')
-  )
-  const targetKey =
-    target.kind === 'wsl'
-      ? `wsl\0${target.distro}\0${target.homeDir}\0${target.cwd}`
-      : `native\0${target.cwd ?? ''}\0${target.cwd ? '' : repoDigest(repos)}`
-  return `${targetKey}\0${providerRoots}`
+function scanKey(target: ResolvedSkillDiscoveryTarget, repos: readonly Repo[]): string {
+  return target.kind === 'wsl'
+    ? `wsl\0${target.distro}\0${target.homeDir}\0${target.cwd}`
+    : `native\0${target.cwd ?? ''}\0${target.cwd ? '' : repoDigest(repos)}`
 }
 
 export async function discoverSkillsOnTarget(
   target: ResolvedSkillDiscoveryTarget,
   repos: readonly Repo[],
-  options: { refresh?: boolean; providerRootOverrides?: SkillProviderRootOverrides } = {}
+  options: { refresh?: boolean } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
   try {
     const outcome = await targetScans.run(
-      scanKey(target, repos, options.providerRootOverrides),
+      scanKey(target, repos),
       { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
       async () => {
         if (target.kind === 'wsl') {
           return discoverSkillsInWsl({
             distro: target.distro,
             homeDir: target.homeDir,
-            cwd: target.cwd,
-            providerRootOverrides: options.providerRootOverrides
+            cwd: target.cwd
           })
         }
         return target.cwd
-          ? discoverSkills({
-              repos: [],
-              cwd: target.cwd,
-              refresh,
-              providerRootOverrides: options.providerRootOverrides
-            })
-          : discoverSkills({
-              repos: [...repos],
-              refresh,
-              providerRootOverrides: options.providerRootOverrides
-            })
+          ? discoverSkills({ repos: [], cwd: target.cwd, refresh })
+          : discoverSkills({ repos: [...repos], refresh })
       }
     )
     return outcome.value

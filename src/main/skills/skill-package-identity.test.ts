@@ -1,9 +1,6 @@
-import { execFile } from 'node:child_process'
-import { createServer } from 'node:net'
-import { chmod, cp, link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   describeObservedSkillFile,
@@ -14,7 +11,6 @@ import {
 } from './skill-package-identity'
 
 const temporaryDirectories: string[] = []
-const execFileAsync = promisify(execFile)
 
 async function temporarySkill(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-freshness-'))
@@ -94,32 +90,6 @@ describe('skill package identity', () => {
         maximumTotalBytes: 10
       })
     ).rejects.toThrow('skill-package-entry-limit')
-  })
-
-  it.runIf(process.platform !== 'win32')('rejects hardlinks, FIFOs, and Unix sockets', async () => {
-    const root = await temporarySkill()
-    const source = join(root, 'SKILL.md')
-    await writeFile(source, 'skill')
-    await link(source, join(root, 'hardlink.md'))
-    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-link')
-    await rm(join(root, 'hardlink.md'))
-
-    const fifo = join(root, 'named-pipe')
-    await execFileAsync('mkfifo', [fifo])
-    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
-    await rm(fifo)
-
-    const socket = join(root, 'unix-socket')
-    const server = createServer()
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(socket, resolve)
-    })
-    try {
-      await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
-    } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()))
-    }
   })
 
   it('ignores OS-authored sidecars so a browsed folder still matches its snapshot', async () => {

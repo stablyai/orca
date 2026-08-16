@@ -270,28 +270,9 @@ describe('buildProjectHostSetupOptions', () => {
         kind: 'needs-setup',
         label: 'Builder',
         detail: 'Project location not set',
-        isAvailable: true,
-        canSetLocation: true
+        isAvailable: true
       })
     ])
-  })
-
-  // A `repo:<id>` project has no cross-host identity, so linking it on another host
-  // always fails in main — the row keeps its status line instead of a dead button.
-  it('cannot set a location for a host-local project', () => {
-    const options = buildProjectHostSetupOptions({
-      projectId: 'repo:local-repo',
-      eligibleRepos: [repo('local-repo')],
-      hosts: [host('local'), host('ssh:builder', { label: 'Builder' })],
-      projectHostSetups: [setup('local', 'repo:local-repo', 'local', 'local-repo')]
-    })
-
-    expect(options.at(-1)).toMatchObject({
-      kind: 'needs-setup',
-      detail: 'Project location not set',
-      isAvailable: true,
-      canSetLocation: false
-    })
   })
 
   it.each([
@@ -426,8 +407,7 @@ describe('buildProjectHostSetupOptions', () => {
         kind: 'needs-setup',
         label: 'GPU VM',
         detail: 'Project setup is in progress',
-        isAvailable: true,
-        canSetLocation: false
+        isAvailable: true
       })
     ])
   })
@@ -457,10 +437,7 @@ describe('buildProjectHostSetupOptions', () => {
           })
         ]
       }).at(-1)
-    ).toMatchObject({
-      detail: 'Project tracked on this host but not set up',
-      canSetLocation: true
-    })
+    ).toMatchObject({ detail: 'Project tracked on this host but not set up' })
 
     expect(
       buildProjectHostSetupOptions({
@@ -480,7 +457,7 @@ describe('buildProjectHostSetupOptions', () => {
           })
         ]
       }).at(-1)
-    ).toMatchObject({ detail: 'Project setup needs attention', canSetLocation: true })
+    ).toMatchObject({ detail: 'Project setup needs attention' })
 
     expect(
       buildProjectHostSetupOptions({
@@ -500,10 +477,7 @@ describe('buildProjectHostSetupOptions', () => {
           })
         ]
       }).at(-1)
-    ).toMatchObject({
-      detail: 'Project is unsupported on this host',
-      canSetLocation: false
-    })
+    ).toMatchObject({ detail: 'Project is unsupported on this host' })
   })
 
   it('marks incompatible runtime hosts as visible but unavailable', () => {

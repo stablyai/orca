@@ -79,7 +79,7 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
-  it('places Automations, Artifacts, and Share Skills first under Workflows', () => {
+  it('places Automations and Artifacts first under Workflows', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -88,7 +88,6 @@ describe('settings navigation metadata', () => {
     })
     const automations = sections.find((section) => section.id === 'automations')
     const artifacts = sections.find((section) => section.id === 'artifacts')
-    const shareSkills = sections.find((section) => section.id === 'share-skills')
     const workflowIds = sections
       .filter((section) => section.group === 'workflows')
       .map((section) => section.id)
@@ -100,9 +99,7 @@ describe('settings navigation metadata', () => {
     expect(artifacts?.description).toBe(
       'Share HTML and Markdown files with your team and manage their public links.'
     )
-    expect(shareSkills).toMatchObject({ group: 'workflows', badge: 'Beta' })
-    expect(shareSkills?.searchEntries[0]?.title).toBe('Unlisted skill links')
-    expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
+    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
   })
 
   it('places the Orca account in Set Up on desktop only', () => {

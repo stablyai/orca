@@ -84,7 +84,6 @@ declare global {
 interface ImportMetaEnv {
   readonly VITE_DIRECT_SSH_RECONNECT_COORDINATOR?: string
   readonly VITE_EXPOSE_STORE?: boolean
-  readonly VITE_SKILL_WARNING_PREVIEW?: string
 }
 
 export {}

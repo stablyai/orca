@@ -63,8 +63,7 @@ type SkillPackageObservationLimits = {
 async function readBoundedSkillFile(
   path: string,
   remainingTotalBytes: number,
-  maximumSingleFileBytes: number,
-  signal?: AbortSignal
+  maximumSingleFileBytes: number
 ): Promise<Buffer> {
   const handle = await open(path, 'r')
   try {
@@ -78,9 +77,6 @@ async function readBoundedSkillFile(
     const bytes = Buffer.alloc(before.size)
     let offset = 0
     while (offset < bytes.length) {
-      if (signal?.aborted) {
-        throw new Error('skill-install-cancelled')
-      }
       const result = await handle.read(bytes, offset, bytes.length - offset, offset)
       if (result.bytesRead === 0) {
         throw new Error('skill-package-changed-during-read')
@@ -170,9 +166,7 @@ function matchesFileIdentity(
 
 export async function observeSkillPackage(
   packageRoot: string,
-  limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
-  executablePaths?: ReadonlySet<string>,
-  signal?: AbortSignal
+  limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS
 ): Promise<ObservedSkillPackage> {
   const files: ObservedSkillFile[] = []
   const treeEntries: SkillGitTreeFileEntry[] = []
@@ -181,9 +175,6 @@ export async function observeSkillPackage(
   let totalBytes = 0
 
   async function visit(directory: string, depth: number): Promise<void> {
-    if (signal?.aborted) {
-      throw new Error('skill-install-cancelled')
-    }
     const directoryHandle = await opendir(directory)
     const entries: Dirent[] = []
     try {
@@ -205,9 +196,6 @@ export async function observeSkillPackage(
     // identity order must match the generator without locale-sensitive collation.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
-      if (signal?.aborted) {
-        throw new Error('skill-install-cancelled')
-      }
       const absolutePath = join(directory, entry.name)
       // Only a plain file is OS-authored, so the type decides and not the name alone: a
       // directory or link wearing the name would otherwise hide a subtree from identity and
@@ -245,22 +233,16 @@ export async function observeSkillPackage(
         }
         await visit(absolutePath, depth + 1)
       } else if (fileStat.isFile()) {
-        if (fileStat.nlink !== 1) {
-          throw new Error('skill-package-link')
-        }
         if (files.length >= limits.maximumFiles) {
           throw new Error('skill-package-file-count-limit')
         }
         const bytes = await readBoundedSkillFile(
           absolutePath,
           limits.maximumTotalBytes - totalBytes,
-          limits.maximumSingleFileBytes,
-          signal
+          limits.maximumSingleFileBytes
         )
         totalBytes += bytes.length
-        const executable = executablePaths
-          ? executablePaths.has(manifestPath)
-          : (fileStat.mode & 0o111) !== 0
+        const executable = (fileStat.mode & 0o111) !== 0
         files.push(describeObservedSkillFile(manifestPath, bytes, executable))
         treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {
@@ -298,11 +280,7 @@ export function matchingKnownSnapshot(
   officialPaths: ReadonlySet<string>
 ): SkillKnownSnapshot | null {
   const observedByPath = new Map(observed.files.map((file) => [file.path, file]))
-  for (let index = snapshots.length - 1; index >= 0; index -= 1) {
-    const snapshot = snapshots[index]
-    if (!snapshot) {
-      continue
-    }
+  for (const snapshot of snapshots.toReversed()) {
     const listed = new Set(snapshot.files.map((file) => file.path))
     const launders = observed.files.some(
       (file) => !listed.has(file.path) && officialPaths.has(file.path)

@@ -1725,13 +1725,6 @@ html.native-shell .app-layout {
   animation: collapsible-up 180ms ease-out;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .collapsible-height-content[data-state='open'],
-  .collapsible-height-content[data-state='closed'] {
-    animation: none;
-  }
-}
-
 @keyframes collapsible-down {
   from {
     height: 0;

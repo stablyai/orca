@@ -55,7 +55,7 @@ describe('useComposerState host retarget', () => {
       'const handleProjectHostSetupChange',
       'const handleProjectChange'
     )
-    expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(target.id)')
+    expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(option.id)')
     expect(switchSection).toContain('preserveStartFrom: true')
     expect(switchSection).toContain('forceResetStartFrom: true')
   })

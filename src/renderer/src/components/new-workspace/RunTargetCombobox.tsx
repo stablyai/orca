@@ -12,8 +12,7 @@ import {
   ConnectHostButton,
   HostRowIcon,
   NeedsSetupHostIcon,
-  RunTargetRow,
-  SetLocationButton
+  RunTargetRow
 } from './RunTargetComboboxRow'
 import {
   buildRunTargetRows,
@@ -35,7 +34,6 @@ type RunTargetComboboxProps = {
   onAddRemoteServer?: () => void
   onAddSshHost?: () => void
   onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
-  onSetLocation?: (option: NeedsSetupProjectHostOption) => void
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
@@ -58,8 +56,7 @@ export default function RunTargetCombobox({
   onRecipeChange,
   onAddRemoteServer,
   onAddSshHost,
-  onConnectHost,
-  onSetLocation
+  onConnectHost
 }: RunTargetComboboxProps): React.JSX.Element {
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
@@ -137,19 +134,6 @@ export default function RunTargetCombobox({
     [connectingHostIds, onConnectHost]
   )
 
-  // Why: reached from the row body, its inline button, and Enter — keep one path
-  // so all three close the picker before handing off to the nested dialog.
-  const setLocation = useCallback(
-    (option: NeedsSetupProjectHostOption): void => {
-      if (!option.canSetLocation || !onSetLocation) {
-        return
-      }
-      close()
-      onSetLocation(option)
-    },
-    [close, onSetLocation]
-  )
-
   /** Commits a row, or opens its submenu when the row is a submenu row. */
   const activate = useCallback(
     (key: string | null): void => {
@@ -162,13 +146,12 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'needs-setup') {
-        // Not ready: setting the location is the only way forward from the row itself.
-        setLocation(row.option)
+        // Not ready: selecting is a no-op, the Connect action is the way forward.
         return
       }
       setSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host')
     },
-    [rows, selectHost, setLocation]
+    [rows, selectHost]
   )
 
   const handleKeyDown = useCallback(
@@ -308,7 +291,6 @@ export default function RunTargetCombobox({
               if (row.kind === 'needs-setup') {
                 const connecting = connectingHostIds.has(row.option.hostId)
                 const hasConnect = Boolean(row.option.connectAction && onConnectHost)
-                const hasSetLocation = Boolean(row.option.canSetLocation && onSetLocation)
                 return (
                   <RunTargetRow
                     key={row.key}
@@ -320,9 +302,10 @@ export default function RunTargetCombobox({
                       />
                     }
                     label={row.option.label}
-                    // Why: Connect / Set project location already say the next
-                    // step, so the detail line would only repeat that.
-                    detail={hasConnect || hasSetLocation ? '' : row.option.detail}
+                    // Why: a Connect button on the row already says the host
+                    // isn't connected, so its detail line only repeats that.
+                    // Rows without the action still need theirs to explain why.
+                    detail={hasConnect ? '' : row.option.detail}
                     armed={isArmed}
                     current={false}
                     dimmed
@@ -331,17 +314,12 @@ export default function RunTargetCombobox({
                       arm(row.key)
                       setSubmenu(null)
                     }}
-                    onCommit={() => setLocation(row.option)}
+                    onCommit={() => {}}
                     trailing={
-                      hasConnect ? (
+                      row.option.connectAction && onConnectHost ? (
                         <ConnectHostButton
                           connecting={connecting}
                           onConnect={() => void connectHost(row.option)}
-                        />
-                      ) : hasSetLocation ? (
-                        <SetLocationButton
-                          hostLabel={row.option.label}
-                          onSetLocation={() => setLocation(row.option)}
                         />
                       ) : undefined
                     }

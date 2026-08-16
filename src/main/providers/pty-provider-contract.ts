@@ -109,11 +109,6 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
-  requestHostRpc?: (
-    method: string,
-    params: unknown,
-    options?: { signal?: AbortSignal; timeoutMs?: number }
-  ) => Promise<unknown>
   /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */

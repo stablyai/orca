@@ -151,8 +151,8 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
-    return this.getPreparation(target).configDir
+  getRuntimeConfigDir(): string {
+    return this.pathResolver.getRuntimePaths().configDir
   }
 
   private initializeLastSyncedState(): void {
