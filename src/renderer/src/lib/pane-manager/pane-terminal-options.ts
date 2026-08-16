@@ -47,6 +47,11 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+    // Why: non-zero duration enables xterm SmoothScrollableElement animation so
+    // the host-viewport patch can keep sub-row pixel remainders (Warp-like
+    // scrollback feel). Catch-up glides also use this as their decay timebase
+    // (default 120ms when unset). prefers-reduced-motion still snaps instantly.
+    smoothScrollDuration: 120,
     allowTransparency: false,
     // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
     minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,

@@ -112,6 +112,11 @@ export type GlobalSettings = {
   terminalTuiScrollSensitivity: number
   /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
   terminalTuiScrollSensitivityDefaultedToOne?: boolean
+  /**
+   * Cosmetic sub-row paint glide for mouse-reporting TUIs (Claude, Codex, etc.).
+   * Visual only — does not change logical buffer scroll. Default `subtle`.
+   */
+  terminalTuiScrollGlide: 'off' | 'subtle' | 'medium'
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.

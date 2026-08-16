@@ -6,6 +6,11 @@ import {
   resolveTerminalWheelDirection
 } from './pane-terminal-tui-wheel-reports'
 import type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+import {
+  normalizeTerminalTuiScrollGlideIntensity,
+  nudgeTerminalTuiScrollGlide
+} from './pane-terminal-tui-scroll-glide'
+import type { TerminalTuiScrollGlideIntensity } from './pane-terminal-tui-scroll-glide'
 
 export {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
@@ -16,6 +21,11 @@ export {
   resolveTerminalTuiMouseWheelReportCount
 } from './pane-terminal-tui-wheel-reports'
 export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+export {
+  normalizeTerminalTuiScrollGlideIntensity,
+  resolveTerminalTuiScrollGlideMaxCellFraction
+} from './pane-terminal-tui-scroll-glide'
+export type { TerminalTuiScrollGlideIntensity } from './pane-terminal-tui-scroll-glide'
 
 const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
@@ -27,6 +37,7 @@ type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'ele
 
 type TerminalMouseWheelMultiplierOptions = {
   getTuiMouseWheelMultiplier?: () => number | undefined
+  getTuiScrollGlideIntensity?: () => TerminalTuiScrollGlideIntensity | undefined
 }
 
 type ReplayedWheelEvent = WheelEvent & {
@@ -212,6 +223,14 @@ export function attachTerminalMouseWheelMultiplier(
         cellHeight: resolveTerminalWheelCellHeight(terminal),
         rows: terminal.rows
       }
+    )
+    // Why: same gate as report multiplication (mouse-reporting class). Host
+    // scroll path already has pixel remainders; TUIs only get discrete reports
+    // unless we add this cosmetic paint lag.
+    nudgeTerminalTuiScrollGlide(
+      terminal,
+      event.deltaY,
+      normalizeTerminalTuiScrollGlideIntensity(options.getTuiScrollGlideIntensity?.())
     )
     queueTerminalTuiWheelReports(replayState, terminal, target, event, reportCount)
 

@@ -41,6 +41,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,
+    terminalTuiScrollGlide: 'subtle',
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',

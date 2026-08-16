@@ -58,6 +58,7 @@ export type PaneManagerOptions = {
   onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalTuiScrollGlide?: () => 'off' | 'subtle' | 'medium' | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
   // Why: required so dropping the wiring is a compile error — an optional hint with a
@@ -138,6 +139,7 @@ export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalTuiScrollGlide?: () => 'off' | 'subtle' | 'medium' | undefined
   terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean

@@ -15,10 +15,10 @@ patchedDependencies:
     hash: af3b156143ed2ee9903b753145b63dd4a2ee72cadd7ef333ab0f4d5d3ebfc32c
     path: config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
   '@xterm/addon-webgl@0.20.0-beta.286':
-    hash: 6da7d7770b6427246f2a0d057d97da418040e498068b41d0c2d3c6b20bf49258
+    hash: f549a0a9755fd2af6f15e8e31778698f1030427216ab3dddd1eb22e9e7e55299
     path: config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
   '@xterm/xterm@6.1.0-beta.287':
-    hash: 8a2d562c08d6a1edb38002299fc7d9eac9b9940b876868c4a8edde466019da67
+    hash: 84439b7f23400c606f45a7af1914e6bec2a3c7c15fcd098b115614c5ff779de3
     path: config/patches/@xterm__xterm@6.1.0-beta.287.patch
   node-pty@1.1.0:
     hash: 8fc49f17011b6611a5b8c00e83a6f12e14e75aada2b0ef26dc5393f8376d20e8

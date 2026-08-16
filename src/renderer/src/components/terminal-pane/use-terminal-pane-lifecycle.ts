@@ -20,7 +20,10 @@ import {
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
-import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
+import {
+  normalizeTerminalTuiMouseWheelMultiplier,
+  normalizeTerminalTuiScrollGlideIntensity
+} from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
@@ -1580,6 +1583,8 @@ export function useTerminalPaneLifecycle({
       },
       terminalTuiScrollSensitivity: () =>
         normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
+      terminalTuiScrollGlide: () =>
+        normalizeTerminalTuiScrollGlideIntensity(settingsRef.current?.terminalTuiScrollGlide),
       onLinkClick: (paneId, event, url) => {
         const activePane = managerRef.current
           ?.getPanes()

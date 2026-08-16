@@ -4,6 +4,7 @@ import { Slider } from '../ui/slider'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { TerminalTuiScrollGlideSetting } from './terminal-tui-scroll-glide-setting'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
@@ -173,7 +174,8 @@ export function TerminalInteractionSection({
                   updateSettings({
                     terminalScrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
                     terminalFastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
-                    terminalTuiScrollSensitivity: TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER
+                    terminalTuiScrollSensitivity: TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
+                    terminalTuiScrollGlide: 'subtle'
                   })
                 }
               >
@@ -241,6 +243,10 @@ export function TerminalInteractionSection({
                 }
               />
             </div>
+            <TerminalTuiScrollGlideSetting
+              value={settings.terminalTuiScrollGlide}
+              onChange={(terminalTuiScrollGlide) => updateSettings({ terminalTuiScrollGlide })}
+            />
           </div>
         </SearchableSetting>
 

@@ -9,6 +9,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalScrollSensitivity: 'Normal Scroll Speed',
   terminalFastScrollSensitivity: 'Fast Scroll Speed',
   terminalTuiScrollSensitivity: 'TUI Scroll Speed',
+  terminalTuiScrollGlide: 'TUI Scroll Glide',
   terminalBackgroundOpacity: 'Background Opacity',
   terminalCursorStyle: 'Cursor Style',
   terminalCursorBlink: 'Cursor Blink',

@@ -35,6 +35,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
+    terminalTuiScrollGlide,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -55,7 +56,8 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
   attachTerminalMouseWheelMultiplier(terminal, {
-    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
+    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity,
+    getTuiScrollGlideIntensity: terminalTuiScrollGlide
   })
   pane.terminalScrollIntentDisposable = attachTerminalScrollIntentTracking(
     terminal,
