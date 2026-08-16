@@ -69,7 +69,7 @@ describe('mobile structured session timeline', () => {
     expect(rows[0]).toMatchObject({ kind: 'prompt', key: 'orca:approval' })
     expect(rows[1]).toMatchObject({
       kind: 'message',
-      key: OUTBOX.clientMessageId,
+      key: agentJournalSubmissionKey(OUTBOX.clientMessageId),
       outbox: { state: 'unconfirmed' },
       message: { blocks: [{ type: 'text', text: 'look' }, { url: 'file:///preview.png' }] }
     })
@@ -85,10 +85,12 @@ describe('mobile structured session timeline', () => {
     }
 
     const rows = buildMobileStructuredTimeline([wal], [OUTBOX])
+    const optimistic = buildMobileStructuredTimeline([], [OUTBOX])
 
     expect(rows).toHaveLength(1)
     // The entry rides the canonical row, so Retry / edit-queued stay reachable.
     expect(rows[0]).toMatchObject({ key: wal.itemId, outbox: { state: 'unconfirmed' } })
+    expect(optimistic[0]?.key).toBe(rows[0]?.key)
   })
 
   it('keeps the device-local thumbnail on the adopted row while delivery is unconfirmed', () => {
