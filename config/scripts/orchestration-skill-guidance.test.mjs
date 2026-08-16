@@ -253,11 +253,10 @@ describe('orchestration skill guidance', () => {
       'Acknowledge only after every message and required release decision is handled'
     )
     expect(workerLoop).toContain(
-      'read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`'
+      'After processing each accepted `worker_done`, run `worker-release` before you acknowledge'
     )
     expect(workerLoop).toContain(
-      'orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca ' +
-        'transfers cleanup ownership to the new Dispatch'
+      'Follow-up supervised work always receives a new bounded process and a new budget reservation.'
     )
     expect(workerLoop).toContain(
       'Run `worker-release` after both succeeded and failed `worker_done` reports unless the user ' +
@@ -274,9 +273,13 @@ describe('orchestration skill guidance', () => {
     )
     expect(agentGuidance).toContain('released workers remain readable through `worker-read`')
     expect(nextAction).toContain(
-      'After every accepted `worker_done`, either transfer the exact terminal to an immediate ' +
-        'follow-up Dispatch or run `worker-release` before the next wait.'
+      'After every accepted `worker_done`, run `worker-release` before the next wait'
     )
+    expect(workerLoop).toContain(
+      '`worker-release` safely returns `retained` with `no_owned_resource` instead of closing or ' +
+        'reporting `dispatch_not_found`'
+    )
+    expect(workerLoop).toContain('Prefer `worker-start` whenever managed cleanup is required.')
   })
 
   it('documents per-invocation model and effort for supervised workers', () => {
@@ -284,9 +287,15 @@ describe('orchestration skill guidance', () => {
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
     expect(workerLoop).toContain('`--effort` requires `--model`')
-    expect(workerLoop).toContain('neither option can combine with `--terminal`')
-    expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
+    expect(workerLoop).toContain('`--terminal` is rejected for bounded workers')
+    expect(workerLoop).toContain(
+      '--agent claude --model aws-bedrock-opus-5 --effort high --dispatch-group'
+    )
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+    expect(workerLoop).toContain(
+      '--agent codex --model gpt-5.6-codex --effort high --dispatch-group'
+    )
+    expect(workerLoop).not.toContain('--agent pi --model')
   })
 
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {

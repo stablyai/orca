@@ -7,6 +7,8 @@ import {
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
+import { syncFederatedDispatch } from '../../orchestration/federation-sync'
+import { reconcileWorkerDeadlines } from '../../orchestration/worker-deadline-reconciler'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './orchestration-federation-test-request'
@@ -21,6 +23,7 @@ describe('orchestration federation', () => {
   let workerDispatcher: RpcDispatcher
   let workerCapabilities: string[]
   let workerPeerFingerprint: string
+  let loseNextAckBeforeDelivery: boolean
   let loseNextAckResponse: boolean
 
   beforeEach(() => {
@@ -35,6 +38,7 @@ describe('orchestration federation', () => {
     })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     workerPeerFingerprint = 'windows_peer_fingerprint'
+    loseNextAckBeforeDelivery = false
     loseNextAckResponse = false
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
@@ -50,6 +54,10 @@ describe('orchestration federation', () => {
             result: { ...workerRuntime.getStatus(), capabilities: workerCapabilities },
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
+        }
+        if (method === 'orchestration.federationAck' && loseNextAckBeforeDelivery) {
+          loseNextAckBeforeDelivery = false
+          throw new Error('connection lost before acknowledgment')
         }
         const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
@@ -113,6 +121,12 @@ describe('orchestration federation', () => {
         state: 'running'
       }
     } as never)
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_windows_worker',
+      worktreeId: 'repo::windows-worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/orca-test-worker-watchdog-sentinel.json'
+    })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [
         { handle: 'term_windows_worker', title: 'Codex' },
@@ -128,6 +142,7 @@ describe('orchestration federation', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockResolvedValue({ exitCode: 0 })
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )
@@ -146,6 +161,8 @@ describe('orchestration federation', () => {
     vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
       handle: 'term_windows_worker',
       status: 'running',
+      tail: ['remote output'],
+      truncated: false,
       entries: [{ cursor: 1, text: 'remote output' }],
       nextCursor: '1',
       limited: false
@@ -154,17 +171,6 @@ describe('orchestration federation', () => {
       handle: 'term_windows_worker',
       closed: true
     } as never)
-  }
-
-  function restartWorkerRuntime(): void {
-    workerRuntime = new OrcaRuntimeService()
-    workerRuntime.setOrchestrationDb(workerDb)
-    configureWorkerRuntime(workerRuntime)
-    workerDispatcher = new RpcDispatcher({
-      runtime: workerRuntime,
-      methods: ORCHESTRATION_METHODS
-    })
-    workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
   }
 
   it('starts a remote worker while keeping authoritative Task state at home', async () => {
@@ -179,6 +185,11 @@ describe('orchestration federation', () => {
         state: 'ready',
         server: { environmentId: 'environment_windows', name: 'windows' },
         setup: { source: 'orchestration_default' },
+        budget: { group: 'federation-test', maxRuntimeMs: 60_000, maxRequests: 10 },
+        leafControl: {
+          leaf: true,
+          enforcement: 'environment_and_cli'
+        },
         mutation: { requestId: 'request_windows_worker' }
       }
     })
@@ -197,13 +208,27 @@ describe('orchestration federation', () => {
       protocol_version: 3,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
-      terminal_handle: 'term_windows_worker'
+      terminal_handle: 'term_windows_worker',
+      max_requests: 10,
+      watchdog_sentinel_path: workerRuntime.getWorkerWatchdogSentinelPath(dispatch.id)
     })
+    expect(attachment?.deadline_at).toBe(homeDb.getWorkerDispatch(dispatch.id)?.deadline_at)
     const fx = JSON.parse(attachment?.effects ?? '[]') as { kind?: string; state?: string }[]
     expect(fx.some((x) => x.kind === 'dispatch_input' && x.state === 'accepted')).toBe(true)
     expect(workerDb.listTasks()).toHaveLength(0)
     const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
     expect([create.activate, create.runHooks]).toEqual([false, false])
+    expect(create.startupAgent).toBeUndefined()
+    expect(workerRuntime.createBoundedWorkerTerminal).toHaveBeenCalledWith(
+      'id:repo::windows-worktree',
+      expect.objectContaining({
+        dispatchId: dispatch.id,
+        agent: 'codex',
+        deadlineAt: attachment?.deadline_at,
+        maxRequests: 10,
+        surfaceOwner: false
+      })
+    )
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)
@@ -214,7 +239,11 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+      startRequest(task.id, {
+        agent: 'claude',
+        model: 'unsupported-model',
+        effort: 'unsupported-effort'
+      })
     )
 
     expect(response).toMatchObject({
@@ -222,7 +251,11 @@ describe('orchestration federation', () => {
       result: {
         state: 'failed',
         launch: {
-          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          requested: {
+            agent: 'claude',
+            model: 'unsupported-model',
+            effort: 'unsupported-effort'
+          },
           effective: null
         }
       }
@@ -237,7 +270,8 @@ describe('orchestration federation', () => {
         requested: 'run',
         hookFound: true,
         startupPolicy: 'wait-for-setup',
-        state: 'running'
+        state: 'running',
+        terminalHandle: 'term_windows_setup'
       }
     } as never)
     const task = createHomeTask()
@@ -267,16 +301,11 @@ describe('orchestration federation', () => {
         requested: 'run',
         hookFound: true,
         startupPolicy: 'wait-for-setup',
-        state: 'running'
+        state: 'running',
+        terminalHandle: 'term_windows_setup'
       }
     } as never)
-    vi.mocked(workerRuntime.waitForTerminal).mockResolvedValueOnce({
-      handle: 'term_windows_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'exited',
-      exitCode: 1
-    })
+    vi.mocked(workerRuntime.waitForSetupTerminalCompletion).mockResolvedValueOnce({ exitCode: 1 })
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(startRequest(task.id))
@@ -293,6 +322,7 @@ describe('orchestration federation', () => {
       }
     })
     expect(homeDb.getTask(task.id)?.status).toBe('failed')
+    expect(workerRuntime.createBoundedWorkerTerminal).not.toHaveBeenCalled()
     expect(workerRuntime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
@@ -349,7 +379,7 @@ describe('orchestration federation', () => {
     expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
     expect(homeDb.getTask(task.id)?.status).toBe('completed')
 
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederatedDispatch(homeRuntime, dispatch.id)
 
     expect(homeDb.getTask(task.id)?.status).toBe('completed')
     expect(homeDb.getWorkerDispatch(dispatch.id)?.state).toBe('succeeded')
@@ -371,482 +401,193 @@ describe('orchestration federation', () => {
     ).toMatchObject({ acked_at: expect.any(String) })
   })
 
-  it('relays a worker question home and the coordinator answer back', async () => {
+  it('preserves a remote watchdog stop that lands during startup', async () => {
     const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-    const ask = workerDispatcher.dispatch({
-      id: 'rpc_remote_ask',
-      authToken: 'worker-local-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_question_request',
-      orchestrationCapability: capability,
-      method: 'orchestration.ask',
-      params: {
-        from: 'term_windows_worker',
-        question: 'Should I include slow integration tests?',
-        options: 'yes,no',
-        timeoutMs: 60_000
-      }
-    })
+    let resolveReadiness!: (value: {
+      handle: string
+      condition: 'tui-idle'
+      satisfied: boolean
+      status: 'running'
+      exitCode: null
+    }) => void
+    vi.mocked(workerRuntime.waitForTerminal).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveReadiness = resolve
+        }) as never
+    )
+    const starting = homeDispatcher.dispatch(startRequest(task.id))
     await vi.waitFor(() =>
       expect(
-        workerDb.listFederationRelay({
-          dispatchId: dispatch.id,
-          direction: 'to_home',
-          afterSequence: 0
-        })
-      ).toHaveLength(1)
+        workerDb.getRemoteDispatchAttachment(homeDb.getDispatchContext(task.id)!.id)
+      ).toBeTruthy()
     )
-
-    await homeRuntime.syncOrchestrationFederation()
-    const question = homeDb
-      .getRunMailboxHistory(task.run_id, 10)
-      .find((message) => message.type === 'question')
-    expect(question).toMatchObject({
-      body: 'Should I include slow integration tests?'
+    const dispatchId = homeDb.getDispatchContext(task.id)!.id
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatchId)!
+    workerDb.reconcileRemoteWorkerWatchdogSentinel(dispatchId, {
+      dispatchId,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt: attachment.deadline_at,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      exitCode: null,
+      signal: 'SIGKILL',
+      stop: 'kill'
     })
-
-    const reply = await homeDispatcher.dispatch({
-      id: 'rpc_home_reply',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'home_reply_request',
-      method: 'orchestration.reply',
-      params: {
-        id: question!.id,
-        body: 'yes',
-        from: 'term_coord'
-      }
-    })
-    expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
-    await homeRuntime.syncOrchestrationFederation()
-
-    await expect(ask).resolves.toMatchObject({
-      ok: true,
-      result: {
-        answer: 'yes',
-        messageId: question!.id,
-        timedOut: false
-      }
-    })
-    expect(
-      homeDb.listFederationRelay({
-        dispatchId: dispatch.id,
-        direction: 'to_worker',
-        afterSequence: 0
-      })[0]
-    ).toMatchObject({ acked_at: expect.any(String) })
-  })
-
-  it('keeps a timed-out remote question resumable', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-    const timedOut = await workerDispatcher.dispatch({
-      id: 'rpc_remote_ask_timeout',
-      authToken: 'worker-local-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_question_timeout_request',
-      orchestrationCapability: capability,
-      method: 'orchestration.ask',
-      params: {
-        from: 'term_windows_worker',
-        question: 'Resume this later?',
-        timeoutMs: 1
-      }
-    })
-    expect(timedOut).toMatchObject({
-      ok: true,
-      result: { timedOut: true, messageId: expect.stringMatching(/^relay_/) }
-    })
-    const questionId = (timedOut as { result: { messageId: string } }).result.messageId
-
-    await homeRuntime.syncOrchestrationFederation()
-    await homeDispatcher.dispatch({
-      id: 'rpc_home_late_reply',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'home_late_reply_request',
-      method: 'orchestration.reply',
-      params: { id: questionId, body: 'yes', from: 'term_coord' }
-    })
-    restartWorkerRuntime()
-    const resumed = workerDispatcher.dispatch({
-      id: 'rpc_remote_ask_resume',
-      authToken: 'worker-local-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_question_resume_request',
-      orchestrationCapability: capability,
-      method: 'orchestration.ask',
-      params: { from: 'term_windows_worker', resume: questionId, timeoutMs: 5_000 }
-    })
-    await homeRuntime.syncOrchestrationFederation()
-
-    await expect(resumed).resolves.toMatchObject({
-      ok: true,
-      result: { answer: 'yes', messageId: questionId, timedOut: false }
-    })
-  })
-
-  it('retries a lost relay acknowledgment without duplicating the home message', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    homeRuntime.stopOrchestrationFederationRelay()
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-    await workerDispatcher.dispatch({
-      id: 'rpc_remote_status',
-      authToken: 'worker-local-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_status_request',
-      orchestrationCapability: capability,
-      method: 'orchestration.send',
-      params: {
-        from: 'term_windows_worker',
-        subject: 'Checkpoint',
-        body: 'One durable update',
-        type: 'status'
-      }
-    })
-    loseNextAckResponse = true
-    const remoteCall = vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer')
-
-    await expect(homeRuntime.syncOrchestrationFederation()).resolves.toBeUndefined()
-    await homeRuntime.syncOrchestrationFederation()
-
-    expect(
-      homeDb
-        .getRunMailboxHistory(task.run_id, 10)
-        .filter((message) => message.subject === 'Checkpoint')
-    ).toHaveLength(1)
-    const acknowledgments = remoteCall.mock.calls.filter(
-      ([, method]) => method === 'orchestration.federationAck'
-    )
-    expect(acknowledgments).toHaveLength(2)
-  })
-
-  it('rejects a reordered relay gap, then converges without loss or duplication', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-
-    expect(() =>
-      homeDb.importFederatedRelayItem({
-        dispatchId: dispatch.id,
-        sequence: 2,
-        message: {
-          id: 'relay_gap',
-          runId: task.run_id,
-          from: `dispatch:${dispatch.id}`,
-          to: `run:${task.run_id}`,
-          subject: 'Gap',
-          body: 'Out of order',
-          type: 'status',
-          priority: 'normal'
-        },
-        lifecycle: { kind: 'none' }
-      })
-    ).toThrow(/not contiguous/)
-    expect(homeDb.getMessageById('relay_gap')).toBeUndefined()
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(0)
-
-    homeDb.importFederatedRelayItem({
-      dispatchId: dispatch.id,
-      sequence: 1,
-      message: {
-        id: 'relay_first',
-        runId: task.run_id,
-        from: `dispatch:${dispatch.id}`,
-        to: `run:${task.run_id}`,
-        subject: 'First',
-        body: 'Arrived after the gap was rejected',
-        type: 'status',
-        priority: 'normal'
-      },
-      lifecycle: { kind: 'none' }
-    })
-    const recovered = homeDb.importFederatedRelayItem({
-      dispatchId: dispatch.id,
-      sequence: 2,
-      message: {
-        id: 'relay_gap',
-        runId: task.run_id,
-        from: `dispatch:${dispatch.id}`,
-        to: `run:${task.run_id}`,
-        subject: 'Gap',
-        body: 'Out of order',
-        type: 'status',
-        priority: 'normal'
-      },
-      lifecycle: { kind: 'none' }
-    })
-    const duplicate = homeDb.importFederatedRelayItem({
-      dispatchId: dispatch.id,
-      sequence: 2,
-      message: {
-        id: 'relay_gap',
-        runId: task.run_id,
-        from: `dispatch:${dispatch.id}`,
-        to: `run:${task.run_id}`,
-        subject: 'Gap',
-        body: 'Out of order',
-        type: 'status',
-        priority: 'normal'
-      },
-      lifecycle: { kind: 'none' }
-    })
-
-    expect(recovered.duplicate).toBe(false)
-    expect(duplicate.duplicate).toBe(true)
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(2)
-    expect(
-      homeDb
-        .getRunMailboxHistory(task.run_id, 10)
-        .filter((message) => ['relay_first', 'relay_gap'].includes(message.id))
-    ).toHaveLength(2)
-  })
-
-  it('restarts relay polling when a federated worker is shown', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-    homeRuntime.stopOrchestrationFederationRelay()
-    await workerDispatcher.dispatch({
-      id: 'rpc_restart_status',
-      authToken: 'worker-local-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'restart_status_request',
-      orchestrationCapability: capability,
-      method: 'orchestration.send',
-      params: {
-        from: 'term_windows_worker',
-        subject: 'After home restart',
-        body: 'Relay me after worker-show',
-        type: 'status'
-      }
-    })
-
-    await homeDispatcher.dispatch({
-      id: 'rpc_restart_show',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
-    })
-
-    await vi.waitFor(() =>
-      expect(
-        homeDb
-          .getRunMailboxHistory(task.run_id, 10)
-          .some((message) => message.subject === 'After home restart')
-      ).toBe(true)
-    )
-  })
-
-  it('treats a worker runtime ID change as an epoch, not a new server', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    const oldEpoch = homeDb.getFederatedDispatch(dispatch.id)?.remote_runtime_epoch
-    restartWorkerRuntime()
-
-    const shown = await homeDispatcher.dispatch({
-      id: 'rpc_worker_restart_show',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
-    })
-
-    expect(shown).toMatchObject({
-      ok: true,
-      result: { observation: { status: 'running', exactWorker: true } }
-    })
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.remote_runtime_epoch).not.toBe(oldEpoch)
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.peer_fingerprint).toBe(
-      'windows_peer_fingerprint'
-    )
-  })
-
-  it('stops only the exact remote agent terminal', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-
-    const stopped = await homeDispatcher.dispatch({
-      id: 'rpc_remote_stop',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_remote_stop',
-      method: 'orchestration.workerStop',
-      params: { dispatch: dispatch.id }
-    })
-
-    expect(stopped).toMatchObject({
-      ok: true,
-      result: { state: 'stopped', processAction: 'closed_agent_terminal' }
-    })
-    expect(workerRuntime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(workerRuntime.closeTerminal).toHaveBeenCalledWith('term_windows_worker')
-    expect(homeDb.getTask(task.id)?.status).toBe('blocked')
-
-    vi.mocked(workerRuntime.showTerminal).mockResolvedValue({
+    resolveReadiness({
       handle: 'term_windows_worker',
-      worktreeId: 'repo::windows-worktree',
-      connected: false,
-      writable: false
-    } as never)
-    const shown = await homeDispatcher.dispatch({
-      id: 'rpc_remote_show_after_stop',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
+      condition: 'tui-idle',
+      satisfied: false,
+      status: 'running',
+      exitCode: null
     })
-    expect(shown).toMatchObject({
+
+    await expect(starting).resolves.toMatchObject({
       ok: true,
-      result: { observation: { status: 'exited', exactWorker: true } }
+      result: { dispatchId, state: 'stopped', stage: 'runtime_budget_exhausted' }
     })
-  })
-
-  it('rejects a re-paired server before show or stop effects', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    workerPeerFingerprint = 'replacement_windows_peer'
-
-    const shown = await homeDispatcher.dispatch({
-      id: 'rpc_changed_peer_show',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
-    })
-    const stopped = await homeDispatcher.dispatch({
-      id: 'rpc_changed_peer_stop',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_changed_peer_stop',
-      method: 'orchestration.workerStop',
-      params: { dispatch: dispatch.id }
-    })
-
-    expect(shown).toMatchObject({ ok: false, error: { code: 'peer_changed' } })
-    expect(stopped).toMatchObject({ ok: false, error: { code: 'peer_changed' } })
-    expect(homeDb.getWorkerDispatch(dispatch.id)?.state).toBe('ready')
-    expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('coalesces overlapping relay polls for the same Dispatch', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    await homeRuntime.syncOrchestrationFederation()
-    homeRuntime.stopOrchestrationFederationRelay()
-
-    let releasePull!: () => void
-    const blockedPull = new Promise<void>((resolve) => {
-      releasePull = resolve
-    })
-    let pullCount = 0
-    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockImplementation(
-      async (_selector, method) => {
-        if (method !== 'orchestration.federationPull') {
-          throw new Error(`Unexpected relay method ${method}`)
-        }
-        pullCount += 1
-        await blockedPull
-        return { runtimeEpoch: workerRuntime.getRuntimeId(), items: [] }
-      }
-    )
-
-    const first = homeRuntime.syncOrchestrationFederation()
-    const second = homeRuntime.syncOrchestrationFederation()
-    await vi.waitFor(() => expect(pullCount).toBe(1))
-    releasePull()
-    await Promise.all([first, second])
-
-    expect(pullCount).toBe(1)
-  })
-
-  it('warns once while a federated Dispatch remains unreachable', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    await homeRuntime.syncOrchestrationFederation()
-    homeRuntime.stopOrchestrationFederationRelay()
-    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockRejectedValue(
-      new Error('worker server offline')
-    )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await homeRuntime.syncOrchestrationFederation()
-    await homeRuntime.syncOrchestrationFederation()
-
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Federation sync failed'),
-      expect.any(Error)
-    )
-    warn.mockRestore()
-  })
-
-  it('returns stop_unknown when the worker server disconnects after the home fence', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockRejectedValueOnce(
-      new Error('connection lost')
-    )
-
-    const stopped = await homeDispatcher.dispatch({
-      id: 'rpc_disconnected_stop',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_disconnected_stop',
-      method: 'orchestration.workerStop',
-      params: { dispatch: dispatch.id }
-    })
-
-    expect(stopped).toMatchObject({
-      ok: true,
-      result: { state: 'stop_unknown', processAction: 'unknown' }
-    })
+    expect(homeDb.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
     expect(homeDb.getTask(task.id)?.status).toBe('blocked')
-    expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('never reads or closes a same-looking replacement process', async () => {
+  it('replays a remote watchdog failure after an acknowledgment is lost before delivery', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    const original = homeDb.getDispatchContext(task.id)!
+    const attachment = workerDb.getRemoteDispatchAttachment(original.id)!
+    const payload = {
+      dispatchId: original.id,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt: attachment.deadline_at,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      exitCode: null,
+      signal: 'SIGTERM',
+      stop: 'term'
+    }
+
+    await reconcileWorkerDeadlines(workerDb, {
+      readFileImpl: async () => JSON.stringify(payload) as never
+    })
+    expect(
+      workerDb.listFederationRelay({
+        dispatchId: original.id,
+        direction: 'to_home',
+        afterSequence: 0
+      })[0]?.payload
+    ).toContain('runtime_budget_exhausted:term')
+    const [relay] = workerDb.listPendingFederationRelay(original.id, 'to_home')
+    const importRelay = vi.spyOn(homeDb, 'importFederatedRelayItem')
+    loseNextAckBeforeDelivery = true
+
+    await expect(syncFederatedDispatch(homeRuntime, original.id)).rejects.toThrow(
+      'connection lost before acknowledgment'
+    )
+    const firstMessage = homeDb.getMessageById(relay.message_id)
+    const firstTask = homeDb.getTask(task.id)
+    const firstDispatch = homeDb.getDispatchContextById(original.id)
+    const replayed = await syncFederatedDispatch(homeRuntime, original.id)
+
+    expect(homeDb.getDispatchContext(task.id)?.id).toBe(original.id)
+    expect(replayed).toEqual({ imported: 0, acknowledgedThrough: relay.sequence })
+    expect(importRelay.mock.results.map((result) => result.value)).toMatchObject([
+      {
+        duplicate: false,
+        lifecycle: { action: 'settled', outcome: 'failed', duplicate: false }
+      },
+      {
+        duplicate: true,
+        lifecycle: { action: 'settled', outcome: 'failed', duplicate: true }
+      }
+    ])
+    expect(homeDb.getMessageById(relay.message_id)).toEqual(firstMessage)
+    expect(homeDb.getTask(task.id)).toEqual(firstTask)
+    expect(homeDb.getDispatchContextById(original.id)).toEqual(firstDispatch)
+    expect(homeDb.getTask(task.id)).toMatchObject({
+      status: 'blocked',
+      result: expect.stringContaining('runtime_budget_exhausted:term')
+    })
+    expect(workerDb.getRemoteDispatchAttachment(original.id)).toMatchObject({
+      state: 'stopped',
+      stage: 'runtime_budget_exhausted'
+    })
+    expect(workerDb.listPendingFederationRelay(original.id, 'to_home')).toHaveLength(0)
+  })
+
+  it('replays a rejected runtime failure without mutating its durable message twice', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
-    vi.mocked(workerRuntime.getTerminalProcessIncarnation).mockReturnValue(
-      'windows_runtime:pty:replacement'
-    )
-
-    const read = await homeDispatcher.dispatch({
-      id: 'rpc_replacement_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatch.id }
+    homeDb.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded',
+      result: 'already completed'
     })
-    const stopped = await homeDispatcher.dispatch({
-      id: 'rpc_replacement_stop',
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)!
+    workerDb.reconcileRemoteWorkerWatchdogSentinel(dispatch.id, {
+      dispatchId: dispatch.id,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt: attachment.deadline_at,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      exitCode: null,
+      signal: 'SIGTERM',
+      stop: 'term'
+    })
+    const [relay] = workerDb.listPendingFederationRelay(dispatch.id, 'to_home')
+    const importRelay = vi.spyOn(homeDb, 'importFederatedRelayItem')
+    loseNextAckBeforeDelivery = true
+
+    await expect(syncFederatedDispatch(homeRuntime, dispatch.id)).rejects.toThrow(
+      'connection lost before acknowledgment'
+    )
+    const firstMessage = homeDb.getMessageById(relay.message_id)
+    await syncFederatedDispatch(homeRuntime, dispatch.id)
+
+    expect(importRelay.mock.results.map((result) => result.value)).toMatchObject([
+      {
+        duplicate: false,
+        lifecycle: { action: 'rejected', code: 'inactive_dispatch' }
+      },
+      {
+        duplicate: true,
+        lifecycle: { action: 'rejected', code: 'inactive_dispatch' }
+      }
+    ])
+    expect(homeDb.getMessageById(relay.message_id)).toEqual(firstMessage)
+    expect(homeDb.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: 'already completed'
+    })
+    expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(0)
+  })
+
+  it('rejects control mail before queueing when the worker lacks that capability', async () => {
+    workerCapabilities = workerCapabilities.filter(
+      (capability) => capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
+    )
+    const task = createHomeTask()
+    const started = await homeDispatcher.dispatch(startRequest(task.id))
+    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
+    const dispatch = homeDb.getDispatchContext(task.id)!
+
+    const sent = await homeDispatcher.dispatch({
+      id: 'send-control-to-old-worker',
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_replacement_stop',
-      method: 'orchestration.workerStop',
-      params: { dispatch: dispatch.id }
+      orchestrationRequestId: 'send-control-to-old-worker-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Continue',
+        body: 'This worker cannot receive control mail yet.',
+        type: 'status'
+      }
     })
 
-    expect(read).toMatchObject({
+    expect(sent).toMatchObject({
       ok: false,
-      error: { code: 'worker_identity_changed' }
+      error: { code: 'capability_unsupported' }
     })
-    expect(stopped).toMatchObject({
-      ok: true,
-      result: { state: 'stop_unknown', processAction: 'none' }
-    })
-    expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
+    expect(homeDb.listPendingFederationRelay(dispatch.id, 'to_worker')).toHaveLength(0)
   })
 })

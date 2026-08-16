@@ -69,6 +69,12 @@ describe('orchestration worker release', () => {
       worktreeId: 'repo::worktree',
       title: 'worker'
     })
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/ctx_watchdog.json'
+    })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -134,6 +140,12 @@ describe('orchestration worker release', () => {
     const result = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
+      dispatchGroup: 'release-workers',
+      dispatchIndex: 1,
+      maxDispatches: 1,
+      maxRuntimeMs: 1_800_000,
+      maxRequests: 100,
+      maxReviewCycles: 0,
       ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
     })) as { dispatchId: string; state: string }
     expect(result.state).toBe('ready')
@@ -206,6 +218,30 @@ describe('orchestration worker release', () => {
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('failed')
   })
 
+  it('retains a watchdog-stopped worker when process identity is no longer provable', async () => {
+    setup()
+    const { dispatchId } = await startWorker()
+    const deadlineAt = db.getWorkerDispatch(dispatchId)!.deadline_at
+    db.reconcileWorkerWatchdogSentinel(dispatchId, {
+      dispatchId,
+      startedAt: '2026-08-15T00:00:00.000Z',
+      deadlineAt,
+      finishedAt: '2026-08-15T00:00:02.000Z',
+      stop: 'kill',
+      exitCode: null,
+      signal: 'SIGKILL'
+    })
+
+    await expect(
+      call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'identity_unproven',
+      processAction: 'none'
+    })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
   it('is idempotent: a duplicate release returns already_released without another close', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -228,53 +264,66 @@ describe('orchestration worker release', () => {
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('not_requested')
   })
 
-  it('retains an explicitly reused external terminal without closing it', async () => {
+  it('rejects external terminal reuse before creating release ownership', async () => {
     setup()
-    const { dispatchId } = await startSettledWorker('succeeded', { terminal: 'term_worker' })
-    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
+    const task = db.createTask({ spec: 'no external reuse', runId: activeRunId })
+    await expect(
+      call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        terminal: 'term_worker',
+        dispatchGroup: 'external-reuse',
+        dispatchIndex: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 1_800_000,
+        maxRequests: 100,
+        maxReviewCycles: 0
+      })
+    ).rejects.toMatchObject({ code: 'bounded_worker_requires_fresh_process' })
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('returns a safe retained receipt for a settled low-level Dispatch', async () => {
+    setup()
+    const task = db.createTask({ spec: 'low-level dispatch', runId: activeRunId })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
+    db.completeDispatch(dispatch.id)
+
+    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatch.id })) as {
       state: string
       reason?: string
+      processAction: string
+      recovery?: string
     }
-    expect(receipt).toMatchObject({ state: 'retained', reason: 'external_terminal' })
+
+    expect(receipt).toMatchObject({
+      state: 'retained',
+      reason: 'no_owned_resource',
+      processAction: 'none'
+    })
+    expect(receipt.recovery).toContain('low-level Dispatch')
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('reconciles a dead external terminal without closing a process', async () => {
+  it('rejects an active low-level Dispatch without closing its terminal', async () => {
     setup()
-    const { dispatchId } = await startSettledWorker('succeeded', { terminal: 'term_worker' })
-    inspectProcessLiveness.mockResolvedValue('dead')
+    const task = db.createTask({ spec: 'active low-level dispatch', runId: activeRunId })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
 
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'released', processAction: 'none' })
-    expect(inspectProcessLiveness).toHaveBeenCalledWith(
-      'runtime_test:term_worker:1',
-      JSON.stringify({ kind: 'local', hostId: 'local' })
+    await expect(call('orchestration.workerRelease', { dispatch: dispatch.id })).rejects.toThrow(
+      /only a settled Dispatch can release/
     )
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      ownership_state: 'released',
-      release_state: 'released'
-    })
   })
 
-  it('retains dead inventory evidence when persisted ownership history is invalid', async () => {
+  it('still rejects an unknown Dispatch', async () => {
     setup()
-    const { dispatchId } = await startSettledWorker('succeeded', { terminal: 'term_worker' })
-    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
-    const raw = (
-      db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
-    ).db
-    raw
-      .prepare('UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE id = ?')
-      .run('{invalid', resource?.id)
-    inspectProcessLiveness.mockResolvedValue('dead')
 
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', processAction: 'none' })
+    await expect(call('orchestration.workerRelease', { dispatch: 'ctx_missing' })).rejects.toThrow(
+      /was not found/
+    )
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
   })
 
   it('retains a user-taken-over terminal durably', async () => {
@@ -692,76 +741,6 @@ describe('orchestration worker release', () => {
       archive_source: 'terminal',
       archive_status: 'captured'
     })
-  })
-
-  it('transfers ownership on exact reuse and fences release through the old Dispatch', async () => {
-    setup()
-    const first = await startSettledWorker('succeeded')
-    const originalResource = db.getWorkerTerminalResourceByOwner(first.dispatchId)
-    expect(originalResource?.ownership_state).toBe('owned')
-
-    const second = await startWorker({ terminal: 'term_reminted' })
-    const transferred = db.getWorkerTerminalResourceByOwner(second.dispatchId)
-    expect(transferred?.id).toBe(originalResource?.id)
-    expect(transferred?.terminal_handle).toBe('term_reminted')
-    expect(db.getWorkerTerminalResourceByOwner(first.dispatchId)).toBeUndefined()
-
-    inspectProcessLiveness.mockResolvedValueOnce('dead')
-    const oldRelease = (await call('orchestration.workerRelease', {
-      dispatch: first.dispatchId
-    })) as { state: string; reason?: string }
-    expect(oldRelease).toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-
-    settle(second.taskId, second.dispatchId, 'succeeded')
-    const newRelease = (await call('orchestration.workerRelease', {
-      dispatch: second.dispatchId
-    })) as { state: string }
-    expect(newRelease.state).toBe('released')
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_reminted')
-  })
-
-  it('reconciles dead transferred ownership after the current owner settles', async () => {
-    setup()
-    const first = await startSettledWorker('succeeded')
-    const second = await startWorker({ terminal: 'term_reminted' })
-    settle(second.taskId, second.dispatchId, 'succeeded')
-    inspectProcessLiveness.mockResolvedValue('dead')
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: first.dispatchId })
-    ).resolves.toMatchObject({ state: 'released', processAction: 'none' })
-    expect(inspectProcessLiveness).toHaveBeenCalledWith(
-      'runtime_test:term_worker:1',
-      JSON.stringify({ kind: 'local', hostId: 'local' })
-    )
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(db.getWorkerTerminalResourceByOwner(second.dispatchId)).toMatchObject({
-      ownership_state: 'released',
-      release_state: 'released'
-    })
-  })
-
-  it('rejects exact reuse after release intent instead of closing the new worker', async () => {
-    setup()
-    const first = await startSettledWorker('succeeded')
-    expect(db.requestWorkerTerminalRelease(first.dispatchId).disposition).toBe('requested')
-    const nextTask = db.createTask({ spec: 'racing reuse', runId: activeRunId })
-
-    const attempted = (await call('orchestration.workerStart', {
-      task: nextTask.id,
-      from: 'term_coord',
-      terminal: 'term_worker'
-    })) as { state: string; lastError?: string }
-
-    expect(attempted).toMatchObject({ state: 'failed' })
-    expect(attempted.lastError).toMatch(/release.*progress/i)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    await expect(
-      call('orchestration.workerRelease', { dispatch: first.dispatchId })
-    ).resolves.toMatchObject({ state: 'released' })
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
 
   it('retains when persisted state has another resource for the exact terminal identity', async () => {

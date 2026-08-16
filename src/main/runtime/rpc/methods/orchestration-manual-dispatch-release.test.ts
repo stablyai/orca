@@ -157,7 +157,18 @@ describe('manual Dispatch release', () => {
   function createSupervisedWorker(): string {
     const started = db.createStartingWorkerDispatch({
       taskId: createTask('supervised'),
-      startOptions: {}
+      startOptions: {},
+      budget: {
+        group: 'manual-release-test',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 60_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: new Date(Date.now() + 60_000).toISOString()
     })
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,

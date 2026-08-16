@@ -54,6 +54,17 @@ describe('orchestration worker recovery', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'recovery-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       runtimeEpoch
     })
     db.prepareStartingWorkerAuthority({
@@ -165,6 +176,17 @@ describe('orchestration worker recovery', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'interrupted-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       runtimeEpoch: 'previous_runtime'
     })
     db.recordWorkerStage({
@@ -203,6 +225,17 @@ describe('orchestration worker recovery', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'remote-stop-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       runtimeEpoch: runtime.getRuntimeId(),
       federation: {
         environmentId: 'environment_windows',

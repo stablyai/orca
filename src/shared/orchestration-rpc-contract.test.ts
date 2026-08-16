@@ -25,6 +25,8 @@ describe('orchestration RPC contract', () => {
     ['orchestration.federationAck', {}],
     ['orchestration.federationImport', {}],
     ['orchestration.federationStop', {}],
+    ['orchestration.federationRelease', {}],
+    ['orchestration.federationRetain', {}],
     ['orchestration.check', {}],
     ['orchestration.check', { wait: true }],
     ['orchestration.check', { unread: true }],
@@ -67,7 +69,7 @@ describe('orchestration RPC contract', () => {
     expect(orchestrationMigrationData('client_contract_missing')).toMatchObject({
       reason: 'client_contract_missing',
       effectsApplied: false,
-      requiredContractVersion: 1,
+      requiredContractVersion: 2,
       guide: { topic: 'orchestration', full: true },
       nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
     })

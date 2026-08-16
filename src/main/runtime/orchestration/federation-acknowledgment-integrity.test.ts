@@ -18,6 +18,8 @@ describe('federation acknowledgment integrity', () => {
       homePeerFingerprint: 'home_peer',
       protocolVersion,
       runtimeEpoch: 'worker_epoch',
+      deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: 'home_peer',
         requestId: `attach_protocol_${protocolVersion}`,

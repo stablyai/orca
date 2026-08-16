@@ -6,18 +6,24 @@ import { assertOrchestrationWorktreeCreationSupported } from './orchestration-fo
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
+  createBoundedFederatedTerminal,
   type FederationEffect
 } from './orchestration-federation-effects'
 import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+import { WorkerSetupGateError } from './orchestration-worker-setup-gate'
 import {
   monitorFederatedSetup,
   persistFederatedReadinessStage,
   persistFederatedSetupSpawnFailure,
-  persistFederatedSetupWaitOutcome
+  persistFederatedSetupWaitOutcome,
+  waitForFederatedSetupGate
 } from './orchestration-federation-setup'
 import { FederationAttachStartParams } from './orchestration-federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
-import { prepareFederationAttachmentWorkerStart } from './orchestration-worker-start-validation'
+import {
+  prepareFederationAttachmentWorkerStart,
+  resolveBoundedWorkerControls
+} from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -42,6 +48,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         createsWorktree,
         runtime
       })
+      const controls = resolveBoundedWorkerControls(params, agent as TuiAgent)
+      if (Date.parse(params.deadlineAt) <= Date.now()) {
+        throw new OrchestrationError(
+          'runtime_budget_exhausted',
+          'The immutable worker deadline elapsed before remote process creation.'
+        )
+      }
       if (createsWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
@@ -57,12 +70,14 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         homePeerFingerprint: orchestrationMutation.callerFingerprint,
         protocolVersion: params.protocolVersion,
         runtimeEpoch: runtime.getRuntimeId(),
+        deadlineAt: params.deadlineAt,
+        maxRequests: params.maxRequests,
         mutationReceipt: orchestrationMutation
       })
       const effects: FederationEffect[] = []
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
-      let terminalHandle = params.terminal
+      let terminalHandle: string | undefined
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
@@ -93,13 +108,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             awaitTerminalProvisioning: true,
             observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
-            startupAgent: agent as TuiAgent,
-            ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
             activate: false,
             lineage: { noParent: true }
           })
           worktree = created.worktree
-          terminalHandle = created.startupTerminal?.handle
           effects.push({
             kind: 'worktree',
             action: 'created_top_level',
@@ -113,21 +125,48 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
             state: created.setupReceipt?.state ?? 'not_configured'
           }
-          if (!terminalHandle) {
-            throw new Error(
-              created.warning ?? 'Agent-first worktree creation returned no terminal.'
-            )
-          }
           const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
             includeVisualLayouts: false
           })
           appendFederationTerminalEffects(
             effects,
             listed.terminals,
-            terminalHandle,
+            undefined,
             created.setupReceipt?.terminalHandle
           )
           appendFederationSetupEffect(effects, setup)
+          db.recordRemoteAttachmentStage({
+            dispatchId: params.dispatchId,
+            stage: 'worktree_created',
+            worktreeId: created.worktree.id,
+            setupState: setup.state,
+            effects,
+            residualResources: effects
+          })
+          failedStage = 'setup_wait'
+          await waitForFederatedSetupGate({
+            runtime,
+            db,
+            dispatchId: params.dispatchId,
+            worktreeId: created.worktree.id,
+            deadlineAt: params.deadlineAt,
+            timeoutMs: params.timeoutMs,
+            setupTerminalHandle: created.setupReceipt?.terminalHandle,
+            setup,
+            effects
+          })
+          terminalHandle = await createBoundedFederatedTerminal({
+            runtime,
+            db,
+            dispatchId: params.dispatchId,
+            worktreeId: created.worktree.id,
+            taskId: params.taskId,
+            agent: agent as TuiAgent,
+            ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
+            deadlineAt: params.deadlineAt,
+            maxRequests: params.maxRequests,
+            effects
+          })
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -139,48 +178,37 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
           )
-          if (terminalHandle) {
-            const terminal = await runtime.showTerminal(terminalHandle)
-            if (terminal.worktreeId !== worktree.id) {
-              throw new OrchestrationError(
-                'terminal_worktree_mismatch',
-                `Terminal ${terminalHandle} does not belong to worktree ${worktree.id}.`
-              )
-            }
-            if (!(await runtime.isTerminalRunningAgent(terminalHandle))) {
-              throw new OrchestrationError(
-                'agent_unconfigured',
-                `Terminal ${terminalHandle} is not running a recognized agent.`
-              )
-            }
-            effects.push({
-              kind: 'terminal',
-              role: 'agent',
-              action: 'reused',
-              id: terminalHandle
-            })
-          } else {
-            failedStage = 'terminal_create'
-            const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-              // Why: agent ids are not shell commands (`cursor` is the desktop app,
-              // its CLI is `cursor-agent`); resolve through the TUI agent config.
-              startupAgent: agent as TuiAgent,
-              ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
-              title: `worker-${params.taskId}`,
-              presentation: 'background'
-            })
-            terminalHandle = terminal.handle
-            effects.push({
-              kind: 'terminal',
-              role: 'agent',
-              action: 'created',
-              id: terminal.handle
-            })
-          }
+          failedStage = 'terminal_create'
+          terminalHandle = await createBoundedFederatedTerminal({
+            runtime,
+            db,
+            dispatchId: params.dispatchId,
+            worktreeId: worktree.id,
+            taskId: params.taskId,
+            agent: agent as TuiAgent,
+            ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
+            deadlineAt: params.deadlineAt,
+            maxRequests: params.maxRequests,
+            effects
+          })
         }
         if (!worktree || !terminalHandle) {
           throw new Error('Federated worker topology did not resolve.')
         }
+        const paneKey = runtime.getTerminalPaneKey(terminalHandle)
+        const processIncarnation = runtime.getTerminalProcessIncarnation(terminalHandle)
+        if (!paneKey || !processIncarnation) {
+          throw new Error('stable_pane_required')
+        }
+        const capability = db.prepareRemoteAttachmentAuthority({
+          dispatchId: params.dispatchId,
+          paneKey,
+          processIncarnation,
+          worktreeId: worktree.id,
+          terminalHandle,
+          setupState: setup.state,
+          effects
+        })
         const setupStage = {
           db,
           dispatchId: params.dispatchId,
@@ -210,20 +238,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const paneKey = runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation = runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
-        const capability = db.prepareRemoteAttachmentAuthority({
-          dispatchId: params.dispatchId,
-          paneKey,
-          processIncarnation,
-          worktreeId: worktree.id,
-          terminalHandle,
-          setupState: setup.state,
-          effects
-        })
         failedStage = 'dispatch_input'
         await runtime.sendTerminalAgentPrompt(
           terminalHandle,
@@ -233,6 +247,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             taskSpec: params.taskSpec,
             coordinatorHandle: 'Run home (relayed by Orca)',
             workerHandle: terminalHandle,
+            maxRequests: params.maxRequests,
             dispatchCapability: capability,
             devMode: params.devMode,
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
@@ -255,10 +270,16 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           terminalHandle,
           setup,
           launch: launch.receipt,
+          deadlineAt: params.deadlineAt,
+          budget: controls.budget,
+          leafControl: controls.leafControl,
           effects,
           residualResources: []
         }
       } catch (error) {
+        if (error instanceof WorkerSetupGateError) {
+          failedStage = error.failedStage
+        }
         return failFederatedAttachmentWithReceipt({
           db,
           dispatchId: params.dispatchId,

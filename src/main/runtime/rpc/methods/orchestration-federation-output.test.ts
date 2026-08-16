@@ -109,7 +109,13 @@ describe('orchestration federated worker output', () => {
         worktree: 'new-top-level',
         repo: 'id:windows-repo',
         name: 'windows-output',
-        agent: 'codex'
+        agent: 'codex',
+        dispatchGroup: 'federation-output-test',
+        dispatchIndex: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 60_000,
+        maxRequests: 10,
+        maxReviewCycles: 0
       }
     }
   }
@@ -130,6 +136,12 @@ describe('orchestration federated worker output', () => {
         state: 'not_configured'
       }
     } as never)
+    vi.spyOn(runtime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_windows_worker',
+      worktreeId: 'repo::windows-worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/orca-test-worker-watchdog-sentinel.json'
+    })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [{ handle: 'term_windows_worker', title: 'Codex' }],
       totalCount: 1,

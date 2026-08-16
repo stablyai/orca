@@ -1,6 +1,7 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { DispatchBudgetInput, OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from './orchestration-federation-start-schema'
 import {
@@ -11,11 +12,83 @@ import {
 import type { WorkerStartInput } from './orchestration-worker-start-schema'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
+type BoundedWorkerControlInput = Pick<
+  WorkerStartInput,
+  | 'dispatchGroup'
+  | 'dispatchIndex'
+  | 'maxDispatches'
+  | 'maxRuntimeMs'
+  | 'maxRequests'
+  | 'maxReviewCycles'
+  | 'reviewCycle'
+>
+
+export type BoundedWorkerControls = {
+  budget: DispatchBudgetInput
+  leafControl: {
+    leaf: true
+    provider: TuiAgent
+    enforcement: 'environment' | 'environment_and_cli' | 'adapter'
+  }
+}
+
+export function resolveWorkerDeadlineAt(args: {
+  db: Pick<OrchestrationDb, 'getWorkerDispatch'>
+  retryOf?: string
+  maxRuntimeMs: number
+  now?: () => number
+}): string {
+  if (args.retryOf) {
+    const prior = args.db.getWorkerDispatch(args.retryOf)
+    if (prior) {
+      return prior.deadline_at
+    }
+  }
+  return new Date((args.now ?? Date.now)() + args.maxRuntimeMs).toISOString()
+}
+
+export function resolveBoundedWorkerControls(
+  params: BoundedWorkerControlInput,
+  agent: TuiAgent
+): BoundedWorkerControls {
+  if (agent !== 'claude' && agent !== 'codex') {
+    throw new OrchestrationError(
+      'leaf_control_unsupported',
+      `Agent ${agent} does not expose a hard fan-out disable for bounded leaf workers.`
+    )
+  }
+  const requestCapEnforcement: DispatchBudgetInput['requestCapEnforcement'] = 'prompt_only'
+  const enforcement: BoundedWorkerControls['leafControl']['enforcement'] = 'environment_and_cli'
+  return {
+    budget: {
+      group: params.dispatchGroup,
+      index: params.dispatchIndex,
+      maxDispatches: params.maxDispatches,
+      maxRuntimeMs: params.maxRuntimeMs,
+      maxRequests: params.maxRequests,
+      requestCapEnforcement,
+      maxReviewCycles: params.maxReviewCycles,
+      ...(params.reviewCycle === undefined ? {} : { reviewCycle: params.reviewCycle }),
+      leaf: true
+    },
+    leafControl: { leaf: true, provider: agent, enforcement }
+  }
+}
+
+function rejectSupervisedTerminalReuse(params: { terminal?: string }): void {
+  if (params.terminal) {
+    throw new OrchestrationError(
+      'bounded_worker_requires_fresh_process',
+      'Supervised worker-start always creates a fresh bounded process; --terminal is unsupported.'
+    )
+  }
+}
 
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,
   createsWorktree: boolean
 ): void {
+  rejectSupervisedTerminalReuse(params)
   if (createsWorktree && (!params.name || !params.repo)) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -54,6 +127,7 @@ export function prepareLocalWorkerStart(args: {
   runtime: OrcaRuntimeService
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
+  rejectSupervisedTerminalReuse(params)
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (params.terminal && params.agent) {
     throw new OrchestrationError(
@@ -92,6 +166,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
   runtime: OrcaRuntimeService
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
+  rejectSupervisedTerminalReuse(params)
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (createsWorktree && (!params.name || !params.repo)) {
     throw new OrchestrationError(

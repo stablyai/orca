@@ -247,6 +247,13 @@ import {
   type OrchestrationMessageWaiter
 } from './orchestration/mailbox-pointer-delivery'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
+import {
+  buildWorkerWatchdogTerminalCommand,
+  prepareWorkerWatchdogLaunch,
+  resolveWorkerWatchdogEntryPath
+} from './orchestration/worker-watchdog'
+import { WORKER_WATCHDOG_CLEANUP_GRACE_MS } from './orchestration/worker-watchdog-protocol'
+import { WorkerDeadlineReconciler } from './orchestration/worker-deadline-reconciler'
 import type {
   Automation,
   AutomationCreateInput,
@@ -545,6 +552,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import { resolveWindowsGitBashShellPath } from '../git-bash'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
@@ -2838,6 +2846,13 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
+export function resolveRuntimeWorkerWatchdogEntryPath(): string {
+  return resolveWorkerWatchdogEntryPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath
+  })
+}
+
 export type RuntimeRendererReloadFence = Readonly<{
   revision: number
   recovery: 'renderer' | 'headless' | 'reloading'
@@ -3019,6 +3034,7 @@ export class OrcaRuntimeService {
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
+  private workerDeadlineReconciler: WorkerDeadlineReconciler | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   private readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
     getDb: () => this._orchestrationDb,
@@ -4071,6 +4087,16 @@ export class OrcaRuntimeService {
       const { app } = require('electron')
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      this.workerDeadlineReconciler = new WorkerDeadlineReconciler(
+        this._orchestrationDb,
+        1_000,
+        (result) => {
+          if (result.notifyHandle) {
+            this.notifyMessageArrived(result.notifyHandle, 'status')
+          }
+        }
+      )
+      this.workerDeadlineReconciler.start()
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
@@ -4078,9 +4104,17 @@ export class OrcaRuntimeService {
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.workerDeadlineReconciler?.stop()
+    this.workerDeadlineReconciler = null
     this.stopOrchestrationFederationRelay()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
+    this.workerDeadlineReconciler = new WorkerDeadlineReconciler(db, 1_000, (result) => {
+      if (result.notifyHandle) {
+        this.notifyMessageArrived(result.notifyHandle, 'status')
+      }
+    })
+    this.workerDeadlineReconciler.start()
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
   }
@@ -18815,7 +18849,10 @@ export class OrcaRuntimeService {
     })
   }
 
-  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
+  async waitForSetupTerminalCompletion(
+    handle: string,
+    options: { timeoutMs?: number } = {}
+  ): Promise<{ exitCode: number | null }> {
     const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
@@ -18825,7 +18862,15 @@ export class OrcaRuntimeService {
     return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
       let settled = false
       let unsubscribe: (() => void) | null = null
+      const timeout =
+        options.timeoutMs === undefined
+          ? null
+          : setTimeout(() => fail(new Error('setup_wait_timeout')), options.timeoutMs)
+      timeout?.unref?.()
       const cleanup = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+        }
         unsubscribe?.()
         exitAbort.abort()
       }
@@ -26868,6 +26913,131 @@ export class OrcaRuntimeService {
       }
       throw error
     }
+  }
+
+  async createBoundedWorkerTerminal(
+    worktreeSelector: string,
+    args: {
+      dispatchId: string
+      agent: TuiAgent
+      launchPreferences?: AgentLaunchPreferences
+      deadlineAt: string
+      maxRequests: number
+      title: string
+      surfaceOwner: false
+    }
+  ): Promise<RuntimeTerminalCreate & { watchdogSentinelPath: string }> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    if (workspace.connectionId) {
+      throw new OrchestrationError(
+        'leaf_control_unsupported',
+        'Bounded local worker terminals require a local worktree; use federation for remote execution.'
+      )
+    }
+    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    if (process.platform === 'win32' && platform !== 'win32') {
+      throw new OrchestrationError(
+        'leaf_control_unsupported',
+        'Bounded worker watchdogs do not yet support WSL-hosted worktrees.'
+      )
+    }
+    const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, {
+      startupAgent: args.agent,
+      ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {})
+    })
+    let providerCommand = launchOpts.command?.trim()
+    if (!providerCommand) {
+      throw new OrchestrationError(
+        'leaf_control_unsupported',
+        `Could not resolve a bounded launcher for ${args.agent}.`
+      )
+    }
+    if (args.agent === 'codex') {
+      providerCommand = `${providerCommand} -c features.multi_agent=false`
+    } else if (args.agent === 'claude') {
+      providerCommand = `${providerCommand} --disallowedTools Task`
+    }
+    const sentinelPath = this.getWorkerWatchdogSentinelPath(args.dispatchId)
+    const configuredWindowsShell = this.store?.getSettings().terminalWindowsShell
+    const shell =
+      platform === 'win32'
+        ? (resolveLocalWindowsAgentStartupShell({
+            platform,
+            isRemote: false,
+            terminalWindowsShell: configuredWindowsShell
+          }) ?? 'powershell')
+        : 'posix'
+    const posixWindowsShell =
+      platform === 'win32' && shell === 'posix'
+        ? resolveWindowsGitBashShellPath(configuredWindowsShell ?? 'git-bash')
+        : null
+    if (platform === 'win32' && shell === 'posix' && !posixWindowsShell) {
+      throw new OrchestrationError(
+        'leaf_control_unsupported',
+        'Bounded workers require an installed Git Bash when a POSIX Windows shell is selected.'
+      )
+    }
+    const shellCommand =
+      platform === 'win32' && shell === 'cmd'
+        ? (process.env.ComSpec ?? 'cmd.exe')
+        : platform === 'win32' && shell === 'powershell'
+          ? (configuredWindowsShell ?? 'powershell.exe')
+          : (posixWindowsShell ?? process.env.SHELL ?? '/bin/sh')
+    const shellArgs =
+      platform === 'win32' && shell === 'cmd'
+        ? ['/d', '/s', '/c', providerCommand]
+        : platform === 'win32' && shell === 'powershell'
+          ? ['-NoLogo', '-NoProfile', '-Command', providerCommand]
+          : ['-lc', providerCommand]
+    const prepared = prepareWorkerWatchdogLaunch(
+      {
+        dispatchId: args.dispatchId,
+        command: shellCommand,
+        args: shellArgs,
+        cwd: workspace.path,
+        env: {
+          ...launchOpts.env,
+          ORCA_DISPATCH_LEAF: '1',
+          ORCA_DISPATCH_ID: args.dispatchId,
+          ORCA_MAX_REQUESTS: String(args.maxRequests)
+        },
+        deadlineAt: args.deadlineAt,
+        cleanupGraceMs: WORKER_WATCHDOG_CLEANUP_GRACE_MS,
+        sentinelPath
+      },
+      {
+        entryPath: resolveRuntimeWorkerWatchdogEntryPath()
+      }
+    )
+    try {
+      const terminal = await this.createTerminal(worktreeSelector, {
+        command: buildWorkerWatchdogTerminalCommand({
+          execPath: process.execPath,
+          prepared,
+          shell
+        }),
+        env: {
+          ELECTRON_RUN_AS_NODE: '1',
+          ORCA_DISPATCH_LEAF: '1',
+          ORCA_DISPATCH_ID: args.dispatchId
+        },
+        ...(launchOpts.envToDelete ? { envToDelete: launchOpts.envToDelete } : {}),
+        ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
+        launchAgent: args.agent,
+        startupCommandDelivery: launchOpts.startupCommandDelivery,
+        title: args.title,
+        surfaceOwner: args.surfaceOwner
+      })
+      return { ...terminal, watchdogSentinelPath: sentinelPath }
+    } catch (error) {
+      await rm(prepared.requestPath, { force: true }).catch(() => undefined)
+      throw error
+    }
+  }
+
+  getWorkerWatchdogSentinelPath(dispatchId: string): string {
+    const sentinelRoot = process.env.ORCA_USER_DATA_PATH ?? join(homedir(), '.orca')
+    return join(sentinelRoot, 'worker-watchdogs', `${dispatchId}.json`)
   }
 
   async createTerminal(

@@ -83,7 +83,7 @@ describe('mutation receipt capacity schema', () => {
     expect(details).not.toMatch(/SCAN mutation_receipts(?:\n|$)/)
   })
 
-  it('migrates a populated v25 database and tracks writes from older connections', () => {
+  it('converges the colliding bounded-worker v26 schema and tracks older connections', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
@@ -98,12 +98,12 @@ describe('mutation receipt capacity schema', () => {
       DROP TABLE mutation_receipt_ledger;
       DROP INDEX idx_mutation_receipts_completed_updated;
     `)
-    oldDb.pragma('user_version = 25')
+    oldDb.pragma('user_version = 26')
     oldDb.close()
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(28)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(29)
     expect(sqlite.prepare('SELECT receipt_count FROM mutation_receipt_ledger').get()).toEqual({
       receipt_count: 20
     })

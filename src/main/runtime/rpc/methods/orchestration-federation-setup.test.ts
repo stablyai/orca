@@ -54,6 +54,8 @@ describe('orchestration federated setup evidence', () => {
       homePeerFingerprint: 'home_peer',
       protocolVersion: 1,
       runtimeEpoch: runtime.getRuntimeId(),
+      deadlineAt: '2099-01-01T00:00:00.000Z',
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: 'home_peer',
         requestId: 'request_remote_setup',
@@ -120,6 +122,17 @@ describe('orchestration federated setup evidence', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'federation-setup-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       runtimeEpoch: runtime.getRuntimeId(),
       federation: {
         environmentId: 'environment_windows',

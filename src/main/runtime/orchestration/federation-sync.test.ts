@@ -130,6 +130,17 @@ describe('federation relay acknowledgments', () => {
     const { dispatch } = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'federation-sync-test',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 60_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: new Date(Date.now() + 60_000).toISOString(),
       federation: {
         environmentId: 'environment_windows',
         environmentName: 'windows',

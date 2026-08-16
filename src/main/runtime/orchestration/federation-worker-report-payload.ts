@@ -7,6 +7,7 @@ export function parseFederatedWorkerReportPayload(payload: string | null): {
   outcome: WorkerReportOutcome
   filesModified: string[]
   reportPath: string | null
+  runtimeFailure: string | null
 } {
   let parsed: unknown
   try {
@@ -32,6 +33,7 @@ export function parseFederatedWorkerReportPayload(payload: string | null): {
     filesModified: Array.isArray(report.filesModified)
       ? report.filesModified.filter((file): file is string => typeof file === 'string')
       : [],
-    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null
+    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null,
+    runtimeFailure: typeof report.runtimeFailure === 'string' ? report.runtimeFailure : null
   }
 }

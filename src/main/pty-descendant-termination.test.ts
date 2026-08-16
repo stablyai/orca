@@ -274,7 +274,7 @@ describe('terminateDescendantSnapshot', () => {
     expect(sendSignal).not.toHaveBeenCalled()
   })
 
-  it('uses the source scan boundary when a caller crosses into the next second', async () => {
+  it('does not authorize a same-second descendant from a later scan boundary', async () => {
     const sameSecond = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
     const sendSignal = vi.fn()
     terminateDescendantSnapshot(snapshot([sameSecond], 10, CAPTURED_AT_MS + 900), {

@@ -134,6 +134,8 @@ describe('OrcaRuntimeRpcServer', () => {
       homePeerFingerprint: existingFingerprint,
       protocolVersion: 1,
       runtimeEpoch: 'runtime_before_upgrade',
+      deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: existingFingerprint,
         requestId: 'request_existing_remote',

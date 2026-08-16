@@ -1,9 +1,4 @@
-import {
-  MESSAGE_TYPES,
-  type MessagePriority,
-  type MessageType,
-  type WorkerReportOutcome
-} from './types'
+import { MESSAGE_TYPES, type MessagePriority, type MessageType } from './types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
@@ -13,7 +8,7 @@ import {
   getFederationAckedThrough,
   recordFederationAckCheckpoint
 } from './federation-ack-checkpoints'
-import { parseFederatedWorkerReportPayload } from './federation-worker-report-payload'
+import { parseFederatedLifecycle } from './federation-relay-lifecycle'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
 const FEDERATION_PULL_PAGE_SIZE = 50
@@ -114,7 +109,13 @@ async function syncFederatedDispatchPages(
         threadId: message.threadId ?? undefined,
         payload: message.payload ?? undefined
       },
-      lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
+      lifecycle: parseFederatedLifecycle(
+        message,
+        item.kind,
+        item.message_id,
+        dispatchId,
+        dispatch.task_id
+      )
     })
     if (stored.lifecycle && supportsLifecycleSettlement) {
       settlements.push({
@@ -232,63 +233,5 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
     payload: typeof message.payload === 'string' ? message.payload : null
-  }
-}
-
-function parseFederatedLifecycle(
-  message: RelayedMessage,
-  messageId: string,
-  dispatchId: string,
-  taskId: string
-):
-  | { kind: 'none' }
-  | { kind: 'heartbeat'; at: string }
-  | {
-      kind: 'worker_report'
-      taskId: string
-      outcome: WorkerReportOutcome
-      result: string
-    }
-  | { kind: 'rejected'; code: string; reason: string } {
-  if (message.type === 'heartbeat') {
-    return { kind: 'heartbeat', at: new Date().toISOString() }
-  }
-  if (message.type !== 'worker_done') {
-    return { kind: 'none' }
-  }
-  let payload
-  try {
-    payload = parseFederatedWorkerReportPayload(message.payload)
-  } catch (error) {
-    return {
-      kind: 'rejected',
-      code: 'invalid_payload',
-      reason: error instanceof Error ? error.message : String(error)
-    }
-  }
-  if (payload.dispatchId !== dispatchId || payload.taskId !== taskId) {
-    return {
-      kind: 'rejected',
-      code: 'task_dispatch_mismatch',
-      reason: `Federated report does not match Dispatch ${dispatchId}.`
-    }
-  }
-  const result = JSON.stringify({
-    provenance: 'worker_report',
-    outcome: payload.outcome,
-    messageId,
-    reportedBy: `dispatch:${dispatchId}`,
-    subject: message.subject,
-    body: message.body,
-    completedBy: `dispatch:${dispatchId}`,
-    filesModified: payload.filesModified,
-    reportPath: payload.reportPath,
-    completedAt: new Date().toISOString()
-  })
-  return {
-    kind: 'worker_report',
-    taskId: payload.taskId,
-    outcome: payload.outcome,
-    result
   }
 }

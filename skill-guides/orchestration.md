@@ -178,7 +178,19 @@ Dispatch rules:
 
 ## Preferred Supervised Worker Loop
 
-Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
+Use `worker-start` for the normal supervised path. Every supervised start is finite and fresh: Orca reserves one immutable Dispatch budget slot, mints an absolute deadline, and launches a new provider process behind an app-independent watchdog. Existing worktrees are reused, supervised agent processes are not. `--terminal` is rejected for bounded workers.
+
+Every invocation must declare:
+
+- `--dispatch-group <group>`: stable Run-level budget group.
+- `--dispatch-index <n>` and `--max-dispatches <n>`: a unique one-based reservation and the immutable group ceiling. A reservation remains consumed even if startup later fails.
+- `--max-runtime-ms <1000..7200000>`: relative input used once to mint the immutable `deadlineAt`.
+- `--max-requests <1..100>`: provider request ceiling. Receipts distinguish hard adapter enforcement from prompt-only enforcement.
+- `--max-review-cycles <0..2>` and, when nonzero, `--review-cycle <1..max>`: explicit review bounds.
+
+Workers are leaf-only. Supported providers currently receive the request ceiling in the immutable environment and injected task preamble, so receipts report `prompt_only` request-cap enforcement. Provider-specific environment, CLI, or adapter controls disable worker fan-out. Providers without a truthful leaf-control implementation fail with `leaf_control_unsupported`.
+
+Bounded worker watchdogs currently support native local workspaces and connected Orca worker servers. SSH-backed and WSL-hosted worktrees fail closed with `leaf_control_unsupported` because the local watchdog cannot truthfully supervise their remote process tree.
 
 Create the Run and every independent Task first, then start all independent workers before waiting:
 
@@ -186,26 +198,27 @@ Create the Run and every independent Task first, then start all independent work
 orca orchestration run-create --objective "<objective>" --json
 orca orchestration task-create --spec "<worker A task>" --json
 orca orchestration task-create --spec "<worker B task>" --json
-orca orchestration worker-start --task <task_a> --worktree current --agent codex --json
-orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
+orca orchestration worker-start --task <task_a> --worktree current --agent codex --dispatch-group <group> --dispatch-index 1 --max-dispatches 2 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
+orca orchestration worker-start --task <task_b> --worktree current --agent claude --dispatch-group <group> --dispatch-index 2 --max-dispatches 2 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 ```
 
-`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
+`current` and exact existing worktrees create a fresh bounded agent process and do not rerun setup. A supervised Dispatch never adopts or transfers an existing process.
 
-For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
+For a supported per-invocation Claude or Codex launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
+orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
+orca orchestration worker-start --task <task_id> --worktree current --agent codex --model gpt-5.6-codex --effort high --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 ```
 
-`--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
+`--effort` requires `--model`. A connected worker server must advertise launch-preference support before Orca forwards either option.
 
-For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
+For a new worktree, setup runs by default. After worktree/setup creation, Orca launches a separate fresh bounded worker process:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 # Independent/top-level:
-orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 ```
 
 Setup normally starts alongside the agent. Only a repository explicitly configured with `wait-for-setup` delays agent launch until setup succeeds. Use `--setup skip` or `--setup inherit` only for a concrete reason.
@@ -216,13 +229,17 @@ To run the worker on another connected Orca server, add `--on <saved-environment
 
 ```bash
 # Mac Run home -> Windows worker (the reverse is identical from a Windows Run home)
-orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --dispatch-group <group> --dispatch-index 1 --max-dispatches 1 --max-runtime-ms 1800000 --max-requests 20 --max-review-cycles 0 --json
 orca orchestration worker-show --dispatch <dispatch_id> --json
 orca orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
 orca orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body "<attempt-specific guidance>" --json
 ```
 
 Remote `current` and `new-child` are intentionally invalid because those words are ambiguous across servers. Use an exact discovered remote worktree selector or `new-top-level` with an explicit remote repo selector.
+
+Run home remains the sole budget-reservation authority. The worker server receives the same immutable absolute deadline and request ceiling, launches its own fresh watchdog-supervised process, and relays watchdog settlement back to the original home Dispatch. A disconnect never extends the deadline or creates a replacement Dispatch.
+
+The watchdog owns the provider process group or process tree independently of the Orca app. At deadline it sends TERM, waits the fixed cleanup grace, escalates to KILL/tree-kill when needed, and atomically records a sentinel. Runtime restart reconciliation imports that evidence. A passed deadline with no sentinel becomes typed `runtime_budget_stop_unknown`; later valid evidence is imported idempotently.
 
 The follow-up is structured inbox mail, not prompt injection. The worker's next
 `orchestration check` receives it even when the Dispatch is on another connected Orca server.
@@ -239,9 +256,9 @@ orca orchestration worker-release --dispatch <dispatch_id> --json
 orca orchestration check --ack <delivery_id> --wait --types worker_done,escalation,question --timeout-ms 900000 --json
 ```
 
-After processing each accepted `worker_done`, choose the terminal's next owner before you acknowledge the Delivery or wait again. If the same exact agent has an immediate follow-up Task, read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`, then run `orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca transfers cleanup ownership to the new Dispatch. Otherwise run `orca orchestration worker-release --dispatch <dispatch_id> --json`.
+After processing each accepted `worker_done`, run `worker-release` before you acknowledge the Delivery or wait again. Follow-up supervised work always receives a new bounded process and a new budget reservation.
 
-Run `worker-release` after both succeeded and failed `worker_done` reports unless the user explicitly asked to keep that worker live. Release is post-completion cleanup, not cancellation: Orca first preserves inspectable output, then closes only the exact agent terminal owned by that settled Dispatch. Reused or pre-existing terminals, setup terminals, coordinators, active workers, user-taken-over terminals, and identities Orca cannot prove are retained. If the user explicitly asks to keep the live terminal for debugging, record that exception with `orca orchestration worker-retain --dispatch <dispatch_id> --json` instead of silently skipping cleanup. When the user is finished, the same Dispatch can be passed to `worker-release`, which clears the requested retention and releases the terminal.
+Run `worker-release` after both succeeded and failed `worker_done` reports unless the user explicitly asked to keep that worker live. Release is post-completion cleanup, not cancellation: Orca first preserves inspectable output, then closes only the exact fresh agent terminal owned by that settled Dispatch. Setup terminals, coordinators, active workers, user-taken-over terminals, and identities Orca cannot prove are retained. If the user explicitly asks to keep the live terminal for debugging, record that exception with `orca orchestration worker-retain --dispatch <dispatch_id> --json` instead of silently skipping cleanup. When the user is finished, the same Dispatch can be passed to `worker-release`, which clears the requested retention and releases the terminal.
 
 Do not release a worker because of a timeout, TUI idle state, heartbeat, status, question, escalation, or rejected/stale `worker_done`. If release returns `release_pending` or `release_unknown`, do not substitute `terminal close`; follow the exact recovery action in the receipt. A replayed Delivery may repeat `worker-release` safely.
 
@@ -264,11 +281,11 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 Recovery is conditional, never a fixed destructive sequence:
 
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus explicit placement, agent, and a new valid budget reservation. Retry does not silently inherit placement or extend the prior deadline.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
-Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
+Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express. A low-level Dispatch has no `worker-start` terminal ownership: `worker-release` safely returns `retained` with `no_owned_resource` instead of closing or reporting `dispatch_not_found`. Prefer `worker-start` whenever managed cleanup is required.
 
 ## Gates And Legacy Inspection
 
@@ -401,6 +418,6 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
+Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> bounded `worker-start` -> `check --wait`). Declare the complete immutable budget on every start. Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, run `worker-release` before the next wait; follow-up supervised work gets a fresh process and reservation.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

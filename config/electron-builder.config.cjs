@@ -189,6 +189,7 @@ module.exports = {
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/daemon-entry.js',
+    'out/main/worker-watchdog-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/session-scanner-opencode-sqlite-worker-entry.js',
     'out/main/plugin-host-entry.js',

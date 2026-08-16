@@ -77,6 +77,12 @@ describe('Electron Vite output contract', () => {
     expect(output.format).toBe('cjs')
     expect(output.entryFileNames).toBe('[name].js')
     expect(output.chunkFileNames).toBe('chunks/[name]-[hash].js')
+    const input = electronViteConfig.main?.build?.rollupOptions?.input
+    expect(input).toMatchObject({
+      'worker-watchdog-entry': expect.stringContaining(
+        'src/main/runtime/orchestration/worker-watchdog-entry.ts'
+      )
+    })
   })
 
   it('externalizes packaged dependencies but bundles self-contained main dependencies', () => {

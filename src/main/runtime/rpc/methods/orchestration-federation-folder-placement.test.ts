@@ -34,7 +34,14 @@ describe('orchestration federated folder placement', () => {
           worktree: 'new-top-level',
           repo: 'folder-repo',
           name: 'folder-worker',
-          agent: 'codex'
+          agent: 'codex',
+          dispatchGroup: 'folder-worker',
+          dispatchIndex: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 60_000,
+          maxRequests: 10,
+          maxReviewCycles: 0,
+          deadlineAt: new Date(Date.now() + 60_000).toISOString()
         }),
         {
           runtime,

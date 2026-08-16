@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { releaseRemoteAttachment } from '../rpc/methods/orchestration-federation-release'
 import { completeWorkerTerminalRelease } from '../rpc/methods/orchestration-worker-release-completion'
 
 export type WorkerTerminalReleaseReconciliationResult = {
@@ -67,13 +68,16 @@ async function reconcileRequestedWorkerTerminalReleasesOnce(
   const result = { ...emptyResult(), attempted: backlog.length }
   for (const resource of backlog) {
     try {
-      const receipt = await completeWorkerTerminalRelease({
-        runtime,
-        db,
-        dispatchId: resource.owner_dispatch_id,
-        resource,
-        mode: 'recovery'
-      })
+      const attachment = db.getRemoteDispatchAttachment(resource.owner_dispatch_id)
+      const receipt = attachment
+        ? await releaseRemoteAttachment({ runtime, db, attachment, mode: 'recovery' })
+        : await completeWorkerTerminalRelease({
+            runtime,
+            db,
+            dispatchId: resource.owner_dispatch_id,
+            resource,
+            mode: 'recovery'
+          })
       if (receipt.state === 'released' || receipt.state === 'already_released') {
         result.released += 1
       } else if (receipt.state === 'release_pending') {

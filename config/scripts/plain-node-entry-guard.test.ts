@@ -239,4 +239,13 @@ describe('worker thread entry guard', () => {
 
     expect(() => runWorkerWriteBundle(plugin, bundle)).not.toThrow()
   })
+
+  it('guards the worker watchdog as a plain-Node process entry', () => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+    const bundle = {
+      'worker-watchdog-entry.js': workerChunk('worker-watchdog-entry', 'require("electron")')
+    } as Rollup.OutputBundle
+
+    expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('plain-Node process')
+  })
 })

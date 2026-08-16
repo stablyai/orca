@@ -100,6 +100,12 @@ describe('orchestration federation lifecycle settlement', () => {
         state: 'running'
       }
     } as never)
+    vi.spyOn(workerRuntime, 'createBoundedWorkerTerminal').mockResolvedValue({
+      handle: 'term_windows_worker',
+      worktreeId: 'repo::windows-worktree',
+      title: 'worker',
+      watchdogSentinelPath: '/tmp/ctx_lifecycle-watchdog.json'
+    })
     vi.spyOn(workerRuntime, 'listTerminals').mockResolvedValue({
       terminals: [{ handle: 'term_windows_worker', title: 'Codex' }],
       totalCount: 1,
@@ -450,6 +456,8 @@ describe('orchestration federation lifecycle settlement', () => {
         homePeerFingerprint: 'run-home-device-token',
         protocolVersion,
         runtimeEpoch: workerRuntime.getRuntimeId(),
+        deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+        maxRequests: 10,
         mutationReceipt: {
           callerFingerprint: 'run-home-device-token',
           requestId: `persisted_protocol_${protocolVersion}_attach`,

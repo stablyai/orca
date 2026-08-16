@@ -1,6 +1,8 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
-import { applyWaitForSetupOutcome, type WorkerSetupReceipt } from './orchestration-worker-topology'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+import { applyWaitForSetupOutcome, WorkerSetupGateError } from './orchestration-worker-setup-gate'
 import {
   isFederationResidualEffect,
   type FederationEffect
@@ -10,7 +12,7 @@ type FederationSetupStageArgs = {
   db: OrchestrationDb
   dispatchId: string
   worktreeId: string
-  terminalHandle: string
+  terminalHandle?: string
   setup: WorkerSetupReceipt
   effects: FederationEffect[]
 }
@@ -20,11 +22,78 @@ function recordStage(args: FederationSetupStageArgs, stage: string): void {
     dispatchId: args.dispatchId,
     stage,
     worktreeId: args.worktreeId,
-    terminalHandle: args.terminalHandle,
+    ...(args.terminalHandle ? { terminalHandle: args.terminalHandle } : {}),
     setupState: args.setup.state,
     effects: args.effects,
     residualResources: args.effects.filter(isFederationResidualEffect)
   })
+}
+
+export async function waitForFederatedSetupGate(args: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  dispatchId: string
+  worktreeId: string
+  deadlineAt: string
+  timeoutMs?: number
+  setupTerminalHandle?: string
+  setup: WorkerSetupReceipt
+  effects: FederationEffect[]
+}): Promise<void> {
+  if (args.setup.startupPolicy !== 'wait-for-setup') {
+    return
+  }
+  if (args.setup.state === 'spawn_failed') {
+    recordStage(args, 'setup_observed')
+    throw new WorkerSetupGateError(
+      'setup_start',
+      'Setup terminal failed to start before the bounded worker launch.',
+      args.setup
+    )
+  }
+  if (args.setup.state !== 'running') {
+    return
+  }
+  if (!args.setupTerminalHandle) {
+    args.setup.state = 'spawn_failed'
+    updateFederatedSetupEffect(args.effects, args.setup.state)
+    recordStage(args, 'setup_observed')
+    throw new WorkerSetupGateError(
+      'setup_start',
+      'Gated setup did not expose a setup terminal.',
+      args.setup
+    )
+  }
+  const remainingMs = Date.parse(args.deadlineAt) - Date.now()
+  if (remainingMs <= 0) {
+    throw new OrchestrationError(
+      'runtime_budget_exhausted',
+      'The immutable worker deadline elapsed during remote setup.'
+    )
+  }
+  const completion = await args.runtime.waitForSetupTerminalCompletion(args.setupTerminalHandle, {
+    timeoutMs: Math.min(args.timeoutMs ?? 60_000, remainingMs)
+  })
+  args.setup.state = completion.exitCode === 0 ? 'succeeded' : 'failed'
+  updateFederatedSetupEffect(args.effects, args.setup.state)
+  recordStage(args, 'setup_observed')
+  if (args.setup.state === 'failed') {
+    throw new WorkerSetupGateError(
+      'setup_wait',
+      'Setup failed before the bounded worker launch.',
+      args.setup
+    )
+  }
+}
+
+function updateFederatedSetupEffect(
+  effects: FederationEffect[],
+  state: WorkerSetupReceipt['state']
+): void {
+  const setupEffect = effects.find((effect) => effect.kind === 'setup')
+  if (setupEffect) {
+    setupEffect.state = state
+  }
 }
 
 export function persistFederatedReadinessStage(args: FederationSetupStageArgs): void {

@@ -56,6 +56,7 @@ import {
   appendNormalizedToTailBuffer,
   buildPreview,
   OrcaRuntimeService,
+  resolveRuntimeWorkerWatchdogEntryPath,
   resolveWorktreeScanCacheTtlMs,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
@@ -1665,6 +1666,29 @@ computeWorktreePathMock.mockImplementation(
   }
 )
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
+
+describe('runtime worker watchdog entry resolution', () => {
+  it('uses the unpacked app resource from the packaged runtime call site', () => {
+    const priorResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+    electronMocks.app.isPackaged = true
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: '/Applications/Orca.app/Contents/Resources'
+    })
+    try {
+      expect(resolveRuntimeWorkerWatchdogEntryPath()).toBe(
+        '/Applications/Orca.app/Contents/Resources/app.asar.unpacked/out/main/worker-watchdog-entry.js'
+      )
+    } finally {
+      electronMocks.app.isPackaged = false
+      if (priorResourcesPath) {
+        Object.defineProperty(process, 'resourcesPath', priorResourcesPath)
+      } else {
+        delete (process as { resourcesPath?: string }).resourcesPath
+      }
+    }
+  })
+})
 
 describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
   it('coalesces concurrent creates that share a clientMutationId', async () => {
@@ -21294,7 +21318,18 @@ describe('OrcaRuntimeService', () => {
       const task = db.createTask({ spec: 'continue after missing worker recovery' })
       const started = db.createStartingWorkerDispatch({
         taskId: task.id,
-        startOptions: { topology: 'current', agent: 'codex' }
+        startOptions: { topology: 'current', agent: 'codex' },
+        budget: {
+          group: 'missing-worker-recovery',
+          index: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          requestCapEnforcement: 'prompt_only',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
       })
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -21399,7 +21434,18 @@ describe('OrcaRuntimeService', () => {
       const task = db.createTask({ spec: 'retry missing worker recovery' })
       const started = db.createStartingWorkerDispatch({
         taskId: task.id,
-        startOptions: { topology: 'current', agent: 'codex' }
+        startOptions: { topology: 'current', agent: 'codex' },
+        budget: {
+          group: 'missing-worker-retry',
+          index: 1,
+          maxDispatches: 1,
+          maxRuntimeMs: 30_000,
+          maxRequests: 10,
+          requestCapEnforcement: 'prompt_only',
+          maxReviewCycles: 0,
+          leaf: true
+        },
+        deadlineAt: '2099-01-01T00:00:00.000Z'
       })
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -35211,6 +35257,7 @@ describe('OrcaRuntimeService', () => {
       const pendingReads = vi.spyOn(db, 'getUndeliveredUnreadMessages')
       const write = vi.fn().mockReturnValue(true)
       setInMemoryOrchestrationMessages(runtime, db)
+      const orchestrationTimerCount = vi.getTimerCount()
       runtime.setPtyController({
         write,
         kill: vi.fn(),
@@ -35231,7 +35278,7 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(pendingReads).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(orchestrationTimerCount)
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
@@ -35292,6 +35339,7 @@ describe('OrcaRuntimeService', () => {
       const db = new InMemoryOrchestrationMessages()
       const write = vi.fn().mockReturnValue(true)
       setInMemoryOrchestrationMessages(runtime, db)
+      const orchestrationTimerCount = vi.getTimerCount()
       runtime.setPtyController({
         write,
         kill: vi.fn(),
@@ -35318,7 +35366,7 @@ describe('OrcaRuntimeService', () => {
             typeof payload === 'string' && payload.includes('orca orchestration check')
         )
       ).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(orchestrationTimerCount)
       db.close()
     } finally {
       vi.useRealTimers()

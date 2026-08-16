@@ -23,7 +23,15 @@ describe('orchestration worker-start CLI contract', () => {
 
   const invokeWorkerStart = (flags: Map<string, string | boolean>) =>
     ORCHESTRATION_HANDLERS['orchestration worker-start']({
-      flags,
+      flags: new Map<string, string | boolean>([
+        ['dispatch-group', 'test-workers'],
+        ['dispatch-index', '1'],
+        ['max-dispatches', '4'],
+        ['max-runtime-ms', '1800000'],
+        ['max-requests', '100'],
+        ['max-review-cycles', '0'],
+        ...flags
+      ]),
       client: { call: callMock },
       cwd: '/tmp/repo',
       json: true
@@ -76,6 +84,13 @@ describe('orchestration worker-start CLI contract', () => {
         terminal: undefined,
         retryOf: undefined,
         timeoutMs: 90_000,
+        dispatchGroup: 'test-workers',
+        dispatchIndex: 1,
+        maxDispatches: 4,
+        maxRuntimeMs: 1_800_000,
+        maxRequests: 100,
+        maxReviewCycles: 0,
+        reviewCycle: undefined,
         run: 'run_1',
         from: 'term_coord',
         devMode: false
@@ -83,6 +98,52 @@ describe('orchestration worker-start CLI contract', () => {
       { orchestrationRequestId: 'request_1' }
     )
     expect(process.exitCode).toBeUndefined()
+  })
+
+  it('requires every bounded worker budget flag before calling the runtime', async () => {
+    await expect(
+      ORCHESTRATION_HANDLERS['orchestration worker-start']({
+        flags: new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['from', 'term_coord']
+        ]),
+        client: { call: callMock },
+        cwd: '/tmp/repo',
+        json: true
+      } as never)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'Missing required --dispatch-group'
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards review-cycle bounds exactly', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'claude'],
+        ['from', 'term_coord'],
+        ['max-review-cycles', '2'],
+        ['review-cycle', '1']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.workerStart',
+      expect.objectContaining({ maxReviewCycles: 2, reviewCycle: 1 })
+    )
   })
 
   it('capability-gates and forwards per-invocation launch preferences', async () => {
@@ -180,7 +241,13 @@ describe('orchestration worker-start CLI contract', () => {
       flags: new Map<string, string | boolean>([
         ['task', 'task_1'],
         ['agent', 'codex'],
-        ['from', 'term_coord']
+        ['from', 'term_coord'],
+        ['dispatch-group', 'test-workers'],
+        ['dispatch-index', '1'],
+        ['max-dispatches', '4'],
+        ['max-runtime-ms', '1800000'],
+        ['max-requests', '100'],
+        ['max-review-cycles', '0']
       ]),
       client: { call: callMock },
       cwd: '/tmp/repo',

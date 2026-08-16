@@ -384,6 +384,33 @@ function getOptionalPositiveIntegerValueFlag(
   return value
 }
 
+function getRequiredSafeIntegerValueFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  options: { minimum: number; maximum?: number }
+): number {
+  const raw = flags.get(name)
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `Missing --${name}.`)
+  }
+  if (!/^\d+$/.test(raw)) {
+    throw new RuntimeClientError('invalid_argument', `Invalid safe integer for --${name}: ${raw}`)
+  }
+  const value = Number(raw)
+  if (
+    !Number.isSafeInteger(value) ||
+    value < options.minimum ||
+    (options.maximum !== undefined && value > options.maximum)
+  ) {
+    const range =
+      options.maximum === undefined
+        ? `at least ${options.minimum}`
+        : `between ${options.minimum} and ${options.maximum}`
+    throw new RuntimeClientError('invalid_argument', `--${name} must be a safe integer ${range}.`)
+  }
+  return value
+}
+
 function rejectLifecycleGroupRecipient(type: string | undefined, to: string): void {
   if ((type === 'worker_done' || type === 'heartbeat') && to.startsWith('@')) {
     throw new RuntimeClientError('invalid_argument', getLifecycleGroupRecipientError(type))
@@ -895,6 +922,32 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       terminal: getOptionalStringFlag(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
+      dispatchGroup: getRequiredStringFlag(flags, 'dispatch-group'),
+      dispatchIndex: getRequiredSafeIntegerValueFlag(flags, 'dispatch-index', {
+        minimum: 1
+      }),
+      maxDispatches: getRequiredSafeIntegerValueFlag(flags, 'max-dispatches', {
+        minimum: 1,
+        maximum: 64
+      }),
+      maxRuntimeMs: getRequiredSafeIntegerValueFlag(flags, 'max-runtime-ms', {
+        minimum: 1000,
+        maximum: 7_200_000
+      }),
+      maxRequests: getRequiredSafeIntegerValueFlag(flags, 'max-requests', {
+        minimum: 1,
+        maximum: 100
+      }),
+      maxReviewCycles: getRequiredSafeIntegerValueFlag(flags, 'max-review-cycles', {
+        minimum: 0,
+        maximum: 2
+      }),
+      reviewCycle: flags.has('review-cycle')
+        ? getRequiredSafeIntegerValueFlag(flags, 'review-cycle', {
+            minimum: 1,
+            maximum: 2
+          })
+        : undefined,
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()

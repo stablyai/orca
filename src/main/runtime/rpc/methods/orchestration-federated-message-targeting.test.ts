@@ -30,6 +30,8 @@ describe('orchestration federated message targeting', () => {
       homePeerFingerprint: 'home_peer',
       protocolVersion: 1,
       runtimeEpoch: runtime.getRuntimeId(),
+      deadlineAt: '2099-01-01T00:00:00.000Z',
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: 'home_peer',
         requestId: 'attach_request',

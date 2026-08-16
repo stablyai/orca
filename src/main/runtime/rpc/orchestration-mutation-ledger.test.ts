@@ -306,6 +306,17 @@ describe('durable orchestration mutation ledger', () => {
     const started = db.createStartingWorkerDispatch({
       taskId: params.task,
       startOptions: {},
+      budget: {
+        group: 'mutation-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       mutationReceipt: {
         callerFingerprint,
         requestId: 'mutation_worker_start',

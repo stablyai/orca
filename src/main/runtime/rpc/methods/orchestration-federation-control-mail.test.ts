@@ -93,6 +93,17 @@ describe('orchestration federation control mail', () => {
     const started = homeDb.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
+      budget: {
+        group: 'control-mail-workers',
+        index: 1,
+        maxDispatches: 1,
+        maxRuntimeMs: 30_000,
+        maxRequests: 10,
+        requestCapEnforcement: 'prompt_only',
+        maxReviewCycles: 0,
+        leaf: true
+      },
+      deadlineAt: '2099-01-01T00:00:00.000Z',
       federation: {
         environmentId: 'environment_worker',
         environmentName: 'worker',
@@ -109,6 +120,8 @@ describe('orchestration federation control mail', () => {
       homePeerFingerprint: homeFingerprint,
       protocolVersion: 2,
       runtimeEpoch: workerRuntime.getRuntimeId(),
+      deadlineAt: '2099-01-01T00:00:00.000Z',
+      maxRequests: 10,
       mutationReceipt: {
         callerFingerprint: homeFingerprint,
         requestId: 'attach-worker',

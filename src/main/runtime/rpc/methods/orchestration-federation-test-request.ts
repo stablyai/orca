@@ -19,6 +19,12 @@ export function createFederationWorkerStartRequest(
       repo: 'id:windows-repo',
       name: 'windows-audit',
       agent: 'codex',
+      dispatchGroup: 'federation-test',
+      dispatchIndex: 1,
+      maxDispatches: 1,
+      maxRuntimeMs: 60_000,
+      maxRequests: 10,
+      maxReviewCycles: 0,
       ...overrides
     }
   }
