@@ -134,6 +134,7 @@ import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/wo
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
+const CODEX_COMPOSER_READY_BYTES = '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m'
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
@@ -16805,6 +16806,75 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('waits for Codex composer readiness before writing prompt bytes', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+            setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25hcomposer redraw', Date.now()), 1)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      await vi.advanceTimersByTimeAsync(100)
+      expect(writes).toEqual([])
+
+      runtime.onPtyData('pty-bg', '\x1b[?20', Date.now())
+      await vi.advanceTimersByTimeAsync(1)
+      expect(writes).toEqual([])
+      runtime.onPtyData('pty-bg', CODEX_COMPOSER_READY_BYTES.slice(5), Date.now())
+      await vi.advanceTimersByTimeAsync(1)
+      expect(writes.join('')).toContain('review this change')
+
+      await vi.advanceTimersByTimeAsync(1_500)
+      await sendPromise
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails a Codex prompt without writing when composer readiness times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const rejection = expect(sendPromise).rejects.toThrow('agent_composer_not_ready')
+      await vi.advanceTimersByTimeAsync(20_000)
+
+      await rejection
+      expect(writes).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['claude', 'codex'] as const)(
     'waits for %s composer output frames to settle before one submit',
     async (agent) => {
@@ -16853,6 +16923,9 @@ describe('OrcaRuntimeService', () => {
         const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
           launchAgent: agent
         })
+        if (agent === 'codex') {
+          runtime.onPtyData('pty-bg', CODEX_COMPOSER_READY_BYTES, Date.now())
+        }
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
@@ -16939,6 +17012,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
+      runtime.onPtyData('pty-bg', CODEX_COMPOSER_READY_BYTES, Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(1_199)
       expect(writes).not.toContain('\r')
@@ -17011,6 +17085,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'codex'
       })
+      runtime.onPtyData('pty-bg', CODEX_COMPOSER_READY_BYTES, Date.now())
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(8_000)

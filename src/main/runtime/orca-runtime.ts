@@ -18237,6 +18237,7 @@ export class OrcaRuntimeService {
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
+      await this.waitForCodexPromptComposer(pty.pty.ptyId)
       const submits = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
         generation,
@@ -18267,6 +18268,7 @@ export class OrcaRuntimeService {
       throw new Error('terminal_not_writable')
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
+    await this.waitForCodexPromptComposer(leaf.ptyId)
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
@@ -18274,6 +18276,16 @@ export class OrcaRuntimeService {
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
+  }
+
+  private async waitForCodexPromptComposer(ptyId: string): Promise<void> {
+    const pty = this.ptysById.get(ptyId)
+    if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'codex') {
+      return
+    }
+    if (!(await this.waitForPtyDraftInputReady(ptyId, 'codex'))) {
+      throw new Error('agent_composer_not_ready')
+    }
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
@@ -23551,16 +23563,20 @@ export class OrcaRuntimeService {
     if (!ptyId) {
       return Promise.resolve(null)
     }
+    return this.waitForPtyDraftInputReady(ptyId, agent).then((ready) => (ready ? ptyId : null))
+  }
+
+  private waitForPtyDraftInputReady(ptyId: string, agent: TuiAgent): Promise<boolean> {
     const readySignal =
       TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    return new Promise<string | null>((resolve) => {
+    return new Promise<boolean>((resolve) => {
       let settled = false
       const scanner = createDraftPasteReadyScanner(readySignal)
       let quietTimer: NodeJS.Timeout | null = null
       let hardTimer: NodeJS.Timeout | null = null
       let unsubscribe: (() => void) | null = null
 
-      const finish = (value: string | null): void => {
+      const finish = (value: boolean): void => {
         if (settled) {
           return
         }
@@ -23579,13 +23595,13 @@ export class OrcaRuntimeService {
         if (quietTimer) {
           clearTimeout(quietTimer)
         }
-        quietTimer = setTimeout(() => finish(ptyId), BRACKETED_PASTE_QUIET_MS)
+        quietTimer = setTimeout(() => finish(true), BRACKETED_PASTE_QUIET_MS)
       }
 
       const observeData = (data: string): void => {
         const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
         if (ready) {
-          finish(ptyId)
+          finish(true)
           return
         }
         if (shouldArm) {
@@ -23598,7 +23614,9 @@ export class OrcaRuntimeService {
       if (replay) {
         observeData(replay)
       }
-      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
+      if (!settled) {
+        hardTimer = setTimeout(() => finish(false), resolveDraftPasteReadyTimeoutMs(agent))
+      }
     })
   }
 
