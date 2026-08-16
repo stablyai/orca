@@ -1,4 +1,7 @@
+import { readFetchResponseTextWithinLimit } from '../../shared/fetch-response-body'
+
 const GITEA_AUTH_ERROR_MAX_LEN = 280
+const GITEA_AUTH_ERROR_MAX_BODY_BYTES = 4 * 1024
 
 /** Keep server auth text, but never echo the configured token or query secrets. */
 export function sanitizeGiteaAuthError(raw: string, token: string | null): string | null {
@@ -20,19 +23,19 @@ export function sanitizeGiteaAuthError(raw: string, token: string | null): strin
 
 async function readGiteaErrorMessage(response: Response): Promise<string | null> {
   try {
-    const body = await response.text()
+    const body = await readFetchResponseTextWithinLimit(response, GITEA_AUTH_ERROR_MAX_BODY_BYTES)
     const trimmed = body.trim()
     if (!trimmed) {
       return null
     }
     try {
-      const parsed = JSON.parse(trimmed) as {
-        message?: unknown
-        error?: unknown
-      }
-      for (const candidate of [parsed.message, parsed.error]) {
-        if (typeof candidate === 'string' && candidate.trim()) {
-          return candidate.trim()
+      const parsed: unknown = JSON.parse(trimmed)
+      if (parsed && typeof parsed === 'object') {
+        const errorBody = parsed as { message?: unknown; error?: unknown }
+        for (const candidate of [errorBody.message, errorBody.error]) {
+          if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim()
+          }
         }
       }
     } catch {
@@ -64,7 +67,6 @@ export async function probeGiteaAuthenticatedUser(
       signal: AbortSignal.timeout(4000)
     })
     if (!response.ok) {
-      // Fully read the body so undici does not need cancelUnreadResponseBody.
       const raw = (await readGiteaErrorMessage(response)) ?? `HTTP ${response.status}`
       return { user: null, authError: sanitizeGiteaAuthError(raw, token) }
     }
