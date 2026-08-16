@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   computeDiffEditorFontSize,
   computeEditorFontSize,
+  computeEditorLineHeight,
   resolveEditorFontFamily,
   resolveEditorFontFamilyOrInherit
 } from './editor-font-zoom'
+import { MIN_TERMINAL_LINE_HEIGHT } from '../../../shared/terminal-line-height-settings'
 
 describe('editor font zoom', () => {
   it('keeps diff editors smaller than regular editor surfaces', () => {
@@ -16,6 +18,25 @@ describe('editor font zoom', () => {
   it('keeps diff editor font size within the editor safety bounds', () => {
     expect(computeDiffEditorFontSize(10, -6)).toBe(8)
     expect(computeDiffEditorFontSize(24, 18)).toBe(32)
+  })
+})
+
+describe('computeEditorLineHeight', () => {
+  it('keeps the documented default of 1 when terminal Line Height is unset', () => {
+    expect(computeEditorLineHeight(13)).toBe(13 * MIN_TERMINAL_LINE_HEIGHT)
+    expect(computeEditorLineHeight(13, undefined)).toBe(13)
+    expect(computeEditorLineHeight(13, Number.NaN)).toBe(13)
+  })
+
+  it('derives Monaco px lineHeight from the terminal Line Height setting', () => {
+    expect(computeEditorLineHeight(13, 1)).toBe(13)
+    expect(computeEditorLineHeight(13, 1.35)).toBe(17.55)
+    expect(computeEditorLineHeight(15, 1.2)).toBe(18)
+  })
+
+  it('clamps inherited terminal Line Height to the same 1–3 bounds as the terminal', () => {
+    expect(computeEditorLineHeight(13, 0.85)).toBe(13)
+    expect(computeEditorLineHeight(13, 4)).toBe(39)
   })
 })
 
