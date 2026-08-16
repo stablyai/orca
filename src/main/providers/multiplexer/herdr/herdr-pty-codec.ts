@@ -65,16 +65,19 @@ export async function waitForFirstHerdrFrame(
         }
         if (frame.full) {
           // Why: the synthesized frame stream delivers full snapshots (pane.read
-          // windows), not deltas. Emit only the appended tail so the renderer
-          // does not re-render the whole window on every poll.
+          // windows), not deltas. A clean append keeps the renderer in sync; any
+          // in-place change (scroll, prompt redraw, clear) must replace the
+          // visible screen, or appending the whole snapshot duplicates the buffer.
           const previous = binding.snapshot
           binding.snapshot = data
-          const delta = previous && data.startsWith(previous) ? data.slice(previous.length) : data
+          const appended = data.startsWith(previous)
+          const delta = appended ? data.slice(previous.length) : data
           if (!delta) {
             return
           }
-          binding.sequenceChars += delta.length
-          callbacks.emitData({ id: binding.id, data: delta, sequenceChars: binding.sequenceChars })
+          const out = appended ? delta : `\x1b[0m\x1b[2J\x1b[H${data}`
+          binding.sequenceChars += out.length
+          callbacks.emitData({ id: binding.id, data: out, sequenceChars: binding.sequenceChars })
           return
         }
         binding.snapshot = `${binding.snapshot}${data}`

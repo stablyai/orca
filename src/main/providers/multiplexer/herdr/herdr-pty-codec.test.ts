@@ -88,12 +88,13 @@ describe('waitForFirstHerdrFrame', () => {
       sequenceChars: 'line2\n'.length
     })
 
-    // A frame whose content scrolled (no shared prefix) falls back to full data.
+    // A frame whose content changed in place (no shared prefix) replaces the
+    // visible screen instead of appending, so the renderer cannot duplicate it.
     push(frame('scrolled\n'))
     expect(emitData).toHaveBeenLastCalledWith({
       id: binding.id,
-      data: 'scrolled\n',
-      sequenceChars: 'line2\n'.length + 'scrolled\n'.length
+      data: '\x1b[0m\x1b[2J\x1b[Hscrolled\n',
+      sequenceChars: 'line2\n'.length + '\x1b[0m\x1b[2J\x1b[Hscrolled\n'.length
     })
   })
 
