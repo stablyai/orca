@@ -16,10 +16,7 @@ export async function requireWorkerDoneSettlement(
     const [dispatchVerification, taskVerification] = await Promise.all([
       client.call<{ dispatch: { id: string; status: string } | null }>(
         'orchestration.dispatchShow',
-        {
-          task: target.taskId,
-          ...(receipt.fromHandle ? { callerTerminalHandle: receipt.fromHandle } : {})
-        }
+        { task: target.taskId }
       ),
       client.call<{
         tasks: { id: string; status: string; result: string | null }[]

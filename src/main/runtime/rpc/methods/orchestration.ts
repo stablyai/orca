@@ -1733,8 +1733,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             callerEvidence: orchestrationCompatibilityEvidence
           })
         : undefined
-      const task = db.getTask(params.task)
-      if (callerRun && task?.run_id !== callerRun.id) {
+      const task = callerRun ? db.getTaskForRun(params.task, callerRun.id) : db.getTask(params.task)
+      if (callerRun && !task) {
         if (params.preamble) {
           throw new OrchestrationError(
             'task_not_found',
@@ -1743,7 +1743,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         return { dispatch: null }
       }
-      const ctx = task ? db.getDispatchContext(task.id) : undefined
+      const ctx = task
+        ? callerRun
+          ? db.getDispatchContextForRun(task.id, callerRun.id)
+          : db.getDispatchContext(task.id)
+        : undefined
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
       if (params.preamble) {

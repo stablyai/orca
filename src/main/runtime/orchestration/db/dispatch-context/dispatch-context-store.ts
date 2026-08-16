@@ -125,6 +125,18 @@ export function getDispatchContext(
     .get(taskId) as DispatchContextRow | undefined
 }
 
+export function getDispatchContextForRun(
+  this: OrchestrationDb,
+  taskId: string,
+  runId: string
+): DispatchContextRow | undefined {
+  return this.db
+    .prepare(
+      'SELECT * FROM dispatch_contexts WHERE run_id = ? AND task_id = ? ORDER BY rowid DESC LIMIT 1'
+    )
+    .get(runId, taskId) as DispatchContextRow | undefined
+}
+
 export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
@@ -168,6 +180,7 @@ export function commitDispatchLaunchTokenHash(
 export type DispatchContextStoreMethods = {
   createDispatchContext: typeof createDispatchContext
   getDispatchContext: typeof getDispatchContext
+  getDispatchContextForRun: typeof getDispatchContextForRun
   getDispatchContextById: typeof getDispatchContextById
   commitDispatchLaunchTokenHash: typeof commitDispatchLaunchTokenHash
 }
@@ -176,6 +189,7 @@ export function attachDispatchContextStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createDispatchContext,
     getDispatchContext,
+    getDispatchContextForRun,
     getDispatchContextById,
     commitDispatchLaunchTokenHash
   })
