@@ -23,6 +23,20 @@ describe('buildWorkspaceDirHistoryForUpdate', () => {
     ).toBeNull()
   })
 
+  it('does not record a whitespace-only current workspace path', () => {
+    const current = makeSettings({
+      workspaceDir: '   ',
+      nestWorkspaces: false,
+      workspaceDirHistory: [{ path: '/old/workspaces', nestWorkspaces: false }]
+    })
+
+    expect(
+      buildWorkspaceDirHistoryForUpdate(current, {
+        workspaceDir: '/new/workspaces'
+      })
+    ).toBeNull()
+  })
+
   it('filters corrupt history before recording the previous valid layout', () => {
     const current = makeSettings({
       workspaceDir: '/current/workspaces',
@@ -30,6 +44,7 @@ describe('buildWorkspaceDirHistoryForUpdate', () => {
       workspaceDirHistory: [
         null as never,
         { path: '', nestWorkspaces: true },
+        { path: 42 as unknown as string, nestWorkspaces: false },
         { path: '/old/workspaces', nestWorkspaces: true }
       ]
     })
