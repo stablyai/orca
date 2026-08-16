@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import type { RuntimeClient } from '../../src/cli/runtime-client'
@@ -8,6 +9,8 @@ import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runti
 type DispatchShowResult = {
   dispatch: { id: string; run_id: string; status: string } | null
 }
+
+type CallerTerminal = RuntimeTerminalCreate & { launchToken: string }
 
 test('isolates dispatch-show across Runs on a paired headless host', async ({ testRepoPath }) => {
   test.setTimeout(120_000)
@@ -40,15 +43,19 @@ async function createTerminal(
   client: RuntimeClient,
   worktreePath: string,
   title: string
-): Promise<RuntimeTerminalCreate> {
+): Promise<CallerTerminal> {
+  const launchToken = randomUUID()
   const created = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
     worktree: `path:${worktreePath}`,
-    title
+    title,
+    launchAgent: 'codex',
+    launchConfig: { agentArgs: '', agentEnv: {} },
+    launchToken
   })
   if (!created.result.terminal.paneKey) {
     throw new Error('Headless terminal did not expose a stable pane identity')
   }
-  return created.result.terminal
+  return { ...created.result.terminal, launchToken }
 }
 
 async function createRun(
@@ -86,7 +93,7 @@ async function createDispatchedTask(
 function show(
   pairingUrl: string,
   userDataPath: string,
-  terminal: RuntimeTerminalCreate,
+  terminal: CallerTerminal,
   task: string
 ): DispatchShowResult {
   const result = spawnSync(
@@ -105,6 +112,7 @@ function show(
         ...process.env,
         ORCA_DEV_CLI_INVOCATION: '1',
         ORCA_PAIRING_CODE: pairingUrl,
+        ORCA_AGENT_LAUNCH_TOKEN: terminal.launchToken,
         ORCA_PANE_KEY: terminal.paneKey ?? '',
         ORCA_TERMINAL_HANDLE: terminal.handle,
         ORCA_USER_DATA_PATH: userDataPath

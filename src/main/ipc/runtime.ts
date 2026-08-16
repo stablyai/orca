@@ -55,12 +55,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       _event,
       args: { method: string; params?: unknown }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      return (await new RpcDispatcher({ runtime }).dispatch({
-        id: 'desktop-ipc',
-        authToken: 'desktop-ipc',
-        method: args.method,
-        params: args.params
-      })) as RuntimeRpcResponse<unknown>
+      return (await new RpcDispatcher({ runtime }).dispatch(
+        {
+          id: 'desktop-ipc',
+          authToken: 'desktop-ipc',
+          method: args.method,
+          params: args.params
+        },
+        { trustedDesktopIpc: true }
+      )) as RuntimeRpcResponse<unknown>
     }
   )
 

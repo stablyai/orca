@@ -1,4 +1,5 @@
 import { test, expect } from './helpers/orca-app'
+import type { Page } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { waitForSessionReady, ensureTerminalVisible } from './helpers/store'
@@ -45,7 +46,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
     abandonedTask,
     terminalHandle
   )
-  const shownBeforeAbandon = await showDispatch(client, abandonedTask, terminalHandle)
+  const shownBeforeAbandon = await showDispatch(orcaPage, abandonedTask)
   expect(shownBeforeAbandon.id).toBe(abandonedDispatch)
   expect(shownBeforeAbandon.status).toBe('dispatched')
 
@@ -59,7 +60,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
       processAction: 'none'
     }
   })
-  expect(await showDispatch(client, abandonedTask, terminalHandle)).toMatchObject({
+  expect(await showDispatch(orcaPage, abandonedTask)).toMatchObject({
     status: 'failed',
     last_failure: 'abandoned'
   })
@@ -77,7 +78,7 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
       warning: expect.stringContaining('without closing')
     }
   })
-  expect(await showDispatch(client, stoppedTask, terminalHandle)).toMatchObject({
+  expect(await showDispatch(orcaPage, stoppedTask)).toMatchObject({
     status: 'failed',
     last_failure: 'stopped'
   })
@@ -126,14 +127,23 @@ async function dispatchTask(
 }
 
 async function showDispatch(
-  client: RuntimeClient,
-  taskId: string,
-  callerTerminalHandle: string
+  page: Page,
+  taskId: string
 ): Promise<{ id: string; status: string; last_failure: string | null }> {
-  const shown = await client.call<{
-    dispatch: { id: string; status: string; last_failure: string | null }
-  }>('orchestration.dispatchShow', { task: taskId, callerTerminalHandle })
-  return shown.result.dispatch
+  return page.evaluate(async (task) => {
+    const shown = await window.api.runtime.call({
+      method: 'orchestration.dispatchShow',
+      params: { task }
+    })
+    if (!shown.ok) {
+      throw new Error(shown.error.message)
+    }
+    return shown.result.dispatch as {
+      id: string
+      status: string
+      last_failure: string | null
+    }
+  }, taskId)
 }
 
 async function findTerminal(client: RuntimeClient, handle: string) {

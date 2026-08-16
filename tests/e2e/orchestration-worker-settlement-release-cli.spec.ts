@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import type { Page } from '@stablyai/playwright-test'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -182,19 +183,16 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
       return read.result.terminal.tail.join('\n')
     })
     .toContain('ACK')
-  const dispatch = await client.call<{ dispatch: { id: string; status: string } | null }>(
-    'orchestration.dispatchShow',
-    {
-      task: task.result.task.id,
-      callerTerminalHandle: coordinator.result.terminal.handle
-    }
-  )
-  expect(dispatch.result.dispatch?.status).toBe('dispatched')
+  const dispatch = await showDispatch(orcaPage, task.result.task.id)
+  expect(dispatch?.status).toBe('dispatched')
+  if (!dispatch) {
+    throw new Error('Expected worker Dispatch')
+  }
 
   const baseMarker = {
     coordinator: coordinator.result.terminal.handle,
     taskId: task.result.task.id,
-    dispatchId: dispatch.result.dispatch!.id
+    dispatchId: dispatch.id
   }
   await client.call('terminal.send', {
     terminal: workerHandle,
@@ -208,14 +206,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     ok: false,
     error: { code: 'dispatch_capability_invalid' }
   })
-  const stillDispatched = await client.call<{ dispatch: { status: string } | null }>(
-    'orchestration.dispatchShow',
-    {
-      task: task.result.task.id,
-      callerTerminalHandle: coordinator.result.terminal.handle
-    }
-  )
-  expect(stillDispatched.result.dispatch?.status).toBe('dispatched')
+  expect((await showDispatch(orcaPage, task.result.task.id))?.status).toBe('dispatched')
 
   await client.call('terminal.send', {
     terminal: workerHandle,
@@ -231,14 +222,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   })
   await expect
     .poll(async () => {
-      const current = await client.call<{ dispatch: { status: string } | null }>(
-        'orchestration.dispatchShow',
-        {
-          task: task.result.task.id,
-          callerTerminalHandle: coordinator.result.terminal.handle
-        }
-      )
-      return current.result.dispatch?.status
+      return (await showDispatch(orcaPage, task.result.task.id))?.status
     })
     .toBe('completed')
 
@@ -256,7 +240,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
        SET ownership_state = 'external', release_state = 'retained',
            retained_reason = 'external_terminal'
        WHERE owner_dispatch_id = ?`
-    ).run(dispatch.result.dispatch!.id)
+    ).run(dispatch.id)
   } finally {
     db.close()
   }
@@ -265,7 +249,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     'orchestration',
     'worker-release',
     '--dispatch',
-    dispatch.result.dispatch!.id,
+    dispatch.id,
     '--json'
   ])
   expect(released.status).toBe(0)
@@ -282,7 +266,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
             `SELECT ownership_state, release_state
            FROM worker_terminal_resources WHERE owner_dispatch_id = ?`
           )
-          .get(dispatch.result.dispatch!.id)
+          .get(dispatch.id)
       )
       .toEqual({ ownership_state: 'released', release_state: 'released' })
   } finally {
@@ -297,3 +281,19 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     )
   ).toBe(true)
 })
+
+async function showDispatch(
+  page: Page,
+  taskId: string
+): Promise<{ id: string; status: string } | null> {
+  return page.evaluate(async (task) => {
+    const shown = await window.api.runtime.call({
+      method: 'orchestration.dispatchShow',
+      params: { task }
+    })
+    if (!shown.ok) {
+      throw new Error(shown.error.message)
+    }
+    return shown.result.dispatch as { id: string; status: string } | null
+  }, taskId)
+}
