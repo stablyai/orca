@@ -1,5 +1,6 @@
 import type { AgentJournalStatusItem } from '../../../shared/agent-session-journal-types'
 import {
+  boundInlineText,
   boundPayload,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
@@ -24,7 +25,7 @@ function serializeProviderPayload(payload: unknown): string {
  *  first. Nested one level because warnings arrive wrapped as often as not. */
 const MESSAGE_KEYS = ['message', 'text', 'warning', 'detail', 'description', 'reason'] as const
 
-function readableMessage(payload: unknown): string | null {
+function directReadableMessage(payload: unknown): string | null {
   if (typeof payload === 'string') {
     return payload.trim() || null
   }
@@ -38,13 +39,19 @@ function readableMessage(payload: unknown): string | null {
       return value.trim()
     }
   }
+  return null
+}
+
+function readableMessage(payload: unknown): string | null {
+  const direct = directReadableMessage(payload)
+  if (direct || typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return direct
+  }
+  const record = payload as Record<string, unknown>
   for (const key of MESSAGE_KEYS) {
-    const nested = record[key]
-    if (typeof nested === 'object' && nested !== null && !Array.isArray(nested)) {
-      const inner = readableMessage(nested)
-      if (inner) {
-        return inner
-      }
+    const nested = directReadableMessage(record[key])
+    if (nested) {
+      return nested
     }
   }
   return null
@@ -71,12 +78,20 @@ export function unhandledProviderFrameJournalItem(
   // and reads as protocol noise. Lead with the provider's own sentence when it has
   // one; the raw frame stays behind the row's disclosure either way.
   const message = readableMessage(payload)
+  const display = message ? boundInlineText(message, limits) : null
+  const blobs = new Map<string, string>()
+  if (bounded.truncated) {
+    blobs.set(bounded.digest, serialized)
+  }
+  if (message && display?.bounded.truncated) {
+    blobs.set(display.bounded.digest, message)
+  }
   return {
     body: {
       kind: 'status',
-      text: message ?? `${provider} · ${kind}`,
+      text: display?.text ?? `${provider} · ${kind}`,
       providerFrame: { provider, kind, payload: bounded }
     },
-    blobs: bounded.truncated ? [{ digest: bounded.digest, payload: serialized }] : []
+    blobs: [...blobs].map(([digest, blobPayload]) => ({ digest, payload: blobPayload }))
   }
 }
