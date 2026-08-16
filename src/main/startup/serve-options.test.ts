@@ -74,4 +74,36 @@ describe('getServeOptions', () => {
       noPairing: false
     })
   })
+
+  it('ignores recognized serve flags after the option terminator', () => {
+    expect(
+      getServeOptions(['/AppRun', '--serve', '--', '--serve-port', '1', '--serve-no-pairing'])
+    ).toEqual({
+      json: false,
+      pairingAddress: null,
+      noPairing: false,
+      mobilePairing: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+  })
+
+  it.each(['--serve-port', '--serve-pairing-address', '--serve-project-root'])(
+    'rejects a missing value for %s',
+    (flag) => {
+      expect(() => getServeOptions(['/AppRun', '--serve', flag])).toThrow(
+        `Missing value for ${flag}.`
+      )
+    }
+  )
+
+  it.each([
+    ['an empty value', ''],
+    ['another flag', '--serve-json'],
+    ['the option terminator', '--']
+  ])('rejects %s after --serve-port', (_description, value) => {
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-port', value])).toThrow(
+      'Missing value for --serve-port.'
+    )
+  })
 })

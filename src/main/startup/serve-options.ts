@@ -16,19 +16,24 @@ export type ServeOptions = {
  * can cover the same guards the packaged binary runs (#13006).
  */
 export function getServeOptions(argv: readonly string[]): ServeOptions {
+  const terminatorIndex = argv.indexOf('--')
+  const optionArgv = terminatorIndex === -1 ? argv : argv.slice(0, terminatorIndex)
   // Why: packaged-binary CLI-form serve skips the CLI parser (#13006 / #12818).
   // Reject pairing-flag typos before they silently keep pairing enabled.
-  const typoError = getServeFlagTypoError(argv)
+  const typoError = getServeFlagTypoError(optionArgv)
   if (typoError) {
     throw new Error(typoError)
   }
   const valueAfter = (flag: string): string | null => {
-    const index = argv.indexOf(flag)
+    const index = optionArgv.indexOf(flag)
     if (index === -1) {
       return null
     }
-    const value = argv[index + 1]
-    return value && !value.startsWith('--') ? value : null
+    const value = optionArgv[index + 1]
+    if (!value || value.startsWith('--')) {
+      throw new Error(`Missing value for ${flag}.`)
+    }
+    return value
   }
   const rawPort = valueAfter('--serve-port')
   let wsPort: number | undefined
@@ -40,12 +45,12 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
     wsPort = parsedPort
   }
   const options: ServeOptions = {
-    json: argv.includes('--serve-json'),
+    json: optionArgv.includes('--serve-json'),
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
-    noPairing: argv.includes('--serve-no-pairing'),
-    mobilePairing: argv.includes('--serve-mobile-pairing'),
-    recipeJson: argv.includes('--serve-recipe-json'),
+    noPairing: optionArgv.includes('--serve-no-pairing'),
+    mobilePairing: optionArgv.includes('--serve-mobile-pairing'),
+    recipeJson: optionArgv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root')
   }
   const guardError = getServeOptionGuardError(options)
