@@ -191,7 +191,13 @@ export class PairedRuntimeBrowserHostLeaseConnection {
         ready.leaseReconnectProtocolVersion,
         request.leaseReconnectProtocolVersion
       ) ||
+      !matchesOptionalProtocol(
+        ready.pageReconciliationProtocolVersion,
+        request.pageReconciliationProtocolVersion
+      ) ||
       (ready.leaseReconnectProtocolVersion === 1 && ready.pageInventoryProtocolVersion !== 1) ||
+      (ready.pageReconciliationProtocolVersion === 1 &&
+        (ready.pageCommandProtocolVersion !== 1 || ready.pageInventoryProtocolVersion !== 1)) ||
       (this.options.reconnect && ready.leaseReconnectProtocolVersion !== 1)
     ) {
       this.fail(new Error('Invalid browser host lease response'))
@@ -261,6 +267,9 @@ function browserHostLeaseAuthority(
       : {}),
     ...(ready.leaseReconnectProtocolVersion
       ? { leaseReconnectProtocolVersion: ready.leaseReconnectProtocolVersion }
+      : {}),
+    ...(ready.pageReconciliationProtocolVersion
+      ? { pageReconciliationProtocolVersion: ready.pageReconciliationProtocolVersion }
       : {})
   })
 }

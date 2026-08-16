@@ -22,6 +22,10 @@ export const BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION = 1 as const
 const LeaseReconnectProtocolVersion = z.literal(
   BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION
 )
+export const BROWSER_CLIENT_HOST_PAGE_RECONCILIATION_PROTOCOL_VERSION = 1 as const
+const PageReconciliationProtocolVersion = z.literal(
+  BROWSER_CLIENT_HOST_PAGE_RECONCILIATION_PROTOCOL_VERSION
+)
 
 export const BrowserHostLeaseAuthority = z.object({
   authorityRuntimeId: Identity,
@@ -31,6 +35,10 @@ export const BrowserHostLeaseAuthority = z.object({
 })
 
 export type BrowserHostLeaseAuthority = z.infer<typeof BrowserHostLeaseAuthority>
+
+const BrowserClientHostedPageAuthority = BrowserHostLeaseAuthority.extend({
+  pageHostGeneration: Generation
+})
 
 export const BrowserClientHostedPageInventory = z.object({
   authorityRuntimeId: PageInventoryIdentity,
@@ -91,7 +99,8 @@ export const BrowserClientHostAttachParams = z
     pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
     pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
     pageInventory: BrowserClientHostedPageInventoryList.optional(),
-    leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
+    leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional(),
+    pageReconciliationProtocolVersion: PageReconciliationProtocolVersion.optional()
   })
   .superRefine((params, context) => {
     if (
@@ -112,6 +121,15 @@ export const BrowserClientHostAttachParams = z
         message: 'Browser host reconnect requires page inventory negotiation'
       })
     }
+    if (
+      params.pageReconciliationProtocolVersion !== undefined &&
+      (params.pageCommandProtocolVersion !== 1 || params.pageInventoryProtocolVersion !== 1)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Browser page reconciliation requires command and inventory negotiation'
+      })
+    }
     for (const [index, page] of (params.pageInventory ?? []).entries()) {
       if (page.browserHostClientId !== params.browserHostClientId) {
         context.addIssue({
@@ -129,7 +147,8 @@ export const BrowserClientHostReady = z.object({
   browserHostGeneration: Generation,
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
   pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
-  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
+  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional(),
+  pageReconciliationProtocolVersion: PageReconciliationProtocolVersion.optional()
 })
 
 const BrowserClientHostRevoked = z.object({
@@ -142,7 +161,8 @@ const BrowserClientHostRevoked = z.object({
 export const BrowserClientHostLeaseAuthority = BrowserHostLeaseAuthority.extend({
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
   pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
-  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional()
+  leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional(),
+  pageReconciliationProtocolVersion: PageReconciliationProtocolVersion.optional()
 })
 
 export type BrowserClientHostLeaseAuthority = z.infer<typeof BrowserClientHostLeaseAuthority>
@@ -186,14 +206,67 @@ const BrowserClientHostNavigateCommand = z.object({
   url: z.string().min(1).max(8192)
 })
 
+const BrowserClientHostReclaimPageCommand = z.object({
+  type: z.literal('reclaimPage'),
+  previousAuthority: BrowserClientHostedPageAuthority,
+  browserProfileId: Identity,
+  executionHostKey: Identity
+})
+
+const BrowserClientHostClosePageCommand = z.object({
+  type: z.literal('closePage'),
+  targetAuthority: BrowserClientHostedPageAuthority
+})
+
+const BrowserClientHostRestorePageCommand = z.object({
+  type: z.literal('restorePage'),
+  browserProfileId: Identity,
+  executionHostKey: Identity,
+  url: z.string().min(1).max(8192).optional()
+})
+
 export const BrowserClientHostPageCommand = z.discriminatedUnion('type', [
   BrowserClientHostCreatePageCommand,
-  BrowserClientHostNavigateCommand
+  BrowserClientHostNavigateCommand,
+  BrowserClientHostReclaimPageCommand,
+  BrowserClientHostClosePageCommand,
+  BrowserClientHostRestorePageCommand
 ])
 
 export const BrowserClientHostCommandEvent = BrowserClientPageCommandAuthority.extend({
   type: z.literal('command'),
   command: BrowserClientHostPageCommand
+}).superRefine((event, context) => {
+  if (event.command.type === 'createPage' || event.command.type === 'navigate') {
+    return
+  }
+  if (event.pageReconciliationProtocolVersion !== 1) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Browser page reconciliation command was not negotiated'
+    })
+  }
+  const previousAuthority =
+    event.command.type === 'reclaimPage'
+      ? event.command.previousAuthority
+      : event.command.type === 'closePage'
+        ? event.command.targetAuthority
+        : null
+  if (previousAuthority && previousAuthority.browserHostClientId !== event.browserHostClientId) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Browser page reconciliation client authority does not match'
+    })
+  }
+  if (
+    event.command.type === 'reclaimPage' &&
+    event.command.previousAuthority.authorityEpoch === event.authorityEpoch
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Browser page reclaim requires an older authority epoch'
+    })
+  }
 })
 
 export type BrowserClientHostCommandEvent = z.infer<typeof BrowserClientHostCommandEvent>
@@ -216,7 +289,7 @@ export const BrowserClientHostLeaseEvent = z.discriminatedUnion('type', [
   BrowserClientHostRevoked
 ])
 
-export const BrowserClientHostEvent = z.discriminatedUnion('type', [
+export const BrowserClientHostEvent = z.union([
   BrowserClientHostReady,
   BrowserClientHostRevoked,
   BrowserClientHostCommandEvent

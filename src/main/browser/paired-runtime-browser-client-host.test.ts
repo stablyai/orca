@@ -57,6 +57,9 @@ describe('PairedRuntimeBrowserClientHost', () => {
       expect.any(Object),
       expect.any(Object)
     )
+    expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).not.toHaveProperty(
+      'pageReconciliationProtocolVersion'
+    )
     callbacks.current!.onResponse(readyResponse())
     await starting
     await host.close()

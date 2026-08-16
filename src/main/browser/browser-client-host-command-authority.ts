@@ -9,6 +9,7 @@ export function assertBrowserClientHostCommandAuthority(
 ): void {
   if (
     command.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion ||
+    command.pageReconciliationProtocolVersion !== authority.pageReconciliationProtocolVersion ||
     command.authorityRuntimeId !== authority.authorityRuntimeId ||
     command.authorityEpoch !== authority.authorityEpoch ||
     command.browserHostClientId !== authority.browserHostClientId ||
@@ -35,6 +36,7 @@ export function sameBrowserClientHostLeaseAuthority(
     left.browserHostGeneration === right.browserHostGeneration &&
     left.pageCommandProtocolVersion === right.pageCommandProtocolVersion &&
     left.pageInventoryProtocolVersion === right.pageInventoryProtocolVersion &&
-    left.leaseReconnectProtocolVersion === right.leaseReconnectProtocolVersion
+    left.leaseReconnectProtocolVersion === right.leaseReconnectProtocolVersion &&
+    left.pageReconciliationProtocolVersion === right.pageReconciliationProtocolVersion
   )
 }

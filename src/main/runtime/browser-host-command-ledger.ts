@@ -240,6 +240,8 @@ export class BrowserHostCommandLedger {
   private assertAuthority(params: BrowserHostCommandResultParams): void {
     if (
       params.pageCommandProtocolVersion !== this.authority.pageCommandProtocolVersion ||
+      params.pageReconciliationProtocolVersion !==
+        this.authority.pageReconciliationProtocolVersion ||
       params.authorityRuntimeId !== this.authority.authorityRuntimeId ||
       params.authorityEpoch !== this.authority.authorityEpoch ||
       params.browserHostClientId !== this.authority.browserHostClientId ||

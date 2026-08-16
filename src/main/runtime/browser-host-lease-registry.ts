@@ -17,6 +17,7 @@ import {
 } from './browser-host-lease-records'
 import { retireClientPageCommandLedger } from './browser-host-command-retirement'
 import { BrowserHostGenerationCounter } from './browser-host-generation-counter'
+import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import {
   BrowserHostPagePlacementRegistry,
   type BrowserClientPageAuthority,
@@ -209,9 +210,9 @@ export class BrowserHostLeaseRegistry {
     ) {
       throw new Error('browser_host_command_protocol_required')
     }
-    if (command.type === 'createPage') {
-      state.executionHostGrants.require(command.executionHostKey)
-    }
+    assertBrowserHostPageCommandAdmission(state.lease, command, (executionHostKey) =>
+      state.executionHostGrants.require(executionHostKey)
+    )
     return ledger.issue({
       browserPageId: authority.browserPageId,
       pageHostGeneration: authority.pageHostGeneration,

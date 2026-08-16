@@ -13,6 +13,31 @@ afterEach(() => {
 })
 
 describe('BrowserHostLeaseRegistry', () => {
+  it('requires reconciliation dependencies before retaining the negotiated lease', () => {
+    const leases = registry()
+    const attach = (overrides: Record<string, unknown>) =>
+      leases.attach({
+        browserHostClientId: 'host-a',
+        connectionId: 'connection-a',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview'],
+        pageReconciliationProtocolVersion: 1,
+        ...overrides
+      })
+
+    expect(() => attach({})).toThrow('browser_host_reconciliation_protocol_dependencies_required')
+    expect(() => attach({ pageCommandProtocolVersion: 1 })).toThrow(
+      'browser_host_reconciliation_protocol_dependencies_required'
+    )
+    expect(
+      attach({
+        pageCommandProtocolVersion: 1,
+        pageInventoryProtocolVersion: 1,
+        pageInventory: []
+      }).lease
+    ).toMatchObject({ pageReconciliationProtocolVersion: 1 })
+  })
+
   it('rejects incomplete, duplicate, and foreign-client inventory before replacing a lease', () => {
     const leases = registry()
     const attach = (overrides: Record<string, unknown>) =>
@@ -127,6 +152,86 @@ describe('BrowserHostLeaseRegistry', () => {
     expect(leases.select('host-a')).toEqual(replacement.lease)
     first.disconnect()
     expect(leases.select('host-a')).toEqual(replacement.lease)
+  })
+
+  it('replaces instead of restoring a lease when reconciliation negotiation changes', async () => {
+    const leases = registry()
+    const first = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      pageReconciliationProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1
+    })
+    first.disconnect()
+
+    const replacement = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      leaseReconnectProtocolVersion: 1
+    })
+
+    expect(replacement.lease.browserHostGeneration).toBe(first.lease.browserHostGeneration + 1)
+    expect(replacement.lease).not.toHaveProperty('pageReconciliationProtocolVersion')
+    await expect(first.whenFenced).resolves.toBe('replaced')
+  })
+
+  it('never emits reconciliation commands to a legacy page-command lease', () => {
+    const leases = registry()
+    const host = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1
+    })
+    const identity = {
+      authorityEpoch: host.lease.authorityEpoch,
+      browserHostClientId: host.lease.browserHostClientId,
+      browserHostGeneration: host.lease.browserHostGeneration,
+      pairedDeviceId: host.lease.pairedDeviceId
+    }
+    const delivery = vi.fn()
+    leases.attachCommandDelivery(identity, delivery)
+    const placement = leases.placeClientPage('page-a', 'host-a')
+    if (placement.kind !== 'client') {
+      throw new Error('expected client placement')
+    }
+    const authority = {
+      authorityRuntimeId: host.lease.authorityRuntimeId,
+      authorityEpoch: host.lease.authorityEpoch,
+      browserPageId: 'page-a',
+      browserHostClientId: host.lease.browserHostClientId,
+      browserHostGeneration: host.lease.browserHostGeneration,
+      pageHostGeneration: placement.pageHostGeneration
+    }
+
+    expect(() =>
+      leases.issueClientPageCommand(authority, {
+        type: 'restorePage',
+        browserProfileId: 'default',
+        executionHostKey: 'host-key-a'
+      })
+    ).toThrow('browser_host_reconciliation_protocol_required')
+    expect(delivery).not.toHaveBeenCalled()
+
+    leases.grantExecutionHost(identity, 'host-key-a')
+    const legacy = leases.issueClientPageCommand(authority, {
+      type: 'createPage',
+      browserProfileId: 'default',
+      executionHostKey: 'host-key-a'
+    })
+    expect(legacy.event).not.toHaveProperty('pageReconciliationProtocolVersion')
+    expect(delivery).toHaveBeenCalledWith(legacy.event)
   })
 
   it('restores exact authority when reattach arrives before old connection cleanup', async () => {

@@ -12,6 +12,7 @@ export type BrowserHostLeaseAttachInput = {
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1
   pageInventory?: readonly BrowserClientHostedPageInventory[]
+  pageReconciliationProtocolVersion?: 1
   leaseReconnectProtocolVersion?: 1
 }
 
@@ -24,6 +25,18 @@ export function assertBrowserHostReconnectNegotiation(input: BrowserHostLeaseAtt
   }
   if (input.leaseReconnectProtocolVersion === 1 && input.pageInventoryProtocolVersion !== 1) {
     throw new Error('browser_host_reconnect_inventory_required')
+  }
+  if (
+    input.pageReconciliationProtocolVersion !== undefined &&
+    input.pageReconciliationProtocolVersion !== 1
+  ) {
+    throw new Error('browser_host_reconciliation_protocol_unsupported')
+  }
+  if (
+    input.pageReconciliationProtocolVersion === 1 &&
+    (input.pageCommandProtocolVersion !== 1 || input.pageInventoryProtocolVersion !== 1)
+  ) {
+    throw new Error('browser_host_reconciliation_protocol_dependencies_required')
   }
 }
 
@@ -54,7 +67,10 @@ export function createBrowserHostLeaseState(options: {
             pageInventory: options.pageInventory
           }
         : {}),
-      ...(input.leaseReconnectProtocolVersion ? { leaseReconnectProtocolVersion: 1 as const } : {})
+      ...(input.leaseReconnectProtocolVersion ? { leaseReconnectProtocolVersion: 1 as const } : {}),
+      ...(input.pageReconciliationProtocolVersion
+        ? { pageReconciliationProtocolVersion: 1 as const }
+        : {})
     }),
     status: 'active',
     fence: createBrowserHostFence(),
@@ -68,7 +84,10 @@ export function createBrowserHostLeaseState(options: {
         authorityEpoch: state.lease.authorityEpoch,
         browserHostClientId: state.lease.browserHostClientId,
         browserHostGeneration: state.lease.browserHostGeneration,
-        pageCommandProtocolVersion: 1
+        pageCommandProtocolVersion: 1,
+        ...(state.lease.pageReconciliationProtocolVersion
+          ? { pageReconciliationProtocolVersion: 1 as const }
+          : {})
       }
     })
   }

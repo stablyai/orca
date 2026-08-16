@@ -18,6 +18,9 @@ export async function submitBrowserHostCommandResult(
     'browser.clientHost.commandResult',
     {
       pageCommandProtocolVersion: command.pageCommandProtocolVersion,
+      ...(command.pageReconciliationProtocolVersion
+        ? { pageReconciliationProtocolVersion: command.pageReconciliationProtocolVersion }
+        : {}),
       authorityRuntimeId: command.authorityRuntimeId,
       authorityEpoch: command.authorityEpoch,
       browserHostClientId: command.browserHostClientId,

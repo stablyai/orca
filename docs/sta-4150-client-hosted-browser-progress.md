@@ -716,6 +716,38 @@ Published reconciliation-execution stage (#14756):
 - Draft PR [#14756](https://github.com/stablyai/orca/pull/14756) stacks on #14754 and remains draft.
   GitHub auto-attached it to STA-4150; the ticket remains In Progress.
 
+Published reconciliation-command-contract stage (#14759):
+
+- Baseline: the shared command-schema oracle failed 3 of 5 assertions because reclaim, close, and
+  restore variants plus their negotiation did not exist. Client attach failed to retain the
+  optional version, and the authenticated server neither retained nor echoed it.
+- Candidate: a separate optional `pageReconciliationProtocolVersion: 1` is valid only beside page
+  commands and complete page inventory. The server retains and echoes it only after an explicit
+  authenticated request; the client enables it only after an exact ready echo and rejects
+  unsolicited, dependency-inconsistent, or in-place reconnect changes.
+- Reclaim and close payloads bind an exact prior authority; restore carries bounded profile,
+  execution-host, and optional URL inputs. Legacy create/navigate payloads are unchanged. Central
+  server admission rejects every reconciliation variant before delivery to a legacy v1 command
+  lease, and command-result settlement requires the exact negotiated reconciliation authority.
+- Old attach and ready decoders strip the optional field. An old server can omit the echo and the
+  new client safely disables reconciliation. The current production `PairedRuntimeBrowserClientHost`
+  composition deliberately does not advertise the new subprotocol, so no new command, placement,
+  publication, or page mutation is active yet.
+- Focused protocol/client/server coverage passes 6 files / 58 tests; the broader host lease,
+  reconnect, command, reconciliation, and RPC surface passes 21 files / 219 tests; mixed-version
+  terminal wire passes 5/5. On `origin/main@931cb037c5`, Node/CLI/web typecheck, full lint and
+  audits, changed-code quality, the 87-gate reliability manifest, max-lines, skill manifests,
+  localization, formatting, and diff checks pass.
+- All 36 stack patches rebased conflict-free from `origin/main@5b7f44278a` to
+  `origin/main@931cb037c5`; `git range-diff` marks every patch identical. The only intervening main
+  change fixes the previously known unrelated type-aware warning and overlaps no STA-4150 file.
+- Fresh security/resource/mobile/cross-platform review found no actionable issue. The stage adds no
+  dependency, network sink, path/shell behavior, timer, retry loop, cache, persisted state, mobile
+  route/framing, UI, SSH/WSL branch, or server/offscreen behavior. Concrete reclaim/close/restore
+  adapters and their exact page-authority rekeying remain the next stage.
+- Draft PR [#14759](https://github.com/stablyai/orca/pull/14759) stacks on #14756 and remains draft.
+  GitHub auto-attached it to STA-4150; the ticket remains In Progress.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -790,6 +822,17 @@ topology, versions, and explicit gaps at every later checkpoint.
   changed, and no PR was merged or marked ready.
 - GitHub auto-attached #14756 to STA-4150. Posted exactly one reconciliation-executor checkpoint
   comment (`3957ea40-a9e2-4b25-9197-2f972166f47b`) and kept the ticket In Progress.
+- Updated the Orca worktree comment after validating the reconciliation-command-contract candidate.
+- Locally rebased all 36 STA-4150 patches onto `origin/main@931cb037c5` and confirmed every patch
+  identical by `git range-diff`. Safety pointer `sta-4150-safety-pre-931c-rebase-20260815` retains
+  the pre-rebase series. No rewritten branch or new stage branch has been pushed at this checkpoint.
+- Atomically force-pushed all 34 existing public stack branches with exact remote-OID leases and
+  created `sta-4150-browser-reconciliation-command-contracts` with a must-not-exist lease. The
+  first local count assertion expected 35 published branches and failed before invoking `git push`;
+  the corrected 34-branch transaction updated all refs together.
+- Opened draft PR [#14759](https://github.com/stablyai/orca/pull/14759) on #14756. GitHub
+  auto-attached it to STA-4150; posted exactly one reconciliation-contract checkpoint comment
+  (`b775afbd-fb75-42bf-bee3-8d8ca0877b33`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

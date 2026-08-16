@@ -212,7 +212,8 @@ export class PairedRuntimeBrowserHostLease {
     if (
       !authority?.pageCommandProtocolVersion ||
       !this.options.onPageCommand ||
-      command.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion
+      command.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion ||
+      command.pageReconciliationProtocolVersion !== authority.pageReconciliationProtocolVersion
     ) {
       this.failTerminal(new Error('Unnegotiated browser host page command'))
       return

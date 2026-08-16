@@ -17,6 +17,7 @@ export type BrowserHostLease = Readonly<{
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageInventoryProtocolVersion?: 1
+  pageReconciliationProtocolVersion?: 1
   leaseReconnectProtocolVersion?: 1
   pageInventory?: readonly BrowserClientHostedPageInventory[]
 }>
