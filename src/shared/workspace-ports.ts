@@ -25,6 +25,12 @@ type WorkspacePortBase = {
   pid?: number
   processName?: string
   protocol: 'http' | 'https' | 'unknown'
+  /** Percent of one CPU core used by the listening process, e.g. from `ps -o pcpu=`. */
+  cpu?: number
+  /** Resident set size in bytes for the listening process. */
+  memory?: number
+  /** Seconds since the listening process started; undefined when unavailable. */
+  uptimeSeconds?: number
 }
 
 export type WorkspacePort =

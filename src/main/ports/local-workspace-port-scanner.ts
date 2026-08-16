@@ -9,6 +9,7 @@ import type {
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
+import { dotnetTicksToUnixMs, parsePsElapsedTimeToSeconds } from '../../shared/ps-elapsed-time'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { isPortScanWorkerUnavailableError, runPortScanCommand } from './port-scan-command-client'
 import { PortScanCommandTimeoutError } from './port-scan-command-protocol'
@@ -48,12 +49,18 @@ type RawListeningPort = {
   processName?: string
   commandLine?: string
   cwd?: string
+  cpu?: number
+  memory?: number
+  uptimeSeconds?: number
 }
 
 type ProcessMetadata = {
   processName?: string
   commandLine?: string
   cwd?: string
+  cpu?: number
+  memory?: number
+  uptimeSeconds?: number
 }
 
 type NormalizedWorkspacePortProbe = {
@@ -132,7 +139,14 @@ function rememberListenerMetadata(ports: readonly RawListeningPort[]): void {
   lastListenerMetadata = new Map(
     ports.map((port) => [
       listenerMetadataKey(port),
-      { processName: port.processName, commandLine: port.commandLine, cwd: port.cwd }
+      {
+        processName: port.processName,
+        commandLine: port.commandLine,
+        cwd: port.cwd,
+        cpu: port.cpu,
+        memory: port.memory,
+        uptimeSeconds: port.uptimeSeconds
+      }
     ])
   )
 }
@@ -146,7 +160,10 @@ function recallListenerMetadata(port: RawListeningPort): RawListeningPort {
     ...port,
     processName: port.processName ?? remembered.processName,
     commandLine: port.commandLine ?? remembered.commandLine,
-    cwd: port.cwd ?? remembered.cwd
+    cwd: port.cwd ?? remembered.cwd,
+    cpu: port.cpu ?? remembered.cpu,
+    memory: port.memory ?? remembered.memory,
+    uptimeSeconds: port.uptimeSeconds ?? remembered.uptimeSeconds
   }
 }
 
@@ -353,13 +370,14 @@ async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
   ])
   const sockets = [...tcp4, ...tcp6]
   const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
+  const resourceUsage = await loadLinuxProcessResourceUsage(new Set(inodeToPid.values()))
   const metadata = new Map<number, ProcessMetadata>()
   const rawPorts: RawListeningPort[] = []
 
   for (const socket of sockets) {
     const pid = inodeToPid.get(socket.inode)
     if (pid != null && !metadata.has(pid)) {
-      metadata.set(pid, await loadLinuxProcessMetadata(pid))
+      metadata.set(pid, { ...(await loadLinuxProcessMetadata(pid)), ...resourceUsage.get(pid) })
     }
     rawPorts.push({
       host: socket.host,
@@ -370,6 +388,39 @@ async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
   }
 
   return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
+}
+
+/** Batched `ps -o pcpu=,rss=` lookup; cheaper than one call per listening pid. */
+async function loadLinuxProcessResourceUsage(
+  pids: Set<number>
+): Promise<Map<number, { cpu?: number; memory?: number; uptimeSeconds?: number }>> {
+  const result = new Map<number, { cpu?: number; memory?: number; uptimeSeconds?: number }>()
+  const pidList = Array.from(pids).join(',')
+  if (!pidList) {
+    return result
+  }
+  const output = await runPortScanCommand('ps', [
+    '-p',
+    pidList,
+    '-o',
+    'pid=',
+    '-o',
+    'pcpu=',
+    '-o',
+    'rss=',
+    '-o',
+    'etime='
+  ]).catch(() => null)
+
+  for (const line of output?.stdout.split('\n') ?? []) {
+    const match = line.match(/^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$/)
+    if (!match) {
+      continue
+    }
+    const pid = Number.parseInt(match[1], 10)
+    result.set(pid, processResourceUsageFromPsFields(match[2], match[3], match[4]))
+  }
+  return result
 }
 
 async function readProcNet(
@@ -458,6 +509,12 @@ async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number,
     '-o',
     'pid=',
     '-o',
+    'pcpu=',
+    '-o',
+    'rss=',
+    '-o',
+    'etime=',
+    '-o',
     'command='
   ]).catch(() => null)
 
@@ -472,15 +529,54 @@ async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number,
   }
 
   for (const line of commandOutput?.stdout.split('\n') ?? []) {
-    const match = line.match(/^\s*(\d+)\s+(.+)$/)
+    const match = line.match(/^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.+)$/)
     if (!match) {
       continue
     }
     const pid = Number.parseInt(match[1], 10)
-    result.set(pid, { ...result.get(pid), commandLine: match[2].trim() || undefined })
+    result.set(pid, {
+      ...result.get(pid),
+      ...processResourceUsageFromPsFields(match[2], match[3], match[4]),
+      commandLine: match[5].trim() || undefined
+    })
   }
 
   return result
+}
+
+/** Parses `ps -o pcpu=,rss=,etime=` fields; tolerates a locale decimal comma in pcpu. */
+function processResourceUsageFromPsFields(
+  pcpuField: string,
+  rssField: string,
+  etimeField?: string
+): { cpu?: number; memory?: number; uptimeSeconds?: number } {
+  const cpu = Number.parseFloat(pcpuField.replace(',', '.'))
+  const rssKb = Number.parseInt(rssField, 10)
+  return {
+    cpu: Number.isFinite(cpu) ? cpu : undefined,
+    memory: Number.isFinite(rssKb) ? rssKb * 1024 : undefined,
+    uptimeSeconds: etimeField ? parsePsElapsedTimeToSeconds(etimeField) : undefined
+  }
+}
+
+type WindowsProcessJsonRow = {
+  ProcessId: number
+  Name?: string
+  CommandLine?: string
+  WorkingSetSize?: number
+  /** `DateTime.Ticks` as a string — a JSON number would lose precision past 2^53. */
+  CreationTicks?: string
+}
+
+function windowsCreationTicksToUptimeSeconds(ticks: string | undefined): number | undefined {
+  if (!ticks || !/^\d+$/.test(ticks)) {
+    return undefined
+  }
+  try {
+    return Math.max(0, Math.floor((Date.now() - dotnetTicksToUnixMs(BigInt(ticks))) / 1000))
+  } catch {
+    return undefined
+  }
 }
 
 async function loadWindowsProcessMetadata(
@@ -498,23 +594,52 @@ async function loadWindowsProcessMetadata(
     const { stdout } = await runPortScanCommand('powershell.exe', [
       '-NoProfile',
       '-Command',
-      `Get-CimInstance Win32_Process -Filter "${pidFilter}" | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress`
+      `Get-CimInstance Win32_Process -Filter "${pidFilter}" | Select-Object ProcessId,Name,CommandLine,WorkingSetSize,@{Name='CreationTicks';Expression={[string]$_.CreationDate.ToUniversalTime().Ticks}} | ConvertTo-Json -Compress`
     ])
-    const parsed = JSON.parse(stdout) as
-      | { ProcessId: number; Name?: string; CommandLine?: string }
-      | { ProcessId: number; Name?: string; CommandLine?: string }[]
+    const parsed = JSON.parse(stdout) as WindowsProcessJsonRow | WindowsProcessJsonRow[]
     for (const row of Array.isArray(parsed) ? parsed : [parsed]) {
       if (pids.has(row.ProcessId)) {
         result.set(row.ProcessId, {
           processName: row.Name,
-          commandLine: row.CommandLine
+          commandLine: row.CommandLine,
+          memory: row.WorkingSetSize,
+          uptimeSeconds: windowsCreationTicksToUptimeSeconds(row.CreationTicks)
         })
       }
     }
   } catch {
     // Process metadata is optional; port rows still render without attribution.
   }
+  await mergeWindowsProcessCpuUsage(pids, result)
   return result
+}
+
+/** Best-effort CPU%; a formatted perf counter class that some hosts restrict. */
+async function mergeWindowsProcessCpuUsage(
+  pids: Set<number>,
+  result: Map<number, ProcessMetadata>
+): Promise<void> {
+  try {
+    const pidFilter = Array.from(pids)
+      .filter(Number.isFinite)
+      .map((pid) => `IDProcess=${pid}`)
+      .join(' OR ')
+    const { stdout } = await runPortScanCommand('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      `Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "${pidFilter}" | Select-Object IDProcess,PercentProcessorTime | ConvertTo-Json -Compress`
+    ])
+    const parsed = JSON.parse(stdout) as
+      | { IDProcess: number; PercentProcessorTime?: number }
+      | { IDProcess: number; PercentProcessorTime?: number }[]
+    for (const row of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (pids.has(row.IDProcess)) {
+        result.set(row.IDProcess, { ...result.get(row.IDProcess), cpu: row.PercentProcessorTime })
+      }
+    }
+  } catch {
+    // CPU% is optional; port rows still render with name/memory only.
+  }
 }
 
 function isCommandTimeoutError(error: unknown): boolean {
@@ -542,7 +667,10 @@ function enrichPort(
     port: port.port,
     pid: port.pid,
     processName: port.processName,
-    protocol: inferProtocol(port.port)
+    protocol: inferProtocol(port.port),
+    cpu: port.cpu,
+    memory: port.memory,
+    uptimeSeconds: port.uptimeSeconds
   }
 
   if (owner) {
