@@ -3218,22 +3218,13 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: async (url) => {
-      // Why: desktop shell:openUrl classifies + confirms custom schemes; web must not
-      // silently window.open app handlers (no openExternal confirm dialog) (#13225).
+      // Why: desktop has a Cancel-default confirmation for custom schemes; web
+      // has no controlled approval surface, so only HTTP(S) may leave the app.
       const classified = classifyExternalAppUrl(url)
-      if (!classified.ok) {
+      if (!classified.ok || classified.kind !== 'http') {
         return
       }
-      if (classified.kind === 'http') {
-        window.open(classified.url, '_blank', 'noopener,noreferrer')
-        return
-      }
-      const ok = window.confirm(
-        `Open this ${classified.schemeLabel} link in the registered app?\n\n${classified.url}`
-      )
-      if (ok) {
-        window.open(classified.url, '_blank', 'noopener,noreferrer')
-      }
+      window.open(classified.url, '_blank', 'noopener,noreferrer')
     },
     openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
