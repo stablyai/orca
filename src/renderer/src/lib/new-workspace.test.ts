@@ -821,7 +821,7 @@ describe('getSetupConfig', () => {
       source: 'yaml',
       kind: 'default-tabs',
       // Free text is indented so it cannot forge a `# …` header or an `env …` line.
-      command: '# defaultTabs[1] Server\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
+      command: '# defaultTabs[1] "Server"\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
     })
   })
 

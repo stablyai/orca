@@ -58,9 +58,25 @@ activate `NODE_OPTIONS` or `LD_PRELOAD` with no re-prompt. Indenting free text a
 command or setup script from forging an extra `# defaultTabs[N]` block, which was possible
 before this change.
 
+Tab titles are escaped rather than filtered at parse time. A remote host on an older build
+parses a newline-bearing title happily, and a client trusts already-parsed hooks from the
+host without revalidating them, so a parse-side check would not survive the mixed-version
+case that [remote wire compatibility](./remote-wire-compatibility.md) treats as normal.
+
+Two deliberate equivalences remain in the trust surface. Re-ordering `env` keys does not
+re-prompt, because key order carries no meaning. A tab with neither a command nor `env` —
+a bare titled shell — contributes nothing to the content, so adding or removing one does
+not re-prompt either; it opens an extra empty tab but cannot execute or inject anything.
+
 Adopting the format changes the hash of every repo that has a setup script or default tabs,
 so each one re-prompts once after upgrade. That is a deliberate one-time cost, not a
 regression.
+
+Approval is still bound to the content the *client* serialized, not to what the host later
+executes: on remote creation the client sends only its setup decision, and the host rereads
+`orca.yaml` independently. Closing that requires carrying the approved hash on
+`worktree.create` and having the host fail closed on mismatch, behind a capability gate for
+older peers — tracked separately, not solved here.
 
 ## Why in-PTY instead of resolving in the main process
 

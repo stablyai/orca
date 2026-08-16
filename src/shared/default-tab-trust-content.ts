@@ -43,7 +43,11 @@ export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): strin
     if (!command && envLines.length === 0) {
       return
     }
-    const label = tab.title ? ` ${tab.title}` : ''
+    // Why: escape here, not at parse time. A remote host on an older build parses a
+    // newline-bearing title happily and the client trusts its already-parsed hooks
+    // without revalidating, so `title: "A\n    x\n\n# defaultTabs[2] B"` would forge a
+    // second block. Escaping in the serializer holds regardless of which build parsed it.
+    const label = tab.title ? ` ${JSON.stringify(tab.title)}` : ''
     const body = [...envLines, ...(command ? [indentFreeText(command)] : [])].join('\n')
     blocks.push(`# defaultTabs[${index + 1}]${label}\n${body}`)
   })

@@ -14,6 +14,64 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import { createWorktreeDefaultTabTerminals } from '../runtime-worktree-terminal-provisioning'
+
+describe('runtime-owned default tab env', () => {
+  const createDefaultTabs = async (defaultTabs: {
+    runCommands: boolean
+    tabs: { title: string; command?: string; env?: Record<string, string> }[]
+  }) => {
+    const createTerminal = vi.fn().mockResolvedValue({ handle: 'term-1', tabId: 'tab-1' })
+    await createWorktreeDefaultTabTerminals(
+      {
+        canSpawn: () => true,
+        createTerminal,
+        splitTerminal: vi.fn(),
+        setTabColor: vi.fn(),
+        getSettings: () => store.getSettings(),
+        getPtyId: () => undefined,
+        recordSetupCompletionToken: vi.fn()
+      },
+      'id:worktree-1',
+      'worktree-1',
+      defaultTabs
+    )
+    return createTerminal
+  }
+
+  it('forwards committed env when shared commands are trusted', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: true,
+      tabs: [{ title: 'Claude', command: 'claude', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ command: 'claude', env: { TOKEN: 'op://V/I/F' } })
+    )
+  })
+
+  it('withholds committed env when shared commands are skipped', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: false,
+      tabs: [{ title: 'Claude', command: 'claude', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', { title: 'Claude' })
+  })
+
+  it('forwards committed env for an env-only tab', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: true,
+      tabs: [{ title: 'Shell', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ env: { TOKEN: 'op://V/I/F' } })
+    )
+  })
+})
 
 describe('OrcaRuntimeService', () => {
   it('does not surface the new workspace when a background create splits its setup pane', async () => {

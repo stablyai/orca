@@ -159,7 +159,9 @@ export function getSetupConfig(
     return localSetup ? { source: 'local', command: localSetup, kind: 'setup' } : null
   }
 
-  const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
+  // Why: byte-identical to what the trust gate hashes — a preview that differs from the
+  // approved content misrepresents what the user is approving.
+  const yamlCommand = getDefaultTabCommandTrustContent(yamlHooks)
   if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
     return {
       source: 'both',

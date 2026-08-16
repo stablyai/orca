@@ -63,6 +63,7 @@ export async function createWorktreeDefaultTabTerminals(
       const terminal = await host.createTerminal(selector, {
         ...(template.title ? { title: template.title } : {}),
         ...(command && defaultTabs.runCommands ? { command } : {}),
+        ...(template.env && defaultTabs.runCommands ? { env: template.env } : {}),
         ...surfacing
       })
       handles.push(terminal.handle)

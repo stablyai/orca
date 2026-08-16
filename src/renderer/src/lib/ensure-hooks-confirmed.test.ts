@@ -136,7 +136,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     const expectedContent =
-      '# setup\n    pnpm install\n\n# defaultTabs[1] Server\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
+      '# setup\n    pnpm install\n\n# defaultTabs[1] "Server"\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
     expect(pending[0].data.scriptContent).toBe(expectedContent)
     expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
 

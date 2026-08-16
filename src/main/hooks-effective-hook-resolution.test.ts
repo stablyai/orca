@@ -550,3 +550,33 @@ describe('trust content cannot be forged by free text (Codex re-review)', () => 
     expect(trust(setupOnly)).not.toBe(trust(realTab))
   })
 })
+
+describe('trust content survives hooks parsed by another build (Codex final gate)', () => {
+  const trust = (hooks: unknown) => getDefaultTabCommandTrustContent(hooks as OrcaHooks)
+
+  it('does not let a newline-bearing title forge a second defaultTabs block', () => {
+    // Why: this shape cannot come from THIS parser, but a remote host on an older
+    // build parses it happily and the client trusts already-parsed hooks without
+    // revalidating — so the serializer, not the parser, has to hold the line.
+    const forged = {
+      scripts: {},
+      defaultTabs: [{ title: 'A\n    x\n\n# defaultTabs[2] B', command: 'y' }]
+    }
+    const real = {
+      scripts: {},
+      defaultTabs: [
+        { title: 'A', command: 'x' },
+        { title: 'B', command: 'y' }
+      ]
+    }
+
+    expect(trust(forged)).not.toBe(trust(real))
+  })
+
+  it('escapes titles so a quote or backslash cannot shift the header', () => {
+    const a = { scripts: {}, defaultTabs: [{ title: 'A" B', command: 'x' }] }
+    const b = { scripts: {}, defaultTabs: [{ title: 'A\\" B', command: 'x' }] }
+
+    expect(trust(a)).not.toBe(trust(b))
+  })
+})
