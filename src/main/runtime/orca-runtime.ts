@@ -31968,10 +31968,9 @@ export class OrcaRuntimeService {
           return false
         }
         if (
-          boundRun &&
           !mailboxHandle.startsWith('run:') &&
           message.run_id &&
-          message.run_id !== boundRun.id
+          message.run_id !== boundRun?.id
         ) {
           return false
         }
