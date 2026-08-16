@@ -11,6 +11,10 @@ import {
   type BrowserHostFence,
   type BrowserHostFenceReason
 } from './browser-host-lease-fence'
+import {
+  BROWSER_HOST_WEBVIEW_CAPABILITY,
+  selectBrowserHostLease
+} from './browser-host-capability-selection'
 
 const MAX_GENERATION = 0xffff_ffff
 const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
@@ -121,21 +125,11 @@ export class BrowserHostLeaseRegistry {
     }
   }
 
-  select(browserHostClientId?: string): BrowserHostLease {
-    if (browserHostClientId) {
-      const exact = this.leasesByClientId.get(browserHostClientId)
-      if (!exact) {
-        throw new Error('browser_host_unavailable')
-      }
-      return exact.lease
-    }
-    if (this.leasesByClientId.size === 0) {
-      throw new Error('browser_host_unavailable')
-    }
-    if (this.leasesByClientId.size > 1) {
-      throw new Error('browser_host_ambiguous')
-    }
-    return this.leasesByClientId.values().next().value!.lease
+  select(
+    browserHostClientId?: string,
+    requiredCapabilities: readonly string[] = []
+  ): BrowserHostLease {
+    return selectBrowserHostLease(this.leasesByClientId, browserHostClientId, requiredCapabilities)
   }
 
   requireLease(identity: BrowserHostLeaseIdentity): BrowserHostLease {
@@ -179,8 +173,15 @@ export class BrowserHostLeaseRegistry {
     return this.pagePlacements.placeServerPage(browserPageId)
   }
 
-  placeClientPage(browserPageId: string, browserHostClientId?: string): RuntimeBrowserPlacement {
-    const lease = this.select(browserHostClientId)
+  placeClientPage(
+    browserPageId: string,
+    browserHostClientId?: string,
+    requiredCapabilities: readonly string[] = []
+  ): RuntimeBrowserPlacement {
+    const lease = this.select(browserHostClientId, [
+      BROWSER_HOST_WEBVIEW_CAPABILITY,
+      ...requiredCapabilities
+    ])
     return this.pagePlacements.placeClientPage(browserPageId, {
       browserHostClientId: lease.browserHostClientId,
       browserHostGeneration: lease.browserHostGeneration
