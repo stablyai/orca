@@ -18,6 +18,7 @@ import {
 } from '../../db/messages/mailbox-pointer-enter-state'
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
+import { OrchestrationTypingQuietRetry } from '../../orchestration-typing-quiet-retry'
 
 const DEFAULT_POINTER_ENTER_DELAY_MS = 500
 
@@ -31,6 +32,9 @@ function pointerEnterDelayMs(): number {
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   private readonly coldParkedPtys = new Set<string>()
+  private readonly typingQuietRetry = new OrchestrationTypingQuietRetry(
+    (mailboxHandle, reservedTypes) => this.deps.redriveMailbox(mailboxHandle, reservedTypes)
+  )
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -105,6 +109,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       reservedTypes: options.reservedTypes
     })
     if (unread.length === 0) {
+      return
+    }
+    if (
+      this.typingQuietRetry.defer(
+        {
+          lastUserInputAt: this.deps.lastUserInputAt?.(ptyId),
+          now: this.deps.now?.() ?? performance.now(),
+          windowFocused: this.deps.isOrcaWindowFocused?.() ?? false
+        },
+        mailboxHandle,
+        options.reservedTypes
+      )
+    ) {
       return
     }
     const newestSequence = unread.at(-1)?.sequence
