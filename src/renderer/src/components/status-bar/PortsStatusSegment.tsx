@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,10 +8,24 @@ import {
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
-import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
+import {
+  getExternalWorkspacePorts,
+  getWorkspacePortGroups,
+  sortWorkspacePortGroupsByMetric,
+  sortWorkspacePortsByMetric
+} from '@/lib/workspace-port-groups'
+import type { ProcessMetricSortOption } from '@/lib/sort-by-process-metric'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
+import { ProcessMetricSortHeader } from './process-resource-metric-columns'
+import { LIVE_POPOVER_POLL_MS } from '@/lib/live-popover-poll-interval'
+import {
+  EXTERNAL_PORTS_HISTORY_KEY,
+  readWorkspacePortMemoryHistory,
+  recordWorkspacePortMemorySamples
+} from '@/lib/workspace-port-group-memory-history'
+import { Sparkline } from './process-metric-sparkline'
 import { translate } from '@/i18n/i18n'
 
 type PortsStatusSegmentProps = {
@@ -29,13 +43,57 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
+  const [sortOption, setSortOption] = useState<ProcessMetricSortOption>('memory')
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
+  // Why: sort reorders within each project's ports and across projects, but
+  // never flattens the workspace/external boundary or the per-project grouping.
+  const sortedWorkspaceGroups = useMemo(
+    () => sortWorkspacePortGroupsByMetric(workspaceGroups, sortOption),
+    [workspaceGroups, sortOption]
+  )
+  const sortedExternalPorts = useMemo(
+    () => sortWorkspacePortsByMetric(externalPorts, sortOption),
+    [externalPorts, sortOption]
+  )
   const workspacePortCount = workspaceGroups.reduce((count, group) => count + group.ports.length, 0)
   const totalCount = workspacePortCount + externalPorts.length
+
+  // Why: mirrors the Resource Manager's history ring — only sample while the
+  // popover is open, so the trend reflects time actually spent watching it.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    recordWorkspacePortMemorySamples(workspaceGroups, externalPorts)
+  }, [open, workspaceGroups, externalPorts])
+
+  // Why: the shared 30s background scan (WorkspacePortScanner) stays quiet so
+  // it doesn't spawn lsof/ps for every window all the time; this popover polls
+  // faster on its own, matching the Resource Manager's open-only cadence.
+  const refreshScan = useCallback(() => {
+    void scanWorkspacePortsForTarget(runtimeTarget)
+      .then((result) => {
+        setWorkspacePortScanForKey(scanKey, result)
+        setWorkspacePortScan({ key: scanKey, result })
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        setWorkspacePortScan({
+          key: scanKey,
+          result: {
+            platform: 'unknown',
+            scannedAt: Date.now(),
+            ports: [],
+            unavailableReason: message || 'Workspace port scan failed.'
+          }
+        })
+      })
+  }, [runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanForKey])
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
@@ -43,34 +101,22 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         return
       }
       recordFeatureInteraction('ports')
-      // Why: the 30s background poll is intentionally quiet; opening the
-      // popover should still collapse that stale window without flashing icons.
-      void scanWorkspacePortsForTarget(runtimeTarget)
-        .then((result) => {
-          setWorkspacePortScanForKey(scanKey, result)
-          setWorkspacePortScan({ key: scanKey, result })
-        })
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          setWorkspacePortScan({
-            key: scanKey,
-            result: {
-              platform: 'unknown',
-              scannedAt: Date.now(),
-              ports: [],
-              unavailableReason: message || 'Workspace port scan failed.'
-            }
-          })
-        })
+      refreshScan()
     },
-    [
-      recordFeatureInteraction,
-      runtimeTarget,
-      scanKey,
-      setWorkspacePortScan,
-      setWorkspacePortScanForKey
-    ]
+    [recordFeatureInteraction, refreshScan]
   )
+
+  // Poll ports only while the popover is open, same cadence as the Resource
+  // Manager's memory poll — the closed badge stays on the shared 30s scan.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const timer = window.setInterval(refreshScan, LIVE_POPOVER_POLL_MS)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [open, refreshScan])
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -162,75 +208,98 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               )}
             </div>
           ) : (
-            <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
-              {workspaceGroups.length > 0 ? (
-                workspaceGroups.map((group) => (
-                  <WorkspaceGroupRows
-                    key={group.worktreeId}
-                    group={group}
-                    activeWorktreeId={activeWorktreeId}
-                  />
-                ))
-              ) : (
-                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {refreshing
-                    ? translate(
-                        'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
-                        'Scanning for workspace ports...'
-                      )
-                    : translate(
-                        'auto.components.status.bar.PortsStatusSegment.3a87d54dfb',
-                        'No workspace ports detected'
-                      )}
-                </div>
-              )}
-
-              <section className="border-t border-border/60">
-                <button
-                  type="button"
-                  className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  aria-expanded={externalOpen}
-                  onClick={() => {
-                    recordFeatureInteraction('ports')
-                    setExternalOpen((value) => !value)
-                  }}
-                >
-                  {externalOpen ? (
-                    <ChevronDown className="size-3" />
-                  ) : (
-                    <ChevronRight className="size-3" />
+            <>
+              {(workspaceGroups.length > 0 || externalPorts.length > 0) && (
+                <ProcessMetricSortHeader
+                  sortOption={sortOption}
+                  onSortOptionChange={setSortOption}
+                  memoryLabel={translate(
+                    'auto.components.status.bar.PortsStatusSegment.rss',
+                    'RSS'
                   )}
-                  <span>
-                    {translate(
-                      'auto.components.status.bar.PortsStatusSegment.7dac3ecc9d',
-                      'External Ports'
-                    )}
-                  </span>
-                  <span className="ml-auto font-mono text-[10px]">{externalPorts.length}</span>
-                </button>
-                {externalOpen && (
-                  <div className="px-1 pb-1">
-                    {externalPorts.length > 0 ? (
-                      externalPorts.map((port) => (
-                        <PortRow
-                          key={port.id}
-                          port={port}
-                          activeWorktreeId={activeWorktreeId}
-                          external
-                        />
-                      ))
-                    ) : (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                        {translate(
-                          'auto.components.status.bar.PortsStatusSegment.4ebf90c12e',
-                          'No external ports detected'
+                  showUptimeColumn
+                  uptimeLabel={translate(
+                    'auto.components.status.bar.PortsStatusSegment.uptime',
+                    'Uptime'
+                  )}
+                />
+              )}
+              <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
+                {sortedWorkspaceGroups.length > 0 ? (
+                  sortedWorkspaceGroups.map((group) => (
+                    <WorkspaceGroupRows
+                      key={group.worktreeId}
+                      group={group}
+                      activeWorktreeId={activeWorktreeId}
+                      history={readWorkspacePortMemoryHistory(group.worktreeId)}
+                    />
+                  ))
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {refreshing
+                      ? translate(
+                          'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
+                          'Scanning for workspace ports...'
+                        )
+                      : translate(
+                          'auto.components.status.bar.PortsStatusSegment.3a87d54dfb',
+                          'No workspace ports detected'
                         )}
-                      </div>
-                    )}
                   </div>
                 )}
-              </section>
-            </div>
+
+                <section className="border-t border-border/60">
+                  <button
+                    type="button"
+                    className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    aria-expanded={externalOpen}
+                    onClick={() => {
+                      recordFeatureInteraction('ports')
+                      setExternalOpen((value) => !value)
+                    }}
+                  >
+                    {externalOpen ? (
+                      <ChevronDown className="size-3" />
+                    ) : (
+                      <ChevronRight className="size-3" />
+                    )}
+                    <span>
+                      {translate(
+                        'auto.components.status.bar.PortsStatusSegment.7dac3ecc9d',
+                        'External Ports'
+                      )}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <Sparkline
+                        samples={readWorkspacePortMemoryHistory(EXTERNAL_PORTS_HISTORY_KEY)}
+                      />
+                      <span className="font-mono text-[10px]">{externalPorts.length}</span>
+                    </span>
+                  </button>
+                  {externalOpen && (
+                    <div className="px-1 pb-1">
+                      {sortedExternalPorts.length > 0 ? (
+                        sortedExternalPorts.map((port) => (
+                          <PortRow
+                            key={port.id}
+                            port={port}
+                            activeWorktreeId={activeWorktreeId}
+                            external
+                          />
+                        ))
+                      ) : (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          {translate(
+                            'auto.components.status.bar.PortsStatusSegment.4ebf90c12e',
+                            'No external ports detected'
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </>
           )}
         </SelectedTextCopyMenu>
       </PopoverContent>
