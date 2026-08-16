@@ -178,6 +178,7 @@ export class BrowserHostLeaseRegistry {
     browserHostClientId?: string,
     requiredCapabilities: readonly string[] = []
   ): RuntimeBrowserPlacement {
+    this.pagePlacements.assertPlacementAdmission(browserPageId)
     const lease = this.select(browserHostClientId, [
       BROWSER_HOST_WEBVIEW_CAPABILITY,
       ...requiredCapabilities

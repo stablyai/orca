@@ -60,13 +60,14 @@ describe('browser host page placement authority', () => {
   it('fences the placement when its lease is released or replaced', () => {
     const leases = registry()
     const firstHost = attachHost(leases)
-    leases.placeClientPage('page-a', 'host-a')
+    const firstPlacement = leases.placeClientPage('page-a', 'host-a')
 
     firstHost.release()
     expect(() => leases.requireClientPage(pageAuthority(1))).toThrow('browser_host_lease_required')
 
     attachHost(leases, 'connection-b')
     expect(() => leases.requireClientPage(pageAuthority(1))).toThrow('browser_host_lease_stale')
+    expect(leases.retirePage('page-a', firstPlacement)).toBe(true)
     const replacement = leases.placeClientPage('page-a', 'host-a')
     expect(leases.requireClientPage(pageAuthority(2, 2))).toBe(replacement)
   })
@@ -84,22 +85,28 @@ describe('browser host page placement authority', () => {
     expect(() => leases.requireClientPage(pageAuthority(1))).toThrow('browser_page_placement_stale')
     expect(leases.requireClientPage(pageAuthority(2))).toBe(replacement)
 
+    expect(leases.retirePage('page-a', replacement)).toBe(true)
     leases.placeServerPage('page-a')
     expect(() => leases.requireClientPage(pageAuthority(2))).toThrow(
       'browser_client_page_placement_required'
     )
   })
 
-  it('bounds live logical placements without blocking exact replacement', () => {
+  it('bounds live logical placements until exact retirement', () => {
     const pages = placements(1)
     const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
     const first = pages.placeClientPage('page-a', host)
 
     expect(() => pages.placeClientPage('page-b', host)).toThrow('browser_page_placement_capacity')
-    expect(pages.placeClientPage('page-a', host)).toMatchObject({
+    expect(() => pages.placeClientPage('page-a', host)).toThrow(
+      'browser_page_replacement_requires_retirement'
+    )
+    expect(pages.retirePage('page-a', first)).toBe(true)
+    const replacement = pages.placeClientPage('page-a', host)
+    expect(replacement).toMatchObject({
       pageHostGeneration: first.pageHostGeneration + 1
     })
-    expect(pages.retirePage('page-a', pages.getPlacement('page-a')!)).toBe(true)
+    expect(pages.retirePage('page-a', replacement)).toBe(true)
     expect(pages.placeServerPage('page-b')).toEqual({ kind: 'server' })
   })
 

@@ -69,9 +69,14 @@ describe('browser host capability selection', () => {
       })
     ).toThrow('browser_host_lease_stale')
     expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
-      'browser_host_capability_unavailable'
+      'browser_page_replacement_requires_retirement'
     )
     expect(leases.getPlacement('page-a')).toBe(placement)
+    expect(leases.retirePage('page-a', placement)).toBe(true)
+    expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
+      'browser_host_capability_unavailable'
+    )
+    expect(leases.getPlacement('page-a')).toBeUndefined()
   })
 })
 

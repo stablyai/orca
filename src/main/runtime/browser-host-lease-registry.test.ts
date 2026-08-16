@@ -133,8 +133,11 @@ describe('BrowserHostLeaseRegistry', () => {
       hostCapabilities: ['webview']
     })
 
-    expect(leases.placeServerPage('page-a')).toEqual({ kind: 'server' })
-    expect(leases.placeClientPage('page-a', 'host-a')).toEqual({
+    const server = leases.placeServerPage('page-a')
+    expect(server).toEqual({ kind: 'server' })
+    expect(leases.retirePage('page-a', server)).toBe(true)
+    const client = leases.placeClientPage('page-a', 'host-a')
+    expect(client).toEqual({
       kind: 'client',
       browserHostClientId: 'host-a',
       browserHostGeneration: 1,
@@ -156,6 +159,7 @@ describe('BrowserHostLeaseRegistry', () => {
         pairedDeviceId: 'device-a'
       })
     ).toThrow('browser_host_lease_stale')
+    expect(leases.retirePage('page-a', client)).toBe(true)
     expect(leases.placeClientPage('page-a', 'host-a')).toMatchObject({
       browserHostGeneration: 2,
       pageHostGeneration: 2
@@ -189,10 +193,12 @@ describe('BrowserHostLeaseRegistry', () => {
       hostCapabilities: ['webview']
     })
     const first = leases.placeClientPage('page-a', 'host-a')
+    expect(leases.retirePage('page-a', first)).toBe(true)
     const replacement = leases.placeClientPage('page-a', 'host-a')
 
     expect(leases.retirePage('page-a', first)).toBe(false)
     expect(leases.getPlacement('page-a')).toBe(replacement)
+    expect(leases.retirePage('page-a', replacement)).toBe(true)
     const server = leases.placeServerPage('page-a')
     expect(leases.retirePage('page-a', replacement)).toBe(false)
     expect(leases.getPlacement('page-a')).toBe(server)

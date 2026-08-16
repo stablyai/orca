@@ -38,7 +38,7 @@ export class BrowserHostPagePlacementRegistry {
   }
 
   placeServerPage(browserPageId: string): RuntimeBrowserServerPlacement {
-    this.assertAdmission(browserPageId)
+    this.assertPlacementAdmission(browserPageId)
     const placement = Object.freeze({ kind: 'server' as const })
     this.placementsByPageId.set(browserPageId, placement)
     return placement
@@ -48,7 +48,7 @@ export class BrowserHostPagePlacementRegistry {
     browserPageId: string,
     host: BrowserHostPlacementIdentity
   ): RuntimeBrowserClientPlacement {
-    this.assertAdmission(browserPageId)
+    this.assertPlacementAdmission(browserPageId)
     assertBrowserHostPlacementIdentity(host)
     const placement = Object.freeze({
       kind: 'client' as const,
@@ -88,7 +88,7 @@ export class BrowserHostPagePlacementRegistry {
     return this.placementsByPageId.delete(browserPageId)
   }
 
-  private assertAdmission(browserPageId: string): void {
+  assertPlacementAdmission(browserPageId: string): void {
     if (
       typeof browserPageId !== 'string' ||
       browserPageId.length === 0 ||
@@ -96,10 +96,10 @@ export class BrowserHostPagePlacementRegistry {
     ) {
       throw new Error('browser_page_identity_invalid')
     }
-    if (
-      !this.placementsByPageId.has(browserPageId) &&
-      this.placementsByPageId.size >= this.maxPagePlacements
-    ) {
+    if (this.placementsByPageId.has(browserPageId)) {
+      throw new Error('browser_page_replacement_requires_retirement')
+    }
+    if (this.placementsByPageId.size >= this.maxPagePlacements) {
       throw new Error('browser_page_placement_capacity')
     }
   }
