@@ -14,6 +14,16 @@ export type DraftPasteReadySignal =
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
+/**
+ * Probe that identifies an unrelated tool owning the same executable name.
+ * A match excludes the agent from detection; anything else (including a failed
+ * probe) keeps it, so a misbehaving binary can never hide a real install.
+ */
+export type TuiAgentIdentityExclusion = {
+  args: readonly string[]
+  excludePattern: RegExp
+}
+
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
@@ -22,6 +32,8 @@ export type TuiAgentConfig = {
   detectRequiredCommands?: readonly string[]
   /** Detection runtimes where this launch mode is not available as a detected agent. */
   detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
+  /** Disambiguates a detectCmd shared with an unrelated tool (see TuiAgentIdentityExclusion). */
+  detectIdentityExclusion?: TuiAgentIdentityExclusion
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>

@@ -223,6 +223,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'bob',
     launchCmd: 'bob',
     expectedProcess: 'bob',
+    // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`.
+    // Its help text names Neovim and IBM Bob's does not, so a match means the PATH hit
+    // belongs to the other tool. Fail-open keeps a real IBM Bob install detectable.
+    detectIdentityExclusion: {
+      args: ['--help'],
+      excludePattern: /\bneo\s?vim\b|\bnvim\b/i
+    },
     // Why: Bob's `--prompt` and positional prompts are one-shot modes.
     // `--prompt-interactive` executes the initial prompt and keeps the hosted
     // shell alive for follow-up work.
