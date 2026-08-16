@@ -116,6 +116,60 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
   })
 
+  it('indexes only exact live page generations by their Electron session', async () => {
+    const { registry, session } = createHarness()
+    const handle = await prepare(registry)
+
+    expect(registry.getPartitionForSession(session)).toBe(handle.partition)
+    expect(
+      registry.getPreparedPageAuthority({
+        partition: handle.partition,
+        browserPageId: 'page-a',
+        pageHostGeneration: 1
+      })
+    ).not.toBeNull()
+    expect(
+      registry.getPreparedPageAuthority({
+        partition: handle.partition,
+        browserPageId: 'page-a',
+        pageHostGeneration: 2
+      })
+    ).toBeNull()
+
+    handle.release()
+    expect(registry.getPartitionForSession(session)).toBe(handle.partition)
+    expect(
+      registry.getPreparedPageAuthority({
+        partition: handle.partition,
+        browserPageId: 'page-a',
+        pageHostGeneration: 1
+      })
+    ).toBeNull()
+  })
+
+  it('changes opaque page authority when the same logical tuple is prepared again', async () => {
+    const { registry } = createHarness()
+    const first = await prepare(registry)
+    const firstAuthority = registry.getPreparedPageAuthority({
+      partition: first.partition,
+      browserPageId: 'page-a',
+      pageHostGeneration: 1
+    })
+    first.release()
+
+    const replacement = await prepare(registry)
+    const replacementAuthority = registry.getPreparedPageAuthority({
+      partition: replacement.partition,
+      browserPageId: 'page-a',
+      pageHostGeneration: 1
+    })
+
+    expect(firstAuthority).not.toBeNull()
+    expect(replacementAuthority).not.toBeNull()
+    expect(replacementAuthority).not.toBe(firstAuthority)
+    replacement.release()
+  })
+
   it('never allowlists a partition whose proxy resolves direct or elsewhere', async () => {
     const { dependencies, registry } = createHarness({ resolvedProxy: 'DIRECT' })
 

@@ -12,6 +12,7 @@ export const browserWindowMock: Mock<
 > = vi.fn()
 export const openExternalMock: MainWindowSpy = vi.fn()
 export const attachGuestPoliciesMock: MainWindowSpy = vi.fn()
+export const attachRouteGuestMock: MainWindowSpy = vi.fn(() => false)
 export const buildFromTemplateMock: Mock<(...args: unknown[]) => { popup: MainWindowSpy }> = vi.fn(
   () => ({ popup: menuPopupMock })
 )
@@ -112,6 +113,8 @@ export function resetMainWindowMocks(): void {
   browserWindowMock.mockReset()
   openExternalMock.mockReset()
   attachGuestPoliciesMock.mockReset()
+  attachRouteGuestMock.mockReset()
+  attachRouteGuestMock.mockReturnValue(false)
   buildFromTemplateMock.mockClear()
   menuPopupMock.mockClear()
   notificationMock.mockClear()

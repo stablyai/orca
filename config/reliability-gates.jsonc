@@ -2968,11 +2968,11 @@
       "providers": ["remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, exact SOCKS5 configuration with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, and arbitrary initial-navigation denial. No production caller prepares a route partition. Persisted-worker containment, UDP/DoH/WebRTC denial, exact WebContents registration, provider journeys, and real Electron traffic capture remain uncovered.",
+      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, exact SOCKS5 configuration with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, and arbitrary initial-navigation denial. The exact WebContents primitive now has separate deterministic coverage, but no production caller prepares, registers, or grants a route page. Persisted-worker containment, UDP/DoH/WebRTC denial, provider journeys, and real Electron traffic capture remain uncovered.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
       ],
-      "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint, and no partition enters the webview allowlist until its existing browser policy is installed, fixed SOCKS5 proxy is applied, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only; later navigation remains unavailable because exact WebContents registration does not exist. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded.",
+      "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint, and no partition enters the webview allowlist until its existing browser policy is installed, fixed SOCKS5 proxy is applied, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only; later navigation remains unavailable in production because no caller registers and grants the exact WebContents. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded.",
       "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require policy setup, setProxy with <-loopback>, closeAllConnections, and exact SOCKS5 resolveProxy in order while isAllowedPartition remains false; then require it to become live. Reject DIRECT, a different proxy endpoint, the 65th live partition, and the 65th page generation. Replace one exact page token and prove stale cleanup cannot retire the replacement. In the window boundary, allow only blank initial attachment for a live route partition and reject direct HTTPS attachment.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts"
@@ -3054,13 +3054,13 @@
       "promotionCriteria": [
         "Use Playwright CDP in real Electron to prove proxy application before the first HTTP, HTTPS, WebSocket, DNS, worker, popup, redirect, and speculative request.",
         "Hold or stop persisted workers until proxy verification and prove network-service restart cannot reset the partition to DIRECT or system proxy.",
-        "Register the exact WebContents and page generation before navigation, and fence reload, popup, restore, profile-switch, renderer-crash, and stale-cleanup paths.",
+        "Activate a trusted exact-WebContents registration/grant flow before navigation, and fence reload, popup, restore, profile-switch, renderer-crash, and stale-cleanup paths.",
         "Disable or capture every UDP, QUIC, DoH, WebRTC, and non-SOCKS desktop egress path on macOS, Linux, and Windows."
       ],
       "knownGaps": [
         "No production method calls preparePage, so the registry and allowlist remain inert.",
         "Creating a persistent Electron Session may wake an existing service worker before setProxy; worker hold or termination proof is required.",
-        "The route partition permits only blank initial attachment; exact WebContents registration and later navigation permission do not exist yet.",
+        "The route partition permits only blank initial attachment; exact WebContents registration and grant primitives are inert because no production caller exists.",
         "Real Electron proxy syntax, loopback coverage, network-service recovery, popup/worker behavior, and desktop packet capture are not validated because the required Electron skill is unavailable in this workspace.",
         "QUIC, DoH, WebRTC, WebTransport, and other UDP/direct-network paths are not yet disabled or proven fail closed.",
         "Partition deletion, download/transfer draining, idle route release, disk quotas, and browser-profile cloning are later lifecycle stages.",
@@ -3069,6 +3069,108 @@
         "Each preparePage synchronously reads and parses bounded binding metadata on Electron main; activation requires latency evidence or a safely invalidated cache before this becomes frequent."
       ],
       "demotionRule": "Keep experimental or demote if raw identities enter a partition path, a durable binding mismatch is reused, a partition retargets to another execution host or live listener, a route partition becomes attachable before exact proxy verification, initial attachment can navigate beyond blank, stale cleanup retires a replacement, admission exceeds a declared cap, or any browser request reaches desktop DNS, TCP, UDP, localhost, or system proxy outside the selected route."
+    },
+    {
+      "id": "browser-client-host.webcontents-quarantine",
+      "title": "Route guests stay blank and popup-denied until exact registration",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-webcontents-authority",
+      "surfaces": [
+        "route guest did-attach lifecycle",
+        "exact host renderer and WebContents ownership",
+        "logical page-generation registration",
+        "post-registration navigation grant",
+        "route popup fail-closed policy"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic main-process fakes cover route-Session recognition after logical release, generic-policy-before-route-lockdown ordering, blank quarantine, exact guest/renderer/partition/logical-page registration, opaque page-authority replacement, a separate navigation grant, repeated navigation, invalid-scheme denial, dynamic page-authority revocation, popup denial, delayed/failed admission closure, mutable input isolation, page conflicts, and token-safe destroyed cleanup. Normal browser Sessions bypass the route registry. No production caller prepares a route page, registers a route guest, or grants navigation. Real Electron event ordering, renderer IPC, process swaps, active-request teardown, and provider journeys remain uncovered.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "A WebContents whose Electron Session has belonged to a prepared route partition is quarantined synchronously after generic guest policy installation, including when page authority disappears between will-attach and did-attach. It must be a live blank webview owned by the exact renderer WebContents. Nonblank navigation remains denied until main matches the exact partition, browser page, page-host generation, guest WebContents, renderer WebContents, and opaque live page authority, then issues a separate grant. Every later navigation rechecks the same opaque authority, so reusing a logical tuple cannot revive a stale guest. Route popups remain denied, including after navigation grant and while rejected attachment closure is delayed or fails. Registry maps are bounded, stale destroyed callbacks cannot retire replacements, and non-route browser guests retain existing behavior.",
+      "oracle": "Attach a blank route guest and require nonblank navigation plus every popup to be denied. Reject a wrong renderer, wrong page generation, nonblank initial document, wrong WebContents type, destroyed guest, and excess attachment; delay or fail its close and require navigation and popups to remain denied. Register the exact prepared tuple and prove navigation remains denied until a second grant; then allow repeated HTTP(S) navigation while continuing to deny file navigation and popups. Release logical page authority and require redirects and late attachments to fail closed immediately. Reprepare the same tuple, require a new opaque authority, deny the stale guest, and admit an exact replacement. Destroy a registered guest under real destroyed state, verify best-effort listener release, replay stale cleanup, and prove its replacement remains grantable. Mutate caller input after registration and prove main-owned authority is unchanged. Attach a normal browser Session and require no route-registry mutation.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts"
+      ],
+      "testFiles": [
+        "src/main/browser/browser-route-session-registry.test.ts",
+        "src/main/browser/browser-route-webcontents-registry.test.ts",
+        "src/main/window/createMainWindow.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/browser-route-session-registry.test.ts",
+          "assertions": [
+            "a prepared Electron Session remains recognizable for late-attachment quarantine",
+            "page release removes logical authority and tuple reuse receives a new opaque token"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-webcontents-registry.test.ts",
+          "assertions": [
+            "route guests remain blank and popup-denied before exact registration and grant",
+            "guest, renderer, partition, and logical page generation must all match",
+            "later navigation rechecks live page authority and invalid schemes remain denied",
+            "late, excess, and close-failed attachments remain navigation- and popup-denied",
+            "opaque authority replacement, page conflicts, mutable inputs, and stale cleanup fail closed",
+            "normal browser Sessions remain outside the route registry"
+          ]
+        },
+        {
+          "file": "src/main/window/createMainWindow.test.ts",
+          "assertions": [
+            "generic guest policy installs before route lockdown can override popup behavior",
+            "every attached webview is offered to the route registry without changing normal guests"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.9,
+          "summary": "Three files passed 113 Session-index, late/rejected route-WebContents quarantine, opaque-authority fencing, exact registration, navigation-grant, popup-denial, and main-window ordering tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "deterministic route Session, WebContents authority, and did-attach boundary tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passes locally; CI and real Electron soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The route-WebContents oracle first failed because no registry existed, and the Session oracle failed because no exact Session/page index existed. A first candidate blocked every navigation after the initial document committed because it incorrectly required the current URL to remain blank; repeated-navigation evidence failed until blank validation was limited to registration and grant. Mutable-input evidence then proved caller-owned data could alter stored authority until the registry copied it. Fresh review found late and rejected attachments could keep generic navigation policy, destroyed cleanup skipped listener release, and tuple reuse revived stale grants; the added deterministic cases fail that candidate and pass with retained Session recognition, deny-first admission, best-effort destroyed cleanup, and opaque authority tokens. Real Electron mutation/revert and traffic evidence remain required before activation."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Session, guest, and page lookups are O(1), install no polling, and retain at most 256 attached route guests in registry maps in addition to the lower 64-partition and 64-logical-page-per-partition bounds. Historical Session recognition uses weak keys. Normal guests perform one bounded Session lookup at did-attach. Destroyed guests synchronously release exact mappings and attempt each listener removal independently."
+      },
+      "promotionCriteria": [
+        "Expose a trusted renderer registration flow that cannot navigate before main acknowledges exact registration and grant.",
+        "Use Playwright CDP in real Electron to prove did-attach lockdown precedes page script, popup, redirect, worker, and speculative activity.",
+        "Fence and close exact WebContents plus active requests on page release, process swap, renderer crash, profile switch, lease replacement, and app shutdown.",
+        "Implement bounded generation-scoped popup reservations without any shell.openExternal or native-window fallback."
+      ],
+      "knownGaps": [
+        "No production method calls preparePage, registerGuest, or grantNavigation, so exact route guest ownership remains inert.",
+        "No renderer IPC or preload surface carries main-owned route page registration yet.",
+        "Real Electron did-attach timing, close behavior, process swaps, and traffic isolation are unvalidated because the required Electron skill is unavailable in this workspace.",
+        "Logical page release blocks future navigation but does not close the WebContents, stop active requests or workers, close connections, or clear persistent storage.",
+        "Popup reservations do not exist; every route guest popup is denied.",
+        "The future caller still must derive the renderer, authority, page, host generation, and route identity from live main-owned state."
+      ],
+      "demotionRule": "Keep inert or demote if a route guest can navigate nonblank before exact registration and grant, a mismatched or released page remains authoritative, tuple reuse revives stale authority, a popup reaches shell.openExternal or an unregistered native window, a rejected attachment retains navigation or popup capability, stale cleanup retires a replacement, normal browser guests change behavior, or any claimed exact identity is sourced only from renderer input."
     },
     {
       "id": "browser-stream.bounded-reconnect",

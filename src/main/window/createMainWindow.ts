@@ -15,7 +15,10 @@ import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { browserRouteSessionRegistry } from '../browser/browser-route-session-runtime'
+import {
+  browserRouteSessionRegistry,
+  browserRouteWebContentsRegistry
+} from '../browser/browser-route-session-runtime'
 import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
@@ -504,6 +507,8 @@ export function createMainWindow(
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
+    // Why: route guests override the generic popup fallback and stay blank until exact main-owned registration.
+    browserRouteWebContentsRegistry.attachGuest(guest)
   })
 
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).

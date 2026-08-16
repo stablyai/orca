@@ -16,6 +16,9 @@ vi.mock('../browser/browser-manager', async () =>
 vi.mock('../browser/browser-route-session-runtime', async () => ({
   browserRouteSessionRegistry: {
     isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
+  },
+  browserRouteWebContentsRegistry: {
+    attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
 
@@ -24,6 +27,7 @@ import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   attachGuestPoliciesMock,
+  attachRouteGuestMock,
   browserWindowMock,
   macosTahoeMock,
   openExternalMock,
@@ -224,6 +228,10 @@ describe('createMainWindow', () => {
     const guest = { marker: 'guest' }
     windowHandlers['did-attach-webview']({} as never, guest as never)
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+    expect(attachRouteGuestMock).toHaveBeenCalledWith(guest)
+    expect(attachGuestPoliciesMock.mock.invocationCallOrder[0]).toBeLessThan(
+      attachRouteGuestMock.mock.invocationCallOrder[0]
+    )
 
     const untrustedPreloadParams = {
       src: 'data:text/html,',
@@ -245,6 +253,7 @@ describe('createMainWindow', () => {
     const secondGuest = { marker: 'second-guest' }
     windowHandlers['did-attach-webview']({} as never, secondGuest as never)
     expect(attachGuestPoliciesMock).toHaveBeenLastCalledWith(secondGuest)
+    expect(attachRouteGuestMock).toHaveBeenLastCalledWith(secondGuest)
   })
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {

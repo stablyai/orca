@@ -70,6 +70,7 @@ export class BrowserRouteSessionRegistry {
   private readonly maxPagesPerPartition: number
   private readonly live = new Map<string, PreparedPartition>()
   private readonly pending = new Map<string, PendingPartition>()
+  private readonly partitionBySession = new WeakMap<BrowserRouteElectronSession, string>()
 
   constructor(private readonly dependencies: BrowserRouteSessionRegistryDependencies) {
     this.derivePartition = dependencies.derivePartition ?? deriveBrowserRoutePartition
@@ -79,6 +80,22 @@ export class BrowserRouteSessionRegistry {
 
   isAllowedPartition(partition: string): boolean {
     return this.live.has(partition)
+  }
+
+  getPartitionForSession(session: BrowserRouteElectronSession): string | null {
+    return this.partitionBySession.get(session) ?? null
+  }
+
+  getPreparedPageAuthority(input: {
+    partition: string
+    browserPageId: string
+    pageHostGeneration: number
+  }): symbol | null {
+    const state = this.live.get(input.partition)
+    if (!state || !isValidPageIdentity(input.browserPageId, input.pageHostGeneration)) {
+      return null
+    }
+    return state.pageTokens.get(pageKey(input.browserPageId, input.pageHostGeneration)) ?? null
   }
 
   async preparePage(input: {
@@ -125,6 +142,7 @@ export class BrowserRouteSessionRegistry {
     try {
       state = await promise
       this.live.set(derived.partition, state)
+      this.partitionBySession.set(state.session, state.partition)
     } finally {
       if (this.pending.get(derived.partition) === pendingState) {
         this.pending.delete(derived.partition)
@@ -194,19 +212,19 @@ export class BrowserRouteSessionRegistry {
     browserPageId: string,
     pageHostGeneration: number
   ): BrowserRouteSessionHandle {
-    const pageKey = JSON.stringify([browserPageId, pageHostGeneration])
-    if (!state.pageTokens.has(pageKey) && state.pageTokens.size >= this.maxPagesPerPartition) {
+    const key = pageKey(browserPageId, pageHostGeneration)
+    if (!state.pageTokens.has(key) && state.pageTokens.size >= this.maxPagesPerPartition) {
       throw new Error('browser_route_partition_page_capacity')
     }
-    const token = Symbol(pageKey)
-    state.pageTokens.set(pageKey, token)
+    const token = Symbol(key)
+    state.pageTokens.set(key, token)
     return {
       partition: state.partition,
       release: () => {
-        if (state.pageTokens.get(pageKey) !== token) {
+        if (state.pageTokens.get(key) !== token) {
           return
         }
-        state.pageTokens.delete(pageKey)
+        state.pageTokens.delete(key)
         if (state.pageTokens.size !== 0 || this.live.get(state.partition) !== state) {
           return
         }
@@ -235,14 +253,22 @@ function sameProxyEndpoint(left: ProxyEndpoint, right: ProxyEndpoint): boolean {
 }
 
 function assertPageIdentity(browserPageId: string, pageHostGeneration: number): void {
-  if (
-    typeof browserPageId !== 'string' ||
-    browserPageId.length === 0 ||
-    browserPageId.length > MAX_PAGE_ID_LENGTH ||
-    !Number.isInteger(pageHostGeneration) ||
-    pageHostGeneration < 1 ||
-    pageHostGeneration > MAX_PAGE_HOST_GENERATION
-  ) {
+  if (!isValidPageIdentity(browserPageId, pageHostGeneration)) {
     throw new Error('browser_route_partition_page_invalid')
   }
+}
+
+function isValidPageIdentity(browserPageId: string, pageHostGeneration: number): boolean {
+  return (
+    typeof browserPageId === 'string' &&
+    browserPageId.length > 0 &&
+    browserPageId.length <= MAX_PAGE_ID_LENGTH &&
+    Number.isInteger(pageHostGeneration) &&
+    pageHostGeneration >= 1 &&
+    pageHostGeneration <= MAX_PAGE_HOST_GENERATION
+  )
+}
+
+function pageKey(browserPageId: string, pageHostGeneration: number): string {
+  return JSON.stringify([browserPageId, pageHostGeneration])
 }
