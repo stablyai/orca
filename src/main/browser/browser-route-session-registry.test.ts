@@ -19,10 +19,15 @@ function createHarness(
     maxPagesPerPartition?: number
     setupError?: Error
     profileError?: Error
+    retirementSettled?: boolean
+    retirementError?: Error
   } = {}
 ) {
   const order: string[] = []
   const bindings = new Map<string, string>()
+  const retirements: Parameters<
+    BrowserRouteSessionRegistryDependencies['retirePageAuthority']
+  >[0][] = []
   let registry: BrowserRouteSessionRegistry
   const session: BrowserRouteElectronSession = {
     setProxy: vi.fn(async () => {
@@ -63,6 +68,13 @@ function createHarness(
       }
     }),
     clearPolicies: vi.fn(() => order.push('clear-policies')),
+    retirePageAuthority: vi.fn((retirement) => {
+      retirements.push(retirement)
+      if (options.retirementError) {
+        throw options.retirementError
+      }
+      return options.retirementSettled ?? true
+    }),
     bindingStore: {
       get: vi.fn((partition) => bindings.get(partition) ?? null),
       set: vi.fn((partition, fingerprint) => {
@@ -74,7 +86,7 @@ function createHarness(
     maxPagesPerPartition: options.maxPagesPerPartition
   }
   registry = new BrowserRouteSessionRegistry(dependencies)
-  return { bindings, dependencies, order, registry, session }
+  return { bindings, dependencies, order, registry, retirements, session }
 }
 
 function prepare(registry: BrowserRouteSessionRegistry, overrides: Record<string, unknown> = {}) {
@@ -168,6 +180,64 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(replacementAuthority).not.toBeNull()
     expect(replacementAuthority).not.toBe(firstAuthority)
     replacement.release()
+  })
+
+  it('keeps route policy installed until delayed exact-page retirement settles', async () => {
+    const { dependencies, registry, retirements } = createHarness({
+      maxPagesPerPartition: 1,
+      retirementSettled: false
+    })
+    const handle = await prepare(registry)
+
+    handle.release()
+    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
+    expect(dependencies.clearPolicies).not.toHaveBeenCalled()
+    await expect(prepare(registry)).rejects.toThrow('browser_route_partition_page_retiring')
+    await expect(prepare(registry, { browserPageId: 'page-b' })).rejects.toThrow(
+      'browser_route_partition_page_capacity'
+    )
+    expect(retirements).toHaveLength(1)
+
+    retirements[0]?.onRetired()
+    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
+    const replacement = await prepare(registry)
+    retirements[0]?.onRetired()
+    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
+    expect(registry.isAllowedPartition(replacement.partition)).toBe(true)
+    replacement.release()
+  })
+
+  it('keeps one shared partition live until every page retirement settles', async () => {
+    const { dependencies, registry, retirements } = createHarness({
+      retirementSettled: false
+    })
+    const first = await prepare(registry)
+    const second = await prepare(registry, { browserPageId: 'page-b' })
+
+    first.release()
+    expect(registry.isAllowedPartition(first.partition)).toBe(true)
+    retirements[0]?.onRetired()
+    expect(dependencies.clearPolicies).not.toHaveBeenCalled()
+
+    second.release()
+    expect(registry.isAllowedPartition(first.partition)).toBe(false)
+    expect(dependencies.clearPolicies).not.toHaveBeenCalled()
+    retirements[1]?.onRetired()
+    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
+    retirements[0]?.onRetired()
+    expect(dependencies.clearPolicies).toHaveBeenCalledOnce()
+  })
+
+  it('fails closed when exact-page retirement cannot be started', async () => {
+    const { dependencies, registry } = createHarness({
+      retirementError: new Error('retirement unavailable')
+    })
+    const handle = await prepare(registry)
+
+    expect(() => handle.release()).not.toThrow()
+    expect(registry.isAllowedPartition(handle.partition)).toBe(false)
+    expect(dependencies.clearPolicies).not.toHaveBeenCalled()
+    await expect(prepare(registry)).rejects.toThrow('browser_route_partition_page_retiring')
   })
 
   it('never allowlists a partition whose proxy resolves direct or elsewhere', async () => {

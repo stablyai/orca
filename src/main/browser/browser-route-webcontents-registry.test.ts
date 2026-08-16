@@ -27,6 +27,7 @@ function createHarness(options: { maxGuests?: number } = {}) {
     maxGuests: options.maxGuests
   })
   return {
+    getPageAuthority: () => pageAuthority,
     registry,
     routeSession,
     setPrepared: (value: boolean) => {
@@ -268,6 +269,95 @@ describe('BrowserRouteWebContentsRegistry', () => {
     expect(registry.attachGuest(replacement.guest)).toBe(true)
     expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(true)
     expect(registry.grantNavigation({ ...page, webContentsId: 42 })).toBe(true)
+  })
+
+  it('holds page retirement until a close-delayed exact guest is destroyed', () => {
+    const { getPageAuthority, registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    const retired = vi.fn()
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+
+    expect(
+      registry.retirePageAuthority({
+        partition,
+        browserPageId: page.browserPageId,
+        pageHostGeneration: page.pageHostGeneration,
+        pageAuthority: getPageAuthority(),
+        onRetired: retired
+      })
+    ).toBe(false)
+    const navigation = navigationEvent()
+    guest.emit('will-navigate', navigation, 'https://example.com/')
+    expect(navigation.preventDefault).toHaveBeenCalledOnce()
+    expect(registry.grantNavigation(page)).toBe(false)
+    expect(retired).not.toHaveBeenCalled()
+    const duplicateRetired = vi.fn()
+    expect(
+      registry.retirePageAuthority({
+        partition,
+        browserPageId: page.browserPageId,
+        pageHostGeneration: page.pageHostGeneration,
+        pageAuthority: getPageAuthority(),
+        onRetired: duplicateRetired
+      })
+    ).toBe(false)
+
+    guest.destroy()
+    expect(retired).toHaveBeenCalledOnce()
+    expect(duplicateRetired).not.toHaveBeenCalled()
+  })
+
+  it('ignores retirement for a different opaque authority', () => {
+    const { registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession })
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+
+    expect(
+      registry.retirePageAuthority({
+        partition,
+        browserPageId: page.browserPageId,
+        pageHostGeneration: page.pageHostGeneration,
+        pageAuthority: Symbol('wrong-authority'),
+        onRetired: vi.fn()
+      })
+    ).toBe(true)
+    expect(guest.guest.close).not.toHaveBeenCalled()
+    const navigation = navigationEvent()
+    guest.emit('will-navigate', navigation, 'https://example.com/')
+    expect(navigation.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('does not settle retirement when destroyed inspection is unavailable', () => {
+    const { getPageAuthority, registry, routeSession } = createHarness()
+    const guest = createGuest({ session: routeSession, closeDestroys: false })
+    const retired = vi.fn()
+    registry.attachGuest(guest.guest)
+    registry.registerGuest(page)
+    registry.grantNavigation(page)
+    vi.mocked(guest.guest.isDestroyed).mockImplementation(() => {
+      throw new Error('inspection unavailable')
+    })
+
+    expect(
+      registry.retirePageAuthority({
+        partition,
+        browserPageId: page.browserPageId,
+        pageHostGeneration: page.pageHostGeneration,
+        pageAuthority: getPageAuthority(),
+        onRetired: retired
+      })
+    ).toBe(false)
+    expect(retired).not.toHaveBeenCalled()
+    const navigation = navigationEvent()
+    guest.emit('will-navigate', navigation, 'https://example.com/')
+    expect(navigation.preventDefault).toHaveBeenCalledOnce()
+
+    guest.destroy()
+    expect(retired).toHaveBeenCalledOnce()
   })
 
   it('fails closed when Electron guest inspection races destruction', () => {

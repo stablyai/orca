@@ -1,23 +1,15 @@
 import type { Event, Session, WebContents } from 'electron'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import {
+  browserRoutePageKey,
+  isValidBrowserRoutePageIdentity,
+  type BrowserRoutePageAuthorityRetirement,
+  type BrowserRoutePageGuestIdentity,
+  type BrowserRoutePageIdentity
+} from './browser-route-page-authority'
 
 const DEFAULT_MAX_GUESTS = 256
-const MAX_PAGE_ID_LENGTH = 256
-const MAX_PAGE_HOST_GENERATION = 0xffff_ffff
-
-export type BrowserRoutePageGuestIdentity = Readonly<{
-  partition: string
-  browserPageId: string
-  pageHostGeneration: number
-  webContentsId: number
-  rendererWebContentsId: number
-}>
-
-type BrowserRoutePageIdentity = Pick<
-  BrowserRoutePageGuestIdentity,
-  'partition' | 'browserPageId' | 'pageHostGeneration'
->
 
 type BrowserRouteWebContentsRegistryDependencies = {
   getPartitionForSession(session: Session): string | null
@@ -31,6 +23,7 @@ type GuestState = {
   registration: BrowserRoutePageGuestIdentity | null
   pageAuthority: symbol | null
   navigationGranted: boolean
+  retirementCallback: (() => void) | null
   onNavigate: (event: Event, url: string) => void
   onDestroyed: () => void
 }
@@ -100,13 +93,15 @@ export class BrowserRouteWebContentsRegistry {
     if (pageAuthority === null) {
       return false
     }
-    const pageKey = routePageKey(registration)
+    const pageKey = browserRoutePageKey(registration)
     const existingPage = this.guestsByPage.get(pageKey)
     if (existingPage && existingPage !== state && this.hasLivePageAuthority(existingPage)) {
       return false
     }
     if (state.registration) {
-      return routePageKey(state.registration) === pageKey && state.pageAuthority === pageAuthority
+      return (
+        browserRoutePageKey(state.registration) === pageKey && state.pageAuthority === pageAuthority
+      )
     }
     if (existingPage && existingPage !== state) {
       existingPage.registration = null
@@ -125,7 +120,7 @@ export class BrowserRouteWebContentsRegistry {
     const state = this.guests.get(registration.webContentsId)
     if (
       !state?.registration ||
-      routePageKey(state.registration) !== routePageKey(registration) ||
+      browserRoutePageKey(state.registration) !== browserRoutePageKey(registration) ||
       !isBlankGuest(state.guest) ||
       !this.registrationMatchesGuest(state, registration) ||
       !this.hasLivePageAuthority(state)
@@ -136,6 +131,26 @@ export class BrowserRouteWebContentsRegistry {
     return true
   }
 
+  retirePageAuthority(retirement: BrowserRoutePageAuthorityRetirement): boolean {
+    if (!isValidPageRetirement(retirement)) {
+      return true
+    }
+    const state = this.guestsByPage.get(browserRoutePageKey(retirement))
+    if (
+      !state?.registration ||
+      state.pageAuthority !== retirement.pageAuthority ||
+      browserRoutePageKey(state.registration) !== browserRoutePageKey(retirement)
+    ) {
+      return true
+    }
+    if (state.retirementCallback) {
+      return false
+    }
+    state.retirementCallback = retirement.onRetired
+    this.revokeGuest(state)
+    return isDestroyed(state.guest)
+  }
+
   private createGuestState(guest: WebContents, partition: string): GuestState {
     const state: GuestState = {
       guest,
@@ -143,6 +158,7 @@ export class BrowserRouteWebContentsRegistry {
       registration: null,
       pageAuthority: null,
       navigationGranted: false,
+      retirementCallback: null,
       onNavigate: (event, url) => {
         if (!this.navigationAllowed(state, url)) {
           event.preventDefault()
@@ -200,10 +216,19 @@ export class BrowserRouteWebContentsRegistry {
 
   private hasLivePageAuthority(state: GuestState): boolean {
     return Boolean(
+      !state.retirementCallback &&
       state.registration &&
       state.pageAuthority !== null &&
       this.dependencies.getPreparedPageAuthority(state.registration) === state.pageAuthority
     )
+  }
+
+  private revokeGuest(state: GuestState): void {
+    state.navigationGranted = false
+    destroyGuest(state.guest)
+    if (isDestroyed(state.guest)) {
+      this.releaseGuest(state)
+    }
   }
 
   private releaseGuest(state: GuestState): void {
@@ -211,7 +236,7 @@ export class BrowserRouteWebContentsRegistry {
       this.guests.delete(state.guest.id)
     }
     if (state.registration) {
-      const pageKey = routePageKey(state.registration)
+      const pageKey = browserRoutePageKey(state.registration)
       if (this.guestsByPage.get(pageKey) === state) {
         this.guestsByPage.delete(pageKey)
       }
@@ -225,6 +250,13 @@ export class BrowserRouteWebContentsRegistry {
     try {
       state.guest.off('destroyed', state.onDestroyed)
     } catch {}
+    const callback = state.retirementCallback
+    state.retirementCallback = null
+    if (callback) {
+      try {
+        callback()
+      } catch {}
+    }
   }
 }
 
@@ -250,14 +282,7 @@ function isBlankGuest(guest: WebContents): boolean {
 
 function isValidRegistration(value: BrowserRoutePageGuestIdentity): boolean {
   return Boolean(
-    value &&
-    typeof value.partition === 'string' &&
-    typeof value.browserPageId === 'string' &&
-    value.browserPageId.length > 0 &&
-    value.browserPageId.length <= MAX_PAGE_ID_LENGTH &&
-    Number.isInteger(value.pageHostGeneration) &&
-    value.pageHostGeneration > 0 &&
-    value.pageHostGeneration <= MAX_PAGE_HOST_GENERATION &&
+    isValidBrowserRoutePageIdentity(value) &&
     Number.isInteger(value.webContentsId) &&
     value.webContentsId > 0 &&
     Number.isInteger(value.rendererWebContentsId) &&
@@ -265,8 +290,12 @@ function isValidRegistration(value: BrowserRoutePageGuestIdentity): boolean {
   )
 }
 
-function routePageKey(page: BrowserRoutePageIdentity): string {
-  return JSON.stringify([page.partition, page.browserPageId, page.pageHostGeneration])
+function isValidPageRetirement(value: BrowserRoutePageAuthorityRetirement): boolean {
+  return Boolean(
+    isValidBrowserRoutePageIdentity(value) &&
+    typeof value.pageAuthority === 'symbol' &&
+    typeof value.onRetired === 'function'
+  )
 }
 
 function destroyGuest(guest: WebContents): void {
@@ -284,6 +313,6 @@ function isDestroyed(guest: WebContents): boolean {
   try {
     return guest.isDestroyed()
   } catch {
-    return true
+    return false
   }
 }

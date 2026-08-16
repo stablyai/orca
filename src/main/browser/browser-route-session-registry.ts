@@ -3,6 +3,7 @@ import {
   type BrowserRoutePartitionIdentity,
   type DerivedBrowserRoutePartition
 } from './browser-route-identity'
+import type { BrowserRoutePageAuthorityRetirement } from './browser-route-page-authority'
 
 const DEFAULT_MAX_LIVE_PARTITIONS = 64
 const DEFAULT_MAX_PAGES_PER_PARTITION = 64
@@ -35,6 +36,7 @@ export type BrowserRouteSessionRegistryDependencies = {
     session: BrowserRouteElectronSession
   }): void
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
+  retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean
   bindingStore: BrowserRoutePartitionBindingStore
   maxLivePartitions?: number
   maxPagesPerPartition?: number
@@ -54,6 +56,7 @@ type PreparedPartition = {
   proxyEndpoint: ProxyEndpoint
   session: BrowserRouteElectronSession
   pageTokens: Map<string, symbol>
+  pageRetirements: Map<string, symbol>
 }
 
 type PendingPartition = {
@@ -79,7 +82,7 @@ export class BrowserRouteSessionRegistry {
   }
 
   isAllowedPartition(partition: string): boolean {
-    return this.live.has(partition)
+    return Boolean(this.live.get(partition)?.pageTokens.size)
   }
 
   getPartitionForSession(session: BrowserRouteElectronSession): string | null {
@@ -203,7 +206,8 @@ export class BrowserRouteSessionRegistry {
       browserProfileId,
       proxyEndpoint,
       session,
-      pageTokens: new Map()
+      pageTokens: new Map(),
+      pageRetirements: new Map()
     }
   }
 
@@ -213,7 +217,13 @@ export class BrowserRouteSessionRegistry {
     pageHostGeneration: number
   ): BrowserRouteSessionHandle {
     const key = pageKey(browserPageId, pageHostGeneration)
-    if (!state.pageTokens.has(key) && state.pageTokens.size >= this.maxPagesPerPartition) {
+    if (state.pageRetirements.has(key)) {
+      throw new Error('browser_route_partition_page_retiring')
+    }
+    if (
+      !state.pageTokens.has(key) &&
+      state.pageTokens.size + state.pageRetirements.size >= this.maxPagesPerPartition
+    ) {
       throw new Error('browser_route_partition_page_capacity')
     }
     const token = Symbol(key)
@@ -225,13 +235,45 @@ export class BrowserRouteSessionRegistry {
           return
         }
         state.pageTokens.delete(key)
-        if (state.pageTokens.size !== 0 || this.live.get(state.partition) !== state) {
-          return
+        state.pageRetirements.set(key, token)
+        let retired = false
+        try {
+          retired = this.dependencies.retirePageAuthority({
+            partition: state.partition,
+            browserPageId,
+            pageHostGeneration,
+            pageAuthority: token,
+            onRetired: () => this.completePageRetirement(state, key, token)
+          })
+        } catch {
+          // Keep route policy installed until exact guest destruction can be confirmed.
         }
-        this.live.delete(state.partition)
-        this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
+        if (retired && state.pageRetirements.get(key) === token) {
+          state.pageRetirements.delete(key)
+        }
+        this.finalizePartitionIfIdle(state)
       }
     }
+  }
+
+  private completePageRetirement(state: PreparedPartition, key: string, token: symbol): void {
+    if (state.pageRetirements.get(key) !== token) {
+      return
+    }
+    state.pageRetirements.delete(key)
+    this.finalizePartitionIfIdle(state)
+  }
+
+  private finalizePartitionIfIdle(state: PreparedPartition): void {
+    if (
+      state.pageTokens.size !== 0 ||
+      state.pageRetirements.size !== 0 ||
+      this.live.get(state.partition) !== state
+    ) {
+      return
+    }
+    this.live.delete(state.partition)
+    this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
   }
 }
 

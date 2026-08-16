@@ -8,6 +8,9 @@ import { browserSessionRegistry } from './browser-session-registry'
 const BINDING_FILE_NAME = 'browser-route-partition-bindings.json'
 const PARTITION_DATA_DIRECTORY_NAME = 'Partitions'
 let bindingFilePathOverride: string | null = null
+const routeWebContentsRegistryRef: {
+  current: BrowserRouteWebContentsRegistry | null
+} = { current: null }
 
 const bindingStore = {
   get(partition: string): string | null {
@@ -29,6 +32,8 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },
+  retirePageAuthority: (retirement) =>
+    routeWebContentsRegistryRef.current?.retirePageAuthority(retirement) ?? false,
   bindingStore
 })
 
@@ -37,6 +42,7 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
     browserRouteSessionRegistry.getPartitionForSession(routeSession),
   getPreparedPageAuthority: (page) => browserRouteSessionRegistry.getPreparedPageAuthority(page)
 })
+routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 
 export function configureRouteSessionsForOrcaProfile(options: { profileDirectory: string }): void {
   bindingFilePathOverride = join(options.profileDirectory, BINDING_FILE_NAME)
