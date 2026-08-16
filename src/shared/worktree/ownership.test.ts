@@ -308,8 +308,10 @@ describe('worktree ownership classification', () => {
 
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
     const wslRoot = '//wsl.localhost/Ubuntu/home/dev/orca/workspaces'
-    expect(layouts).toContainEqual({ path: wslRoot, nestWorkspaces: true })
-    expect(layouts).toContainEqual({ path: wslRoot, nestWorkspaces: false })
+    expect(layouts.filter(({ path }) => path === wslRoot)).toEqual([
+      { path: wslRoot, nestWorkspaces: true },
+      { path: wslRoot, nestWorkspaces: false }
+    ])
   })
 
   it('builds known layouts from large workspace history lists', () => {
