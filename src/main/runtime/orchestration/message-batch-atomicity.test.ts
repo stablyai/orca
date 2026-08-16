@@ -91,4 +91,33 @@ describe('message batch atomicity', () => {
     }
     expect(first).toEqual({ subject: 'outer change', read: 0 })
   })
+
+  it('preserves an outer transaction when a message insert batch rolls back', () => {
+    db = new OrchestrationDb(':memory:')
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    sqlite.exec(`
+      CREATE TRIGGER reject_second_message_insert
+      BEFORE INSERT ON messages WHEN NEW.id = 'inner_second'
+      BEGIN
+        SELECT RAISE(ABORT, 'blocked');
+      END;
+      BEGIN IMMEDIATE;
+      INSERT INTO messages (id, from_handle, to_handle, subject)
+      VALUES ('outer', 'sender', 'recipient', 'outer change');
+    `)
+
+    expect(() =>
+      db?.insertMessages([
+        { id: 'inner_first', from: 'sender', to: 'recipient', subject: 'first' },
+        { id: 'inner_second', from: 'sender', to: 'recipient', subject: 'second' }
+      ])
+    ).toThrow('blocked')
+    sqlite.exec('COMMIT')
+
+    expect(
+      sqlite
+        .prepare("SELECT id FROM messages WHERE id IN ('outer', 'inner_first') ORDER BY id")
+        .all()
+    ).toEqual([{ id: 'outer' }])
+  })
 })

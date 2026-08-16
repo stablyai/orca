@@ -10,9 +10,51 @@ import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 
+export type LegacyAdoptedMailboxOwner = {
+  runId: string
+  terminalHandle: string
+}
+
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
   return run ? exposeRunTimestamps(run) : undefined
+}
+
+export function getLegacyAdoptedRunMailboxOwner(
+  this: OrchestrationDb
+): LegacyAdoptedMailboxOwner | null {
+  const adoption = this.getLegacyAdoption()
+  if (!adoption) {
+    return null
+  }
+  const terminalHandle = this.getUniqueLegacyCoordinatorHandle(adoption.adopted_run_id)
+  return terminalHandle ? { runId: adoption.adopted_run_id, terminalHandle } : null
+}
+
+export function getRunMailboxOwnerIdsForHandle(
+  this: OrchestrationDb,
+  terminalHandle: string,
+  legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
+): string[] {
+  const runIds = (
+    this.db
+      .prepare(
+        `SELECT coordinator.run_id
+         FROM run_coordinator_handles AS coordinator
+         JOIN runs ON runs.id = coordinator.run_id AND runs.legacy = 0
+         WHERE coordinator.terminal_handle = ?
+         ORDER BY coordinator.run_id`
+      )
+      .all(terminalHandle) as { run_id: string }[]
+  ).map((row) => row.run_id)
+  const adoptedOwner =
+    legacyAdoptedMailboxOwner === undefined
+      ? this.getLegacyAdoptedRunMailboxOwner()
+      : legacyAdoptedMailboxOwner
+  if (adoptedOwner?.terminalHandle === terminalHandle) {
+    runIds.push(adoptedOwner.runId)
+  }
+  return [...new Set(runIds)].sort()
 }
 
 export function listRuns(
@@ -117,6 +159,8 @@ export function fenceOutstandingDelivery(this: OrchestrationDb, runId: string): 
 
 export type RunLookupMethods = {
   getRun: typeof getRun
+  getLegacyAdoptedRunMailboxOwner: typeof getLegacyAdoptedRunMailboxOwner
+  getRunMailboxOwnerIdsForHandle: typeof getRunMailboxOwnerIdsForHandle
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
@@ -129,6 +173,8 @@ export type RunLookupMethods = {
 export function attachRunLookup(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getRun,
+    getLegacyAdoptedRunMailboxOwner,
+    getRunMailboxOwnerIdsForHandle,
     listRuns,
     getCurrentRunForPane,
     runsBoundToPane,

@@ -601,6 +601,13 @@ describe('orchestration RPC methods', () => {
         totalCount: terminals.length,
         truncated: false
       })
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) => {
+        if (handle === 'term_coord') {
+          return coordinatorPaneKey
+        }
+        const terminal = terminals.find((candidate) => candidate.handle === handle)
+        return terminal ? `${terminal.tabId}:${terminal.leafId}` : null
+      })
       vi.spyOn(runtime, 'getAgentStatusForHandle').mockImplementation(
         (handle: string) => agentStatuses?.[handle] ?? null
       )

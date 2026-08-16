@@ -37,6 +37,49 @@ export function getActiveDispatchForIdentity(
   return this.findActiveDispatchForAssignee(handle, paneKey)
 }
 
+export function getActiveDispatchMailboxOwners(
+  this: OrchestrationDb,
+  handle: string,
+  paneKey?: string
+): DispatchContextRow[] {
+  const byHandle = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC`
+    )
+    .all(handle) as DispatchContextRow[]
+  if (byHandle.length > 0 || !paneKey) {
+    return byHandle
+  }
+
+  const byExactPane = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC`
+    )
+    .all(paneKey) as DispatchContextRow[]
+  if (byExactPane.length > 0 || !parsePaneKey(paneKey)) {
+    return byExactPane
+  }
+  return (
+    this.db
+      .prepare(
+        `SELECT * FROM dispatch_contexts
+         WHERE assignee_pane_key IS NOT NULL
+           AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
+           AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC`
+      )
+      .all(paneKeyMatchSuffix(paneKey)) as DispatchContextRow[]
+  ).filter(
+    (dispatch) =>
+      dispatch.assignee_pane_key !== null &&
+      isEquivalentPaneKey(dispatch.assignee_pane_key, paneKey)
+  )
+}
+
 export function isDispatchMessageSender(
   this: OrchestrationDb,
   params: {
@@ -125,6 +168,7 @@ export type DispatchLookupMethods = {
   getActiveDispatchForTerminal: typeof getActiveDispatchForTerminal
   hasAnyDispatchContexts: typeof hasAnyDispatchContexts
   getActiveDispatchForIdentity: typeof getActiveDispatchForIdentity
+  getActiveDispatchMailboxOwners: typeof getActiveDispatchMailboxOwners
   isDispatchMessageSender: typeof isDispatchMessageSender
   findActiveDispatchForAssignee: typeof findActiveDispatchForAssignee
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
@@ -135,6 +179,7 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     getActiveDispatchForTerminal,
     hasAnyDispatchContexts,
     getActiveDispatchForIdentity,
+    getActiveDispatchMailboxOwners,
     isDispatchMessageSender,
     findActiveDispatchForAssignee,
     getLatestDispatchForTerminal

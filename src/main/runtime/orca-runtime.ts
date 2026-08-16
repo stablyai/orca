@@ -17765,6 +17765,23 @@ export class OrcaRuntimeService {
     return this.getPaneKeyForTerminalHandle(handle)
   }
 
+  getLiveTerminalPaneKey(handle: string): string | null {
+    const runtimePty = this.getLivePtyForHandle(handle)
+    if (runtimePty) {
+      return runtimePty.pty.connected ? (runtimePty.pty.paneKey ?? null) : null
+    }
+    try {
+      const leaf = this.resolveLiveLeafForHandle(handle)
+      if (!leaf?.ptyId) {
+        return null
+      }
+      const pty = this.ptysById.get(leaf.ptyId)
+      return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle)
+    } catch {
+      return null
+    }
+  }
+
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null

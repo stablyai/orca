@@ -49884,6 +49884,7 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
       // The guarded resolver surfaces the staleness so clients can re-derive.
       expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
+      expect(runtime.getLiveTerminalPaneKey(handle)).toBeNull()
     })
 
     it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
@@ -49903,6 +49904,23 @@ describe('OrcaRuntimeService', () => {
       record.ptyId = null
 
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
+    })
+
+    it('keeps terminal cwd resolution fail-soft when the provider is unavailable', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.attachWindow(1)
+      syncSingleTerminalGraph(runtime, 'pty-a')
+      const handle = issueLeafHandle(runtime, 'pty-a')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        getCwd: async () => {
+          throw new Error('ssh disconnected')
+        }
+      })
+
+      await expect(runtime.resolveTerminalCwd(handle)).resolves.toBeNull()
     })
   })
 
