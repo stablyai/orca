@@ -494,7 +494,10 @@ export class Session {
     this.pendingOutputRecords = []
     this.pendingOutputBytes = 0
     this.pendingOutputOverflowed = false
-    this.pendingOutputSeq += 1
+    // Empty incremental takes are not persisted; advancing them would create a false reattach gap.
+    if (includeSnapshot || records.length > 0 || overflowed) {
+      this.pendingOutputSeq += 1
+    }
     return {
       records: includeSnapshot
         ? releasedHeldBytes

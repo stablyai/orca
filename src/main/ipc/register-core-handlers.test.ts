@@ -342,8 +342,11 @@ vi.mock('../window/clipboard-ipc-handlers', () => ({
 
 vi.mock('./browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
-  setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
+}))
+
+vi.mock('./browser-renderer-trust', () => ({
+  setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock
 }))
 
 vi.mock('./app', () => ({

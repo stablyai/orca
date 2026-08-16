@@ -29,7 +29,7 @@
         "opencodeGoToggleDescription": "显示当前工作区的 OpenCode Go Token 与费用消耗情况。",
         "kimiToggleDescription": "显示当前工作区的 Kimi 订阅使用情况。",
         "minimaxToggleDescription": "显示当前工作区的 MiniMax 订阅使用情况。",
-        "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
+        "sshToggleDescription": "当有可用的已配置 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。点击可查看工作区范围的端口和外部监听器。",
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用情况。",
@@ -46,7 +46,7 @@
     "settings": "设置",
     "exploreOrca": "探索 Orca",
     "gettingStarted": "Orca 入门",
-    "reportCrash": "发送错误报告...",
+    "reportCrash": "发送崩溃报告...",
     "file": "文件",
     "exit": "退出",
     "edit": "编辑",
@@ -61,7 +61,7 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
-    "resetSize": "重置尺寸",
+    "resetSize": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
@@ -78,7 +78,7 @@
       "body": "Orca 仍在系统托盘中运行"
     },
     "activityWaiting": "Orca - 活动等待中",
-    "activityWaitingSuffix": "activity waiting"
+    "activityWaitingSuffix": "等待活动"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -4696,7 +4696,9 @@
           "noneFound": "未找到非 Orca 工作树",
           "tryDifferentSearch": "请尝试其他名称或路径。",
           "disableSource": "禁用来源后可单独管理其工作树。",
-          "appearWhenDetected": "Orca 检测到新工作树后，它们会显示在这里。"
+          "appearWhenDetected": "Orca 检测到新工作树后，它们会显示在这里。",
+          "openGlobalSettings": "在全局设置中管理",
+          "globalSettingsSources": "以下来源有全局设置，可在此处覆盖："
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
@@ -4708,15 +4710,21 @@
           "duplicatePath": "此位置已在列表中。",
           "limit": "请先移除一个自定义位置再添加新位置。",
           "sources": "来源",
-          "sourcesDescription": "已启用来源的当前及未来工作树会显示在侧边栏中。",
+          "sourcesDescription": "设为显示的来源，其当前及未来工作树会显示在侧边栏中。",
           "found": "找到 {{value0}} 个",
           "remove": "移除 {{value0}}",
           "removeLocation": "移除自定义位置",
-          "toggle": "显示 {{value0}} 的当前及未来工作树",
           "addLocation": "添加位置",
           "worktreeRoot": "工作树根目录",
           "add": "添加",
-          "rootHelp": "Orca 会识别此文件夹下的工作树。"
+          "rootHelp": "Orca 会识别此文件夹下的工作树。",
+          "visibility": "{{value0}} 的可见性",
+          "show": "显示",
+          "hide": "隐藏",
+          "overridingGlobal": "正在覆盖全局设置：{{value0}}",
+          "projectOnly": "仅在此项目中添加。",
+          "useGlobalFor": "为 {{value0}} 使用全局设置",
+          "useGlobal": "使用全局设置"
         },
         "add": {
           "repo": {
@@ -4786,7 +4794,7 @@
           "project": {
             "drop": {
               "669e12dd97": "本地文件夹和 Git 存储库",
-              "ffc769ca29": "删除文件夹以添加项目",
+              "ffc769ca29": "拖放文件夹以添加项目",
               "740e8d0d46": "使用“添加项目”作为服务器路径",
               "e344666fb8": "服务器运行时处于激活状态",
               "d0f8943f8b": "准备项目添加流程",
@@ -5965,7 +5973,11 @@
           "5567191a6e": "浏览",
           "0e9fc0eadc": "工作区目录",
           "e2955d9ccb": "配置创建新工作区的位置。",
-          "7511097c5d": "工作区"
+          "7511097c5d": "工作区",
+          "externalWorktrees": "外部工作树",
+          "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。",
+          "show": "显示",
+          "hide": "隐藏"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "应用更改",
@@ -6628,7 +6640,14 @@
           "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} via {{value1}}",
+          "externalWorktrees": "外部工作树",
+          "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
+          "externalWorktreesInherited": "正在使用全局设置：{{value0}}",
+          "show": "显示",
+          "hide": "隐藏",
+          "externalWorktreesGlobal": "全局默认值：{{value0}}",
+          "useGlobal": "使用全局设置"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
@@ -8249,7 +8268,9 @@
             "e61157e926": "编辑器自动换行",
             "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
             "editorFontFamily": "编辑器字体",
-            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。"
+            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
+            "externalWorktrees": "外部工作树",
+            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。"
           }
         },
         "git": {
@@ -8733,6 +8754,8 @@
             "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。",
             "projectRuntime": "项目运行时",
             "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+            "externalWorktrees": "外部工作树",
+            "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
             "copy": "复制",
             "clone": "克隆",
             "apfs": "apfs"
@@ -8758,6 +8781,9 @@
               "4575341c77": "选择本地桌面、添加已保存的远程 Orca 服务器或生成配对 URL。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "已被调度中心拦截。在此重新映射，或在系统设置中更改。"
         },
         "shortcuts": {
           "search": {
@@ -10132,6 +10158,11 @@
           "description": "用于语音听写的输入设备，系统默认会跟随操作系统的麦克风设置。",
           "accessHint": "允许麦克风访问以列出输入设备。",
           "allowAccess": "允许访问"
+        },
+        "GlobalWorktreeVisibilitySourcesSetting": {
+          "saveFailed": "无法保存可见性默认设置。",
+          "updateServer": "请更新此服务器以配置来源默认设置。",
+          "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
         }
       },
       "right": {
@@ -14323,18 +14354,18 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…",
+        "uploadingAttachments": "正在将 {{value0}} 个文件上传到远端…",
         "model": "模型",
         "effort": "推理强度",
         "fastMode": "快速模式",
         "thinking": "思考",
         "options": "选项",
         "sessionOptions": "会话选项",
-        "chooseInAgentPicker": "在代理选择器中选择…",
+        "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "valueUnknown": "当前值未知 — 请选择开或关",
-        "sentNotConfirmed": "已发送给代理 — 尚未确认",
+        "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
         "optionUpdateFailed": "无法更新选项",
@@ -14354,11 +14385,11 @@
         "commands": "命令",
         "skills": "技能",
         "loadingSkills": "正在加载技能…",
-        "skillsUnavailableHost": "此主机不可用技能",
+        "skillsUnavailableHost": "此主机上无法使用技能",
         "skillsLoadFailed": "无法从此主机加载技能",
         "retrySkills": "重试",
-        "skillCommandCollision": "也是技能名称 - 由代理决定",
-        "skillMultipleSources": "{{sourceCount}} 个来源 - 由代理解析",
+        "skillCommandCollision": "也是技能名称 — 由智能体决定",
+        "skillMultipleSources": "{{sourceCount}} 个来源 — 由智能体处理",
         "skillScopeProject": "项目",
         "skillScopePersonal": "个人",
         "skillScopeBuiltIn": "内置",
@@ -14462,7 +14493,7 @@
       "detectionFailed": "无法检测此工作区主机上的智能体。",
       "noAgents": "未在此工作区主机上检测到已启用的智能体。",
       "context": "上下文",
-      "modeFocused": "聚焦续接（推荐）",
+      "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
       "modeFull": "完整会话记录",
       "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
@@ -14495,12 +14526,12 @@
       "canvasLabel": "项目、工作区和智能体的嵌套关系图",
       "zoomOut": "缩小",
       "zoomIn": "放大",
-      "fit": "适应",
+      "fit": "适配屏幕",
       "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
       "agentCount": "{{count}} 个智能体"
     },
     "placeholder": {
-      "title": "Agent dashboard",
+      "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
     },
     "recoverableError": {
@@ -14508,16 +14539,16 @@
       "description": "看板未能完成渲染。请重试以重新挂载，或重新打开。"
     },
     "bucket": {
-      "attention": "Needs You",
-      "working": "Working",
-      "idle": "Idle",
-      "empty": "None",
+      "attention": "需要你",
+      "working": "工作中",
+      "idle": "空闲",
+      "empty": "无",
       "done": "已完成"
     },
-    "title": "Agents",
-    "total": "{{count}} total",
+    "title": "智能体",
+    "total": "共 {{count}} 个",
     "card": {
-      "you": "You",
+      "you": "你",
       "time": {
         "justNow": "刚刚",
         "minutes": "{{count}} 分钟",
@@ -14530,15 +14561,15 @@
         "merged": "已合并的评审",
         "closed": "已关闭的评审"
       },
-      "subagents_one": "{{count}} 个子代理",
-      "subagents_other": "{{count}} 个子代理"
+      "subagents_one": "{{count}} 个子智能体",
+      "subagents_other": "{{count}} 个子智能体"
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "Open worktree",
-      "close": "Close"
+      "focusWorktree": "聚焦工作树",
+      "close": "关闭"
     },
-    "close": "Close dashboard",
+    "close": "关闭仪表盘",
     "settingsTooltip": "看板设置",
     "filters": {
       "remove": "移除 {{label}} 筛选条件",

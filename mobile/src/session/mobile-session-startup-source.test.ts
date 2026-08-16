@@ -186,4 +186,17 @@ describe('mobile session startup', () => {
       newTabActions.indexOf("label: 'Markdown Note'")
     )
   })
+
+  it('counts a pending-handle active terminal as a tabs recovery need (STA-4256)', () => {
+    const recoveryNeed = sliceBetween(
+      'const hasSessionTabsRecoveryNeed = useCallback(',
+      'const getSessionTabsApplicationRevision ='
+    )
+
+    expect(recoveryNeed).toContain('hasPendingTerminalHandleRecoveryNeed(')
+    expect(recoveryNeed).toContain('sessionTabsRef.current')
+    expect(recoveryNeed).toContain('activeSessionTabIdRef.current')
+    // The predicate only reaches the poll loop through this hook's option.
+    expect(source).toContain('hasRecoveryNeed: hasSessionTabsRecoveryNeed')
+  })
 })

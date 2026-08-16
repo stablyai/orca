@@ -9,7 +9,7 @@ export type SkillScanRunOptions = {
 }
 
 type CacheEntry<T> = { value: T; expiresAt: number }
-type PendingEntry<T> = { promise: Promise<T>; startedAt: number }
+type PendingEntry<T> = { promise: Promise<T>; startedAt: number; abort: AbortController }
 
 // Why: a root on a stalled network mount can leave a readdir that never settles.
 // Joining it forever would make one wedged mount permanently wedge discovery for
@@ -17,6 +17,48 @@ type PendingEntry<T> = { promise: Promise<T>; startedAt: number }
 // least retried. Past this age a new caller starts its own scan instead; the old
 // promise is dropped, so at most one pending entry per key survives.
 const MAX_JOINABLE_SCAN_AGE_MS = 30_000
+
+// Why bound *abandoned* scans and not live ones: one discovery legitimately starts
+// a walk per root (a dozen-plus at once), so a cap on live scans would shed healthy
+// roots and make skills vanish from the picker. A scan only becomes abandoned by
+// outliving MAX_JOINABLE_SCAN_AGE_MS without settling, which healthy roots never do,
+// so this budget is spent only by genuinely stalled mounts.
+//
+// The budget is global and per-abandonment, not per-key: a single wedged root can
+// spend all of it on its own, one replacement per 30s window. That is the intended
+// shape — the number bounds how many stalled walks may be alive at once, whatever
+// mix of roots produced them. It is not a count of distinct roots.
+const MAX_ABANDONED_SCANS = 16
+
+/**
+ * Thrown instead of starting yet another walk while too many are stalled.
+ *
+ * The key is deliberately not in the message: it carries an absolute workspace
+ * path, and this reaches a paired client and the renderer's error string.
+ */
+export class SkillScanShedError extends Error {
+  constructor() {
+    super('Skill scan was shed: too many stalled scans')
+    this.name = 'SkillScanShedError'
+  }
+}
+
+/**
+ * True for the ways a scan ends without an answer: shed before it began, or
+ * aborted because it was abandoned for age. Callers that can degrade a single
+ * root should treat them the same — re-throwing either one fails a whole scan.
+ *
+ * Matching on the name is safe rather than broad: the walk and the candidate
+ * tasks catch every filesystem error locally, so the only `AbortError` that can
+ * escape a scan is the one its own signal raised. `TimeoutError` is the name
+ * `AbortSignal.timeout()` aborts with, so a pre-flight deadline lands here too.
+ */
+export function isSkillRootUnavailableError(error: unknown): boolean {
+  return (
+    error instanceof SkillScanShedError ||
+    (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
+  )
+}
 
 /**
  * Shares one filesystem scan between concurrent callers and, optionally, reuses
@@ -28,6 +70,8 @@ const MAX_JOINABLE_SCAN_AGE_MS = 30_000
 export class SkillScanCoalescer<T> {
   private readonly pending = new Map<string, PendingEntry<T>>()
   private readonly cache = new Map<string, CacheEntry<T>>()
+  /** Scans abandoned for age that have not settled; the budget for replacements. */
+  private abandonedScans = 0
 
   constructor(
     private readonly maximumEntries: number,
@@ -37,12 +81,15 @@ export class SkillScanCoalescer<T> {
   async run(
     key: string,
     options: SkillScanRunOptions,
-    task: () => Promise<T>
+    task: (signal: AbortSignal) => Promise<T>
   ): Promise<SkillScanOutcome<T>> {
     if (options.refresh) {
       // Why: a forced caller is answering a mutation it just made, so it must not
       // join a scan that may have started before that mutation. Concurrent forced
       // callers therefore duplicate; they are rare (install / explicit recheck).
+      // The superseded scan is not aborted — on a healthy root it is about to
+      // finish, and its callers still want an answer; the publish fence in
+      // `start` already stops it writing a pre-mutation result.
       this.cache.delete(key)
       return { value: await this.start(key, options.ttlMs, task), cached: false }
     }
@@ -54,6 +101,23 @@ export class SkillScanCoalescer<T> {
     if (inFlight && this.now() - inFlight.startedAt < MAX_JOINABLE_SCAN_AGE_MS) {
       return { value: await inFlight.promise, cached: true }
     }
+    if (inFlight) {
+      if (this.abandonedScans >= MAX_ABANDONED_SCANS) {
+        // Why leave the stalled entry in `pending`: it is still the only scan that
+        // can answer this key, so keeping it lets the root recover on its own the
+        // moment the mount responds, with no extra walk from us.
+        throw new SkillScanShedError()
+      }
+      // Why: the replacement is what future callers read, so the walk this one
+      // gives up on must stop issuing filesystem work rather than race it.
+      this.abandonedScans += 1
+      inFlight.abort.abort()
+      void inFlight.promise
+        .catch(() => undefined)
+        .finally(() => {
+          this.abandonedScans -= 1
+        })
+    }
     return { value: await this.start(key, options.ttlMs, task), cached: false }
   }
 
@@ -63,8 +127,9 @@ export class SkillScanCoalescer<T> {
     this.pending.clear()
   }
 
-  private start(key: string, ttlMs: number, task: () => Promise<T>): Promise<T> {
-    const promise = task()
+  private start(key: string, ttlMs: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const abort = new AbortController()
+    const promise = task(abort.signal)
       .then((value) => {
         // Why: owning the pending slot is what makes a scan publishable, and it is
         // per key by construction. Deleting the cache entry is not enough to
@@ -88,7 +153,7 @@ export class SkillScanCoalescer<T> {
     // Why: rejections must not surface as an unhandled rejection on the shared
     // promise before the caller that started it awaits.
     promise.catch(() => undefined)
-    this.pending.set(key, { promise, startedAt: this.now() })
+    this.pending.set(key, { promise, startedAt: this.now(), abort })
     return promise
   }
 

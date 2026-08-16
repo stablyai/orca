@@ -70,6 +70,8 @@ ORCA computer get-app-state --app <app> --restore-window --json
 ORCA computer click --app <app> --element-index <index> --json
 ORCA computer click --app <app> --x 100 --y 100 --json
 ORCA computer click --app <app> --x 100 --y 100 --modifiers CmdOrCtrl+Shift --json
+ORCA computer click --app <app> --element-index <index> --mouse-button right --json
+ORCA computer click --app <app> --element-index <index> --mouse-button middle --json
 ORCA computer perform-secondary-action --app <app> --element-index <index> --action <name> --json
 ORCA computer set-value --app <app> --element-index <index> --value "text" --json
 ORCA computer type-text --app <app> --text "text" --json

@@ -13,16 +13,11 @@ import {
 } from '../agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
-  effectiveWorktreeSourceVisibility,
-  normalizeCustomWorktreeVisibilitySources,
+  resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from './visibility-sources'
-import { isExplicitlyImportedExternalWorktreePath } from '../external-worktree-inbox'
-import {
-  effectiveAgentWorktreeVisibility,
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../external-worktree-visibility'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../external-worktree-visibility'
+import { shouldShowWorktree } from '../worktree-visibility-resolution'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../global-settings-types'
 import type { Repo } from '../repo-types'
 import type { WorktreeMeta } from './meta-types'
@@ -34,6 +29,7 @@ export {
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../external-worktree-visibility'
+export { shouldShowWorktree } from '../worktree-visibility-resolution'
 
 export function buildKnownOrcaWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
@@ -179,7 +175,10 @@ export function toDetectedWorktree(args: {
   repo: Repo
   worktree: Worktree
   meta?: WorktreeMeta
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<
+    GlobalSettings,
+    'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory' | 'worktreeVisibilityDefaults'
+  >
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
@@ -189,7 +188,7 @@ export function toDetectedWorktree(args: {
     args.worktreeVisibilitySourceMatcher ??
     createWorktreeVisibilitySourceMatcher(
       [args.repo.path],
-      normalizeCustomWorktreeVisibilitySources(args.repo.customWorktreeVisibilitySources) ?? []
+      resolveCustomWorktreeVisibilitySources(args.repo, args.settings.worktreeVisibilityDefaults)
     )
   const visibilitySource = sourceMatcher(args.worktree.path)
   const ownership = classifyWorktreeOwnership({
@@ -206,6 +205,7 @@ export function toDetectedWorktree(args: {
     isLegacyRepoForVisibility,
     isSelectedCheckout: selectedCheckout,
     importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths,
+    visibilityDefaults: args.settings.worktreeVisibilityDefaults,
     visibilitySource
   })
 
@@ -216,40 +216,6 @@ export function toDetectedWorktree(args: {
     visible,
     ...(visibilitySource ? { visibilitySource } : {})
   }
-}
-
-export function shouldShowWorktree(args: {
-  worktree: Pick<Worktree, 'path'>
-  ownership: WorktreeOwnership
-  repo: Repo
-  isLegacyRepoForVisibility: boolean
-  isSelectedCheckout: boolean
-  importedExternalWorktreePaths?: readonly string[] | undefined
-  visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
-}): boolean {
-  if (args.isSelectedCheckout) {
-    return true
-  }
-  if (args.ownership === 'orca-managed') {
-    return true
-  }
-  if (
-    isExplicitlyImportedExternalWorktreePath(args.worktree.path, {
-      importedExternalWorktreePaths: args.importedExternalWorktreePaths
-    })
-  ) {
-    return true
-  }
-  if (args.visibilitySource) {
-    return effectiveWorktreeSourceVisibility(args.repo, args.visibilitySource) === 'show'
-  }
-  if (args.ownership === 'agent-scratch') {
-    return effectiveAgentWorktreeVisibility(args.repo) === 'show'
-  }
-  if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
-    return true
-  }
-  return effectiveExternalWorktreeVisibility(args.repo, args.isLegacyRepoForVisibility) === 'show'
 }
 
 export function applyMetadataFallbackVisibility(detected: DetectedWorktree): DetectedWorktree {

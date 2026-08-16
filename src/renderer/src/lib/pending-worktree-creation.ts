@@ -11,7 +11,7 @@ import type {
   WorkspaceStatus
 } from '../../../shared/worktree/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.
@@ -49,6 +49,8 @@ export type WorktreeCreationRequest = {
   ephemeralVmRuntimeEnvironmentId?: string
   /** Checkout ownership selected by the provisioned recipe. */
   ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
+  /** Source-host commit captured before a provisioned-root recipe starts. */
+  ephemeralVmExpectedRefHead?: string
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
@@ -61,6 +63,8 @@ export type WorktreeCreationRequest = {
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
+  /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+  nameWasGenerated?: boolean
   displayName?: string
   baseBranch?: string
   compareBaseRef?: string
