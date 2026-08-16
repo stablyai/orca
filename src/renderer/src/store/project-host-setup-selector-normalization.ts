@@ -1,4 +1,5 @@
-import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   getProjectIdentityKey,
   type ProjectHostSetupProjection

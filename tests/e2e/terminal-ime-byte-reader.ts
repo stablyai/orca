@@ -9,14 +9,17 @@ export type TerminalImeByteReader = {
   expectedLineCount: number
   readyMarker: string
   resultPrefix: string
-  scriptPath: string | null
-  source: string
+  scriptPath: string
 }
 
-function createReader(expectedLineCount: number): TerminalImeByteReader {
+export function createTerminalImeByteReader(
+  testRepoPath: string,
+  expectedLineCount: number
+): TerminalImeByteReader {
   const runId = randomUUID().replaceAll('-', '')
   const readyMarker = `ORCA_IME_READER_READY_${runId}`
   const resultPrefix = `ORCA_IME_BYTES_${runId}`
+  const scriptPath = path.join(testRepoPath, `.orca-ime-byte-reader-${runId}.cjs`)
   const source = `
 const expectedLineCount = ${expectedLineCount}
 const readyMarker = ${JSON.stringify(readyMarker)}
@@ -29,7 +32,14 @@ process.stdin.on('data', (chunk) => {
   pending = Buffer.concat([pending, Buffer.from(chunk)])
   let newlineIndex = pending.indexOf(0x0a)
   while (newlineIndex >= 0) {
-    const line = pending.subarray(0, newlineIndex + 1)
+    // Why: a Unix pty's line discipline turns the terminal's CR into a bare LF, but Windows
+    // ConPTY hands the reader CRLF. Drop the CR so a recorded line-feed expectation holds on
+    // every substrate; the IME payload bytes ahead of it are compared unchanged.
+    const rawLine = pending.subarray(0, newlineIndex + 1)
+    const hasCarriageReturn = rawLine.length > 1 && rawLine[rawLine.length - 2] === 0x0d
+    const line = hasCarriageReturn
+      ? Buffer.concat([rawLine.subarray(0, rawLine.length - 2), Buffer.from([0x0a])])
+      : rawLine
     pending = pending.subarray(newlineIndex + 1)
     receivedLineCount += 1
     process.stdout.write(resultPrefix + ':' + receivedLineCount + ':' + line.toString('hex') + '\\n')
@@ -40,25 +50,8 @@ process.stdin.on('data', (chunk) => {
   }
 })
 `
-  return { expectedLineCount, readyMarker, resultPrefix, scriptPath: null, source }
-}
-
-export function createTerminalImeByteReader(
-  testRepoPath: string,
-  expectedLineCount: number
-): TerminalImeByteReader {
-  const reader = createReader(expectedLineCount)
-  const runId = reader.readyMarker.slice('ORCA_IME_READER_READY_'.length)
-  const scriptPath = path.join(testRepoPath, `.orca-ime-byte-reader-${runId}.cjs`)
-  reader.scriptPath = scriptPath
-  writeFileSync(scriptPath, reader.source)
-  return reader
-}
-
-export function createInlineTerminalImeByteReader(
-  expectedLineCount: number
-): TerminalImeByteReader {
-  return createReader(expectedLineCount)
+  writeFileSync(scriptPath, source)
+  return { expectedLineCount, readyMarker, resultPrefix, scriptPath }
 }
 
 export async function startTerminalImeByteReader(
@@ -66,12 +59,7 @@ export async function startTerminalImeByteReader(
   ptyId: string,
   reader: TerminalImeByteReader
 ): Promise<void> {
-  const script = reader.scriptPath
-    ? JSON.stringify(reader.scriptPath)
-    : `-e ${JSON.stringify(
-        `eval(Buffer.from('${Buffer.from(reader.source).toString('base64')}', 'base64').toString())`
-      )}`
-  await sendToTerminal(page, ptyId, `node ${script}\r`)
+  await sendToTerminal(page, ptyId, `node ${JSON.stringify(reader.scriptPath)}\r`)
   await waitForTerminalOutput(page, reader.readyMarker, 10_000, 20_000)
 }
 
@@ -102,7 +90,5 @@ export async function waitForTerminalImeBytes(
 }
 
 export function removeTerminalImeByteReader(reader: TerminalImeByteReader): void {
-  if (reader.scriptPath) {
-    rmSync(reader.scriptPath, { force: true })
-  }
+  rmSync(reader.scriptPath, { force: true })
 }

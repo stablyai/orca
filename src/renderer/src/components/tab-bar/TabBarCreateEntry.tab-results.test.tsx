@@ -25,14 +25,20 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => null
 }))
 
-// `hold` stands in for the hook's deferred query: rows the user has not seen yet.
+// `hold` stands in for the hook's deferred query: it pins the results to the
+// query they were built from, so later keystrokes leave them stale.
 const tabSearchMock = vi.hoisted(() => ({
-  hold: false,
+  hold: null as string | null,
   resultsByQuery: {} as Record<string, unknown[]>
 }))
 vi.mock('./use-open-tab-search', () => ({
-  useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) =>
-    enabled && !tabSearchMock.hold ? (tabSearchMock.resultsByQuery[query.trim()] ?? []) : []
+  useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
+    const resolved = tabSearchMock.hold ?? query
+    return {
+      query: enabled ? resolved : query,
+      results: enabled ? (tabSearchMock.resultsByQuery[resolved.trim()] ?? []) : []
+    }
+  }
 }))
 
 // Selection routing itself stays real, so the focus handoff and failure messages
@@ -42,7 +48,7 @@ const activationMocks = vi.hoisted(() => ({
   browser: vi.fn(),
   simulator: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
-  queueBrowserFocusRequest: vi.fn()
+  requestBrowserFocus: vi.fn()
 }))
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: activationMocks.workspace
@@ -57,8 +63,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: activationMocks.focusTerminalTabSurface
 }))
 vi.mock('@/components/browser-pane/browser-focus', () => ({
-  ORCA_BROWSER_FOCUS_REQUEST_EVENT: 'orca:browser-focus-request',
-  queueBrowserFocusRequest: activationMocks.queueBrowserFocusRequest
+  requestBrowserFocus: activationMocks.requestBrowserFocus
 }))
 
 import TabBarCreateEntry from './TabBarCreateEntry'
@@ -67,6 +72,7 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 
 function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSearchResult {
   return {
+    executionHostId: 'local',
     source: 'workspace',
     id: 'open-tab:workspace:tab-1',
     title: 'Add tab search and jump in worktree',
@@ -158,7 +164,7 @@ function renderEntry(props: Record<string, unknown> = {}): void {
 beforeEach(() => {
   vi.clearAllMocks()
   entryOptionsMock.options = []
-  tabSearchMock.hold = false
+  tabSearchMock.hold = null
   tabSearchMock.resultsByQuery = {}
   activationMocks.workspace.mockReturnValue({ status: 'activated' })
   activationMocks.browser.mockReturnValue({
@@ -226,23 +232,66 @@ describe('TabBarCreateEntry tab results', () => {
     expect(rows[3]).toContain('Open file')
   })
 
-  it('keeps Enter on the row the user saw when a tab row arrives a render later', () => {
+  it('re-pins Enter to a deferred tab row that ranks above the auto-selected file', () => {
     entryOptionsMock.options = [newFileOption]
     tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
-    tabSearchMock.hold = true
+    tabSearchMock.hold = ''
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    const onDidOpenEntry = vi.fn()
+    renderEntry({ onDidOpenEntry, onOpenEntry })
+
+    setQuery('add tab')
+    expect(rowTexts()).toHaveLength(1)
+
+    tabSearchMock.hold = null
+    renderEntry({ onDidOpenEntry, onOpenEntry })
+    expect(rowTexts()[0]).toContain('Switch to tab')
+    submitForm()
+
+    expect(activationMocks.workspace).toHaveBeenCalledTimes(1)
+    expect(onDidOpenEntry).toHaveBeenCalledTimes(1)
+    expect(onOpenEntry).not.toHaveBeenCalled()
+  })
+
+  it('keeps a manually chosen row when a tab row arrives a render later', () => {
+    entryOptionsMock.options = [newFileOption]
+    tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
+    tabSearchMock.hold = ''
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     renderEntry({ onOpenEntry })
 
     setQuery('add tab')
     expect(rowTexts()).toHaveLength(1)
+    // Arrow on the only row marks selection as user-owned, not auto-default.
+    pressKey(queryInput(), 'ArrowDown')
 
-    tabSearchMock.hold = false
+    tabSearchMock.hold = null
     renderEntry({ onOpenEntry })
     expect(rowTexts()[0]).toContain('Switch to tab')
     submitForm()
 
     expect(onOpenEntry).toHaveBeenCalledTimes(1)
     expect(activationMocks.workspace).not.toHaveBeenCalled()
+  })
+
+  it('drops tab rows built for an earlier query until the search catches up', () => {
+    entryOptionsMock.options = [newFileOption]
+    tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+
+    setQuery('add tab')
+    expect(rowTexts()[0]).toContain('Switch to tab')
+
+    // The user keeps typing; the deferred search still describes 'add tab'.
+    tabSearchMock.hold = 'add tab'
+    setQuery('add tabs')
+
+    expect(rowTexts().some((row) => row.includes('Switch to tab'))).toBe(false)
+    submitForm()
+
+    expect(activationMocks.workspace).not.toHaveBeenCalled()
+    expect(onOpenEntry).toHaveBeenCalledTimes(1)
   })
 
   it('activates a clicked tab row and closes the menu', () => {
@@ -293,7 +342,10 @@ describe('TabBarCreateEntry tab results', () => {
     submitForm()
 
     expect(onDidOpenEntry).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Tab no longer exists')
+    // Announced, not just drawn: the failure lands inside the live region.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      'Tab no longer exists'
+    )
     expect(rowTexts()).toHaveLength(3)
 
     // The other tab row and the create row below it still act.

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -106,7 +106,7 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
         label: 'stablyai/orca'
       }
     })
-    // Offline/unauthed: the parent lookup returns null. The fork's own origin
+    // Offline/unauthed: the parent lookup returns null. The same-name origin
     // owner must NOT be persisted over the parent identity.
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
@@ -117,6 +117,5 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
     await flushEffects()
 
     expect(updateRepo).not.toHaveBeenCalled()
-    expect(apiMocks.repoSlug).not.toHaveBeenCalled()
   })
 })

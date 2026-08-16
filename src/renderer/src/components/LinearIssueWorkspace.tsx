@@ -10,10 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  Copy,
+  ExternalLink,
   FolderKanban,
   FolderOpen,
   GitBranch,
-  Link,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -51,7 +52,6 @@ import {
 } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
@@ -71,9 +71,9 @@ import {
 import type {
   LinearComment,
   LinearIssue,
-  LinearIssueChildSummary,
-  LinearProjectSummary
-} from '../../../shared/types'
+  LinearIssueChildSummary
+} from '../../../shared/linear/issue-types'
+import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
@@ -125,39 +125,6 @@ function LinearIssueAvatar({
     >
       {initial}
     </span>
-  )
-}
-
-export function LinearSubIssueTitleInput({
-  value,
-  onChange,
-  onSubmit
-}: {
-  value: string
-  onChange: (value: string) => void
-  onSubmit: () => void
-}): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
-  return (
-    <input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onCompositionStart={() => imeEnter.setComposing(true)}
-      onCompositionEnd={() => imeEnter.setComposing(false)}
-      onKeyDown={(event) => {
-        if (imeEnter.ownsKeyDown(event)) {
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          onSubmit()
-        }
-      }}
-      onKeyUp={imeEnter.onKeyUp}
-      onBlur={imeEnter.reset}
-      placeholder={translate('auto.components.LinearIssueWorkspace.c182e02de5', 'Sub-issue title')}
-      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    />
   )
 }
 
@@ -334,10 +301,20 @@ function LinearIssueSubIssueButton({
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
           <div className="space-y-3">
-            <LinearSubIssueTitleInput
+            <input
               value={title}
-              onChange={setTitle}
-              onSubmit={() => void handleCreate()}
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreate()
+                }
+              }}
+              placeholder={translate(
+                'auto.components.LinearIssueWorkspace.c182e02de5',
+                'Sub-issue title'
+              )}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex justify-end">
               <Button
@@ -806,6 +783,7 @@ export default function LinearIssueWorkspace({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
@@ -814,7 +792,7 @@ export default function LinearIssueWorkspace({
                   'Copy Linear URL'
                 )}
               >
-                <Link className="size-4" />
+                <Copy className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -824,19 +802,20 @@ export default function LinearIssueWorkspace({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
+                onClick={() => void window.api.shell.openUrl(displayed.url)}
                 aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.9e3c49beb8',
-                  'Copy issue identifier'
+                  'auto.components.LinearIssueWorkspace.openOnLinear',
+                  'Open on Linear'
                 )}
               >
-                <Clipboard className="size-4" />
+                <ExternalLink className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier')}
+              {translate('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
             </TooltipContent>
           </Tooltip>
           {attachedWorkspace ? (
@@ -882,24 +861,19 @@ export default function LinearIssueWorkspace({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleOpenOrUseIssue}
-                  aria-label={translate(
-                    'auto.components.LinearIssueWorkspace.30a7f56c0a',
-                    'Start workspace from issue'
-                  )}
-                >
-                  <ArrowRight className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenOrUseIssue}
+              className="gap-1.5 whitespace-nowrap"
+              aria-label={translate(
+                'auto.components.LinearIssueWorkspace.30a7f56c0a',
+                'Start workspace from issue'
+              )}
+            >
+              {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
+              <ArrowRight className="size-3.5" />
+            </Button>
           )}
           {variant === 'sheet' ? (
             <Tooltip>

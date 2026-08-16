@@ -43,7 +43,7 @@ describe('parseWorkspaceSession terminal fields', () => {
     }
   })
 
-  it('rejects empty terminal startup cwd values', () => {
+  it('drops a tab with an empty startup cwd instead of failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -67,6 +67,9 @@ describe('parseWorkspaceSession terminal fields', () => {
       terminalLayoutsByTabId: {}
     })
 
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt).toEqual([])
+    }
   })
 })

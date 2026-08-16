@@ -66,6 +66,20 @@ export function configureElectronNetworkCompatibility(
   app.commandLine.appendSwitch('disable-http2')
 }
 
+export function disableUnsupportedChromiumFeatures(): void {
+  appendDisabledChromiumFeatures(['FedCm'])
+}
+
+function appendDisabledChromiumFeatures(features: string[]): void {
+  const existingFeatures = app.commandLine
+    .getSwitchValue('disable-features')
+    .split(',')
+    .map((feature) => feature.trim())
+    .filter(Boolean)
+  const disabledFeatures = Array.from(new Set([...features, ...existingFeatures])).join(',')
+  app.commandLine.appendSwitch('disable-features', disabledFeatures)
+}
+
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
@@ -254,23 +268,6 @@ export function installDevParentSignalQuit(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
-  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
-  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
-  const isLinuxX11Override =
-    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
-  const isLinuxWaylandSession =
-    process.platform === 'linux' &&
-    !isLinuxX11Override &&
-    (Boolean(process.env.WAYLAND_DISPLAY) ||
-      process.env.XDG_SESSION_TYPE === 'wayland' ||
-      ozonePlatformHint === 'wayland' ||
-      ozonePlatform === 'wayland')
-
-  if (isLinuxWaylandSession) {
-    // Why: Chromium otherwise leaves Wayland text-input-v3 disconnected from native IME frameworks.
-    app.commandLine.appendSwitch('enable-wayland-ime')
-  }
-
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
@@ -289,6 +286,17 @@ export function enableMainProcessGpuFeatures(): void {
   // 128 raises the ceiling for real layouts while staying bounded so context leaks still surface.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+  const isLinuxWaylandSession =
+    process.platform === 'linux' &&
+    !isLinuxX11Override &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
   if (isLinuxWaylandSession) {
     // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
@@ -306,11 +314,7 @@ export function enableMainProcessGpuFeatures(): void {
     app.commandLine.appendSwitch('enable-features', features)
   }
 
-  const existingDisabledFeatures = app.commandLine.getSwitchValue('disable-features')
   // Why: IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min, delaying agent-done/bell notifications ~60s.
   // This opt-out is skipped under GPU fallback (win32-only today); if throttling ever reaches Windows it must move out of this path.
-  const disabledFeatures = ['IntensiveWakeUpThrottling', existingDisabledFeatures]
-    .filter(Boolean)
-    .join(',')
-  app.commandLine.appendSwitch('disable-features', disabledFeatures)
+  appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
 }

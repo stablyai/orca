@@ -69,6 +69,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
   })
 
+  it('shows terminal link actions by default', () => {
+    expect(getDefaultSettings('/tmp').terminalLinkActionPopoverEnabled).toBe(true)
+  })
+
   it('confirms before closing pinned tabs by default', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })

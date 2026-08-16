@@ -8,8 +8,12 @@ const dependencyAction = parse(
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 const shellContractFiles = [
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
-  'src/main/providers/local-pty-shell-ready.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
@@ -55,18 +59,36 @@ describe('PR workflow parallelism', () => {
     }
   })
 
-  it('runs real-zsh coverage once outside the general shards', () => {
+  it('runs real-shell coverage once outside the general shards', () => {
     const shellStep = workflow.jobs.shell_contracts.steps.find(
       (step) => step.name === 'Test real shell contracts'
     )
     const shellInstall = workflow.jobs.shell_contracts.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+    // Why parsed rather than substring-matched: the step name changes as shells are
+    // added, and `includes('fish')` would also match a comment or a longer package.
+    const aptPackages = (step) =>
+      (step.run?.match(/apt-get install[^\n]*/)?.[0] ?? '')
+        .split(/\s+/)
+        .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
+        .filter((token) => !token.startsWith('-'))
+    const jobsInstallingPackages = Object.entries(workflow.jobs)
+      .filter(([, job]) => (job.steps ?? []).some((step) => aptPackages(step).length > 0))
+      .map(([name]) => name)
 
-    expect(workflow.jobs.test.steps.some((step) => step.name === 'Install zsh')).toBe(false)
-    expect(workflow.jobs.shell_contracts.steps.some((step) => step.name === 'Install zsh')).toBe(
-      true
-    )
+    expect(shellStep).toBeDefined()
+    expect(shellInstall).toBeDefined()
+    expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
+    // Why the whole workflow, not just the general shards: any other lane installing
+    // these shells would silently start running the real-shell tests twice.
+    expect(jobsInstallingPackages).toEqual(['shell_contracts'])
+    // Why each shell is asserted: the live tests skip themselves when the binary is
+    // missing, so a dropped package silently empties this lane instead of failing it.
+    const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
+    for (const shell of ['zsh', 'fish']) {
+      expect(shellPackages).toContain(shell)
+    }
     expect(shellInstall.with['native-runtime']).toBe('node')
     for (const testFile of nativeShellContractFiles) {
       expect(shellStep.run).toContain(testFile)
@@ -148,12 +170,7 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of [
-      'static_analysis',
-      'typecheck',
-      'git_compatibility',
-      'xterm_patch_sync'
-    ]) {
+    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -199,7 +216,6 @@ describe('PR workflow parallelism', () => {
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
-      'xterm_patch_sync',
       'shell_contracts',
       'test',
       'managed_hook_node18',

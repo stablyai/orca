@@ -4,7 +4,8 @@ import type { ExecutionHostId } from './execution-host'
 // IPC payload for aiVault:deleteSession.
 export type AiVaultDeleteSessionArgs = {
   agent: AiVaultAgent
-  // Optional for mixed renderer/main versions; main rejects missing identity.
+  // Optional for mixed renderer/main versions. Main ignores this field on delete
+  // (path + host + agent validation only; no identity/liveness check).
   sessionId?: string
   filePath: string
   // The session's host; only a local session may be deleted.
@@ -71,10 +72,6 @@ export type AiVaultSessionDeleteRejectionCode =
   // fs-side guard: lstat disagrees with the removal's declared kind (a symlink,
   // or a file where the plan expects a directory).
   | 'unexpected-target-kind'
-  | 'session-live'
-  | 'session-liveness-unknown'
-
-export type AiVaultSessionLiveness = 'live' | 'not-live' | 'unknown'
 
 // One path the executor removes. A `kind` mismatch on disk is a rejection,
 // never a coerced delete. `roots` are what the path's realpath must still

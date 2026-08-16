@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
-import type { TerminalPreviewDataPayload } from '../../shared/terminal-preview'
+import type {
+  TerminalPreviewDataPayload,
+  TerminalPreviewReplayChunk
+} from '../../shared/terminal-preview'
 
 const OUTPUT_BATCH_MS = 5
 export const TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
@@ -16,22 +19,37 @@ export type TerminalPreviewOutputMeta = {
 
 type PendingOutput = { data: string; bytes: number; meta?: TerminalPreviewOutputMeta }
 
-function outputAfterSnapshotSeq(output: PendingOutput, snapshotSeq?: number): string | null {
+/**
+ * Split one buffered chunk against the snapshot boundary, keeping WHY it
+ * survived. Only a chunk whose sequence metadata proves it is the suffix after
+ * that boundary may advance kitty state with live stack semantics; an overlap
+ * that cannot be sliced is redelivery, and a redelivered `CSI > u` applied as a
+ * push would leave the TUI's single pop landing on a stale frame.
+ */
+function outputAfterSnapshotSeq(
+  output: PendingOutput,
+  snapshotSeq?: number
+): TerminalPreviewReplayChunk | null {
   if (
     typeof snapshotSeq !== 'number' ||
     typeof output.meta?.seq !== 'number' ||
     typeof output.meta.rawLength !== 'number'
   ) {
-    return output.data
+    return { data: output.data, mode: 'replay' }
   }
   if (output.meta.seq <= snapshotSeq) {
     return null
   }
   const startSeq = output.meta.seq - output.meta.rawLength
-  if (startSeq >= snapshotSeq || output.meta.transformed === true) {
-    return output.data
+  if (startSeq >= snapshotSeq) {
+    return { data: output.data, mode: 'live' }
   }
-  return output.data.slice(snapshotSeq - startSeq)
+  if (output.meta.transformed === true) {
+    // Transformed payloads make raw offsets unmappable, so the covered head
+    // cannot be sliced off and the whole chunk stays uncertain redelivery.
+    return { data: output.data, mode: 'replay' }
+  }
+  return { data: output.data.slice(snapshotSeq - startSeq), mode: 'live' }
 }
 
 /** Owns one preview's bounded snapshot/live output queue and acknowledgements. */
@@ -101,10 +119,10 @@ export class TerminalPreviewOutputStream {
     return true
   }
 
-  completeSnapshot(snapshotSeq?: number): string[] {
+  completeSnapshot(snapshotSeq?: number): TerminalPreviewReplayChunk[] {
     const replay = this.initialPending.flatMap((output) => {
       const uncovered = outputAfterSnapshotSeq(output, snapshotSeq)
-      return uncovered ? [uncovered] : []
+      return uncovered && uncovered.data.length > 0 ? [uncovered] : []
     })
     this.initialPending = []
     this.initialPendingBytes = 0

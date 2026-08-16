@@ -49,7 +49,8 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
-import type { WorkspaceStatus, Worktree, WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
@@ -65,6 +66,9 @@ type WorkspaceKanbanDrawerProps = {
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
 }
+
+// Why: outlast the Sheet close animation so the board does not disappear mid-slide.
+const WORKSPACE_BOARD_CLOSE_LINGER_MS = 300
 
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
@@ -140,7 +144,26 @@ function formatTaskStatusSyncDescription(result: WorkspaceBoardTaskStatusSyncRes
     .join('. ')
 }
 
-export default function WorkspaceKanbanDrawer({
+export default function WorkspaceKanbanDrawer(
+  props: WorkspaceKanbanDrawerProps
+): React.JSX.Element | null {
+  const [lingering, setLingering] = useState(props.open)
+  useEffect(() => {
+    if (props.open) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), WORKSPACE_BOARD_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [props.open])
+
+  if (!props.open && !lingering) {
+    return null
+  }
+  return <WorkspaceKanbanDrawerContent {...props} />
+}
+
+function WorkspaceKanbanDrawerContent({
   leftSidebarStyle,
   open,
   statusBarVisible,

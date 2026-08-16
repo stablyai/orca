@@ -4,7 +4,8 @@ import type { AppState } from '@/store/types'
 import type { DashboardCardReview } from '../../../../shared/dashboard-snapshot'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
-import type { Repo, Worktree, WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import {
   DEFAULT_WORKSPACE_STATUSES,
   getWorkspaceStatus

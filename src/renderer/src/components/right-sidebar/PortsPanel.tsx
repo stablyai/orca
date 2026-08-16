@@ -45,7 +45,6 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog'
-import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -59,6 +58,7 @@ import {
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 
 export {
   killWorkspacePortForTarget,
@@ -805,7 +805,6 @@ function SshPortsPanel(): React.JSX.Element {
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   // Why: scope the panel to the active worktree's SSH connection so
   // actions target the correct machine and the disconnected state
   // reflects the active worktree, not some other SSH session.
@@ -885,11 +884,15 @@ function SshPortsPanel(): React.JSX.Element {
         )
         return
       }
-      createBrowserTab(activeWorktree.id, url, {
-        activate: true
+      void openWorkspaceBrowserTab({
+        workspaceId: activeWorktree.id,
+        url,
+        intent: { kind: 'url' }
+      }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error))
       })
     },
-    [activeWorktree?.id, createBrowserTab, settings]
+    [activeWorktree?.id, settings]
   )
 
   const handleDialogClose = useCallback(() => {
@@ -1341,7 +1344,7 @@ function PortForwardDialog({
   )
 }
 
-export function PortForwardForm({
+function PortForwardForm({
   mode,
   editId,
   initialRemotePort,
@@ -1419,7 +1422,7 @@ export function PortForwardForm({
   )
 
   return (
-    <ImeEnterGuardedForm onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-2">
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
@@ -1512,6 +1515,6 @@ export function PortForwardForm({
               : translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
         </Button>
       </div>
-    </ImeEnterGuardedForm>
+    </form>
   )
 }

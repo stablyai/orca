@@ -23,6 +23,7 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
+import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -38,6 +39,9 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+
+  requestHostRpc: NonNullable<IPtyProvider['requestHostRpc']> = (method, params, options) =>
+    this.mux.request(method, params as Record<string, unknown>, options)
 
   constructor(
     connectionId: string,
@@ -204,8 +208,12 @@ export class SshPtyProvider implements IPtyProvider {
     })
   }
 
-  write(id: string, data: string): void {
-    this.mux.notify('pty.data', { id: this.toRelayPtyId(id), data })
+  write(id: string, data: string): boolean {
+    return writeToSshPty(this.mux, this.toRelayPtyId(id), data)
+  }
+
+  writeWithSettlement(id: string, data: string): Promise<boolean> {
+    return writeToSshPtyWithSettlement(this.mux, this.toRelayPtyId(id), data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -299,9 +307,7 @@ export class SshPtyProvider implements IPtyProvider {
     return processes
   }
 
-  hasPty(id: string): boolean {
-    return this.livePtyIds.has(id)
-  }
+  hasPty = (id: string): boolean => this.livePtyIds.has(id)
 
   async getDefaultShell(): Promise<string> {
     const result = await this.mux.request('pty.getDefaultShell')

@@ -1,6 +1,6 @@
 import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
@@ -150,7 +150,10 @@ export function applyTerminalAppearance(
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
-  const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
+  const terminalFontWeights = resolveTerminalFontWeights(
+    settings.terminalFontWeight,
+    settings.terminalFontWeightBold
+  )
   const ligaturesEnabled = resolveTerminalLigaturesEnabled(
     settings.terminalLigatures,
     settings.terminalFontFamily

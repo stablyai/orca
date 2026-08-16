@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { writeFileAtomically } from './fs-utils'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 import { codexAuthMatchesManagedAccount, compareCodexAuthFreshness } from './codex-auth-identity'

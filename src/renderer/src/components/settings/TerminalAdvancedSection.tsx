@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
@@ -157,8 +157,6 @@ export function TerminalAdvancedSection({
                       onChange={(e) => setScrollbackRowsDraft(e.target.value)}
                       onBlur={commitScrollbackRowsDraft}
                       onKeyDown={(e) => {
-                        // No IME guard: Chromium blanks number inputs at compositionstart, so a
-                        // confirm-Enter only ever reaches the empty-draft reset below.
                         if (e.key === 'Enter') {
                           commitScrollbackRowsDraft()
                         }

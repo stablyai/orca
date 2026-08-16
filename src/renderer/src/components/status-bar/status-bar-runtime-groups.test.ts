@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState,
-  GlobalSettings
-} from '../../../../shared/types'
+  CodexRateLimitAccountsState
+} from '../../../../shared/managed-account-types'
 import {
   buildClaudeStatusSwitchGroups,
   buildCodexStatusSwitchGroups,

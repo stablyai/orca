@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -88,7 +87,7 @@ export function PluginDevelopmentSection({
             </Button>
           </div>
         ))}
-        <ImeEnterGuardedForm
+        <form
           className="flex min-w-0 items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault()
@@ -118,7 +117,7 @@ export function PluginDevelopmentSection({
             {busy ? <Loader2 className="animate-spin" /> : null}
             {translate('auto.components.settings.PluginDevelopmentSection.add', 'Add path')}
           </Button>
-        </ImeEnterGuardedForm>
+        </form>
         {error ? (
           <p id="plugin-development-path-error" className="text-xs text-destructive">
             {error}

@@ -84,11 +84,15 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRead)
   },
   'terminal send': async ({ flags, client, cwd, json }) => {
+    const text = getOptionalStringFlag(flags, 'text')
+    const enter = flags.get('enter') === true
+    const interrupt = flags.get('interrupt') === true
     const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      text: getOptionalStringFlag(flags, 'text'),
-      enter: flags.get('enter') === true,
-      interrupt: flags.get('interrupt') === true,
+      text,
+      enter,
+      interrupt,
+      ...(text && enter && !interrupt ? { agentPrompt: true } : {}),
       client: { id: 'orca-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)

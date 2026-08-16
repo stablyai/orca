@@ -1,7 +1,7 @@
 import React, { isValidElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
 import WorkspaceKanbanSearchField from './WorkspaceKanbanSearchField'

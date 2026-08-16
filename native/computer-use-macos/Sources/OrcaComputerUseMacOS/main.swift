@@ -727,7 +727,7 @@ final class Provider {
 
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let button = params["mouseButton"]?.string ?? "left"
+        let button = try mouseButton(params["mouseButton"]?.string)
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
         guard count <= SyntheticMouseClickDelivery.maxClickCount else {
             throw ProviderError.coded(
@@ -741,13 +741,16 @@ final class Provider {
         recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if modifiers.isEmpty, count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
+            if modifiers.isEmpty,
+               count <= 1,
+               button.hasAccessibilityAction,
+               let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(
                     at: point,
-                    button: mouseButton(button),
+                    button: button,
                     count: count,
                     modifiers: modifiers,
                     targetWindow: snapshot
@@ -763,7 +766,7 @@ final class Provider {
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try Input.click(
             at: point,
-            button: mouseButton(button),
+            button: button,
             count: count,
             modifiers: modifiers,
             targetWindow: snapshot
@@ -774,8 +777,8 @@ final class Provider {
         )
     }
 
-    private func performClickAction(record: ElementRecord, mouseButton: String) throws -> String? {
-        if mouseButton == "right" {
+    private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
+        if mouseButton == .right {
             return performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
         }
         for action in ["AXPress", "AXConfirm", "AXOpen"] {
@@ -1044,11 +1047,7 @@ private func screenCaptureTrusted() -> Bool {
 }
 
 private func screenCaptureTrustedSettled() -> Bool {
-    PermissionTrustSettling.settleWithFallback(
-        finalTimeoutMs: 500,
-        probe: screenCaptureTrusted,
-        fallbackProbe: screenCaptureTrustedByCaptureProbe
-    )
+    PermissionTrustSettling.settle(timeoutMs: 2_000, probe: screenCaptureTrusted).settled
 }
 
 private func permissionStatusSnapshotSettled() -> PermissionStatusSnapshot {
@@ -1056,40 +1055,6 @@ private func permissionStatusSnapshotSettled() -> PermissionStatusSnapshot {
         accessibilityProbe: accessibilityTrustedSettled,
         screenshotsProbe: screenCaptureTrustedSettled
     )
-}
-
-private func screenCaptureTrustedByCaptureProbe() -> Bool {
-    guard let infos = CGWindowListCopyWindowInfo(
-        [.optionOnScreenOnly],
-        kCGNullWindowID
-    ) as? [[String: Any]] else {
-        return false
-    }
-    let windows = infos.compactMap { info -> ScreenCaptureProbeWindow? in
-        guard let layer = info[kCGWindowLayer as String] as? Int,
-              let ownerPid = info[kCGWindowOwnerPID as String] as? NSNumber,
-              let number = info[kCGWindowNumber as String] as? NSNumber
-        else {
-            return nil
-        }
-        return ScreenCaptureProbeWindow(
-            layer: layer,
-            ownerPid: ownerPid.int32Value,
-            windowId: number.uint32Value
-        )
-    }
-    guard let windowId = ScreenCaptureProbeWindowSelection.firstCrossProcessNormalWindow(
-        ownPid: ProcessInfo.processInfo.processIdentifier,
-        windows: windows
-    ) else {
-        return false
-    }
-    return CGWindowListCreateImage(
-        .null,
-        [.optionIncludingWindow],
-        CGWindowID(windowId),
-        [.boundsIgnoreFraming]
-    ) != nil
 }
 
 private func requestScreenCaptureAccess() -> Bool {
@@ -1672,16 +1637,17 @@ private func screenshotScale(screenshot: ScreenshotPayload?, bounds: CGRect) -> 
     )
 }
 
-private enum MouseButton {
-    case left
-    case right
-
+extension MouseButtonSelection {
+    // Why: macOS has no dedicated middle-button event family; it rides `otherMouse*`
+    // with the button number carried by `mouseButton:` on the event constructor.
     var cgButton: CGMouseButton {
         switch self {
         case .left:
             return .left
         case .right:
             return .right
+        case .middle:
+            return .center
         }
     }
 
@@ -1691,6 +1657,8 @@ private enum MouseButton {
             return .leftMouseDown
         case .right:
             return .rightMouseDown
+        case .middle:
+            return .otherMouseDown
         }
     }
 
@@ -1700,20 +1668,18 @@ private enum MouseButton {
             return .leftMouseUp
         case .right:
             return .rightMouseUp
+        case .middle:
+            return .otherMouseUp
         }
     }
 }
 
-private func mouseButton(_ raw: String?) throws -> MouseButton {
-    switch raw ?? "left" {
-    case "left":
-        return .left
-    case "right":
-        return .right
-    case "middle":
-        throw ProviderError.coded("invalid_argument", "middle-click is not yet supported")
-    case let value:
-        throw ProviderError.coded("invalid_argument", "unsupported mouse button '\(value)'")
+private func mouseButton(_ raw: String?) throws -> MouseButtonSelection {
+    switch ActionArgumentValidation.mouseButton(raw) {
+    case let .success(button):
+        return button
+    case let .failure(error):
+        throw ProviderError.coded("invalid_argument", error.message)
     }
 }
 
@@ -2530,7 +2496,7 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 private enum Input {
     static func click(
         at point: CGPoint,
-        button: MouseButton,
+        button: MouseButtonSelection,
         count: Int,
         modifiers: [KeyModifier],
         targetWindow: Snapshot

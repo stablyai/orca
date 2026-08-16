@@ -1,10 +1,11 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
-import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
-import { getWslHome, parseWslPath } from '../wsl'
+import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
@@ -110,6 +111,37 @@ export function computeWorktreePath(
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
   return pathOps.join(workspaceRoot, sanitizedName)
+}
+
+/** Async twin of computeWorktreePath. Same result; resolves the WSL home without blocking the main
+ *  thread, so callers off the create path never freeze the app on a stopped distro. */
+export async function computeWorktreePathAsync(
+  sanitizedName: string,
+  repoPath: string,
+  settings: WorktreePathSettings
+): Promise<string> {
+  const workspaceRoot = await computeWorkspaceRootAsync(repoPath, settings)
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+
+  if (settings.nestWorkspaces) {
+    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+    return pathOps.join(workspaceRoot, repoName, sanitizedName)
+  }
+  return pathOps.join(workspaceRoot, sanitizedName)
+}
+
+async function computeWorkspaceRootAsync(
+  repoPath: string,
+  settings: { workspaceDir: string }
+): Promise<string> {
+  const wsl = parseWslPath(repoPath)
+  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
+    const wslHome = await getWslHomeAsync(wsl.distro)
+    if (wslHome) {
+      return win32.join(wslHome, 'orca', 'workspaces')
+    }
+  }
+  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
 }
 
 export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
@@ -142,47 +142,6 @@ export function TerminalMacKeyboardSection({
           onChange={() =>
             updateSettings({
               terminalJISYenToBackslash: !settings.terminalJISYenToBackslash
-            })
-          }
-        />
-      </SearchableSetting>
-
-      {/* Why: with a Korean keyboard input source active, the backquote-position keystroke is rewritten to backquote regardless of the layout's character there. */}
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.TerminalPane.fc01559dad',
-          'Korean Won (₩) to Backquote (`)'
-        )}
-        description={translate(
-          'auto.components.settings.TerminalPane.f1f43e38f3',
-          'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
-        )}
-        keywords={[
-          'terminal',
-          'won',
-          'backquote',
-          'backtick',
-          'korean',
-          'hangul',
-          'keyboard',
-          'korea',
-          'markdown',
-          'intl'
-        ]}
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.TerminalPane.fc01559dad',
-            'Korean Won (₩) to Backquote (`)'
-          )}
-          description={translate(
-            'auto.components.settings.TerminalPane.7f535117e5',
-            'Pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
-          )}
-          checked={settings.terminalKoreanWonToBackquote ?? false}
-          onChange={() =>
-            updateSettings({
-              terminalKoreanWonToBackquote: !settings.terminalKoreanWonToBackquote
             })
           }
         />

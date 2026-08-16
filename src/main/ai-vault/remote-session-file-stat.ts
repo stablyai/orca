@@ -2,7 +2,7 @@ import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileStat } from '../providers/types'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { recordRemoteSessionScanIssue } from './remote-session-scan-issues'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type { RemoteSessionFilesystemProvider } from './remote-session-scanner-types'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
@@ -32,7 +32,7 @@ export async function statRemoteSessionFile(
   } catch (error) {
     throwIfAiVaultScanCancelled(options?.signal)
     if (!options?.missingIsExpected || !isMissingRemoteSessionPathError(error)) {
-      recordRemoteSessionScanIssue(issues, {
+      recordSessionScanIssue(issues, {
         executionHostId,
         agent,
         path,

@@ -1,25 +1,26 @@
 import { useCallback, type KeyboardEvent, type RefObject } from 'react'
 
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
-import type { TerminalQuickCommand } from '../../../../shared/types'
 
-type SearchInputOptions = {
+type SearchInputOptions<TCommand> = {
   commandListRef: RefObject<HTMLDivElement | null>
   commandValue: string
-  filteredCommands: readonly TerminalQuickCommand[]
+  filteredCommands: readonly TCommand[]
+  getCommandId: (command: TCommand) => string
   onCommandValueChange: (commandId: string) => void
-  onRun: (command: TerminalQuickCommand) => void
-  selectedCommand: TerminalQuickCommand | null
+  onRun: (command: TCommand) => void
+  selectedCommand: TCommand | null
 }
 
-export function useTabBarQuickCommandSearchInput({
+export function useTabBarQuickCommandSearchInput<TCommand>({
   commandListRef,
   commandValue,
   filteredCommands,
+  getCommandId,
   onCommandValueChange,
   onRun,
   selectedCommand
-}: SearchInputOptions): {
+}: SearchInputOptions<TCommand>): {
   onBlur: () => void
   onCompositionEnd: () => void
   onCompositionStart: () => void
@@ -41,12 +42,14 @@ export function useTabBarQuickCommandSearchInput({
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filteredCommands.length > 0) {
         event.preventDefault()
         event.stopPropagation()
-        const currentIndex = filteredCommands.findIndex((command) => command.id === commandValue)
+        const currentIndex = filteredCommands.findIndex(
+          (command) => getCommandId(command) === commandValue
+        )
         const startIndex = Math.max(currentIndex, 0)
         const direction = event.key === 'ArrowDown' ? 1 : -1
         const nextIndex =
           (startIndex + direction + filteredCommands.length) % filteredCommands.length
-        onCommandValueChange(filteredCommands[nextIndex].id)
+        onCommandValueChange(getCommandId(filteredCommands[nextIndex]))
         requestAnimationFrame(() => {
           commandListRef.current
             ?.querySelector('[cmdk-item][data-selected="true"]')
@@ -62,6 +65,7 @@ export function useTabBarQuickCommandSearchInput({
       commandListRef,
       commandValue,
       filteredCommands,
+      getCommandId,
       imeEnter,
       onCommandValueChange,
       onRun,

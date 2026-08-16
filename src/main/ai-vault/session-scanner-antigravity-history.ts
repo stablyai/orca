@@ -1,7 +1,27 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { normalizeTitleText, parseJsonObject, timestampMs } from './session-scanner-values'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000
+
+/**
+ * The local-scan `readHistory`; remote scans inject their own transport. A
+ * missing or unreadable history file is genuinely "no enrichment", but a gate
+ * refusal must propagate so the caller records a scan issue — degrading it to
+ * null lists the session with a missing cwd and no retry signal, and the
+ * resolver's memo relies on the rejection to evict rather than pin a stall.
+ */
+export async function readLocalAntigravityHistory(path: string): Promise<string | null> {
+  try {
+    return await wslGatedReadFile(path, 'utf-8', 'scan')
+  } catch (error) {
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
+    return null
+  }
+}
 
 type AntigravityHistoryEntry = {
   timestampMs: number
@@ -26,8 +46,19 @@ export function createAntigravityWorkspaceResolver(
       }
       let index = indexes.get(historyPath)
       if (!index) {
-        index = readHistory(historyPath).then(indexAntigravityHistory)
-        indexes.set(historyPath, index)
+        // Why: a read failure is transient (a stalled WSL distro refuses here),
+        // so it must not be memoized — every later session under this history
+        // file would inherit the rejection for the process lifetime.
+        const pending: Promise<AntigravityHistoryIndex> = readHistory(historyPath)
+          .then(indexAntigravityHistory)
+          .catch((error: unknown) => {
+            if (indexes.get(historyPath) === pending) {
+              indexes.delete(historyPath)
+            }
+            throw error
+          })
+        index = pending
+        indexes.set(historyPath, pending)
       }
       const workspace = findAntigravityWorkspace(session, await index)
       return workspace ? { ...session, cwd: workspace } : session

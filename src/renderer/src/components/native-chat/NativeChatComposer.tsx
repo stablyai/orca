@@ -4,12 +4,14 @@ import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
   sendNativeChatMessage,
+  sendNativeChatTypedCommand,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   applyMentionSuggestion,
@@ -77,8 +79,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onSwitchToTerminal,
       readTerminalScreen,
       launchDraft,
-      launchDraftResolved = false,
-      onCompositionActiveChange
+      launchDraftResolved = false
     },
     ref
   ): React.JSX.Element {
@@ -264,7 +265,10 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       // command/unknown send, otherwise `clearImageAttachments()` below drops
       // them silently when the text starts with the agent's slash/skill prefix.
       if (classification !== 'chat' && imagePaths.length === 0) {
-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+        pendingHandle =
+          agent === 'codex' && isSlashCommandDraft(text)
+            ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
+            : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
       } else if (imagePaths.length > 0) {
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           target.settings,
@@ -413,15 +417,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onKeyDown={handleKeyDown}
         onCompositionStart={() => {
           isComposingRef.current = true
-          onCompositionActiveChange?.(true)
         }}
         onCompositionEnd={(event) => {
           isComposingRef.current = false
           if (event.currentTarget.value !== draft) {
             handleDraftChange(event.currentTarget.value, event.currentTarget)
           }
-          // Released last so the draft is synced before any deferred unmount runs.
-          onCompositionActiveChange?.(false)
         }}
         onPaste={handlePaste}
         pickerListboxId={picker.listboxId}

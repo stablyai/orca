@@ -2,7 +2,8 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import React, { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 
 const virtualWindow = vi.hoisted(() => ({ startIndex: 0, visibleCount: 4 }))
 const animationFrames = new Map<number, FrameRequestCallback>()

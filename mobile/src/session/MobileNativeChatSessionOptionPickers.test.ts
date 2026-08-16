@@ -149,7 +149,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setOption.mockReset()
     setOption.mockResolvedValue(true)
     invokeAction.mockReset()

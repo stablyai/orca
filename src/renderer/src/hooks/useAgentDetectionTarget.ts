@@ -10,8 +10,15 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentDetectionTarget } from './useDetectedAgents'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 export const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
+
+function getLocalAgentDetectionTargetKey(worktreeId: string): string {
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    ? `${AGENT_DETECTION_LOCAL_TARGET_KEY}:${encodeURIComponent(worktreeId)}:host`
+    : AGENT_DETECTION_LOCAL_TARGET_KEY
+}
 
 type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
   WorktreeRuntimeOwnerState
@@ -57,7 +64,7 @@ export function getAgentDetectionTargetKeyForWorktree(
   if (executionHost?.kind === 'runtime') {
     return `runtime:${executionHost.environmentId}`
   }
-  return AGENT_DETECTION_LOCAL_TARGET_KEY
+  return getLocalAgentDetectionTargetKey(worktreeId)
 }
 
 export function parseAgentDetectionTargetKey(
@@ -68,6 +75,23 @@ export function parseAgentDetectionTargetKey(
   }
   if (key === AGENT_DETECTION_LOCAL_TARGET_KEY) {
     return { kind: 'local' }
+  }
+  if (key.startsWith(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`)) {
+    const [encodedWorktreeId, encodedContextKey] = key
+      .slice(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`.length)
+      .split(':')
+    if (!encodedWorktreeId || !encodedContextKey) {
+      return { kind: 'local' }
+    }
+    try {
+      return {
+        kind: 'local',
+        worktreeId: decodeURIComponent(encodedWorktreeId),
+        contextKey: decodeURIComponent(encodedContextKey)
+      }
+    } catch {
+      return { kind: 'local' }
+    }
   }
   if (key.startsWith('ssh:')) {
     return { kind: 'ssh', connectionId: key.slice('ssh:'.length) }

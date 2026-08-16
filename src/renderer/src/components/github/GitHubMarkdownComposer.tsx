@@ -27,10 +27,9 @@ import {
 } from '@/components/github/github-markdown-composer-tabbar'
 import { hasBoundedGitHubMarkdownImageUrlText } from '@/components/github/github-markdown-image-url'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
@@ -142,7 +141,7 @@ export function GitHubMarkdownComposer({
         }
         const isMac = navigator.userAgent.includes('Mac')
         const mod = isMac ? event.metaKey : event.ctrlKey
-        if (mod && isLatinShortcutKey(event, 'k')) {
+        if (mod && event.key.toLowerCase() === 'k') {
           event.preventDefault()
           event.stopPropagation()
           openLinkEditor()

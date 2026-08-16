@@ -16,6 +16,7 @@ import {
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
   parseDevBuildStamp,
+  type DedicatedRepoChannel,
   type ReleaseBuild,
   type ReleaseChannel
 } from '../../../../shared/release-channel'
@@ -24,8 +25,29 @@ const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
   stable: 'Shipped releases. What everyone else is running.',
   rc: 'Release candidates cut ahead of each stable.',
   hourly: 'macOS only. Unvetted builds from main, built every hour. No tests.',
+  daily:
+    'macOS only. Unvetted builds from main, cut once a day at 14:15 UTC (early morning Pacific). No tests.',
   adhoc: 'macOS only. One-off builds cut from a branch to try a feature before it lands.'
 }
+
+const DEDICATED_CHANNEL_WARNINGS: Record<DedicatedRepoChannel, { key: string; fallback: string }> =
+  {
+    hourly: {
+      key: 'auto.components.settings.ReleaseChannelSection.hourlyWarning',
+      fallback:
+        'Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.'
+    },
+    daily: {
+      key: 'auto.components.settings.ReleaseChannelSection.dailyWarning',
+      fallback:
+        'Daily builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.'
+    },
+    adhoc: {
+      key: 'auto.components.settings.ReleaseChannelSection.adhocWarning',
+      fallback:
+        'Adhoc builds are macOS-only and come from a branch that has not landed. Whoever cut one may abandon it — keep a stable build handy.'
+    }
+  }
 
 function formatBuildLabel(build: ReleaseBuild): string {
   // Why the release's own title wins: the build workflows compose it (hourly
@@ -226,15 +248,10 @@ export function ReleaseChannelSection(): React.JSX.Element {
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            {activeChannel === 'hourly'
-              ? translate(
-                  'auto.components.settings.ReleaseChannelSection.hourlyWarning',
-                  'Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.'
-                )
-              : translate(
-                  'auto.components.settings.ReleaseChannelSection.adhocWarning',
-                  'Adhoc builds are macOS-only and come from a branch that has not landed. Whoever cut one may abandon it — keep a stable build handy.'
-                )}
+            {translate(
+              DEDICATED_CHANNEL_WARNINGS[activeChannel].key,
+              DEDICATED_CHANNEL_WARNINGS[activeChannel].fallback
+            )}
           </p>
         </div>
       ) : null}

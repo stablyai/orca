@@ -16,6 +16,7 @@ import {
 import { focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
+import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -78,15 +79,16 @@ export function resumeTerminalVisibility({
         if (flushDeferredPaneMetricOptionsIfMeasurable(pane)) {
           flushedDeferredMetrics = true
         }
+        // Why here: the light path neither recreates WebGL nor fits, so a dpr
+        // change that landed while this tab was hidden has no other repair point.
+        repairPaneWebglCanvasDprMismatch(pane)
       }
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
       // synchronous drain and atlas rebuilds off this path avoids racing the
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      // Why: reveal recovery must be immediate, not the terminal-output debounce
-      // — a background agent streaming in another pane must not defer this tab's
-      // atlas rebuild.
+      // Why: reveal is the lifecycle boundary that owns hidden renderer repair.
       scheduleTabRevealWebglAtlasRecovery()
       if (flushedDeferredMetrics) {
         // Why: the light path normally skips fitting, but flushed metrics changed
@@ -129,8 +131,7 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in the
-    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
+    // xterm.write() keeps updating the hidden buffer; suspension only changes renderer lifetime.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }

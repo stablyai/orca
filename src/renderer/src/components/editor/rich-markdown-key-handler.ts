@@ -26,7 +26,6 @@ import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-htm
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
 import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -105,7 +104,7 @@ export function createRichMarkdownKeyHandler(
 
     // Strikethrough: Cmd/Ctrl+Shift+X (standard shortcut used by Google
     // Docs, Notion, etc. — supplements Tiptap's built-in Mod+Shift+S).
-    if (mod && event.shiftKey && isLatinShortcutKey(event, 'x')) {
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
       event.preventDefault()
       ctx.editorRef.current?.chain().focus().toggleStrike().run()
       return true

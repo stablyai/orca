@@ -1,9 +1,9 @@
-import type { Worktree } from '../../../../shared/types'
-import { isDefaultBranchWorkspace } from './visible-worktrees'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
 
 export type AddRepoSkipFinalizationState = {
   activeRepoId: string | null
-  filterRepoIds: string[]
+  filterRepoIds: readonly string[]
   showActiveOnly: boolean
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean

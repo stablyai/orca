@@ -4,7 +4,7 @@ import {
   describeToolInput,
   summarizeToolInput,
   toolFilePath
-} from './mobile-native-chat-tool-summary'
+} from '../../../src/shared/native-chat-tool-summary'
 
 describe('summarizeToolInput', () => {
   it('passes short strings through, collapsing whitespace', () => {
@@ -59,7 +59,7 @@ describe('toolFilePath', () => {
 })
 
 describe('describeToolInput', () => {
-  it('is re-exported and labels rows with the path or primary argument', () => {
+  it('labels rows with the path or primary argument', () => {
     expect(describeToolInput({ file_path: 'src/a.ts', offset: 3 })).toBe('src/a.ts')
     expect(describeToolInput('{"cmd":"git status"}')).toBe('git status')
   })
