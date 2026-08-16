@@ -66,6 +66,18 @@ describe('shouldShowNativeChatTypingIndicator', () => {
     ).toBe(true)
   })
 
+  it('shows after a slash-command marker even though an earlier turn replied', () => {
+    expect(
+      shouldShowNativeChatTypingIndicator({
+        messages: [
+          message('a1', 'assistant'),
+          message('command:compact', 'system', 'Ran /compact')
+        ],
+        isWorking: true
+      })
+    ).toBe(true)
+  })
+
   it('shows on a session whose transcript is still empty', () => {
     expect(shouldShowNativeChatTypingIndicator({ messages: [], isWorking: true })).toBe(true)
   })

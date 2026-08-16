@@ -92,7 +92,7 @@ export function buildMobileStructuredTimeline(
       .map(
         (entry): MobileStructuredTimelineRow => ({
           kind: 'message',
-          key: entry.clientMessageId,
+          key: agentJournalSubmissionKey(entry.clientMessageId),
           message: outboxMessage(entry),
           outbox: entry
         })

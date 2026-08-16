@@ -6,6 +6,7 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { isCommandMarkerId } from './native-chat-pending'
 
 export function shouldShowNativeChatTypingIndicator(args: {
   messages: readonly NativeChatMessage[]
@@ -19,7 +20,7 @@ export function shouldShowNativeChatTypingIndicator(args: {
   // must not suppress the indicator for the send the user just made.
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
-    if (!message || message.role === 'user') {
+    if (!message || message.role === 'user' || isCommandMarkerId(message.id)) {
       return true
     }
     // Status/system rows interleave mid-turn; they neither suppress nor unsuppress,

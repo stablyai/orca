@@ -80,9 +80,11 @@ describe('structured agent session message projection', () => {
     }
 
     const messages = projectStructuredAgentSessionMessages([walItem], outbox, [pending])
+    const optimistic = projectStructuredAgentSessionMessages([], outbox, [])
 
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(1)
     expect(messages.map((message) => message.id)).toEqual([walItem.itemId])
+    expect(optimistic[0]?.id).toBe(messages[0]?.id)
   })
 
   it('keeps an optimistic send until its acceptance arrives', () => {
@@ -97,7 +99,7 @@ describe('structured agent session message projection', () => {
     ]
 
     expect(projectStructuredAgentSessionMessages([], outbox, [])).toMatchObject([
-      { id: 'client-pending', role: 'user' }
+      { id: agentJournalSubmissionKey('client-pending'), role: 'user' }
     ])
   })
 })

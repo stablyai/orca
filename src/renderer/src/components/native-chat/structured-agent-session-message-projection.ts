@@ -27,7 +27,7 @@ export function projectStructuredAgentSessionMessages(
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
       .map(
         (entry): NativeChatMessage => ({
-          id: entry.clientMessageId,
+          id: agentJournalSubmissionKey(entry.clientMessageId),
           role: 'user',
           source: 'transcript',
           timestamp: entry.queuedAt,
