@@ -1,6 +1,4 @@
-import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -9,20 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import {
-  getHiddenImportableExternalWorktrees,
-  getVisibleNonOrcaWorktrees
-} from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
-import {
-  effectiveAgentWorktreeVisibility,
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree-ownership'
 import { translate } from '@/i18n/i18n'
 import {
   importNewExternalWorktreeInboxPaths,
@@ -41,6 +26,36 @@ import {
   type ActiveVisibilityMutation,
   useVisibilityMutationFence
 } from './worktree-visibility-mutation-fence'
+import WorktreeVisibilitySourceList, {
+  type WorktreeVisibilitySourceAddResult,
+  type WorktreeVisibilitySourceRow
+} from './WorktreeVisibilitySourceList'
+import type { CustomWorktreeVisibilitySource, Repo } from '../../../../shared/repo-types'
+import {
+  MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
+  effectiveCustomWorktreeSourceVisibility,
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from '../../../../shared/worktree/visibility-sources'
+import {
+  buildWorktreeSourcePreferenceUpdate,
+  removeCustomWorktreeSourcePreference
+} from '../../../../shared/worktree/visibility-source-preferences'
+import HiddenWorktreeRecoveryList from './HiddenWorktreeRecoveryList'
+import { worktreeVisibilityUpdateError } from './worktree-visibility-update-error'
+import { useRepoOwnerVisibilityDefaults } from './use-repo-owner-visibility-defaults'
+import {
+  getLatestRepoForVisibilityScope,
+  getRepoCustomWorktreeVisibilitySourceIds,
+  isDuplicateWorktreeVisibilitySource
+} from './worktree-visibility-repo-sources'
+import { WorktreeVisibilityGlobalSettingsLink } from './WorktreeVisibilityGlobalSettingsLink'
+import { WorktreeVisibilityScanStatus } from './WorktreeVisibilityScanStatus'
+import {
+  createWorktreeVisibilityUseGlobalMutation,
+  shouldUseGlobalWorktreeVisibility
+} from './worktree-visibility-use-global'
+import { createWorktreeVisibilitySourceMutation } from './worktree-visibility-source-mutation'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -55,9 +70,6 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const [busyPath, setBusyPath] = useState<string | null>(null)
   const [isToggling, setIsToggling] = useState(false)
   const [listState, setListState] = useState<'checking' | 'ready' | 'failed'>('checking')
-  const alwaysShowSwitchId = useId()
-  const hiddenListHeadingId = useId()
-  const hiddenListRef = useRef<HTMLDivElement>(null)
 
   const isOpen = activeModal === 'worktree-visibility'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
@@ -76,25 +88,8 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const effectiveBusyPath =
     busyPath ?? (activeMutation?.kind === 'row' ? activeMutation.path : null)
   const effectivelyToggling = isToggling || activeMutation?.kind === 'toggle'
-  const showOther = repo
-    ? effectiveExternalWorktreeVisibility(repo, isLegacyRepoForExternalWorktreeVisibility(repo)) ===
-      'show'
-    : false
-  const showAgentScratch = repo ? effectiveAgentWorktreeVisibility(repo) === 'show' : false
-  const alwaysShow = showOther && showAgentScratch
-  const hiddenImportable = getHiddenImportableExternalWorktrees(detected)
-  const hiddenCount = hiddenImportable.length
-  const otherCount = getVisibleNonOrcaWorktrees(detected).length
-  const hiddenWorktreeLabel = `${hiddenCount} ${hiddenCount === 1 ? 'worktree' : 'worktrees'}`
-  const shownWorktreeLabel = `${otherCount} ${otherCount === 1 ? 'worktree' : 'worktrees'}`
-  const hiddenListVirtualizer = useVirtualizer({
-    count: hiddenImportable.length,
-    getScrollElement: () => hiddenListRef.current,
-    estimateSize: () => 56,
-    getItemKey: (index) => hiddenImportable[index]?.id ?? index,
-    overscan: 3,
-    initialRect: { width: 480, height: 224 }
-  })
+  const visibilityDefaults = useRepoOwnerVisibilityDefaults(repo)
+  const removableSourceIds = useMemo(() => getRepoCustomWorktreeVisibilitySourceIds(repo), [repo])
 
   useLayoutEffect(() => {
     currentMutationScopeRef.current = mutationScope
@@ -188,41 +183,39 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     [refreshTargetRepo, repo, updateTargetRepo]
   )
 
-  const handleAlwaysShowChange = useCallback(
-    async (checked: boolean) => {
-      if (!repoId || checked === alwaysShow) {
-        return
+  const commitSourceUpdate = useCallback(
+    async (
+      updates: Parameters<typeof updateTargetRepo>[1],
+      isAccepted: (latestRepo: Repo) => boolean
+    ): Promise<boolean> => {
+      if (!repoId) {
+        return false
       }
       const mutation: ActiveVisibilityMutation = { kind: 'toggle' }
       startVisibilityMutation(mutationScope, mutation)
       setActionState(null)
       setIsToggling(true)
       try {
-        const updated = await updateTargetRepo(repoId, {
-          externalWorktreeVisibility: checked ? 'show' : 'hide',
-          agentWorktreeVisibility: checked ? 'show' : 'hide',
-          // Why: showing hidden externals again should re-enable the inbox if the
-          // user previously opted out of discovery prompts for this repo.
-          // Why: null is the transport sentinel for clearing on remote runtime paths
-          // where `undefined` is stripped before persistence.
-          ...(checked ? { externalWorktreeDiscoverySuppressedAt: null } : {})
-        })
-        if (!updated) {
+        const updated = await updateTargetRepo(repoId, updates)
+        const latestRepo = getLatestRepoForVisibilityScope(mutationScope)
+        if (!updated || !latestRepo || !isAccepted(latestRepo)) {
           if (currentMutationScopeRef.current === mutationScope) {
             setActionState({
               pending: false,
-              error: translate(
-                'auto.components.sidebar.WorktreeVisibilityDialog.d40d436fc2',
-                'Could not update worktree visibility. Try again.'
+              error: worktreeVisibilityUpdateError(
+                updated,
+                latestRepo?.worktreeVisibilitySourcePreferences,
+                updates.worktreeVisibilitySourcePreferences
               )
             })
           }
-          return
+          return false
         }
         const refreshed = await refreshTargetRepo(repoId, { requireAuthoritative: true })
         if (currentMutationScopeRef.current === mutationScope) {
           setListState(refreshed ? 'ready' : 'failed')
         }
+        return true
       } finally {
         finishVisibilityMutation(mutationScope, mutation)
         if (currentMutationScopeRef.current === mutationScope) {
@@ -230,7 +223,115 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
         }
       }
     },
-    [alwaysShow, mutationScope, refreshTargetRepo, repoId, updateTargetRepo]
+    [mutationScope, refreshTargetRepo, repoId, updateTargetRepo]
+  )
+
+  const handleUseDefault = useCallback(
+    async (source: WorktreeVisibilitySourceRow) => {
+      if (!repo) {
+        return
+      }
+      const mutation = createWorktreeVisibilityUseGlobalMutation(repo, source, visibilityDefaults)
+      await commitSourceUpdate(mutation.updates, mutation.isAccepted)
+    },
+    [commitSourceUpdate, repo, visibilityDefaults]
+  )
+
+  const handleSourceToggle = useCallback(
+    async (source: WorktreeVisibilitySourceRow, checked: boolean) => {
+      if (!repo) {
+        return
+      }
+      const visibility = checked ? 'show' : 'hide'
+      if (
+        shouldUseGlobalWorktreeVisibility(
+          repo,
+          source,
+          visibility,
+          visibilityDefaults,
+          removableSourceIds
+        )
+      ) {
+        await handleUseDefault(source)
+        return
+      }
+      const mutation = createWorktreeVisibilitySourceMutation(
+        repo,
+        source,
+        visibility,
+        visibilityDefaults
+      )
+      await commitSourceUpdate(mutation.updates, mutation.isAccepted)
+    },
+    [commitSourceUpdate, handleUseDefault, removableSourceIds, repo, visibilityDefaults]
+  )
+
+  const handleAddSource = useCallback(
+    async (rootPath: string): Promise<WorktreeVisibilitySourceAddResult> => {
+      if (!repo) {
+        return 'save-failed'
+      }
+      const existing = normalizeCustomWorktreeVisibilitySources(
+        repo.customWorktreeVisibilitySources
+      )
+      if ((existing?.length ?? 0) >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
+        return 'limit'
+      }
+      const id = crypto.randomUUID().replaceAll('-', '')
+      const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
+      if (!candidate) {
+        return 'invalid-path'
+      }
+      if (isDuplicateWorktreeVisibilitySource(repo, visibilityDefaults, candidate)) {
+        return 'duplicate-path'
+      }
+      const next = normalizeCustomWorktreeVisibilitySources([...(existing ?? []), candidate])
+      if (!next || next.length !== (existing?.length ?? 0) + 1) {
+        return 'duplicate-path'
+      }
+      const saved = await commitSourceUpdate(
+        {
+          customWorktreeVisibilitySources: next,
+          worktreeVisibilitySourcePreferences: buildWorktreeSourcePreferenceUpdate(
+            repo,
+            { kind: 'custom', id },
+            'hide'
+          )
+        },
+        (latestRepo) =>
+          normalizeCustomWorktreeVisibilitySources(
+            latestRepo.customWorktreeVisibilitySources
+          )?.some((source) => source.id === id) === true &&
+          effectiveCustomWorktreeSourceVisibility(latestRepo, id, visibilityDefaults) === 'hide'
+      )
+      return saved ? 'added' : 'save-failed'
+    },
+    [commitSourceUpdate, repo, visibilityDefaults]
+  )
+
+  const handleRemoveSource = useCallback(
+    async (source: CustomWorktreeVisibilitySource) => {
+      if (!repo) {
+        return
+      }
+      const next = (
+        normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+      ).filter((candidate) => candidate.id !== source.id)
+      await commitSourceUpdate(
+        {
+          customWorktreeVisibilitySources: next,
+          worktreeVisibilitySourcePreferences: removeCustomWorktreeSourcePreference(repo, source.id)
+        },
+        (latestRepo) =>
+          !normalizeCustomWorktreeVisibilitySources(
+            latestRepo.customWorktreeVisibilitySources
+          )?.some((candidate) => candidate.id === source.id) &&
+          normalizeWorktreeVisibilitySourcePreferences(
+            latestRepo.worktreeVisibilitySourcePreferences
+          )?.custom?.[source.id] === undefined
+      )
+    },
+    [commitSourceUpdate, repo]
   )
 
   if (!isOpen || !repo || !isGitRepoKind(repo)) {
@@ -239,7 +340,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="scrollbar-sleek max-h-[calc(100vh-6rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-1.5">
             <DialogTitle>
@@ -253,164 +354,34 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
           <DialogDescription>{repo.displayName}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-            {alwaysShow ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">
-              {alwaysShow
-                ? translate(
-                    'auto.components.sidebar.WorktreeVisibilityDialog.3e045d4cb8',
-                    'Shown in sidebar'
-                  )
-                : translate(
-                    'auto.components.sidebar.WorktreeVisibilityDialog.5d02a5647f',
-                    'Hidden from sidebar'
-                  )}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {alwaysShow
-                ? translate(
-                    'auto.components.sidebar.WorktreeVisibilityDialog.8372e4bbd9',
-                    '{{value0}} currently shown',
-                    { value0: shownWorktreeLabel }
-                  )
-                : translate(
-                    'auto.components.sidebar.WorktreeVisibilityDialog.25ddf19920',
-                    '{{value0}} currently hidden',
-                    { value0: hiddenWorktreeLabel }
-                  )}
-            </div>
-          </div>
-          <Label htmlFor={alwaysShowSwitchId} className="shrink-0 gap-2">
-            {translate(
-              'auto.components.sidebar.WorktreeVisibilityDialog.f1f71b9f02',
-              'Always show'
-            )}
-            <Switch
-              id={alwaysShowSwitchId}
-              checked={alwaysShow}
-              disabled={
-                effectiveBusyPath !== null || effectivelyToggling || listState === 'checking'
-              }
-              onCheckedChange={(checked) => void handleAlwaysShowChange(checked)}
-            />
-          </Label>
-        </div>
+        <WorktreeVisibilitySourceList
+          repo={repo}
+          worktrees={detected?.authoritative ? detected.worktrees : []}
+          visibilityDefaults={visibilityDefaults}
+          removableSourceIds={removableSourceIds}
+          disabled={effectiveBusyPath !== null || effectivelyToggling || listState === 'checking'}
+          onAdd={handleAddSource}
+          onRemove={handleRemoveSource}
+          onToggle={handleSourceToggle}
+          onUseDefault={handleUseDefault}
+        />
 
-        {listState === 'checking' ? (
-          <p aria-live="polite" className="text-xs text-muted-foreground">
-            {translate('auto.components.sidebar.WorktreeVisibilityDialog.a3f19c07d2', 'Checking…')}
-          </p>
-        ) : null}
+        <WorktreeVisibilityGlobalSettingsLink repo={repo} visibilityDefaults={visibilityDefaults} />
 
-        {listState === 'failed' ? (
-          <div className="flex min-w-0 items-center gap-3" role="alert">
-            <p className="min-w-0 flex-1 text-xs text-destructive">
-              {translate(
-                'auto.components.sidebar.WorktreeVisibilityDialog.b8d24e61f5',
-                "Could not list this repo's worktrees."
-              )}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={effectiveBusyPath !== null || effectivelyToggling}
-              onClick={handleRetryList}
-            >
-              {translate(
-                'auto.components.sidebar.WorktreeVisibilityDialog.c5e70a93b1',
-                'Try again'
-              )}
-            </Button>
-          </div>
-        ) : null}
+        <WorktreeVisibilityScanStatus
+          state={listState}
+          retryDisabled={effectiveBusyPath !== null || effectivelyToggling}
+          onRetry={handleRetryList}
+        />
 
-        {hiddenImportable.length > 0 ? (
-          <div className="grid min-w-0 gap-2">
-            <div>
-              <h3 id={hiddenListHeadingId} className="text-sm font-medium">
-                {translate(
-                  'auto.components.sidebar.WorktreeVisibilityDialog.7d21c5e848',
-                  'Hidden worktrees ({{value0}})',
-                  { value0: hiddenImportable.length }
-                )}
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.WorktreeVisibilityDialog.9b53f7a160',
-                  'Choose which hidden worktrees to show individually.'
-                )}
-              </p>
-            </div>
-            <div
-              ref={hiddenListRef}
-              aria-labelledby={hiddenListHeadingId}
-              className="scrollbar-sleek max-h-56 min-w-0 overflow-y-auto"
-              tabIndex={0}
-              style={{
-                height: `${Math.min(hiddenListVirtualizer.getTotalSize(), 224)}px`
-              }}
-            >
-              <ul
-                className="relative min-w-0"
-                style={{ height: `${hiddenListVirtualizer.getTotalSize()}px` }}
-              >
-                {hiddenListVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const worktree = hiddenImportable[virtualRow.index]
-                  if (!worktree) {
-                    return null
-                  }
-                  const displayPath =
-                    relativePathInsideRoot(repo.path, worktree.path) || worktree.path
-                  return (
-                    <li
-                      key={worktree.id}
-                      ref={hiddenListVirtualizer.measureElement}
-                      data-index={virtualRow.index}
-                      className="absolute left-0 top-0 w-full pb-1"
-                      style={{ transform: `translateY(${virtualRow.start}px)` }}
-                      aria-posinset={virtualRow.index + 1}
-                      aria-setsize={hiddenImportable.length}
-                    >
-                      <div className="flex min-w-0 items-center gap-3 rounded-md border border-border px-3 py-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm">{worktree.displayName}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {displayPath}
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={
-                            effectiveBusyPath !== null ||
-                            effectivelyToggling ||
-                            listState === 'checking'
-                          }
-                          onClick={() => void handleShowWorktree(worktree.path)}
-                        >
-                          {effectiveBusyPath === worktree.path
-                            ? translate(
-                                'auto.components.sidebar.WorktreeVisibilityDialog.2f80cd4b97',
-                                'Showing…'
-                              )
-                            : translate(
-                                'auto.components.sidebar.WorktreeVisibilityDialog.e64b81d3a9',
-                                'Show'
-                              )}
-                        </Button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          </div>
-        ) : null}
+        <HiddenWorktreeRecoveryList
+          repo={repo}
+          detected={detected}
+          listState={listState}
+          busyPath={effectiveBusyPath}
+          toggling={effectivelyToggling}
+          onShow={handleShowWorktree}
+        />
 
         {actionState?.error ? (
           <p className="text-xs text-destructive" role="alert">

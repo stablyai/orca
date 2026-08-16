@@ -144,7 +144,7 @@ function fsyncPathSync(path: string, flags: 'r' | 'r+'): void {
 
 export function fsyncFileSync(path: string): void {
   // FlushFileBuffers requires a write-capable handle on Windows.
-  fsyncPathSync(path, 'r+')
+  fsyncPathSync(path, process.platform === 'win32' ? 'r+' : 'r')
 }
 
 export function bestEffortFsyncDirectorySync(directory: string): void {

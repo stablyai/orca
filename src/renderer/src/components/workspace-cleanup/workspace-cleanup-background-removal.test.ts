@@ -98,7 +98,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedCount: 1,
       failedCount: 0
     })
-    expect(toast.success).toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
     expect(onResult).toHaveBeenCalledWith({ removedIds: [candidate.worktreeId], failures: [] })
   })
 
@@ -572,7 +572,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedIds: [parent.worktreeId],
       failures: []
     })
-    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 1')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('hardens a provisional parent skip after the child late-fails post-batch', async () => {
@@ -829,7 +829,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     })
     await settleBackgroundRemoval()
 
-    expect(toast.success).toHaveBeenCalledWith('Removed workspaces: 1')
+    expect(toast.success).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalledWith(
       'Workspace cleanup failed',
       expect.objectContaining({ description: 'callback failed' })

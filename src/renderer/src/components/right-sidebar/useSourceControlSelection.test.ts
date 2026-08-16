@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   getSelectionRangeKeys,
   reconcileSelectionKeys,
   reconcileSourceControlSelectionState,
   type FlatEntry
-} from './useSourceControlSelection'
+} from './source-control/listing/use-selection'
 
 function makeEntry(
   key: string,

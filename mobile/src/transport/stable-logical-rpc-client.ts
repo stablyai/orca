@@ -5,6 +5,7 @@ import {
   type MigrationDialStateForwarder
 } from './migration-dial-state-forwarder'
 import { waitForAuthenticated } from './replacement-session-authentication'
+import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -84,22 +85,24 @@ export function createStableLogicalRpcClient(
       return new Promise<RpcResponse>((resolve, reject) => {
         const pending = { reject }
         pendingRequests.add(pending)
-        void session.sendRequest(method, params, options).then(
-          (response) => {
-            pendingRequests.delete(pending)
-            if (closed) {
-              reject(new Error('Client closed'))
-            } else if (requestGeneration !== generation) {
-              reject(new LogicalClientCutoverError())
-            } else {
-              resolve(response)
+        void session
+          .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
+          .then(
+            (response) => {
+              pendingRequests.delete(pending)
+              if (closed) {
+                reject(new Error('Client closed'))
+              } else if (requestGeneration !== generation) {
+                reject(new LogicalClientCutoverError())
+              } else {
+                resolve(response)
+              }
+            },
+            (error: unknown) => {
+              pendingRequests.delete(pending)
+              reject(error)
             }
-          },
-          (error: unknown) => {
-            pendingRequests.delete(pending)
-            reject(error)
-          }
-        )
+          )
       })
     },
 

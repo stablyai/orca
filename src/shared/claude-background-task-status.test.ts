@@ -6,6 +6,7 @@ import {
   markClaudeLeadTurnInterrupted,
   movePaneCacheState,
   normalizeHookPayload,
+  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
 } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
@@ -445,6 +446,21 @@ describe('Claude background task status', () => {
       state: 'working',
       subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
     })
+  })
+
+  it('does not mint working from an unconfirmed child-attributed Stop', () => {
+    const state = createHookListenerState()
+    seedClaudeSubagentRosterFromSnapshots(state, SOURCE_PANE, [
+      { id: 'restored-child', state: 'working', startedAt: 100 }
+    ])
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        agent_id: 'unknown-child',
+        background_tasks: []
+      })
+    ).toBeUndefined()
   })
 
   it('does not let an unknown child interrupt lead-owned background work', () => {

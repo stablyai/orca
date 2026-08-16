@@ -39,6 +39,20 @@ const COLOR_SCHEME_REPORT_PREFIX = '\x1b[?997'
 const ARM_2031 = '\x1b[?2031h'
 const WITHDRAW_2031 = '\x1b[?2031l'
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const DA1_REPLY = '\x1b[?62;4;6;22c'
+const DSR_REPLY = '\x1b[1;1R'
+const OSC_10_REPLY = '\x1b]10;rgb:eeee/eeee/eeee\x1b\\'
+const OSC_11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\'
+const TERMINAL_QUERY_REPLIES: readonly (readonly [string, string])[] = [
+  ['\x1b[0c', DA1_REPLY],
+  ['\x1b[c', DA1_REPLY],
+  ['\x1b[6n', DSR_REPLY],
+  ['\x1b]10;?\x07', OSC_10_REPLY],
+  ['\x1b]10;?\x1b\\', OSC_10_REPLY],
+  ['\x1b]11;?\x07', OSC_11_REPLY],
+  ['\x1b]11;?\x1b\\', OSC_11_REPLY]
+]
+const QUERY_CARRY_LENGTH = Math.max(...TERMINAL_QUERY_REPLIES.map(([query]) => query.length)) - 1
 
 type MutableState = Record<string, unknown>
 let mockStoreState: MutableState = {}
@@ -216,6 +230,114 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<b
   return false
 }
 
+function createTerminalQueryResponder(write: (reply: string) => void): {
+  accept: (chunk: string) => void
+  getCarryLength: () => number
+} {
+  let carry = ''
+  return {
+    accept: (chunk) => {
+      const carriedLength = carry.length
+      const scan = carry + chunk
+      carry = scan.slice(-QUERY_CARRY_LENGTH)
+      for (let at = 0; at < scan.length; at += 1) {
+        for (const [query, reply] of TERMINAL_QUERY_REPLIES) {
+          if (!scan.startsWith(query, at)) {
+            continue
+          }
+          if (at + query.length > carriedLength) {
+            write(reply)
+          }
+          at += query.length - 1
+          break
+        }
+      }
+    },
+    getCarryLength: () => carry.length
+  }
+}
+
+function allChunkPartitions(input: string): string[][] {
+  if (input.length === 0) {
+    return [[]]
+  }
+  const partitions: string[][] = []
+  for (let end = 1; end <= input.length; end += 1) {
+    for (const suffix of allChunkPartitions(input.slice(end))) {
+      partitions.push([input.slice(0, end), ...suffix])
+    }
+  }
+  return partitions
+}
+
+function collectTerminalQueryReplies(chunks: readonly string[]): string[] {
+  const replies: string[] = []
+  const responder = createTerminalQueryResponder((reply) => replies.push(reply))
+  chunks.forEach(responder.accept)
+  return replies
+}
+
+describe('terminal query responder', () => {
+  it.each([
+    ['OSC 10 BEL', '\x1b]10;?\x07', OSC_10_REPLY],
+    ['OSC 10 ST', '\x1b]10;?\x1b\\', OSC_10_REPLY],
+    ['OSC 11 BEL', '\x1b]11;?\x07', OSC_11_REPLY],
+    ['OSC 11 ST', '\x1b]11;?\x1b\\', OSC_11_REPLY]
+  ])('answers each complete %s query once across every partition', (_label, query, reply) => {
+    for (const chunks of allChunkPartitions(query)) {
+      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
+    }
+  })
+
+  it.each([
+    ['DA1 with omitted parameter', '\x1b[c', DA1_REPLY],
+    ['DA1 with zero parameter', '\x1b[0c', DA1_REPLY],
+    ['DSR cursor position', '\x1b[6n', DSR_REPLY]
+  ])('preserves %s across every partition', (_label, query, reply) => {
+    for (const chunks of allChunkPartitions(query)) {
+      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
+    }
+  })
+
+  it.each([
+    ['unterminated OSC 10', '\x1b]10;?'],
+    ['unterminated OSC 11 ST', '\x1b]11;?\x1b'],
+    ['OSC 10 extra query marker', '\x1b]10;??\x07'],
+    ['OSC 11 stacked query', '\x1b]11;?;?\x07'],
+    ['OSC 10 malformed body', '\x1b]10;?x\x07'],
+    ['OSC 11 malformed ST body', '\x1b]11;?x\x1b\\'],
+    ['OSC slot lookalike', '\x1b]110;?\x07']
+  ])('rejects %s across every partition', (_label, input) => {
+    for (const chunks of allChunkPartitions(input)) {
+      expect(collectTerminalQueryReplies(chunks)).toEqual([])
+    }
+  })
+
+  it('answers concatenated queries once each in source order across every partition', () => {
+    const input = '\x1b]10;?\x07\x1b]11;?\x07'
+    for (const chunks of allChunkPartitions(input)) {
+      expect(collectTerminalQueryReplies(chunks)).toEqual([OSC_10_REPLY, OSC_11_REPLY])
+    }
+  })
+
+  it('bounds carry while rejecting a long unterminated query lookalike', () => {
+    const replies: string[] = []
+    const responder = createTerminalQueryResponder((reply) => replies.push(reply))
+    let maxCarryLength = 0
+    for (const fragment of `\x1b]10;?${'x'.repeat(10_000)}`) {
+      responder.accept(fragment)
+      maxCarryLength = Math.max(maxCarryLength, responder.getCarryLength())
+    }
+    for (const fragment of '\x1b]10;?\x07') {
+      responder.accept(fragment)
+    }
+
+    expect(maxCarryLength).toBe(QUERY_CARRY_LENGTH)
+    expect(responder.getCarryLength()).toBeLessThanOrEqual(QUERY_CARRY_LENGTH)
+    expect(replies).toEqual([OSC_10_REPLY])
+  })
+})
+
 describe('fish never receives a color-scheme report it did not query (#9993)', () => {
   let configHome: string | null = null
 
@@ -375,7 +497,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           "  if (!buffered.includes('\\n')) return\n" +
           "  process.stdout.write('CHILD-READ:' + JSON.stringify(buffered) + '\\n')\n" +
           '  process.exit(0)\n' +
-          '})\n'
+          '})\n' +
+          "process.stdout.write('CHILD-READY\\n')\n"
       )
 
       const term = nodePty.spawn(FISH_BIN as string, ['-l', '-i'], {
@@ -398,20 +521,16 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
 
       let rendered = ''
       const { transport, sent, emit } = createPtyBackedTransport((data) => term.write(data))
+      const answerTerminalQueries = createTerminalQueryResponder((reply) => term.write(reply))
       transportFactoryQueue.push(transport)
 
       // Why answered here: no real xterm is attached, and fish blocks its first prompt ~10s
       // on DA1 and re-probes every prompt. These are harness bytes, never renderer output.
       term.onData((chunk) => {
         rendered += chunk
-        if (chunk.includes('\x1b[0c') || chunk.includes('\x1b[c')) {
-          term.write('\x1b[?62;4;6;22c')
-        }
-        if (chunk.includes('\x1b[6n')) {
-          term.write('\x1b[1;1R')
-        }
-        if (chunk.includes('\x1b]10;?') || chunk.includes('\x1b]11;?')) {
-          term.write('\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\')
+        // Maximal fragmentation keeps query handling independent of node-pty chunk boundaries.
+        for (const fragment of chunk) {
+          answerTerminalQueries.accept(fragment)
         }
         emit(chunk)
       })
@@ -444,8 +563,10 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         // Withdrawal #1: `sleep` owns the tty now, so the next line is typed ahead.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 1, 5_000)).toBe(true)
         term.write('"$ORCA_NODE_BIN" "$ORCA_CHILD_SCRIPT"\r')
-        // Withdrawal #2: fish re-armed for the prompt and handed the tty to the child.
+        // Withdrawal #2: fish re-armed for the prompt and accepted the child command.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 2, 5_000)).toBe(true)
+        // DECSET withdrawal precedes fish's child spawn; the child's marker is the ownership signal.
+        expect(await waitUntil(() => rendered.includes('CHILD-READY'), 5_000)).toBe(true)
 
         const renderedBeforeChildInput = rendered.length
         // Canonical mode buffers this in the tty, so it queues behind anything already

@@ -1,7 +1,8 @@
 // Builds one worktree's tabs, browser pages and simulator tabs into the shapes
 // the three Cmd+J engines search.
 
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
 import {

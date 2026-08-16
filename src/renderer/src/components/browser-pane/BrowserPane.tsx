@@ -68,7 +68,7 @@ import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
-} from '../../../../shared/types'
+} from '../../../../shared/browser-workspace-types'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -2042,7 +2042,8 @@ function RemoteBrowserPagePane({
                         void openWorkspaceBrowserTab({
                           workspaceId: worktreeId,
                           url: linkUrl,
-                          intent: { kind: 'url' }
+                          intent: { kind: 'url' },
+                          expectedRuntimeEnvironmentId: runtimeEnvironmentId
                         }).catch((error) => {
                           setPaneNotice({
                             kind: 'direct',

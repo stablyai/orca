@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import type { WindowsInputRecordNewline } from './terminal-paste-model'
 
 type BracketedPasteTerminal = {
   modes: {
@@ -14,6 +15,7 @@ type PasteTerminal = BracketedPasteTerminal & {
 
 type PasteTerminalTextOptions = {
   forceBracketedPaste?: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
 }
 
 const interruptedBracketedPasteTerminals = new WeakSet<object>()
@@ -77,6 +79,28 @@ export function wrapTerminalBracketedPasteText(text: string): string {
   return `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(normalizedText)}${BRACKETED_PASTE_END}`
 }
 
+export function encodeWindowsInputRecordPasteText(
+  text: string,
+  newline: WindowsInputRecordNewline
+): string {
+  const newlineSequence = newline === 'csi-u' ? '\x1b[13;2u' : '\x1b\r'
+  let encoded = ''
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (char === '\r') {
+      encoded += newlineSequence
+      if (text[index + 1] === '\n') {
+        index += 1
+      }
+    } else if (char === '\n') {
+      encoded += newlineSequence
+    } else {
+      encoded += char === ESCAPE ? '\u241b' : char
+    }
+  }
+  return encoded
+}
+
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
   // Why: forced callers already built the exact paste protocol bytes. Send
   // them as PTY input so xterm's DOM/native paste machinery cannot defer them.
@@ -110,6 +134,12 @@ export function pasteTerminalText(
   text: string,
   options?: PasteTerminalTextOptions
 ): void {
+  if (options?.windowsInputRecordNewline) {
+    // Why: input-record TUIs see bracket markers as keys; modified Enter preserves
+    // pasted newlines without turning the first one into submit.
+    terminal.input(encodeWindowsInputRecordPasteText(text, options.windowsInputRecordNewline))
+    return
+  }
   if (options?.forceBracketedPaste) {
     // Why: generated image paths are paste payloads, even when they are a
     // single line, so they must bypass stale Ctrl+C plain-text suppression.

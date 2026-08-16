@@ -1,66 +1,18 @@
-/* eslint-disable max-lines -- Why: the coordinator keeps message processing, task dispatch, gate handling, escalation, and convergence checking in one class so the polling loop can make atomic decisions across all these concerns without split-brain behavior. */
 import type { OrchestrationDb } from './db'
-import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
-import { buildDispatchPreamble } from './preamble'
+import type { MessageRow, CoordinatorStatus } from './types'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
-
-type WorktreeDrift = {
-  base: string
-  behind: number
-  recentSubjects: string[]
-} | null
-
-type TaskDispatchResult = 'dispatched' | 'stale-base-refused'
-
-export type CoordinatorRuntime = {
-  sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
-  listTerminals(
-    worktreeSelector?: string,
-    limit?: number,
-    opts?: { includeVisualLayouts?: boolean }
-  ): Promise<{
-    terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
-  }>
-  createTerminal(
-    worktreeSelector?: string,
-    opts?: { command?: string; title?: string }
-  ): Promise<{ handle: string; worktreeId: string }>
-  waitForTerminal(
-    handle: string,
-    options?: { condition?: string; timeoutMs?: number }
-  ): Promise<{ handle: string; condition: string }>
-  // Why (§3.1): lives on the runtime because it must resolve a worktree, load the repo, and fetch — the coordinator only knows handles + specs.
-  probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
-  // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
-  getTerminalPaneKey?(handle: string): string | null
-  // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
-  getOrchestrationDispatchAuthority?(handle: string): {
-    paneKey: string | null
-    processIncarnation: string | null
-    launchTokenHash: string | null
-  } | null
-  // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
-  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
-}
-
-// Why (§3.1): 20 lets normal monorepo day-velocity pass but trips the 168-commit harm from ORCHESTRATOR_FEEDBACK.md (chosen in msg_eff3a646110d).
-export const DISPATCH_STALE_THRESHOLD = 20
-
-// Why (§3.4): the flag lives in the spec text (no DB column in v1); the regex is narrow so typos fail closed, and stripping keeps the infra line out of the worker's `--- TASK ---` block.
-// Trade-off (§7.9): matches any spec line, even inside fenced code — fails open, but the preamble drift section still surfaces staleness to the worker.
-const ALLOW_STALE_BASE_RE = /^[ \t]*allow-stale-base:[ \t]*true[ \t]*\r?$/im
-const ALLOW_STALE_BASE_STRIP_RE = /^[ \t]*allow-stale-base:[ \t]*true[ \t]*\r?\n?/im
-
-export function parseAllowStaleBaseFromSpec(spec: string): {
-  allowStale: boolean
-  strippedSpec: string
-} {
-  if (!ALLOW_STALE_BASE_RE.test(spec)) {
-    return { allowStale: false, strippedSpec: spec }
-  }
-  const strippedSpec = spec.replace(ALLOW_STALE_BASE_STRIP_RE, '')
-  return { allowStale: true, strippedSpec }
-}
+import type { CoordinatorRuntime, WorktreeDrift } from './coordinator-runtime-contract'
+import { applyEscalationToDispatch } from './coordinator-escalation-triage'
+import { evaluateDagConvergence } from './coordinator-dag-convergence'
+import {
+  openDecisionGateFromMessage,
+  reblockTasksWithPendingGates
+} from './coordinator-decision-gates'
+import {
+  dispatchTaskToWorker,
+  listAvailableWorkerTerminals,
+  warnStaleDispatches
+} from './coordinator-task-dispatch'
 
 export type CoordinatorOptions = {
   spec: string
@@ -81,9 +33,6 @@ type CoordinatorState = {
 
 const DEFAULT_POLL_MS = 2000
 const MAX_CONCURRENT_DEFAULT = 4
-
-// Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
-const HUNG_THRESHOLD_MS = 10 * 60 * 1000
 
 export class Coordinator {
   private db: OrchestrationDb
@@ -209,22 +158,10 @@ export class Coordinator {
   private async tick(): Promise<boolean> {
     this.processMessages()
     this.processEscalations()
-    this.processDecisionGates()
-    this.warnStaleDispatches()
+    reblockTasksWithPendingGates(this.db)
+    warnStaleDispatches(this.db, this.opts.onLog)
     await this.dispatchReadyTasks()
     return this.checkConvergence()
-  }
-
-  // Why: warn only, never auto-fail — a false positive (slow but correct worker) costs more than a false negative (hung worker holding a slot); see R6 of DESIGN_DOC_PREAMBLE_FIX.md.
-  private warnStaleDispatches(): void {
-    const thresholdIso = new Date(Date.now() - HUNG_THRESHOLD_MS).toISOString()
-    const stale = this.db.getStaleDispatches(thresholdIso)
-    for (const ctx of stale) {
-      const minutes = Math.round(HUNG_THRESHOLD_MS / 60000)
-      this.opts.onLog(
-        `Warning: worker ${ctx.assignee_handle ?? '<unknown>'} on task ${ctx.task_id} has not sent a heartbeat in ~${minutes} min (dispatch ${ctx.id})`
-      )
-    }
   }
 
   private processMessages(): void {
@@ -242,7 +179,7 @@ export class Coordinator {
           this.handleEscalation(msg)
           break
         case 'decision_gate':
-          this.handleDecisionGateMessage(msg)
+          openDecisionGateFromMessage(this.db, msg, this.opts.onLog)
           break
         case 'heartbeat':
           this.handleLifecycleMessage(msg)
@@ -278,81 +215,14 @@ export class Coordinator {
     this.opts.onLog(`Escalation from ${msg.from_handle}: ${msg.subject}`)
     this.state.escalations.push(msg)
 
-    let taskId: string | undefined
-    if (msg.payload) {
-      try {
-        const payload = JSON.parse(msg.payload)
-        taskId = payload.taskId
-      } catch {
-        // Escalation without structured payload — log subject as context
-      }
+    const circuitBrokenTaskId = applyEscalationToDispatch(this.db, msg, this.opts.onLog)
+    if (circuitBrokenTaskId) {
+      this.state.failedTasks.push(circuitBrokenTaskId)
     }
-
-    if (!taskId) {
-      return
-    }
-
-    const task = this.db.getTask(taskId)
-    if (!task || task.status === 'completed' || task.status === 'failed') {
-      return
-    }
-
-    const dispatch = this.db.getDispatchContext(taskId)
-    if (!dispatch) {
-      return
-    }
-
-    // Why: fail the dispatch to increment the circuit breaker; under threshold the task returns to 'pending' for re-dispatch next tick.
-    const updated = this.db.failDispatch(dispatch.id, msg.subject)
-    if (updated?.status === 'circuit_broken') {
-      this.opts.onLog(`Task ${taskId} circuit broken after repeated failures`)
-      this.db.updateTaskStatus(taskId, 'failed', `Circuit broken: ${msg.subject}`)
-      this.state.failedTasks.push(taskId)
-    } else {
-      this.opts.onLog(`Task ${taskId} will be retried (failure ${updated?.failure_count ?? 0}/3)`)
-    }
-  }
-
-  private handleDecisionGateMessage(msg: MessageRow): void {
-    this.opts.onLog(`Decision gate from ${msg.from_handle}: ${msg.subject}`)
-
-    let payload: { taskId?: string; question?: string; options?: string[] } = {}
-    if (msg.payload) {
-      try {
-        payload = JSON.parse(msg.payload)
-      } catch {
-        return
-      }
-    }
-
-    if (!payload.taskId || !payload.question) {
-      this.opts.onLog(`Warning: decision_gate missing taskId or question`)
-      return
-    }
-
-    this.db.createGate({
-      taskId: payload.taskId,
-      question: payload.question,
-      options: payload.options
-    })
-
-    this.opts.onLog(`Task ${payload.taskId} blocked on decision gate`)
   }
 
   private processEscalations(): void {
     // Why: escalations are handled inline via handleEscalation; this stays a hook for future policies (auto-reassign, external notify).
-  }
-
-  private processDecisionGates(): void {
-    // Why: the coordinator never auto-resolves gates (humans do, via orchestration.gateResolve) — that would defeat them as approval checkpoints.
-    const pendingGates = this.db.listGates({ status: 'pending' })
-    for (const gate of pendingGates) {
-      const task = this.db.getTask(gate.task_id)
-      if (task && task.status !== 'blocked') {
-        // Why: gate exists but task isn't blocked — re-block to restore the invariant.
-        this.db.updateTaskStatus(gate.task_id, 'blocked')
-      }
-    }
   }
 
   private async dispatchReadyTasks(): Promise<void> {
@@ -368,7 +238,12 @@ export class Coordinator {
       return
     }
 
-    const terminals = await this.getAvailableTerminals()
+    const terminals = await listAvailableWorkerTerminals(
+      this.db,
+      this.runtime,
+      this.opts.coordinatorHandle,
+      this.opts.worktree
+    )
     if (terminals.length === 0 && slotsAvailable > 0) {
       // Why: create at most one terminal per tick to avoid spawning many at once.
       try {
@@ -384,7 +259,7 @@ export class Coordinator {
     }
 
     // Why: every task in one tick dispatches from the same fetched base snapshot.
-    const baseDrift = this.opts.worktree
+    const baseDrift: WorktreeDrift = this.opts.worktree
       ? await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
           this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
           return null
@@ -400,10 +275,22 @@ export class Coordinator {
       slotsAvailable--
 
       try {
-        const result = await this.dispatchTask(task, targetHandle, baseDrift)
+        const result = await dispatchTaskToWorker({
+          db: this.db,
+          runtime: this.runtime,
+          task,
+          targetHandle,
+          baseDrift,
+          coordinatorHandle: this.opts.coordinatorHandle,
+          worktree: this.opts.worktree,
+          onLog: this.opts.onLog,
+          onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
+        })
         if (result === 'stale-base-refused') {
           terminals.unshift(targetHandle)
           slotsAvailable++
+        } else {
+          this.state.phase = 'monitoring'
         }
       } catch (err) {
         this.opts.onLog(`Failed to dispatch task ${task.id}: ${String(err)}`)
@@ -411,140 +298,12 @@ export class Coordinator {
     }
   }
 
-  private async dispatchTask(
-    task: TaskRow,
-    targetHandle: string,
-    baseDrift: WorktreeDrift
-  ): Promise<TaskDispatchResult> {
-    // Why (§3.1): drift check runs before createDispatchContext so a refusal doesn't bump failure_count (carried forward as MAX in db.ts:301-306) and burn the circuit-breaker budget; the task stays `ready` and retries next tick.
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(task.spec)
-
-    if (!this.opts.worktree) {
-      // Why (§7.4): worktree is optional; with none we can't probe drift, so log that the guard is inert and proceed.
-      this.opts.onLog(`stale-base guard inert for ${task.id}: coordinator has no worktree selector`)
-    } else if (baseDrift && baseDrift.behind > DISPATCH_STALE_THRESHOLD && !allowStale) {
-      // Why (§3.1): silent-return, not failDispatch — failing a recoverable stale-base here would burn the circuit-breaker budget.
-      this.opts.onLog(
-        `Skipping dispatch of ${task.id}: worktree is ${baseDrift.behind} commits ` +
-          `behind ${baseDrift.base}. Pull/rebase the worktree, recreate it with ` +
-          `--base-branch ${baseDrift.base}, or include 'allow-stale-base: true' ` +
-          `in the task spec to override. Task remains in 'ready'; coordinator ` +
-          `will retry on the next tick.`
-      )
-      return 'stale-base-refused'
-    }
-
-    const dispatchAuthority = this.runtime.getOrchestrationDispatchAuthority?.(targetHandle)
-    const assigneePaneKey =
-      dispatchAuthority?.paneKey ?? this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
-    const processIncarnation =
-      dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
-        ? dispatchAuthority.processIncarnation
-        : undefined
-    const dispatch = this.db.createDispatchContext(
-      task.id,
-      targetHandle,
-      assigneePaneKey,
-      dispatchAuthority?.launchTokenHash ?? undefined,
-      processIncarnation
-    )
-
-    // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
-    const preamble = buildDispatchPreamble({
-      taskId: task.id,
-      dispatchId: dispatch.id,
-      // Why (§3.4): strippedSpec drops the allow-stale-base line so the worker doesn't read the infra flag as an instruction.
-      taskSpec: strippedSpec,
-      coordinatorHandle: this.opts.coordinatorHandle,
-      workerHandle: targetHandle,
-      devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
-      ...(this.runtime.getTerminalOrchestrationCliCommand
-        ? { cliCommand: this.runtime.getTerminalOrchestrationCliCommand(targetHandle) }
-        : {}),
-      // Why (§3.2): pass baseDrift unconditionally — the preamble builder itself gates the drift section on behind > 0.
-      ...(baseDrift ? { baseDrift } : {})
-    })
-
-    // Why: surface a since-resolved decision gate's outcome to the worker via the preamble.
-    const gates = this.db.listGates({ taskId: task.id, status: 'resolved' })
-    let gateContext = ''
-    if (gates.length > 0) {
-      const latest = gates.at(-1)!
-      gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n---\n`
-    }
-
-    try {
-      await this.runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
-    } catch (err) {
-      const updated = this.db.failDispatch(
-        dispatch.id,
-        err instanceof Error ? err.message : String(err)
-      )
-      if (updated?.status === 'circuit_broken') {
-        this.state.failedTasks.push(task.id)
-      }
-      throw err
-    }
-
-    this.opts.onLog(`Dispatched task ${task.id} to ${targetHandle}`)
-    this.state.phase = 'monitoring'
-    return 'dispatched'
-  }
-
-  private async getAvailableTerminals(): Promise<string[]> {
-    try {
-      const result = await this.runtime.listTerminals(this.opts.worktree, undefined, {
-        includeVisualLayouts: false
-      })
-      const dispatched = this.db.listTasks({ status: 'dispatched' })
-      const busyHandles = new Set<string>()
-
-      for (const task of dispatched) {
-        const ctx = this.db.getDispatchContext(task.id)
-        if (ctx?.assignee_handle) {
-          busyHandles.add(ctx.assignee_handle)
-        }
-      }
-
-      // Why: createDispatchContext's dispatch-lock guarantees correctness; this filter is only an optimization to skip busy/disconnected terminals.
-      return result.terminals
-        .filter(
-          (t) =>
-            t.handle !== this.opts.coordinatorHandle &&
-            !busyHandles.has(t.handle) &&
-            t.connected &&
-            t.writable
-        )
-        .map((t) => t.handle)
-    } catch {
-      return []
-    }
-  }
-
   private checkConvergence(): boolean {
-    const tasks = this.db.listTasks()
-    if (tasks.length === 0) {
-      return true
-    }
-
-    const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
-    if (allDone) {
+    const convergence = evaluateDagConvergence(this.db, this.opts.onLog)
+    if (convergence === 'all-done') {
       this.state.phase = 'done'
-      return true
     }
-
-    // Why: no active tasks but some blocked → dependencies can never be satisfied (stuck).
-    const active = tasks.filter(
-      (t) => t.status === 'ready' || t.status === 'dispatched' || t.status === 'pending'
-    )
-    const blocked = tasks.filter((t) => t.status === 'blocked')
-    if (active.length === 0 && blocked.length > 0) {
-      this.opts.onLog(
-        `Stuck: ${blocked.length} tasks blocked with no active tasks. Resolve decision gates to continue.`
-      )
-    }
-
-    return false
+    return convergence !== 'active'
   }
 
   private sleep(ms: number): Promise<void> {

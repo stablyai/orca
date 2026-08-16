@@ -4,12 +4,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
+import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import {
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
+import { HeadlessEmulator } from './headless-emulator'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
   return import('./shell-ready')
+}
+
+async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
+  vi.resetModules()
+  return import('./daemon-bash-shell-ready-rcfile')
 }
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
@@ -296,6 +308,8 @@ describePosix('daemon shell-ready launch config', () => {
           }
         })
         let output = ''
+        let scannedOutput = ''
+        const startupScanState = createShellStartupOutputScanState()
         let commandWritten = false
         let erasureProbeWritten = false
         let queryCarry = ''
@@ -321,6 +335,7 @@ describePosix('daemon shell-ready launch config', () => {
         }, 50)
         proc.onData((chunk) => {
           output += chunk
+          scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
           // Why: fish stalls its first prompt 10s waiting on these and re-queries
           // each prompt, so answer every occurrence — an unanswered query makes
           // fish swallow the post-marker command as its reply.
@@ -350,9 +365,15 @@ describePosix('daemon shell-ready launch config', () => {
         clearTimeout(deadline)
         clearInterval(sentinelPoll)
         proc.kill()
+        scannedOutput += drainShellStartupOutputScanState(startupScanState)
 
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+        expect(scannedOutput).toBe(output.replace(SHELL_READY_MARKER_OUTPUT, ''))
+        const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+        expect(rendered.writeSync(scannedOutput)).toBe(true)
+        expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+        rendered.dispose()
         expect(existsSync(sentinel)).toBe(true)
         // Why: asserts the erase directly rather than inferring it from the marker
         // count, which only holds once enough prompts have been drawn to expose it.
@@ -668,7 +689,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'runs the daemon bash wrapper without fake C/D markers before the first prompt',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
 
       const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
@@ -679,7 +700,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'preserves prompt hooks and existing DEBUG traps without fake command markers',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -699,7 +720,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
@@ -725,7 +746,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
@@ -765,7 +786,7 @@ describePosix('daemon shell-ready launch config', () => {
   )
 
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
-    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
     writeFileSync(
       join(userDataPath, '.bash_profile'),
       'PROMPT_COMMAND=(\'AFTER_ARRAY_PROMPT=1; printf "PROMPT_ARRAY\\n"\')\n'

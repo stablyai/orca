@@ -1,4 +1,5 @@
-import type { FolderWorkspace, ProjectGroup } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { ProjectGroup } from './project-group-types'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
@@ -104,6 +105,8 @@ export function normalizeFolderWorkspaces(
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
+      // PersistedState.folderWorkspaceDiffComments.
       ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
     })
   }

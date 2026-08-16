@@ -4,6 +4,7 @@ import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-cli
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
+  getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
@@ -26,6 +27,7 @@ const WORKTREE_CREATE_CUTOVER_MAX_RETRIES = 5
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
+  nameWasGenerated?: boolean
   buildParams: (name: string) => Record<string, unknown>
   supportsIdempotentCutoverRetry: boolean | Promise<boolean>
   maxAttempts?: number
@@ -49,7 +51,9 @@ export async function createWorktreeWithNameRetry(
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   let lastError: string | null = null
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const candidateName = getClientWorktreeCreateCandidate(baseName, attempt)
+    const candidateName = args.nameWasGenerated
+      ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
+      : getClientWorktreeCreateCandidate(baseName, attempt)
     const candidateParams = buildParams(candidateName)
     // Why: older hosts strip unknown fields, so only stamp and replay when the
     // host advertises idempotency. One key per candidate makes cutover retries

@@ -20,7 +20,7 @@ import {
   readDaemonEndpointOwnershipState,
   readDaemonSocketIdentity
 } from './daemon-endpoint-ownership'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function connectsTo(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {

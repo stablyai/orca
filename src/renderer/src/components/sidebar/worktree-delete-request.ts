@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 
 export type WorktreeBatchDeleteOptions = {
@@ -17,6 +17,7 @@ export type WorktreeDeleteWithToastOptions = {
   onForceDeleted?: (worktreeId: string) => void
   onPreservedBranch?: (branch: PreservedBranchCleanup) => void
   suppressPreservedBranchToast?: boolean
+  snapshotPruneBatchId?: string
   // Batch deletion commits one focus handoff after all targets settle.
   focusSuccessorOnDelete?: boolean
 }
