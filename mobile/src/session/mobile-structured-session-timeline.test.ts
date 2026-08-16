@@ -91,6 +91,30 @@ describe('mobile structured session timeline', () => {
     expect(rows[0]).toMatchObject({ key: wal.itemId, outbox: { state: 'unconfirmed' } })
   })
 
+  it('keeps the device-local thumbnail on the adopted row while delivery is unconfirmed', () => {
+    const wal: AgentJournalRenderItem = {
+      itemId: agentJournalSubmissionKey(OUTBOX.clientMessageId),
+      revision: 1,
+      sequence: 1,
+      observedAt: 3,
+      body: OUTBOX.body
+    }
+
+    const rows = buildMobileStructuredTimeline([wal], [OUTBOX])
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      key: wal.itemId,
+      outbox: { state: 'unconfirmed' },
+      message: {
+        blocks: [
+          { type: 'text', text: 'look' },
+          { type: 'image-ref', url: 'file:///preview.png' }
+        ]
+      }
+    })
+  })
+
   it('restores host paths and local previews when a queued send is edited', () => {
     expect(restoreMobileStructuredAttachments(OUTBOX)).toEqual([
       {

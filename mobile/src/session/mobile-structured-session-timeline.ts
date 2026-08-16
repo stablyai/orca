@@ -26,20 +26,27 @@ function isPendingPrompt(item: AgentJournalRenderItem): item is MobileStructured
 }
 
 function outboxMessage(entry: MobileStructuredOutboxEntry): NativeChatMessage {
-  let imageIndex = 0
   return {
     id: entry.clientMessageId,
     role: 'user',
     timestamp: entry.queuedAt,
     source: 'transcript',
-    blocks: entry.body.blocks.map((block) => {
-      if (block.type !== 'image-ref') {
-        return block
-      }
-      const preview = entry.previewUris[imageIndex++]
-      return preview ? { ...block, url: preview, path: undefined } : block
-    })
+    blocks: mobilePreviewBlocks(entry.body.blocks, entry.previewUris)
   }
+}
+
+function mobilePreviewBlocks(
+  blocks: NativeChatMessage['blocks'],
+  previewUris: readonly string[]
+): NativeChatMessage['blocks'] {
+  let imageIndex = 0
+  return blocks.map((block) => {
+    if (block.type !== 'image-ref') {
+      return block
+    }
+    const preview = previewUris[imageIndex++]
+    return preview ? { ...block, url: preview, path: undefined } : block
+  })
 }
 
 export function buildMobileStructuredTimeline(
@@ -67,7 +74,16 @@ export function buildMobileStructuredTimeline(
     if (entry) {
       seen.add(entry.clientMessageId)
     }
-    return [{ kind: 'message', key: message.id, message, ...(entry ? { outbox: entry } : {}) }]
+    return [
+      {
+        kind: 'message',
+        key: message.id,
+        message: entry
+          ? { ...message, blocks: mobilePreviewBlocks(message.blocks, entry.previewUris) }
+          : message,
+        ...(entry ? { outbox: entry } : {})
+      }
+    ]
   })
   return [
     ...canonical,
