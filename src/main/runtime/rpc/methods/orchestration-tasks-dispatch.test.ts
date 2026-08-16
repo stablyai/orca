@@ -177,7 +177,28 @@ describe('orchestration RPC methods', () => {
       async (status) => {
         setup()
         const task = db.createTask({ spec: 'work' })
-        db.createDispatchContext(task.id, 'term_a')
+        const paneKey = 'tab_worker:11111111-1111-4111-8111-111111111111'
+        const processIncarnation = 'test:worker:1'
+        const dispatch = db.createDispatchContext(
+          task.id,
+          'term_a',
+          paneKey,
+          undefined,
+          processIncarnation
+        )
+        const capability = db.mintDispatchCapability({
+          dispatchId: dispatch.id,
+          paneKey,
+          processIncarnation
+        })
+        expect(
+          db.verifyDispatchCapability({
+            dispatchId: dispatch.id,
+            capability,
+            paneKey,
+            processIncarnation
+          })
+        ).toEqual({ valid: true })
 
         const result = (await call('orchestration.taskUpdate', {
           id: task.id,
@@ -191,6 +212,14 @@ describe('orchestration RPC methods', () => {
           completed_at: expect.any(String),
           capability_revoked_at: expect.any(String)
         })
+        expect(
+          db.verifyDispatchCapability({
+            dispatchId: dispatch.id,
+            capability,
+            paneKey,
+            processIncarnation
+          })
+        ).toEqual({ valid: false, reason: `Dispatch ${dispatch.id} capability is revoked.` })
 
         const next = db.createTask({ spec: 'next' })
         expect(() => db.createDispatchContext(next.id, 'term_a')).not.toThrow()

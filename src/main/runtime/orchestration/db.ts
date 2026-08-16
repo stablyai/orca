@@ -4582,22 +4582,32 @@ export class OrchestrationDb {
   }
 
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
-    const completedAt =
-      status === 'completed' || status === 'failed' ? new Date().toISOString() : null
-    this.db
-      .prepare(
-        'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
-      )
-      .run(status, result ?? null, completedAt, id)
+    // Why: SAVEPOINT is atomic standalone and nests without committing a caller-owned transaction.
+    this.db.exec('SAVEPOINT update_task_status')
+    try {
+      const completedAt =
+        status === 'completed' || status === 'failed' ? new Date().toISOString() : null
+      this.db
+        .prepare(
+          'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
+        )
+        .run(status, result ?? null, completedAt, id)
 
-    if (status === 'completed') {
-      this.promoteReadyTasks(id)
-    }
-    if (status === 'completed' || status === 'failed') {
-      this.settleActiveDispatchForTask(id, status)
-    }
+      if (status === 'completed') {
+        this.promoteReadyTasks(id)
+      }
+      if (status === 'completed' || status === 'failed') {
+        this.settleActiveDispatchForTask(id, status)
+      }
 
-    return this.getTask(id)
+      const task = this.getTask(id)
+      this.db.exec('RELEASE update_task_status')
+      return task
+    } catch (error) {
+      this.db.exec('ROLLBACK TO update_task_status')
+      this.db.exec('RELEASE update_task_status')
+      throw error
+    }
   }
 
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
