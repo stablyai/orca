@@ -187,6 +187,48 @@ describe('BrowserHostLeaseRegistry', () => {
     })
   })
 
+  it('fences outstanding outcomes at exact placement retirement', async () => {
+    const leases = registry()
+    const host = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1
+    })
+    const identity = {
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1,
+      pairedDeviceId: 'device-a'
+    }
+    leases.attachCommandDelivery(identity, () => {})
+    leases.grantExecutionHost(identity, 'host-key-a')
+    const placement = leases.placeClientPage('page-a', 'host-a')
+    if (placement.kind !== 'client') {
+      throw new Error('expected client placement')
+    }
+    const authority = {
+      authorityRuntimeId: 'runtime-a',
+      authorityEpoch: 'epoch-a',
+      browserPageId: 'page-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1,
+      pageHostGeneration: placement.pageHostGeneration
+    }
+    const issued = leases.issueClientPageCommand(authority, {
+      type: 'createPage',
+      browserProfileId: 'default',
+      executionHostKey: 'host-key-a'
+    })
+    const firstRetirement = leases.beginPageRetirement('page-a', placement)
+
+    expect(leases.completePageRetirement(firstRetirement)).toBe(true)
+    expect(leases.getPlacement('page-a')).toBeUndefined()
+    await expect(issued.result).rejects.toThrow('browser_host_command_outcome_unknown')
+    host.release()
+  })
+
   it('does not let late cleanup retire a replacement or server placement', () => {
     const leases = registry()
     leases.attach({

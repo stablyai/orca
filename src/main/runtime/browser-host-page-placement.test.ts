@@ -136,6 +136,22 @@ describe('browser host page placement authority', () => {
     })
   })
 
+  it('allocates one global page-generation order across page IDs and reuse', () => {
+    const pages = placements()
+    const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+    const first = pages.placeClientPage('page-a', host)
+    const second = pages.placeClientPage('page-b', host)
+    const retirement = pages.beginPageRetirement('page-a', first)
+    expect(pages.completePageRetirement(retirement)).toBe(true)
+    const reused = pages.placeClientPage('page-a', host)
+
+    expect([
+      first.pageHostGeneration,
+      second.pageHostGeneration,
+      reused.pageHostGeneration
+    ]).toEqual([1, 2, 3])
+  })
+
   it('rejects invalid page identities before consuming placement capacity', () => {
     const pages = placements(1)
     const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }

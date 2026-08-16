@@ -1,5 +1,24 @@
 import { randomUUID } from 'node:crypto'
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostCommandResult
+} from '../../shared/browser-client-host-protocol'
+import { BrowserHostCommandLedger } from './browser-host-command-ledger'
+import type { BrowserHostCommandResultParams } from './browser-host-command-state'
+import {
+  assertBrowserHostLeaseAdmission,
+  requireBrowserHostCommandResultLedger,
+  type BrowserHostCommandResultIdentity,
+  type BrowserHostLease,
+  type BrowserHostLeaseHandle,
+  type BrowserHostLeaseIdentity,
+  type BrowserHostLeaseState,
+  type BrowserHostRouteState,
+  type BrowserTunnelLeaseHandle
+} from './browser-host-lease-records'
 import { BrowserExecutionHostGrantRegistry } from './browser-execution-host-grant-registry'
+import { retireClientPageCommandLedger } from './browser-host-command-retirement'
+import { BrowserHostGenerationCounter } from './browser-host-generation-counter'
 import {
   BrowserHostPagePlacementRegistry,
   type BrowserClientPageAuthority,
@@ -7,74 +26,18 @@ import {
   type RuntimeBrowserClientPlacement,
   type RuntimeBrowserPlacement
 } from './browser-host-page-placement'
-import {
-  createBrowserHostFence,
-  type BrowserHostFence,
-  type BrowserHostFenceReason
-} from './browser-host-lease-fence'
+import { createBrowserHostFence, type BrowserHostFenceReason } from './browser-host-lease-fence'
 import {
   BROWSER_HOST_WEBVIEW_CAPABILITY,
   selectBrowserHostLease
 } from './browser-host-capability-selection'
 
-const MAX_GENERATION = 0xffff_ffff
-const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
-// Why: tolerate brief desktop restart/update overlap while keeping one paired identity bounded.
-const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
-
-export type { BrowserPageRetirement, RuntimeBrowserPlacement } from './browser-host-page-placement'
-
-export type BrowserHostLease = Readonly<{
-  authorityRuntimeId: string
-  authorityEpoch: string
-  browserHostClientId: string
-  browserHostGeneration: number
-  connectionId: string
-  pairedDeviceId: string
-  hostCapabilities: readonly string[]
-}>
-
-export type BrowserHostLeaseIdentity = Pick<
-  BrowserHostLease,
-  'authorityEpoch' | 'browserHostClientId' | 'browserHostGeneration' | 'pairedDeviceId'
->
-
-type LeaseState = {
-  token: symbol
-  lease: BrowserHostLease
-  fence: BrowserHostFence
-  routes: Set<RouteState>
-  executionHostGrants: BrowserExecutionHostGrantRegistry
-}
-
-type RouteState = {
-  token: symbol
-  lease: LeaseState
-  key: string
-  tunnelGeneration: number
-  fence: BrowserHostFence
-  releaseGrantLink?: () => void
-}
-
-export type BrowserHostLeaseHandle = Readonly<{
-  lease: BrowserHostLease
-  whenFenced: Promise<BrowserHostFenceReason>
-  release: () => void
-}>
-
-export type BrowserTunnelLeaseHandle = Readonly<{
-  tunnelGeneration: number
-  whenFenced: Promise<BrowserHostFenceReason>
-  release: () => void
-}>
-
 export class BrowserHostLeaseRegistry {
   readonly authorityRuntimeId: string
   readonly authorityEpoch: string
-  private nextHostGeneration = 1
-  private nextTunnelGeneration = 1
-  private readonly leasesByClientId = new Map<string, LeaseState>()
-  private readonly routesByKey = new Map<string, RouteState>()
+  private readonly generations = new BrowserHostGenerationCounter()
+  private readonly leasesByClientId = new Map<string, BrowserHostLeaseState>()
+  private readonly routesByKey = new Map<string, BrowserHostRouteState>()
   private readonly pagePlacements: BrowserHostPagePlacementRegistry
 
   constructor(options: { authorityRuntimeId: string; authorityEpoch?: string }) {
@@ -91,6 +54,7 @@ export class BrowserHostLeaseRegistry {
     connectionId: string
     pairedDeviceId: string
     hostCapabilities: readonly string[]
+    pageCommandProtocolVersion?: 1
   }): BrowserHostLeaseHandle {
     const existing = this.leasesByClientId.get(input.browserHostClientId)
     if (existing) {
@@ -98,12 +62,12 @@ export class BrowserHostLeaseRegistry {
         throw new Error('browser_host_identity_conflict')
       }
     }
-    this.assertLeaseAdmission(input, existing)
-    const generation = this.takeGeneration('host')
+    assertBrowserHostLeaseAdmission(this.leasesByClientId.values(), input, existing)
+    const generation = this.generations.take('host')
     if (existing) {
       this.fenceLease(existing, 'replaced')
     }
-    const state: LeaseState = {
+    const state: BrowserHostLeaseState = {
       token: Symbol(input.browserHostClientId),
       lease: Object.freeze({
         authorityRuntimeId: this.authorityRuntimeId,
@@ -112,11 +76,23 @@ export class BrowserHostLeaseRegistry {
         browserHostGeneration: generation,
         connectionId: input.connectionId,
         pairedDeviceId: input.pairedDeviceId,
-        hostCapabilities: Object.freeze([...input.hostCapabilities])
+        hostCapabilities: Object.freeze([...input.hostCapabilities]),
+        ...(input.pageCommandProtocolVersion ? { pageCommandProtocolVersion: 1 as const } : {})
       }),
       fence: createBrowserHostFence(),
       routes: new Set(),
       executionHostGrants: new BrowserExecutionHostGrantRegistry()
+    }
+    if (input.pageCommandProtocolVersion) {
+      state.commandLedger = new BrowserHostCommandLedger({
+        authority: {
+          authorityRuntimeId: state.lease.authorityRuntimeId,
+          authorityEpoch: state.lease.authorityEpoch,
+          browserHostClientId: state.lease.browserHostClientId,
+          browserHostGeneration: state.lease.browserHostGeneration,
+          pageCommandProtocolVersion: 1
+        }
+      })
     }
     this.leasesByClientId.set(input.browserHostClientId, state)
     return {
@@ -137,7 +113,7 @@ export class BrowserHostLeaseRegistry {
     return this.requireLeaseState(identity).lease
   }
 
-  private requireLeaseState(identity: BrowserHostLeaseIdentity): LeaseState {
+  private requireLeaseState(identity: BrowserHostLeaseIdentity): BrowserHostLeaseState {
     if (identity.authorityEpoch !== this.authorityEpoch) {
       throw new Error('browser_host_lease_stale')
     }
@@ -202,6 +178,54 @@ export class BrowserHostLeaseRegistry {
     return placement
   }
 
+  attachCommandDelivery(
+    identity: BrowserHostLeaseIdentity,
+    delivery: (event: BrowserClientHostCommandEvent) => void
+  ): () => void {
+    const ledger = this.requireLeaseState(identity).commandLedger
+    if (!ledger) {
+      throw new Error('browser_host_command_protocol_required')
+    }
+    return ledger.attach(delivery)
+  }
+
+  issueClientPageCommand(
+    authority: BrowserClientPageAuthority,
+    command: BrowserClientHostCommandEvent['command']
+  ): {
+    event: BrowserClientHostCommandEvent
+    result: Promise<BrowserClientHostCommandResult>
+  } {
+    this.requireClientPage(authority)
+    const state = this.leasesByClientId.get(authority.browserHostClientId)
+    const ledger = state?.commandLedger
+    if (
+      !state ||
+      state.lease.browserHostGeneration !== authority.browserHostGeneration ||
+      !ledger
+    ) {
+      throw new Error('browser_host_command_protocol_required')
+    }
+    if (command.type === 'createPage') {
+      state.executionHostGrants.require(command.executionHostKey)
+    }
+    return ledger.issue({
+      browserPageId: authority.browserPageId,
+      pageHostGeneration: authority.pageHostGeneration,
+      command
+    })
+  }
+
+  settleClientPageCommand(
+    identity: BrowserHostCommandResultIdentity,
+    params: BrowserHostCommandResultParams
+  ): boolean {
+    const state = this.requireLeaseState(identity)
+    const ledger = requireBrowserHostCommandResultLedger(state, identity)
+    this.requireClientPage(params)
+    return ledger.settle(params)
+  }
+
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {
     return this.pagePlacements.getPlacement(browserPageId)
   }
@@ -218,7 +242,9 @@ export class BrowserHostLeaseRegistry {
   }
 
   completePageRetirement(retirement: BrowserPageRetirement): boolean {
-    return this.pagePlacements.completePageRetirement(retirement)
+    return this.pagePlacements.completePageRetirement(retirement, () =>
+      retireClientPageCommandLedger(this.leasesByClientId, retirement)
+    )
   }
 
   openTunnel(
@@ -229,11 +255,11 @@ export class BrowserHostLeaseRegistry {
     const lease = this.leasesByClientId.get(identity.browserHostClientId)!
     const key = `${identity.browserHostClientId}\u0000${identity.executionHostKey}`
     const existing = this.routesByKey.get(key)
-    const tunnelGeneration = this.takeGeneration('tunnel')
+    const tunnelGeneration = this.generations.take('tunnel')
     if (existing) {
       this.fenceRoute(existing, 'replaced')
     }
-    const state: RouteState = {
+    const state: BrowserHostRouteState = {
       token: Symbol(key),
       lease,
       key,
@@ -254,36 +280,11 @@ export class BrowserHostLeaseRegistry {
     }
   }
 
-  private releaseLease(state: LeaseState): void {
+  private releaseLease(state: BrowserHostLeaseState): void {
     this.fenceLease(state, 'lease_released')
   }
 
-  private assertLeaseAdmission(
-    input: { connectionId: string; pairedDeviceId: string },
-    replacement: LeaseState | undefined
-  ): void {
-    let connectionLeases = 0
-    let deviceLeases = 0
-    for (const state of this.leasesByClientId.values()) {
-      if (state === replacement) {
-        continue
-      }
-      if (state.lease.connectionId === input.connectionId) {
-        connectionLeases += 1
-      }
-      if (state.lease.pairedDeviceId === input.pairedDeviceId) {
-        deviceLeases += 1
-      }
-    }
-    if (connectionLeases >= MAX_BROWSER_HOSTS_PER_CONNECTION) {
-      throw new Error('browser_host_connection_capacity')
-    }
-    if (deviceLeases >= MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE) {
-      throw new Error('browser_host_device_capacity')
-    }
-  }
-
-  private fenceLease(state: LeaseState, reason: BrowserHostFenceReason): void {
+  private fenceLease(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void {
     if (this.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
       return
     }
@@ -292,10 +293,11 @@ export class BrowserHostLeaseRegistry {
       this.fenceRoute(route, reason === 'replaced' ? 'lease_replaced' : 'lease_released')
     }
     state.executionHostGrants.clear()
+    state.commandLedger?.close()
     state.fence.resolve(reason)
   }
 
-  private fenceRoute(state: RouteState, reason: BrowserHostFenceReason): void {
+  private fenceRoute(state: BrowserHostRouteState, reason: BrowserHostFenceReason): void {
     state.releaseGrantLink?.()
     state.releaseGrantLink = undefined
     state.lease.routes.delete(state)
@@ -303,19 +305,6 @@ export class BrowserHostLeaseRegistry {
       this.routesByKey.delete(state.key)
     }
     state.fence.resolve(reason)
-  }
-
-  private takeGeneration(kind: 'host' | 'tunnel'): number {
-    const value = kind === 'host' ? this.nextHostGeneration : this.nextTunnelGeneration
-    if (value > MAX_GENERATION) {
-      throw new Error(`browser_${kind}_generation_exhausted`)
-    }
-    if (kind === 'host') {
-      this.nextHostGeneration += 1
-    } else {
-      this.nextTunnelGeneration += 1
-    }
-    return value
   }
 }
 

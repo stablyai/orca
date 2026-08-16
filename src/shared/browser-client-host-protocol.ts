@@ -82,12 +82,14 @@ const BrowserClientHostNavigateCommand = z.object({
   url: z.string().min(1).max(8192)
 })
 
+export const BrowserClientHostPageCommand = z.discriminatedUnion('type', [
+  BrowserClientHostCreatePageCommand,
+  BrowserClientHostNavigateCommand
+])
+
 export const BrowserClientHostCommandEvent = BrowserClientPageCommandAuthority.extend({
   type: z.literal('command'),
-  command: z.discriminatedUnion('type', [
-    BrowserClientHostCreatePageCommand,
-    BrowserClientHostNavigateCommand
-  ])
+  command: BrowserClientHostPageCommand
 })
 
 export type BrowserClientHostCommandEvent = z.infer<typeof BrowserClientHostCommandEvent>

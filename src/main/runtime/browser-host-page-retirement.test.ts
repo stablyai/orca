@@ -74,6 +74,38 @@ describe('browser page retirement settlement', () => {
     expect(pages.getPlacement('page-a')).toBe(replacement)
   })
 
+  it('serializes completion against cancellation and recursive completion', () => {
+    const pages = registry()
+    const placement = pages.placeClientPage('page-a', host)
+    const retirement = pages.beginPageRetirement('page-a', placement)
+    let cancellationAccepted = true
+
+    expect(
+      pages.completePageRetirement(retirement, () => {
+        cancellationAccepted = pages.cancelPageRetirement(retirement)
+        expect(() => pages.completePageRetirement(retirement)).toThrow(
+          'browser_page_retirement_completion_pending'
+        )
+      })
+    ).toBe(true)
+    expect(cancellationAccepted).toBe(false)
+    expect(pages.getPlacement('page-a')).toBeUndefined()
+  })
+
+  it('leaves failed completion pending and retryable', () => {
+    const pages = registry()
+    const placement = pages.placeClientPage('page-a', host)
+    const retirement = pages.beginPageRetirement('page-a', placement)
+
+    expect(() =>
+      pages.completePageRetirement(retirement, () => {
+        throw new Error('destroy failed')
+      })
+    ).toThrow('destroy failed')
+    expect(() => pages.requireClientPage(authority(1))).toThrow('browser_page_retirement_pending')
+    expect(pages.completePageRetirement(retirement)).toBe(true)
+  })
+
   it('retains capacity until retirement completion', () => {
     const pages = registry(1)
     const placement = pages.placeClientPage('page-a', host)

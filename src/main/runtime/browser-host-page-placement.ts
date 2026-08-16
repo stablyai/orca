@@ -32,6 +32,7 @@ type BrowserHostPlacementIdentity = Readonly<{
 type BrowserPagePlacementState = {
   placement: RuntimeBrowserPlacement
   retirement?: BrowserPageRetirement
+  retirementCompletionInProgress?: boolean
 }
 
 export class BrowserHostPagePlacementRegistry {
@@ -112,19 +113,28 @@ export class BrowserHostPagePlacementRegistry {
 
   cancelPageRetirement(retirement: BrowserPageRetirement): boolean {
     const state = this.placementsByPageId.get(retirement.browserPageId)
-    if (state?.retirement !== retirement) {
+    if (state?.retirement !== retirement || state.retirementCompletionInProgress) {
       return false
     }
     state.retirement = undefined
     return true
   }
 
-  completePageRetirement(retirement: BrowserPageRetirement): boolean {
+  completePageRetirement(retirement: BrowserPageRetirement, beforeComplete?: () => void): boolean {
     const state = this.placementsByPageId.get(retirement.browserPageId)
     if (state?.retirement !== retirement) {
       return false
     }
-    return this.placementsByPageId.delete(retirement.browserPageId)
+    if (state.retirementCompletionInProgress) {
+      throw new Error('browser_page_retirement_completion_pending')
+    }
+    state.retirementCompletionInProgress = true
+    try {
+      beforeComplete?.()
+      return this.placementsByPageId.delete(retirement.browserPageId)
+    } finally {
+      state.retirementCompletionInProgress = false
+    }
   }
 
   assertPlacementAdmission(browserPageId: string): void {
