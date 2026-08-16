@@ -3965,6 +3965,9 @@ export class OrchestrationDb {
       if (!dependency || dependency.run_id !== task.run_id) {
         throw new Error(`Dependency task ${depId} must belong to run ${task.run_id}`)
       }
+      if (this.dependencyPathReaches(depId, id)) {
+        throw new Error(`Dependency cycle: task ${depId} already depends on task ${id}`)
+      }
     }
     const allDepsCompleted = deps.every((depId) => {
       const dep = this.getTask(depId)
@@ -3975,6 +3978,62 @@ export class OrchestrationDb {
       .prepare('UPDATE tasks SET deps = ?, status = ? WHERE id = ?')
       .run(JSON.stringify(deps), nextStatus, id)
     return this.getTask(id)
+  }
+
+  private dependencyPathReaches(startTaskId: string, targetTaskId: string): boolean {
+    const pending = [startTaskId]
+    const visited = new Set<string>()
+    while (pending.length > 0) {
+      const taskId = pending.pop() as string
+      if (taskId === targetTaskId) {
+        return true
+      }
+      if (visited.has(taskId)) {
+        continue
+      }
+      visited.add(taskId)
+      const task = this.getTask(taskId)
+      if (task) {
+        pending.push(...(JSON.parse(task.deps) as string[]))
+      }
+    }
+    return false
+  }
+
+  updateTask(
+    id: string,
+    changes: { deps?: string[]; status?: TaskStatus; result?: string }
+  ): TaskRow | undefined {
+    if (changes.result !== undefined && changes.status === undefined) {
+      throw new Error('--result requires --status')
+    }
+    if (!this.getTask(id)) {
+      return undefined
+    }
+
+    this.db.exec('SAVEPOINT update_task')
+    try {
+      let task = this.getTask(id) as TaskRow
+      if (changes.deps !== undefined) {
+        task = this.updateTaskDeps(id, changes.deps) as TaskRow
+      }
+      if (changes.status === 'ready') {
+        const deps = JSON.parse(task.deps) as string[]
+        const incomplete = deps.find((depId) => this.getTask(depId)?.status !== 'completed')
+        if (incomplete) {
+          throw new Error(`Cannot set status ready while dependency ${incomplete} is incomplete`)
+        }
+      }
+      if (changes.status !== undefined) {
+        task = this.updateTaskStatus(id, changes.status, changes.result) as TaskRow
+      }
+      this.db.exec('RELEASE update_task')
+      return task
+    } catch (error) {
+      this.db.exec('ROLLBACK TO update_task')
+      this.db.exec('RELEASE update_task')
+      throw error
+    }
   }
 
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.

@@ -39,4 +39,17 @@ describe('OrchestrationDb.updateTaskDeps', () => {
     d.updateTaskStatus(task.id, 'dispatched')
     expect(() => d.updateTaskDeps(task.id, [])).toThrow(/only pending or ready/)
   })
+
+  it('rejects a dependency that already reaches the updated task', () => {
+    const d = createDb()
+    const first = d.createTask({ spec: 'first' })
+    const second = d.createTask({ spec: 'second', deps: [first.id] })
+
+    expect(() => d.updateTaskDeps(first.id, [second.id])).toThrow(/dependency cycle/i)
+    expect(d.getTask(first.id)).toMatchObject({ status: 'ready', deps: '[]' })
+    expect(d.getTask(second.id)).toMatchObject({
+      status: 'pending',
+      deps: JSON.stringify([first.id])
+    })
+  })
 })

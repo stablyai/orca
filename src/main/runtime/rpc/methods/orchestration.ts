@@ -1206,9 +1206,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           `Task ${params.id} was not found in Run ${run.id}.`
         )
       }
-      let task = existing
+      let deps: string[] | undefined
       if (params.deps !== undefined) {
-        let deps: string[]
         try {
           const parsed = JSON.parse(params.deps)
           if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
@@ -1218,29 +1217,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         } catch {
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
         }
-        const updated = db.updateTaskDeps(params.id, deps)
-        if (!updated) {
-          throw new Error(`Task not found: ${params.id}`)
-        }
-        task = updated
       }
-      if (params.status !== undefined) {
-        // Why: updateTaskStatus is a blind write; refuse ready while deps are still incomplete
-        // so `--deps incomplete --status ready` cannot create a dispatchable task (#13177 review).
-        if (params.status === 'ready') {
-          const deps: string[] = JSON.parse(task.deps)
-          const incomplete = deps.find((depId) => db.getTask(depId)?.status !== 'completed')
-          if (incomplete) {
-            throw new Error(`Cannot set status ready while dependency ${incomplete} is incomplete`)
-          }
-        }
-        const updated = db.updateTaskStatus(params.id, params.status, params.result)
-        if (!updated) {
-          throw new Error(`Task not found: ${params.id}`)
-        }
-        task = updated
-      } else if (params.result !== undefined) {
-        throw new Error('--result requires --status')
+      const task = db.updateTask(params.id, {
+        deps,
+        status: params.status,
+        result: params.result
+      })
+      if (!task) {
+        throw new Error(`Task not found: ${params.id}`)
       }
       return { task }
     }

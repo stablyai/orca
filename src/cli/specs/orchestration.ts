@@ -166,11 +166,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Provide --status and/or --deps. Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
       '--deps is a JSON array of task IDs (same shape as task-create). Only pending or ready tasks accept deps changes; status flips between pending and ready from whether all deps are completed.',
+      'Shell quoting: use single-quoted JSON on macOS, Linux, or PowerShell; use the escaped double-quoted example in Windows Command Prompt.',
       '--result requires --status.'
     ],
     examples: [
       'orca orchestration task-update --id task_abc --status completed --json',
-      `orca orchestration task-update --id task_abc --deps '["task_dep1","task_dep2"]' --json`
+      `orca orchestration task-update --id task_abc --deps '["task_dep1","task_dep2"]' --json`,
+      `orca orchestration task-update --id task_abc --deps "[\\"task_dep1\\",\\"task_dep2\\"]" --json`
     ]
   },
   ...ORCHESTRATION_WORKER_COMMAND_SPECS,

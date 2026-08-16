@@ -1938,6 +1938,22 @@ describe('orchestration RPC methods', () => {
           status: 'ready'
         })
       ).rejects.toThrow(/Cannot set status ready while dependency/)
+      expect(db.getTask(child.id)).toMatchObject({ status: 'ready', deps: '[]' })
+    })
+
+    it('preserves deps and status when result is provided without status', async () => {
+      setup()
+      const blocker = db.createTask({ spec: 'blocker' })
+      const child = db.createTask({ spec: 'child' })
+
+      await expect(
+        call('orchestration.taskUpdate', {
+          id: child.id,
+          deps: JSON.stringify([blocker.id]),
+          result: '{"unexpected":true}'
+        })
+      ).rejects.toThrow('--result requires --status')
+      expect(db.getTask(child.id)).toMatchObject({ status: 'ready', deps: '[]' })
     })
   })
 
