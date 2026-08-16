@@ -63,11 +63,10 @@ describe('Plane issue API adapter', () => {
     getClients.mockReturnValue([client()])
   })
 
-  it('paginates project work items with expanded fields and filters assigned to current user', async () => {
+  it('serializes legacy assigned filters as server-side Plane filters', async () => {
     planeFetch
-      .mockResolvedValueOnce({ results: [project()] })
       .mockResolvedValueOnce({
-        results: [issue('issue-1', 1), issue('issue-2', 2, { assignees: [{ id: 'user-2' }] })],
+        results: [issue('issue-1', 1)],
         next_cursor: '2:1:0',
         next_page_results: true
       })
@@ -81,13 +80,25 @@ describe('Plane issue API adapter', () => {
       items: [
         { id: 'issue-1', identifier: 'AIF-1', assigneeIds: ['user-1'], labelIds: ['label-1'] },
         { id: 'issue-3', identifier: 'AIF-3' }
-      ],
-      hasMore: false
+      ]
     })
-    expect(planeFetch.mock.calls[1][1]).toContain(
+    expect(planeFetch.mock.calls[0][1]).toContain(
       'expand=assignees%2Clabels%2Cstate%2Cproject%2Ccycle%2Cmodule%2Ctype'
     )
-    expect(planeFetch.mock.calls[2][1]).toContain('cursor=2%3A1%3A0')
+    expect(planeFetch.mock.calls[0][1]).toContain('filters=%7B%22assignee_id%22%3A%22user-1%22%7D')
+    expect(planeFetch.mock.calls[1][1]).toContain('cursor=2%3A1%3A0')
+  })
+
+  it('stops legacy list pagination when Plane returns an empty page with another cursor', async () => {
+    planeFetch.mockResolvedValueOnce({
+      results: [],
+      next_cursor: '2:1:0',
+      next_page_results: true
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('assigned', 2)).resolves.toEqual({ items: [] })
+    expect(planeFetch).toHaveBeenCalledTimes(1)
   })
 
   it('maps project_detail when project is absent', async () => {
@@ -168,8 +179,8 @@ describe('Plane issue API adapter', () => {
     })
   })
 
-  it('matches created filter when Plane expands created_by as an object', async () => {
-    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+  it('serializes legacy created filters as server-side Plane filters', async () => {
+    planeFetch.mockResolvedValueOnce({
       results: [
         issue('issue-1', 1, { created_by: { id: 'user-1', display_name: 'Ada' } }),
         issue('issue-2', 2, { created_by: { id: 'user-2', display_name: 'Grace' } })
@@ -179,12 +190,19 @@ describe('Plane issue API adapter', () => {
     const { listIssues } = await import('./issues')
 
     await expect(listIssues('created', 10)).resolves.toMatchObject({
-      items: [{ id: 'issue-1', createdById: 'user-1' }]
+      items: [
+        { id: 'issue-1', createdById: 'user-1' },
+        { id: 'issue-2', createdById: 'user-2' }
+      ]
+    })
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[0][1]}`)
+    expect(JSON.parse(url.searchParams.get('filters') ?? '{}')).toEqual({
+      created_by_id: 'user-1'
     })
   })
 
-  it('lists work items with structured Plane filters via project endpoint query params', async () => {
-    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+  it('lists work items with structured Plane filters via workspace endpoint query params', async () => {
+    planeFetch.mockResolvedValueOnce({
       results: [issue('issue-1', 1)],
       next_page_results: false
     })
@@ -205,8 +223,8 @@ describe('Plane issue API adapter', () => {
         10
       )
     ).resolves.toMatchObject({ items: [{ id: 'issue-1' }] })
-    const url = new URL(`https://orca.test${planeFetch.mock.calls[1][1]}`)
-    expect(url.pathname).toBe('/api/v1/workspaces/acme/projects/project-1/work-items/')
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[0][1]}`)
+    expect(url.pathname).toBe('/api/v1/workspaces/acme/work-items/')
     expect(url.searchParams.get('search')).toBe('oauth')
     expect(url.searchParams.get('order_by')).toBe('-created_at')
     expect(url.searchParams.get('pql')).toContain('stateGroup IN (openStates())')
@@ -218,29 +236,34 @@ describe('Plane issue API adapter', () => {
   })
 
   it('serializes dropdown filter state into Plane filters JSON', async () => {
-    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+    planeFetch.mockResolvedValueOnce({
       results: [issue('issue-1', 1)],
-      next_page_results: false
+      next_page_results: false,
+      total_pages: 5,
+      total_results: 42
     })
     const { listIssues } = await import('./issues')
 
-    await listIssues(
-      {
-        preset: 'assigned',
-        stateGroup: 'started',
-        stateId: 'state-1',
-        priority: 'urgent',
-        assigneeId: 'user-2',
-        labelId: 'label-1',
-        cycleId: 'cycle-1',
-        moduleId: 'module-1',
-        typeId: 'type-1',
-        estimatePoint: 5
-      },
-      10
-    )
+    await expect(
+      listIssues(
+        {
+          preset: 'assigned',
+          stateGroup: 'started',
+          stateId: 'state-1',
+          priority: 'urgent',
+          assigneeId: 'user-2',
+          labelId: 'label-1',
+          cycleId: 'cycle-1',
+          moduleId: 'module-1',
+          typeId: 'type-1',
+          estimatePoint: 5
+        },
+        10
+      )
+    ).resolves.toMatchObject({ totalPages: 5, totalResults: 42 })
 
-    const url = new URL(`https://orca.test${planeFetch.mock.calls[1][1]}`)
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[0][1]}`)
+    expect(url.pathname).toBe('/api/v1/workspaces/acme/work-items/')
     expect(url.searchParams.get('pql')).toBeNull()
     expect(JSON.parse(url.searchParams.get('filters') ?? '{}')).toEqual({
       and: [
@@ -256,6 +279,101 @@ describe('Plane issue API adapter', () => {
         { estimate_point: 5 }
       ]
     })
+  })
+
+  it('preserves Plane totals when a query returns fewer items than the requested page', async () => {
+    planeFetch.mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: false,
+      total_pages: 1,
+      total_results: 1
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues({ preset: 'all' }, 50)).resolves.toMatchObject({
+      items: [{ id: 'issue-1' }],
+      totalPages: 1,
+      totalResults: 1
+    })
+  })
+
+  it('serializes multi-select filter state into Plane filters JSON', async () => {
+    planeFetch.mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: false
+    })
+    const { listIssues } = await import('./issues')
+
+    await listIssues(
+      {
+        preset: 'all',
+        stateGroups: ['backlog', 'started'],
+        stateIds: ['state-1', 'state-2'],
+        priorities: ['urgent', 'high'],
+        assigneeIds: ['user-1', 'user-2'],
+        labelIds: ['label-1', 'label-2']
+      },
+      10
+    )
+
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[0][1]}`)
+    expect(JSON.parse(url.searchParams.get('filters') ?? '{}')).toEqual({
+      and: [
+        { state_group: ['backlog', 'started'] },
+        { state_id: ['state-1', 'state-2'] },
+        { priority: ['urgent', 'high'] },
+        { assignee_id: ['user-1', 'user-2'] },
+        { label_id: ['label-1', 'label-2'] }
+      ]
+    })
+  })
+
+  it('uses the project work-item endpoint for a single selected project', async () => {
+    planeFetch.mockResolvedValueOnce({ results: [project('project-1')] }).mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: false,
+      total_results: 7
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(
+      listIssues({ preset: 'all', projectIds: ['project-1'] }, 10)
+    ).resolves.toMatchObject({
+      items: [{ id: 'issue-1' }],
+      totalResults: 7
+    })
+    const url = new URL(`https://orca.test${planeFetch.mock.calls[1][1]}`)
+    expect(url.pathname).toBe('/api/v1/workspaces/acme/projects/project-1/work-items/')
+  })
+
+  it('reports hasMore when a structured query fills the limit before visiting later projects', async () => {
+    planeFetch.mockResolvedValueOnce({
+      results: [issue('issue-1', 1)],
+      next_page_results: true,
+      total_results: 12
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues({ preset: 'all' }, 1)).resolves.toMatchObject({
+      items: [{ id: 'issue-1' }],
+      hasMore: true,
+      totalResults: 12
+    })
+    expect(planeFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops structured query pagination when Plane returns an empty page with another cursor', async () => {
+    planeFetch.mockResolvedValueOnce({ results: [project()] }).mockResolvedValueOnce({
+      results: [],
+      next_cursor: '2:1:0',
+      next_page_results: true
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues({ preset: 'assigned', projectId: 'project-1' }, 2)).resolves.toEqual({
+      items: []
+    })
+    expect(planeFetch).toHaveBeenCalledTimes(2)
   })
 
   it('writes update fields using Plane payload names', async () => {

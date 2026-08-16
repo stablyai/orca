@@ -1,18 +1,18 @@
-import { getClient, getClients } from './client'
+import { getClients } from './client'
 import { apiPath, planeFetch } from './api-request'
 import { arrayFromResponse, mapWorkItem, notNull } from './response-mappers'
 import { listProjects } from './project-resources'
 import { matchesListFilter } from './issue-query'
 import { fetchProjectWorkItemPage, fetchWorkItemQueryPage } from './issue-pages'
+export { createIssue, deleteIssue, getIssue, updateIssue } from './issue-mutations'
+import type { getClient } from './client'
 import type {
   PlaneCollectionResult,
-  PlaneCreateIssueArgs,
   PlaneIssueQuery,
-  PlaneIssueUpdate,
   PlaneListFilter,
+  PlaneProject,
   PlaneWorkItem
 } from '../../shared/plane/types'
-import { parsePlaneIssueLink } from '../../shared/plane/links'
 
 type PlaneClient = ReturnType<typeof getClient>
 const WORK_ITEM_EXPAND = 'assignees,labels,state,project,cycle,module,type'
@@ -26,8 +26,13 @@ export async function listIssues(
     return listIssuesByQuery(filterOrQuery, limit, instanceId)
   }
   const filter = filterOrQuery
+  if (filter !== 'all') {
+    return listIssuesByQuery({ preset: filter }, limit, instanceId)
+  }
   const clients = getClients(instanceId as string | undefined)
   const items: PlaneWorkItem[] = []
+  let totalResults = 0
+  let sawTotalResults = false
   for (let clientIndex = 0; clientIndex < clients.length; clientIndex += 1) {
     const client = clients[clientIndex]
     const projects = await listProjects(client.instance.id)
@@ -35,6 +40,7 @@ export async function listIssues(
       const project = projects[projectIndex]
       let cursor: string | null = null
       do {
+        const pageCursor = cursor
         const page = await fetchProjectWorkItemPage(
           client,
           project,
@@ -42,7 +48,11 @@ export async function listIssues(
           limit,
           WORK_ITEM_EXPAND
         )
-        cursor = page.nextCursor
+        cursor = nextPageCursor(pageCursor, page)
+        if (page.totalResults !== undefined && pageCursor === null) {
+          totalResults += page.totalResults
+          sawTotalResults = true
+        }
         items.push(
           ...page.items
             .map((item) => mapWorkItem(client, project, item))
@@ -53,11 +63,16 @@ export async function listIssues(
       if (items.length >= limit) {
         const unvisitedProjects =
           projectIndex < projects.length - 1 || clientIndex < clients.length - 1
-        return { items: items.slice(0, limit), hasMore: cursor !== null || unvisitedProjects }
+        return collectionResult(
+          items,
+          limit,
+          cursor !== null || unvisitedProjects,
+          sawTotalResults ? totalResults : undefined
+        )
       }
     }
   }
-  return { items: items.slice(0, limit) }
+  return collectionResult(items, limit, false, sawTotalResults ? totalResults : undefined)
 }
 
 async function listIssuesByQuery(
@@ -66,31 +81,99 @@ async function listIssuesByQuery(
   instanceId?: string
 ): Promise<PlaneCollectionResult<PlaneWorkItem>> {
   const items: PlaneWorkItem[] = []
-  for (const client of getClients(instanceId as string | undefined)) {
-    const allProjects = await listProjects(client.instance.id)
-    const projects = query.projectId
-      ? allProjects.filter((project) => project.id === query.projectId)
-      : allProjects
-    for (const project of projects) {
-      let cursor: string | null = null
-      do {
-        const page = await fetchWorkItemQueryPage(
-          client,
-          project,
-          query,
-          cursor,
-          limit,
-          WORK_ITEM_EXPAND
-        )
-        cursor = page.nextCursor
-        items.push(...page.items.map((item) => mapWorkItem(client, project, item)).filter(notNull))
-      } while (cursor && items.length < limit)
-      if (items.length >= limit) {
-        return { items: items.slice(0, limit), hasMore: cursor !== null }
+  const clients = getClients(instanceId as string | undefined)
+  let totalPages: number | undefined
+  let totalResults: number | undefined
+  for (let clientIndex = 0; clientIndex < clients.length; clientIndex += 1) {
+    const client = clients[clientIndex]
+    const project = await singleProjectForQuery(client, query)
+    let cursor: string | null = null
+    do {
+      const pageCursor = cursor
+      const page = await fetchWorkItemQueryPage(
+        client,
+        project,
+        query,
+        cursor,
+        limit,
+        WORK_ITEM_EXPAND
+      )
+      cursor = nextPageCursor(pageCursor, page)
+      if (page.totalResults !== undefined && pageCursor === null) {
+        totalResults = page.totalResults
       }
+      if (page.totalPages !== undefined && pageCursor === null) {
+        totalPages = page.totalPages
+      }
+      items.push(...page.items.map((item) => mapWorkItem(client, project, item)).filter(notNull))
+    } while (cursor && items.length < limit)
+    if (items.length >= limit) {
+      return collectionResult(
+        items,
+        limit,
+        hasMoreIssues(items.length, cursor, totalResults) || clientIndex < clients.length - 1,
+        totalResults,
+        totalPages
+      )
     }
   }
-  return { items: items.slice(0, limit) }
+  return collectionResult(items, limit, false, totalResults, totalPages)
+}
+
+function hasMoreIssues(
+  loadedCount: number,
+  cursor: string | null,
+  totalResults: number | undefined
+): boolean {
+  return cursor !== null || (totalResults !== undefined && loadedCount < totalResults)
+}
+
+function collectionResult(
+  items: PlaneWorkItem[],
+  limit: number,
+  hasMore: boolean,
+  totalResults?: number,
+  totalPages?: number
+): PlaneCollectionResult<PlaneWorkItem> {
+  return {
+    items: items.slice(0, limit),
+    ...(hasMore ? { hasMore: true } : {}),
+    ...(totalPages !== undefined
+      ? {
+          totalPages
+        }
+      : {}),
+    ...(totalResults !== undefined
+      ? {
+          totalResults
+        }
+      : {})
+  }
+}
+
+async function singleProjectForQuery(
+  client: PlaneClient,
+  query: PlaneIssueQuery
+): Promise<PlaneProject | null> {
+  if (query.projectId) {
+    const projects = await listProjects(client.instance.id)
+    return projects.find((project) => project.id === query.projectId) ?? null
+  }
+  if (query.projectIds?.length === 1) {
+    const projects = await listProjects(client.instance.id)
+    return projects.find((project) => project.id === query.projectIds?.[0]) ?? null
+  }
+  return null
+}
+
+function nextPageCursor(
+  currentCursor: string | null,
+  page: { items: unknown[]; nextCursor: string | null }
+): string | null {
+  if (page.items.length === 0 || !page.nextCursor || page.nextCursor === currentCursor) {
+    return null
+  }
+  return page.nextCursor
 }
 
 export async function searchIssues(
@@ -114,168 +197,6 @@ export async function searchIssues(
     )
   }
   return items.slice(0, limit)
-}
-
-export async function getIssue(
-  identifierOrId: string,
-  instanceId?: string
-): Promise<PlaneWorkItem | null> {
-  const parsed = parsePlaneIssueLink(identifierOrId)
-  for (const client of getClients(instanceId as string | undefined)) {
-    const issue = parsed
-      ? await readIssueByIdentifier(client, parsed.identifier)
-      : await readIssueById(client, identifierOrId)
-    if (issue) {
-      return issue
-    }
-  }
-  return null
-}
-
-export async function createIssue(
-  args: PlaneCreateIssueArgs
-): Promise<
-  | { ok: true; id: string; identifier: string; title: string; url: string }
-  | { ok: false; error: string }
-> {
-  try {
-    const client = getClient(args.instanceId)
-    const body = JSON.stringify({
-      name: args.title,
-      description: args.description,
-      description_html: args.description,
-      state: args.stateId,
-      assignees: args.assigneeIds,
-      labels: args.labelIds,
-      priority: args.priority,
-      cycle: args.cycleId,
-      module: args.moduleId,
-      type_id: args.typeId,
-      estimate_point: args.estimatePoint,
-      external_source: args.externalSource,
-      external_id: args.externalId
-    })
-    const data = await planeFetch<unknown>(
-      client,
-      apiPath(client, `/projects/${encodeURIComponent(args.projectId)}/work-items/`),
-      { method: 'POST', body }
-    )
-    const project =
-      (await listProjects(client.instance.id)).find((item) => item.id === args.projectId) ?? null
-    const issue = mapWorkItem(client, project, data)
-    if (!issue) {
-      throw new Error('Plane did not return the created work item')
-    }
-    return {
-      ok: true,
-      id: issue.id,
-      identifier: issue.identifier,
-      title: issue.title,
-      url: issue.url
-    }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-export async function updateIssue(
-  identifierOrId: string,
-  updates: PlaneIssueUpdate,
-  instanceId?: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const client = getClient(instanceId)
-    const issue = await getIssue(identifierOrId, client.instance.id)
-    if (!issue) {
-      throw new Error('Plane work item not found')
-    }
-    await planeFetch<unknown>(
-      client,
-      apiPath(
-        client,
-        `/projects/${encodeURIComponent(issue.project.id)}/work-items/${encodeURIComponent(issue.id)}/`
-      ),
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: updates.title,
-          description: updates.description,
-          description_html: updates.description,
-          state: updates.stateId,
-          assignees: updates.assigneeIds,
-          labels: updates.labelIds,
-          priority: updates.priority,
-          cycle: updates.cycleId,
-          module: updates.moduleId,
-          type_id: updates.typeId,
-          estimate_point: updates.estimatePoint
-        })
-      }
-    )
-    return { ok: true }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-export async function deleteIssue(
-  identifierOrId: string,
-  instanceId?: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const client = getClient(instanceId)
-    const issue = await getIssue(identifierOrId, client.instance.id)
-    if (!issue) {
-      throw new Error('Plane work item not found')
-    }
-    await planeFetch<unknown>(
-      client,
-      apiPath(
-        client,
-        `/projects/${encodeURIComponent(issue.project.id)}/work-items/${encodeURIComponent(issue.id)}/`
-      ),
-      { method: 'DELETE' }
-    )
-    return { ok: true }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-async function readIssueByIdentifier(
-  client: PlaneClient,
-  identifier: string
-): Promise<PlaneWorkItem | null> {
-  try {
-    const params = new URLSearchParams({ expand: WORK_ITEM_EXPAND })
-    const data = await planeFetch<unknown>(
-      client,
-      apiPath(client, `/work-items/${encodeURIComponent(identifier)}/?${params}`)
-    )
-    return mapWorkItem(client, null, data)
-  } catch {
-    return null
-  }
-}
-
-async function readIssueById(client: PlaneClient, id: string): Promise<PlaneWorkItem | null> {
-  const projects = await listProjects(client.instance.id)
-  for (const project of projects) {
-    try {
-      const data = await planeFetch<unknown>(
-        client,
-        apiPath(
-          client,
-          `/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(id)}/?${new URLSearchParams({ expand: WORK_ITEM_EXPAND })}`
-        )
-      )
-      const issue = mapWorkItem(client, project, data)
-      if (issue) {
-        return issue
-      }
-    } catch {}
-  }
-  return null
 }
 
 export type { PlaneListFilter }

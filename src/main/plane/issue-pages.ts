@@ -12,6 +12,8 @@ export type PlanePage = {
   items: unknown[]
   nextCursor: string | null
   hasNext: boolean
+  totalPages?: number
+  totalResults?: number
 }
 
 export async function fetchProjectWorkItemPage(
@@ -38,7 +40,7 @@ export async function fetchProjectWorkItemPage(
 
 export async function fetchWorkItemQueryPage(
   client: PlaneClient,
-  project: PlaneProject,
+  project: PlaneProject | null,
   query: PlaneIssueQuery,
   cursor: string | null,
   limit: number,
@@ -65,7 +67,9 @@ export async function fetchWorkItemQueryPage(
   }
   const data = await planeFetch<unknown>(
     client,
-    apiPath(client, `/projects/${encodeURIComponent(project.id)}/work-items/?${params}`)
+    project
+      ? apiPath(client, `/projects/${encodeURIComponent(project.id)}/work-items/?${params}`)
+      : apiPath(client, `/work-items/?${params}`)
   )
   return mapPlanePage(data)
 }
@@ -75,6 +79,12 @@ function mapPlanePage(data: unknown): PlanePage {
   return {
     items: arrayFromResponse(data),
     nextCursor: typeof raw.next_cursor === 'string' && raw.next_cursor ? raw.next_cursor : null,
-    hasNext: raw.next_page_results === true
+    hasNext: raw.next_page_results === true,
+    totalPages: numberField(raw.total_pages),
+    totalResults: numberField(raw.total_results ?? raw.total_count)
   }
+}
+
+function numberField(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }

@@ -63,6 +63,13 @@ describe('Plane project resources', () => {
     expect(planeFetch.mock.calls[1][1]).toContain('cursor=100%3A1%3A0')
   })
 
+  it('treats missing Plane estimates as an empty resource list', async () => {
+    planeFetch.mockRejectedValueOnce(new Error('Plane API 404: {"error":"Estimate not found"}'))
+    const { listEstimates } = await import('./project-resources')
+
+    await expect(listEstimates('project-1')).resolves.toEqual([])
+  })
+
   it('paginates project listing', async () => {
     planeFetch
       .mockResolvedValueOnce({

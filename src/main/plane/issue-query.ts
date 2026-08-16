@@ -17,7 +17,7 @@ export function normalizeOrderBy(orderBy: PlaneIssueSort | undefined): PlaneIssu
 export function buildPql(query: PlaneIssueQuery): string {
   const parts: string[] = []
   const preset = query.preset ?? 'all'
-  if (preset === 'open' && !query.stateGroup) {
+  if (preset === 'open' && !query.stateGroup && !query.stateGroups?.length) {
     parts.push('stateGroup IN (openStates())')
   }
   if (query.assigneeId === 'unassigned') {
@@ -32,24 +32,47 @@ export function buildPql(query: PlaneIssueQuery): string {
 export function buildFilters(client: PlaneClient, query: PlaneIssueQuery): PlaneFilters | null {
   const clauses: PlaneFilterClause[] = []
   const preset = query.preset ?? 'all'
-  if (preset === 'assigned' && client.instance.userId && query.assigneeId !== 'unassigned') {
+  if (
+    preset === 'assigned' &&
+    client.instance.userId &&
+    query.assigneeId !== 'unassigned' &&
+    !query.assigneeIds?.length
+  ) {
     clauses.push({ assignee_id: client.instance.userId })
   } else if (preset === 'created' && client.instance.userId) {
     clauses.push({ created_by_id: client.instance.userId })
-  } else if (preset === 'completed' && !query.stateGroup) {
+  } else if (preset === 'completed' && !query.stateGroup && !query.stateGroups?.length) {
     clauses.push({ state_group: 'completed' })
+  }
+  if (query.projectIds?.length) {
+    clauses.push({ project_id: query.projectIds })
+  }
+  if (query.stateGroups?.length) {
+    clauses.push({ state_group: query.stateGroups })
   }
   if (query.stateGroup) {
     clauses.push({ state_group: query.stateGroup })
   }
+  if (query.stateIds?.length) {
+    clauses.push({ state_id: query.stateIds })
+  }
   if (query.stateId) {
     clauses.push({ state_id: query.stateId })
+  }
+  if (query.priorities?.length) {
+    clauses.push({ priority: query.priorities })
   }
   if (query.priority) {
     clauses.push({ priority: query.priority })
   }
+  if (query.assigneeIds?.length) {
+    clauses.push({ assignee_id: query.assigneeIds })
+  }
   if (query.assigneeId && query.assigneeId !== 'unassigned') {
     clauses.push({ assignee_id: query.assigneeId })
+  }
+  if (query.labelIds?.length) {
+    clauses.push({ label_id: query.labelIds })
   }
   if (query.labelId && query.labelId !== 'none') {
     clauses.push({ label_id: query.labelId })

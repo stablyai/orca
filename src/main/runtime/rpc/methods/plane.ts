@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { PlaneIssueQuery, PlaneListFilter } from './plane-query-schema'
 
 const InstanceSelection = z.object({ instanceId: OptionalString }).optional()
 const Connect = z.object({
@@ -20,44 +21,6 @@ const SearchIssues = z.object({
   query: requiredString('Missing query'),
   limit: OptionalFiniteNumber,
   instanceId: OptionalString
-})
-const PlaneListFilter = z.enum(['assigned', 'created', 'all', 'completed', 'open'])
-const PlaneIssueQuery = z.object({
-  preset: PlaneListFilter.optional(),
-  query: OptionalString,
-  projectId: OptionalString,
-  stateGroup: z.enum(['backlog', 'unstarted', 'started', 'completed', 'cancelled']).optional(),
-  stateId: OptionalString,
-  priority: z.enum(['urgent', 'high', 'medium', 'low', 'none']).optional(),
-  assigneeId: OptionalString,
-  labelId: OptionalString,
-  cycleId: OptionalString,
-  moduleId: OptionalString,
-  typeId: OptionalString,
-  estimatePoint: z
-    .union([z.string(), z.number()])
-    .transform((value) =>
-      typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))
-        ? Number(value)
-        : value
-    )
-    .optional(),
-  orderBy: z
-    .enum([
-      '-updated_at',
-      'updated_at',
-      '-created_at',
-      'created_at',
-      'priority',
-      '-priority',
-      'state',
-      '-state',
-      'name',
-      '-name',
-      'sort_order',
-      '-sort_order'
-    ])
-    .optional()
 })
 const ListIssues = z
   .object({

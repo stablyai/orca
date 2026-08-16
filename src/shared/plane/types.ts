@@ -185,6 +185,8 @@ export type PlaneComment = {
 export type PlaneCollectionResult<T> = {
   items: T[]
   hasMore?: boolean
+  totalPages?: number
+  totalResults?: number
 }
 
 export type PlaneIssueUpdate = {
@@ -241,11 +243,17 @@ export type PlaneIssueQuery = {
   preset?: PlaneListFilter
   query?: string
   projectId?: string
+  projectIds?: string[]
   stateGroup?: PlaneStateGroup
+  stateGroups?: PlaneStateGroup[]
   stateId?: string
+  stateIds?: string[]
   priority?: PlanePriority
+  priorities?: PlanePriority[]
   assigneeId?: string | 'unassigned'
+  assigneeIds?: string[]
   labelId?: string | 'none'
+  labelIds?: string[]
   cycleId?: string | 'none'
   moduleId?: string | 'none'
   typeId?: string

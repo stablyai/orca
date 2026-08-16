@@ -505,6 +505,7 @@ const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
 const PLANE_ITEM_LIMIT = 50
+const PLANE_ITEM_LIST_MAX = 500
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const PLANE_PRESETS: readonly { id: PlaneListFilter; label: string }[] = [
@@ -2912,11 +2913,13 @@ function PRMergeCell({
 function PaginationBar({
   currentPage,
   totalPages,
+  canLoadMore = false,
   loadingTarget,
   onPageChange
 }: {
   currentPage: number
   totalPages: number
+  canLoadMore?: boolean
   loadingTarget: number | null
   onPageChange: (page: number) => void
 }): React.JSX.Element {
@@ -2979,7 +2982,7 @@ function PaginationBar({
 
       <button
         type="button"
-        disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
+        disabled={(currentPage >= totalPages - 1 && !canLoadMore) || loadingTarget !== null}
         onClick={() => onPageChange(currentPage + 1)}
         aria-label={translate('auto.components.TaskPage.0c8df28045', 'Next page')}
         className={btnClass}
@@ -4728,16 +4731,24 @@ export default function TaskPage(): React.JSX.Element {
   const [planeIssues, setPlaneIssues] = useState<PlaneWorkItem[]>([])
   const [planeLoading, setPlaneLoading] = useState(false)
   const [planeError, setPlaneError] = useState<string | null>(null)
+  const [planeIssueLimit, setPlaneIssueLimit] = useState(PLANE_ITEM_LIMIT)
+  const [planeIssuePage, setPlaneIssuePage] = useState(0)
+  const [planeIssueLoadingTargetPage, setPlaneIssueLoadingTargetPage] = useState<number | null>(
+    null
+  )
+  const [planeIssuesHasMore, setPlaneIssuesHasMore] = useState(false)
+  const [planeIssueTotalPages, setPlaneIssueTotalPages] = useState<number | null>(null)
+  const [planeIssueTotalResults, setPlaneIssueTotalResults] = useState<number | null>(null)
   const [planeSearchInput, setPlaneSearchInput] = useState('')
   const [appliedPlaneSearch, setAppliedPlaneSearch] = useState('')
   const [planeRefreshNonce, setPlaneRefreshNonce] = useState(0)
   const [planePreset, setPlanePreset] = useState<PlaneListFilter>('assigned')
-  const [planeProjectId, setPlaneProjectId] = useState<string>('all')
-  const [planeStateGroup, setPlaneStateGroup] = useState<PlaneStateGroup | 'all'>('all')
-  const [planeStateId, setPlaneStateId] = useState<string>('all')
-  const [planePriority, setPlanePriority] = useState<PlanePriority | 'all'>('all')
-  const [planeAssigneeId, setPlaneAssigneeId] = useState<string>('all')
-  const [planeLabelId, setPlaneLabelId] = useState<string>('all')
+  const [planeProjectIds, setPlaneProjectIds] = useState<string[]>([])
+  const [planeStateGroups, setPlaneStateGroups] = useState<PlaneStateGroup[]>([])
+  const [planeStateIds, setPlaneStateIds] = useState<string[]>([])
+  const [planePriorities, setPlanePriorities] = useState<PlanePriority[]>([])
+  const [planeAssigneeIds, setPlaneAssigneeIds] = useState<string[]>([])
+  const [planeLabelIds, setPlaneLabelIds] = useState<string[]>([])
   const [planeCycleId, setPlaneCycleId] = useState<string>('all')
   const [planeModuleId, setPlaneModuleId] = useState<string>('all')
   const [planeTypeId, setPlaneTypeId] = useState<string>('all')
@@ -5591,6 +5602,73 @@ export default function TaskPage(): React.JSX.Element {
     setActiveLinearIssuePage,
     visibleLinearIssuePage
   ])
+
+  const loadedPlaneIssuePages = Math.max(1, Math.ceil(planeIssues.length / PLANE_ITEM_LIMIT))
+  const advertisedPlaneIssueTotalPages =
+    planeIssueTotalPages !== null
+      ? Math.max(1, planeIssueTotalPages)
+      : planeIssueTotalResults !== null
+        ? Math.max(1, Math.ceil(planeIssueTotalResults / PLANE_ITEM_LIMIT))
+        : planeIssues.length === 0
+          ? 1
+          : loadedPlaneIssuePages
+  const planeCanLoadMore =
+    planeIssuesHasMore || loadedPlaneIssuePages < advertisedPlaneIssueTotalPages
+  const visiblePlaneIssuePage = Math.min(planeIssuePage, Math.max(0, loadedPlaneIssuePages - 1))
+  const pagedPlaneIssues = useMemo(() => {
+    const start = visiblePlaneIssuePage * PLANE_ITEM_LIMIT
+    return planeIssues.slice(start, start + PLANE_ITEM_LIMIT)
+  }, [planeIssues, visiblePlaneIssuePage])
+  const showPlaneIssuePagination =
+    planeIssues.length > 0 &&
+    !planeError &&
+    !planeStatus.credentialError &&
+    (advertisedPlaneIssueTotalPages > 1 || planeCanLoadMore) &&
+    !(planeLoading && planeIssues.length === 0)
+
+  const handlePlaneIssuePageChange = useCallback(
+    (page: number) => {
+      if (page < loadedPlaneIssuePages) {
+        setPlaneIssuePage(page)
+        setPlaneIssueLoadingTargetPage(null)
+        return
+      }
+
+      setPlaneIssueLoadingTargetPage(page)
+      setPlaneIssueLimit((limit) =>
+        Math.max(limit, Math.min((page + 1) * PLANE_ITEM_LIMIT, PLANE_ITEM_LIST_MAX))
+      )
+    },
+    [loadedPlaneIssuePages]
+  )
+
+  useEffect(() => {
+    if (planeIssueLoadingTargetPage === null || planeLoading) {
+      return
+    }
+    const maxLoadedPage = Math.max(0, loadedPlaneIssuePages - 1)
+    const targetPageLoaded = planeIssueLoadingTargetPage <= maxLoadedPage
+    const targetPageCannotLoad = !planeCanLoadMore || planeIssueLimit >= PLANE_ITEM_LIST_MAX
+    if (targetPageLoaded || targetPageCannotLoad) {
+      setPlaneIssuePage(Math.min(planeIssueLoadingTargetPage, maxLoadedPage))
+      setPlaneIssueLoadingTargetPage(null)
+      return
+    }
+    setPlaneIssueLimit((limit) => Math.min(limit + PLANE_ITEM_LIMIT, PLANE_ITEM_LIST_MAX))
+  }, [
+    loadedPlaneIssuePages,
+    planeIssueLimit,
+    planeIssueLoadingTargetPage,
+    planeCanLoadMore,
+    planeLoading
+  ])
+
+  useEffect(() => {
+    if (planeIssueLoadingTargetPage !== null || planeIssuePage <= visiblePlaneIssuePage) {
+      return
+    }
+    setPlaneIssuePage(visiblePlaneIssuePage)
+  }, [planeIssueLoadingTargetPage, planeIssuePage, visiblePlaneIssuePage])
 
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
@@ -8766,37 +8844,46 @@ export default function TaskPage(): React.JSX.Element {
     const query: PlaneIssueQuery = {
       preset: planePreset,
       query: appliedPlaneSearch.trim() || undefined,
-      projectId: planeProjectId === 'all' ? undefined : planeProjectId,
-      stateGroup: planeStateGroup === 'all' ? undefined : planeStateGroup,
-      stateId: planeStateId === 'all' ? undefined : planeStateId,
-      priority: planePriority === 'all' ? undefined : planePriority,
-      assigneeId: planeAssigneeId === 'all' ? undefined : planeAssigneeId,
-      labelId: planeLabelId === 'all' ? undefined : planeLabelId,
+      projectIds: planeProjectIds.length ? planeProjectIds : undefined,
+      stateGroups: planeStateGroups.length ? planeStateGroups : undefined,
+      stateIds: planeStateIds.length ? planeStateIds : undefined,
+      priorities: planePriorities.length ? planePriorities : undefined,
+      assigneeIds: planeAssigneeIds.length ? planeAssigneeIds : undefined,
+      labelIds: planeLabelIds.length ? planeLabelIds : undefined,
       cycleId: planeCycleId === 'all' ? undefined : planeCycleId,
       moduleId: planeModuleId === 'all' ? undefined : planeModuleId,
       typeId: planeTypeId === 'all' ? undefined : planeTypeId,
       estimatePoint: planeEstimatePoint === 'all' ? undefined : planeEstimatePoint,
       orderBy: planeOrderBy
     }
-    const requestSignature = JSON.stringify({
+    const querySignature = JSON.stringify({
       source: planeTaskSourceContext ?? null,
       instanceId: selectedPlaneInstanceId ?? null,
-      limit: PLANE_ITEM_LIMIT,
       query
     })
     const previousRequest = lastPlaneRequestRef.current
-    const isNewSignature = previousRequest?.signature !== requestSignature
+    const isNewQuery = previousRequest?.signature.split('::limit::')[0] !== querySignature
+    const requestLimit = isNewQuery ? PLANE_ITEM_LIMIT : planeIssueLimit
+    const requestSignature = `${querySignature}::limit::${requestLimit}`
     lastPlaneRequestRef.current = { nonce: planeRefreshNonce, signature: requestSignature }
-    if (isNewSignature) {
-      setPlaneError(null)
+    if (isNewQuery && planeIssueLimit !== PLANE_ITEM_LIMIT) {
+      setPlaneIssueLimit(PLANE_ITEM_LIMIT)
     }
-    const request = listPlaneIssues(query, PLANE_ITEM_LIMIT, selectedPlaneInstanceId ?? undefined, {
+    if (isNewQuery) {
+      setPlaneError(null)
+      setPlaneIssuesHasMore(false)
+      setPlaneIssueTotalPages(null)
+      setPlaneIssueTotalResults(null)
+      setPlaneIssuePage(0)
+      setPlaneIssueLoadingTargetPage(null)
+    }
+    const request = listPlaneIssues(query, requestLimit, selectedPlaneInstanceId ?? undefined, {
       sourceContext: planeTaskSourceContext,
       force: Boolean(previousRequest && planeRefreshNonce !== previousRequest.nonce)
-    }).then((result) => result.items)
+    })
 
     void request
-      .then((issues) => {
+      .then((result) => {
         if (
           cancelled ||
           lastPlaneRequestRef.current?.signature !== requestSignature ||
@@ -8804,7 +8891,18 @@ export default function TaskPage(): React.JSX.Element {
         ) {
           return
         }
-        setPlaneIssues(issues)
+        setPlaneIssues(result.items)
+        setPlaneIssuesHasMore(Boolean(result.hasMore) && requestLimit < PLANE_ITEM_LIST_MAX)
+        setPlaneIssueTotalPages(
+          typeof result.totalPages === 'number' && Number.isFinite(result.totalPages)
+            ? result.totalPages
+            : null
+        )
+        setPlaneIssueTotalResults(
+          typeof result.totalResults === 'number' && Number.isFinite(result.totalResults)
+            ? result.totalResults
+            : null
+        )
         setPlaneLoading(false)
       })
       .catch((error) => {
@@ -8816,6 +8914,9 @@ export default function TaskPage(): React.JSX.Element {
           return
         }
         setPlaneIssues([])
+        setPlaneIssuesHasMore(false)
+        setPlaneIssueTotalPages(null)
+        setPlaneIssueTotalResults(null)
         setPlaneError(error instanceof Error ? error.message : String(error))
         setPlaneLoading(false)
       })
@@ -8826,18 +8927,19 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     appliedPlaneSearch,
     planeConnected,
-    planeAssigneeId,
+    planeAssigneeIds,
     planeCycleId,
     planeEstimatePoint,
-    planeLabelId,
+    planeLabelIds,
+    planeIssueLimit,
     planeModuleId,
     planeOrderBy,
     planePreset,
-    planePriority,
-    planeProjectId,
+    planePriorities,
+    planeProjectIds,
     planeRefreshNonce,
-    planeStateGroup,
-    planeStateId,
+    planeStateGroups,
+    planeStateIds,
     planeTaskSourceContext,
     planeTypeId,
     listPlaneIssues,
@@ -8884,7 +8986,8 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (taskSource !== 'plane' || !planeConnected || planeProjectId === 'all') {
+    const selectedProjectId = planeProjectIds.length === 1 ? planeProjectIds[0] : null
+    if (taskSource !== 'plane' || !planeConnected || !selectedProjectId) {
       setPlaneStates([])
       setPlaneLabels([])
       setPlaneCycles([])
@@ -8894,7 +8997,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     let cancelled = false
-    void listPlaneProjectResources(planeProjectId, selectedPlaneInstanceId ?? undefined, {
+    void listPlaneProjectResources(selectedProjectId, selectedPlaneInstanceId ?? undefined, {
       sourceContext: planeTaskSourceContext
     })
       .then(({ states, labels, cycles, modules, types, estimates }) => {
@@ -8923,7 +9026,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     listPlaneProjectResources,
     planeConnected,
-    planeProjectId,
+    planeProjectIds,
     planeTaskSourceContext,
     selectedPlaneInstanceId,
     taskSource
@@ -9244,6 +9347,58 @@ export default function TaskPage(): React.JSX.Element {
       </SelectContent>
     </Select>
   )
+
+  const planeCheckboxFilter = <T extends string>(
+    values: readonly T[],
+    onValuesChange: (values: T[]) => void,
+    label: string,
+    items: readonly { id: T; label: string }[],
+    width = 'w-[170px]'
+  ) => {
+    const selected = new Set(values)
+    const summary =
+      selected.size === 0 ? `All ${label.toLowerCase()}` : `${label}: ${selected.size}`
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn('h-8 justify-between border-border/50 bg-background px-3 text-xs', width)}
+          >
+            <span className="truncate">{summary}</span>
+            <ChevronDown className="ml-2 size-3.5 opacity-70" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="max-h-80 w-56 overflow-y-auto scrollbar-sleek"
+        >
+          <DropdownMenuLabel>{label}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => onValuesChange([])}>
+            {`All ${label.toLowerCase()}`}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {items.map((item) => (
+            <DropdownMenuCheckboxItem
+              key={item.id}
+              checked={selected.has(item.id)}
+              onCheckedChange={(checked) => {
+                const next = checked
+                  ? [...values, item.id]
+                  : values.filter((value) => value !== item.id)
+                onValuesChange(next)
+              }}
+              onSelect={(event) => event.preventDefault()}
+            >
+              {item.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -10335,81 +10490,54 @@ export default function TaskPage(): React.JSX.Element {
                       })}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 pb-3">
-                      {planeFilterSelect(
-                        planeProjectId,
-                        (value) => {
-                          setPlaneProjectId(value)
-                          setPlaneStateId('all')
-                          setPlaneLabelId('all')
+                      {planeCheckboxFilter(
+                        planeProjectIds,
+                        (values) => {
+                          setPlaneProjectIds(values)
+                          setPlaneStateIds([])
+                          setPlaneLabelIds([])
                           setPlaneCycleId('all')
                           setPlaneModuleId('all')
                           setPlaneTypeId('all')
                           setPlaneEstimatePoint('all')
                         },
                         'Project',
-                        [
-                          { id: 'all', label: 'All projects' },
-                          ...planeProjects.map((project) => ({
-                            id: project.id,
-                            label: project.name
-                          }))
-                        ],
+                        planeProjects.map((project) => ({ id: project.id, label: project.name })),
                         'w-[190px]'
                       )}
-                      {planeFilterSelect(
-                        planeStateGroup,
-                        (value) => {
-                          setPlaneStateGroup(value as PlaneStateGroup | 'all')
-                        },
+                      {planeCheckboxFilter(
+                        planeStateGroups,
+                        setPlaneStateGroups,
                         'State group',
-                        [{ id: 'all', label: 'All state groups' }, ...PLANE_STATE_GROUPS]
+                        PLANE_STATE_GROUPS
                       )}
-                      {planeFilterSelect(
-                        planeStateId,
-                        (value) => {
-                          setPlaneStateId(value)
-                        },
+                      {planeCheckboxFilter(
+                        planeStateIds,
+                        setPlaneStateIds,
                         'State',
-                        [
-                          { id: 'all', label: 'All states' },
-                          ...planeStates.map((state) => ({ id: state.id, label: state.name }))
-                        ]
+                        planeStates.map((state) => ({ id: state.id, label: state.name }))
                       )}
-                      {planeFilterSelect(
-                        planePriority,
-                        (value) => {
-                          setPlanePriority(value as PlanePriority | 'all')
-                        },
+                      {planeCheckboxFilter(
+                        planePriorities,
+                        setPlanePriorities,
                         'Priority',
-                        [{ id: 'all', label: 'All priorities' }, ...PLANE_PRIORITIES]
+                        PLANE_PRIORITIES
                       )}
-                      {planeFilterSelect(
-                        planeAssigneeId,
-                        (value) => {
-                          setPlaneAssigneeId(value)
-                        },
+                      {planeCheckboxFilter(
+                        planeAssigneeIds,
+                        setPlaneAssigneeIds,
                         'Assignee',
-                        [
-                          { id: 'all', label: 'All assignees' },
-                          { id: 'unassigned', label: 'Unassigned' },
-                          ...planeMembers.map((member) => ({
-                            id: member.id,
-                            label: member.displayName
-                          }))
-                        ],
+                        planeMembers.map((member) => ({
+                          id: member.id,
+                          label: member.displayName
+                        })),
                         'w-[190px]'
                       )}
-                      {planeFilterSelect(
-                        planeLabelId,
-                        (value) => {
-                          setPlaneLabelId(value)
-                        },
+                      {planeCheckboxFilter(
+                        planeLabelIds,
+                        setPlaneLabelIds,
                         'Label',
-                        [
-                          { id: 'all', label: 'All labels' },
-                          { id: 'none', label: 'No label' },
-                          ...planeLabels.map((label) => ({ id: label.id, label: label.name }))
-                        ]
+                        planeLabels.map((label) => ({ id: label.id, label: label.name }))
                       )}
                       {planeFilterSelect(
                         planeCycleId,
@@ -11701,7 +11829,7 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
                   <div className="divide-y divide-border/50">
-                    {planeIssues.map((issue) => (
+                    {pagedPlaneIssues.map((issue) => (
                       <div
                         role="button"
                         tabIndex={0}
@@ -11788,6 +11916,17 @@ export default function TaskPage(): React.JSX.Element {
                     ))}
                   </div>
                 </div>
+                {showPlaneIssuePagination ? (
+                  <div className="flex-none border-t border-border/50 bg-background">
+                    <PaginationBar
+                      currentPage={visiblePlaneIssuePage}
+                      totalPages={advertisedPlaneIssueTotalPages}
+                      canLoadMore={planeCanLoadMore}
+                      loadingTarget={planeIssueLoadingTargetPage}
+                      onPageChange={handlePlaneIssuePageChange}
+                    />
+                  </div>
+                ) : null}
               </div>
             )
           ) : taskSource === 'linear' && selectedLinearIssue ? (

@@ -87,7 +87,14 @@ export async function listEstimates(
   projectId: string,
   instanceId?: string
 ): Promise<PlaneEstimate[]> {
-  return listProjectResource(projectId, instanceId, 'estimates', mapEstimate)
+  try {
+    return await listProjectResource(projectId, instanceId, 'estimates', mapEstimate)
+  } catch (error) {
+    if (error instanceof Error && /Plane API 404:.*Estimate not found/.test(error.message)) {
+      return []
+    }
+    throw error
+  }
 }
 
 async function listProjectResource<T>(

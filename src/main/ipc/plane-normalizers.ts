@@ -3,7 +3,9 @@ import type { PlaneListFilter } from '../plane/issues'
 
 const VALID_FILTERS = new Set<PlaneListFilter>(['assigned', 'created', 'all', 'completed', 'open'])
 const MIN_LIMIT = 1
-const MAX_LIMIT = 50
+const MAX_LIMIT = 500
+const VALID_STATE_GROUPS = ['backlog', 'unstarted', 'started', 'completed', 'cancelled'] as const
+const VALID_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'none'] as const
 
 export function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -36,17 +38,17 @@ export function normalizeIssueQuery(value: unknown): PlaneIssueQuery | undefined
     preset: normalizeFilter(raw.preset),
     query: optionalString(raw.query),
     projectId: optionalString(raw.projectId),
-    stateGroup: optionalEnum(raw.stateGroup, [
-      'backlog',
-      'unstarted',
-      'started',
-      'completed',
-      'cancelled'
-    ]),
+    projectIds: optionalStringList(raw.projectIds, 'project IDs'),
+    stateGroup: optionalEnum(raw.stateGroup, VALID_STATE_GROUPS),
+    stateGroups: optionalEnumList(raw.stateGroups, VALID_STATE_GROUPS, 'state groups'),
     stateId: optionalString(raw.stateId),
-    priority: optionalEnum(raw.priority, ['urgent', 'high', 'medium', 'low', 'none']),
+    stateIds: optionalStringList(raw.stateIds, 'state IDs'),
+    priority: optionalEnum(raw.priority, VALID_PRIORITIES),
+    priorities: optionalEnumList(raw.priorities, VALID_PRIORITIES, 'priorities'),
     assigneeId: optionalString(raw.assigneeId),
+    assigneeIds: optionalStringList(raw.assigneeIds, 'assignee IDs'),
     labelId: optionalString(raw.labelId),
+    labelIds: optionalStringList(raw.labelIds, 'label IDs'),
     cycleId: optionalString(raw.cycleId),
     moduleId: optionalString(raw.moduleId),
     typeId: optionalString(raw.typeId),
@@ -138,11 +140,26 @@ function optionalStringList(value: unknown, fieldName: string): string[] | undef
   if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item.trim())) {
     throw new Error(`Invalid ${fieldName}`)
   }
-  return value.map((item) => item.trim())
+  const normalized = value.map((item) => item.trim())
+  return normalized.length > 0 ? normalized : undefined
 }
 
 function optionalEnum<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
   return allowed.includes(value as T) ? (value as T) : undefined
+}
+
+function optionalEnumList<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fieldName: string
+): T[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!Array.isArray(value) || !value.every((item) => allowed.includes(item as T))) {
+    throw new Error(`Invalid ${fieldName}`)
+  }
+  return value.length > 0 ? (value as T[]) : undefined
 }
 
 function optionalNullableString(value: unknown, fieldName: string): string | null {
