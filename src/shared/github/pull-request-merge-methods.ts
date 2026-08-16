@@ -2,11 +2,19 @@ import type { GitHubPRMergeMethod, GitHubPRMergeMethodSettings } from './pull-re
 
 export const GITHUB_PR_MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
+// Non-localized labels for internal use
 export const GITHUB_PR_MERGE_METHOD_LABELS: Record<GitHubPRMergeMethod, string> = {
   squash: 'Squash and merge',
   merge: 'Create merge commit',
   rebase: 'Rebase and merge'
 }
+
+// Translation keys for i18n
+export const GITHUB_PR_MERGE_METHOD_I18N_KEYS = {
+  squash: 'shared.github.pullRequestMergeMethods.squashAndMerge',
+  merge: 'shared.github.pullRequestMergeMethods.createMergeCommit',
+  rebase: 'shared.github.pullRequestMergeMethods.rebaseAndMerge'
+} as const
 
 export type GitHubPRMergeMethodOption = {
   method: GitHubPRMergeMethod

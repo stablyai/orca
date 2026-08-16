@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
+import { translate } from '../../../src/renderer/src/i18n/i18n'
 import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetModal } from './ActionSheetModal'
 import { BottomDrawer } from './BottomDrawer'
@@ -33,7 +34,7 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
       />
       <ActionSheetModal
         visible={controller.sendSheet !== null}
-        title="Send Notes"
+        title={translate('mobile.components.MobileDiffReviewDrawers.sendNotes', 'Send Notes')}
         message={sendSheetMessage(controller)}
         actions={sendActions}
         onClose={() => controller.setSendSheet(null)}
@@ -107,7 +108,10 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
         onPress: () => void controller.copyNotes()
       },
       {
-        label: 'Send Unsent Notes',
+        label: translate(
+          'mobile.components.MobileDiffReviewDrawers.sendUnsentNotes',
+          'Send Unsent Notes'
+        ),
         icon: Send,
         disabled: controller.unsentComments.length === 0,
         skipAutoClose: true,
@@ -283,10 +287,15 @@ function CompletionDrawer({ controller }: Props) {
           disabled={controller.unsentComments.length === 0}
           onPress={() => void controller.openSendSheet()}
           accessibilityRole="button"
-          accessibilityLabel="Send notes to agent"
+          accessibilityLabel={translate(
+            'mobile.components.MobileDiffReviewDrawers.sendNotesToAgent',
+            'Send notes to agent'
+          )}
         >
           <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
-          <Text style={styles.primaryButtonText}>Send Notes</Text>
+          <Text style={styles.primaryButtonText}>
+            {translate('mobile.components.MobileDiffReviewDrawers.sendNotesButton', 'Send Notes')}
+          </Text>
         </Pressable>
       </View>
     </BottomDrawer>

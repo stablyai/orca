@@ -276,6 +276,7 @@ import {
   reconcileMobileSessionCreateWarningState
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors } from '../../../../src/theme/mobile-theme'
+import { translate } from '../../../../src/renderer/src/i18n/i18n'
 import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
 import { styles } from '../../../../src/session/mobile-session-styles'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
@@ -639,7 +640,9 @@ function FileReader({
                 accessibilityLabel="Send review notes to AI"
               >
                 <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
+                <Text style={styles.diffNotesActionText}>
+                  {translate('mobile.app.h.hostId.session.worktreeId.send', 'Send')}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -5064,8 +5067,14 @@ export default function SessionScreen() {
 
       <ActionSheetModal
         visible={pendingDiffNotesDelivery !== null}
-        title="Send Review Notes"
-        message="Choose an agent session for the current notes."
+        title={translate(
+          'mobile.app.h.hostId.session.worktreeId.sendReviewNotes',
+          'Send Review Notes'
+        )}
+        message={translate(
+          'mobile.app.h.hostId.session.worktreeId.chooseAgentSession',
+          'Choose an agent session for the current notes.'
+        )}
         actions={[
           ...sendDiffNotesAgentActions,
           {

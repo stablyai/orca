@@ -176,6 +176,7 @@ import {
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
+  GITHUB_PR_MERGE_METHOD_I18N_KEYS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github/pull-request-merge-methods'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
@@ -2888,7 +2889,10 @@ function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
-    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const label = translate(
+      GITHUB_PR_MERGE_METHOD_I18N_KEYS[method],
+      GITHUB_PR_MERGE_METHOD_LABELS[method]
+    )
     const confirmed = await confirm({
       title: translate(
         'auto.components.GitHubItemDialog.03d7216d62',

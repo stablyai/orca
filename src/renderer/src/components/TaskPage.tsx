@@ -348,6 +348,7 @@ import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-su
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
+  GITHUB_PR_MERGE_METHOD_I18N_KEYS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github/pull-request-merge-methods'
 import type {
@@ -2695,7 +2696,10 @@ function PRMergeCell({
     if (!repo || mergeDisabled) {
       return
     }
-    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const label = translate(
+      GITHUB_PR_MERGE_METHOD_I18N_KEYS[method],
+      GITHUB_PR_MERGE_METHOD_LABELS[method]
+    )
     const confirmed = await confirm({
       title: translate('auto.components.TaskPage.844dc193c7', '{{value0}} PR #{{value1}}?', {
         value0: label,

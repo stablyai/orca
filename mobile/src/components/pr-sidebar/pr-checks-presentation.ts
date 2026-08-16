@@ -3,6 +3,7 @@ import type {
   PRState,
   ProviderCheckSummary
 } from '../../../../src/shared/github/pull-request-types'
+import { translate } from '../../../../src/renderer/src/i18n/i18n'
 import {
   classifyCheckOutcome,
   summarizeProviderChecks,
@@ -109,25 +110,30 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
 // outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
 export function checkStatusLabel(check: PRCheckDetail): string {
   if (check.status !== 'completed') {
-    return check.status === 'in_progress' ? 'In progress' : 'Pending'
+    return check.status === 'in_progress'
+      ? translate('mobile.components.prSidebar.prChecksPresentation.inProgress', 'In progress')
+      : translate('mobile.components.prSidebar.prChecksPresentation.pending', 'Pending')
   }
   switch (check.conclusion) {
     case 'success':
-      return 'Successful'
+      return translate('mobile.components.prSidebar.prChecksPresentation.successful', 'Successful')
     case 'failure':
-      return 'Failed'
+      return translate('mobile.components.prSidebar.prChecksPresentation.failed', 'Failed')
     case 'cancelled':
-      return 'Cancelled'
+      return translate('mobile.components.prSidebar.prChecksPresentation.cancelled', 'Cancelled')
     case 'timed_out':
-      return 'Timed out'
+      return translate('mobile.components.prSidebar.prChecksPresentation.timedOut', 'Timed out')
     case 'action_required':
-      return 'Action required'
+      return translate(
+        'mobile.components.prSidebar.prChecksPresentation.actionRequired',
+        'Action required'
+      )
     case 'neutral':
-      return 'Neutral'
+      return translate('mobile.components.prSidebar.prChecksPresentation.neutral', 'Neutral')
     case 'skipped':
-      return 'Skipped'
+      return translate('mobile.components.prSidebar.prChecksPresentation.skipped', 'Skipped')
     default:
-      return 'Pending'
+      return translate('mobile.components.prSidebar.prChecksPresentation.pending', 'Pending')
   }
 }
 

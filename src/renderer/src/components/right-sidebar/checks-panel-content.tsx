@@ -598,33 +598,33 @@ function isFailureState(state: string | null | undefined): boolean {
 function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
-    return 'Successful'
+    return translate('components.rightSidebar.checksPanelContent.successful', 'Successful')
   }
   if (conclusion === 'failure') {
-    return 'Failed'
+    return translate('components.rightSidebar.checksPanelContent.failed', 'Failed')
   }
   if (conclusion === 'cancelled') {
-    return 'Cancelled'
+    return translate('components.rightSidebar.checksPanelContent.cancelled', 'Cancelled')
   }
   if (conclusion === 'timed_out') {
-    return 'Timed out'
+    return translate('components.rightSidebar.checksPanelContent.timedOut', 'Timed out')
   }
   if (conclusion === 'action_required') {
-    return 'Action required'
+    return translate('components.rightSidebar.checksPanelContent.actionRequired', 'Action required')
   }
   if (conclusion === 'neutral') {
-    return 'Neutral'
+    return translate('components.rightSidebar.checksPanelContent.neutral', 'Neutral')
   }
   if (conclusion === 'skipped') {
-    return 'Skipped'
+    return translate('components.rightSidebar.checksPanelContent.skipped', 'Skipped')
   }
   if (check.status === 'queued') {
-    return 'Queued'
+    return translate('components.rightSidebar.checksPanelContent.queued', 'Queued')
   }
   if (check.status === 'in_progress') {
-    return 'In progress'
+    return translate('components.rightSidebar.checksPanelContent.inProgress', 'In progress')
   }
-  return 'Pending'
+  return translate('components.rightSidebar.checksPanelContent.pending', 'Pending')
 }
 
 function formatCheckTimestamp(input: string | null | undefined): string | null {
