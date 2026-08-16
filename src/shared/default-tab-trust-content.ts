@@ -11,7 +11,11 @@ export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): strin
     .map((tab, index) => {
       const command = tab.command?.trim()
       // Why: committed env is trust-relevant too — it can redirect binaries (PATH) or pull 1Password secrets (op:// refs).
-      const envLines = Object.entries(tab.env ?? {}).map(([key, value]) => `${key}=${value}`)
+      // Sorted so re-ordering keys in orca.yaml, which changes nothing semantically, does not re-prompt.
+      // Keys are [A-Za-z_][A-Za-z0-9_]* and values are control-char-free (orca-yaml.ts), so each line is unambiguous.
+      const envLines = Object.entries(tab.env ?? {})
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, value]) => `${key}=${value}`)
       if (!command && envLines.length === 0) {
         return null
       }

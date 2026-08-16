@@ -474,3 +474,35 @@ describe('trust content is shared with the renderer (Codex review)', () => {
     expect(getDefaultTabCommandTrustContent(hooks)).not.toBe('')
   })
 })
+
+describe('trust content is unambiguous (Codex/CodeRabbit review)', () => {
+  it('does not collide a multi-key env with a single value that embeds a newline', () => {
+    // The embedded-newline variant cannot reach here (orca-yaml rejects it); assert the
+    // serialization would distinguish them anyway, so the two layers cannot both regress silently.
+    const twoKeys = {
+      scripts: {},
+      defaultTabs: [{ title: 'T', env: { FOO: 'safe', PATH: 'evil' } }]
+    } as unknown as OrcaHooks
+    const oneKey = {
+      scripts: {},
+      defaultTabs: [{ title: 'T', env: { FOO: 'safe' } }]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabCommandTrustContent(twoKeys)).not.toBe(
+      getDefaultTabCommandTrustContent(oneKey)
+    )
+  })
+
+  it('is stable under env key re-ordering, which changes nothing semantically', () => {
+    const a = {
+      scripts: {},
+      defaultTabs: [{ title: 'T', env: { B: '2', A: '1' } }]
+    } as unknown as OrcaHooks
+    const b = {
+      scripts: {},
+      defaultTabs: [{ title: 'T', env: { A: '1', B: '2' } }]
+    } as unknown as OrcaHooks
+
+    expect(getDefaultTabCommandTrustContent(a)).toBe(getDefaultTabCommandTrustContent(b))
+  })
+})

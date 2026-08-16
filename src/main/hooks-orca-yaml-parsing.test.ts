@@ -530,3 +530,24 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
     expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
   })
 })
+
+describe('trust-content forgery vectors are rejected at parse time', () => {
+  it('drops env values containing CR/LF, which would forge a second env line in the trust hash', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      FOO: "safe\\nPATH=evil"',
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env).toEqual({ GOOD: 'keep' })
+  })
+
+  it('drops a title containing a newline, which would forge an env line on the header', () => {
+    const yaml = ['defaultTabs:', '  - title: "A\\nFOO=evil"', '    command: claude'].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]).toEqual({ command: 'claude' })
+  })
+})
