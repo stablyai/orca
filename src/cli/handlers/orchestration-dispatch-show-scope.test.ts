@@ -15,7 +15,7 @@ function invokeDispatchShow(flags: Map<string, string | boolean>) {
   return ORCHESTRATION_HANDLERS['orchestration dispatch-show']({
     flags,
     client: { call: callMock },
-    cwd: '/tmp/repo',
+    cwd: process.cwd(),
     json: true
   } as never)
 }
