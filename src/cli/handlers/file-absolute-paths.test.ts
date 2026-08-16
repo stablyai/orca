@@ -103,6 +103,30 @@ describe('absolute file CLI paths', () => {
     })
   })
 
+  it.each([
+    ['POSIX', '/tmp/repo', '/tmp/repo/src/lib/../App.tsx', '/tmp'],
+    ['Windows', 'C:\\repo', 'C:\\repo\\src\\lib\\..\\App.tsx', 'C:\\users\\ada']
+  ])('normalizes dot segments in %s absolute paths', async (_flavor, root, path, cwd) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree(root, 'feature') }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open', '--path', path, '--worktree', 'id:wt-1'], cwd)
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+  })
+
   it('keeps relative paths on the single-rpc path', async () => {
     queueFixtures(
       callMock,

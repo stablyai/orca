@@ -65,7 +65,7 @@ async function resolveFilePath(
     worktree
   })
   const worktreePath = result.result.worktree.path
-  const candidate = isRuntimePathAbsolute(path) ? path : resolveRuntimePath(ctx.cwd, path)
+  const candidate = resolveRuntimePath(ctx.cwd, path)
   const relativePath = relativePathInsideRoot(worktreePath, candidate)
   if (relativePath === '') {
     throw new RuntimeClientError(
