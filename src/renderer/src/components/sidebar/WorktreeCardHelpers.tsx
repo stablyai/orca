@@ -2,6 +2,7 @@ import React from 'react'
 import type { GitConflictOperation } from '../../../../shared/git-status-types'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { translate } from '../../i18n/i18n'
 
 // ── Pure helper functions ────────────────────────────────────────────
 
@@ -22,6 +23,23 @@ export function checksLabel(status: CheckStatus): string {
   }
 }
 
+export function conflictOperationLabel(
+  operation: Exclude<GitConflictOperation, 'unknown'>
+): string {
+  switch (operation) {
+    case 'merge':
+      return translate('renderer.components.sidebar.WorktreeCardHelpers.merging', 'Merging')
+    case 'rebase':
+      return translate('renderer.components.sidebar.WorktreeCardHelpers.rebasing', 'Rebasing')
+    case 'cherry-pick':
+      return translate(
+        'renderer.components.sidebar.WorktreeCardHelpers.cherryPicking',
+        'Cherry-picking'
+      )
+  }
+}
+
+// Deprecated: use conflictOperationLabel() function instead for i18n support
 export const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>, string> = {
   merge: 'Merging',
   rebase: 'Rebasing',

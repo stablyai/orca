@@ -16242,6 +16242,17 @@
       "launchFailed": "无法启动新的 {{agent}} 会话。"
     }
   },
+  "renderer": {
+    "components": {
+      "sidebar": {
+        "WorktreeCardHelpers": {
+          "merging": "合并中",
+          "rebasing": "变基中",
+          "cherryPicking": "拣选中"
+        }
+      }
+    }
+  },
   "dashboardPopout": {
     "view": {
       "label": "仪表盘视图",
