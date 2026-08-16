@@ -1,6 +1,7 @@
 import {
   BrowserClientHostEvent,
-  type BrowserHostLeaseAuthority
+  type BrowserClientHostCommandEvent,
+  type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
@@ -16,6 +17,8 @@ type PairedRuntimeBrowserHostLeaseOptions = {
   authorityRuntimeId: string
   browserHostClientId: string
   hostCapabilities: readonly string[]
+  pageCommandProtocolVersion?: 1
+  onPageCommand?: (command: BrowserClientHostCommandEvent) => void | Promise<void>
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
   onError?: (error: Error) => void
@@ -23,15 +26,15 @@ type PairedRuntimeBrowserHostLeaseOptions = {
 
 export class PairedRuntimeBrowserHostLease {
   private subscription: RemoteRuntimeSubscription | null = null
-  private startPromise: Promise<BrowserHostLeaseAuthority> | null = null
+  private startPromise: Promise<BrowserClientHostLeaseAuthority> | null = null
   private closePromise: Promise<void> | null = null
   private rejectReady: ((error: Error) => void) | null = null
-  private authority: BrowserHostLeaseAuthority | null = null
+  private authority: BrowserClientHostLeaseAuthority | null = null
   private closed = false
 
   constructor(private readonly options: PairedRuntimeBrowserHostLeaseOptions) {}
 
-  start(): Promise<BrowserHostLeaseAuthority> {
+  start(): Promise<BrowserClientHostLeaseAuthority> {
     if (this.closed) {
       return Promise.reject(new Error('Browser host lease is closed'))
     }
@@ -49,28 +52,33 @@ export class PairedRuntimeBrowserHostLease {
     return this.closePromise
   }
 
-  private async startLease(): Promise<BrowserHostLeaseAuthority> {
+  private async startLease(): Promise<BrowserClientHostLeaseAuthority> {
     const timeoutMs = this.options.timeoutMs ?? 15_000
-    let resolveReady = (_authority: BrowserHostLeaseAuthority): void => {}
+    let resolveReady = (_authority: BrowserClientHostLeaseAuthority): void => {}
     let rejectReady = (_error: Error): void => {}
-    const ready = new Promise<BrowserHostLeaseAuthority>((resolve, reject) => {
+    const ready = new Promise<BrowserClientHostLeaseAuthority>((resolve, reject) => {
       resolveReady = resolve
       rejectReady = reject
     })
     void ready.catch(() => undefined)
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
+      const pageCommandProtocolVersion = this.requestedPageCommandProtocolVersion()
       const subscription = await subscribeRemoteRuntimeRequest(
         this.options.pairing,
         'browser.clientHost.attach',
         {
           authorityRuntimeId: this.options.authorityRuntimeId,
           browserHostClientId: this.options.browserHostClientId,
-          hostCapabilities: [...this.options.hostCapabilities]
+          hostCapabilities: [...this.options.hostCapabilities],
+          ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {})
         },
         timeoutMs,
         {
           onResponse: (response) => {
+            if (this.closed) {
+              return
+            }
             if (!response.ok) {
               this.fail(
                 new RemoteRuntimeClientError(response.error.code, response.error.message),
@@ -81,6 +89,10 @@ export class PairedRuntimeBrowserHostLease {
             const parsed = BrowserClientHostEvent.safeParse(response.result)
             if (!parsed.success || response._meta.runtimeId !== this.options.authorityRuntimeId) {
               this.fail(new Error('Invalid browser host lease response'), rejectReady)
+              return
+            }
+            if (parsed.data.type === 'command') {
+              this.handlePageCommand(parsed.data, rejectReady)
               return
             }
             if (parsed.data.type === 'revoked') {
@@ -95,11 +107,21 @@ export class PairedRuntimeBrowserHostLease {
               this.fail(new Error(`Browser host lease revoked: ${parsed.data.reason}`), rejectReady)
               return
             }
+            if (
+              parsed.data.pageCommandProtocolVersion !== undefined &&
+              parsed.data.pageCommandProtocolVersion !== pageCommandProtocolVersion
+            ) {
+              this.fail(new Error('Invalid browser host lease response'), rejectReady)
+              return
+            }
             const authority = {
               authorityRuntimeId: this.options.authorityRuntimeId,
               authorityEpoch: parsed.data.authorityEpoch,
               browserHostClientId: this.options.browserHostClientId,
-              browserHostGeneration: parsed.data.browserHostGeneration
+              browserHostGeneration: parsed.data.browserHostGeneration,
+              ...(parsed.data.pageCommandProtocolVersion
+                ? { pageCommandProtocolVersion: parsed.data.pageCommandProtocolVersion }
+                : {})
             }
             if (this.authority) {
               if (!sameAuthority(this.authority, authority)) {
@@ -161,6 +183,44 @@ export class PairedRuntimeBrowserHostLease {
     )
   }
 
+  private requestedPageCommandProtocolVersion(): 1 | undefined {
+    return this.options.onPageCommand ? this.options.pageCommandProtocolVersion : undefined
+  }
+
+  private handlePageCommand(
+    command: BrowserClientHostCommandEvent,
+    rejectReady: (error: Error) => void
+  ): void {
+    const authority = this.authority
+    if (
+      !authority?.pageCommandProtocolVersion ||
+      !this.options.onPageCommand ||
+      command.pageCommandProtocolVersion !== authority.pageCommandProtocolVersion
+    ) {
+      this.fail(new Error('Unnegotiated browser host page command'), rejectReady)
+      return
+    }
+    if (
+      command.authorityRuntimeId !== authority.authorityRuntimeId ||
+      command.authorityEpoch !== authority.authorityEpoch ||
+      command.browserHostClientId !== authority.browserHostClientId ||
+      command.browserHostGeneration !== authority.browserHostGeneration
+    ) {
+      this.fail(new Error('Stale browser host page command'), rejectReady)
+      return
+    }
+    try {
+      const delivered = this.options.onPageCommand(command)
+      if (delivered) {
+        void delivered.catch((error) =>
+          this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
+        )
+      }
+    } catch (error) {
+      this.fail(error instanceof Error ? error : new Error(String(error)), rejectReady)
+    }
+  }
+
   private async closeLease(): Promise<void> {
     this.subscription?.close()
     this.subscription = null
@@ -175,11 +235,15 @@ export class PairedRuntimeBrowserHostLease {
   }
 }
 
-function sameAuthority(left: BrowserHostLeaseAuthority, right: BrowserHostLeaseAuthority): boolean {
+function sameAuthority(
+  left: BrowserClientHostLeaseAuthority,
+  right: BrowserClientHostLeaseAuthority
+): boolean {
   return (
     left.authorityRuntimeId === right.authorityRuntimeId &&
     left.authorityEpoch === right.authorityEpoch &&
     left.browserHostClientId === right.browserHostClientId &&
-    left.browserHostGeneration === right.browserHostGeneration
+    left.browserHostGeneration === right.browserHostGeneration &&
+    left.pageCommandProtocolVersion === right.pageCommandProtocolVersion
   )
 }

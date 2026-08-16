@@ -6,7 +6,7 @@ import { RpcDispatcher } from '../dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 import { ALL_RPC_METHODS } from './index'
 
-function request(browserHostClientId = 'host-a') {
+function request(browserHostClientId = 'host-a', pageCommandProtocolVersion?: 1) {
   return {
     id: `browser-host:${browserHostClientId}`,
     authToken: 'bound-by-websocket',
@@ -14,7 +14,8 @@ function request(browserHostClientId = 'host-a') {
     params: {
       authorityRuntimeId: 'runtime-a',
       browserHostClientId,
-      hostCapabilities: ['webview']
+      hostCapabilities: ['webview'],
+      ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {})
     }
   }
 }
@@ -77,6 +78,7 @@ describe('browser.clientHost.attach RPC', () => {
     await vi.waitFor(() => expect(replies).toHaveLength(1))
     const ready = JSON.parse(replies[0]!).result
     expect(ready).toMatchObject({ type: 'ready', browserHostGeneration: 1 })
+    expect(ready).not.toHaveProperty('pageCommandProtocolVersion')
     expect(ready.authorityEpoch).toEqual(expect.any(String))
     expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
       connectionId: 'connection-a',
@@ -96,6 +98,35 @@ describe('browser.clientHost.attach RPC', () => {
     expect(() => getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toThrow(
       'browser_host_unavailable'
     )
+  })
+
+  it('echoes page-command negotiation only to an explicit v1 client', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const replies: string[] = []
+    const dispatch = dispatcher.dispatchStreaming(
+      request('host-a', 1),
+      (reply) => replies.push(reply),
+      {
+        connectionId: 'connection-a',
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a',
+        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+      }
+    )
+
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    expect(JSON.parse(replies[0]!).result).toMatchObject({
+      type: 'ready',
+      pageCommandProtocolVersion: 1
+    })
+    cleanups.get('browser-client-host:host-a')?.()
+    await dispatch
+    expect(JSON.parse(replies[1]!).result).not.toHaveProperty('pageCommandProtocolVersion')
   })
 
   it('fences a replaced subscription and increments its host generation', async () => {

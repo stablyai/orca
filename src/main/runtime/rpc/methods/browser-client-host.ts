@@ -48,7 +48,10 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
         emit({
           type: 'ready',
           authorityEpoch: handle.lease.authorityEpoch,
-          browserHostGeneration: handle.lease.browserHostGeneration
+          browserHostGeneration: handle.lease.browserHostGeneration,
+          ...(params.pageCommandProtocolVersion
+            ? { pageCommandProtocolVersion: params.pageCommandProtocolVersion }
+            : {})
         })
         const reason = await handle.whenFenced
         emit({

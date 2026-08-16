@@ -97,7 +97,10 @@ export class PairedRuntimeBrowserNetworkTransport {
         this.options.pairing,
         'network.browserTunnel',
         {
-          ...this.options.lease,
+          authorityRuntimeId: this.options.lease.authorityRuntimeId,
+          authorityEpoch: this.options.lease.authorityEpoch,
+          browserHostClientId: this.options.lease.browserHostClientId,
+          browserHostGeneration: this.options.lease.browserHostGeneration,
           executionHost: this.options.executionHost
         },
         this.options.timeoutMs,

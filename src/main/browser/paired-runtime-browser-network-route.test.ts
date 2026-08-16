@@ -307,6 +307,26 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
+  it('keeps page-command negotiation off the independent tunnel attach', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const commandLease = { ...lease, pageCommandProtocolVersion: 1 }
+    const route = new PairedRuntimeBrowserNetworkRoute({
+      pairing,
+      lease: commandLease,
+      executionHostRevision: 1
+    })
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    await starting
+
+    expect(attempts[0]!.params).toEqual({
+      ...lease,
+      executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
+    })
+    await route.close()
+  })
+
   it('negotiates execution-host routing only for an SSH descriptor', async () => {
     const attempts = mockSubscriptionAttempts()
     const executionHost = {
