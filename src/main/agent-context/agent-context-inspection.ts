@@ -7,10 +7,12 @@ import type {
   AgentContextPlugin,
   AgentContextReport
 } from '../../shared/agent-context'
-import { inspectMcpConfigContent, type McpConfigInspection } from '../../shared/mcp-config'
 import { inspectCodexMcpToml } from './codex-mcp-toml'
+import { inspectJsonMcpFile } from './json-mcp-file'
 import {
   buildInstructionFileSources,
+  defaultAgentContextPathApi,
+  MAX_ANCESTOR_LEVELS,
   type AgentContextPathApi,
   type InstructionFileSource
 } from './agent-context-sources'
@@ -67,6 +69,26 @@ async function readBoundedText(pathValue: string): Promise<string | null> {
   }
 }
 
+/** The nearest directory at or above `cwd` holding a `.git` entry (a worktree's `.git` is a file). */
+async function findGitRootDir(
+  cwd: string,
+  pathApi: AgentContextPathApi,
+  toAccessPath: (displayPath: string) => string
+): Promise<string | null> {
+  let current = cwd
+  for (let level = 0; level <= MAX_ANCESTOR_LEVELS; level += 1) {
+    if (await statOrNull(toAccessPath(pathApi.join(current, '.git')))) {
+      return current
+    }
+    const parent = pathApi.dirname(current)
+    if (!parent || parent === current) {
+      return null
+    }
+    current = parent
+  }
+  return null
+}
+
 async function countRuleFiles(dirPath: string): Promise<number | null> {
   try {
     // Why: Cursor and Copilot both read rule files from nested folders.
@@ -91,9 +113,10 @@ async function inspectInstructionFile(
   }
   if (source.kind === 'directory') {
     const entryCount = await countRuleFiles(accessPath)
+    // Why: a rules folder with no rule files loads nothing — checked but empty.
     return {
       ...base,
-      exists: entryCount !== null,
+      exists: entryCount !== null && entryCount > 0,
       sizeBytes: null,
       updatedAt: null,
       entryCount: entryCount ?? undefined
@@ -104,26 +127,6 @@ async function inspectInstructionFile(
     return { ...base, exists: false, sizeBytes: null, updatedAt: null }
   }
   return { ...base, exists: true, sizeBytes: fileStat.size, updatedAt: fileStat.mtimeMs }
-}
-
-/** Merges servers from every configured object path; the first path's inspection carries status. */
-function inspectJsonMcpFile(source: McpFileSource, content: string | null): McpConfigInspection {
-  const primary = inspectMcpConfigContent(source.candidate, content)
-  if (!source.extraServersPaths?.length || primary.status !== 'valid') {
-    return primary
-  }
-  const seen = new Set(primary.servers.map((server) => server.name))
-  const servers = [...primary.servers]
-  for (const serversPath of source.extraServersPaths) {
-    const extra = inspectMcpConfigContent({ ...source.candidate, serversPath }, content)
-    for (const server of extra.servers) {
-      if (!seen.has(server.name)) {
-        seen.add(server.name)
-        servers.push(server)
-      }
-    }
-  }
-  return { ...primary, servers }
 }
 
 async function inspectMcpFile(
@@ -246,10 +249,14 @@ export async function inspectAgentContext(
   args: AgentContextInspectionArgs
 ): Promise<AgentContextReport> {
   const toAccessPath = args.toAccessPath ?? ((displayPath: string) => displayPath)
-  const sourceArgs = { homeDir: args.target.homeDir, cwd: args.target.cwd, pathApi: args.pathApi }
+  const pathApi = args.pathApi ?? defaultAgentContextPathApi
+  const sourceArgs = { homeDir: args.target.homeDir, cwd: args.target.cwd, pathApi }
+  const gitRootDir = args.target.cwd
+    ? await findGitRootDir(args.target.cwd, pathApi, toAccessPath)
+    : null
   const [instructionFiles, mcpFiles, settings] = await Promise.all([
     Promise.all(
-      buildInstructionFileSources(sourceArgs).map((source) =>
+      buildInstructionFileSources({ ...sourceArgs, gitRootDir }).map((source) =>
         inspectInstructionFile(source, toAccessPath)
       )
     ),

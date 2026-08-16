@@ -20,7 +20,7 @@ export type InstructionFileSource = {
 // unbounded stat walk; agents themselves stop at the repo or home boundary.
 export const MAX_ANCESTOR_LEVELS = 8
 
-/** Agents that read a shared `AGENTS.md` at the workspace root and its ancestors. */
+/** Agents that read a shared `AGENTS.md` at the workspace root. */
 export const AGENTS_MD_READERS: AgentType[] = [
   'codex',
   'opencode',
@@ -29,6 +29,23 @@ export const AGENTS_MD_READERS: AgentType[] = [
   'copilot',
   'pi'
 ]
+
+/**
+ * Agents that also read `AGENTS.md` from parent folders, up to the git root.
+ * Cursor and Copilot read only the workspace root's file.
+ */
+export const AGENTS_MD_ANCESTOR_READERS: AgentType[] = ['codex', 'opencode', 'amp', 'pi']
+
+const WINDOWS_PATH_PATTERN = /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/])/
+
+/** Path equality the way the host's filesystem sees it: Windows paths ignore case and separator style. */
+export function isSamePath(a: string, b: string): boolean {
+  const normalize = (value: string): string => {
+    const unified = value.replace(/\\/g, '/').replace(/\/+$/, '')
+    return WINDOWS_PATH_PATTERN.test(value) ? unified.toLowerCase() : unified
+  }
+  return normalize(a) === normalize(b)
+}
 
 function ancestorDirs(cwd: string, pathApi: AgentContextPathApi): string[] {
   const dirs: string[] = []
@@ -48,14 +65,20 @@ function ancestorDirs(cwd: string, pathApi: AgentContextPathApi): string[] {
  * Every instruction file a supported agent loads for a session rooted at `cwd`.
  * The table is the product: each row names the agents that read the path so the
  * panel can group by agent without re-deriving vendor conventions.
+ *
+ * `gitRootDir` is the workspace's repository root (the nearest ancestor with a
+ * `.git`), or `null` when there is none: Codex-family agents stop their
+ * `AGENTS.md` walk there, Claude walks every parent up to the home directory.
  */
 export function buildInstructionFileSources(args: {
   homeDir: string
   cwd: string | null
+  gitRootDir?: string | null
   pathApi?: AgentContextPathApi
 }): InstructionFileSource[] {
   const pathApi = args.pathApi ?? defaultAgentContextPathApi
   const { homeDir, cwd } = args
+  const gitRootDir = args.gitRootDir ?? null
   const sources: InstructionFileSource[] = [
     {
       id: 'home-claude-md',
@@ -167,10 +190,12 @@ export function buildInstructionFileSources(args: {
       kind: 'directory'
     }
   )
-  // Why: Claude and Codex both walk up from cwd, so a monorepo root file
-  // applies to a nested workspace even though it is outside the worktree.
+  // Why: Claude walks up from cwd to home, so a monorepo root file applies to a
+  // nested workspace even though it is outside the worktree; Codex-family
+  // agents walk only as far as the repository root.
+  let insideGitRoot = gitRootDir !== null && !isSamePath(cwd, gitRootDir)
   for (const dir of ancestorDirs(cwd, pathApi)) {
-    if (dir === homeDir) {
+    if (isSamePath(dir, homeDir)) {
       break
     }
     sources.push(
@@ -183,14 +208,25 @@ export function buildInstructionFileSources(args: {
         kind: 'file'
       },
       {
+        id: `ancestor-claude-local-md:${dir}`,
+        label: 'CLAUDE.local.md',
+        path: pathApi.join(dir, 'CLAUDE.local.md'),
+        scope: 'ancestor',
+        agents: ['claude'],
+        kind: 'file'
+      }
+    )
+    if (insideGitRoot) {
+      sources.push({
         id: `ancestor-agents-md:${dir}`,
         label: 'AGENTS.md',
         path: pathApi.join(dir, 'AGENTS.md'),
         scope: 'ancestor',
-        agents: [...AGENTS_MD_READERS],
+        agents: [...AGENTS_MD_ANCESTOR_READERS],
         kind: 'file'
-      }
-    )
+      })
+      insideGitRoot = gitRootDir !== null && !isSamePath(dir, gitRootDir)
+    }
   }
   return sources
 }

@@ -68,6 +68,21 @@ const OPENCODE_MCP_CANDIDATE: McpConfigCandidate = {
   serversPath: ['mcp']
 }
 
+const GEMINI_PROJECT_MCP_CANDIDATE: McpConfigCandidate = {
+  format: 'workspace',
+  label: 'Gemini workspace',
+  relativePath: '.gemini/settings.json',
+  serversPath: ['mcpServers']
+}
+
+/** VS Code / Copilot keep workspace MCP servers under `servers`, not `mcpServers`. */
+const COPILOT_MCP_CANDIDATE: McpConfigCandidate = {
+  format: 'workspace',
+  label: 'Copilot workspace',
+  relativePath: '.vscode/mcp.json',
+  serversPath: ['servers']
+}
+
 const CODEX_MCP_CANDIDATE: McpConfigCandidate = {
   format: 'workspace',
   label: 'Codex',
@@ -148,6 +163,20 @@ export function buildMcpFileSources(args: {
       scope: 'project',
       agents: ['opencode'],
       candidate: OPENCODE_MCP_CANDIDATE
+    },
+    {
+      id: 'project-mcp:.gemini/settings.json',
+      path: pathApi.join(args.cwd, '.gemini', 'settings.json'),
+      scope: 'project',
+      agents: ['gemini'],
+      candidate: GEMINI_PROJECT_MCP_CANDIDATE
+    },
+    {
+      id: 'project-mcp:.vscode/mcp.json',
+      path: pathApi.join(args.cwd, '.vscode', 'mcp.json'),
+      scope: 'project',
+      agents: ['copilot'],
+      candidate: COPILOT_MCP_CANDIDATE
     }
   )
   return sources
