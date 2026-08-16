@@ -10,6 +10,10 @@ const itWithBash = hasBash ? it : it.skip
 const bashMajor = hasBash
   ? Number(spawnSync('bash', ['-lc', 'printf %s "${BASH_VERSINFO[0]}"']).stdout)
   : 0
+const bashMinor = hasBash
+  ? Number(spawnSync('bash', ['-lc', 'printf %s "${BASH_VERSINFO[1]}"']).stdout)
+  : 0
+const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
 
 function runInteractiveBash(
   profile: string,
@@ -153,7 +157,9 @@ PROMPT_COMMAND=(__status_a __status_b)
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_BACKSLASH:<safe>')).toHaveLength(4)
-    expect(output.split('PROMPT_BACKSLASH:<\\>')).toHaveLength(bashMajor >= 4 ? 4 : 1)
+    expect(output.split('PROMPT_BACKSLASH:<\\>')).toHaveLength(
+      bashPreservesOddTerminalBackslash ? 4 : 1
+    )
     expect(output).not.toContain('PROMPT_BACKSLASH:<__orca_')
     expectLifecycle(output)
   })
@@ -164,7 +170,9 @@ PROMPT_COMMAND=(__status_a __status_b)
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_ARRAY_BACKSLASH:<safe>')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_BACKSLASH:<\\>')).toHaveLength(bashMajor >= 4 ? 4 : 1)
+    expect(output.split('PROMPT_ARRAY_BACKSLASH:<\\>')).toHaveLength(
+      bashPreservesOddTerminalBackslash ? 4 : 1
+    )
     expect(output.split('PROMPT_ARRAY_NEXT')).toHaveLength(4)
     expect(output).not.toContain('PROMPT_ARRAY_BACKSLASH:<__orca_')
     expectLifecycle(output)

@@ -38,8 +38,8 @@ export const BASH_PROMPT_COMMAND_COMPOSITION_BLOCK = `__orca_normalize_prompt_co
   fi
   __orca_output_length=$(( \${#__orca_value} - __orca_suffix_length ))
   __orca_value="\${__orca_value:0:__orca_output_length}"
-  # Bash 4.0-5.0 scalar prompt evaluation preserves an odd terminal backslash.
-  if (( __orca_suffix_length == 0 && (BASH_VERSINFO[0] == 4 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] == 0)) && __orca_backslash_length % 2 == 1 )); then
+  # Bash 4.4-5.0 scalar prompt evaluation preserves an odd terminal backslash.
+  if (( __orca_suffix_length == 0 && ((BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] == 0)) && __orca_backslash_length % 2 == 1 )); then
     __orca_value="$__orca_value\\\\"
   fi
   printf -v "$__orca_output_name" '%s' "$__orca_value"
