@@ -38,6 +38,7 @@ export const BOOLEAN_FLAGS = new Set([
   'mobile-pairing',
   'no-pairing',
   'parent-current',
+  'pin',
   'provision',
   'ready',
   'recipe-json',
@@ -52,6 +53,7 @@ export const BOOLEAN_FLAGS = new Set([
   'tasks',
   'text-stdin',
   'unread',
+  'unpin',
   'value-stdin',
   'wait'
 ])

@@ -391,4 +391,64 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+
+  it.each([
+    { workspaceKind: 'Git worktree', flag: 'pin', isPinned: true },
+    { workspaceKind: 'Git worktree', flag: 'unpin', isPinned: false },
+    { workspaceKind: 'folder workspace', flag: 'pin', isPinned: true },
+    { workspaceKind: 'folder workspace', flag: 'unpin', isPinned: false }
+  ])('sets isPinned for a $workspaceKind through worktree.set --$flag', async (testCase) => {
+    const { workspaceKind, flag, isPinned } = testCase
+    const worktree =
+      workspaceKind === 'folder workspace'
+        ? {
+            ...buildWorktree('/tmp/folder', '', '', 'folder-workspace:group-1'),
+            id: 'folder:folder-1',
+            displayName: 'Folder'
+          }
+        : buildWorktree('/tmp/repo/child', 'feature/child')
+    const selector = `id:${worktree.id}`
+    queueFixtures(
+      callMock,
+      okFixture('req_set_pin', {
+        worktree: { ...worktree, isPinned }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['worktree', 'set', '--worktree', selector, `--${flag}`, '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({
+        worktree: selector,
+        isPinned
+      })
+    )
+    const receipt = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(receipt.result.worktree.isPinned).toBe(isPinned)
+  })
+
+  it('rejects contradictory pin flags on worktree.set before resolving selectors', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/child', 'feature/child')])
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'active', '--pin', '--unpin', '--json'],
+      '/tmp/repo/child'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --pin or --unpin, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
 })
