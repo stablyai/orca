@@ -13,5 +13,6 @@ export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> 
   zcode: ['node_modules/@zcode/cli/'],
   // Why: the `dsh-tui` launcher is installed twice — once on PATH and once inside the
   // profile it bootstraps — and the PATH copy re-execs the profile copy by absolute path.
-  'dsh-tui': ['node_modules/@deepseek-harness-tui/dsh-tui/']
+  'dsh-tui': ['node_modules/@deepseek-harness-tui/dsh-tui/'],
+  bob: ['node_modules/bobshell/']
 }

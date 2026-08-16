@@ -50,6 +50,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   hermes: 'hermes',
   openclaw: 'openclaw',
   copilot: 'copilot',
+  bob: 'bob',
   grok: 'grok',
   devin: 'devin',
   ante: 'ante',
