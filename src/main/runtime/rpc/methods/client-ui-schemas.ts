@@ -284,6 +284,7 @@ const UiUpdateFields = z
     sidekickId: z.string().optional(),
     customSidekicks: UnknownRecordArray.optional(),
     sidekickSize: z.number().finite().optional(),
+    githubTaskPrimaryAction: z.enum(['start', 'open-in-browser']).optional(),
     taskResumeState: TaskResumeState.optional(),
     workspaceCleanup: WorkspaceCleanup.optional(),
     featureTipsSeenIds: FeatureTipIds.optional(),

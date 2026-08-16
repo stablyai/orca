@@ -108,7 +108,7 @@ describe('TaskPage workspace creation source boundaries', () => {
   it('uses the shared composer handler from GitHub detail and start-new actions', () => {
     expect(TASK_PAGE_SOURCE.match(/onUse=\{\(item\) => \{/g)).toHaveLength(2)
     expect(TASK_PAGE_SOURCE.match(/onSelect=\{\(\) => handleUseWorkItem\(item\)\}/g)).toHaveLength(
-      2
+      1
     )
   })
 

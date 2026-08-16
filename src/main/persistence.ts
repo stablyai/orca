@@ -142,6 +142,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
+import { normalizeGitHubTaskPrimaryAction } from '../shared/github-task-primary-action'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -6277,6 +6278,9 @@ export class Store {
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       contextualToursSeenIds: normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
       featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions),
+      githubTaskPrimaryAction: normalizeGitHubTaskPrimaryAction(
+        this.state.ui?.githubTaskPrimaryAction
+      ),
       activeView: this.activeViewPreference.get()
     }
   }

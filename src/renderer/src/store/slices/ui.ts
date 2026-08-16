@@ -34,6 +34,11 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
+import {
+  DEFAULT_GITHUB_TASK_PRIMARY_ACTION,
+  normalizeGitHubTaskPrimaryAction,
+  type GitHubTaskPrimaryAction
+} from '../../../../shared/github-task-primary-action'
 import { isTopLevelView } from '../../../../shared/top-level-view'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
@@ -683,6 +688,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  githubTaskPrimaryAction: GitHubTaskPrimaryAction
+  setGitHubTaskPrimaryAction: (action: GitHubTaskPrimaryAction) => void
   taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
   setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
@@ -1244,6 +1251,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  githubTaskPrimaryAction: DEFAULT_GITHUB_TASK_PRIMARY_ACTION,
   taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
@@ -1398,6 +1406,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const next = { ...s.taskResumeState, ...updates }
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
+    }),
+  setGitHubTaskPrimaryAction: (action) =>
+    set((s) => {
+      const next = normalizeGitHubTaskPrimaryAction(action)
+      if (s.githubTaskPrimaryAction === next) {
+        return s
+      }
+      window.api.ui.set({ githubTaskPrimaryAction: next }).catch(console.error)
+      return { githubTaskPrimaryAction: next }
     }),
   setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
@@ -2528,6 +2545,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
+        githubTaskPrimaryAction: normalizeGitHubTaskPrimaryAction(ui.githubTaskPrimaryAction),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
