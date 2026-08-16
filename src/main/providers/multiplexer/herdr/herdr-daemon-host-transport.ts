@@ -8,7 +8,10 @@ import type {
 } from './herdr-runtime-contract'
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import { HerdrTransport } from './herdr-transport'
-import { createHerdrSocketTerminalController } from './herdr-socket-terminal-control'
+import {
+  createHerdrDaemonTerminalController,
+  type HerdrDaemonPaneData
+} from './herdr-daemon-terminal-control'
 import { DEFAULT_HERDR_EVENT_SUBSCRIPTIONS } from './herdr-socket-events'
 import type { HerdrSocketEvent } from './herdr-socket-types'
 
@@ -20,6 +23,7 @@ import type { HerdrSocketEvent } from './herdr-socket-types'
 export class HerdrDaemonHostTransport implements HerdrHostTransport {
   private readonly client: HerdrTransport
   private readonly eventListeners = new Set<(event: HerdrTransportEvent) => void>()
+  private readonly paneDataListeners = new Set<(payload: HerdrDaemonPaneData) => void>()
   private ready = false
   private ensurePromise: Promise<void> | null = null
 
@@ -49,6 +53,15 @@ export class HerdrDaemonHostTransport implements HerdrHostTransport {
     this.client.on('event', (event: HerdrSocketEvent) => {
       for (const listener of this.eventListeners) {
         listener(event)
+      }
+    })
+    this.client.on('notification', (notification: { method: string; params: unknown }) => {
+      if (notification.method !== 'pane.data') {
+        return
+      }
+      const payload = notification.params as HerdrDaemonPaneData
+      for (const listener of this.paneDataListeners) {
+        listener(payload)
       }
     })
     await this.client.request('ping', {})
@@ -83,9 +96,10 @@ export class HerdrDaemonHostTransport implements HerdrHostTransport {
     target: string,
     options: HerdrTerminalControlOptions
   ): HerdrTerminalController {
-    return createHerdrSocketTerminalController(target, options, {
+    return createHerdrDaemonTerminalController(target, options, {
       request: <T>(method: string, params: unknown) =>
         this.client.request(method, params) as Promise<T>,
+      subscribePaneData: (listener) => this.onPaneData(listener),
       subscribeEvents: (listener) => this.onEvent(listener)
     })
   }
@@ -95,8 +109,14 @@ export class HerdrDaemonHostTransport implements HerdrHostTransport {
     return () => this.eventListeners.delete(listener)
   }
 
+  onPaneData(listener: (payload: HerdrDaemonPaneData) => void): () => void {
+    this.paneDataListeners.add(listener)
+    return () => this.paneDataListeners.delete(listener)
+  }
+
   async disconnect(): Promise<void> {
     this.eventListeners.clear()
+    this.paneDataListeners.clear()
     this.ready = false
     await this.client.close()
   }

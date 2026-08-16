@@ -87,4 +87,55 @@ describe('herdr terminal input end to end (real PTY)', () => {
 
     await provider.shutdown(spawned.id, {})
   })
+
+  it('streams incremental pane.data frames through the daemon transport', async () => {
+    await setup()
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [],
+      getRepo: () => undefined,
+      getWorktreeMeta: () => undefined,
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+    const provider = new HerdrPtyProvider(
+      () => transport!,
+      createLocalHerdrPtyTargetResolver(store),
+      () => undefined
+    )
+
+    const cwd = process.env.HOME!
+    const spawned = await provider.spawn({
+      cols: 100,
+      rows: 40,
+      cwd,
+      worktreeId: `repo-1::${cwd}`,
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+
+    // Why: the daemon controller streams raw PTY bytes as incremental frames
+    // after one seed snapshot. The seed is returned as `spawned.snapshot`, never
+    // re-emitted through onData, so a keystroke must surface as a small delta.
+    const chunks: string[] = []
+    provider.onData((payload) => {
+      if (payload.id === spawned.id) {
+        chunks.push(payload.data)
+      }
+    })
+
+    provider.write(spawned.id, 'echo ORCA_STREAM_E2E\r')
+
+    const deadline = Date.now() + 10_000
+    let stream = ''
+    while (Date.now() < deadline) {
+      stream = chunks.join('')
+      if (stream.includes('ORCA_STREAM_E2E')) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(stream).toContain('ORCA_STREAM_E2E')
+
+    await provider.shutdown(spawned.id, {})
+  })
 })
