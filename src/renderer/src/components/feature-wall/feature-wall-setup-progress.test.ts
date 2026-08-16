@@ -8,7 +8,7 @@ import {
   getFeatureWallSetupStepsForSection,
   getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 function makeInput(
   overrides: Partial<FeatureWallSetupProgressInput> = {}

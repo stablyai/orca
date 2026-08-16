@@ -25,7 +25,7 @@ import { loadHosts, updateLastConnected } from '../../../src/transport/host-stor
 import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
-  useCloseHost,
+  useForgetHostClient,
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
@@ -55,6 +55,8 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
+import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
@@ -65,6 +67,7 @@ import { leaveHostRoute } from '../../../src/host-route-exit'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
+  hostNewWorktreeSessionRoute,
   resolveHostRouteActionState,
   setHostRouteNewWorktreeVisible
 } from '../../../src/host-route-action-state'
@@ -93,7 +96,7 @@ import {
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
 import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
-import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
@@ -117,9 +120,12 @@ export function HostScreen({
   action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string }>()
+  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const action = actionProp ?? params.action
+  const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
+  const noticeParam = params.notice?.trim()
+  const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
@@ -142,7 +148,7 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
-  const closeHostClient = useCloseHost()
+  const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
@@ -461,7 +467,7 @@ export function HostScreen({
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, confirmed)
+            setCachedWorktrees(hostId, confirmed, { proven: true })
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
@@ -512,7 +518,8 @@ export function HostScreen({
   useFocusEffect(
     useCallback(() => {
       // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      clientRef.current?.notifyForeground()
+      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      clientRef.current?.notifyForeground('focus')
     }, [])
   )
 
@@ -629,14 +636,14 @@ export function HostScreen({
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, closeHostClient)
+      await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
     } catch {
       // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       Alert.alert('Could not remove host', 'Please try again.')
     }
-  }, [hostId, leaveHost, closeHostClient])
+  }, [hostId, leaveHost, forgetHostClient])
 
   const navigateFromHostList = useCallback(
     (target: string) => {
@@ -734,10 +741,9 @@ export function HostScreen({
   )
 
   const displayWorktrees = useMemo(() => {
-    const base =
-      connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
-        ? lastKnownWorktrees
-        : worktrees
+    // Why: live `worktrees` is authoritative only while connected; under the amber
+    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    const base = connState === 'connected' ? worktrees : lastKnownWorktrees
     if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
       return base
     }
@@ -1100,6 +1106,14 @@ export function HostScreen({
         />
       )}
 
+      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
+      {routeNotice && (
+        <HostRouteNoticeBanner
+          message={routeNotice}
+          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
+        />
+      )}
+
       {/* Search bar */}
       {showSearch && (
         <View style={styles.searchBar}>
@@ -1390,10 +1404,7 @@ export function HostScreen({
         }}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees({ allowDuringModal: true })
-          const params = new URLSearchParams({ name: worktreeName, created: '1' })
-          navigateFromHostList(
-            `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
-          )
+          navigateFromHostList(hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName))
         }}
         onRouteVisibleChange={setShowNewWorktreeVisible}
       />

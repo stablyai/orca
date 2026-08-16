@@ -37,6 +37,12 @@ type RuntimeInternals = {
   ) => unknown
   issuePtyHandle: (pty: unknown) => string
   headlessTerminals: Map<string, unknown>
+  subscriberDrivenProviderAttachesByPtyId: Map<string, Promise<boolean>>
+  subscriberDrivenProviderAttachInventoryWaiters: Set<string>
+  refreshPtyWorktreeRecordsWithControllerInventory: (
+    worktrees: [],
+    targetWorktreeId: string | null
+  ) => Promise<unknown>
 }
 
 function internals(runtime: OrcaRuntimeService): RuntimeInternals {
@@ -56,11 +62,21 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
   const sessions = new Map<string, DaemonSessionModel>()
   const attachCalls: string[] = []
   const resizeCalls: [string, number, number][] = []
+  let nextAttachBarrier: { promise: Promise<void>; result: boolean } | null = null
   let runtime: OrcaRuntimeService | null = null
   const controller = {
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null,
+    listProcesses: async () =>
+      [...sessions.entries()].map(([id, session]) => ({
+        id,
+        cwd: '/tmp/wt',
+        worktreeId: WORKTREE_ID,
+        title: '',
+        cols: session.cols,
+        rows: session.rows
+      })),
     hasRendererSerializer: () => false,
     getSize: (ptyId: string) => {
       const session = sessions.get(ptyId)
@@ -72,6 +88,14 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
     },
     attach: async (ptyId: string) => {
       attachCalls.push(ptyId)
+      const barrier = nextAttachBarrier
+      nextAttachBarrier = null
+      if (barrier) {
+        await barrier.promise
+        if (!barrier.result) {
+          return false
+        }
+      }
       const session = sessions.get(ptyId)
       // Attach-only: an absent session is refused, never created.
       if (!session) {
@@ -100,6 +124,14 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
     sessions,
     attachCalls,
     resizeCalls,
+    deferNextAttach(result: boolean): () => void {
+      let release!: () => void
+      const promise = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      nextAttachBarrier = { promise, result }
+      return release
+    },
     bind(target: OrcaRuntimeService) {
       runtime = target
     },
@@ -374,6 +406,39 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     expect(model.emitData(PTY_ID, 'late daemon hello\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('late daemon hello'))
+  })
+
+  it('retries an existing subscriber when provider inventory becomes ready', async () => {
+    const { runtime, model, handle } = setupNeverAttachedDaemonSession({
+      snapshotCapable: false
+    })
+    model.sessions.delete(PTY_ID)
+    const refuseFirstAttach = model.deferNextAttach(false)
+    const harness = startMultiplex(runtime)
+    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+
+    sendSubscribe(harness, 1, handle)
+    await waitForSubscribed(harness, 1)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(internals(runtime).subscriberDrivenProviderAttachesByPtyId.has(PTY_ID)).toBe(true)
+    expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(true)
+    expect(model.emitData(PTY_ID, 'before inventory\r\n')).toBe(false)
+
+    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
+    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
+    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
+    expect(model.attachCalls).toEqual([PTY_ID])
+    expect([...internals(runtime).subscriberDrivenProviderAttachInventoryWaiters]).toEqual([PTY_ID])
+    refuseFirstAttach()
+
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
+    await vi.waitFor(() =>
+      expect(internals(runtime).subscriberDrivenProviderAttachInventoryWaiters.has(PTY_ID)).toBe(
+        false
+      )
+    )
+    expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
+    await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
   })
 
   it('does not subscriber-attach or provider-read a session this app already spawned', async () => {

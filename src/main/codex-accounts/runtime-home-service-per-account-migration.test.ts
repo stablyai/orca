@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
 
@@ -21,7 +22,6 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
     'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'

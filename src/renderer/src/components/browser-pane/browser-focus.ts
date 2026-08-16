@@ -64,6 +64,12 @@ export function queueBrowserFocusRequest(detail: BrowserFocusRequestDetail): voi
   scheduleExpiredRequestCleanup()
 }
 
+/** Queue + announce so a mounting browser pane and live listeners both see the request. */
+export function requestBrowserFocus(detail: BrowserFocusRequestDetail): void {
+  queueBrowserFocusRequest(detail)
+  window.dispatchEvent(new CustomEvent(ORCA_BROWSER_FOCUS_REQUEST_EVENT, { detail }))
+}
+
 export function consumeBrowserFocusRequest(pageId: string): BrowserFocusTarget | null {
   purgeExpiredFocusRequests()
   const pending = pendingBrowserFocusByPageId.get(pageId) ?? null

@@ -2,21 +2,6 @@ import type { IPtyProvider } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { SessionNotFoundError } from './daemon-errors'
 
-export async function discoverDegradedDaemonSessions(
-  adapters: readonly DaemonPtyAdapter[],
-  sessionProviders: Map<string, IPtyProvider>
-): Promise<void> {
-  for (const adapter of adapters) {
-    try {
-      for (const session of await adapter.listProcesses()) {
-        sessionProviders.set(session.id, adapter)
-      }
-    } catch (error) {
-      console.warn('[daemon] Failed to discover degraded daemon sessions', error)
-    }
-  }
-}
-
 export function listProviderSessionIds(
   sessionProviders: ReadonlyMap<string, IPtyProvider>,
   provider: IPtyProvider
@@ -34,11 +19,11 @@ export async function attachDaemonOwnedSession(
   owner: IPtyProvider,
   fallback: IPtyProvider,
   sessionId: string
-): Promise<void> {
+): ReturnType<IPtyProvider['attach']> {
   if (owner === fallback) {
     throw new SessionNotFoundError(sessionId)
   }
-  await owner.attach(sessionId)
+  return await owner.attach(sessionId)
 }
 
 /** Probes providers for an id absent from the routing map and adopts the

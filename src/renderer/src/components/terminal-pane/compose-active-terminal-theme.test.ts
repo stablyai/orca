@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { composeActiveTerminalTheme } from './terminal-appearance'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 describe('composeActiveTerminalTheme', () => {
   function settingsWith(partial: Partial<GlobalSettings>): GlobalSettings {

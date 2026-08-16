@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronDown, KeyRound } from 'lucide-react'
-import type { LinearTeam, LinearWorkspace, LinearWorkspaceSelection } from '../../../shared/types'
+import type {
+  LinearTeam,
+  LinearWorkspace,
+  LinearWorkspaceSelection
+} from '../../../shared/linear/workspace-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'

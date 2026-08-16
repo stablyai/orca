@@ -37,6 +37,22 @@ describe('sendTerminalInputAfterComposition', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
+  // #12871: a newline arriving late still arrives, so the fallback timer is right for it. A
+  // cursor chord arriving mid-preedit is the corruption the wait exists to prevent, and a
+  // conversion can hold its candidate window open for seconds — far past the fallback.
+  it('never fires on a timer when the caller opts out of the fallback', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    vi.advanceTimersByTime(60_000)
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to sending when no compositionend arrives', () => {
     const el = document.createElement('div')
     const send = vi.fn()
@@ -180,6 +196,17 @@ describe('createTerminalImeDeferredNewlineSender', () => {
     expect(sender.absorbRedispatchedEnter(enter(10))).toBe(true)
   })
 
+  it('moves a credit to a balancing keyup with the redispatch timestamp', () => {
+    const el = document.createElement('div')
+    const sender = createSender()
+
+    sender.defer(enter(10), el, vi.fn())
+    sender.releaseRedispatchedEnter(enter(20), enter(10))
+
+    expect(sender.absorbRedispatchedEnter(enter(20))).toBe(true)
+    expect(sender.absorbRedispatchedEnter(enter(10))).toBe(false)
+  })
+
   it('releases an unused credit on a later physical keyup', () => {
     const el = document.createElement('div')
     const sender = createSender()
@@ -289,6 +316,22 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
 
     expect(defer).toHaveBeenCalledTimes(1)
     expect(owner.absorb(chord('shift', 5037.9, 'Enter'))).toBe(true)
+    expect(owner.ownsRedispatchedEnter()).toBe(false)
+  })
+
+  it('owns a modifier-lost redispatch only after a terminal modifier keydown', () => {
+    const owner = createTerminalImeModifiedEnterChordOwner()
+
+    expect(owner.claim({ ...chord('shift', 10), terminalModifierKeyDownObserved: true })).toBe(true)
+    expect(owner.ownsRedispatchedEnter()).toBe(true)
+  })
+
+  it('releases a claimed chord when the balancing Enter keyup loses its modifier', () => {
+    const owner = createTerminalImeModifiedEnterChordOwner()
+
+    expect(owner.claim(chord('shift', 10))).toBe(true)
+    expect(owner.releaseForEnterKeyUp()).toEqual(chord('shift', 10))
+    expect(owner.ownsRedispatchedEnter()).toBe(false)
   })
 
   it('does not merge different modified Enter kinds into one chord', () => {
@@ -303,7 +346,7 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
     const owner = createTerminalImeModifiedEnterChordOwner()
 
     expect(owner.claim(chord('ctrl', 10))).toBe(true)
-    owner.release(chord('ctrl', 30, 'Enter'))
+    expect(owner.release(chord('ctrl', 30, 'Enter'))).toEqual(chord('ctrl', 10))
 
     expect(owner.absorb(chord('ctrl', 40, 'Enter'))).toBe(false)
     expect(owner.claim(chord('ctrl', 40, 'Enter'))).toBe(true)
@@ -313,7 +356,7 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
     const owner = createTerminalImeModifiedEnterChordOwner()
 
     expect(owner.claim(chord('shift', 10))).toBe(true)
-    owner.release(chord('ctrl', 20))
+    expect(owner.release(chord('ctrl', 20))).toBeNull()
     expect(owner.absorb(chord('shift', 30))).toBe(true)
     owner.clear()
 

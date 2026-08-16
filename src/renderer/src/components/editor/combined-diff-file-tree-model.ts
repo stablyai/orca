@@ -1,5 +1,6 @@
 import { basename } from '@/lib/path'
-import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   buildSourceControlTree,

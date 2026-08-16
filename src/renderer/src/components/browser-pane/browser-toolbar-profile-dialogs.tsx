@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { BrowserProfileUserAgentOption } from '../browser-profile-user-agent-option'
 
 type BrowserToolbarProfileDialogsProps = {
   pendingSwitchProfileId: string | null | undefined
@@ -18,6 +19,8 @@ type BrowserToolbarProfileDialogsProps = {
   onNewProfileDialogOpenChange: (open: boolean) => void
   newProfileName: string
   onNewProfileNameChange: (value: string) => void
+  useNativeUserAgent: boolean
+  onUseNativeUserAgentChange: (value: boolean) => void
   isCreatingProfile: boolean
   onCreateProfile: () => void
   onCancelNewProfile: () => void
@@ -31,6 +34,8 @@ export function BrowserToolbarProfileDialogs({
   onNewProfileDialogOpenChange,
   newProfileName,
   onNewProfileNameChange,
+  useNativeUserAgent,
+  onUseNativeUserAgentChange,
   isCreatingProfile,
   onCreateProfile,
   onCancelNewProfile
@@ -96,8 +101,14 @@ export function BrowserToolbarProfileDialogs({
               )}
               autoFocus
               maxLength={50}
-              className="mb-4"
+              className="mb-3"
             />
+            <div className="mb-4">
+              <BrowserProfileUserAgentOption
+                checked={useNativeUserAgent}
+                onCheckedChange={onUseNativeUserAgentChange}
+              />
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={onCancelNewProfile}>
                 {translate('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}

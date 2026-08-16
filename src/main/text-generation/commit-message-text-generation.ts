@@ -2,7 +2,9 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -28,11 +30,14 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
-import {
-  getCommitMessageAgentSpec,
-  type CommitMessageAgentCapability,
-  type CommitMessageModelCapability
+import type {
+  CommitMessageAgentCapability,
+  CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
+import {
+  getAgentModelProbeSpec,
+  type AgentModelProbeSpec
+} from '../../shared/agent-model-probe-spec'
 import {
   planAgentBinary,
   planCommitMessageGeneration,
@@ -59,6 +64,7 @@ import {
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -228,7 +234,7 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
 }
 
 function toModelDiscoveryCapability(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   models = spec.models,
   defaultModelId = spec.defaultModelId,
   catalogOrigin: 'probe' | 'spec' = 'spec'
@@ -249,7 +255,7 @@ function toModelDiscoveryCapability(
 }
 
 function finalizeModelDiscoveryOutput(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   stdout: string,
   stderr: string,
   code: number | null
@@ -288,7 +294,7 @@ function finalizeModelDiscoveryOutput(
 }
 
 function planModelDiscovery(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   agentCommandOverride?: string
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
@@ -316,9 +322,9 @@ export async function discoverCommitMessageModelsLocal(
   agentCommandOverride?: string,
   options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
 
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
@@ -503,9 +509,9 @@ export async function discoverCommitMessageModelsRemote(
   ) => Promise<RemoteCommitMessageExecResult>,
   agentCommandOverride?: string
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
@@ -519,6 +525,12 @@ export async function discoverCommitMessageModelsRemote(
     result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${spec.label} model discovery took longer than ${GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
@@ -996,6 +1008,12 @@ async function runRemotePlan(
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
+    if (isSshMuxRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${label} took longer than ${GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
+      }
+    }
     return {
       success: false,
       error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`

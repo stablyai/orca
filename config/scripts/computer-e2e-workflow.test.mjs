@@ -219,7 +219,7 @@ describe('computer-use e2e workflow', () => {
         'config/scripts/daemon-boot-smoke.mjs',
         'config/scripts/windows-daemon-workspace-close-repro.mjs',
         'electron.vite.config.ts',
-        'build-plugins/**',
+        'config/build-plugins/**',
         'src/main/daemon/**'
       ])
     )

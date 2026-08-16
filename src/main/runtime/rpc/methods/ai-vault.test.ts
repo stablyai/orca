@@ -4,13 +4,20 @@ import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
+import {
+  AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../../../shared/protocol-version'
 
-const { scanAiVaultSessions } = vi.hoisted(() => ({
-  scanAiVaultSessions: vi.fn()
+const { scanAiVaultSessionsInWorker, resolveAiVaultSessionTitlesInWorker } = vi.hoisted(() => ({
+  scanAiVaultSessionsInWorker: vi.fn(),
+  resolveAiVaultSessionTitlesInWorker: vi.fn()
 }))
 
-vi.mock('../../../ai-vault/session-scanner', () => ({
-  scanAiVaultSessions
+vi.mock('../../../ai-vault/session-scanner-worker-spawn', () => ({
+  scanAiVaultSessionsInWorker,
+  resolveAiVaultSessionTitlesInWorker,
+  resetAiVaultScannerWorkerForTests: vi.fn()
 }))
 
 import {
@@ -65,10 +72,63 @@ function makeDispatcher(): RpcDispatcher {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
-      listAiVaultSessions(args)
+      listAiVaultSessions(args),
+    resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
+      resolveAiVaultSessionTitlesInWorker(requests, signal)
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
+
+describe('aiVault.resolveSessionTitles handler', () => {
+  beforeEach(() => {
+    resolveAiVaultSessionTitlesInWorker.mockReset()
+  })
+
+  it('advertises and routes the bounded exact-title capability', async () => {
+    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({
+      titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Exact title' }]
+    })
+    const dispatcher = makeDispatcher()
+    const requests = [
+      { agent: 'codex', sessionId: 'session-1', transcriptPath: '/tmp/session.jsonl' }
+    ]
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.resolveSessionTitles', { requests }))
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { titles: [{ sessionId: 'session-1', title: 'Exact title' }] }
+    })
+    expect(resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, undefined)
+    expect(RUNTIME_CAPABILITIES).toContain(AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY)
+  })
+
+  it('forwards transport cancellation to the background scanner', async () => {
+    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
+    const dispatcher = makeDispatcher()
+    const controller = new AbortController()
+    const requests = [{ agent: 'codex', sessionId: 'session-1' }]
+
+    await dispatcher.dispatch(makeRequest('aiVault.resolveSessionTitles', { requests }), {
+      signal: controller.signal
+    })
+
+    expect(resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, controller.signal)
+  })
+
+  it('rejects more than 64 title identities before reaching the host', async () => {
+    const dispatcher = makeDispatcher()
+    const requests = Array.from({ length: 65 }, (_, index) => ({
+      agent: 'codex',
+      sessionId: `session-${index}`
+    }))
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.resolveSessionTitles', { requests }))
+    ).resolves.toMatchObject({ ok: false })
+    expect(resolveAiVaultSessionTitlesInWorker).not.toHaveBeenCalled()
+  })
+})
 
 describe('aiVault.listSessions params schema', () => {
   it('accepts a bounded request', () => {
@@ -153,8 +213,10 @@ describe('aiVault.prepareSessionResume', () => {
 describe('aiVault.listSessions handler + shared cache', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
-    scanAiVaultSessions.mockReset()
-    scanAiVaultSessions.mockResolvedValue(makeResult())
+    scanAiVaultSessionsInWorker.mockReset()
+    scanAiVaultSessionsInWorker.mockResolvedValue(makeResult())
+    resolveAiVaultSessionTitlesInWorker.mockReset()
+    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
   })
 
   afterEach(() => {
@@ -172,7 +234,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const scopePaths = Array.from({ length: 65 }, (_, index) => `/p/${index}`)
     const response = await dispatcher.dispatch(makeRequest('aiVault.listSessions', { scopePaths }))
     expect(response).toMatchObject({ ok: true })
-    expect(scanAiVaultSessions.mock.calls[0]?.[0]).toMatchObject({
+    expect(scanAiVaultSessionsInWorker.mock.calls[0]?.[0]).toMatchObject({
       scopePaths: scopePaths.slice(0, 64)
     })
   })
@@ -183,7 +245,23 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 500 })
     // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps completed scans cached for one minute', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-05T00:00:00.000Z') })
+    try {
+      await listAiVaultSessions({ limit: 500 })
+      await vi.advanceTimersByTimeAsync(59_999)
+      await listAiVaultSessions({ limit: 500 })
+      expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await listAiVaultSessions({ limit: 500 })
+      expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('serves lower depths from a larger completed scan', async () => {
@@ -191,14 +269,14 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 250 })
     await listAiVaultSessions({ limit: 500 })
 
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
   })
 
   it('shares a cache entry across equivalent scope path ordering', async () => {
     await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/a', '/repo/b'] })
     await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/b', '/repo/a'] })
 
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
   })
 
   it('forwards Unlimited without a numeric limit', async () => {
@@ -208,8 +286,9 @@ describe('aiVault.listSessions handler + shared cache', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
-    expect(scanAiVaultSessions).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: undefined, unlimited: true })
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: undefined, unlimited: true }),
+      expect.any(AbortSignal)
     )
   })
 
@@ -217,7 +296,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // Why: the resolving scan's cleanup must not clear tracking a concurrent
     // different-key scan replaced, or re-requests start a duplicate rescan.
     const deferreds: ((result: AiVaultListResult) => void)[] = []
-    scanAiVaultSessions.mockImplementation(
+    scanAiVaultSessionsInWorker.mockImplementation(
       () => new Promise<AiVaultListResult>((resolve) => deferreds.push(resolve))
     )
     // The scanner is invoked a microtask after the call (WSL-home await), so
@@ -235,13 +314,13 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // reverted guard reads 3, so this assertion — not a Promise.all hang — pins
     // the fix.
     await new Promise((resolve) => setTimeout(resolve))
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
     deferreds[1]?.(makeResult())
     await Promise.all([scanB, scanBAgain])
   })
 
   it('restamps the shared cached result as the addressed runtime host', async () => {
-    scanAiVaultSessions.mockResolvedValue({
+    scanAiVaultSessionsInWorker.mockResolvedValue({
       sessions: [makeSession()],
       issues: [{ executionHostId: 'local', agent: 'claude', path: '/tmp', message: 'boom' }],
       scannedAt: SCANNED_AT
@@ -261,8 +340,10 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
     // Why: the host id must never change what is scanned — one host-local scan
     // (and one cache entry) serves every caller; only the stamps differ.
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(scanAiVaultSessions.mock.calls[0]?.[0]).toMatchObject({ executionHostId: 'local' })
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker.mock.calls[0]?.[0]).toMatchObject({
+      executionHostId: 'local'
+    })
 
     expect(localResponse.result.sessions[0]?.executionHostId).toBe('local')
     expect(runtimeResponse.result.sessions[0]?.executionHostId).toBe('runtime:remote-server')
@@ -278,7 +359,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     })
     const dispatcher = makeDispatcher()
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
-    const options = scanAiVaultSessions.mock.calls[0]?.[0] as AiVaultScanOptions
+    const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     // Why: the codex-home is sourced from the runtime, not the window-only
     // registerCoreHandlers path, so it survives in serve mode.
     expect(options.additionalCodexSessionsDirs).toContain('/runtime/codex/home/sessions')
@@ -293,7 +374,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })
     await runtime.listAiVaultSessions({})
-    const options = scanAiVaultSessions.mock.calls[0]?.[0] as AiVaultScanOptions
+    const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
   })
 })

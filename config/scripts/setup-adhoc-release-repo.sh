@@ -86,7 +86,7 @@ Could not do it from here${INSTALL_ID:+ (needs an Organization Owner)}. Do it in
   1. Open:  https://github.com/organizations/$ORG/settings/installations
   2. Configure  ->  $APP_SLUG
   3. Repository access  ->  Only select repositories  ->  add $ADHOC_REPO
-     (keep orca-hourly selected; both dev channels use this one App)
+     (keep orca-hourly/orca-daily selected; all dev channels use this one App)
   4. Save.
 EOF
 fi

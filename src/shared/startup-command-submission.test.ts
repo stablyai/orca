@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildStartupCommandSubmission } from './startup-command-submission'
+import {
+  buildStartupCommandSubmission,
+  isBracketedPasteSafeShell
+} from './startup-command-submission'
 
 describe('buildStartupCommandSubmission', () => {
   it('appends the submit byte to a single-line command unchanged', () => {
@@ -42,5 +45,24 @@ describe('buildStartupCommandSubmission', () => {
     expect(
       buildStartupCommandSubmission(command, { submit: '\n', bracketedPasteSafe: false })
     ).toBe(`${command}\n`)
+  })
+})
+
+describe('isBracketedPasteSafeShell', () => {
+  it('always trusts bash and zsh', () => {
+    for (const shellName of ['bash', 'zsh', 'BASH']) {
+      expect(isBracketedPasteSafeShell({ shellName, waitsForShellReady: false })).toBe(true)
+    }
+  })
+
+  it('trusts fish only behind the shell-ready barrier', () => {
+    expect(isBracketedPasteSafeShell({ shellName: 'fish', waitsForShellReady: true })).toBe(true)
+    expect(isBracketedPasteSafeShell({ shellName: 'fish', waitsForShellReady: false })).toBe(false)
+  })
+
+  it('rejects shells with no known bracketed-paste line editor', () => {
+    for (const shellName of ['sh', 'dash', 'nu', 'powershell.exe', '']) {
+      expect(isBracketedPasteSafeShell({ shellName, waitsForShellReady: true })).toBe(false)
+    }
   })
 })

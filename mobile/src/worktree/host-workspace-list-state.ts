@@ -14,9 +14,15 @@ export function selectHostWorkspaceListState(
   input: HostWorkspaceListStateInput
 ): 'loading' | 'catalog-error' | 'empty' | null {
   const { connState, worktreesLoaded, displayCount, sectionCount, catalogError } = input
-  const connecting = connState === 'connecting' || connState === 'reconnecting'
+  // Why: a blank disconnected list read as "no workspaces"; spin instead — the
+  // header verdict owns escalating a long outage. auth-failed keeps its own UI.
+  const pending =
+    connState === 'connecting' ||
+    connState === 'handshaking' ||
+    connState === 'reconnecting' ||
+    connState === 'disconnected'
   if (
-    (connecting && displayCount === 0) ||
+    (pending && displayCount === 0) ||
     (connState === 'connected' && !worktreesLoaded && displayCount === 0 && !catalogError)
   ) {
     return 'loading'

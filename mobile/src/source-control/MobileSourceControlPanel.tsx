@@ -18,7 +18,7 @@ import { isMobileConflictAborting } from './mobile-source-control-conflict-abort
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
-import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
+import { openMobilePrUrl } from '../components/mobile-pr-url'
 
 export type MobileSourceControlPanelProps = {
   hostId: string

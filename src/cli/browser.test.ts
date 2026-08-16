@@ -414,6 +414,29 @@ describe('orca cli browser tab profiles', () => {
     expect(logSpy).toHaveBeenCalledWith('No browser profiles found.')
   })
 
+  it('marks native-UA profiles in text output', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_profiles_native_ua', {
+        profiles: [
+          {
+            id: 'google',
+            scope: 'isolated',
+            label: 'Google',
+            partition: 'persist:orca-browser-session-google',
+            source: null,
+            userAgentMode: 'native'
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'profile', 'list'], '/tmp/not-an-orca-worktree')
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ua:native'))
+  })
+
   it('creates isolated browser tab profiles by default', async () => {
     queueFixtures(
       callMock,
@@ -462,6 +485,33 @@ describe('orca cli browser tab profiles', () => {
     expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
       label: 'From Chrome',
       scope: 'imported'
+    })
+  })
+
+  it('creates a profile with the native user agent when requested', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_profile_native_ua', {
+        profile: {
+          id: 'google',
+          scope: 'isolated',
+          label: 'Google',
+          partition: 'persist:orca-browser-session-google',
+          userAgentMode: 'native'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'profile', 'create', '--label', 'Google', '--no-ua-spoof', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
+      label: 'Google',
+      scope: 'isolated',
+      userAgentMode: 'native'
     })
   })
 

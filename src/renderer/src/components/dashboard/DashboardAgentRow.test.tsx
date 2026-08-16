@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
@@ -247,13 +247,14 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
-  it('renders waiting rows with the amber question glyph', () => {
+  it('renders waiting rows with the shared question glyph', () => {
     const markup = renderRow(makeAgent({}, { state: 'waiting' }))
     const tokens = classTokens(markup)
 
     expect(markup).toContain('aria-label="Waiting for input"')
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(tokens).toContain('text-amber-500')
+    expect(tokens).toContain('text-agent-question')
+    expect(tokens).not.toContain('text-amber-500')
     expect(tokens).not.toContain('bg-red-500')
   })
 

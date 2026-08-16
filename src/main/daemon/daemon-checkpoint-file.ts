@@ -20,5 +20,7 @@ export type TerminalCheckpointFile = {
   /** Ties this checkpoint to the output.log whose header carries the same
    *  generation. Absent on checkpoints written before incremental logs. */
   generation?: number
+  /** Last daemon pending-output batch included in this checkpoint. */
+  pendingOutputSeq?: number
   checkpointedAt: string
 }

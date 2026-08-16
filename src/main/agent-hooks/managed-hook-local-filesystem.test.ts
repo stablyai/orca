@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
 const tempHomes: string[] = []
@@ -34,7 +37,10 @@ describe('managed-hook local filesystem', () => {
   it('supports cold and warm aggregate installs without SFTP or temp-file residue', async () => {
     const home = await createTempHome()
     const filesystem = createManagedHookLocalFilesystem()
-    const options = { grokHomeDir: join(home, '.grok') }
+    const options = {
+      grokHomeDir: join(home, '.grok'),
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+    }
 
     const cold = await installRemoteManagedAgentHooks(filesystem, home, options)
     const warm = await installRemoteManagedAgentHooks(filesystem, home, options)
@@ -61,7 +67,8 @@ describe('managed-hook local filesystem', () => {
     await writeFile(claudeConfig, '{"hooks": }', 'utf8')
 
     const results = await installRemoteManagedAgentHooks(createManagedHookLocalFilesystem(), home, {
-      grokHomeDir: join(home, '.grok')
+      grokHomeDir: join(home, '.grok'),
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
     })
 
     expect(results).toHaveLength(14)

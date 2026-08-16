@@ -288,6 +288,51 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
   })
 
+  it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
+    const d = createDb()
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const attach = (dispatchId: string, paneKey: string): void => {
+      d.createRemoteDispatchAttachment({
+        dispatchId,
+        taskId: `task_${dispatchId}`,
+        homePeerFingerprint: 'home_peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'worker_epoch',
+        mutationReceipt: {
+          callerFingerprint: 'home_peer',
+          requestId: `request_${dispatchId}`,
+          method: 'orchestration.federationAttachStart',
+          payloadHash: `payload_${dispatchId}`
+        }
+      })
+      d.prepareRemoteAttachmentAuthority({
+        dispatchId,
+        paneKey,
+        processIncarnation: `process_${dispatchId}`,
+        worktreeId: 'repo::worktree',
+        terminalHandle: `term_${dispatchId}`,
+        setupState: 'not_applicable',
+        effects: []
+      })
+    }
+
+    attach('ctx_valid_old', `tab_old:${leafId}`)
+    for (let index = 0; index < 64; index += 1) {
+      attach(`ctx_malformed_${index}`, `:${leafId}`)
+    }
+
+    expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_old'
+    )
+    attach('ctx_valid_new', `tab_new:${leafId}`)
+    expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_new'
+    )
+    expect(d.findActiveRemoteAttachmentForPane(`tab_old:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_new'
+    )
+  })
+
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })

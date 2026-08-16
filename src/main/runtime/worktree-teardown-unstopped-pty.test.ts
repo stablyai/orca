@@ -13,7 +13,7 @@ import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
 import {
   classifyWorktreeForceDeleteReason,
   isProvenLivePtyRemovalError
-} from '../../shared/worktree-removal'
+} from '../../shared/worktree/removal'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 
 // Why: these tests advance fake timers *before* awaiting the teardown, so a

@@ -9,8 +9,13 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
+
+const RELAY_PROBE_TIMEOUT_MS = 4_000
+const RELAY_MISSED_PROBE_LIMIT = 2
+const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -48,6 +53,7 @@ export function connectMobileRelayRpcSession(args: {
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
+  const livenessIdentity = {}
   const streams = new MobileRelayRpcStreams({
     nextId,
     sendFrame,
@@ -74,8 +80,14 @@ export function connectMobileRelayRpcSession(args: {
       publishState('handshaking')
     },
     onAuthenticated: () => void confirmResume(),
-    onText: handleText,
-    onBinary: handleBinary,
+    onText: (plaintext) => {
+      livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
+      handleText(plaintext)
+    },
+    onBinary: (plaintext) => {
+      livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
+      handleBinary(plaintext)
+    },
     onError: fail
   })
 
@@ -103,12 +115,17 @@ export function connectMobileRelayRpcSession(args: {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: () => {},
+    notifyForeground: (reason) => {
+      if (state === 'connected' && reason !== 'network-change') {
+        livenessWatchdog.probeNow(livenessIdentity)
+      }
+    },
     close() {
       if (closed) {
         return
       }
       closed = true
+      livenessWatchdog.stop(livenessIdentity)
       link.close()
       rejectPending(new Error('Client closed'))
       streams.clear()
@@ -119,6 +136,16 @@ export function connectMobileRelayRpcSession(args: {
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
+  const livenessWatchdog = new RpcSessionLivenessWatchdog({
+    transport: 'relay',
+    idleProbeMs: null,
+    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
+    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
+    voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+    sendProbe: () =>
+      state === 'connected' && sendFrame({ id: nextId(), method: 'status.get', params: undefined }),
+    terminate: () => fail(new Error('relay session liveness timeout'))
+  })
   return client
 
   async function confirmResume(): Promise<void> {
@@ -139,6 +166,7 @@ export function connectMobileRelayRpcSession(args: {
       resumeConfirmation = result.resumeConfirmation
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
+      livenessWatchdog.start(livenessIdentity)
       publishState('connected')
     } catch (error) {
       fail(asError(error))
@@ -242,6 +270,7 @@ export function connectMobileRelayRpcSession(args: {
     }
     closed = true
     failure = error
+    livenessWatchdog.stop(livenessIdentity)
     link.close()
     rejectPending(error)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')

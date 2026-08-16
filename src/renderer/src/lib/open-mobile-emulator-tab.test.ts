@@ -14,7 +14,11 @@ const mockStoreState = vi.hoisted(() => ({
   activeGroupIdByWorktree: { 'wt-1': 'group-1' } as Record<string, string>,
   groupsByWorktree: { 'wt-1': [{ id: 'group-1' }] } as Record<string, { id: string }[]>,
   unifiedTabsByWorktree: {} as Record<string, { id: string; contentType: string }[]>,
-  settings: { mobileEmulatorEnabled: true } as { mobileEmulatorEnabled?: boolean }
+  settings: { mobileEmulatorEnabled: true } as {
+    mobileEmulatorEnabled?: boolean
+    activeRuntimeEnvironmentId?: string | null
+  },
+  runtimeStatusByEnvironmentId: new Map()
 }))
 
 vi.mock('@/store', () => ({
@@ -68,6 +72,22 @@ describe('openMobileEmulatorTab', () => {
   afterEach(() => {
     cancelPendingSimulatorPaneShutdown('wt-1')
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects web-client invocation before creating a tab or attaching', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mockStoreState.settings = {
+      mobileEmulatorEnabled: true,
+      activeRuntimeEnvironmentId: 'runtime-1'
+    }
+
+    await expect(openMobileEmulatorTab('wt-1')).rejects.toThrow(
+      'Mobile Emulator is unavailable in the web client.'
+    )
+
+    expect(ensureSimulatorTab).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('surfaces the simulator tab before attaching the emulator stream', async () => {

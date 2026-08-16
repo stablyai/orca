@@ -1,3 +1,5 @@
+import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 import type {
@@ -19,13 +21,14 @@ export type WorkspaceTabPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 function findRange(text: string, query: string): MatchRange | null {
@@ -179,6 +182,26 @@ export function searchWorkspaceTabs(
         score: scoreWorkspaceTabMatch({
           fieldWeight: 20,
           matchIndex: secondaryMatch.range.start,
+          entry
+        })
+      })
+      continue
+    }
+
+    // Why after display secondaries: path/file matches should beat bare type labels.
+    const typeAliasHit = selectPaletteTypeAliasMatch(entry.typeSearchAliases ?? [], trimmedQuery)
+    if (typeAliasHit) {
+      results.push({
+        ...baseResult,
+        titleRange: null,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
+        secondaryRange: null,
+        repoRange: null,
+        worktreeRange: null,
+        typeAliasMatch: typeAliasHit,
+        score: scoreWorkspaceTabMatch({
+          fieldWeight: 25,
+          matchIndex: typeAliasHit.range.start,
           entry
         })
       })

@@ -10,6 +10,7 @@ type RegisteredPaneManager = {
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
+  scheduleRevealPresent?: () => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -74,6 +75,19 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     } catch {
       // Why: a pane can unmount between atlas reset and repaint; later
       // managers still need to repaint from their xterm buffers.
+    }
+  }
+}
+
+export function presentAllTerminalPanesWithoutAtlasClear(): void {
+  for (const manager of liveManagers) {
+    if (manager.isVisibleForAtlasRecovery?.() === false) {
+      continue
+    }
+    try {
+      manager.scheduleRevealPresent?.()
+    } catch {
+      // A disposing manager must not block sibling panes from presenting.
     }
   }
 }

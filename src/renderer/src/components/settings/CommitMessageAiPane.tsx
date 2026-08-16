@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type React from 'react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
@@ -21,6 +22,7 @@ import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { SearchableSetting } from './SearchableSetting'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from './settings-search'
@@ -199,20 +201,14 @@ export function CommitMessageAiPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={config.enabled}
-          onClick={onToggleEnabled}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            config.enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              config.enabled ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        <Switch
+          aria-label={translate(
+            'auto.components.settings.CommitMessageAiPane.d5b45a3628',
+            'Show Source Control AI actions'
+          )}
+          checked={config.enabled}
+          onCheckedChange={onToggleEnabled}
+        />
       </SearchableSetting>
     )
   }

@@ -7,6 +7,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
 import {
   discardInFlightTerminalOutputAckCredits,
   registerTerminalOutputAckCredits
@@ -49,6 +50,8 @@ type WriteTerminalOutputOptions = {
 
 type QueueChunk = {
   data: string
+  // Tracks the backing data still reachable through this queue slot.
+  retainedChars: number
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
@@ -85,6 +88,10 @@ type QueueEntry = {
   foregroundCoalesceDelayMs: number
   foregroundHoldSafetyTimer: ReturnType<typeof setTimeout> | null
   foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
+  // Why: hold and coalesce cancel each other's fallback timer, so an alternating DEC 2026 stream could re-arm both forever and freeze a visible pane (#8754). This caps one non-drainable episode.
+  foregroundReleaseDeadlineAt: number | null
+  // Why: an open frame's own hold chunks may still push the deadline out, but once coalesce has taken the entry over the deadline stops moving so the two mechanisms can't re-arm each other.
+  foregroundReleaseDeadlineFixed: boolean
 }
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
@@ -181,6 +188,7 @@ type TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedCharsByTerminal: number
   droppedBacklogCount: number
   drainWrites: number[]
+  drainHighPriority: boolean[]
 }
 
 type TerminalOutputSchedulerDebugApi = {
@@ -202,7 +210,8 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedChars: 0,
   peakQueuedCharsByTerminal: 0,
   droppedBacklogCount: 0,
-  drainWrites: []
+  drainWrites: [],
+  drainHighPriority: []
 }
 
 function resetDebugState(): void {
@@ -220,6 +229,7 @@ function resetDebugState(): void {
   debugState.peakQueuedCharsByTerminal = 0
   debugState.droppedBacklogCount = 0
   debugState.drainWrites = []
+  debugState.drainHighPriority = []
 }
 
 function readQueueDebugSnapshot(): {
@@ -272,7 +282,8 @@ function exposeDebugApi(): void {
       recordQueueDebugPressure()
       return {
         ...debugState,
-        drainWrites: [...debugState.drainWrites]
+        drainWrites: [...debugState.drainWrites],
+        drainHighPriority: [...debugState.drainHighPriority]
       }
     }
   }
@@ -323,8 +334,38 @@ function createQueueEntry(
     foregroundCoalesce: false,
     foregroundCoalesceDelayMs: FOREGROUND_COALESCE_DELAY_MS,
     foregroundHoldSafetyTimer: null,
-    foregroundCoalesceTimer: null
+    foregroundCoalesceTimer: null,
+    foregroundReleaseDeadlineAt: null,
+    foregroundReleaseDeadlineFixed: false
   }
+}
+
+// Returns the delay the caller's timer must use so it never outlives the episode deadline.
+function armForegroundReleaseDeadline(
+  entry: QueueEntry,
+  delayMs: number,
+  mayExtend: boolean
+): number {
+  const now = getDrainNow()
+  const requested = now + delayMs
+  entry.foregroundReleaseDeadlineAt =
+    entry.foregroundReleaseDeadlineAt === null ||
+    (mayExtend && !entry.foregroundReleaseDeadlineFixed)
+      ? requested
+      : Math.min(entry.foregroundReleaseDeadlineAt, requested)
+  return Math.max(0, entry.foregroundReleaseDeadlineAt - now)
+}
+
+// Why: reopen the gate only once the entry is drainable again, so the next synchronized frame gets a full budget.
+function resetForegroundReleaseGate(entry: QueueEntry): void {
+  entry.foregroundReleaseDeadlineAt = null
+  entry.foregroundReleaseDeadlineFixed = false
+}
+
+function clearForegroundRelease(entry: QueueEntry): void {
+  clearForegroundHoldSafety(entry)
+  clearForegroundCoalesce(entry)
+  resetForegroundReleaseGate(entry)
 }
 
 function clearForegroundHoldSafety(entry: QueueEntry): void {
@@ -347,14 +388,16 @@ function clearForegroundCoalesce(entry: QueueEntry): void {
 
 function scheduleForegroundHoldSafety(entry: QueueEntry): void {
   clearForegroundHoldSafety(entry)
+  const delayMs = armForegroundReleaseDeadline(entry, entry.foregroundHoldSafetyDelayMs, true)
   entry.foregroundHoldSafetyTimer = setTimeout(() => {
     entry.foregroundHoldSafetyTimer = null
     entry.foregroundHold = false
     clearForegroundCoalesce(entry)
+    resetForegroundReleaseGate(entry)
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, entry.foregroundHoldSafetyDelayMs)
+  }, delayMs)
 }
 
 function scheduleForegroundCoalesceRelease(
@@ -370,13 +413,17 @@ function scheduleForegroundCoalesceRelease(
     entry.foregroundCoalesceTimer = null
   }
   entry.foregroundCoalesce = true
+  // Why fixed from here: a later hold chunk must clamp to this deadline instead of restarting the pair's mutual re-arm (#8754).
+  entry.foregroundReleaseDeadlineFixed = true
+  const delayMs = armForegroundReleaseDeadline(entry, entry.foregroundCoalesceDelayMs, false)
   entry.foregroundCoalesceTimer = setTimeout(() => {
     entry.foregroundCoalesceTimer = null
     entry.foregroundCoalesce = false
+    resetForegroundReleaseGate(entry)
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, entry.foregroundCoalesceDelayMs)
+  }, delayMs)
 }
 
 function isEntryDrainable(entry: QueueEntry): boolean {
@@ -591,6 +638,16 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
       data += chunk.data
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
+      // Clear drained slots before the 64-chunk compaction can release them.
+      entry.chunks[entry.chunkIndex] = {
+        data: '',
+        retainedChars: 0,
+        foreground: chunk.foreground,
+        forceForegroundRefresh: false,
+        followupForegroundRefresh: false,
+        shouldRefreshForegroundSynchronously: ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
+        stripTransientCursorShows: false
+      }
       entry.chunkIndex += 1
       if (chunk.onParsed) {
         parsedCallbacks.push(chunk.onParsed)
@@ -602,9 +659,13 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     }
 
     data += chunk.data.slice(0, remaining)
+    const residual = chunk.data.slice(remaining)
+    // Geometric flattening bounds retained parents while keeping total copy work linear.
+    const flatten = residual.length * 2 <= chunk.retainedChars
     entry.chunks[entry.chunkIndex] = {
       ...chunk,
-      data: chunk.data.slice(remaining)
+      data: flatten ? flattenRetainedSlice(residual) : residual,
+      retainedChars: flatten ? residual.length : chunk.retainedChars
     }
     entry.queuedChars -= remaining
     remaining = 0
@@ -679,8 +740,11 @@ function enqueueChunk(
     ackCredit?: () => void
   }
 ): void {
+  // Own queued data so producer slices cannot pin larger PTY or restore buffers.
+  const owned = flattenRetainedSlice(data)
   entry.chunks.push({
-    data,
+    data: owned,
+    retainedChars: owned.length,
     foreground: options?.foreground === true,
     forceForegroundRefresh: options?.forceForegroundRefresh === true,
     followupForegroundRefresh: options?.followupForegroundRefresh === true,
@@ -708,8 +772,7 @@ function discardDetachedQueueEntry(entry: QueueEntry): void {
   entry.chunkIndex = 0
   entry.queuedChars = 0
   entry.highPriority = false
-  clearForegroundHoldSafety(entry)
-  clearForegroundCoalesce(entry)
+  clearForegroundRelease(entry)
 }
 
 function queueCapExceeded(entry: QueueEntry): boolean {
@@ -744,6 +807,7 @@ function replaceBacklogWithWarning(
   entry.chunks = [
     {
       data: warning,
+      retainedChars: warning.length,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
@@ -760,7 +824,7 @@ function replaceBacklogWithWarning(
   if (debugEnabled && shouldNotify) {
     debugState.droppedBacklogCount++
   }
-  clearForegroundCoalesce(entry)
+  clearForegroundRelease(entry)
   recordQueueDebugPressure()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
@@ -945,8 +1009,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
       entry.chunks.length = 0
       entry.chunkIndex = 0
       entry.queuedChars = 0
-      clearForegroundHoldSafety(entry)
-      clearForegroundCoalesce(entry)
+      clearForegroundRelease(entry)
       recordQueueDebugPressure()
       return null
     }
@@ -958,8 +1021,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
-    clearForegroundHoldSafety(entry)
-    clearForegroundCoalesce(entry)
+    clearForegroundRelease(entry)
     recordQueueDebugPressure()
     return null
   }
@@ -978,9 +1040,8 @@ function drainQueuedOutput(): void {
   drainTimerDelayMs = null
   let writes = 0
   const startedAt = getDrainNow()
-  const maxWrites = hasHighPriorityBacklog()
-    ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
-    : MAX_WRITES_PER_DRAIN
+  const highPriority = hasHighPriorityBacklog()
+  const maxWrites = highPriority ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
     const entry = takeNextDrainableEntry()
@@ -1003,8 +1064,7 @@ function drainQueuedOutput(): void {
       queuedByTerminal.set(entry.terminal, entry)
     } else {
       entry.highPriority = false
-      clearForegroundCoalesce(entry)
-      clearForegroundHoldSafety(entry)
+      clearForegroundRelease(entry)
     }
     // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
@@ -1014,6 +1074,7 @@ function drainQueuedOutput(): void {
 
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
+    debugState.drainHighPriority.push(highPriority)
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
@@ -1103,7 +1164,7 @@ export function writeTerminalOutput(
           shouldShortenCoalesceForLatencySensitiveForeground &&
           !coalescedQueuedDataNeedsCursorRestore(queued)
         if (containsDrainableCursorRestore(data) || shouldDrainForLatencySensitiveForeground) {
-          clearForegroundCoalesce(queued)
+          clearForegroundRelease(queued)
           scheduleDrain(0)
           return
         }
@@ -1114,8 +1175,7 @@ export function writeTerminalOutput(
         return
       }
       queued.foregroundHold = false
-      clearForegroundCoalesce(queued)
-      clearForegroundHoldSafety(queued)
+      clearForegroundRelease(queued)
       scheduleDrain(0)
       return
     }
@@ -1256,8 +1316,7 @@ export function flushTerminalOutput(
     entry.chunkIndex = 0
     entry.queuedChars = 0
     entry.highPriority = false
-    clearForegroundHoldSafety(entry)
-    clearForegroundCoalesce(entry)
+    clearForegroundRelease(entry)
     recordQueueDebugPressure()
     return
   }
@@ -1302,8 +1361,7 @@ export function flushTerminalOutput(
           )
       if (!writeAccepted) {
         fireQueuedAckCredits(entry)
-        clearForegroundHoldSafety(entry)
-        clearForegroundCoalesce(entry)
+        clearForegroundRelease(entry)
         recordQueueDebugPressure()
         return
       }
@@ -1312,8 +1370,7 @@ export function flushTerminalOutput(
       cancelTerminalWriteStallWatch(terminal)
       ackCreditsParsed?.()
       fireQueuedAckCredits(entry)
-      clearForegroundHoldSafety(entry)
-      clearForegroundCoalesce(entry)
+      clearForegroundRelease(entry)
       recordQueueDebugPressure()
       return
     }
@@ -1328,8 +1385,7 @@ export function flushTerminalOutput(
     scheduleDrain(0)
   } else {
     entry.highPriority = false
-    clearForegroundCoalesce(entry)
-    clearForegroundHoldSafety(entry)
+    clearForegroundRelease(entry)
   }
   recordQueueDebugPressure()
 }

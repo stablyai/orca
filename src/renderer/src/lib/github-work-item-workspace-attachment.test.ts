@@ -7,7 +7,7 @@ import {
   getGithubWorkItemWorkspaceAttachmentLabel,
   getGithubPrWorkspaceAttachmentLabel
 } from './github-work-item-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {

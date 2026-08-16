@@ -5,31 +5,28 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
+  rankSlashCommandSuggestions,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
+import {
+  composerSuggestionInsertText,
+  MobileNativeChatComposerSuggestions,
+  type ComposerSuggestion
+} from './MobileNativeChatComposerSuggestions'
+import {
+  MobileNativeChatSessionOptionPickers,
+  type MobileNativeChatSessionOptionPickersProps
+} from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-
-// Common agent slash commands offered as autocomplete; sending them is just text
-// to the agent's terminal, so the set is intentionally provider-agnostic.
-const SLASH_COMMANDS = [
-  '/clear',
-  '/compact',
-  '/review',
-  '/model',
-  '/help',
-  '/init',
-  '/cost',
-  '/diff'
-]
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -39,6 +36,11 @@ type Props = {
   value: string
   onChangeText: (text: string) => void
   onSend: (text: string) => Promise<boolean>
+  /** Active tab's agent — the slash autocomplete serves its command catalog. */
+  agent?: string | null
+  /** Model/session-option pickers shown in the composer action row; null when
+   *  the agent has no session-option catalog. */
+  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
    *  and ridden along on the next send (desktop native-chat parity). */
@@ -61,6 +63,8 @@ export function MobileNativeChatComposer({
   value,
   onChangeText,
   onSend,
+  agent,
+  sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -85,21 +89,36 @@ export function MobileNativeChatComposer({
   const sendingRef = useRef(false)
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
+  const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
   // along even when the user sends no accompanying text.
   const canSend =
-    (trimmed.length > 0 || attachments.length > 0) && !disabled && !sending && !isAttaching
+    (trimmed.length > 0 || attachments.length > 0) &&
+    !disabled &&
+    !sending &&
+    !isAttaching &&
+    !sessionOptionDispatching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<ComposerSuggestion[]>(() => {
     if (!trigger) {
       return []
     }
     if (trigger.kind === 'slash') {
-      return rankSuggestions(SLASH_COMMANDS, trigger.query)
+      const commands = agent ? getVerifiedNativeChatCommands(agent) : []
+      // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
+      // (~5 rows visible), so an uncapped `/` would mount every row and
+      // re-reconcile them on each streaming tick right above the transcript.
+      return rankSlashCommandSuggestions(commands, trigger.query, 12).map((command) => ({
+        kind: 'command' as const,
+        command
+      }))
     }
-    return rankSuggestions(filePaths, trigger.query).map((p) => `@${p}`)
-  }, [trigger, filePaths])
+    return rankSuggestions(filePaths, trigger.query).map((path) => ({
+      kind: 'file' as const,
+      path
+    }))
+  }, [trigger, filePaths, agent])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {
@@ -111,11 +130,15 @@ export function MobileNativeChatComposer({
     onChangeText(next)
   }
 
-  const pickSuggestion = (suggestion: string): void => {
+  const pickSuggestion = (suggestion: ComposerSuggestion): void => {
     if (!trigger) {
       return
     }
-    const { text: nextText, cursor: nextCursor } = applyAutocomplete(value, trigger, suggestion)
+    const { text: nextText, cursor: nextCursor } = applyAutocomplete(
+      value,
+      trigger,
+      composerSuggestionInsertText(suggestion)
+    )
     onChangeText(nextText)
     setCursor(nextCursor)
     setPendingSelection({ start: nextCursor, end: nextCursor })
@@ -128,7 +151,7 @@ export function MobileNativeChatComposer({
     sendingRef.current = true
     setSending(true)
     try {
-      const accepted = await onSend(trimmed)
+      const accepted = await onSend(value.trimEnd())
       if (accepted) {
         setCursor(0)
       }
@@ -141,21 +164,7 @@ export function MobileNativeChatComposer({
   return (
     <View>
       {suggestions.length > 0 ? (
-        <View style={styles.suggestions}>
-          <ScrollView keyboardShouldPersistTaps="always" style={styles.suggestionScroll}>
-            {suggestions.map((s) => (
-              <Pressable
-                key={s}
-                style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
-                onPress={() => pickSuggestion(s)}
-              >
-                <Text style={styles.suggestionText} numberOfLines={1}>
-                  {s}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
+        <MobileNativeChatComposerSuggestions suggestions={suggestions} onPick={pickSuggestion} />
       ) : null}
       {attachments.length > 0 ? (
         <ScrollView
@@ -186,102 +195,95 @@ export function MobileNativeChatComposer({
           ))}
         </ScrollView>
       ) : null}
-      <View style={styles.bar}>
-        {onAttachImage ? (
-          <Pressable
-            accessibilityLabel="Attach image"
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-            onPress={onAttachImage}
-            disabled={isAttaching || disabled}
-          >
-            {isAttaching ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <ImagePlus size={20} color={colors.textSecondary} strokeWidth={2} />
-            )}
-          </Pressable>
-        ) : null}
-        <TextInput
-          style={styles.input}
-          value={value}
-          onChangeText={handleChange}
-          // Controlled only transiently right after an autocomplete insert.
-          selection={pendingSelection ?? undefined}
-          onSelectionChange={(e) => {
-            setCursor(e.nativeEvent.selection.end)
-            setPendingSelection(null)
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.accentBlue}
-          multiline
-          // Why: never revoke `editable` — iOS resigns first responder on a focused
-          // field, so a transient lock would yank the keyboard mid-typing (#10681).
-          // The lock gates sending; the draft survives and rides the next send.
-          textAlignVertical="top"
-        />
-        {onMicPress ? (
-          <Pressable
-            accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-            // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
-            onPress={dictationMode === 'hold' ? undefined : onMicPress}
-            onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
-            onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-            disabled={disabled}
-          >
-            {micActive ? (
-              <Square
-                size={18}
-                color={colors.statusRed}
-                strokeWidth={2.4}
-                fill={colors.statusRed}
+      <View style={styles.composerInset} testID="native-chat-composer-inset">
+        <View style={styles.bar} testID="native-chat-composer">
+          <TextInput
+            style={styles.input}
+            value={value}
+            onChangeText={handleChange}
+            // Controlled only transiently right after an autocomplete insert.
+            selection={pendingSelection ?? undefined}
+            onSelectionChange={(e) => {
+              setCursor(e.nativeEvent.selection.end)
+              setPendingSelection(null)
+            }}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accentBlue}
+            multiline
+            // Why: never revoke `editable` — iOS resigns first responder on a focused
+            // field, so a transient lock would yank the keyboard mid-typing (#10681).
+            // The lock gates sending; the draft survives and rides the next send.
+            textAlignVertical="top"
+          />
+          <View style={styles.actionRow} testID="native-chat-composer-actions">
+            {onAttachImage ? (
+              <Pressable
+                accessibilityLabel="Attach image"
+                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                onPress={onAttachImage}
+                disabled={isAttaching || disabled}
+              >
+                {isAttaching ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <ImagePlus size={20} color={colors.textSecondary} strokeWidth={2} />
+                )}
+              </Pressable>
+            ) : null}
+            {sessionOptions ? (
+              <MobileNativeChatSessionOptionPickers
+                {...sessionOptions}
+                sendInFlight={sending || isAttaching}
               />
-            ) : (
-              <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
-            )}
-          </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityLabel="Send message"
-          style={({ pressed }) => [
-            styles.sendButton,
-            !canSend && styles.sendButtonDisabled,
-            pressed && canSend && styles.pressed
-          ]}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          <ArrowUp size={20} color={canSend ? colors.bgBase : colors.textMuted} strokeWidth={2.6} />
-        </Pressable>
+            ) : null}
+            <View style={styles.actionSpacer} />
+            {onMicPress ? (
+              <Pressable
+                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
+                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
+                onPress={dictationMode === 'hold' ? undefined : onMicPress}
+                onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
+                onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
+                disabled={disabled}
+              >
+                {micActive ? (
+                  <Square
+                    size={18}
+                    color={colors.statusRed}
+                    strokeWidth={2.4}
+                    fill={colors.statusRed}
+                  />
+                ) : (
+                  <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
+                )}
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityLabel="Send message"
+              style={({ pressed }) => [
+                styles.sendButton,
+                !canSend && styles.sendButtonDisabled,
+                pressed && canSend && styles.pressed
+              ]}
+              onPress={handleSend}
+              disabled={!canSend}
+            >
+              <ArrowUp
+                size={20}
+                color={canSend ? colors.bgBase : colors.textMuted}
+                strokeWidth={2.6}
+              />
+            </Pressable>
+          </View>
+        </View>
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  suggestions: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  suggestionScroll: {
-    maxHeight: 180
-  },
-  suggestion: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  suggestionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  suggestionText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
-  },
   attachmentStrip: {
     maxHeight: 76,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -321,18 +323,32 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
+  composerInset: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md
+  },
   bar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.card,
+    backgroundColor: colors.bgPanel,
+    overflow: 'hidden'
+  },
+  actionRow: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  actionSpacer: {
+    flex: 1
   },
   input: {
-    flex: 1,
+    width: '100%',
     maxHeight: 140,
     minHeight: 40,
     color: colors.textPrimary,

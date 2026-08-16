@@ -1,3 +1,7 @@
+import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
+import { mobileSessionRouteTarget } from '../session/mobile-session-route'
+import type { HostCredentialStatus } from '../transport/types'
+
 export type DesktopNotificationSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type DesktopNotificationEvent = {
@@ -15,6 +19,7 @@ export type LocalNotificationData = {
 
 export type NotificationNavigationOptions = {
   knownHostIds?: ReadonlySet<string>
+  credentialStatusByHostId?: ReadonlyMap<string, HostCredentialStatus>
 }
 
 function readNonEmptyString(value: unknown): string | null {
@@ -38,10 +43,27 @@ export function buildLocalNotificationData(
   return data
 }
 
-export function getNotificationNavigationPath(
+/** Where a tap should land. `sessionTarget` is null for a host-only notification, whose
+ *  `/h/<id>` push is shallow enough to need no host-stack coordination. */
+export type NotificationNavigationTarget = Readonly<{
+  hostId: string
+  sessionTarget: HostStackRouteTarget | null
+  credentialRecovery?: 'retry' | 're-pair'
+}>
+
+export function notificationCredentialRecoveryRoute(
+  target: NotificationNavigationTarget
+): '/' | '/pair-scan' | null {
+  if (target.credentialRecovery === 're-pair') {
+    return '/pair-scan'
+  }
+  return target.credentialRecovery === 'retry' ? '/' : null
+}
+
+export function getNotificationNavigationTarget(
   data: unknown,
   options: NotificationNavigationOptions = {}
-): string | null {
+): NotificationNavigationTarget | null {
   if (!data || typeof data !== 'object') {
     return null
   }
@@ -55,11 +77,15 @@ export function getNotificationNavigationPath(
     return null
   }
 
-  const hostPath = `/h/${encodeURIComponent(hostId)}`
   const worktreeId = readNonEmptyString(record.worktreeId)
-  if (!worktreeId) {
-    return hostPath
+  const credentialStatus = options.credentialStatusByHostId?.get(hostId)
+  return {
+    hostId,
+    sessionTarget: worktreeId ? mobileSessionRouteTarget({ hostId, worktreeId }) : null,
+    ...(credentialStatus === 'missing'
+      ? { credentialRecovery: 're-pair' as const }
+      : credentialStatus === 'temporarily-unavailable'
+        ? { credentialRecovery: 'retry' as const }
+        : {})
   }
-
-  return `${hostPath}/session/${encodeURIComponent(worktreeId)}`
 }

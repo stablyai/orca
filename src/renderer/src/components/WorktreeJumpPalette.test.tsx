@@ -2,18 +2,21 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
-import type { Repo, Worktree } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
+import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
   return {
     ...actual,
-    useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key })
+    useTranslation: () => ({
+      t: (_key: string, fallback?: string) => fallback ?? _key
+    })
   }
 })
 
@@ -43,30 +46,69 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
   getPaletteHostBadge: () => null
 }))
 
+// Why: activation reaches into window.api and the whole worktree-reveal path; the palette's own
+// contract is which result it hands over, so stub the boundary and assert on that.
+const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
+  activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
+}))
+vi.mock('@/lib/workspace-tab-palette-activation', () => ({
+  activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
+}))
+
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
-    CommandDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-      open ? <div data-command-dialog="true">{children}</div> : null,
-    CommandInput: ({
-      value,
-      onValueChange,
-      placeholder
+    // Why the commandProps passthrough: cmdk resolves Enter against its `value`, so the controlled
+    // value is the only honest stand-in for "what would Enter activate" without mounting real cmdk.
+    CommandDialog: ({
+      children,
+      open,
+      commandProps
     }: {
-      value?: string
-      onValueChange?: (next: string) => void
-      placeholder?: string
+      children: React.ReactNode
+      open?: boolean
+      commandProps?: { value?: string; onValueChange?: (next: string) => void }
     }) => {
+      return open ? (
+        <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
+          {children}
+        </div>
+      ) : null
+    },
+    Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandInput: React.forwardRef(function CommandInput(
+      {
+        value,
+        onValueChange,
+        placeholder,
+        onClick,
+        onSelect,
+        onKeyDown
+      }: {
+        value?: string
+        onValueChange?: (next: string) => void
+        placeholder?: string
+        onClick?: React.MouseEventHandler<HTMLInputElement>
+        onSelect?: React.ReactEventHandler<HTMLInputElement>
+        onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
+      },
+      ref: React.ForwardedRef<HTMLInputElement>
+    ) {
       setCommandQuery = onValueChange ?? null
       return (
         <input
+          ref={ref}
           data-command-input="true"
           placeholder={placeholder}
           value={value}
           onChange={(event) => onValueChange?.(event.currentTarget.value)}
+          onClick={onClick}
+          onSelect={onSelect}
+          onKeyDown={onKeyDown}
         />
       )
-    },
+    }),
     CommandList: React.forwardRef(function CommandList(
       { children }: { children: React.ReactNode },
       ref: React.ForwardedRef<HTMLDivElement>
@@ -100,43 +142,6 @@ const initialAppState = useAppStore.getInitialState()
 let testRoot: Root
 let testContainer: HTMLDivElement
 let setCommandQuery: ((next: string) => void) | null = null
-
-function makeRepo(): Repo {
-  return {
-    id: 'repo-1',
-    path: '/repos/repo-1',
-    displayName: 'Repo 1',
-    badgeColor: '#000000',
-    addedAt: 0
-  }
-}
-
-function makeWorktree(
-  id: string,
-  displayName: string,
-  overrides: Partial<Worktree> = {}
-): Worktree {
-  return {
-    id,
-    repoId: 'repo-1',
-    path: `/tmp/${id}`,
-    head: 'abc123',
-    branch: 'refs/heads/main',
-    isBare: false,
-    isMainWorktree: false,
-    displayName,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
 
 async function flushEffects(): Promise<void> {
   await act(async () => {
@@ -347,5 +352,17 @@ describe('WorktreeJumpPalette', () => {
     await flushEffects()
 
     expect(testContainer.textContent).toContain('Feature workspace')
+  })
+
+  it('replaces a completed emoji shortcode in the search query', async () => {
+    await renderPalette({ worktreesByRepo: { 'repo-1': [] } })
+    const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      fireEvent.change(input!, { target: { value: ':wink:', selectionStart: 6 } })
+    })
+
+    expect(input?.value).toBe('😉')
   })
 })

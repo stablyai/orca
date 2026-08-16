@@ -7,6 +7,8 @@ import {
   TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
 } from './terminal-live-hangul-mirror'
 import {
+  cancelTerminalLivePendingFlush,
+  createTerminalLivePendingFlushState,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
@@ -39,7 +41,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingLiveInputFlushRef = useRef<Promise<boolean> | null>(null)
+  const pendingLiveInputFlushRef = useRef(createTerminalLivePendingFlushState())
   const heldLiveInputTextRef = useRef('')
   const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
@@ -56,6 +58,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
 
   const resetMirrorState = useCallback(() => {
     clearHeldCommitTimer()
+    cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
     heldLiveInputTextRef.current = ''
     sentLiveInputTextRef.current = ''
     pendingLiveInputHandleRef.current = null
@@ -68,8 +71,14 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
-    return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef)
+    return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
   }, [])
+
+  const sendQueuedMirrorPayload = useCallback(
+    (handle: string, payload: string): Promise<boolean> =>
+      sendLiveTerminalInputRef.current(handle, payload),
+    [sendLiveTerminalInputRef]
+  )
 
   const runMirrorStep = useCallback(
     async (handle: string, fieldText: string, commitHeld: boolean): Promise<boolean> => {
@@ -107,8 +116,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
-      return queueTerminalLiveMirrorSend(pendingLiveInputFlushRef, () =>
-        sendLiveTerminalInputRef.current(handle, payload)
+      return queueTerminalLiveMirrorSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        payload,
+        sendQueuedMirrorPayload
       )
     },
     [
@@ -117,11 +129,15 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       clearHeldCommitTimer,
       liveInputTerminalHandlesRef,
       resetMirrorState,
-      sendLiveTerminalInputRef,
+      sendQueuedMirrorPayload,
       waitForPendingLiveInputFlush
     ]
   )
-  runMirrorStepRef.current = runMirrorStep
+  // Why: assigning during render is not replay-safe. The only read is inside a
+  // held-commit timer, which fires long after commit, so an effect is soon enough.
+  useEffect(() => {
+    runMirrorStepRef.current = runMirrorStep
+  }, [runMirrorStep])
 
   const applyLiveInputMirror = useCallback(
     (handle: string, fieldText: string): void => {
@@ -164,7 +180,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       heldLiveInputTextRef.current = ''
       sentLiveInputTextRef.current = ''
       pendingLiveInputHandleRef.current = null
-      pendingLiveInputFlushRef.current = null
+      cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
     }
   }, [])
 

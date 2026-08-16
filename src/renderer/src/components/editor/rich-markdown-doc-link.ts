@@ -1,7 +1,7 @@
 import { Node } from '@tiptap/core'
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import type { MarkdownDocumentIndex } from './markdown-doc-links'
 import {
   createMarkdownDocumentIndex,

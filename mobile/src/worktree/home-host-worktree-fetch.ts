@@ -47,7 +47,7 @@ export function fetchHomeHostWorktreeInfo(
         }
         const result = response.result as { worktrees?: HomeWorktreeSummary[] }
         const worktrees = result.worktrees ?? []
-        setCachedWorktrees(hostId, worktrees)
+        setCachedWorktrees(hostId, worktrees, { proven: true })
         const active = worktrees.filter((w) => w.status && ACTIVE_STATUSES.has(w.status))
         // Mirror the desktop's focused workspace (see pickResumeWorktree).
         const lastActive = pickResumeWorktree(worktrees)

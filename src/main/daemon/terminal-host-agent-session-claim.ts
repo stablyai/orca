@@ -4,10 +4,11 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   agentSessionGeneration?: string
+  isCanceled?: () => boolean
 }
 
 export async function createOrAttachClaimedAgentSession(args: {
-  options: CreateOrAttachOptions
+  options: InternalCreateOrAttachOptions
   owners: ClaimedAgentPtyOwnerRegistry
   isLive: (owner: AgentSessionOwnerBinding) => boolean
   createOrAttach: (options: InternalCreateOrAttachOptions) => Promise<CreateOrAttachResult>

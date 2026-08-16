@@ -66,14 +66,11 @@ import {
   deleteIpynbCell,
   insertIpynbCell,
   moveIpynbCell,
-  parseIpynb,
   updateIpynbCellKind,
   updateIpynbCellOutputs,
-  updateIpynbCellSources,
-  type IpynbCell,
-  type IpynbCellKind,
-  type IpynbOutputItem
-} from './ipynb-parse'
+  updateIpynbCellSources
+} from './ipynb-cell-mutations'
+import { parseIpynb, type IpynbCell, type IpynbCellKind, type IpynbOutputItem } from './ipynb-parse'
 import { translate } from '@/i18n/i18n'
 
 type IpynbViewerProps = {
@@ -435,7 +432,7 @@ function getCellKey(cell: IpynbCell, index: number): string {
 }
 
 function hasOwnDraft(drafts: Record<string, string>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(drafts, key)
+  return Object.hasOwn(drafts, key)
 }
 
 function EditableTextCell({

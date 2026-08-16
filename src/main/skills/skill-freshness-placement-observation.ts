@@ -8,7 +8,11 @@ import type {
 } from '../../shared/skill-freshness'
 import type { SkillScanRoot } from './skill-discovery-sources'
 import type { SkillBundleArtifacts } from './skill-bundle-artifacts'
-import { matchingKnownSnapshot, observeSkillPackage } from './skill-package-identity'
+import {
+  matchingKnownSnapshot,
+  observeSkillPackage,
+  officialPathsGitTreeSha
+} from './skill-package-identity'
 import {
   classifyHomeSkillTopology,
   classifyUnsupportedSkillTopology,
@@ -95,10 +99,9 @@ export async function observeSkillFreshnessInstallation(args: {
 
   try {
     const observed = await observeSkillPackage(args.topology.resolvedPath)
-    const matchedSnapshot = matchingKnownSnapshot(
-      observed,
-      knownSnapshots(args.artifacts, args.current)
-    )
+    const snapshots = knownSnapshots(args.artifacts, args.current)
+    const officialPaths = new Set(args.current.files.map((file) => file.path))
+    const matchedSnapshot = matchingKnownSnapshot(observed, snapshots, officialPaths)
     // Why: a later release can reintroduce identical bytes. Exact current
     // identity is still current, and cannot honestly be attributed to the later tag.
     const snapshot =
@@ -117,7 +120,8 @@ export async function observeSkillFreshnessInstallation(args: {
             null)
         : null,
       observedPackageDigest: observed.observedDigest,
-      observedGitTreeSha: observed.observedGitTreeSha
+      observedGitTreeSha: observed.observedGitTreeSha,
+      observedOfficialGitTreeSha: officialPathsGitTreeSha(observed, officialPaths)
     }
   } catch (error) {
     return {

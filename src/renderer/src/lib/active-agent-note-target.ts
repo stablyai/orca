@@ -11,7 +11,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import {
   classifyTitleActivity,
   isExplicitAgentStatusFresh,
@@ -167,7 +167,11 @@ export async function findActiveRuntimeTerminal(
     runtimeTarget,
     'terminal.list',
     // Why: worktree ids can look like branch names or paths; keep the lookup unambiguous.
-    { worktree: toRuntimeWorktreeSelector(worktreeId), limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
+      includeVisualLayouts: false
+    },
     { timeoutMs }
   )
   return (

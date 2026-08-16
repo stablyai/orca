@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR,
+  PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR,
+  PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS,
+  PTY_CONSUMER_OWNER_HELD_SELF_ERROR,
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,
   PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR,
-  PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR,
   PtyConsumerSession,
   type PtyConsumerAuthentication,
   type PtyConsumerSessionHello
@@ -40,38 +43,51 @@ function createSession(options: { now?: () => number } = {}): PtyConsumerSession
 }
 
 describe('PtyConsumerSession', () => {
-  it('types a resume against a fresh relay without weakening other owner refusals', () => {
+  it('grants a fresh claim when the relay no longer holds the resumed record', () => {
     const session = createSession()
 
-    expect(() =>
-      session.admit(
-        ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'stale' } }),
-        auth('connection-1')
-      )
-    ).toThrow(
-      expect.objectContaining({
-        code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR,
-        message: expect.stringContaining('stale')
-      })
+    const admission = session.admit(
+      ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'forgotten' } }),
+      auth('connection-1')
     )
+
+    // Why one round trip: the client named a record this relay does not have, which is a fresh claim,
+    // not a refusal — `resumed: false` is what tells it the old checkpoints no longer apply.
+    expect(admission.grant).toMatchObject({
+      role: 'session-owner',
+      ownerGeneration: 1,
+      ownerLease: 'lease-1',
+      resumed: false
+    })
   })
 
   it('activates an authenticated owner only after its publication fence', () => {
     const session = createSession()
     const first = session.admit(ownerHello(), auth('connection-1'))
-    const competitor = session.admit(
-      ownerHello({ clientInstanceId: 'client-b' }),
-      auth('connection-2', { principal: 'other' })
-    )
 
     expect(first.grant).toMatchObject({
       clientGeneration: 1,
       role: 'session-owner',
       ownerGeneration: 1,
-      ownerLease: 'lease-1'
+      ownerLease: 'lease-1',
+      resumed: false
     })
-    expect(competitor.grant).toMatchObject({ clientGeneration: 2, role: 'subscriber' })
+    // Why a coded refusal and not a subscriber grant: a subscriber grant is unusable to a client that
+    // asked to own the PTY, and it arrives shaped like success.
+    expect(() =>
+      session.admit(
+        ownerHello({ clientInstanceId: 'client-b' }),
+        auth('connection-2', { principal: 'other' })
+      )
+    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR }))
     first.commitPublication()
+
+    expect(() =>
+      session.admit(
+        ownerHello({ clientInstanceId: 'client-b' }),
+        auth('connection-3', { principal: 'other' })
+      )
+    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR }))
   })
 
   it('rolls back an unpublished owner without consuming authority', () => {
@@ -86,14 +102,15 @@ describe('PtyConsumerSession', () => {
     })
   })
 
-  it('returns the same generation and lease for duplicate opens on one connection', () => {
+  it('rejects an identical duplicate open before it registers a second publication', () => {
     const session = createSession()
     const first = session.admit(ownerHello(), auth('connection-1'))
-    const duplicate = session.admit(ownerHello(), auth('connection-1'))
 
-    expect(duplicate.grant).toBe(first.grant)
+    // Why even an identical repeat: two responses settle independently, so one admission cannot make
+    // one response's rollback and the other's commit atomic.
+    expect(() => session.admit(ownerHello(), auth('connection-1'))).toThrow('only once')
     first.commitPublication()
-    duplicate.commitPublication()
+    expect(session.activeGrant('connection-1')).toBe(first.grant)
   })
 
   it('rejects a second, different open on one connection', () => {
@@ -339,46 +356,143 @@ describe('PtyConsumerSession', () => {
     expect(session.activeGrant('connection-2')).toBeNull()
   })
 
-  it('types mismatched recovery without disturbing principal or lease ownership', () => {
-    const session = createSession()
+  it('separates a disconnected holder from the owner it belongs to', () => {
+    let now = 10
+    const session = createSession({ now: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
     session.close('connection-1')
 
-    expect(() =>
-      session.admit(
-        ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } }),
-        auth('connection-2', { principal: 'stale-desktop' })
-      )
-    ).toThrow(
-      expect.objectContaining({
-        code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR,
-        message: expect.stringContaining('principal')
-      })
-    )
-    expect(() =>
-      session.admit(
-        ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'wrong' } }),
-        auth('connection-3')
-      )
-    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR }))
+    for (const [connectionId, hello] of [
+      ['connection-2', ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } })],
+      ['connection-3', ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'wrong' } })],
+      ['connection-4', ownerHello()]
+    ] as const) {
+      expect(() =>
+        session.admit(hello, auth(connectionId, { principal: 'other-desktop' }))
+      ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR }))
+    }
 
-    const staleFresh = session.admit(
-      ownerHello(),
-      auth('connection-2', { principal: 'stale-desktop' })
-    )
-    expect(staleFresh.grant).toMatchObject({ role: 'subscriber' })
-    expect(staleFresh.grant.ownerLease).toBeUndefined()
-
+    // Why the incumbent still wins: a matching proof is routed as a replacement and never reaches the
+    // held-owner branch, so shortening the grace cannot cost the real owner its lease.
     const recovered = session.admit(
       ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } }),
-      auth('connection-4')
+      auth('connection-5')
     )
     expect(recovered.grant).toMatchObject({
       role: 'session-owner',
       ownerGeneration: 2,
-      ownerLease: 'lease-1'
+      ownerLease: 'lease-1',
+      resumed: true
     })
+  })
+
+  it('clamps a refused disconnected holder to the shared grace floor', () => {
+    let now = 10
+    const session = createSession({ now: () => now })
+    const first = session.admit(ownerHello(), auth('connection-1'))
+    first.commitPublication()
+    // Why 'peer-closed': the floor is only for an owner the relay watched leave.
+    session.close('connection-1', 'peer-closed')
+
+    const rival = ownerHello({ clientInstanceId: 'client-b' })
+    expect(() => session.admit(rival, auth('connection-2', { principal: 'other' }))).toThrow(
+      expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR })
+    )
+    now += PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS - 1
+    expect(() => session.admit(rival, auth('connection-3', { principal: 'other' }))).toThrow(
+      expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR })
+    )
+
+    now += 1
+    const promoted = session.admit(rival, auth('connection-4', { principal: 'other' }))
+
+    expect(promoted.grant).toMatchObject({
+      role: 'session-owner',
+      ownerGeneration: 2,
+      ownerLease: 'lease-2',
+      resumed: false
+    })
+  })
+
+  it('keeps the whole grace for an owner the relay tore down for backpressure', () => {
+    let now = 1_000
+    const session = createSession({ now: () => now })
+    const first = session.admit(ownerHello(), auth('connection-1'))
+    first.commitPublication()
+    // The relay destroyed this socket because its lane queue was full. That is the signature of an
+    // owner that is alive and slow, so the default 'local' cause must leave the grace untouched.
+    session.close('connection-1')
+
+    const rival = ownerHello({ clientInstanceId: 'client-b' })
+    now += 10
+    expect(() => session.admit(rival, auth('connection-2'))).toThrow(
+      expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR })
+    )
+    // Why past the floor and still refused: no owner finishes notice-close, connect, handshake and
+    // openClient inside 250 ms, so a floor that applied here would hand the claim away every time.
+    now += PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS + 20
+    expect(() => session.admit(rival, auth('connection-3'))).toThrow(
+      expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR })
+    )
+
+    now += 5_000
+    const recovered = session.admit(
+      ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } }),
+      auth('connection-4')
+    )
+
+    // The point of the whole sequence: the live owner still gets back in. Losing here is permanent —
+    // the refusal it would have received routes as blocked and parks the target with no retry.
+    expect(recovered.grant).toMatchObject({
+      role: 'session-owner',
+      ownerLease: 'lease-1',
+      resumed: true
+    })
+  })
+
+  it("refuses a client's own attached connection as transient, not as another client's claim", () => {
+    const session = createSession()
+    const first = session.admit(ownerHello(), auth('connection-1'))
+    first.commitPublication()
+
+    // The app's previous connection is a half-open zombie the relay never observed closing. Its
+    // re-open carries the same instance id and no proof, because the recovery record went with it.
+    expect(() => session.admit(ownerHello(), auth('connection-2'))).toThrow(
+      expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_SELF_ERROR })
+    )
+
+    // A genuinely different client is still blocked — this narrows the terminal case, it does not
+    // remove it.
+    expect(() =>
+      session.admit(
+        ownerHello({ clientInstanceId: 'client-b' }),
+        auth('connection-3', { principal: 'other-desktop' })
+      )
+    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR }))
+    // Same instance id under a different principal is a different client too.
+    expect(() =>
+      session.admit(ownerHello(), auth('connection-4', { principal: 'other-desktop' }))
+    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR }))
+  })
+
+  it('never converts an owner-capable request into a subscriber grant', () => {
+    const session = createSession()
+    const first = session.admit(ownerHello(), auth('connection-1'))
+    first.commitPublication()
+
+    const ineligible = session.admit(
+      ownerHello(),
+      auth('connection-2', { allowSessionOwner: false })
+    )
+
+    // Why this is the only subscriber outcome left: the request was not owner-capable in the first
+    // place, so no refusal code applies and the grant carries no `resumed`.
+    expect(ineligible.grant.role).toBe('subscriber')
+    expect(ineligible.grant).not.toHaveProperty('resumed')
+    expect(() =>
+      session.admit(ownerHello({ clientInstanceId: 'client-b' }), auth('connection-3'))
+    ).toThrow(expect.objectContaining({ code: PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR }))
   })
 
   it('elects a new owner after disconnected-owner grace expires', () => {

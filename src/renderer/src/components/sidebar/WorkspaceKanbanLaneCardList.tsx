@@ -1,6 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import { registerWorkspaceKanbanVirtualLaneLayout } from './workspace-kanban-virtual-lane-layout'
 

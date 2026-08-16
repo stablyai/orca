@@ -1,5 +1,5 @@
 import { getCheckConclusion } from '@/components/pr-check-counts'
-import type { PRCheckDetail } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 
 export function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)

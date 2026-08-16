@@ -1,4 +1,4 @@
-import type { CustomPet, SpriteAnimation } from './types'
+import type { CustomPet, SpriteAnimation } from './pet-types'
 
 /** Codex pet sprite layout and pacing, mirroring the tables in Codex CLI's
  *  `tui/src/pets`. Shared because main bakes these into imported bundles and

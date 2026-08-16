@@ -69,26 +69,7 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
-vi.mock('lucide-react', () => ({
-  FilePlus: function FilePlus() {
-    return null
-  },
-  FileText: function FileText() {
-    return null
-  },
-  Globe: function Globe() {
-    return null
-  },
-  Plus: function Plus() {
-    return null
-  },
-  Smartphone: function Smartphone() {
-    return null
-  },
-  TerminalSquare: function TerminalSquare() {
-    return null
-  }
-}))
+vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {
@@ -514,6 +495,26 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      onNewSimulatorTab: () => {}
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels.some((label) => label.includes('New Terminal'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('New Markdown'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Open Markdown...'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Browser'))).toBe(false)
+    expect(menuLabels.some((label) => label.includes('Mobile Emulator'))).toBe(false)
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {

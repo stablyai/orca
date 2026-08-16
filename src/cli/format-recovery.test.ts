@@ -57,4 +57,17 @@ describe('CLI error recovery', () => {
 
     expect(output).toContain('Fix the command flags or RPC params')
   })
+
+  it('does not replace mutation recovery with generic runtime startup advice', () => {
+    const error = new RuntimeClientError(
+      'runtime_unavailable',
+      'Re-issue the same command with --retry-request mutation_1.',
+      { orchestrationRequestId: 'mutation_1' }
+    )
+
+    const output = formatCliError(error)
+
+    expect(output).toContain('--retry-request mutation_1')
+    expect(output).not.toContain('orca open')
+  })
 })

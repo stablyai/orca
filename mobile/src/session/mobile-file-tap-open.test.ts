@@ -64,7 +64,12 @@ describe('openMobileFileTap', () => {
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: '/tmp/result.json', terminal: 'terminal-1' },
+      {
+        worktree: 'id:wt-1',
+        pathText: '/tmp/result.json',
+        terminal: 'terminal-1',
+        crossWorkspace: true
+      },
       { timeoutMs: 10_000 }
     )
     expect(pushPreviewRoute).toHaveBeenCalledWith({
@@ -322,7 +327,13 @@ describe('openMobileFileTap', () => {
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'index.ts', terminal: 'term-1', cwd: '/repo/src' },
+      {
+        worktree: 'id:wt-1',
+        pathText: 'index.ts',
+        terminal: 'term-1',
+        cwd: '/repo/src',
+        crossWorkspace: true
+      },
       { timeoutMs: 10_000 }
     )
   })

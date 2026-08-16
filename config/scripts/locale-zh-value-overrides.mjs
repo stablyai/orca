@@ -144,7 +144,6 @@ export const ZH_VALUE_OVERRIDES = {
   'Expand Orca': '展开 Orca',
   'Support Orca': '支持 Orca',
   'Restarting Orca…': '正在重启 Orca…',
-  'Orca Attribution': 'Orca 归因',
   'Show Orca Mobile Button': '显示 Orca Mobile 按钮',
   'Codex Accounts': 'Codex 账户',
   'Codex Account': 'Codex 账户',
@@ -186,8 +185,7 @@ export const ZH_VALUE_OVERRIDES = {
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
     '让代理直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作。',
   'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
-  'Branch naming, base refs, attribution, and Git AI Author.':
-    '分支命名、基础引用、归因和 Git AI Author。',
+  'Branch naming, base refs, and Git AI Author.': '分支命名、基础引用和 Git AI Author。',
   'You have unsaved Git AI Author changes. Leaving will discard them.':
     '您有未保存的 Git AI Author 更改。离开将丢弃它们。',
   'Discard unsaved Git AI Author changes?': '放弃未保存的 Git AI Author 更改？',

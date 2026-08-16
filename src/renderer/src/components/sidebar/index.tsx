@@ -8,7 +8,6 @@ import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
-import { AgentDashboardDrawer } from '@/components/dashboard/AgentDashboardDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
@@ -23,6 +22,7 @@ const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
+const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -91,28 +91,6 @@ function Sidebar({
       closeWorkspaceBoard()
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
-
-  const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
-  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
-  useEffect(() => {
-    if (!sidebarOpen && agentDashboardDrawerOpen) {
-      setAgentDashboardDrawerOpen(false)
-    }
-  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, sidebarOpen])
-  // Why: both companion boards expand into the same space beside the sidebar,
-  // so the most recently opened one dismisses the other.
-  useEffect(() => {
-    if (agentDashboardDrawerOpen) {
-      closeWorkspaceBoard()
-    }
-  }, [agentDashboardDrawerOpen, closeWorkspaceBoard])
-  // Why: a transient drag preview is not the user opening the board, so it must
-  // not evict the dashboard — key on the opened state, not the rendered state.
-  useEffect(() => {
-    if (workspaceBoardOpen) {
-      setAgentDashboardDrawerOpen(false)
-    }
-  }, [setAgentDashboardDrawerOpen, workspaceBoardOpen])
 
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -217,11 +195,16 @@ function Sidebar({
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
         />
       ) : null}
-      {sidebarOpen && settings?.experimentalAgentDashboardPopout === true ? (
-        <AgentDashboardDrawer
-          leftSidebarStyle={leftSidebarStyle}
-          statusBarVisible={statusBarVisible}
-        />
+      {settings?.experimentalAgentDashboardPopout === true ? (
+        <React.Suspense fallback={null}>
+          <AgentDashboardSidebarHost
+            sidebarOpen={sidebarOpen}
+            workspaceBoardOpen={workspaceBoardOpen}
+            closeWorkspaceBoard={closeWorkspaceBoard}
+            leftSidebarStyle={leftSidebarStyle}
+            statusBarVisible={statusBarVisible}
+          />
+        </React.Suspense>
       ) : null}
     </TooltipProvider>
   )

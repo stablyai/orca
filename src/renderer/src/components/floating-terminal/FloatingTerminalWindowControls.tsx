@@ -20,8 +20,6 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
-import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -80,10 +78,6 @@ export function FloatingTerminalWindowControls({
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
-      sessionOptions: resolveNativeChatSessionOptionDefaults(
-        state.settings?.nativeChatSessionOptions,
-        defaultAgent
-      ),
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -98,7 +92,6 @@ export function FloatingTerminalWindowControls({
       return
     }
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
-    seedNativeChatAppliedSessionOptions(tab.id, defaultAgent, startupPlan.sessionOptions)
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),

@@ -11,6 +11,7 @@ describe('plugin VM recipe artifacts', () => {
         schemaVersion: 1,
         id: 'cloud-sandbox',
         name: 'Cloud Sandbox',
+        checkoutMode: 'provisioned-root',
         create: './scripts/create.sh',
         suspend: './scripts/suspend.sh',
         resume: './scripts/resume.sh',
@@ -18,7 +19,11 @@ describe('plugin VM recipe artifacts', () => {
       })
     )
 
-    expect(recipe).toMatchObject({ id: 'cloud-sandbox', name: 'Cloud Sandbox' })
+    expect(recipe).toMatchObject({
+      id: 'cloud-sandbox',
+      name: 'Cloud Sandbox',
+      checkoutMode: 'provisioned-root'
+    })
     expect(listPluginVmRecipeCommands(recipe)).toEqual([
       { phase: 'create', command: './scripts/create.sh' },
       { phase: 'suspend', command: './scripts/suspend.sh' },
