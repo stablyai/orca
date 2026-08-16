@@ -32,7 +32,13 @@ const testState = vi.hoisted(() => ({
     skillsLoading: false,
     refresh: () => {}
   },
-  openFile: [] as { filePath: string; relativePath: string }[]
+  openFile: [] as {
+    filePath: string
+    relativePath: string
+    runtimeEnvironmentId?: string | null
+  }[],
+  authorized: [] as string[],
+  allowAbsolutePaths: true
 }))
 
 vi.mock('@/store', () => ({
@@ -44,12 +50,15 @@ vi.mock('@/store', () => ({
   ): T =>
     selector({
       openFile: (file) => {
-        testState.openFile.push(file as { filePath: string; relativePath: string })
+        testState.openFile.push(file as (typeof testState.openFile)[number])
       },
       runtimeEnvironments: [{ id: 'env-1', name: 'Build box' }]
     })
 }))
 vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => testState.worktree }))
+vi.mock('@/components/tab-bar/tab-create-entry-local-path', () => ({
+  createTabEntryAllowAbsolutePathsSelector: () => () => testState.allowAbsolutePaths
+}))
 vi.mock('./use-workspace-agent-context', () => ({
   useWorkspaceAgentContext: () => ({
     worktreeId: testState.worktree?.id ?? null,
@@ -227,6 +236,15 @@ describe('WorkspaceContextPanel', () => {
     testState.context.unavailable = null
     testState.context.report = report()
     testState.openFile = []
+    testState.authorized = []
+    testState.allowAbsolutePaths = true
+    ;(window as unknown as { api: unknown }).api = {
+      fs: {
+        authorizeExternalPath: async ({ targetPath }: { targetPath: string }) => {
+          testState.authorized.push(targetPath)
+        }
+      }
+    }
     // Why: view options persist across mounts on purpose; tests start clean.
     window.localStorage.clear()
   })
@@ -310,6 +328,45 @@ describe('WorkspaceContextPanel', () => {
     expect(testState.openFile).toEqual([
       expect.objectContaining({ relativePath: 'CLAUDE.md', filePath: '/home/u/repo/CLAUDE.md' })
     ])
+    expect(testState.authorized).toEqual([])
+  })
+
+  it('opens files outside the worktree as authorized external files on a local workspace', async () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    const button = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('/home/u/.claude/CLAUDE.md')
+    )
+    expect(button).toBeDefined()
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(testState.authorized).toEqual(['/home/u/.claude/CLAUDE.md'])
+    expect(testState.openFile).toEqual([
+      expect.objectContaining({
+        filePath: '/home/u/.claude/CLAUDE.md',
+        relativePath: '/home/u/.claude/CLAUDE.md',
+        runtimeEnvironmentId: null
+      })
+    ])
+    // MCP rows open their config file the same way.
+    const mcpRow = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('/home/u/repo/.mcp.json')
+    )
+    expect(mcpRow).toBeDefined()
+  })
+
+  it('offers no external opens when the workspace is not local', () => {
+    testState.allowAbsolutePaths = false
+    act(() => root.render(<WorkspaceContextPanel />))
+    const homeRow = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('/home/u/.claude/CLAUDE.md')
+    )
+    expect(homeRow).toBeUndefined()
+    const repoRow = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('/home/u/repo/CLAUDE.md')
+    )
+    expect(repoRow).toBeDefined()
   })
 
   it('filters to one section from the filter strip', () => {

@@ -1,12 +1,12 @@
 import type React from 'react'
-import type {
-  AgentContextInstructionFile,
-  AgentContextReport
-} from '../../../../shared/agent-context'
+import type { AgentContextReport } from '../../../../shared/agent-context'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { formatBytes, groupInstructionFiles, sortByScope } from './workspace-context-model'
 import { ContextRow, EmptyRow, scopeLabel } from './workspace-context-rows'
+
+/** Resolves a click handler for a report path, or nothing when Orca cannot open it here. */
+export type OpenContextPath = (displayPath: string) => (() => void) | undefined
 
 type SectionBodyProps = {
   /** Already narrowed by the agent and scope filters. */
@@ -14,6 +14,7 @@ type SectionBodyProps = {
   showMissing: boolean
   /** The unfiltered report has rows here; the filters hid all of them. */
   hiddenByFilter: boolean
+  openPath: OpenContextPath
 }
 
 function emptyText(hiddenByFilter: boolean, none: string): string {
@@ -29,10 +30,8 @@ export function InstructionFilesBody({
   report,
   showMissing,
   hiddenByFilter,
-  onOpen
-}: SectionBodyProps & {
-  onOpen: (file: AgentContextInstructionFile) => void
-}): React.JSX.Element {
+  openPath
+}: SectionBodyProps): React.JSX.Element {
   const groups = groupInstructionFiles(report?.instructionFiles ?? [], showMissing)
   if (report && groups.length === 0) {
     return (
@@ -76,9 +75,7 @@ export function InstructionFilesBody({
               agents={file.agents}
               muted={!file.exists}
               onClick={
-                file.exists && file.scope === 'project' && file.entryCount === undefined
-                  ? () => onOpen(file)
-                  : undefined
+                file.exists && file.entryCount === undefined ? openPath(file.path) : undefined
               }
               title={file.path}
             />
@@ -92,7 +89,8 @@ export function InstructionFilesBody({
 export function McpFilesBody({
   report,
   showMissing,
-  hiddenByFilter
+  hiddenByFilter,
+  openPath
 }: SectionBodyProps): React.JSX.Element {
   const files = sortByScope(report?.mcpFiles ?? []).filter(
     (file) => file.inspection.exists || showMissing
@@ -130,6 +128,7 @@ export function McpFilesBody({
               }
               agents={file.agents}
               muted={!file.inspection.exists}
+              onClick={file.inspection.exists ? openPath(file.path) : undefined}
               title={file.inspection.error ?? file.path}
             />
             {file.inspection.servers.map((server) => (
@@ -167,7 +166,8 @@ export function McpFilesBody({
 export function HookFilesBody({
   report,
   showMissing,
-  hiddenByFilter
+  hiddenByFilter,
+  openPath
 }: SectionBodyProps): React.JSX.Element {
   const files = sortByScope(report?.hookFiles ?? []).filter(
     (file) => file.hookCount > 0 || file.error || showMissing
@@ -198,6 +198,7 @@ export function HookFilesBody({
           }
           agents={file.agents}
           muted={!file.exists || file.hookCount === 0}
+          onClick={file.exists ? openPath(file.path) : undefined}
           title={file.error ?? file.path}
         />
       ))}
@@ -219,7 +220,8 @@ export function HookFilesBody({
 export function PluginsBody({
   report,
   showMissing,
-  hiddenByFilter
+  hiddenByFilter,
+  openPath
 }: SectionBodyProps): React.JSX.Element {
   const plugins = (report?.plugins ?? []).filter((plugin) => plugin.enabled || showMissing)
   return (
@@ -250,6 +252,7 @@ export function PluginsBody({
             }
             agents={plugin.agents}
             muted={!plugin.enabled}
+            onClick={openPath(plugin.sourcePath)}
             title={plugin.sourcePath}
           />
         ))

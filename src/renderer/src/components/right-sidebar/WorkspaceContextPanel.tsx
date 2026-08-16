@@ -1,9 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import type { AgentContextInstructionFile } from '../../../../shared/agent-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { createTabEntryAllowAbsolutePathsSelector } from '@/components/tab-bar/tab-create-entry-local-path'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -17,7 +15,6 @@ import {
   filterReportByAgents,
   filterReportByScope,
   groupSkillsBySource,
-  isPathInside,
   selectSkillsForAgents,
   selectSkillsForScope,
   selectWorkspaceSkills
@@ -28,8 +25,10 @@ import {
   HookFilesBody,
   InstructionFilesBody,
   McpFilesBody,
-  PluginsBody
+  PluginsBody,
+  type OpenContextPath
 } from './workspace-context-sections'
+import { canOpenWorkspaceContextPath, openWorkspaceContextPath } from './workspace-context-open'
 import {
   useWorkspaceContextViewOptions,
   type ContextSectionKey
@@ -41,12 +40,6 @@ const DEFAULT_OPEN: Record<ContextSectionKey, boolean> = {
   mcp: true,
   hooks: false,
   plugins: false
-}
-
-function relativeToWorkspace(pathValue: string, workspaceCwd: string): string {
-  const normalized = pathValue.replace(/\\/g, '/')
-  const base = workspaceCwd.replace(/\\/g, '/').replace(/\/+$/, '')
-  return normalized.slice(base.length + 1)
 }
 
 function unavailableText(reason: WorkspaceAgentContextUnavailable): string {
@@ -133,24 +126,35 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
   const bodyProps = (key: keyof typeof counts) => ({
     report,
     showMissing,
-    hiddenByFilter: hiddenByFilter(key)
+    hiddenByFilter: hiddenByFilter(key),
+    openPath
   })
 
-  const openInstructionFile = useCallback(
-    (file: AgentContextInstructionFile) => {
-      if (!worktree || !workspaceCwd || !isPathInside(file.path, workspaceCwd)) {
-        return
+  const allowAbsolutePathsSelector = useMemo(
+    () => createTabEntryAllowAbsolutePathsSelector(worktree?.id ?? '', { skip: !worktree }),
+    [worktree]
+  )
+  const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+  const reportTarget = fullReport?.target ?? null
+  const openPath = useCallback<OpenContextPath>(
+    (displayPath) => {
+      if (!worktree || !reportTarget) {
+        return undefined
       }
-      const relativePath = relativeToWorkspace(file.path, workspaceCwd)
-      openFile({
-        filePath: joinPath(worktree.path, relativePath),
-        relativePath,
-        worktreeId: worktree.id,
-        language: detectLanguage(relativePath),
-        mode: 'edit'
-      })
+      if (!canOpenWorkspaceContextPath({ displayPath, reportTarget, allowAbsolutePaths })) {
+        return undefined
+      }
+      return () =>
+        void openWorkspaceContextPath({
+          displayPath,
+          reportTarget,
+          worktree,
+          allowAbsolutePaths,
+          authorizeExternalPath: (args) => window.api.fs.authorizeExternalPath(args),
+          openFile
+        })
     },
-    [openFile, workspaceCwd, worktree]
+    [allowAbsolutePaths, openFile, reportTarget, worktree]
   )
 
   if (!worktree) {
@@ -202,10 +206,7 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
               count={report ? counts.instructionFiles : null}
               {...sectionState('instructions')}
             >
-              <InstructionFilesBody
-                {...bodyProps('instructionFiles')}
-                onOpen={openInstructionFile}
-              />
+              <InstructionFilesBody {...bodyProps('instructionFiles')} />
             </ContextSection>
           )}
 
@@ -250,6 +251,7 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
                         primary={skill.name}
                         secondary={skill.skillFilePath}
                         agents={skill.providers.filter((provider) => provider !== 'agent-skills')}
+                        onClick={openPath(skill.skillFilePath)}
                         title={skill.description ?? skill.skillFilePath}
                       />
                     ))}

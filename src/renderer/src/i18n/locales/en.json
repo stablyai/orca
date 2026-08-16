@@ -14953,7 +14953,8 @@
           "unavailableRuntime": "Waiting for the runtime that owns this workspace.",
           "hiddenByFilter": "Hidden by the current filter.",
           "hostWsl": "{{value0}} · WSL {{value1}}",
-          "hostTitle": "Read on the host that runs this workspace"
+          "hostTitle": "Read on the host that runs this workspace",
+          "openNotAuthorized": "Couldn't open {{value0}} — path not authorized."
         }
       },
       "link": {
