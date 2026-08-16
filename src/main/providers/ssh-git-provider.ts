@@ -226,7 +226,7 @@ export class SshGitProvider implements IGitProvider {
   async amend(
     worktreePath: string
   ): Promise<{ success: boolean; error?: string }> {
-    return this.runWithDiffDedupeClear(
+    return this.runWithGitReadInvalidation(
       async () =>
         (await this.mux.request('git.amend', {
           worktreePath
