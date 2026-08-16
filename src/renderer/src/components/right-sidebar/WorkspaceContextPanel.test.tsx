@@ -38,8 +38,13 @@ const testState = vi.hoisted(() => ({
     runtimeEnvironmentId?: string | null
   }[],
   authorized: [] as string[],
+  authorizeRejects: false,
   allowAbsolutePaths: true
 }))
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
+
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
 vi.mock('@/store', () => ({
   useAppStore: <T,>(
@@ -237,10 +242,15 @@ describe('WorkspaceContextPanel', () => {
     testState.context.report = report()
     testState.openFile = []
     testState.authorized = []
+    testState.authorizeRejects = false
     testState.allowAbsolutePaths = true
+    toastErrorMock.mockReset()
     ;(window as unknown as { api: unknown }).api = {
       fs: {
         authorizeExternalPath: async ({ targetPath }: { targetPath: string }) => {
+          if (testState.authorizeRejects) {
+            throw new Error('path not authorized')
+          }
           testState.authorized.push(targetPath)
         }
       }
@@ -354,6 +364,23 @@ describe('WorkspaceContextPanel', () => {
       el.textContent?.includes('/home/u/repo/.mcp.json')
     )
     expect(mcpRow).toBeDefined()
+  })
+
+  it('opens nothing and warns when the external-path grant is refused', async () => {
+    testState.authorizeRejects = true
+    act(() => root.render(<WorkspaceContextPanel />))
+    const button = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('/home/u/.claude/CLAUDE.md')
+    )
+    expect(button).toBeDefined()
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(testState.openFile).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Couldn't open /home/u/.claude/CLAUDE.md — path not authorized."
+    )
   })
 
   it('offers no external opens when the workspace is not local', () => {
