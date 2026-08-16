@@ -41,6 +41,27 @@ If `op` is missing, the tab prints `op: command not found` — the integration i
 - **Environment values are capped by the generic 64 KiB orca.yaml field limit,** which is larger than the 32,767-character maximum Windows allows for a single environment variable. The cap is deliberately platform-independent: `parseOrcaYaml` feeds the command-trust hash, so a platform-dependent parse would change that hash between macOS and Windows and re-prompt on every switch. A value above the Windows limit therefore parses everywhere but can fail at spawn time on Windows.
 - **Setup scripts and environment-recipe lifecycle scripts** are not covered yet (planned follow-up). Recipes run from the main process, so their `op` path additionally needs the macOS TCC login-shell attribution wrapper.
 
+## Command trust and the one-time re-prompt
+
+Committed `defaultTabs[].env` is trust-gated exactly like a committed `command`: it is
+serialized into the setup trust content, hashed, and injected only once the user approves
+that hash. Main and renderer share one implementation
+(`src/shared/default-tab-trust-content.ts`) so a change trusted on one side cannot be
+silently accepted by the other.
+
+The format separates structure from free text by indentation — `# setup` and
+`# defaultTabs[N]` headers sit at column 0, `env KEY=value` lines at one indent, and every
+byte of user free text (setup scripts, tab commands) at two. Without that separation a
+`command:` beginning `NODE_OPTIONS=…` hashes identically to a real `env:` entry, and only
+the latter exports the variable into the spawned PTY — so an approved hash could later
+activate `NODE_OPTIONS` or `LD_PRELOAD` with no re-prompt. Indenting free text also stops a
+command or setup script from forging an extra `# defaultTabs[N]` block, which was possible
+before this change.
+
+Adopting the format changes the hash of every repo that has a setup script or default tabs,
+so each one re-prompts once after upgrade. That is a deliberate one-time cost, not a
+regression.
+
 ## Why in-PTY instead of resolving in the main process
 
 Orca-spawned `op` subprocesses historically triggered macOS TCC permission-prompt storms because tccd attributed each grant to Orca's bundle id (#6996, #8985, #12534); the fix wraps PTY shells in `login(1)` so children keep their own TCC identity (`src/main/providers/macos-tcc-login-shell.ts`). Running `op` from the main process would bypass that wrapper and revive the storm — and would put secret values in Orca's process memory. The in-PTY wrap avoids both.

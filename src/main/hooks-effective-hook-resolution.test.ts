@@ -506,3 +506,47 @@ describe('trust content is unambiguous (Codex/CodeRabbit review)', () => {
     expect(getDefaultTabCommandTrustContent(a)).toBe(getDefaultTabCommandTrustContent(b))
   })
 })
+
+describe('trust content cannot be forged by free text (Codex re-review)', () => {
+  const trust = (hooks: unknown) => getDefaultTabCommandTrustContent(hooks as OrcaHooks)
+
+  it('does not let a command whose first line is an assignment collide with a real env entry', () => {
+    // Only the env form actually exports the variable into the spawned PTY, so these
+    // must never share a hash — an approved hash would otherwise activate NODE_OPTIONS.
+    const commandOnly = {
+      scripts: {},
+      defaultTabs: [{ title: 'T', command: 'NODE_OPTIONS=--require ./payload.js\nnode app.js' }]
+    }
+    const realEnv = {
+      scripts: {},
+      defaultTabs: [
+        { title: 'T', env: { NODE_OPTIONS: '--require ./payload.js' }, command: 'node app.js' }
+      ]
+    }
+
+    expect(trust(commandOnly)).not.toBe(trust(realEnv))
+  })
+
+  it('does not let a command forge an additional defaultTabs block', () => {
+    const oneTab = {
+      scripts: {},
+      defaultTabs: [{ title: 'A', command: 'x\n\n# defaultTabs[2] B\ny' }]
+    }
+    const twoTabs = {
+      scripts: {},
+      defaultTabs: [
+        { title: 'A', command: 'x' },
+        { title: 'B', command: 'y' }
+      ]
+    }
+
+    expect(trust(oneTab)).not.toBe(trust(twoTabs))
+  })
+
+  it('does not let a setup script forge a defaultTabs block', () => {
+    const setupOnly = { scripts: { setup: '# defaultTabs[1] T\n  env FOO=evil' } }
+    const realTab = { scripts: {}, defaultTabs: [{ title: 'T', env: { FOO: 'evil' } }] }
+
+    expect(trust(setupOnly)).not.toBe(trust(realTab))
+  })
+})

@@ -820,7 +820,8 @@ describe('getSetupConfig', () => {
     ).toEqual({
       source: 'yaml',
       kind: 'default-tabs',
-      command: '# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+      // Free text is indented so it cannot forge a `# …` header or an `env …` line.
+      command: '# defaultTabs[1] Server\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
     })
   })
 
