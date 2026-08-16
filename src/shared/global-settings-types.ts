@@ -357,6 +357,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
+  /** One-shot guard: start IBM Bob hidden for existing profiles without overriding later opt-ins. */
+  bobDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
   skipDeleteWorktreeConfirm: boolean
   /** Opt-in: workspace deletion discards changes and may waive terminal-stop verification. */
