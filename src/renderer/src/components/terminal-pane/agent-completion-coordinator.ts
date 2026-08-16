@@ -17,6 +17,7 @@ import type {
 } from './agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { CODEX_ATTENTION_QUIET_MS } from '../../../../shared/codex-attention-quiet-window'
 import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle
@@ -49,8 +50,6 @@ const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
-// Why: under "Approve for me" Codex resumes almost immediately, so debounce the OS attention notification so a self-resolving pause raises no false banner (#8387).
-const CODEX_ATTENTION_QUIET_MS = 1_500
 
 const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
   active: ACTIVE_POLL_INTERVAL_MS,
