@@ -39,6 +39,7 @@ import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory, fallbackHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
+import { parsePsElapsedTimeToSeconds } from '../../shared/ps-elapsed-time'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
@@ -81,6 +82,8 @@ type ProcRow = {
   cpu: number
   /** Resident memory in bytes. */
   memory: number
+  /** Seconds since the process started; undefined when unavailable. */
+  uptimeSeconds?: number
 }
 
 /** Indexed view of a single host process sweep. */
@@ -175,7 +178,7 @@ async function enumerateUnix(): Promise<ProcRow[]> {
   // silently drops the fractional part at a comma. Forcing C locale keeps
   // decimals as dots.
   try {
-    const { stdout } = await execAsync('ps -eo pid=,ppid=,pcpu=,rss=', {
+    const { stdout } = await execAsync('ps -eo pid=,ppid=,pcpu=,rss=,etime=', {
       maxBuffer: PS_MAX_BUFFER,
       timeout: PS_EXEC_TIMEOUT_MS,
       env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
@@ -187,11 +190,11 @@ async function enumerateUnix(): Promise<ProcRow[]> {
   }
 }
 
-/** Exported for tests: parses `ps -eo pid=,ppid=,pcpu=,rss=` output. */
+/** Exported for tests: parses `ps -eo pid=,ppid=,pcpu=,rss=,etime=` output. */
 export function parsePsOutput(stdout: string): ProcRow[] {
   const rows: ProcRow[] = []
   for (const line of iterateProcessOutputLines(stdout)) {
-    const fields = getProcessOutputFields(line, 4)
+    const fields = getProcessOutputFields(line, 5)
     if (fields.length < 4) {
       continue
     }
@@ -206,7 +209,8 @@ export function parsePsOutput(stdout: string): ProcRow[] {
       pid,
       ppid,
       cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
-      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
+      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0,
+      uptimeSeconds: fields[4] ? parsePsElapsedTimeToSeconds(fields[4]) : undefined
     })
   }
   return rows
@@ -382,7 +386,10 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
       cpu: clampNumber(sessionCpu),
-      memory: clampNumber(sessionMemory)
+      memory: clampNumber(sessionMemory),
+      // Why: uptime is the root shell's own age, not a subtree aggregate —
+      // summing children's ages the way cpu/memory are summed makes no sense.
+      uptimeSeconds: pty.pid != null ? processIndex.byPid.get(pty.pid)?.uptimeSeconds : undefined
     }
 
     let bucket: WorktreeBucket
