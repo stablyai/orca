@@ -414,7 +414,7 @@ describe('useAllHostClients', () => {
     connectMock.mockReturnValue(client)
     loadHostsMock.mockResolvedValue([HOST])
     let pendingPath: MobileConnectionPath | null | undefined
-    let renderer: ReactTestRenderer | null = null
+    let renderer: ReturnType<typeof create> | null = null
 
     function Probe(): null {
       pendingPath = useAllHostClients([HOST.id])[0]?.pendingPath
