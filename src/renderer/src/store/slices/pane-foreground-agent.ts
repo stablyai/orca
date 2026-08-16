@@ -1,12 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
   agent: TuiAgent | null
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
+  /** True after exit/input evidence revokes routing until provider confirmation. */
+  routingRevoked?: boolean
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
@@ -41,6 +43,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current &&
         current.agent === entry.agent &&
         current.routingTrusted === entry.routingTrusted &&
+        current.routingRevoked === entry.routingRevoked &&
         current.shellForeground === entry.shellForeground
       ) {
         return s

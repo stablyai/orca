@@ -1,7 +1,6 @@
 import { readNodeFileWithinLimit } from './node-bounded-file-reader'
 
 export const LINUX_PROC_NETWORK_TABLE_MAX_BYTES = 8 * 1024 * 1024
-export const LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES = 2_048
 export const LINUX_PROC_PROCESS_METADATA_MAX_BYTES = 8 * 1024 * 1024
 export const LINUX_PROC_PROCESS_METADATA_FILE_MAX_BYTES = 64 * 1024
 

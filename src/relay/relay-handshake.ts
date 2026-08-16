@@ -13,10 +13,10 @@ import {
 } from './protocol'
 import { relayLogLine } from './relay-diagnostic-log'
 
-// Why: client maps this exit code to a non-retryable error so it skips reconnect backoff; other non-zero exits are treated as transient.
+// Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
 
-// Why: read .version next to the resolved script path (realpathSync, not cwd) so arbitrary-cwd or symlink-launched spawns still report a coherent version.
+// Why: read .version beside the resolved script path, not the arbitrary launch cwd.
 export function readLaunchVersion(): string {
   try {
     const entry = process.argv[1]
@@ -161,7 +161,7 @@ export type ConnectHandshakeCallbacks = {
   onAccepted: (leftover: Buffer) => void
 }
 
-// Why: bridge-side version handshake; defense-in-depth so a bad .version can't let a v2 bridge drive a v1 daemon (cf. VS Code remoteExtensionHostAgentServer.ts:340).
+// Why: defense-in-depth prevents a bad .version from pairing incompatible bridge and daemon versions.
 export function runConnectHandshake(
   sock: Socket,
   myVersion: string,

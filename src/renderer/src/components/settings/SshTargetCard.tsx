@@ -284,6 +284,8 @@ export function SshTargetCard({
   return (
     <div
       ref={handleCardRef}
+      data-ssh-target-card=""
+      data-ssh-target-label={target.label}
       className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />

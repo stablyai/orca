@@ -13,6 +13,10 @@ import {
   parseJsonOutput,
   runOrcaCli
 } from './helpers/computer-driver'
+import {
+  clickCapturedTextEditOpenDialog,
+  doubleClickTextEditWord
+} from './helpers/computer-coordinate-click-driver'
 
 const isMac = process.platform === 'darwin'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
@@ -69,6 +73,25 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       (await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])).stdout
     )
     expect(after.result.snapshot.treeText).toContain(marker)
+  })
+
+  test('coordinate double-click activates a control, not just hover (STA-3433)', async () => {
+    const result = await doubleClickTextEditWord()
+
+    expect(result.action?.path).toBe('synthetic')
+    expect(result.action?.verification).toMatchObject({
+      state: 'unverified',
+      reason: 'synthetic_input'
+    })
+    expect(result.replacedWord).toBe(true)
+  })
+
+  test('coordinate click reaches the captured native dialog window', async () => {
+    expect(await clickCapturedTextEditOpenDialog()).toMatchObject({
+      clickPath: 'synthetic',
+      dialogClosed: true,
+      dialogWasNew: true
+    })
   })
 
   test('paste-text and hotkey verify TextEdit text replacement', async () => {

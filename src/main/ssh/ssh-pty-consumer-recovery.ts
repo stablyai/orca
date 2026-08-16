@@ -56,21 +56,22 @@ export function getSshPtyConsumerRecovery(
   return recoveryByTarget.get(targetId)
 }
 
-export function rememberSshPtyConsumerRecovery(args: {
+// Why async: the in-memory update lands synchronously (before the first await) so no caller can
+// observe a torn state; only the awaited durability barrier is deferred.
+export async function rememberSshPtyConsumerRecovery(args: {
   targetId: string
   clientInstanceId: string
   serverBuildId: string
   owner: SshPtyConsumerOwnerState
   store: Store
-}): void {
+}): Promise<void> {
   const current = recoveryByTarget.get(args.targetId)
-  if (current?.clientInstanceId !== args.clientInstanceId) {
+  if (current?.clientInstanceId !== args.clientInstanceId || current.detached) {
     return
   }
-  current.detached = false
   current.serverBuildId = args.serverBuildId
   current.owner = args.owner
-  args.store.upsertSshPtyConsumerRecovery({
+  await args.store.upsertSshPtyConsumerRecovery({
     targetId: args.targetId,
     clientInstanceId: args.clientInstanceId,
     serverBuildId: args.serverBuildId,
@@ -81,14 +82,14 @@ export function rememberSshPtyConsumerRecovery(args: {
   })
 }
 
-export function removeSshPtyConsumerOwnerRecovery(
+export async function removeSshPtyConsumerOwnerRecovery(
   targetId: string,
   clientInstanceId: string,
   store: Store
-): void {
+): Promise<void> {
   const persisted = store.getSshPtyConsumerRecovery(targetId)
   if (persisted?.clientInstanceId === clientInstanceId) {
-    store.removeSshPtyConsumerRecovery(targetId)
+    await store.removeSshPtyConsumerRecovery(targetId)
   }
 }
 
@@ -99,14 +100,14 @@ export function detachSshPtyConsumerRecovery(targetId: string, clientInstanceId:
   }
 }
 
-export function forgetSshPtyConsumerRecovery(
+export async function forgetSshPtyConsumerRecovery(
   targetId: string,
   clientInstanceId: string,
   store: Store
-): void {
+): Promise<void> {
   const current = recoveryByTarget.get(targetId)
   if (current?.clientInstanceId === clientInstanceId) {
     recoveryByTarget.delete(targetId)
   }
-  removeSshPtyConsumerOwnerRecovery(targetId, clientInstanceId, store)
+  await removeSshPtyConsumerOwnerRecovery(targetId, clientInstanceId, store)
 }

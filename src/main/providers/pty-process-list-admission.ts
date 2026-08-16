@@ -145,17 +145,3 @@ export async function visitPtyProcessListingsInBatches<T>(
     visit(listing.entry, listing.processes)
   }
 }
-
-export async function collectPtyProcessListings<T>(
-  sources: Iterable<T>,
-  load: (source: T) => Promise<readonly PtyProcessInfo[]>
-): Promise<PtyProcessInfo[]> {
-  const admission = new PtyProcessListAdmission()
-  const processes: PtyProcessInfo[] = []
-  await visitPtyProcessListingsInBatches(sources, load, (_source, listing) => {
-    for (const process of listing) {
-      processes.push(admission.admit(process))
-    }
-  })
-  return processes
-}

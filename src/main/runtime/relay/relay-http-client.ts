@@ -116,6 +116,7 @@ export async function requestRelayAssignment(input: {
   directorUrl: string
   relayToken: string
   relayHostId: string
+  reconnect?: boolean
   fetch?: typeof globalThis.fetch
   requestDeadlineMs?: number
 }): Promise<RelayAssignment> {
@@ -129,11 +130,21 @@ export async function requestRelayAssignment(input: {
       'content-type': 'application/json'
     },
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
-    body: JSON.stringify({ v: 1, relayHostId: input.relayHostId })
+    body: JSON.stringify({
+      v: 1,
+      relayHostId: input.relayHostId,
+      // Declares likely reconnection so the director can verify and admit
+      // through its bounded fast lane instead of the placement queue.
+      ...(input.reconnect ? { reconnect: true } : {})
+    })
   })
   if (!response.ok) {
     const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     await cancelUnreadResponseBody(response)
+    if (input.reconnect && response.status === 400) {
+      // A rolled-back director rejects unknown fields; retry once unhinted.
+      return await requestRelayAssignment({ ...input, reconnect: false })
+    }
     throw new RelayHttpError('assignment', response.status, retryAfterMs)
   }
   const parsed = AssignmentResponseSchema.safeParse(await response.json())

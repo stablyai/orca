@@ -1,6 +1,11 @@
 import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  cmdJPaletteTokenScore,
+  normalizeCmdJPaletteQuery,
+  uniqueNormalizedCmdJPaletteKeywords
+} from './palette-query-tokens'
 
 export type CmdJSettingsResult = {
   id: string
@@ -53,40 +58,6 @@ export function isCmdJPaletteQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-function normalizeQuery(value: string): string {
-  let normalized = ''
-  let pendingWhitespace = false
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (isCmdJPaletteWhitespace(code)) {
-      pendingWhitespace = normalized.length > 0
-      continue
-    }
-    if (pendingWhitespace) {
-      normalized += ' '
-      pendingWhitespace = false
-    }
-    normalized += value.charAt(index).toLowerCase()
-  }
-  return normalized
-}
-
-function isCmdJPaletteWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
 function keywordParts(section: SettingsNavSection): string[] {
   const baseId = section.id.startsWith('repo-') ? 'repo' : section.id
   const idWords = baseId.replace(/-/g, ' ')
@@ -107,10 +78,6 @@ function targetEntryKeywordParts(entryTitle: string): string[] {
   return [entryTitle, `${entryTitle} settings`]
 }
 
-function uniqueNormalized(values: readonly string[]): string[] {
-  return [...new Set(values.map(normalizeQuery).filter(Boolean))]
-}
-
 export function buildCmdJSettingsResults(
   sections: readonly SettingsNavSection[]
 ): CmdJSettingsResult[] {
@@ -123,7 +90,7 @@ export function buildCmdJSettingsResults(
       icon: section.icon,
       sectionId: section.id,
       order,
-      configKeywords: uniqueNormalized(keywordParts(section))
+      configKeywords: uniqueNormalizedCmdJPaletteKeywords(keywordParts(section))
     }
     const targetedResults = section.searchEntries
       .filter((entry) => entry.targetSectionId)
@@ -136,7 +103,7 @@ export function buildCmdJSettingsResults(
         sectionId: section.id,
         targetSectionId: entry.targetSectionId,
         order: order + (entryIndex + 1) / 100,
-        configKeywords: uniqueNormalized([
+        configKeywords: uniqueNormalizedCmdJPaletteKeywords([
           ...targetEntryKeywordParts(entry.title),
           ...(entry.cmdJKeywords ?? entry.keywords ?? [])
         ])
@@ -154,35 +121,6 @@ function startsOrIsStartedBy(query: string, keyword: string): boolean {
   return keyword.startsWith(query) || query.startsWith(keyword)
 }
 
-function tokenize(value: string): string[] {
-  return normalizeQuery(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-}
-
-function tokenScore(query: string, values: readonly string[]): number {
-  const candidateTokens = values.flatMap(tokenize)
-  if (candidateTokens.length === 0) {
-    return 0
-  }
-
-  let score = 0
-  for (const queryToken of tokenize(query)) {
-    let best = 0
-    for (const candidateToken of candidateTokens) {
-      if (candidateToken === queryToken) {
-        best = Math.max(best, 3)
-      } else if (candidateToken.startsWith(queryToken)) {
-        best = Math.max(best, 2)
-      } else if (candidateToken.includes(queryToken)) {
-        best = Math.max(best, 1)
-      }
-    }
-    score += best
-  }
-  return score
-}
-
 function rankingForCandidate(
   query: string,
   candidate: CmdJMiddleResult,
@@ -190,6 +128,17 @@ function rankingForCandidate(
   settingsConfigKeywords: readonly string[]
 ): RankedResult | null {
   if (!query) {
+    return null
+  }
+
+  // Why: the shortcut rules below only inspect the head and tail of the query, so coverage has
+  // to gate all of them — otherwise "new terminal <junk> browser settings" still wins on rule 3.
+  const values =
+    candidate.kind === 'settings'
+      ? [candidate.title, ...candidate.configKeywords]
+      : [candidate.title, ...candidate.verbKeywords]
+  const score = cmdJPaletteTokenScore(query, values)
+  if (score === 0) {
     return null
   }
 
@@ -227,12 +176,7 @@ function rankingForCandidate(
     return { result: candidate, rule: 5, score: 0 }
   }
 
-  const values =
-    candidate.kind === 'settings'
-      ? [candidate.title, ...candidate.configKeywords]
-      : [candidate.title, ...candidate.verbKeywords]
-  const score = tokenScore(query, values)
-  return score > 0 ? { result: candidate, rule: 6, score } : null
+  return { result: candidate, rule: 6, score }
 }
 
 function compareRanked(a: RankedResult, b: RankedResult): number {
@@ -263,7 +207,7 @@ export function rankCmdJMiddleResults({
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeCmdJPaletteQuery(query)
   if (normalizedQuery.length < 2) {
     return []
   }

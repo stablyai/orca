@@ -8,24 +8,32 @@ import type {
   SessionOptionsSurface,
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
+import { recordNativeChatSessionOptionCommand } from '../../../../shared/native-chat-session-option-commands'
 import {
+  applyNativeChatReportedSessionOptions,
+  clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
+  setTrackedSessionOption
+} from '../../../../shared/native-chat-session-option-state'
+import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
+  resolveEffectiveNativeChatModelId,
+  withTrackedNativeChatModel,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
-import { applyNativeChatReportedSessionOptions } from './native-chat-session-option-reporting'
-import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-command-recording'
 
 type PersistSelection = (args: {
   modelId: string
   optionId: string
   value: SessionOptionValue
+  /** False leaves the model scoping this value only, never a persisted launch flag. */
+  adoptModelAsLaunchDefault: boolean
 }) => Promise<void> | void
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
@@ -55,6 +63,9 @@ export function createNativeChatPtySessionOptions(
     return null
   }
   let models = [...(args.initialModels ?? catalog.models)]
+  // The enrichment cache only ever holds probe output, so being handed a list at all
+  // means `isDefault` below names the account's real default rather than the seed guess.
+  let modelsAreDiscovered = args.initialModels !== undefined
   let record =
     readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??
     createNativeChatSessionOptionRecord(args.agent)
@@ -65,9 +76,27 @@ export function createNativeChatPtySessionOptions(
   if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
+  /** Why: an authoritative probe proved this id gone; left tracked it would re-enter
+   *  the picker via re-injection and re-persist the fatal `-m` on any later option
+   *  write, undoing the settings retirement. */
+  const untrackRetiredModel = (): boolean => {
+    if (!catalog.discoveredModelsAreAuthoritative || !modelsAreDiscovered) {
+      return false
+    }
+    const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
+    if (!trackedId || models.some((model) => model.id === trackedId)) {
+      return false
+    }
+    clearNativeChatSessionModel(record)
+    return true
+  }
+  if (untrackRetiredModel()) {
+    writeNativeChatSessionOptionCache(args.scopeKey, record)
+  }
+  const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
-    models,
+    models: activeModels(),
     record,
     mode: args.mode
   })
@@ -77,7 +106,7 @@ export function createNativeChatPtySessionOptions(
     writeNativeChatSessionOptionCache(args.scopeKey, record)
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
-      models,
+      models: activeModels(),
       record,
       mode: args.mode
     })
@@ -88,47 +117,55 @@ export function createNativeChatPtySessionOptions(
   }
 
   const clearModelTruth = (): void => {
-    const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-    record.model = undefined
-    if (modelId) {
-      delete record.valuesByModel[modelId]
-    }
+    clearNativeChatSessionModel(record)
   }
 
+  /** Resolved at commit, not pre-dispatch: with nothing tracked the pre-dispatch id was
+   *  only the seed's guess at grok's default, and a probe landing mid-dispatch replaces
+   *  it with the id the CLI actually reported — the model the command truly reached. */
   const setTrackedValue = (
     optionId: string,
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
-  ): string | null => {
-    if (optionId === 'model') {
-      record.model = { value, source }
-      return typeof value === 'string' ? value : null
-    }
-    const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-    if (!modelId) {
-      return null
-    }
-    record.valuesByModel[modelId] = {
-      ...record.valuesByModel[modelId],
-      [optionId]: { value, source }
-    }
-    return modelId
-  }
+  ): string | null =>
+    setTrackedSessionOption(
+      record,
+      optionId,
+      value,
+      source,
+      resolveEffectiveNativeChatModelId(catalog, activeModels(), record)
+    )
 
+  /** The sole answer to "may this id become the persisted `-m` launch flag?", read at
+   *  persist time because a probe can settle mid-pick. Before one, `isDefault` is just
+   *  the seed's guess, so only an id the session actually tracks is evidence of
+   *  anything; after one, an authoritative list that omits the id proves it retired —
+   *  adopting either would emit an `-m` that is fatal on an account without it. */
+  const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean =>
+    modelsAreDiscovered
+      ? !catalog.discoveredModelsAreAuthoritative || models.some((model) => model.id === modelId)
+      : record.model !== undefined
+
+  /** Every persist path — picker applies and typed commands — funnels through here. */
   const persist = (modelId: string | null, optionId: string, value: SessionOptionValue): void => {
     if (modelId) {
-      void args.persistSelection?.({ modelId, optionId, value })
+      void args.persistSelection?.({
+        modelId,
+        optionId,
+        value,
+        adoptModelAsLaunchDefault: modelIsAdoptableAsLaunchDefault(modelId)
+      })
     }
   }
 
   const appliers = createSessionOptionAppliers({
     mode: args.mode,
     catalog,
-    getModels: () => models,
+    getModels: activeModels,
     getRecord: () => record,
     dispatchCommand: args.dispatchCommand,
     onAgentPicker: args.onAgentPicker,
-    persistSelection: args.persistSelection,
+    persist,
     onDraftValuesChanged: args.onDraftValuesChanged,
     publish,
     clearModelTruth,
@@ -146,7 +183,7 @@ export function createNativeChatPtySessionOptions(
     recordOutgoingCommand: (command) => {
       const result = recordNativeChatSessionOptionCommand({
         catalog,
-        models,
+        models: activeModels(),
         record,
         command,
         persist
@@ -165,6 +202,8 @@ export function createNativeChatPtySessionOptions(
     },
     replaceModels: (nextModels) => {
       models = [...nextModels]
+      modelsAreDiscovered = true
+      untrackRetiredModel()
       publish()
     }
   }

@@ -19,8 +19,11 @@ describe('browser automation visibility leases', () => {
     const {
       acquireBrowserAutomationVisibility,
       isBrowserAutomationVisible,
+      onBrowserAutomationVisibilityChange,
       releaseBrowserAutomationVisibility
     } = await import('./browser-automation-visibility')
+    const listener = vi.fn()
+    const unsubscribe = onBrowserAutomationVisibilityChange(listener)
 
     const first = acquireBrowserAutomationVisibility('page-1')
     const second = acquireBrowserAutomationVisibility('page-1')
@@ -32,6 +35,11 @@ describe('browser automation visibility leases', () => {
 
     expect(releaseBrowserAutomationVisibility(second)).toBe(true)
     expect(isBrowserAutomationVisible('page-1')).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(4)
+
+    unsubscribe()
+    acquireBrowserAutomationVisibility('page-2')
+    expect(listener).toHaveBeenCalledTimes(4)
   })
 
   it('installs a main-process bridge that keeps the page visible while waiting for paint', async () => {

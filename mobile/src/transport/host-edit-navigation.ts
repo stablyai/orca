@@ -1,19 +1,35 @@
-type HostEditRouter = {
-  push: (href: `/h/${string}`) => void
-  replace: (href: ReturnType<typeof mobileHostEditRoute>) => void
+import {
+  hostStackHostRoute,
+  navigateToHostStackRoute,
+  type HostStackHostRoute,
+  type HostStackNavigationController,
+  type HostStackNavigationState,
+  type HostStackRootNavigation,
+  type HostStackRouteTarget,
+  type HostStackRouter
+} from '../navigation/host-stack-navigation'
+
+export type MobileHostEditHostRoute = HostStackHostRoute
+export type MobileHostEditNavigationState = HostStackNavigationState
+export type MobileHostEditRootNavigation = HostStackRootNavigation
+export type MobileHostEditRouter = HostStackRouter
+export type MobileHostEditNavigationController = HostStackNavigationController
+
+export function mobileHostEditHostRoute(hostId: string): MobileHostEditHostRoute {
+  return hostStackHostRoute(hostId)
 }
 
-export function mobileHostEditRoute(hostId: string) {
+export function mobileHostEditRouteTarget(hostId: string): HostStackRouteTarget {
   return {
-    pathname: '/h/[hostId]/edit' as const,
+    name: '[hostId]/edit',
     params: { hostId }
   }
 }
 
-export function navigateToMobileHostEdit(router: HostEditRouter, hostId: string): void {
-  // Why: a cold nested host navigator resolves a deep push to its index route.
-  router.push(`/h/${hostId}`)
-  requestAnimationFrame(() => {
-    router.replace(mobileHostEditRoute(hostId))
-  })
+export function navigateToMobileHostEdit(
+  navigation: MobileHostEditRootNavigation,
+  router: MobileHostEditRouter,
+  hostId: string
+): MobileHostEditNavigationController {
+  return navigateToHostStackRoute(navigation, router, hostId, mobileHostEditRouteTarget(hostId))
 }

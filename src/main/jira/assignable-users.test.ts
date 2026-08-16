@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraClientForSite } from './client'
+import type { JiraClientForSite } from './authenticated-request'
 
 const { getClientsMock, isAuthErrorMock, jiraRequestMock, acquireMock, releaseMock } = vi.hoisted(
   () => ({
@@ -11,15 +11,21 @@ const { getClientsMock, isAuthErrorMock, jiraRequestMock, acquireMock, releaseMo
   })
 )
 
-vi.mock('./client', () => ({
+vi.mock('./request-queue', () => ({
   acquire: (...args: unknown[]) => acquireMock(...args),
-  release: (...args: unknown[]) => releaseMock(...args),
+  release: (...args: unknown[]) => releaseMock(...args)
+}))
+
+vi.mock('./authenticated-request', () => ({
   apiBasePath: (site: { authType?: string }) =>
     site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
+  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
+}))
+
+vi.mock('./client', () => ({
   clearToken: vi.fn(),
   getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
-  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
+  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args)
 }))
 
 function makeEntry(id = 'site-1'): JiraClientForSite {

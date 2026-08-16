@@ -1,11 +1,12 @@
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { TerminalLayoutSnapshot, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type TerminalPtyContext = {
   activeTabId: string | null

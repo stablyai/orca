@@ -13,8 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { githubAvatarUrl } from './github-issue-comment-helpers'
-import { resolveGitHubUserAvatarSrc } from './github-user-avatar'
+import { githubAvatarUrl, resolveGitHubUserAvatarSrc } from './github-user-avatar'
 
 describe('issue #8784 GHE avatar fallback (regression)', () => {
   it('prefers API avatar_url over login.png (GHE healthy path)', () => {

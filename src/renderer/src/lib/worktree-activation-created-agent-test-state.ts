@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { vi } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 
 export function makeCreatedAgentWorktree(): Worktree {

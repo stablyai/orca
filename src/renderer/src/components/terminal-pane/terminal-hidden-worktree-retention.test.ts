@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TERMINAL_WORKTREE_PARK_DELAY_MS } from './terminal-hidden-view-parking'
+import {
+  clearTerminalProviderSnapshotCapabilities,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   hasPendingRetentionSpawnWork,
@@ -44,17 +48,35 @@ describe('hasPendingRetentionSpawnWork', () => {
 
 describe('isEvictionExemptTerminalPty', () => {
   const worktreeId = 'repo::/worktree'
+  const currentPtyId = `${worktreeId}@@session-1`
+
+  beforeEach(async () => {
+    clearTerminalProviderSnapshotCapabilities()
+    await synchronizeTerminalProviderSnapshotCapabilities([currentPtyId], async () => [
+      { id: currentPtyId, authoritative: true }
+    ])
+  })
+  afterEach(() => clearTerminalProviderSnapshotCapabilities())
 
   it('exempts only live local ptys a remount could not reattach', () => {
     expect(isEvictionExemptTerminalPty('pty-local-detached', worktreeId)).toBe(true)
     expect(isEvictionExemptTerminalPty('other::wt@@session-1', worktreeId)).toBe(true)
   })
 
-  it('never exempts snapshot-backed, SSH, remote-runtime, or unbound ptys', () => {
-    expect(isEvictionExemptTerminalPty(`${worktreeId}@@session-1`, worktreeId)).toBe(false)
+  it('never exempts authoritative, SSH, remote-runtime, or unbound ptys', () => {
+    expect(isEvictionExemptTerminalPty(currentPtyId, worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty('ssh:conn-1@@pty-1', worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty('remote:env-1@@t-1', worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty(null, worktreeId)).toBe(false)
+  })
+
+  it('exempts a preserved daemon without an authoritative snapshot', async () => {
+    clearTerminalProviderSnapshotCapabilities()
+    await synchronizeTerminalProviderSnapshotCapabilities([currentPtyId], async () => [
+      { id: currentPtyId, authoritative: false }
+    ])
+
+    expect(isEvictionExemptTerminalPty(currentPtyId, worktreeId)).toBe(true)
   })
 })
 

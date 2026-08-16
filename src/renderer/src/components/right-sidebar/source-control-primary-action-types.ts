@@ -1,5 +1,6 @@
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
+import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { PRState } from '../../../../shared/github/pull-request-types'
 import type {
   SourceControlPrimaryActionKind,
   SourceControlRemoteOpKind
@@ -61,14 +62,4 @@ export type PrimaryActionInputs = {
   // Why: eligibility is fetched asynchronously; keep the header anchor visible
   // while the request is in flight instead of flashing it in after ~1s.
   isHostedReviewCreationLoading?: boolean
-}
-
-export const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
-  stage: 'Stage All',
-  push: 'Push',
-  pull: 'Pull',
-  sync: 'Sync',
-  publish: 'Publish Branch',
-  create_pr_intent: 'Create PR',
-  create_pr: 'Create PR'
 }

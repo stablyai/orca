@@ -86,8 +86,8 @@ describe('startHostWorktreeRefresh', () => {
     // Mount force-fetch.
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(1)
 
-    // Foregrounded: repo.list rides the interval as a convergence safety-net for desktop
-    // Settings edits that never emit a runtime reposChanged (the callee self-throttles).
+    // Foregrounded: repo.list rides the interval as a convergence safety-net for hosts on an
+    // older build, whose Settings edits emit no runtime reposChanged (the callee self-throttles).
     await vi.advanceTimersByTimeAsync(9_000)
     expect(fetchWorktrees).toHaveBeenCalledTimes(4)
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(4)

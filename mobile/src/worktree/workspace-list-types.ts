@@ -52,6 +52,8 @@ export type FilterState = {
   filterRepoIds: Set<string>
   hideSleeping: boolean
   hideDefaultBranch: boolean
+  /** Absent means on: #8873's exemption must fail open on older host payloads. */
+  alwaysShowDefaultBranch?: boolean
 }
 
 export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }

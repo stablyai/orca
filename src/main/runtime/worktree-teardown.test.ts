@@ -424,6 +424,56 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.runtimeStopped).toBe(3)
   })
 
+  it('forwards resolvedWorktreeId so an orphan sweep skips selector resolution', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 2 })
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree('w1', {
+      runtime,
+      localProvider,
+      resolvedWorktreeId: 'w1'
+    })
+
+    // Without this the sweep resolves a selector whose repo is gone and throws selector_not_found.
+    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
+      deadline: expect.any(Number),
+      stopPty: expect.any(Function),
+      resolvedWorktreeId: 'w1'
+    })
+    expect(result.runtimeStopped).toBe(2)
+  })
+
+  it('can restrict an orphan runtime sweep to its SSH connection', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 1 })
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await killAllProcessesForWorktree('w1', {
+      runtime,
+      localProvider,
+      resolvedWorktreeId: 'w1',
+      resolvedConnectionId: 'ssh-1',
+      includeProviderInventory: false,
+      includeLocalRegistry: false
+    })
+
+    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
+      deadline: expect.any(Number),
+      stopPty: expect.any(Function),
+      resolvedWorktreeId: 'w1',
+      resolvedConnectionId: 'ssh-1'
+    })
+    expect(localProvider.listProcesses).not.toHaveBeenCalled()
+  })
+
   it('claims duplicate provider and registry PTY ids only once', async () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }

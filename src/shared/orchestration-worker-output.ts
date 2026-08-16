@@ -44,6 +44,8 @@ export type OrchestrationWorkerReadTranscriptResult = {
   }
   fallbackReason: null
   warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
 }
 
 export type OrchestrationWorkerReadTerminalResult = {
@@ -58,6 +60,8 @@ export type OrchestrationWorkerReadTerminalResult = {
   }
   fallbackReason: OrchestrationWorkerReadFallbackReason | null
   warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
 }
 
 export type OrchestrationWorkerReadResult =

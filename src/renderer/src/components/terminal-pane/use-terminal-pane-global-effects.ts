@@ -142,6 +142,7 @@ export function useTerminalPaneGlobalEffects({
     if (!manager) {
       return
     }
+    manager.setAtlasRecoveryVisible?.(rendererVisible)
     const wasVisible = wasVisibleRef.current
     const wasWorktreeActive = wasWorktreeActiveRef.current
     isActiveRef.current = isActive
@@ -167,18 +168,18 @@ export function useTerminalPaneGlobalEffects({
       hiddenReasonRef.current = null
       applyPendingFollowOutputRequests()
       return
-    } else {
-      const hiddenState = hideTerminalVisibility({
-        manager,
-        wasVisible,
-        wasWorktreeActive,
-        isWorktreeActive,
-        hasCompletedVisibleResume: hasCompletedVisibleResumeRef.current,
-        captureViewportPositions
-      })
-      renderingSuspendedByVisibilityRef.current = hiddenState.renderingSuspended
-      hiddenReasonRef.current = hiddenState.hiddenReason
     }
+    const hiddenState = hideTerminalVisibility({
+      manager,
+      wasVisible,
+      wasWorktreeActive,
+      isWorktreeActive,
+      hasCompletedVisibleResume: hasCompletedVisibleResumeRef.current,
+      captureViewportPositions
+    })
+    renderingSuspendedByVisibilityRef.current = hiddenState.renderingSuspended
+    hiddenReasonRef.current = hiddenState.hiddenReason
+
     wasVisibleRef.current = false
     wasWorktreeActiveRef.current = isWorktreeActive
     // eslint-disable-next-line react-hooks/exhaustive-deps

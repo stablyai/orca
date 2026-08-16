@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
@@ -58,7 +58,8 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
-  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({
@@ -104,6 +105,9 @@ export const WorktreeCreate = z
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
     name: OptionalString,
+    /** Set by clients that fell back to a generated creature name. Absent means user-typed, so the
+     *  host neither skips a retired candidate nor retires the name it lands on. */
+    nameWasGenerated: z.boolean().optional(),
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
@@ -275,11 +279,17 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  hostId: OptionalString,
   force: OptionalBoolean,
+  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
+  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
+  // waiver travels on its own field.
+  allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  hostId: OptionalString,
   branchName: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

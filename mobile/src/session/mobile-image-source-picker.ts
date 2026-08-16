@@ -83,11 +83,12 @@ async function readUriAsBase64(
   }
 }
 
-async function pickFromLibrary(
+async function* pickFromLibrary(
+  multiple: boolean,
   requestPermission: typeof ImagePicker.requestMediaLibraryPermissionsAsync = ImagePicker.requestMediaLibraryPermissionsAsync,
   launch: typeof ImagePicker.launchImageLibraryAsync = ImagePicker.launchImageLibraryAsync,
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
-): Promise<PickedMobileImage | null> {
+): AsyncGenerator<PickedMobileImage> {
   const permission = await requestPermission()
   // Why: `granted` covers full + limited iOS access; only a hard denial blocks us.
   if (!permission.granted) {
@@ -96,51 +97,84 @@ async function pickFromLibrary(
   const result = await launch({
     mediaTypes: ['images'],
     base64: false,
-    allowsMultipleSelection: false,
+    allowsMultipleSelection: multiple,
+    ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
     quality: 1
   })
   if (result.canceled) {
-    return null
+    return
   }
-  const asset = result.assets[0]
-  const base64 = asset?.uri ? await readUriAsBase64(asset.uri, asset.fileSize, createFile) : null
-  if (!base64) {
-    return null
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
+    if (base64) {
+      yield { base64, uri: asset.uri }
+    }
   }
-  return { base64, ...(asset?.uri ? { uri: asset.uri } : {}) }
 }
 
-async function pickFromFiles(
+async function* pickFromFiles(
+  multiple: boolean,
   launch: typeof DocumentPicker.getDocumentAsync = DocumentPicker.getDocumentAsync,
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
-): Promise<PickedMobileImage | null> {
+): AsyncGenerator<PickedMobileImage> {
   const result = await launch({
     type: 'image/*',
-    multiple: false,
+    multiple,
     copyToCacheDirectory: true
   })
   if (result.canceled) {
-    return null
+    return
   }
-  const asset = result.assets[0]
-  if (!asset?.uri) {
-    return null
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
+    if (base64) {
+      yield { base64, uri: asset.uri }
+    }
   }
-  const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
-  return base64 ? { base64, uri: asset.uri } : null
+}
+
+type MobileImagePickerDeps = {
+  readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
+  readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
+  readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
+  readonly createFile?: MobileImageFileFactory
+}
+
+function pickMobileImagesWithMode(
+  source: MobileImageSource,
+  multiple: boolean,
+  deps?: MobileImagePickerDeps
+): AsyncIterable<PickedMobileImage> {
+  if (source === 'library') {
+    return pickFromLibrary(
+      multiple,
+      deps?.requestLibraryPermission,
+      deps?.launchLibrary,
+      deps?.createFile
+    )
+  }
+  return pickFromFiles(multiple, deps?.launchFiles, deps?.createFile)
 }
 
 export async function pickMobileImage(
   source: MobileImageSource,
-  deps?: {
-    readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
-    readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
-    readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
-    readonly createFile?: MobileImageFileFactory
-  }
+  deps?: MobileImagePickerDeps
 ): Promise<PickedMobileImage | null> {
-  if (source === 'library') {
-    return pickFromLibrary(deps?.requestLibraryPermission, deps?.launchLibrary, deps?.createFile)
+  for await (const image of pickMobileImagesWithMode(source, false, deps)) {
+    return image
   }
-  return pickFromFiles(deps?.launchFiles, deps?.createFile)
+  return null
+}
+
+export function pickMobileImages(
+  source: MobileImageSource,
+  deps?: MobileImagePickerDeps
+): AsyncIterable<PickedMobileImage> {
+  return pickMobileImagesWithMode(source, true, deps)
 }

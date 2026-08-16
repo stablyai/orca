@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { resumePaneRendering } from './pane-rendering-control'
+import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
 import { attachWebgl, resetTerminalWebglSuggestion } from './pane-webgl-renderer'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
@@ -14,6 +15,7 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
       cols: 80,
       rows: 24,
       refresh: vi.fn(),
+      blur: vi.fn(),
       loadAddon: vi.fn(options.loadAddon)
     } as never,
     container: {} as never,
@@ -110,6 +112,47 @@ describe('terminal WebGL context recovery', () => {
     resumePaneRendering([pane])
     expect(pane.webglDisabledAfterContextLoss).toBe(false)
     expect(pane.webglAddon).not.toBeNull()
+  })
+
+  it('defers retained replay rebuilds until rendering resumes', () => {
+    const owner = {}
+    const pane = createPane()
+    attachWebgl(pane)
+    const retainedAddon = pane.webglAddon
+    suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
+
+    rebuildAttachedWebgl(pane)
+
+    expect(pane.webglAddon).toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(true)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+
+    resumePaneRendering([pane], owner)
+
+    expect(pane.webglAddon).not.toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(false)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(2)
+  })
+
+  it('replaces a retained context lost before xterm dispatches its loss event', () => {
+    const pane = createPane()
+    const dispose = vi.fn()
+    const lostAddon = {
+      dispose,
+      _renderer: {
+        _gl: {
+          getExtension: vi.fn(() => null),
+          isContextLost: vi.fn(() => true)
+        }
+      }
+    }
+    pane.webglAddon = lostAddon as never
+
+    resumePaneRendering([pane])
+
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).not.toBe(lostAddon)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('re-latches when the retried context is lost again', () => {

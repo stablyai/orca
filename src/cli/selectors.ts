@@ -211,7 +211,7 @@ export async function getComputerCommandTarget(
   }
 }
 
-// Mirror getBrowserCommandTarget / getBrowserWorktreeSelector for emulator (workspace scoped by default + explicit --device/--emulator/--worktree; active from bridge for unqualified).
+// Match browser targeting: workspace by default, explicit device/emulator/worktree overrides.
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string
@@ -236,6 +236,14 @@ export async function getEmulatorWorktreeSelector(
   }
   if (client.isRemote) {
     return undefined
+  }
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    return terminalWorktreeId
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  if (folderWorkspaceId?.startsWith('folder:')) {
+    return folderWorkspaceId
   }
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)

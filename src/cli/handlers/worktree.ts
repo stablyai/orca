@@ -280,6 +280,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       force: flags.get('force') === true,
+      // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
+      allowUnverifiedPtyStop: flags.get('force') === true,
       runHooks: flags.get('run-hooks') === true
     })
     printHookWarning(result.result, json)

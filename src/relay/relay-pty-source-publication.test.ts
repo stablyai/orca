@@ -223,14 +223,24 @@ describe('RelayPtySourcePublication', () => {
   it('keeps mixed legacy and V1 clients on distinct frame authority', async () => {
     const harness = await createHarness(8)
     const legacyWrites: Buffer[] = []
-    dispatcher!.attachClient(
+    const legacyClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         legacyWrites.push(Buffer.from(data))
         onSettled({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher!.feedClient(
+      legacyClientId,
+      requestFrame(2, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'legacy-client',
+        requestedRole: 'subscriber'
+      })
+    )
+    await flushRequests()
 
     harness.publication.publish('pty-1', { data: 'data' }, false)
 
@@ -289,10 +299,15 @@ describe('RelayPtySourcePublication', () => {
     const saturatedWrites: Buffer[] = []
     const healthyWrites: Buffer[] = []
     const heldSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    let saturateSubscriber = false
     dispatcher!.onClientDetached((clientId) => detached.push(clientId))
     const saturatedId = dispatcher!.attachClient(
       (data, onSettled) => {
         saturatedWrites.push(Buffer.from(data))
+        if (!saturateSubscriber) {
+          onSettled({ ok: true })
+          return true
+        }
         heldSettlements.push(onSettled)
         return false
       },
@@ -300,7 +315,8 @@ describe('RelayPtySourcePublication', () => {
         supportsWriteCallback: true,
         writableLength: () => 128 * 1024,
         writableHighWaterMark: () => 4 * 1024 * 1024
-      }
+      },
+      endpointIdentity
     )
     const healthyId = dispatcher!.attachClient(
       (data, onSettled) => {
@@ -308,8 +324,27 @@ describe('RelayPtySourcePublication', () => {
         onSettled({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher!.feedClient(
+      saturatedId,
+      requestFrame(2, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'saturated-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    dispatcher!.feedClient(
+      healthyId,
+      requestFrame(3, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'healthy-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    await flushRequests()
+    saturateSubscriber = true
     const saturatedPayload = 's'.repeat(128 * 1024)
     let admitted = 0
     while (
@@ -328,7 +363,9 @@ describe('RelayPtySourcePublication', () => {
 
     expect(detached).toEqual([saturatedId])
     expect(detached).not.toContain(healthyId)
-    expect(saturatedWrites).toHaveLength(1)
+    expect(
+      saturatedWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+    ).toHaveLength(1)
     expect(heldSettlements).toHaveLength(1)
     expect(
       healthyWrites.map(notification).filter((frame) => frame?.method === 'pty.data')

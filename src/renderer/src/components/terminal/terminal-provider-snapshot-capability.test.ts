@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
   collectTerminalProviderSnapshotPtyIds,
+  refreshTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities,
   terminalProviderHasAuthoritativeSnapshot
 } from './terminal-provider-snapshot-capability'
@@ -42,6 +43,18 @@ describe('terminal provider snapshot capabilities', () => {
     expect(resolve).toHaveBeenCalledWith(['current', 'legacy'])
     expect(terminalProviderHasAuthoritativeSnapshot('current')).toBe(true)
     expect(terminalProviderHasAuthoritativeSnapshot('legacy')).toBe(false)
+  })
+
+  it('refreshes a pre-provider false after startup services become ready', async () => {
+    await synchronizeTerminalProviderSnapshotCapabilities(['restored-pty'], async () => [
+      { id: 'restored-pty', authoritative: false }
+    ])
+    const readyResolve = vi.fn(async () => [{ id: 'restored-pty', authoritative: true }])
+
+    await refreshTerminalProviderSnapshotCapabilities(['restored-pty'], readyResolve)
+
+    expect(readyResolve).toHaveBeenCalledWith(['restored-pty'])
+    expect(terminalProviderHasAuthoritativeSnapshot('restored-pty')).toBe(true)
   })
 
   it('caches resolved PTYs and prunes closed ones', async () => {

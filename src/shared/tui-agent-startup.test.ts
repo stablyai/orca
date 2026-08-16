@@ -593,6 +593,40 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
   })
 
+  it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'grok',
+      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
+      cmdOverrides: {},
+      agentArgs: '--permission-mode bypassPermissions',
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    // Why: cmd.exe treats single quotes as literal characters. Resume must use
+    // double quotes (or unquoted tokens) so the CLI receives clean argv.
+    expect(plan?.launchCommand).toBe(
+      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
+    )
+  })
+
+  it('keeps cmd-quoted agentCommand aligned with cmd resume suffix', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'grok',
+      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
+      cmdOverrides: {},
+      agentCommand: 'grok "--permission-mode" "bypassPermissions"',
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    // Regression: agentCommand from a prior cmd launch + PowerShell-default resume
+    // suffix produced mixed quoting and broke reboot restore on cmd.exe tabs.
+    expect(plan?.launchCommand).toBe(
+      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
+    )
+  })
+
   it('honors command overrides when building POSIX resume plans', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
@@ -737,6 +771,23 @@ describe('tui agent startup plans', () => {
     expect(
       buildAgentDraftLaunchPlan({
         agent: 'mimo-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps grok on the composer-glyph paste draft route', () => {
+    // Why: grok has no --prefill-style flag, so every launch draft goes through
+    // paste-after-ready — and its shimmering startup logo never settles the
+    // quiet window, which is what made the paste take the full hard timeout.
+    expect(TUI_AGENT_CONFIG.grok.draftPasteReadySignal).toBe('grok-composer-prompt')
+    expect(TUI_AGENT_CONFIG.grok.draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG.grok.draftPromptEnvVar).toBeUndefined()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'grok',
         draft: 'x',
         cmdOverrides: {},
         platform: 'darwin'

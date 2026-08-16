@@ -91,7 +91,17 @@ export function LinearIntegrationCard(): React.JSX.Element {
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.statusConnected',
+              'Connected'
+            )
+          : translate(
+              'auto.components.settings.task.tracker.integration.cards.statusNotConnected',
+              'Not connected'
+            )
+      }
       actions={
         !checking ? (
           <Button

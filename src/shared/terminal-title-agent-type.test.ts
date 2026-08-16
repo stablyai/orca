@@ -3,6 +3,7 @@ import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   isClaudeAgent,
+  isClaudeIdentityFrameTitle,
   isGrokRotatingWorkingTitle,
   resolveExplicitTerminalTitleAgentType,
   resolveTerminalTitleAgentType
@@ -63,7 +64,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(getSharedAgentLabel('OC | Compare Codex and Claude')).toBe('OpenCode')
     expect(getSharedAgentLabel('OC | ✦ Gemini CLI')).toBe('OpenCode')
     expect(resolveExplicitTerminalTitleAgentType('tmux | OC | ses_123')).toBe('opencode')
-    expect(resolveExplicitTerminalTitleAgentType('OC|compact-session')).toBe('opencode')
+    expect(resolveExplicitTerminalTitleAgentType('OC|compact-session')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('oc | Understand about the plugin')).toBeNull()
   })
 
@@ -88,6 +89,37 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
 
   it('still resolves Claude when the title explicitly names Claude', () => {
     expect(resolveExplicitTerminalTitleAgentType('. Claude Code compare Opencode')).toBe('claude')
+  })
+
+  // Why (#8940): only a title that PRESENTS Claude may take a pane from its known owner —
+  // a "claude" token inside another agent's task text is a mention, not identity.
+  it('separates Claude identity frames from an incidental claude token', () => {
+    for (const title of [
+      'Claude Code',
+      '✳ Claude Code',
+      '⠋ Claude Code',
+      'claude',
+      '. claude',
+      'Claude Code ready',
+      'Claude - action required',
+      // A multiplexer prefix must not read as task text and cost Claude its identity.
+      'zsh | ⠋ Claude Code',
+      'tmux | dev | Claude Code ready'
+    ]) {
+      expect(isClaudeIdentityFrameTitle(title)).toBe(true)
+    }
+    for (const title of [
+      '⠋ use Claude Sonnet',
+      'OC | ⠋ ask claude about this',
+      '⠋ port the claude prompt',
+      '. ship it with claude',
+      '⠋ claude 스타일로 리팩터',
+      '. Claude Code compare Opencode',
+      '✳ investigating startup',
+      '✳'
+    ]) {
+      expect(isClaudeIdentityFrameTitle(title)).toBe(false)
+    }
   })
 
   it('returns null for plain shell and unknown titles', () => {

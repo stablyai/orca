@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
-import { open, readdir, rename, rm } from 'node:fs/promises'
+import { open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 /**
@@ -103,11 +103,13 @@ export function durableWriteTempPath(finalPath: string): string {
 
 /**
  * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
- * otherwise accumulate forever. Racing another instance's in-flight save at worst loses that save,
- * the trade already accepted for rename-based atomicity. This process's own temps are skipped: a
- * `<file>.<our pid>.*.tmp` seen during a sweep is a live write, and deleting it fails its rename.
+ * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
+ * write. This process's own temps are always skipped because deleting one would fail its rename.
  */
-export async function removeStaleDurableWriteTempFiles(finalPath: string): Promise<void> {
+export async function removeStaleDurableWriteTempFiles(
+  finalPath: string,
+  options: { minimumAgeMs?: number } = {}
+): Promise<void> {
   const directory = dirname(finalPath)
   const prefix = `${basename(finalPath)}.`
   const ownPrefix = `${prefix}${process.pid}.`
@@ -118,7 +120,16 @@ export async function removeStaleDurableWriteTempFiles(finalPath: string): Promi
         .filter(
           (name) => name.startsWith(prefix) && name.endsWith('.tmp') && !name.startsWith(ownPrefix)
         )
-        .map((name) => rm(join(directory, name), { force: true }).catch(() => {}))
+        .map(async (name) => {
+          const path = join(directory, name)
+          if (options.minimumAgeMs) {
+            const info = await stat(path).catch(() => null)
+            if (!info || Date.now() - info.mtimeMs < options.minimumAgeMs) {
+              return
+            }
+          }
+          await rm(path, { force: true }).catch(() => {})
+        })
     )
   } catch {
     // Directory missing or unreadable — nothing to sweep.

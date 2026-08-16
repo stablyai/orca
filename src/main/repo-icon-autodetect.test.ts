@@ -214,6 +214,36 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('keeps the renamed fork own owner avatar while storing the upstream metadata', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+    await gitExecFileAsync(['remote', 'add', 'origin', 'git@github.com:acme/rocket-pro.git'], {
+      cwd: repoPath
+    })
+    await gitExecFileAsync(
+      ['remote', 'add', 'upstream', 'git@github.com:upstream-org/rocket.git'],
+      {
+        cwd: repoPath
+      }
+    )
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/upstream-org/rocket',
+        remoteName: 'upstream',
+        remoteUrl: 'git@github.com:upstream-org/rocket.git'
+      },
+      // Why: a renamed fork is its own project, so the avatar stays on the origin owner.
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/acme.png?size=64',
+        source: 'github',
+        label: 'acme/rocket-pro'
+      },
+      upstream: { owner: 'upstream-org', repo: 'rocket', host: 'github.com' }
+    })
+  })
+
   it('detects a provider-neutral git remote identity for non-GitHub remotes', async () => {
     const repoPath = await makeTempRepoDir()
     await gitExecFileAsync(['init'], { cwd: repoPath })

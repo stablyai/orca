@@ -14,8 +14,13 @@ type ObservedSkillFile = SkillBundleFileIdentity
 export type ObservedSkillPackage = {
   files: ObservedSkillFile[]
   observedDigest: string
-  /** Git tree sha of the raw bytes — comparable against the updater lock's skillFolderHash. */
+  /**
+   * Git tree sha of every observed file's raw bytes — one of the two values comparable
+   * against the updater lock's `skillFolderHash` (see `officialPathsGitTreeSha`).
+   */
   observedGitTreeSha: string
+  /** Retained so a subset of the observed paths can be re-hashed the same way. */
+  treeEntries: SkillGitTreeFileEntry[]
 }
 
 // Why: package identity compares a live user directory against a tree the generator read
@@ -250,21 +255,40 @@ export async function observeSkillPackage(
   return {
     files,
     observedDigest: skillPackageDigest(files),
-    observedGitTreeSha: skillPackageGitTreeSha(treeEntries)
+    observedGitTreeSha: skillPackageGitTreeSha(treeEntries),
+    treeEntries
   }
 }
 
+/**
+ * The newest revision whose every listed file is present and byte-identical.
+ *
+ * `officialPaths` is what the CURRENT bundle says this skill owns, and it is what
+ * separates a tolerable neighbour from drift. Agent CLIs drop their own metadata
+ * beside an official SKILL.md (Codex writes `agents/openai.yaml` and cannot put it
+ * anywhere else), and a file no revision claims is not evidence the user edited
+ * anything — so extras alone must not mark the package unrecognized.
+ *
+ * A file the current bundle DOES list is never an extra, even when the revision
+ * being tested predates it: without that guard an older snapshot would happily match
+ * a folder whose newer official file had been tampered with, laundering real drift
+ * into a clean "outdated" row. Listed-file drift still fails closed either way.
+ */
 export function matchingKnownSnapshot(
   observed: ObservedSkillPackage,
-  snapshots: readonly SkillKnownSnapshot[]
+  snapshots: readonly SkillKnownSnapshot[],
+  officialPaths: ReadonlySet<string>
 ): SkillKnownSnapshot | null {
+  const observedByPath = new Map(observed.files.map((file) => [file.path, file]))
   for (const snapshot of snapshots.toReversed()) {
-    if (snapshot.files.length !== observed.files.length) {
-      continue
-    }
+    const listed = new Set(snapshot.files.map((file) => file.path))
+    const launders = observed.files.some(
+      (file) => !listed.has(file.path) && officialPaths.has(file.path)
+    )
     if (
-      snapshot.files.every((expected, index) => {
-        const actual = observed.files[index]
+      !launders &&
+      snapshot.files.every((expected) => {
+        const actual = observedByPath.get(expected.path)
         return Boolean(actual && matchesFileIdentity(actual, expected))
       })
     ) {
@@ -272,4 +296,33 @@ export function matchingKnownSnapshot(
     }
   }
   return null
+}
+
+/**
+ * The observed folder hashed as if it held only the files the current bundle owns.
+ *
+ * Compared against the updater lock's `skillFolderHash` ALONGSIDE the whole-folder
+ * hash, never instead of it. The two cover different halves and neither subsumes the
+ * other: the lock records the source tree, so a folder carrying a sidecar only ever
+ * matches scoped, while an upstream revision that ADDS a file puts that file in the
+ * lock's own tree and only ever matches whole. Publishing one and dropping the other
+ * would trade this bug for #11220 — a clean install reading "may be modified" and its
+ * update run reporting failure.
+ *
+ * Scoped to the CURRENT entry rather than every revision ever shipped: a leftover from
+ * an older revision is exactly the stale byte the lock comparison should look past, and
+ * unioning historical paths would drag it back in on the accident of its name.
+ *
+ * A folder holding none of them yields the whole-folder hash rather than git's empty-tree
+ * sha, which is a real, matchable value: a lock that ever recorded an empty source tree
+ * would otherwise vouch for every such folder.
+ */
+export function officialPathsGitTreeSha(
+  observed: ObservedSkillPackage,
+  officialPaths: ReadonlySet<string>
+): string {
+  const scoped = observed.treeEntries.filter((entry) => officialPaths.has(entry.path))
+  return scoped.length === 0 || scoped.length === observed.treeEntries.length
+    ? observed.observedGitTreeSha
+    : skillPackageGitTreeSha(scoped)
 }

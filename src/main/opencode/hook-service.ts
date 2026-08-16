@@ -25,7 +25,7 @@ type OpenCodeOverlayManifest = {
   pluginEntries: string[]
 }
 
-// Why: bounds-check only — the id is a daemon sessionId with path separators, hashed downstream to a filesystem-safe name (an old regex rejecting "/"/":" broke every such id, #1148); 1024 just caps pathological hash input.
+// Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
@@ -40,7 +40,7 @@ export function getOpenCodePluginSource(): string {
 }
 
 export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
-  // Why: plugin runs in OpenCode's Node process and POSTs Orca's ORCA_* PTY env to the shared agent-hooks server; events are mapped plugin-side to fit the server's per-case switch.
+  // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
     '// Why: process-lifetime guard so a recurring parse error on a malformed',
     "// endpoint file does not spam OpenCode's stderr once per hook post.",

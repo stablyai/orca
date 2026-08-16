@@ -1,7 +1,7 @@
 // Telemetry IPC boundary tests: the renderer is in the threat model, so handlers drop malformed calls, cap consent mutations, and derive `via` main-side.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 
 const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
@@ -160,6 +160,7 @@ describe('telemetry IPC handlers', () => {
       count_bucket: 'count_1',
       bucket_source: 'crossed_now'
     })
+    handler({}, 'daemon_audit_eligibility', {})
     expect(trackMock).not.toHaveBeenCalled()
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })

@@ -145,7 +145,7 @@ describe('persistence single-serialize save guard', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(KAGI_LINK)
   })
 
-  it('handles empty secrets and unavailable encryption (payload stays plaintext, guard still skips)', async () => {
+  it('omits new secrets when encryption is unavailable and still skips an identical state', async () => {
     cipherState.encryptionAvailable = false
     const store = await createStore()
     store.updateSettings({ ...SECRETS, opencodeSessionCookie: '' })
@@ -156,7 +156,7 @@ describe('persistence single-serialize save guard', () => {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
     }
     expect(persisted.settings.opencodeSessionCookie).toBe('')
-    expect(persisted.settings.httpProxyUrl).toBe(SECRETS.httpProxyUrl)
+    expect(persisted.settings.httpProxyUrl).toBe('')
 
     const inoBefore = statSync(dataFile()).ino
     store.updateSettings({ httpProxyUrl: SECRETS.httpProxyUrl })

@@ -53,10 +53,86 @@ describe('Git Bash path discovery', () => {
     ).toBe('C:\\Users\\alice\\AppData\\Local\\Programs\\Git\\bin\\bash.exe')
   })
 
+  // Why: resolveWindowsGitBashShellPath has no platform guard of its own, so passing options
+  // explicitly keeps these assertions meaningful on non-Windows CI hosts.
   it('honors an explicit bash.exe path for future user-configurable launch paths', () => {
-    expect(resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe')).toBe(
-      'D:\\PortableGit\\bin\\bash.exe'
-    )
+    expect(
+      resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe', {
+        platform: 'win32',
+        env: {},
+        exists: (path) => path === 'D:\\PortableGit\\bin\\bash.exe'
+      })
+    ).toBe('D:\\PortableGit\\bin\\bash.exe')
+  })
+
+  it('rejects an explicit Git Bash path that is no longer installed', () => {
+    expect(
+      resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe', {
+        platform: 'win32',
+        env: {},
+        exists: () => false
+      })
+    ).toBeNull()
+  })
+
+  it('resolves a bare bash entry through Git Bash discovery', () => {
+    expect(
+      resolveWindowsGitBashShellPath('bash', {
+        platform: 'win32',
+        env: { ProgramFiles: 'C:\\Program Files' },
+        exists: (path) => path === 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })
+    ).toBe('C:\\Program Files\\Git\\bin\\bash.exe')
+  })
+
+  it('returns null for a bare bash entry when Git Bash is not installed', () => {
+    expect(
+      resolveWindowsGitBashShellPath('bash', {
+        platform: 'win32',
+        env: { ProgramFiles: 'C:\\Program Files' },
+        exists: () => false
+      })
+    ).toBeNull()
+  })
+
+  it('resolves an extension-less Git Bash path to the bash.exe it names', () => {
+    expect(
+      resolveWindowsGitBashShellPath('C:\\Program Files\\Git\\bin\\bash', {
+        platform: 'win32',
+        env: {},
+        exists: (path) => path === 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })
+    ).toBe('C:\\Program Files\\Git\\bin\\bash.exe')
+  })
+
+  it('returns null for an extension-less Git Bash path with no bash.exe beside it', () => {
+    expect(
+      resolveWindowsGitBashShellPath('C:\\Program Files\\Git\\bin\\bash', {
+        platform: 'win32',
+        env: {},
+        exists: () => false
+      })
+    ).toBeNull()
+  })
+
+  it('does not treat an extension-less non-Git bash path as Git Bash', () => {
+    expect(
+      resolveWindowsGitBashShellPath('C:\\cygwin64\\bin\\bash', {
+        platform: 'win32',
+        env: {},
+        exists: () => true
+      })
+    ).toBeNull()
+  })
+
+  it('does not probe a bash-prefixed path that is not bash itself', () => {
+    expect(
+      resolveWindowsGitBashShellPath('C:\\Program Files\\Git\\bin\\bash.old', {
+        platform: 'win32',
+        env: {},
+        exists: () => true
+      })
+    ).toBeNull()
   })
 
   it('recognizes Git Bash executable paths case-insensitively', () => {
@@ -64,7 +140,13 @@ describe('Git Bash path discovery', () => {
   })
 
   it('does not classify arbitrary bash.exe paths as Git Bash', () => {
-    expect(resolveWindowsGitBashShellPath('C:\\msys64\\usr\\bin\\bash.exe')).toBeNull()
+    expect(
+      resolveWindowsGitBashShellPath('C:\\msys64\\usr\\bin\\bash.exe', {
+        platform: 'win32',
+        env: {},
+        exists: () => true
+      })
+    ).toBeNull()
     expect(isWindowsGitBashShellPath('C:\\cygwin64\\bin\\bash.exe')).toBe(false)
   })
 

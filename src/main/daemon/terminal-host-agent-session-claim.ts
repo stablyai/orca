@@ -4,7 +4,6 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   agentSessionGeneration?: string
-  attachOnly?: boolean
 }
 
 export async function createOrAttachClaimedAgentSession(args: {

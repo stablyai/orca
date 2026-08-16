@@ -83,7 +83,7 @@ describe('WebSocketTransport accepted socket ordering', () => {
     ).toEqual([0, 0, 0, 0])
   })
 
-  it('reaps an unresponsive accepted socket by the first interval deadline', async () => {
+  it('reaps an unresponsive accepted socket once consecutive probes go unanswered', async () => {
     vi.useFakeTimers()
     const events: string[] = []
     let socket: WebSocket
@@ -99,19 +99,22 @@ describe('WebSocketTransport accepted socket ordering', () => {
     socket.once('open', () => events.push('open'))
     socket.emit('open')
     lifecycle.handleConnection(socket)
-    await vi.advanceTimersByTimeAsync(99)
+    // A single silent interval is not evidence: the socket is re-probed, not reaped.
+    await vi.advanceTimersByTimeAsync(100)
+    expect(socket.terminate).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(199)
     expect(socket.terminate).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
 
     expect(socket.terminate).toHaveBeenCalledTimes(1)
-    expect(events).toEqual(['open', 'ping', 'close'])
+    expect(events).toEqual(['open', 'ping', 'ping', 'ping', 'close'])
     expect(lifecycle.heartbeatConnections.size).toBe(0)
     expect(lifecycle.heartbeat.timer).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps later sockets on the shared cadence and reaps them within two intervals', async () => {
+  it('keeps later sockets on the shared cadence and reaps them on the shared budget', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
     const firstPingTimes: number[] = []
@@ -150,13 +153,15 @@ describe('WebSocketTransport accepted socket ordering', () => {
     expect(laterPingTimes).toEqual([100])
     expect(laterSocket.terminate).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(99)
+    // Re-probed on every sweep while its misses bank, so a recovered path can answer immediately.
+    await vi.advanceTimersByTimeAsync(299)
+    expect(laterPingTimes).toEqual([100, 200, 300])
     expect(laterSocket.terminate).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
     expect(laterSocket.terminate).toHaveBeenCalledTimes(1)
-    expect(laterReapTimes).toEqual([200])
-    expect(firstPingTimes).toEqual([0, 100, 200])
+    expect(laterReapTimes).toEqual([400])
+    expect(firstPingTimes).toEqual([0, 100, 200, 300, 400])
     expect(
       ['pong', 'message', 'close', 'error'].map((event) => laterSocket.listenerCount(event))
     ).toEqual([0, 0, 0, 0])

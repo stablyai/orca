@@ -77,6 +77,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
     projectGroups: [],
+    sshTargetLabels: new Map(),
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: false,
@@ -139,15 +140,37 @@ describe('useDashboardPopoutBridge', () => {
 
     expect(mocks.onPopoutOpenChanged).toHaveBeenCalledTimes(1)
     expect(mocks.subscribeStore).not.toHaveBeenCalled()
+    expect(mocks.buildDashboardSnapshot).not.toHaveBeenCalled()
 
     await act(async () => mocks.onPopoutOpenChanged.mock.calls[0][0](true))
 
     expect(mocks.subscribeStore).toHaveBeenCalledTimes(1)
+    expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
     const unsubscribe = mocks.subscribeStore.mock.results[0]?.value as () => void
+    const notifyStore = mocks.subscribeStore.mock.calls[0][0]
 
     await act(async () => mocks.onPopoutOpenChanged.mock.calls[0][0](false))
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+    const previousState = makeSnapshotWatchState()
+    await act(async () => notifyStore({ ...previousState, agentStatusEpoch: 1 }, previousState))
+    expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('reveals the agent on its exact execution host', async () => {
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'shared-worktree',
+        executionHostId: 'runtime:env-1',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith('shared-worktree', 'runtime:env-1')
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {
@@ -158,7 +181,6 @@ describe('useDashboardPopoutBridge', () => {
       'repos',
       'worktreesByRepo',
       'tabsByWorktree',
-      'agentStatusByPaneKey',
       'retainedAgentsByPaneKey',
       'migrationUnsupportedByPtyId',
       'runtimeAgentOrchestrationByPaneKey',
@@ -178,7 +200,19 @@ describe('useDashboardPopoutBridge', () => {
       ).toBe(true)
     }
     expect(
+      dashboardSnapshotInputsChanged(
+        { ...previousState, agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey } },
+        previousState
+      )
+    ).toBe(false)
+    expect(
       dashboardSnapshotInputsChanged({ ...previousState, agentStatusEpoch: 1 }, previousState)
+    ).toBe(false)
+    expect(
+      dashboardSnapshotInputsChanged(
+        { ...previousState, sshTargetLabels: new Map([['target-1', 'Builder']]) },
+        previousState
+      )
     ).toBe(true)
 
     // Why: each card's preview terminal keys against a host-input profile
@@ -291,7 +325,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     const previousState = makeSnapshotWatchState()
     act(() =>
       mocks.subscribeStore.mock.calls[0][0](
-        { ...previousState, agentStatusEpoch: 1 },
+        { ...previousState, acknowledgedAgentsByPaneKey: { pane: 1 } },
         previousState
       )
     )
@@ -299,6 +333,19 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   const notifyUnrelatedStoreWrite = (): void => {
     const previousState = makeSnapshotWatchState()
     act(() => mocks.subscribeStore.mock.calls[0][0]({ ...previousState }, previousState))
+  }
+  const notifyStatusChurn = (): void => {
+    const previousState = makeSnapshotWatchState()
+    act(() =>
+      mocks.subscribeStore.mock.calls[0][0](
+        {
+          ...previousState,
+          agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey },
+          agentStatusEpoch: previousState.agentStatusEpoch + 1
+        },
+        previousState
+      )
+    )
   }
   const mountAndOpen = async (): Promise<void> => {
     await act(async () => root.render(<Harness enabled />))
@@ -328,6 +375,19 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     notifyUnrelatedStoreWrite()
 
     expect(mocks.publishSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('does no snapshot work during live status churn', async () => {
+    await mountAndOpen()
+    mocks.buildDashboardSnapshot.mockClear()
+    mocks.publishSnapshot.mockClear()
+
+    for (let index = 0; index < 100; index += 1) {
+      notifyStatusChurn()
+    }
+
+    expect(mocks.buildDashboardSnapshot).not.toHaveBeenCalled()
+    expect(mocks.publishSnapshot).not.toHaveBeenCalled()
   })
 
   // A burst collapses onto the trailing timer, so that edge carries most of the

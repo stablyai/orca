@@ -155,8 +155,7 @@ export async function launchPairedElectronClient(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const app = await electron.launch({

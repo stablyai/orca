@@ -154,6 +154,25 @@ describe('createWorktreeWithNameRetry', () => {
     expect(attempts[1]!.params.name).toBe('topic-2')
   })
 
+  it('advances generated retries without nesting suffixes', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ errorMessage: 'already exists locally' }, { id: 'wt-generated' }],
+      attempts
+    )
+
+    const result = await createWorktreeWithNameRetry({
+      client,
+      baseName: 'nautilus-2',
+      nameWasGenerated: true,
+      buildParams: (name) => ({ repo: 'id:r', name, nameWasGenerated: true }),
+      supportsIdempotentCutoverRetry: false
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-generated', name: 'nautilus-3' })
+    expect(attempts.map((attempt) => attempt.params.name)).toEqual(['nautilus-2', 'nautilus-3'])
+  })
+
   it('does not replay an ambiguous cutover when the host lacks idempotency support', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ throws: new LogicalClientCutoverError() }], attempts)

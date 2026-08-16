@@ -1,6 +1,7 @@
 import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import type { FolderWorkspace, ProjectGroup } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
@@ -16,7 +17,7 @@ type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
   folderWorkspaces?: readonly Pick<
     FolderWorkspace,
-    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
   >[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
@@ -41,7 +42,10 @@ export function findFolderWorkspaceOwner(
   state: FolderWorkspaceRuntimeOwnerState,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'> | null {
+): Pick<
+  FolderWorkspace,
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
+> | null {
   return findIndexedFolderWorkspaceOwner(
     state.folderWorkspaces,
     folderWorkspaceId,

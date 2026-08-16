@@ -8,6 +8,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { requireWorkerDoneSettlement } from './orchestration-worker-settlement'
 import { getTerminalHandle } from '../selectors'
 import {
   clampOrchestrationAskTimeoutMs,
@@ -20,7 +21,8 @@ import type {
   OrchestrationWorkerReadSource
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
-import type { RuntimeTerminalRead } from '../../shared/runtime-types'
+import type { RuntimeStatus, RuntimeTerminalRead } from '../../shared/runtime-types'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
@@ -30,6 +32,7 @@ import {
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
+import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -79,14 +82,26 @@ const TASK_STATUS_VALUES = [
   'blocked'
 ] as const
 
-type LifecycleSendRejection = {
-  action: 'rejected'
-  code: string
-  reason: string
-}
+// Why: mirrors WorkerTerminalListState (orchestration/types.ts) so a bad --terminal-state fails before the RPC.
+const WORKER_TERMINAL_LIST_STATES = [
+  'active',
+  'reclaimable',
+  'retained',
+  'release_pending',
+  'release_unknown',
+  'released'
+] as const
+
+type LifecycleSendResult =
+  | {
+      action: 'completed' | 'failed'
+      authority?: 'run_home' | 'worker_server_legacy'
+    }
+  | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
+  | { action: 'rejected'; code: string; reason: string }
 
 type OrchestrationSendResult =
-  | { message: { id: string }; lifecycle?: LifecycleSendRejection }
+  | { message: { id: string; run_id?: string }; lifecycle?: LifecycleSendResult }
   | { messages: { id: string }[]; recipients: number }
   | {
       relay: {
@@ -96,7 +111,7 @@ type OrchestrationSendResult =
         destination?: 'run_home' | 'worker'
         accepted: true
       }
-      lifecycle?: { action: 'completed' | 'failed' }
+      lifecycle?: LifecycleSendResult
     }
 
 function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
@@ -383,14 +398,13 @@ function callMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
   const requestId = getOptionalStringFlag(flags, 'retry-request')
-  if (!requestId) {
-    return options
+  const result = requestId
+    ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
+    : options
       ? client.call<TResult>(method, params, options)
       : client.call<TResult>(method, params)
-  }
-  return client.call<TResult>(method, params, {
-    ...options,
-    orchestrationRequestId: requestId
+  return result.catch((error) => {
+    throw orchestrationMutationRecoveryError(error)
   })
 }
 
@@ -420,6 +434,33 @@ function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
     return block.url ? `[image] ${block.url}` : `[image omitted]`
   })
   return `[${message.role}] ${blocks.join('\n')}`.trimEnd()
+}
+
+type WorkerReleaseReceipt = {
+  dispatchId: string
+  state: string
+  reason?: string
+  processAction: string
+  archive: { source: string | null; status: string | null } | null
+  recovery?: string
+  lastError?: string
+}
+
+function formatWorkerRelease(value: WorkerReleaseReceipt): string {
+  const head = `Worker ${value.dispatchId} terminal [${value.state}]`
+  const lines = [
+    `${head}${value.reason ? ` reason=${value.reason}` : ''} process=${value.processAction}`
+  ]
+  if (value.archive) {
+    lines.push(`archive ${value.archive.source ?? 'none'} [${value.archive.status ?? 'unknown'}]`)
+  }
+  if (value.lastError) {
+    lines.push(value.lastError)
+  }
+  if (value.recovery) {
+    lines.push(value.recovery)
+  }
+  return lines.join('\n')
 }
 
 function safeJson(value: unknown): string {
@@ -527,7 +568,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
+    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -541,6 +582,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
@@ -551,15 +593,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
     )
-    if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
-      // Why: a rejected lifecycle signal isn't completion; non-zero exit stops workers from treating it as such.
-      process.exitCode = 1
+    await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
+    if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
+      throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
     printResult(result, json, (r) => {
       if ('message' in r) {
-        if (r.lifecycle?.action === 'rejected') {
-          return `Rejected ${r.message.id}: ${r.lifecycle.reason}`
-        }
         return `Sent ${r.message.id}`
       }
       if ('relay' in r) {
@@ -815,6 +854,21 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
+    const model = getOptionalStringFlag(flags, 'model')
+    const effort = getOptionalStringFlag(flags, 'effort')
+    if (model || effort) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (
+        !status.result.capabilities?.includes(
+          ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+        )
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+        )
+      }
+    }
     const result = await callMutation<{
       runId: string
       taskId: string
@@ -836,6 +890,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
       agent: getOptionalStringFlag(flags, 'agent'),
+      model,
+      effort,
       terminal: getOptionalStringFlag(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
@@ -901,6 +957,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       processAction: string
       lastError?: string
+      warning?: string
     }>(client, flags, 'orchestration.workerStop', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
@@ -911,7 +968,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
     )
   },
 
@@ -928,6 +985,79 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       json,
       (value) => `Worker ${value.dispatchId} [${value.state}]\nWarning: ${value.warning}`
     )
+  },
+
+  'orchestration worker-release': async ({ flags, client, json }) => {
+    const result = await callMutation<WorkerReleaseReceipt>(
+      client,
+      flags,
+      'orchestration.workerRelease',
+      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+    )
+    // Why: only an unprovable close is a failure; retained/pending/already-released are settled answers.
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
+  },
+
+  'orchestration worker-retain': async ({ flags, client, json }) => {
+    const result = await callMutation<WorkerReleaseReceipt>(
+      client,
+      flags,
+      'orchestration.workerRetain',
+      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+    )
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
+  },
+
+  'orchestration worker-list': async ({ flags, client, json }) => {
+    const terminalState = getOptionalStringFlag(flags, 'terminal-state')
+    if (
+      terminalState &&
+      !WORKER_TERMINAL_LIST_STATES.includes(
+        terminalState as (typeof WORKER_TERMINAL_LIST_STATES)[number]
+      )
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `invalid --terminal-state '${terminalState}', expected one of: ${WORKER_TERMINAL_LIST_STATES.join(', ')}`
+      )
+    }
+    const result = await client.call<{
+      workers: {
+        dispatchId: string
+        taskId: string
+        runId: string
+        workerState: string
+        dispatchStatus: string
+        agentTerminalHandle: string | null
+        terminalState: string | null
+        resource: unknown
+      }[]
+      counts: Record<string, number>
+    }>('orchestration.workerList', {
+      run: getOptionalStringFlag(flags, 'run'),
+      terminalState
+    })
+    printResult(result, json, (r) => {
+      if (r.workers.length === 0) {
+        return 'No workers found.'
+      }
+      const rows = r.workers
+        .map(
+          (w) =>
+            `${w.dispatchId} task=${w.taskId} [${w.workerState}] terminal=${w.terminalState ?? 'none'}`
+        )
+        .join('\n')
+      const counts = Object.entries(r.counts)
+        .map(([state, count]) => `${state}=${count}`)
+        .join(' ')
+      return counts ? `${rows}\nTerminals: ${counts}` : rows
+    })
   },
 
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
@@ -1123,7 +1253,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
-    // Why: same read posture as task-list — an explicitly named Run stays inspectable without a bound pane, so identity is only resolved for the implicit "my own Run" case.
+    // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
     const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]

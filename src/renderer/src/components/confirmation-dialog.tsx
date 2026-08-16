@@ -1,6 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -9,26 +11,19 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import {
+  ConfirmationDialogContext,
+  type ConfirmationDialogContextValue,
+  type ConfirmationDialogOptions
+} from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-
-type ConfirmationDialogOptions = {
-  title: string
-  description?: string
-  confirmLabel?: string
-  cancelLabel?: string
-  confirmVariant?: 'default' | 'destructive'
-}
 
 type ConfirmationDialogRequest = {
   id: number
   options: ConfirmationDialogOptions
   resolve: (confirmed: boolean) => void
 }
-
-type ConfirmationDialogContextValue = (options: ConfirmationDialogOptions) => Promise<boolean>
-
-const ConfirmationDialogContext = createContext<ConfirmationDialogContextValue | null>(null)
 
 export function ConfirmationDialogProvider({
   children
@@ -37,6 +32,7 @@ export function ConfirmationDialogProvider({
 }): React.JSX.Element {
   const nextIdRef = useRef(0)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
+  const [dontAskAgain, setDontAskAgain] = useState(false)
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
   const setContextualToursBlockingSurfaceVisible = useAppStore(
@@ -69,19 +65,28 @@ export function ConfirmationDialogProvider({
     })
   }, [])
 
-  const settleActiveRequest = useCallback((confirmed: boolean) => {
-    const request = activeRequestRef.current
-    if (!request) {
-      return
-    }
-    request.resolve(confirmed)
-    setQueue((currentQueue) => {
-      if (currentQueue[0]?.id === request.id) {
-        return currentQueue.slice(1)
+  const settleActiveRequest = useCallback(
+    (confirmed: boolean) => {
+      const request = activeRequestRef.current
+      if (!request) {
+        return
       }
-      return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
-    })
-  }, [])
+      // Why: cancelling must not persist a preference the user backed out of.
+      if (confirmed && dontAskAgain) {
+        request.options.dontAskAgain?.onConfirmed()
+      }
+      // Why: queued prompts must not inherit this request's preference.
+      setDontAskAgain(false)
+      request.resolve(confirmed)
+      setQueue((currentQueue) => {
+        if (currentQueue[0]?.id === request.id) {
+          return currentQueue.slice(1)
+        }
+        return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
+      })
+    },
+    [dontAskAgain]
+  )
 
   return (
     <ConfirmationDialogContext.Provider value={confirm}>
@@ -97,6 +102,22 @@ export function ConfirmationDialogProvider({
               <DialogDescription>{displayedRequest.options.description}</DialogDescription>
             ) : null}
           </DialogHeader>
+          {displayedRequest?.options.dontAskAgain ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="confirmation-dialog-dont-ask-again"
+                checked={dontAskAgain}
+                onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+              />
+              <Label
+                htmlFor="confirmation-dialog-dont-ask-again"
+                className="text-sm font-normal text-foreground/80"
+              >
+                {displayedRequest.options.dontAskAgain.label ??
+                  translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+              </Label>
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => settleActiveRequest(false)}>
               {displayedRequest?.options.cancelLabel ??
@@ -115,12 +136,4 @@ export function ConfirmationDialogProvider({
       </Dialog>
     </ConfirmationDialogContext.Provider>
   )
-}
-
-export function useConfirmationDialog(): ConfirmationDialogContextValue {
-  const confirm = useContext(ConfirmationDialogContext)
-  if (!confirm) {
-    throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
-  }
-  return confirm
 }

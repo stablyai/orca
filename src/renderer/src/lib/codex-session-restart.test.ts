@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   CODEX_ACCOUNT_RESTART_STARTUP,
   markLiveCodexSessionsForRestart,
@@ -27,9 +27,14 @@ function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
 
 describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
   it('waits for shell readiness before relaunching Codex after an account switch', () => {
+    // Why launchAgent is load-bearing: pty:spawn runs the managed-auth
+    // readiness gate and Codex launch prep only for launchAgent 'codex', so
+    // dropping it would let a restart respawn race the account handoff and
+    // record a launch account the pane does not actually read.
     expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
       command: 'codex',
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
     })
     expect(shouldUseShellReadyStartupDelivery(CODEX_ACCOUNT_RESTART_STARTUP)).toBe(true)
   })

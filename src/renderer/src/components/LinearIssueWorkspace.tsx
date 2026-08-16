@@ -10,9 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  Copy,
+  ExternalLink,
   FolderKanban,
+  FolderOpen,
   GitBranch,
-  Link,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -31,15 +33,29 @@ import {
   type LinearLocalComment
 } from '@/components/LinearItemDrawer'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import {
+  findLinearIssueWorkspaceAttachment,
+  getLinearIssueWorkspaceAttachmentLabel
+} from '@/lib/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import {
   buildLinearIssueBranchName,
   formatLinearIssueRelativeTime
@@ -55,9 +71,9 @@ import {
 import type {
   LinearComment,
   LinearIssue,
-  LinearIssueChildSummary,
-  LinearProjectSummary
-} from '../../../shared/types'
+  LinearIssueChildSummary
+} from '../../../shared/linear/issue-types'
+import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
@@ -512,6 +528,12 @@ export default function LinearIssueWorkspace({
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? settings
+  const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const attachmentWorkspaces = useMemo(
+    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [allWorktrees, folderWorkspaces]
+  )
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
   const [issueLoading, setIssueLoading] = useState(false)
   const [comments, setComments] = useState<LinearComment[]>([])
@@ -647,11 +669,26 @@ export default function LinearIssueWorkspace({
 
   const displayed = fullIssue ?? issue
 
+  const attachedWorkspace = useMemo(
+    () => (displayed ? findLinearIssueWorkspaceAttachment(attachmentWorkspaces, displayed) : null),
+    [attachmentWorkspaces, displayed]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    : null
+
   const handleUseIssue = useCallback((): void => {
     if (!displayed) {
       return
     }
     onUse(displayed)
+  }, [displayed, onUse])
+
+  const handleOpenOrUseIssue = useCallback((): void => {
+    if (!displayed) {
+      return
+    }
+    openLinearIssueWorkspaceOrStart(displayed, () => onUse(displayed))
   }, [displayed, onUse])
 
   const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
@@ -746,6 +783,7 @@ export default function LinearIssueWorkspace({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
@@ -754,7 +792,7 @@ export default function LinearIssueWorkspace({
                   'Copy Linear URL'
                 )}
               >
-                <Link className="size-4" />
+                <Copy className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -764,39 +802,79 @@ export default function LinearIssueWorkspace({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
+                onClick={() => void window.api.shell.openUrl(displayed.url)}
                 aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.9e3c49beb8',
-                  'Copy issue identifier'
+                  'auto.components.LinearIssueWorkspace.openOnLinear',
+                  'Open on Linear'
                 )}
               >
-                <Clipboard className="size-4" />
+                <ExternalLink className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier')}
+              {translate('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
             </TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleUseIssue}
-                aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.30a7f56c0a',
-                  'Start workspace from issue'
-                )}
-              >
-                <ArrowRight className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
+          {attachedWorkspace ? (
+            <DropdownMenu modal={false}>
+              <ButtonGroup>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUseIssue}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={translate(
+                    'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
+                    'Open workspace attached to issue'
+                  )}
+                >
+                  <FolderOpen className="size-3.5" />
+                  {translate(
+                    'auto.components.LinearIssueWorkspace.openWorkspace',
+                    'Open workspace'
+                  )}
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.LinearIssueWorkspace.moreWorkspaceActions',
+                      'More issue workspace actions'
+                    )}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={handleUseIssue}>
+                  <Plus className="size-4" />
+                  {translate(
+                    'auto.components.LinearIssueWorkspace.startNewWorkspace',
+                    'Start new workspace'
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenOrUseIssue}
+              className="gap-1.5 whitespace-nowrap"
+              aria-label={translate(
+                'auto.components.LinearIssueWorkspace.30a7f56c0a',
+                'Start workspace from issue'
+              )}
+            >
               {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
-            </TooltipContent>
-          </Tooltip>
+              <ArrowRight className="size-3.5" />
+            </Button>
+          )}
           {variant === 'sheet' ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -949,6 +1027,33 @@ export default function LinearIssueWorkspace({
               onProjectChanged={handleProjectChanged}
               sourceContext={sourceContext}
             />
+            <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
+              <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
+                <span>
+                  {translate('auto.components.LinearIssueWorkspace.workspaceSection', 'Workspace')}
+                </span>
+              </div>
+              <div className="p-3">
+                {attachedWorkspaceLabel ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenOrUseIssue}
+                    aria-label={translate(
+                      'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
+                      'Open workspace attached to issue'
+                    )}
+                    className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <FolderOpen className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{attachedWorkspaceLabel}</span>
+                  </button>
+                ) : (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {translate('auto.components.LinearIssueWorkspace.noWorkspaceYet', 'None yet')}
+                  </div>
+                )}
+              </div>
+            </section>
             <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
               <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
                 <span>

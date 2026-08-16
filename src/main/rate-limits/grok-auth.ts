@@ -130,10 +130,6 @@ export function readGrokAuthSession(): GrokAuthReadResult {
   }
 }
 
-export function hasGrokAuthSession(): boolean {
-  return readGrokAuthSession().status === 'ok'
-}
-
 const TOKEN_SKEW_MS = 5 * 60 * 1000
 
 export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {

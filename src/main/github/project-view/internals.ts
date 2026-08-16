@@ -9,9 +9,9 @@ import {
   noteRepositoryRateLimitSpend,
   type RateLimitBucketKind
 } from '../rate-limit'
-import type { GitHubProjectViewError } from '../../../shared/github-project-types'
-import { githubProjectHost } from '../../../shared/github-project-identity'
-import { isDefaultGitHubHost } from '../../../shared/github-repository-identity-key'
+import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
+import { isDefaultGitHubHost } from '../../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticatedForGlobalCli } from '../github-enterprise-repository'
 import {
   classifyProjectError,
@@ -80,12 +80,6 @@ export function isValidRepoSlug(value: unknown): value is string {
     REPO_SLUG_RE.test(value) &&
     !REPO_SLUG_RESERVED.has(value)
   )
-}
-
-// Backwards-compatible alias for callers that don't distinguish owner vs repo.
-// Prefer `isValidOwnerSlug` / `isValidRepoSlug` at new call sites.
-export function isValidSlug(value: unknown): value is string {
-  return isValidOwnerSlug(value) || isValidRepoSlug(value)
 }
 
 export function assertSlug(

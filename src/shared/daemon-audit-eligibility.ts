@@ -1,5 +1,7 @@
 export const DAEMON_AUDIT_STATE_VALUES = ['present', 'gone', 'unknown'] as const
 
+export const DAEMON_AUDIT_GENERATION_ROLE_VALUES = ['current', 'legacy'] as const
+
 export const DAEMON_AUDIT_TRIGGER_VALUES = [
   'inventory_answered',
   'inventory_failed',
@@ -69,7 +71,6 @@ export const DAEMON_AUDIT_PROCESS_REASON_VALUES = [
   'windows_named_pipe_missing'
 ] as const
 
-export type DaemonAuditState = (typeof DAEMON_AUDIT_STATE_VALUES)[number]
 export type DaemonAuditTrigger = (typeof DAEMON_AUDIT_TRIGGER_VALUES)[number]
 export type DaemonAuditFailureTrigger = Exclude<DaemonAuditTrigger, 'inventory_answered'>
 export type DaemonEvidenceSource = (typeof DAEMON_EVIDENCE_SOURCE_VALUES)[number]

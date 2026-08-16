@@ -77,6 +77,49 @@ describe('worker transcript reads', () => {
     })
   })
 
+  it('pins archived reads to the transcript offset observed before release', async () => {
+    await writeFile(
+      transcriptPath,
+      `${codexMessage('one', 'before release')}\n${codexMessage('two', 'release boundary')}\n`
+    )
+    const snapshot = await readWorkerTranscript({
+      agent: 'codex',
+      sessionId: 'session-exact',
+      transcriptPath,
+      limit: 1
+    })
+    if (!snapshot.ok) {
+      throw new Error('Expected the release transcript probe')
+    }
+    await appendFile(transcriptPath, `${codexMessage('three', 'after release')}\n`)
+
+    await expect(
+      readWorkerTranscript({
+        agent: 'codex',
+        sessionId: 'session-exact',
+        transcriptPath,
+        endOffset: snapshot.nextOffset,
+        limit: 10
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      messages: [
+        { id: 'one', blocks: [{ type: 'text', text: 'before release' }] },
+        { id: 'two', blocks: [{ type: 'text', text: 'release boundary' }] }
+      ]
+    })
+    await expect(
+      readWorkerTranscript({
+        agent: 'codex',
+        sessionId: 'session-exact',
+        transcriptPath,
+        offset: snapshot.nextOffset,
+        endOffset: snapshot.nextOffset,
+        limit: 10
+      })
+    ).resolves.toMatchObject({ ok: true, messages: [], nextOffset: snapshot.nextOffset })
+  })
+
   it('reports source changes and unsupported providers without guessing', async () => {
     await writeFile(transcriptPath, `${codexMessage('one', 'first')}\n`)
 

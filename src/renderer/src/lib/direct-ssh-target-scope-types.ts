@@ -1,10 +1,7 @@
-import type {
-  FolderWorkspace,
-  ProjectGroup,
-  Repo,
-  WorkspaceKey,
-  Worktree
-} from '../../../shared/types'
+import type { FolderWorkspace, WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 export type DirectSshGitRepoRef = {
   repoId: string

@@ -107,3 +107,11 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   const banners = messages.map(formatMessageBanner).join('\n\n')
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
+
+export function formatMessagePointer(count: number, mailboxHandle?: string): string {
+  const noun = count === 1 ? 'message' : 'messages'
+  const runFlag = mailboxHandle?.startsWith('run:')
+    ? ` --run ${mailboxHandle.slice('run:'.length)}`
+    : ''
+  return `\nYou have ${count} orchestration ${noun}. Run \`orca orchestration check${runFlag}\`.\n`
+}

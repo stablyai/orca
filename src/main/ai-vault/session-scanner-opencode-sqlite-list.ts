@@ -32,7 +32,7 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -45,7 +45,7 @@ function buildSessionListQuery(db: SyncDatabase): string {
           FROM session
           WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
-          LIMIT ?`
+          ${limited ? 'LIMIT ?' : ''}`
 }
 
 function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
@@ -105,7 +105,9 @@ export async function listOpenCodeSqliteSessions(args: {
       if (!canReadOpenCodeSessions(db)) {
         continue
       }
-      const rows = db.prepare(buildSessionListQuery(db)).all(args.limit) as SessionRow[]
+      const limited = Number.isFinite(args.limit)
+      const statement = db.prepare(buildSessionListQuery(db, limited))
+      const rows = (limited ? statement.all(args.limit) : statement.all()) as SessionRow[]
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }

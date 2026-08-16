@@ -14,7 +14,8 @@ import {
   type TaskProviderIdentity
 } from './task-provider-identity'
 import type { TaskProvider } from './task-providers'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 export type {
   GitHubTaskProviderIdentity,
@@ -190,12 +191,6 @@ export function buildWorkspaceRunContext(args: {
     repoId,
     path: repoPath
   }
-}
-
-export function getWorkspaceRunRuntimeSettings(
-  context: Pick<WorkspaceRunContext, 'hostId'> | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  return getTaskSourceRuntimeSettings(context ? { hostId: context.hostId } : null)
 }
 
 function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {

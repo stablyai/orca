@@ -19,7 +19,11 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 describe('PullRequestPage host boundaries', () => {
   it('routes reviewer metadata and mutations through the PR repo owner host', () => {
     const source = componentSource('PullRequestPage.tsx')
-    const section = sourceBetween(source, 'function PRReviewersPanel', 'function isPRFileViewed')
+    const section = sourceBetween(
+      source,
+      'function PRReviewersPanel',
+      'const WORK_ITEM_DETAILS_CACHE_MAX'
+    )
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
@@ -58,15 +62,11 @@ describe('PullRequestPage host boundaries', () => {
 
   it('source-scopes full-page optimistic work item patches', () => {
     const source = componentSource('PullRequestPage.tsx')
-    const prAssigneesSection = sourceBetween(
-      source,
-      'function PRAssigneesPanel',
-      'function PRReviewersPanel'
-    )
+    const prAssigneesSection = componentSource('github/PRAssigneesPanel.tsx')
     const prActionsSection = sourceBetween(
       source,
       'function PRActionsPanel',
-      'function CommentReactions'
+      'function CommentReplyForm'
     )
     const issueEditSection = sourceBetween(
       source,
@@ -101,7 +101,7 @@ describe('PullRequestPage host boundaries', () => {
     const propsSection = sourceBetween(
       source,
       'type PullRequestPageProps',
-      'function formatRelativeTime'
+      'function findMentionQuery'
     )
     const cacheKeySection = sourceBetween(
       source,
@@ -142,11 +142,7 @@ describe('PullRequestPage host boundaries', () => {
 
   it('routes file viewed mutations through the PR source context', () => {
     const source = componentSource('PullRequestPage.tsx')
-    const helperSection = sourceBetween(
-      source,
-      'function setPRFileViewedForRepo',
-      'function PRViewedCheckbox'
-    )
+    const helperSection = componentSource('github/github-work-item-comment-mutations.ts')
     const changeSection = sourceBetween(
       source,
       'const handlePRFileViewedChange = useCallback',
@@ -166,7 +162,7 @@ describe('PullRequestPage host boundaries', () => {
   it('routes comment mutations through runtime source context when needed', () => {
     const source = componentSource('PullRequestPage.tsx')
     const helperSection = sourceBetween(
-      source,
+      componentSource('github/github-work-item-comment-mutations.ts'),
       'function addIssueCommentForRepo',
       'function setPRFileViewedForRepo'
     )
@@ -201,10 +197,11 @@ describe('PullRequestPage host boundaries', () => {
 
   it('routes PR file contents and runtime viewed invalidations through the PR source context', () => {
     const source = componentSource('PullRequestPage.tsx')
+    const commentMutations = componentSource('github/github-work-item-comment-mutations.ts')
     const fileContentsSection = sourceBetween(
       source,
       'function loadPRFileContents',
-      'function setPRFileViewedForRepo'
+      'type CachedPRFilesDiffViewState'
     )
     const fileContentsCacheKeySection = sourceBetween(
       source,
@@ -213,7 +210,7 @@ describe('PullRequestPage host boundaries', () => {
     )
     const listenerSection = sourceBetween(source, 'let workItemMutatedUnsub', '// Why: bounded LRU')
     const commentContextSection = sourceBetween(
-      source,
+      componentSource('github/CommentCodeContext.tsx'),
       'function CommentCodeContext',
       'const resolvedContextExpansionState'
     )
@@ -228,9 +225,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(fileContentsSection).toContain('sourceContext: args.sourceContext')
     expect(fileContentsSection).toContain('sourceContext,')
     expect(listenerSection).toContain('onGitHubWorkItemDetailsCacheMutation')
-    expect(source).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
-    expect(source).toContain('options.local !== false')
-    expect(source).toContain('notifyWorkItemMutated({')
+    expect(commentMutations).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
+    expect(commentMutations).toContain('options.local !== false')
+    expect(commentMutations).toContain('notifyWorkItemMutated({')
     expect(commentContextSection).toContain('sourceContext?: TaskSourceContext | null')
     expect(commentContextSection).toMatch(
       /loadPRFileContents\(\{\s*repoPath,\s*repoId,\s*sourceContext,\s*prNumber,\s*prRepo,/
@@ -252,15 +249,46 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain('window.api.gh.prChecks({')
     expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
     expect(checksSection).toContain('prCheckDetails({')
+    expect(checksSection).toMatch(
+      /withGitHubCheckDetailsTimeout\(\(signal\) =>\s*runtimeHost\s*\?\s*callRuntimeRpc[\s\S]*:\s*window\.api\.gh\.prCheckDetails\(\{/
+    )
+    expect(checksSection).toContain('{ timeoutMs: 30_000, signal }')
+  })
+
+  it('makes failed check detail loads retryable and fences stale settlements', () => {
+    const source = componentSource('PullRequestPage.tsx')
+    const checksSection = sourceBetween(source, 'function ChecksTab', 'function MentionTextarea')
+
+    expect(checksSection).toContain('const requestId = ++nextCheckDetailsRequestIdRef.current')
+    expect(checksSection).toContain('settleGitHubChecksTabDetails(current, key, requestId')
+    expect(checksSection).toContain('createGitHubChecksTabState(checks, checkDetailsContextKey)')
+    expect(checksSection).toContain('checksState,\n    checks,\n    checkDetailsContextKey')
+    expect(checksSection).toContain('resetGitHubChecksTabForSource(current)')
+    expect(checksSection).toContain(
+      'committedChecksContextOwnerRef.current !== refreshContextOwner'
+    )
+    expect(checksSection).toContain('activeChecksRefreshRequestIdRef.current !== refreshRequestId')
+    expect(checksSection).toContain('current.contextOwner === refreshContextOwner')
+    expect(checksSection).toContain(
+      'const rerunContextOwner = committedChecksContextOwnerRef.current'
+    )
+    expect(checksSection).toContain('committedChecksContextOwnerRef.current !== rerunContextOwner')
+    expect(checksSection).toContain('await handleRefresh(rerunContextOwner)')
+    expect(checksSection).toContain('!mountedRef.current ||')
+    expect(checksSection).toContain(
+      'onClick={() => requestCheckDetails(check, getCheckDetailsKey(check))}'
+    )
+    expect(checksSection).toContain('disabled={state.loading}')
+    expect(checksSection).toContain('aria-busy={state.loading}')
+    expect(checksSection).toContain("translate('githubChecks.retrying', 'Retrying…')")
+    expect(checksSection).toContain(
+      "translate('auto.components.PullRequestPage.5df7c41d2a', 'Retry')"
+    )
   })
 
   it('routes edit metadata and mutations through the PR source context', () => {
     const source = componentSource('PullRequestPage.tsx')
-    const editHelperSection = sourceBetween(
-      source,
-      'function getGitHubMutationSettings',
-      'function GHCommentComposer'
-    )
+    const editHelperSection = componentSource('github/github-work-item-edit-mutations.ts')
     const editSection = sourceBetween(
       source,
       'function GHEditSection',
@@ -292,7 +320,7 @@ describe('PullRequestPage host boundaries', () => {
     const actionsSection = sourceBetween(
       source,
       'function PRActionsPanel',
-      'function CommentReactions'
+      'function CommentReplyForm'
     )
 
     expect(actionsSection).toContain(

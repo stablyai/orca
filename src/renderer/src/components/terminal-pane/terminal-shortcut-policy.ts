@@ -53,6 +53,7 @@ const PUNCTUATION_CODE_MAP: Record<string, string> = {
 
 export type TerminalShortcutAction =
   | { type: 'copySelection' }
+  | { type: 'selectAll' }
   | { type: 'toggleSearch' }
   | { type: 'clearActivePane' }
   | { type: 'focusPane'; direction: 'next' | 'previous' }
@@ -96,7 +97,7 @@ export function resolveTerminalShortcutAction(
   optionKeyLocation: number = 0,
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
-  // Why: lazy so execution-host lookup (local native Windows ConPTY) runs only on Ctrl+Arrow, not every keystroke.
+  // Why: lazy so local ConPTY lookup runs only for Ctrl+Arrow and Ctrl+Enter.
   isLocalWindowsConptyPane?: () => boolean,
   // Why: gates Option-as-Alt compensation on the app's own kitty-protocol (CSI > u) opt-in, so shells keep composition.
   isKittyKeyboardActivePane?: () => boolean,
@@ -107,13 +108,21 @@ export function resolveTerminalShortcutAction(
   // Why: keybindings follow the client OS, but byte protocols follow the PTY host — they differ for macOS clients on Windows runtimes.
   isWindowsTerminalHost: () => boolean = () => isWindows,
   // Why: gates the tab.close pane-close alias — under terminal-first a remapped tab.close yields to the shell (terminal.closePane, scope terminal, still closes).
-  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first'
+  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first',
+  // Why: query-only Droid/Grok consumers need CSI-u even when the live kitty flags remain inactive.
+  hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
   if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
     return { type: 'switchInputSource' }
+  }
+
+  // Why: held select-all keydowns must remain claimed until keyup so Kitty
+  // event reporting cannot encode their repeat or release into the PTY.
+  if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
+    return { type: 'selectAll' }
   }
 
   if (!event.repeat) {
@@ -195,8 +204,16 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: xterm.js collapses Ctrl+Enter to a bare CR, so forward kitty CSI-u (modifier 5 = Ctrl) so the chord reaches TUIs; no Windows fallback yet (#2418).
-    return { type: 'sendInput', data: '\x1b[13;5u' }
+    const localWindowsConpty = isLocalWindowsConptyPane?.() === true
+    // Why: preserve query-only TUI chords elsewhere; local ConPTY shells require negotiation or trusted consumer evidence (#12329).
+    const canSendCsiU =
+      !localWindowsConpty ||
+      isKittyKeyboardActivePane?.() === true ||
+      hasCtrlEnterCsiUAuthority?.() === true
+    return {
+      type: 'sendInput',
+      data: canSendCsiU ? '\x1b[13;5u' : '\r'
+    }
   }
 
   if (

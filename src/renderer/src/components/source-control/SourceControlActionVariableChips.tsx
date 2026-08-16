@@ -23,7 +23,7 @@ function hasVariablePreview(
 ): boolean {
   return Boolean(
     variablePreviews &&
-    Object.prototype.hasOwnProperty.call(variablePreviews, variable) &&
+    Object.hasOwn(variablePreviews, variable) &&
     variablePreviews[variable] !== undefined &&
     variablePreviews[variable] !== null
   )

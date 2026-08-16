@@ -861,6 +861,38 @@
   cursor: not-allowed;
 }
 
+/* Secondary collapsible; quieter than mp-text-link so it isn’t read as a primary action. */
+.mobile-page-root .mp-disclosure-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.mobile-page-root .mp-disclosure-trigger:hover {
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-disclosure-trigger svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mobile-page-root .mp-disclosure-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 36rem;
+}
+
 .mobile-page-root .mp-network-row {
   display: flex;
   align-items: center;

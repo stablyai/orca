@@ -591,7 +591,8 @@ async function main() {
       args.reportPath ??
         path.join(
           rootDir,
-          'tests', 'tools',
+          'tests',
+          'tools',
           'benchmarks',
           'results',
           `terminal-perf-${args.label}-${stamp}.json`

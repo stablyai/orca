@@ -146,6 +146,7 @@ export function FloatingTerminalOrchestrationDialog({
           terminalAriaLabel="Orchestration skill install terminal"
           terminalWorktreeId="floating-terminal-orchestration-skill-terminal"
           terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+          terminalRuntime={activeSkillRuntime.agentRuntime}
           installed={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
