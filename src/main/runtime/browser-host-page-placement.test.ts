@@ -63,10 +63,14 @@ describe('browser host page placement authority', () => {
     const firstPlacement = leases.placeClientPage('page-a', 'host-a')
 
     firstHost.release()
-    expect(() => leases.requireClientPage(pageAuthority(1))).toThrow('browser_host_lease_required')
+    expect(() => leases.requireClientPage(pageAuthority(1))).toThrow(
+      'browser_page_retirement_pending'
+    )
 
     attachHost(leases, 'connection-b')
-    expect(() => leases.requireClientPage(pageAuthority(1))).toThrow('browser_host_lease_stale')
+    expect(() => leases.requireClientPage(pageAuthority(1))).toThrow(
+      'browser_page_retirement_pending'
+    )
     const firstRetirement = leases.beginPageRetirement('page-a', firstPlacement)
     expect(leases.completePageRetirement(firstRetirement)).toBe(true)
     const replacement = leases.placeClientPage('page-a', 'host-a')

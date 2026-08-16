@@ -32,6 +32,7 @@ type BrowserHostPlacementIdentity = Readonly<{
 type BrowserPagePlacementState = {
   placement: RuntimeBrowserPlacement
   retirement?: BrowserPageRetirement
+  retirementTerminal?: boolean
   retirementCompletionInProgress?: boolean
 }
 
@@ -111,12 +112,33 @@ export class BrowserHostPagePlacementRegistry {
     return retirement
   }
 
+  fenceClientHostPlacements(host: BrowserHostPlacementIdentity): void {
+    assertBrowserHostPlacementIdentity(host)
+    for (const [browserPageId, state] of this.placementsByPageId) {
+      const placement = state.placement
+      if (
+        placement.kind !== 'client' ||
+        placement.browserHostClientId !== host.browserHostClientId ||
+        placement.browserHostGeneration !== host.browserHostGeneration
+      ) {
+        continue
+      }
+      state.retirement ??= Object.freeze({ browserPageId, placement })
+      state.retirementTerminal = true
+    }
+  }
+
   cancelPageRetirement(retirement: BrowserPageRetirement): boolean {
     const state = this.placementsByPageId.get(retirement.browserPageId)
-    if (state?.retirement !== retirement || state.retirementCompletionInProgress) {
+    if (
+      state?.retirement !== retirement ||
+      state.retirementTerminal ||
+      state.retirementCompletionInProgress
+    ) {
       return false
     }
     state.retirement = undefined
+    state.retirementTerminal = undefined
     return true
   }
 

@@ -285,6 +285,13 @@ export class BrowserHostLeaseRegistry {
 
   private fenceLease(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void {
     this.reconnects.clear(state)
+    if (this.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
+      return
+    }
+    this.pagePlacements.fenceClientHostPlacements({
+      browserHostClientId: state.lease.browserHostClientId,
+      browserHostGeneration: state.lease.browserHostGeneration
+    })
     fenceBrowserHostLease(state, reason, this.leasesByClientId, (route, routeReason) =>
       this.fenceRoute(route, routeReason)
     )

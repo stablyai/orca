@@ -36,13 +36,14 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-host-admission-fairness`, draft PR
-  [#14747](https://github.com/stablyai/orca/pull/14747), stacked on retired-frame PR
-  [#14694](https://github.com/stablyai/orca/pull/14694). #14694's rerun packaging job passed and
-  its workflow completed successfully.
-- All 31 published patches plus the local admission stage are rebased onto
-  `origin/main@5b7f44278a`. Range-diff marks all 32 patches identical. The rewritten public
-  branches have not been force-pushed yet.
+- Latest published stack tip: `sta-4150-browser-lease-fence-placement-retirement`, draft PR
+  [#14753](https://github.com/stablyai/orca/pull/14753), stacked on admission-fairness PR
+  [#14747](https://github.com/stablyai/orca/pull/14747).
+- All 32 patches through the published admission stage are rebased onto
+  `origin/main@5b7f44278a`; range-diff marked every patch identical before the exact-lease push.
+- Published lease-fence placement-retirement stage: draft PR
+  [#14753](https://github.com/stablyai/orca/pull/14753). It makes exact terminal host-generation
+  placement retirement non-cancellable without inferring destruction or releasing capacity.
 - The reconnect stage preserves exact client-host authority and page/executor lifetime through a
   negotiated, bounded same-client reconnect grace. Its pre-ledger, pre-replay-fix tip was
   `1093072a0b`; the reviewed fix was first committed at `5374c561a6` before this final ledger amend.
@@ -107,6 +108,7 @@ ownership.
 | [#14691](https://github.com/stablyai/orca/pull/14691) | Reconnect grace    | Negotiated same-client authority and page lifetime preservation           |
 | [#14694](https://github.com/stablyai/orca/pull/14694) | Tunnel isolation   | Late retired-stream frames cannot collapse healthy concurrent streams     |
 | [#14747](https://github.com/stablyai/orca/pull/14747) | Admission fairness | Per-device host capacity, wait reservation, and bounded pressure recovery |
+| [#14753](https://github.com/stablyai/orca/pull/14753) | Lease retirement   | Terminal exact-host fencing makes placements non-cancellable pending      |
 
 ## Current stage: exact renderer bridge
 
@@ -644,6 +646,25 @@ Published admission-fairness stage (#14747):
 - The 32-patch stack rebased cleanly onto `origin/main@5b7f44278a`; range-diff marks every patch
   identical.
 
+Published lease-fence placement-retirement stage (#14753):
+
+- Baseline: 6 of 7 new public-registry assertions failed because terminal host release,
+  replacement, legacy disconnect, and reconnect-grace expiry left exact client placements
+  cancellable. The negotiated reconnect-grace preservation control passed.
+- Candidate: current-token terminal lease fencing marks only the exact client ID and host
+  generation retirement-pending before the lease fence settles. Existing retirement becomes
+  non-cancellable; server placements, other hosts, and replacements remain untouched.
+- Capacity remains occupied until exact retirement completion. The runtime does not infer guest
+  destruction or delete placement from transport loss alone.
+- Focused placement/lifecycle coverage passes 5 files / 44 tests; the broader affected
+  attach/reconnect/route/command surface passes 16 files / 166 tests; Node/CLI/web typecheck,
+  changed-code quality, the 87-gate manifest, max-lines, localization, formatting, diff checks,
+  and 5/5 cross-version terminal-wire journeys pass.
+- Full lint reaches only the known upstream-main type-aware warning at
+  `config/scripts/pr-test-loc-summary.test.mjs:88`; the changed stack remains clean.
+- No exchanged field, opcode, capability, payload, publication, placement default, SSH/WSL path,
+  folder/worktree behavior, Electron UI, or server-hosted browser behavior changes.
+
 Do not promote narrow deterministic evidence into a live-topology claim. Record exact commands,
 topology, versions, and explicit gaps at every later checkpoint.
 
@@ -702,6 +723,11 @@ topology, versions, and explicit gaps at every later checkpoint.
   literal stdin and verified the final title, body, base, head, and draft state.
 - GitHub auto-attached #14747 to STA-4150. Posted exactly one admission-fairness checkpoint comment
   and kept the ticket In Progress.
+- Pushed `sta-4150-browser-lease-fence-placement-retirement` with a must-not-exist lease and opened
+  draft PR [#14753](https://github.com/stablyai/orca/pull/14753) on #14747. No existing stack branch
+  changed, and no PR was merged or marked ready.
+- GitHub auto-attached #14753 to STA-4150. Posted exactly one lease-retirement checkpoint comment
+  (`99343f4d-a584-46fd-94ab-fc8d004e738b`) and kept the ticket In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule
