@@ -283,6 +283,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ensureConnected.mockRestore()
       }
     })
+
+    it('does not retry a raced-out v30 attach when its single retire attempt fails', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-orphan-incarnation'
+        })
+        .mockRejectedValueOnce(new Error('Connection lost'))
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'orphaned-legacy-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('Session not found: orphaned-legacy-session')
+        expect(request.mock.calls.filter((call) => call[0] === 'createOrAttach')).toHaveLength(1)
+        expect(request.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(1)
+      } finally {
+        legacy.dispose()
+        errorSpy.mockRestore()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
   })
 
   describe('attach', () => {

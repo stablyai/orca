@@ -17,6 +17,15 @@ describe('classifyAttachOnlyKillError', () => {
     expect(classifyAttachOnlyKillError(new Error('Session not found: x'))).toBe('not_found')
     expect(classifyAttachOnlyKillError(new Error('weird'))).toBe('unknown')
   })
+
+  it('classifies rejection values whose string conversion throws as unknown', () => {
+    const rejection = {
+      [Symbol.toPrimitive]: () => {
+        throw new Error('conversion failed')
+      }
+    }
+    expect(classifyAttachOnlyKillError(rejection)).toBe('unknown')
+  })
 })
 
 describe('trackAttachOnlyOrphanRisk', () => {

@@ -761,8 +761,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let result = await createOrAttach(historySeedSegments)
     if (emulateLegacyAttachOnly && result.isNew) {
       operation.ignoreNextExit = true
-      await this.client.request('kill', { sessionId: requestedSessionId, immediate: true })
-      throw new SessionNotFoundError(requestedSessionId)
+      await this.refuseAccidentalAttachOnlySpawn(requestedSessionId)
     }
     await adoptSpawnResultSession(result)
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
@@ -1047,6 +1046,25 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return result.exitedBeforeSpawnReply === true
   }
 
+  private async refuseAccidentalAttachOnlySpawn(id: string): Promise<never> {
+    const retire = await retireAccidentalAttachOnlySpawn({
+      kill: async () => {
+        await this.client.request('kill', { sessionId: id, immediate: true })
+      }
+    })
+    if (!retire.ok) {
+      console.error(
+        '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+        { sessionId: id, protocolVersion: this.protocolVersion, error: retire.error }
+      )
+      trackAttachOnlyOrphanRisk({
+        protocolVersion: this.protocolVersion,
+        killErrorClass: classifyAttachOnlyKillError(retire.error)
+      })
+    }
+    throw new SessionNotFoundError(id)
+  }
+
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -1067,31 +1085,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       attachOnly: true
     })
     if (result.isNew) {
-      // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
-      // instead of publishing a fresh shell as an attach (#12589 / #12662).
-      // One kill only: kill is session-id keyed, not incarnation-fenced.
-      const retire = await retireAccidentalAttachOnlySpawn({
-        kill: async () => {
-          await this.client.request('kill', { sessionId: id, immediate: true })
-        }
-      })
-      if (!retire.ok) {
-        // Why: console + telemetry — packaged/headless support must find orphans
-        // beyond a single stderr line.
-        console.error(
-          '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
-          {
-            sessionId: id,
-            protocolVersion: this.protocolVersion,
-            error: retire.error
-          }
-        )
-        trackAttachOnlyOrphanRisk({
-          protocolVersion: this.protocolVersion,
-          killErrorClass: classifyAttachOnlyKillError(retire.error)
-        })
-      }
-      throw new SessionNotFoundError(id)
+      await this.refuseAccidentalAttachOnlySpawn(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)
     const providerSequence = providerSequenceFromCreateOrAttach(result)

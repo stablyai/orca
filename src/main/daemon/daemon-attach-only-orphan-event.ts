@@ -20,21 +20,23 @@ export function trackAttachOnlyOrphanRisk(props: {
 export function classifyAttachOnlyKillError(
   error: unknown
 ): 'transport' | 'timeout' | 'not_found' | 'unknown' {
-  const message = error instanceof Error ? error.message : String(error)
-  // Why: DaemonClient rejects in-flight RPCs as "Connection lost" / "Disconnected"
-  // on socket drop — match those exact surfaces, not free-text "transport".
-  if (
-    /not connected|connection lost|disconnected|EPIPE|ECONNRESET|ECONNREFUSED|socket closed/i.test(
-      message
-    )
-  ) {
-    return 'transport'
-  }
-  if (/timed? ?out|timeout/i.test(message)) {
-    return 'timeout'
-  }
-  if (/not found|Session not found/i.test(message)) {
-    return 'not_found'
+  try {
+    const message = error instanceof Error ? error.message : String(error)
+    if (
+      /not connected|connection lost|disconnected|EPIPE|ECONNRESET|ECONNREFUSED|socket closed/i.test(
+        message
+      )
+    ) {
+      return 'transport'
+    }
+    if (/timed? ?out|timeout/i.test(message)) {
+      return 'timeout'
+    }
+    if (/not found|Session not found/i.test(message)) {
+      return 'not_found'
+    }
+  } catch {
+    return 'unknown'
   }
   return 'unknown'
 }
