@@ -2,8 +2,12 @@ import type { Terminal } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-addon'
+import { TerminalContextualShapingAddon } from '@/lib/pane-manager/terminal-contextual-shaping-addon'
 
-const ligatureAddonsByTerminal = new WeakMap<Terminal, TerminalLigaturesAddon>()
+const ligatureAddonsByTerminal = new WeakMap<
+  Terminal,
+  { ligatures: TerminalLigaturesAddon; shaping: TerminalContextualShapingAddon }
+>()
 
 /**
  * Match the pane's ligature state on the preview terminal, attaching and
@@ -24,7 +28,8 @@ export function syncPreviewTerminalLigatures(
   }
   if (!enabled) {
     try {
-      attached?.dispose()
+      attached?.ligatures.dispose()
+      attached?.shaping.dispose()
     } catch {
       /* ignore */
     }
@@ -32,9 +37,12 @@ export function syncPreviewTerminalLigatures(
     return
   }
   try {
-    const addon = new TerminalLigaturesAddon()
-    terminal.loadAddon(addon)
-    ligatureAddonsByTerminal.set(terminal, addon)
+    const ligatures = new TerminalLigaturesAddon()
+    terminal.loadAddon(ligatures)
+    // Why: match the pane — Fast-family fonts need whole-word shaping runs.
+    const shaping = new TerminalContextualShapingAddon()
+    terminal.loadAddon(shaping)
+    ligatureAddonsByTerminal.set(terminal, { ligatures, shaping })
     // Why: ligatures can turn on after rows rendered; force a glyph-run recompute.
     terminal.refresh(0, terminal.rows - 1)
   } catch {

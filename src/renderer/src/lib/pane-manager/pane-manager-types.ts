@@ -1,6 +1,7 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
+import type { TerminalContextualShapingAddon } from './terminal-contextual-shaping-addon'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
@@ -156,6 +157,8 @@ export type ManagedPaneInternal = {
   // so the addon instance only exists while the feature is active. A null
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
+  // Why nullable: attached only while ligature handling is on for the pane.
+  contextualShapingAddon: TerminalContextualShapingAddon | null
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.
