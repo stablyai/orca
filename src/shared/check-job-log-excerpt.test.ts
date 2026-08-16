@@ -84,6 +84,14 @@ describe('boundRawCheckLogTail', () => {
     expect(bounded).toBe('kept line')
   })
 
+  it('treats a bare CR as a line boundary', () => {
+    const head = `${'a'.repeat(MAX_RAW_CHECK_LOG_CHARS)}\r`
+
+    const bounded = boundRawCheckLogTail(`${head}kept line`)
+
+    expect(bounded).toBe('kept line')
+  })
+
   it('keeps the tail when the bounded slice has no line break', () => {
     const bounded = boundRawCheckLogTail('b'.repeat(MAX_RAW_CHECK_LOG_CHARS + 10))
 

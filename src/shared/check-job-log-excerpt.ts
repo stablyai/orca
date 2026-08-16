@@ -11,14 +11,15 @@ export const MAX_RAW_CHECK_LOG_CHARS = 512 * 1024
  * Cut a raw CI job log down to a bounded tail before any per-character work.
  *
  * Drops the partial first line so an escape sequence cut in half cannot survive
- * stripping as visible garbage.
+ * stripping as visible garbage. CR counts as a boundary: the redraw-only output
+ * this excerpt exists to tame carries no LF at all.
  */
 export function boundRawCheckLogTail(log: string): string {
   if (log.length <= MAX_RAW_CHECK_LOG_CHARS) {
     return log
   }
   const tail = log.slice(log.length - MAX_RAW_CHECK_LOG_CHARS)
-  const firstLineBreak = tail.indexOf('\n')
+  const firstLineBreak = tail.search(/[\r\n]/)
   return firstLineBreak === -1 ? tail : tail.slice(firstLineBreak + 1)
 }
 
