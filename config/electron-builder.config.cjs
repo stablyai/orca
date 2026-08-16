@@ -83,6 +83,10 @@ const linuxSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-linux-${arch}',
   to: 'node_modules/sherpa-onnx-linux-${arch}'
 }
+const macInfoPlistLocalizationResource = {
+  from: 'resources/darwin/info-plist-localizations',
+  to: '.'
+}
 const winSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-win-x64',
   to: 'node_modules/sherpa-onnx-win-x64'
@@ -335,6 +339,8 @@ module.exports = {
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {
+      NSAppDataUsageDescription:
+        "Agents and tools you run in Orca's terminal may read data stored in other apps' folders.",
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',
       NSBluetoothAlwaysUsageDescription:
@@ -372,6 +378,7 @@ module.exports = {
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
+      macInfoPlistLocalizationResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
