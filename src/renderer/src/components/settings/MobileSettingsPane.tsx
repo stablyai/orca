@@ -63,7 +63,7 @@ export function MobileSettingsPane(): React.JSX.Element {
           <p>
             {translate(
               'auto.components.settings.MobileSettingsPane.androidDownloadStuckHint',
-              'If the APK download stalls near 99% on the phone, download it on a computer and transfer the file (Files / AirDrop / messaging), then install from the phone storage.'
+              'If the APK download stalls near 99% on the phone, download it on a computer and transfer the file (USB cable / cloud storage / messaging), then install from the phone storage.'
             )}
           </p>
           <MobileRelayBetaNotice />

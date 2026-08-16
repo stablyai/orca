@@ -6656,7 +6656,8 @@
           "174f4a3c6d": "Control terminals and agents from your phone.",
           "1de96ec8a6": "Show Orca Mobile Button",
           "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
-          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar.",
+          "androidDownloadStuckHint": "If the APK download stalls near 99% on the phone, download it on a computer and transfer the file (USB cable / cloud storage / messaging), then install from the phone storage."
         },
         "NotificationsPane": {
           "906b4afebf": "Send Test Notification",
