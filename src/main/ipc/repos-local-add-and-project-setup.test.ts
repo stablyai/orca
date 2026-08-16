@@ -85,7 +85,7 @@ describe('repos:add + repos:clone', () => {
     const safeDirectory = await import('../git/git-safe-directory')
     const accessSpy = vi
       .spyOn(safeDirectory, 'getLocalGitRepoAccessBlocker')
-      .mockReturnValue(
+      .mockResolvedValue(
         [
           'Git refuses to use this repository because of dubious ownership.',
           'Repository path:',
@@ -127,7 +127,7 @@ describe('repos:add + repos:clone', () => {
     const safeDirectory = await import('../git/git-safe-directory')
     const accessSpy = vi
       .spyOn(safeDirectory, 'getLocalGitRepoAccessBlocker')
-      .mockReturnValue(
+      .mockResolvedValue(
         [
           'Git refuses to use this repository because of dubious ownership.',
           'Repository path:',

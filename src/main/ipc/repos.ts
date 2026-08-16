@@ -305,13 +305,13 @@ async function addLocalRepoFromPath(
   const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
 
-  const blockIfGitInaccessible = (repoPath: string): { error: string } | null => {
+  const blockIfGitInaccessible = async (repoPath: string): Promise<{ error: string } | null> => {
     // Why: isGitRepo may accept a .git marker after rev-parse fails for ownership; without this
     // probe we persist or re-surface kind:git with zero worktrees and no remediation (#12627).
     if (repoKind !== 'git') {
       return null
     }
-    const accessBlocker = getLocalGitRepoAccessBlocker(repoPath)
+    const accessBlocker = await getLocalGitRepoAccessBlocker(repoPath)
     return accessBlocker ? { error: accessBlocker } : null
   }
 
@@ -320,7 +320,7 @@ async function addLocalRepoFromPath(
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
     // Why: re-add of a pre-fix empty record must surface safe.directory, not silently "succeed".
-    const blocked = blockIfGitInaccessible(existing.path)
+    const blocked = await blockIfGitInaccessible(existing.path)
     if (blocked) {
       return blocked
     }
@@ -336,7 +336,7 @@ async function addLocalRepoFromPath(
           !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
       )
     if (existingAfterRootResolve) {
-      const blocked = blockIfGitInaccessible(existingAfterRootResolve.path)
+      const blocked = await blockIfGitInaccessible(existingAfterRootResolve.path)
       if (blocked) {
         return blocked
       }
@@ -362,14 +362,14 @@ async function addLocalRepoFromPath(
             normalizeRuntimePathForComparison(repo.path) === mainRepoKey
         )
       if (trackedMainRepo) {
-        const blocked = blockIfGitInaccessible(trackedMainRepo.path)
+        const blocked = await blockIfGitInaccessible(trackedMainRepo.path)
         if (blocked) {
           return blocked
         }
         return { repo: trackedMainRepo, alreadyExisted: true }
       }
     }
-    const blocked = blockIfGitInaccessible(resolvedPath)
+    const blocked = await blockIfGitInaccessible(resolvedPath)
     if (blocked) {
       return blocked
     }
@@ -1758,7 +1758,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             importRepoPath = await importTargetResolver.resolveLocal(repoPath)
             // Why: marker-based isGitRepo can accept an owned-by-Administrators checkout while
             // Git itself refuses every worktree scan (#12627).
-            const accessBlocker = getLocalGitRepoAccessBlocker(importRepoPath)
+            const accessBlocker = await getLocalGitRepoAccessBlocker(importRepoPath)
             if (accessBlocker) {
               results.push({ path: repoPath, status: 'failed', error: accessBlocker })
               continue

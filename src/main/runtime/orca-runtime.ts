@@ -20492,7 +20492,7 @@ export class OrcaRuntimeService {
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
-        const accessBlocker = getLocalGitRepoAccessBlocker(importRepoPath)
+        const accessBlocker = await getLocalGitRepoAccessBlocker(importRepoPath)
         if (accessBlocker) {
           results.push({ path: repoPath, status: 'failed', error: accessBlocker })
           continue
@@ -20627,7 +20627,7 @@ export class OrcaRuntimeService {
     if (kind === 'git') {
       // Why: marker-based isGitRepo can accept an Administrators-owned checkout while Git
       // refuses worktree scans — same zero-worktree silent import as local repos:add (#12627).
-      const accessBlocker = getLocalGitRepoAccessBlocker(path)
+      const accessBlocker = await getLocalGitRepoAccessBlocker(path)
       if (accessBlocker) {
         throw new Error(accessBlocker)
       }
@@ -20641,7 +20641,7 @@ export class OrcaRuntimeService {
     })
     if (existing) {
       if (existing.kind === 'git' || kind === 'git') {
-        const accessBlocker = getLocalGitRepoAccessBlocker(existing.path)
+        const accessBlocker = await getLocalGitRepoAccessBlocker(existing.path)
         if (accessBlocker) {
           throw new Error(accessBlocker)
         }

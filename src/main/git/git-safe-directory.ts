@@ -3,7 +3,7 @@
  * actionable import errors so repos:add never persists an empty kind:git project (#12627).
  */
 import { extractExecError } from './exec-error'
-import { gitExecFileSync } from './runner'
+import { gitExecFileAsync } from './runner'
 
 export function isGitDubiousOwnershipError(error: unknown): boolean {
   const { stderr, stdout } = extractExecError(error)
@@ -13,12 +13,13 @@ export function isGitDubiousOwnershipError(error: unknown): boolean {
 }
 
 export function formatGitDubiousOwnershipRemediation(repoPath: string): string {
-  // Why: never embed the path inside a shell-quoted command — directory names can contain
-  // `$()`, backticks, or quotes that run when the user pastes the hint (#12627 review).
+  const escapedPath = JSON.stringify(repoPath)
+    .replaceAll('$', '\\u0024')
+    .replaceAll('`', '\\u0060')
+    .replaceAll('!', '\\u0021')
   return [
     'Git refuses to use this repository because of dubious ownership.',
-    `Repository path:`,
-    repoPath,
+    `Repository path (escaped display): ${escapedPath}`,
     'Trust that exact path with Git safe.directory (quote it for your shell), for example:',
     'git config --global --add safe.directory <path>',
     'On WSL-backed checkouts, run that inside the distro using the Linux path Git sees, not a Windows UNC path.',
@@ -31,9 +32,9 @@ export function formatGitDubiousOwnershipRemediation(repoPath: string): string {
  * Returns a remediation message for ownership blocks; null when Git can open the repo
  * or the failure is unrelated (caller keeps existing behavior).
  */
-export function getLocalGitRepoAccessBlocker(repoPath: string): string | null {
+export async function getLocalGitRepoAccessBlocker(repoPath: string): Promise<string | null> {
   try {
-    gitExecFileSync(['rev-parse', '--git-dir'], { cwd: repoPath })
+    await gitExecFileAsync(['rev-parse', '--git-dir'], { cwd: repoPath })
     return null
   } catch (error) {
     if (isGitDubiousOwnershipError(error)) {
