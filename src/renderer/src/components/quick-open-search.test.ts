@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   QUICK_OPEN_QUERY_MAX_BYTES,
   QUICK_OPEN_RESULT_LIMIT,
+  getPreparedQuickOpenFiles,
   isQuickOpenQueryTooLarge,
   prepareQuickOpenFiles,
   rankQuickOpenFiles,
@@ -149,7 +150,17 @@ describe('quick-open-search', () => {
     expect(quickOpenStarts[quickOpen.indexOf('u')]).toBe(0)
 
     const appPath = 'packages/windows-origin/src/App.tsx'
-    expect(indexed[1].wordStarts[appPath.indexOf('A')]).toBe(1)
+    expect(indexed[2].wordStarts[appPath.indexOf('A')]).toBe(1)
+  })
+
+  it('reuses the prepared index while the file-list identity is unchanged', () => {
+    const files = ['lib/product_detail.dart']
+    const indexed = getPreparedQuickOpenFiles(files)
+
+    // Why: query updates reuse the same file-list array, so indexing must stay
+    // off the keystroke path while a replacement array gets a fresh index.
+    expect(getPreparedQuickOpenFiles(files)).toBe(indexed)
+    expect(getPreparedQuickOpenFiles([...files])).not.toBe(indexed)
   })
 
   it('returns no results for non-positive limits', () => {
@@ -224,8 +235,8 @@ describe('quick-open-search', () => {
 
     const paths = rankQuickOpenFiles('product detail', files).map((item) => item.path)
     expect(paths).toEqual([
-      'ui/product-detail.tsx',
       'ui/product_detail.tsx',
+      'ui/product-detail.tsx',
       'ui/ProductDetail.tsx'
     ])
   })

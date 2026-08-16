@@ -229,7 +229,11 @@ function includesWithIdentifierSeparatorEquivalence(value: string, wanted: strin
   return false
 }
 
-function includesIgnoringSeparators(value: string, wanted: string, crossPathSeparators: boolean): boolean {
+function includesIgnoringSeparators(
+  value: string,
+  wanted: string,
+  crossPathSeparators: boolean
+): boolean {
   for (let start = 0; start < value.length; start++) {
     if (value[start] !== wanted[0]) {
       continue
@@ -243,7 +247,9 @@ function includesIgnoringSeparators(value: string, wanted: string, crossPathSepa
       // value char is the one we're currently matching (an extension dot in the
       // query must still land on the basename's dot).
       const ignorable =
-        isIdentifierSeparator(ch) || ch === ' ' || (crossPathSeparators && (ch === '/' || ch === '.'))
+        isIdentifierSeparator(ch) ||
+        ch === ' ' ||
+        (crossPathSeparators && (ch === '/' || ch === '.'))
       if (ignorable && ch !== wanted[wantedIndex]) {
         valueIndex++
         continue
@@ -284,8 +290,7 @@ function searchCharactersMatch(valueChar: string, queryChar: string): boolean {
   // `/` and `.` stay distinct so path/extension boundaries aren't crossed.
   return (
     valueChar === queryChar ||
-    (isIdentifierSeparator(queryChar) &&
-      (isIdentifierSeparator(valueChar) || valueChar === ' '))
+    (isIdentifierSeparator(queryChar) && (isIdentifierSeparator(valueChar) || valueChar === ' '))
   )
 }
 
