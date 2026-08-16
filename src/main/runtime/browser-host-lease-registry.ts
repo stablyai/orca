@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserExecutionHostGrantRegistry } from './browser-execution-host-grant-registry'
 import {
+  BrowserHostPagePlacementRegistry,
+  type BrowserClientPageAuthority,
+  type RuntimeBrowserClientPlacement,
+  type RuntimeBrowserPlacement
+} from './browser-host-page-placement'
+import {
   createBrowserHostFence,
   type BrowserHostFence,
   type BrowserHostFenceReason
@@ -11,14 +17,7 @@ const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
 // Why: tolerate brief desktop restart/update overlap while keeping one paired identity bounded.
 const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
 
-export type RuntimeBrowserPlacement =
-  | { kind: 'server' }
-  | {
-      kind: 'client'
-      browserHostClientId: string
-      browserHostGeneration: number
-      pageHostGeneration: number
-    }
+export type { RuntimeBrowserPlacement } from './browser-host-page-placement'
 
 export type BrowserHostLease = Readonly<{
   authorityRuntimeId: string
@@ -68,16 +67,18 @@ export class BrowserHostLeaseRegistry {
   readonly authorityRuntimeId: string
   readonly authorityEpoch: string
   private nextHostGeneration = 1
-  // Why: a global counter lets closed page IDs leave no tombstone without reusing a stale generation.
-  private nextPageGeneration = 1
   private nextTunnelGeneration = 1
   private readonly leasesByClientId = new Map<string, LeaseState>()
   private readonly routesByKey = new Map<string, RouteState>()
-  private readonly placementsByPageId = new Map<string, RuntimeBrowserPlacement>()
+  private readonly pagePlacements: BrowserHostPagePlacementRegistry
 
   constructor(options: { authorityRuntimeId: string; authorityEpoch?: string }) {
     this.authorityRuntimeId = options.authorityRuntimeId
     this.authorityEpoch = options.authorityEpoch ?? randomUUID()
+    this.pagePlacements = new BrowserHostPagePlacementRegistry({
+      authorityRuntimeId: this.authorityRuntimeId,
+      authorityEpoch: this.authorityEpoch
+    })
   }
 
   attach(input: {
@@ -175,33 +176,35 @@ export class BrowserHostLeaseRegistry {
   }
 
   placeServerPage(browserPageId: string): RuntimeBrowserPlacement {
-    const placement = Object.freeze({ kind: 'server' as const })
-    this.placementsByPageId.set(browserPageId, placement)
-    return placement
+    return this.pagePlacements.placeServerPage(browserPageId)
   }
 
   placeClientPage(browserPageId: string, browserHostClientId?: string): RuntimeBrowserPlacement {
     const lease = this.select(browserHostClientId)
-    const pageHostGeneration = this.takePageGeneration()
-    const placement = Object.freeze({
-      kind: 'client' as const,
+    return this.pagePlacements.placeClientPage(browserPageId, {
       browserHostClientId: lease.browserHostClientId,
-      browserHostGeneration: lease.browserHostGeneration,
-      pageHostGeneration
+      browserHostGeneration: lease.browserHostGeneration
     })
-    this.placementsByPageId.set(browserPageId, placement)
+  }
+
+  requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {
+    const placement = this.pagePlacements.requireClientPage(authority)
+    const lease = this.leasesByClientId.get(authority.browserHostClientId)
+    if (!lease) {
+      throw new Error('browser_host_lease_required')
+    }
+    if (lease.lease.browserHostGeneration !== authority.browserHostGeneration) {
+      throw new Error('browser_host_lease_stale')
+    }
     return placement
   }
 
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {
-    return this.placementsByPageId.get(browserPageId)
+    return this.pagePlacements.getPlacement(browserPageId)
   }
 
   retirePage(browserPageId: string, expected: RuntimeBrowserPlacement): boolean {
-    if (this.placementsByPageId.get(browserPageId) !== expected) {
-      return false
-    }
-    return this.placementsByPageId.delete(browserPageId)
+    return this.pagePlacements.retirePage(browserPageId, expected)
   }
 
   openTunnel(
@@ -298,15 +301,6 @@ export class BrowserHostLeaseRegistry {
     } else {
       this.nextTunnelGeneration += 1
     }
-    return value
-  }
-
-  private takePageGeneration(): number {
-    const value = this.nextPageGeneration
-    if (value > MAX_GENERATION) {
-      throw new Error('browser_page_generation_exhausted')
-    }
-    this.nextPageGeneration += 1
     return value
   }
 }
