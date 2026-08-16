@@ -1,15 +1,13 @@
 import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import {
-  formatUsageCost,
-  formatUsageTokens,
-  type UsageOverviewDailyPoint,
-  type UsageOverviewModel,
-  type UsageProviderOverview
-} from './usage-overview-model'
-import { getIntlLocale, translate } from '@/i18n/i18n'
-import { formatUsageProjectLabel } from './usage-formatters'
+import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import type {
+  UsageOverviewDailyPoint,
+  UsageOverviewModel,
+  UsageProviderOverview
+} from './usage-overview-types'
+import { translate } from '@/i18n/i18n'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   0: 'border-border/60 bg-muted/40',
@@ -31,7 +29,7 @@ function formatDayLabel(day: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
-  return parsed.toLocaleDateString(getIntlLocale(), {
+  return parsed.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric'
   })
@@ -226,7 +224,7 @@ export function ProviderUsageRow({
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {provider.topModel ??
               translate('auto.components.stats.usage.overview.sections.3de9bf87fc', 'No model yet')}
-            {provider.topProject ? ` - ${formatUsageProjectLabel(provider.topProject)}` : ''}
+            {provider.topProject ? ` - ${provider.topProject}` : ''}
           </p>
         </div>
         {!provider.enabled ? (

@@ -15,7 +15,6 @@ import type { SshConnectionState, SshConnectionStatus } from '../../../../shared
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { translate } from '@/i18n/i18n'
-import { translateLocalExecutionHostLabel } from './host-section-rows'
 
 export type SidebarHostOption = {
   id: ExecutionHostId
@@ -76,12 +75,7 @@ export function buildSidebarHostOptions(args: {
     hostLabelOverrides: args.hostLabelOverrides
   }).map((host) => {
     if (host.kind === 'local') {
-      return {
-        ...host,
-        presence: 'local',
-        label: translateLocalExecutionHostLabel(host.label),
-        detail: translate('auto.components.sidebar.hostSection.thisComputer', 'This computer')
-      }
+      return { ...host, presence: 'local' }
     }
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
@@ -134,10 +128,7 @@ export function getSidebarHostVisibilityLabel(
     return translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (visibleHostIds.length === 1) {
-    return (
-      hosts.find((host) => host.id === visibleHostIds[0])?.label ??
-      translate('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
-    )
+    return hosts.find((host) => host.id === visibleHostIds[0])?.label ?? 'Hosts'
   }
   return translate(
     'auto.components.sidebar.sidebarHostOptions.visibleHostsCount',
@@ -149,27 +140,18 @@ export function getSidebarHostVisibilityLabel(
 export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health']): string {
   switch (health) {
     case 'local':
-      return translate('auto.components.sidebar.sidebarHostOptions.healthLocal', 'Local')
+      return 'Local'
     case 'available':
-      return translate('auto.components.sidebar.sidebarHostOptions.healthConnected', 'Connected')
+      return 'Connected'
     case 'connecting':
-      return translate('auto.components.sidebar.sidebarHostOptions.healthConnecting', 'Connecting')
+      return 'Connecting'
     case 'blocked':
-      return translate(
-        'auto.components.sidebar.sidebarHostOptions.healthUpdateNeeded',
-        'Update needed'
-      )
+      return 'Update needed'
     case 'disconnected':
-      return translate(
-        'auto.components.sidebar.sidebarHostOptions.healthDisconnected',
-        'Disconnected'
-      )
+      return 'Disconnected'
     case 'error':
-      return translate(
-        'auto.components.sidebar.sidebarHostOptions.healthNeedsAttention',
-        'Needs attention'
-      )
+      return 'Needs attention'
     case 'mixed':
-      return translate('auto.components.sidebar.sidebarHostOptions.healthMixed', 'Mixed')
+      return 'Mixed'
   }
 }

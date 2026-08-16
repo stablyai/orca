@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  getImportedWorktreesKeepHiddenError,
-  getImportedWorktreesShowError,
+  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
+  IMPORTED_WORKTREES_SHOW_ERROR,
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
@@ -43,7 +43,7 @@ describe('imported worktrees card actions', () => {
     expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: getImportedWorktreesShowError()
+      error: IMPORTED_WORKTREES_SHOW_ERROR
     })
   })
 
@@ -66,7 +66,7 @@ describe('imported worktrees card actions', () => {
     })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: getImportedWorktreesShowError(),
+      error: IMPORTED_WORKTREES_SHOW_ERROR,
       forceVisible: true
     })
   })
@@ -81,7 +81,7 @@ describe('imported worktrees card actions', () => {
     expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: getImportedWorktreesShowError(),
+      error: IMPORTED_WORKTREES_SHOW_ERROR,
       forceVisible: true
     })
   })
@@ -109,7 +109,7 @@ describe('imported worktrees card actions', () => {
 
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
-      error: getImportedWorktreesKeepHiddenError()
+      error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
     })
   })
 })

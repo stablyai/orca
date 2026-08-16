@@ -1,5 +1,4 @@
 import { translate } from '@/i18n/i18n'
-import { translateLocalExecutionHostLabel } from '../sidebar/host-section-rows'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -55,7 +54,7 @@ export function getProviderAccountScope(
     }
   }
   return {
-    label: translateLocalExecutionHostLabel(getLocalExecutionHostLabel()),
+    label: getLocalExecutionHostLabel(),
     description: translate(
       'auto.components.settings.providerAccountScope.localCredentials',
       'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
@@ -83,7 +82,7 @@ export function getProviderRateLimitScope(
     }
   }
   return {
-    label: translateLocalExecutionHostLabel(getLocalExecutionHostLabel()),
+    label: getLocalExecutionHostLabel(),
     description: translate(
       'auto.components.settings.providerAccountScope.localRateLimit',
       '{{value0}} API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets.',

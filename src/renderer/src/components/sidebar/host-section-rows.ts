@@ -1,6 +1,7 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId,
@@ -10,16 +11,10 @@ import {
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
-import type { Row } from './worktree-list-groups'
-import { translate } from '@/i18n/i18n'
-import { translateLocalExecutionHostLabel } from './execution-host-label'
-
-export {
-  getTranslatedExecutionHostLabel,
-  translateExecutionHostLabel,
-  translateLocalExecutionHostLabel
-} from './execution-host-label'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Row } from './worktree-list/grouping/row-types'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -94,10 +89,8 @@ function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   return {
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
-    label: isLocal ? translateLocalExecutionHostLabel() : hostId,
-    detail: isLocal
-      ? translate('auto.components.sidebar.hostSection.thisComputer', 'This computer')
-      : translate('auto.components.sidebar.hostSection.host', 'Host'),
+    label: isLocal ? getLocalExecutionHostLabel() : hostId,
+    detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }
 }

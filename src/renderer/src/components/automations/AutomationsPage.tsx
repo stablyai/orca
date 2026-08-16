@@ -25,7 +25,6 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import { translateLocalExecutionHostLabel } from '../sidebar/host-section-rows'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -728,15 +727,13 @@ export default function AutomationsPage(): React.JSX.Element {
             ?.name ?? parsed.environmentId
         )
       }
-      return translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
+      return getLocalExecutionHostLabel()
     },
     [runtimeEnvironments, sshTargetLabels]
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostLabelById = useMemo(() => {
-    const labels = new Map<string, string>([
-      ['local', translateLocalExecutionHostLabel(getLocalExecutionHostLabel())]
-    ])
+    const labels = new Map<string, string>([['local', getLocalExecutionHostLabel()]])
     for (const [targetId, label] of sshTargetLabels) {
       labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
     }

@@ -4,28 +4,35 @@ import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
-  createNestedRepoTelemetryAttemptId
+  createNestedRepoTelemetryAttemptId,
+  type NestedRepoTelemetryRuntimeKind
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import type { RepoSlice } from '@/store/slices/repos'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
-import {
-  addRepoChooseFolderLabel,
-  addRepoOpeningProjectLabel,
-  addRepoScanningRepositoriesLabel
-} from './add-repo-busy-labels'
-import {
-  addRepoRemoteHostPathRequiredMessage,
-  addRepoSkippedBatchFoldersToast
-} from './add-repo-local-folder-messages'
-import type {
-  LocalPathAddMode,
-  LocalPathAddResult,
-  ShowNestedRepoReview
-} from './add-repo-local-folder-types'
+import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+
+type ShowNestedRepoReview = (args: {
+  scan: NestedRepoScanResult
+  selectedPath: string
+  connectionId: string | null
+  attemptId: string
+  runtimeKind: NestedRepoTelemetryRuntimeKind
+  inProgress: boolean
+  scanId: string | null
+  runtimeEnvironmentId?: string | null
+}) => void
+
+type LocalPathAddResult =
+  | { status: 'completed'; repo: Repo }
+  | { status: 'cancelled' | 'paused' | 'skipped' }
+
+type LocalPathAddMode = 'single' | 'batch'
 
 export function useAddRepoLocalFolderFlow({
   isOpen,
@@ -84,11 +91,16 @@ export function useAddRepoLocalFolderFlow({
       mode: LocalPathAddMode = 'single'
     ): Promise<LocalPathAddResult> => {
       if (activeRuntimeEnvironmentId?.trim()) {
-        toast.error(addRepoRemoteHostPathRequiredMessage())
+        toast.error(
+          translate(
+            'auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974',
+            'Use a host path to add projects from a remote host.'
+          )
+        )
         closeModal()
         return { status: 'paused' }
       }
-      setAddProjectBusyLabel(addRepoScanningRepositoriesLabel())
+      setAddProjectBusyLabel('Scanning for repositories...')
       try {
         const attemptId = createNestedRepoTelemetryAttemptId()
         const scanId = createNestedRepoScanId()
@@ -148,7 +160,7 @@ export function useAddRepoLocalFolderFlow({
           })
           return { status: 'paused' }
         }
-        setAddProjectBusyLabel(addRepoOpeningProjectLabel())
+        setAddProjectBusyLabel('Opening project...')
         const repo = await addRepoPath(path, undefined, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
         })
@@ -244,8 +256,18 @@ export function useAddRepoLocalFolderFlow({
         return
       }
       if (skippedCount > 0) {
-        const skipped = addRepoSkippedBatchFoldersToast()
-        toast.info(skipped.title, { description: skipped.description })
+        toast.info(
+          translate(
+            'auto.components.sidebar.useAddRepoLocalFolderFlow.skippedBatchFolders',
+            'Some folders were skipped'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.useAddRepoLocalFolderFlow.skippedBatchFoldersDescription',
+              'Add skipped folders individually to review or confirm them.'
+            )
+          }
+        )
       }
       if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
         await onGitRepoReady(
@@ -272,7 +294,7 @@ export function useAddRepoLocalFolderFlow({
   const handleBrowse = useCallback(async (): Promise<void> => {
     const gen = ++localAddGenRef.current
     setIsAdding(true)
-    setAddProjectBusyLabel(addRepoChooseFolderLabel())
+    setAddProjectBusyLabel('Choose a folder...')
     try {
       const paths = await window.api.repos.pickFolders()
       if (paths.length === 0 || gen !== localAddGenRef.current) {

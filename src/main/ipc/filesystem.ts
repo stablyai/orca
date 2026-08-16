@@ -9,26 +9,24 @@ import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync, wslAwareSpawn } 
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type {
-  DirEntry,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GlobalSettings,
   GitStagingArea,
-  GitPushTarget,
-  GitUpstreamStatus,
   GitStatusResult,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult,
-  Repo,
-  TuiAgent
-} from '../../shared/types'
-import { translateMain } from '../i18n/main-i18n'
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -92,13 +90,9 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
-import {
-  resolveAuthorizedPath,
-  resolveRegisteredWorktreePath,
-  validateGitRelativeFilePath,
-  isENOENT,
-  authorizeExternalPath
-} from './filesystem-auth'
+import { resolveAuthorizedPath, authorizeExternalPath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { validateGitRelativeFilePath, isENOENT } from './filesystem-path-containment'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
@@ -136,7 +130,7 @@ import {
 import { listRepoWorktrees } from '../repo-worktrees'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
@@ -176,26 +170,14 @@ async function readLocalLogSnapshot(filePath: string): Promise<{
   try {
     const stats = await handle.stat()
     if (stats.size > MAX_TEXT_FILE_SIZE) {
-      const actualSize = (stats.size / 1024 / 1024).toFixed(1)
-      const maxSize = MAX_TEXT_FILE_SIZE / 1024 / 1024
       throw new Error(
-        translateMain(
-          'auto.main.ipc.filesystem.fileTooLarge',
-          `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
-          { actualSize, maxSize }
-        )
+        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
       )
     }
     const buffer = await handle.readFile()
     if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
-      const actualSize = (buffer.byteLength / 1024 / 1024).toFixed(1)
-      const maxSize = MAX_TEXT_FILE_SIZE / 1024 / 1024
       throw new Error(
-        translateMain(
-          'auto.main.ipc.filesystem.fileTooLarge',
-          `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
-          { actualSize, maxSize }
-        )
+        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
       )
     }
     if (isBinaryBuffer(buffer)) {
@@ -616,14 +598,8 @@ export function registerFilesystemHandlers(
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
-        const actualSize = (stats.size / 1024 / 1024).toFixed(1)
-        const maxSize = sizeLimit / 1024 / 1024
         throw new Error(
-          translateMain(
-            'auto.main.ipc.filesystem.fileTooLarge',
-            `File too large: ${actualSize}MB exceeds ${maxSize}MB limit`,
-            { actualSize, maxSize }
-          )
+          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
         )
       }
 

@@ -6,10 +6,9 @@ import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent
-} from '../../../shared/types'
-import { translate } from '@/i18n/i18n'
+  TerminalTab
+} from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
@@ -21,13 +20,12 @@ type WorktreeStatusHeuristicOptions = {
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
 }
 
-const STATUS_LABELS: Record<WorktreeStatus, () => string> = {
-  active: () => translate('auto.components.lib.worktreeStatus.active', 'Active'),
-  working: () => translate('auto.components.lib.worktreeStatus.working', 'Working'),
-  permission: () =>
-    translate('auto.components.lib.worktreeStatus.needsPermission', 'Needs permission'),
-  done: () => translate('auto.components.lib.worktreeStatus.done', 'Done'),
-  inactive: () => translate('auto.components.lib.worktreeStatus.inactive', 'Inactive')
+const STATUS_LABELS: Record<WorktreeStatus, string> = {
+  active: 'Active',
+  working: 'Working',
+  permission: 'Needs permission',
+  done: 'Done',
+  inactive: 'Inactive'
 }
 
 export function getWorktreeStatus(
@@ -112,7 +110,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {
-  return STATUS_LABELS[status]()
+  return STATUS_LABELS[status]
 }
 
 /**

@@ -1,21 +1,19 @@
 import {
+  getExecutionHostLabel,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import {
-  getTranslatedExecutionHostLabel,
-  translateExecutionHostLabel
-} from '@/components/sidebar/host-section-rows'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
-import type { ProjectHostSetup, Repo } from '../../../shared/types'
-import { translate } from '@/i18n/i18n'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 export type ProjectHostSetupOption =
   | {
@@ -39,6 +37,9 @@ export type ProjectHostSetupOption =
       // Why: only a genuine connection error warrants an alarm glyph; a dormant
       // disconnected host is merely not-yet-connected, not broken.
       attention: boolean
+      // Why: available hosts without a path can be set up in place; connecting or
+      // in-progress/unsupported hosts need a different next step.
+      canSetLocation: boolean
       connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
 
@@ -137,9 +138,7 @@ function buildReadySetupOptions({
       projectId: setup.projectId,
       hostId: setup.hostId,
       repoId: setup.repoId,
-      label: translateExecutionHostLabel(
-        hostById.get(setup.hostId)?.label || getTranslatedExecutionHostLabel(setup.hostId)
-      ),
+      label: hostById.get(setup.hostId)?.label || getExecutionHostLabel(setup.hostId),
       detail: setup.displayName,
       path: setup.path
     }))
@@ -184,7 +183,7 @@ function buildNeedsSetupOptions({
         kind: 'needs-setup' as const,
         projectId,
         hostId: host.id,
-        label: translateExecutionHostLabel(host.label || getTranslatedExecutionHostLabel(host.id)),
+        label: host.label || getExecutionHostLabel(host.id),
         detail: availability.isAvailable
           ? pendingSetup
             ? getPendingSetupDetail(pendingSetup)
@@ -192,6 +191,7 @@ function buildNeedsSetupOptions({
           : availability.detail,
         isAvailable: availability.isAvailable,
         attention: host.health === 'error',
+        canSetLocation: canSetProjectLocation(projectId, availability.isAvailable, pendingSetup),
         ...(connectAction ? { connectAction } : {})
       }
     })
@@ -216,10 +216,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
   if (host.health === 'blocked') {
     return {
       isAvailable: false,
-      detail: translate(
-        'auto.lib.project.host.setup.options.deb150c3a7',
-        'Orca server version is incompatible'
-      )
+      detail: 'Orca server version is incompatible'
     }
   }
   // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
@@ -235,10 +232,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     if (!host.capabilities) {
       return {
         isAvailable: false,
-        detail: translate(
-          'auto.lib.project.host.setup.options.e084b8f916',
-          'Checking host capabilities'
-        )
+        detail: 'Checking host capabilities'
       }
     }
     if (
@@ -247,10 +241,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     ) {
       return {
         isAvailable: false,
-        detail: translate(
-          'auto.lib.project.host.setup.options.dab97ff977',
-          'Update Orca on this host to set up projects'
-        )
+        detail: 'Update Orca on this host to set up projects'
       }
     }
   }
@@ -275,6 +266,23 @@ function getHostHealthUnavailableDetail(
     case 'local':
       return null
   }
+}
+
+function canSetProjectLocation(
+  projectId: string,
+  isAvailable: boolean,
+  pendingSetup: ProjectHostSetup | undefined
+): boolean {
+  // Why: setting up on another host links by project identity, and a host-local
+  // `repo:<id>` project has none to match against — the call always fails, so offer
+  // the plain status line rather than a button that only ever toasts an error.
+  if (!isAvailable || isHostLocalProjectId(projectId)) {
+    return false
+  }
+  if (!pendingSetup) {
+    return true
+  }
+  return pendingSetup.setupState === 'not-set-up' || pendingSetup.setupState === 'error'
 }
 
 function getHostConnectAction(
