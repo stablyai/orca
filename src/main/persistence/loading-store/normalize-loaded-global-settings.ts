@@ -131,6 +131,7 @@ export function normalizeLoadedGlobalSettings(
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
     claudeAgentTeamsDefaultDisabledMigrated: true,
+    bobDefaultDisabledMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),

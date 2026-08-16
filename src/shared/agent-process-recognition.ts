@@ -40,7 +40,8 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   gemini: ['node_modules/@google/gemini-cli/'],
   // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
   // and never shows `zcode` as the foreground name (a SEA build still matches by name).
-  zcode: ['node_modules/@zcode/cli/']
+  zcode: ['node_modules/@zcode/cli/'],
+  bob: ['node_modules/bobshell/']
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
