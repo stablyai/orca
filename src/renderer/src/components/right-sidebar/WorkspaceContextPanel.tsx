@@ -1,12 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { RefreshCw, X } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import type { AgentContextInstructionFile } from '../../../../shared/agent-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -16,14 +14,18 @@ import { useWorkspaceAgentContext } from './use-workspace-agent-context'
 import {
   agentsInContext,
   countPresent,
-  filterReportByAgent,
+  filterReportByAgents,
+  filterReportByScope,
   formatBytes,
   groupInstructionFiles,
   groupSkillsBySource,
   isPathInside,
-  selectSkillsForAgent,
-  selectWorkspaceSkills
+  selectSkillsForAgents,
+  selectSkillsForScope,
+  selectWorkspaceSkills,
+  type ContextScopeFilter
 } from './workspace-context-model'
+import { ContextScopeSwitch, ContextViewMenu } from './workspace-context-controls'
 import { ContextRow, ContextSection, EmptyRow, scopeLabel } from './workspace-context-rows'
 import { HookFilesBody, McpFilesBody, PluginsBody } from './workspace-context-sections'
 
@@ -84,12 +86,15 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
     skillsLoading,
     refresh
   } = useWorkspaceAgentContext()
-  const [agentFilter, setAgentFilter] = useState<TuiAgent | null>(null)
-  const report = useMemo(
-    () => filterReportByAgent(fullReport, agentFilter),
-    [fullReport, agentFilter]
-  )
+  // Why: `null` means every agent present — the default survives a rescan
+  // that adds an agent, where an explicit list would silently hide it.
+  const [agentFilter, setAgentFilter] = useState<TuiAgent[] | null>(null)
+  const [scope, setScope] = useState<ContextScopeFilter>('all')
   const [showMissing, setShowMissing] = useState(false)
+  const report = useMemo(
+    () => filterReportByScope(filterReportByAgents(fullReport, agentFilter), scope),
+    [fullReport, agentFilter, scope]
+  )
   const [filter, setFilter] = useState<SectionFilter>('all')
   const showSection = (key: SectionKey): boolean => filter === 'all' || filter === key
   const [open, setOpen] = useState<Record<SectionKey, boolean>>(DEFAULT_OPEN)
@@ -101,15 +106,31 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
   const workspaceCwd = report?.target.cwd ?? null
   const workspaceSkills = useMemo(
     () =>
-      selectSkillsForAgent(selectWorkspaceSkills(skills, workspaceCwd), skillSources, agentFilter),
-    [agentFilter, skillSources, skills, workspaceCwd]
+      selectSkillsForScope(
+        selectSkillsForAgents(
+          selectWorkspaceSkills(skills, workspaceCwd),
+          skillSources,
+          agentFilter
+        ),
+        scope
+      ),
+    [agentFilter, scope, skillSources, skills, workspaceCwd]
   )
   const agentOptions = useMemo(() => {
     const present = new Set(
       agentsInContext(fullReport, selectWorkspaceSkills(skills, workspaceCwd), skillSources)
     )
-    return AGENT_CATALOG.filter((entry) => present.has(entry.id))
+    return AGENT_CATALOG.filter((entry) => present.has(entry.id)).map((entry) => entry.id)
   }, [fullReport, skillSources, skills, workspaceCwd])
+  const setAgentEnabled = useCallback(
+    (agent: TuiAgent, enabled: boolean) =>
+      setAgentFilter((current) => {
+        const base = current ?? agentOptions
+        return enabled ? [...new Set([...base, agent])] : base.filter((entry) => entry !== agent)
+      }),
+    [agentOptions]
+  )
+  const adjustmentCount = (agentFilter ? 1 : 0) + (showMissing ? 1 : 0)
   const counts = countPresent(report)
   const skillGroups = useMemo(() => groupSkillsBySource(workspaceSkills), [workspaceSkills])
   const instructionGroups = useMemo(
@@ -167,6 +188,19 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
             {hostLabel ? ` · ${hostLabel}` : ''}
           </div>
         </div>
+        <ContextViewMenu
+          agentOptions={agentOptions}
+          agents={agentFilter}
+          showMissing={showMissing}
+          adjustmentCount={adjustmentCount}
+          onAgentEnabledChange={setAgentEnabled}
+          onAllAgentsEnabledChange={(enabled) => setAgentFilter(enabled ? null : [])}
+          onShowMissingChange={setShowMissing}
+          onReset={() => {
+            setAgentFilter(null)
+            setShowMissing(false)
+          }}
+        />
         <Button
           type="button"
           variant="ghost"
@@ -182,38 +216,8 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
           <RefreshCw className={cn(loading && 'animate-spin')} />
         </Button>
       </div>
-      <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
-        <AgentCombobox
-          agents={agentOptions}
-          value={agentFilter}
-          onValueChange={setAgentFilter}
-          allowBlankTerminal={false}
-          allowNarrowTrigger
-          emptyLabel={translate(
-            'auto.components.rightSidebar.WorkspaceContextPanel.allAgents',
-            'All agents'
-          )}
-          triggerClassName="h-7 min-w-0 flex-1"
-        />
-        {agentFilter ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setAgentFilter(null)}
-            aria-label={translate(
-              'auto.components.rightSidebar.WorkspaceContextPanel.clearAgentFilter',
-              'Show all agents'
-            )}
-            title={translate(
-              'auto.components.rightSidebar.WorkspaceContextPanel.clearAgentFilter',
-              'Show all agents'
-            )}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X />
-          </Button>
-        ) : null}
+      <div className="border-b border-border px-3 py-1.5">
+        <ContextScopeSwitch scope={scope} onScopeChange={setScope} />
       </div>
       <div
         role="tablist"
@@ -241,17 +245,6 @@ export default function WorkspaceContextPanel(): React.JSX.Element {
           </button>
         ))}
       </div>
-      <label className="flex cursor-pointer items-center gap-2 border-b border-border px-4 py-1.5 text-xs text-muted-foreground">
-        <Checkbox
-          className="size-3.5"
-          checked={showMissing}
-          onCheckedChange={(checked) => setShowMissing(checked === true)}
-        />
-        {translate(
-          'auto.components.rightSidebar.WorkspaceContextPanel.showMissing',
-          'Show locations that were checked but empty'
-        )}
-      </label>
       {error ? (
         <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>
       ) : null}

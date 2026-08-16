@@ -14945,7 +14945,13 @@
           "filterMcp": "MCP",
           "filterLabel": "Filter sections",
           "allAgents": "All agents",
-          "clearAgentFilter": "Show all agents"
+          "clearAgentFilter": "Show all agents",
+          "scopeAriaLabel": "Agent context scope",
+          "viewOptions": "Agent context view options",
+          "agents": "Agents",
+          "selectAllAgents": "Select all",
+          "clearAgents": "Clear",
+          "resetView": "Reset view"
         }
       },
       "link": {

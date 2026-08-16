@@ -7,9 +7,11 @@ import type { AgentContextReport } from '../../../../shared/agent-context'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import {
   agentsInContext,
-  filterReportByAgent,
+  filterReportByAgents,
+  filterReportByScope,
   groupInstructionFiles,
-  selectSkillsForAgent,
+  selectSkillsForAgents,
+  selectSkillsForScope,
   selectWorkspaceSkills
 } from './workspace-context-model'
 
@@ -43,28 +45,69 @@ vi.mock('./use-workspace-agent-context', () => ({
     ...testState.context
   })
 }))
-vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({
-    value,
-    agents,
-    onValueChange
+// Why: Radix menus and toggle groups need pointer/layout APIs happy-dom lacks;
+// the panel test drives the same props through plain controls.
+vi.mock('./workspace-context-controls', () => ({
+  ContextScopeSwitch: ({
+    scope,
+    onScopeChange
   }: {
-    value: string | null
-    agents: { id: string }[]
-    onValueChange: (agent: string | null) => void
+    scope: string
+    onScopeChange: (scope: 'workspace' | 'user' | 'all') => void
   }) => (
     <select
-      data-testid="agent-filter"
-      value={value ?? ''}
-      onChange={(event) => onValueChange(event.target.value || null)}
+      data-testid="scope"
+      value={scope}
+      onChange={(event) => onScopeChange(event.target.value as 'workspace' | 'user' | 'all')}
     >
-      <option value="">All agents</option>
-      {agents.map((agent) => (
-        <option key={agent.id} value={agent.id}>
-          {agent.id}
-        </option>
-      ))}
+      <option value="workspace">Workspace</option>
+      <option value="user">User</option>
+      <option value="all">All</option>
     </select>
+  ),
+  ContextViewMenu: ({
+    agentOptions,
+    agents,
+    showMissing,
+    onAgentEnabledChange,
+    onAllAgentsEnabledChange,
+    onShowMissingChange
+  }: {
+    agentOptions: readonly string[]
+    agents: readonly string[] | null
+    showMissing: boolean
+    onAgentEnabledChange: (agent: string, enabled: boolean) => void
+    onAllAgentsEnabledChange: (enabled: boolean) => void
+    onShowMissingChange: (showMissing: boolean) => void
+  }) => (
+    <div data-testid="view-menu">
+      {agentOptions.map((agent) => (
+        <button
+          key={agent}
+          type="button"
+          data-testid={`agent-${agent}`}
+          aria-pressed={agents === null || agents.includes(agent)}
+          onClick={() => onAgentEnabledChange(agent, !(agents === null || agents.includes(agent)))}
+        >
+          {agent}
+        </button>
+      ))}
+      <button
+        type="button"
+        data-testid="agents-clear"
+        onClick={() => onAllAgentsEnabledChange(false)}
+      >
+        clear
+      </button>
+      <button
+        type="button"
+        data-testid="show-missing"
+        aria-pressed={showMissing}
+        onClick={() => onShowMissingChange(!showMissing)}
+      >
+        missing
+      </button>
+    </div>
   )
 }))
 vi.mock('@/lib/agent-catalog', () => ({
@@ -177,9 +220,9 @@ describe('WorkspaceContextPanel', () => {
 
   it('reveals checked-but-empty locations when toggled', () => {
     act(() => root.render(<WorkspaceContextPanel />))
-    const checkbox = container.querySelector('[role="checkbox"]') as HTMLButtonElement
+    const toggle = container.querySelector('[data-testid="show-missing"]') as HTMLButtonElement
     act(() => {
-      checkbox.click()
+      toggle.click()
     })
     expect(container.textContent).toContain('GEMINI.md')
     expect(container.textContent).toContain('not found')
@@ -211,19 +254,36 @@ describe('WorkspaceContextPanel', () => {
 
   it('offers only agents present in the workspace and narrows every section to the chosen one', () => {
     act(() => root.render(<WorkspaceContextPanel />))
-    const select = container.querySelector('[data-testid="agent-filter"]') as HTMLSelectElement
-    expect([...select.options].map((option) => option.value)).toEqual(['', 'claude', 'gemini'])
-    act(() => {
-      select.value = 'gemini'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    const checkbox = container.querySelector('[role="checkbox"]') as HTMLButtonElement
-    act(() => checkbox.click())
+    const menu = container.querySelector('[data-testid="view-menu"]') as HTMLElement
+    expect(
+      [...menu.querySelectorAll('[data-testid^="agent-"]')].map((el) => el.textContent)
+    ).toEqual(['claude', 'gemini'])
+    act(() => (menu.querySelector('[data-testid="agent-claude"]') as HTMLButtonElement).click())
+    act(() => (menu.querySelector('[data-testid="show-missing"]') as HTMLButtonElement).click())
     const text = container.textContent ?? ''
     expect(text).toContain('GEMINI.md')
     expect(text).not.toContain('/home/u/repo/CLAUDE.md')
     expect(text).not.toContain('linear')
     expect(text).not.toContain('adhd@local')
+  })
+
+  it('narrows to workspace-scoped rows with the scope switch', () => {
+    act(() => root.render(<WorkspaceContextPanel />))
+    const select = container.querySelector('[data-testid="scope"]') as HTMLSelectElement
+    act(() => {
+      select.value = 'workspace'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const text = container.textContent ?? ''
+    expect(text).toContain('/home/u/repo/CLAUDE.md')
+    expect(text).not.toContain('/home/u/.claude/CLAUDE.md')
+    expect(text).not.toContain('adhd@local')
+    act(() => {
+      select.value = 'user'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('/home/u/.claude/CLAUDE.md')
+    expect(container.textContent).not.toContain('linear')
   })
 
   it('shows the empty state without an active worktree', () => {
@@ -278,19 +338,21 @@ describe('workspace-context-model', () => {
     expect(groupInstructionFiles(files, true).map((group) => group.files.length)).toEqual([2, 1])
   })
 
-  it('narrows the report and skills to one agent', () => {
+  it('narrows the report and skills to the chosen agents', () => {
     const full = report()
-    const claude = filterReportByAgent(full, 'claude')
+    const claude = filterReportByAgents(full, ['claude'])
     expect(claude?.instructionFiles.map((file) => file.id)).toEqual([
       'home-claude-md',
       'project-claude-md'
     ])
     expect(claude?.mcpFiles).toHaveLength(1)
-    const gemini = filterReportByAgent(full, 'gemini')
+    const gemini = filterReportByAgents(full, ['gemini'])
     expect(gemini?.instructionFiles.map((file) => file.id)).toEqual(['project-gemini-md'])
     expect(gemini?.mcpFiles).toHaveLength(0)
     expect(gemini?.plugins).toHaveLength(0)
-    expect(filterReportByAgent(full, null)).toBe(full)
+    expect(filterReportByAgents(full, null)).toBe(full)
+    expect(filterReportByAgents(full, ['claude', 'gemini'])?.instructionFiles).toHaveLength(3)
+    expect(filterReportByAgents(full, [])?.instructionFiles).toHaveLength(0)
 
     const sources: SkillDiscoverySource[] = [
       {
@@ -341,11 +403,11 @@ describe('workspace-context-model', () => {
       skill('claude-only', '/h/.claude/skills', ['claude']),
       skill('plugin', '/h/.claude/plugins/cache/x', ['claude'])
     ]
-    expect(selectSkillsForAgent(skills, sources, 'grok').map((entry) => entry.id)).toEqual([
+    expect(selectSkillsForAgents(skills, sources, ['grok']).map((entry) => entry.id)).toEqual([
       'shared',
       'grok-only'
     ])
-    expect(selectSkillsForAgent(skills, sources, 'claude').map((entry) => entry.id)).toEqual([
+    expect(selectSkillsForAgents(skills, sources, ['claude']).map((entry) => entry.id)).toEqual([
       'shared',
       'claude-only',
       'plugin'
@@ -353,5 +415,20 @@ describe('workspace-context-model', () => {
     expect(agentsInContext(full, skills, sources).sort()).toEqual(
       ['claude', 'gemini', 'grok'].sort()
     )
+    expect(selectSkillsForScope(skills, 'user').map((entry) => entry.id)).toEqual(
+      skills.map((entry) => entry.id)
+    )
+    expect(selectSkillsForScope(skills, 'workspace')).toEqual([])
+  })
+
+  it('splits the report between the workspace tree and the user home', () => {
+    const full = report()
+    const workspace = filterReportByScope(full, 'workspace')
+    expect(workspace?.instructionFiles.map((file) => file.scope)).toEqual(['project', 'project'])
+    expect(workspace?.plugins).toHaveLength(0)
+    const user = filterReportByScope(full, 'user')
+    expect(user?.instructionFiles.map((file) => file.id)).toEqual(['home-claude-md'])
+    expect(user?.mcpFiles).toHaveLength(0)
+    expect(filterReportByScope(full, 'all')).toBe(full)
   })
 })
