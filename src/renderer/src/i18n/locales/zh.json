@@ -10124,7 +10124,7 @@
                   "d5b3be8ecd": "重新检查",
                   "8cbc39f862": "了解更多",
                   "707180d09c": "glab auth login",
-                  "4be0616873": "GitLab CLI 已安装但未通过身份验证。请在终端中运行此命令：",
+                  "4be0616873": "GitLab CLI 已安装但未通过身份验证，请在终端中运行此命令：",
                   "54a640af7a": "安装 GitLab CLI",
                   "b56fd5676a": "安装 GitLab CLI 以启用合并请求、议题和流水线",
                   "faddeb763d": "此运行时暂不支持 GitLab CLI 状态",
@@ -10132,7 +10132,7 @@
                   "2a6b359e75": "glab",
                   "1f2b347bd3": "通过",
                   "8d90249d22": "gh auth login",
-                  "2e44dda68a": "GitHub CLI 已安装但未通过身份验证。请在终端中运行此命令：",
+                  "2e44dda68a": "GitHub CLI 已安装但未通过身份验证，请在终端中运行此命令：",
                   "7755c28af5": "安装 GitHub CLI",
                   "23cb5a0dee": "安装 GitHub CLI 以启用拉取请求、议题和检查",
                   "6f30fc4216": "此运行时暂不支持 GitHub CLI 状态",
@@ -10154,8 +10154,8 @@
               "cards": {
                 "c90f2ef419": "重新检查",
                 "dd3529015d": "断开 {{value0}}",
-                "8b2408a8e5": "此运行时已连接 Jira。如果已连接的站点列表看起来过期，请重新检查",
-                "8c20e76308": "每个已连接的 Jira 站点都由活动运行时存储一个 token",
+                "8b2408a8e5": "此运行时已连接 Jira，如果已连接的站点列表看起来过期，请重新检查",
+                "8c20e76308": "每个已连接的 Jira 站点都由活动运行时存储一个 Token",
                 "c24e56c532": "测试",
                 "3e7c10d286": "测试中...",
                 "a2c0015fb8": "已验证",
@@ -10164,8 +10164,8 @@
                 "7ca5ffffdb": "从 Jira Cloud 议题浏览、创建并开始工作",
                 "a1093a06c7": "在显示设置操作前正在检查 Jira 访问权限",
                 "9fa04a032e": "{{value0}} 个站点{{value1}} 已连接",
-                "cef18762a2": "用 Linear 设置里的个人 API 密钥添加访问权限。完全访问密钥可看到密钥所有者能访问的所有团队",
-                "6224fe9d34": "每个已连接的 Linear 工作区都有一个由活动运行时存储的密钥。全权限密钥可覆盖密钥所有者可访问的所有团队；受限密钥可随时更换",
+                "cef18762a2": "用 Linear 设置里的个人 API 密钥添加访问权限，完全访问密钥可看到密钥所有者能访问的所有团队",
+                "6224fe9d34": "每个已连接的 Linear 工作区都有一个由活动运行时存储的密钥，全权限密钥可覆盖密钥所有者可访问的所有团队，受限密钥可随时更换",
                 "1a12e33fe5": "添加 Linear 访问",
                 "622c224082": "添加工作区访问权限",
                 "eae4a9f16b": "添加 Linear 访问以浏览和链接议题",
@@ -10173,8 +10173,8 @@
                 "e1f5e6424c": "{{value0}} 个工作区{{value1}} 已连接",
                 "disconnect_all": "断开连接",
                 "account_scope_prefix": "账户范围",
-                "2d60ec7921": "使用 API token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira。凭据会发送到所选远程运行时并以运行时支持的加密方式存储",
-                "977e360b71": "使用 API token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira。凭据存储在本地，本地运行时存储支持时会进行加密",
+                "2d60ec7921": "使用 API token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据会发送到所选远程运行时并以运行时支持的加密方式存储",
+                "977e360b71": "使用 API token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据存储在本地，本地运行时存储支持时会进行加密",
                 "statusConnected": "已连接",
                 "statusNotConnected": "未连接"
               }
@@ -10188,17 +10188,17 @@
                 "cards": {
                   "793a06e899": "重新检查",
                   "1a9475dace": "了解更多",
-                  "19fb419c12": "Gitea 凭据已配置但无法通过身份验证。请检查 token、API 基础 URL 和仓库权限；如果环境变量已更改，请重启 Orca",
+                  "19fb419c12": "Gitea 凭据已配置但无法通过身份验证，请检查 token、API 基础 URL 和仓库权限；如果环境变量已更改，请重启 Orca",
                   "60708f23da": "则仅当 Orca 无法从 remote 推导出 API URL 时。",
                   "709057ad91": "ORCA_GITEA_API_BASE_URL",
                   "6da9dfa5de": "用于私有仓库，设置",
                   "6d5c2a3005": "ORCA_GITEA_TOKEN",
-                  "fcbe0469fd": "公开仓库会从其 git remote 检测。设置",
+                  "fcbe0469fd": "公开仓库会从其 git remote 检测，设置",
                   "0613928cb3": "此运行时暂不支持 Gitea 状态",
                   "05863d2599": "通过 Gitea REST API 获取 pull request 和 commit 状态",
                   "52f75876be": "已检测仓库的 pull request 和 commit 状态",
                   "0b5242f8a2": "{{value0}} · 拉取请求和提交状态",
-                  "40f678df73": "Azure DevOps 凭据已配置但无法通过身份验证。请检查 token、API 基础 URL 和仓库权限；如果环境变量已更改，请重启 Orca",
+                  "40f678df73": "Azure DevOps 凭据已配置但无法通过身份验证，请检查 token、API 基础 URL 和仓库权限，如果环境变量已更改，请重启 Orca",
                   "7bd345e3f6": "则仅当 Orca 无法从 git remote 推导出 API 基础 URL 时",
                   "186a6689df": "ORCA_AZURE_DEVOPS_API_BASE_URL",
                   "b8a10b07c1": "。设置",
@@ -10210,7 +10210,7 @@
                   "0eb50d5593": "通过 Azure DevOps REST API token 获取 pull request 和构建状态",
                   "54636c65d4": "已检测 Azure Repos 的 pull request 和构建状态",
                   "ea204f5e03": "{{value0}} · 拉取请求和构建状态",
-                  "6154b02093": "Bitbucket 凭据已配置但无法通过身份验证。请检查 token 和仓库权限；如果环境变量已更改，请重启 Orca",
+                  "6154b02093": "Bitbucket 凭据已配置但无法通过身份验证，请检查 token 和仓库权限，如果环境变量已更改，请重启 Orca",
                   "e63fe8f627": "ORCA_BITBUCKET_ACCESS_TOKEN",
                   "19416c874c": "ORCA_BITBUCKET_API_TOKEN",
                   "fc71a0e7aa": "和",
@@ -10313,7 +10313,7 @@
           "windows": "Windows",
           "wsl": "WSL",
           "selectDistro": "选择发行版",
-          "runtimeChangeHelp": "运行时更改应用于此项目的新终端、代理检查和技能发现。已有终端保留其当前运行时",
+          "runtimeChangeHelp": "运行时更改应用于此项目的新终端、代理检查和技能发现，已有终端保留其当前运行时",
           "wslUnavailable": "WSL 不可用。请将此项目切换到 Windows 或修复 WSL",
           "distroMissing": "WSL 中未安装 {{value0}}。请选择已安装的发行版，或将此项目切换到 Windows",
           "distroRequired": "选择一个 WSL 发行版，或将此项目切换到 Windows",
@@ -10326,7 +10326,7 @@
           "activeTaskSingular": "{{count}} 个活动任务",
           "activeTaskPlural": "{{count}} 个活动任务",
           "runtimeSessionJoin": "{{value0}}和{{value1}}",
-          "runtimeSessionWarning": "{{value0}}会继续在当前运行时中运行。继续前请等待任务完成或重启终端",
+          "runtimeSessionWarning": "{{value0}}会继续在当前运行时中运行，继续前请等待任务完成或重启终端",
           "pendingRuntimeChange": "运行时更改待处理。应用后，新项目工作将使用所选运行时",
           "cancel": "取消",
           "applyRuntimeChange": "应用运行时更改"
@@ -10384,7 +10384,7 @@
         },
         "MobileEmulatorSdkStatus": {
           "536026130e": "模拟器 SDK",
-          "dde0ec1cd8": "运行模拟器的工具链：Android 需 Android SDK；iOS 模拟器需 macOS 上的 Xcode",
+          "dde0ec1cd8": "运行模拟器的工具链：Android 需 Android SDK，iOS 模拟器需 macOS 上的 Xcode",
           "027cbf668a": "Android SDK",
           "f6d080d128": "正在使用配置的路径",
           "7fe4bd5907": "检测位置",
@@ -10430,7 +10430,7 @@
           "notificationPlaygroundDescription": "用于检查提示布局、恢复操作和长文案换行的开发触发器",
           "devOnly": "仅开发",
           "orcaCloud": "Orca Cloud",
-          "orcaCloudDescription": "开发环境云登录预览(生产隐藏)；配置 ORCA_CLOUD_API_URL 与 ORCA_CLOUD_CLIENT_ID 后可出现在账户切换器",
+          "orcaCloudDescription": "开发环境云登录预览(生产隐藏)，配置 ORCA_CLOUD_API_URL 与 ORCA_CLOUD_CLIENT_ID 后可出现在账户切换器",
           "orcaCloudStatus": "状态",
           "orcaCloudSignOut": "退出登录",
           "orcaCloudConnect": "连接配置文件",
@@ -15628,16 +15628,16 @@
                 "label": "链接"
               },
               "orca": {
-                "note": "Orca 可以使用已导入的 Cookie 打开已登录的网站。",
+                "note": "Orca 可以使用已导入的 Cookie 打开已登录的网站",
                 "button": "在 Orca 中打开"
               },
               "settings": {
-                "note": "之后可在设置 → 浏览器中更改。"
+                "note": "之后可在设置 → 浏览器中更改"
               },
               "shortcut": {
                 "note": {
                   "prefix": "当链接在 Orca 中打开时，",
-                  "suffix": "点击可临时改用系统浏览器。"
+                  "suffix": "点击可临时改用系统浏览器"
                 }
               },
               "system": {
@@ -15676,7 +15676,7 @@
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} 来源不可用：{{value1}}",
         "someSourceHostsUnavailable": "部分 {{value0}} 来源主机不可用：{{value1}}",
-        "reconnectOrUpdateTitle": "重新连接或更新 {{value0}} 以加载此来源。",
+        "reconnectOrUpdateTitle": "重新连接或更新 {{value0}} 以加载此来源",
         "sourceHostsCount": "{{count}} 个来源主机",
         "noHost": "无主机",
         "accountPrefix": "账户：{{value0}}",
@@ -15714,7 +15714,7 @@
             "openGithub": "打开 GitHub",
             "starOnGithub": "在 GitHub 上加星",
             "onboardingCompleted": "入门流程已完成！",
-            "body": "如果你目前喜欢 Orca，在 GitHub 上加星可以帮助其他开发者发现它。",
+            "body": "如果你目前喜欢 Orca，在 GitHub 上加星可以帮助其他开发者发现它",
             "dismiss": "关闭",
             "later": "稍后"
           }
@@ -15739,10 +15739,10 @@
       },
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 筛选器",
-        "teamRequired": "选择一个团队以加载此工作区的状态、负责人和标签。",
+        "teamRequired": "选择一个团队以加载此工作区的状态、负责人和标签",
         "filters": "筛选器",
         "allWorkspacesTitle": "选择一个工作区",
-        "allWorkspacesBody": "状态、负责人和标签筛选器使用单个 Linear 工作区的 ID。请选择一个工作区以按这些属性进行筛选。",
+        "allWorkspacesBody": "状态、负责人和标签筛选器使用单个 Linear 工作区的 ID。请选择一个工作区以按这些属性进行筛选",
         "optionsFromTeam": "来自 {{team}} 的选项",
         "clearAll": "清除所有筛选器"
       },
@@ -15771,9 +15771,9 @@
           "drawHintBadge": "新建",
           "drawHintDismiss": "知道了",
           "drawHintTry": "试一试",
-          "errorAttach": "无法附加标注后的截图。",
-          "errorCapture": "无法捕获页面进行绘制。",
-          "errorUnavailable": "此页面无法使用截图标注。",
+          "errorAttach": "无法附加标注后的截图",
+          "errorCapture": "无法捕获页面进行绘制",
+          "errorUnavailable": "此页面无法使用截图标注",
           "fontSize": "字号",
           "hint": "在页面上绘制，然后复制标注以粘贴到你的代理",
           "redo": "重做",
@@ -15791,10 +15791,10 @@
           "widthOption": "{{value0}} px"
         },
         "grab": {
-          "errorNotReady": "此页面尚未准备好进行元素选择。",
-          "errorNotAuthorized": "浏览器访问被拒绝。",
-          "errorAlreadyActive": "元素选择已处于活动状态。",
-          "errorInjectionFailed": "无法在此页面上启动元素选择。"
+          "errorNotReady": "此页面尚未准备好进行元素选择",
+          "errorNotAuthorized": "浏览器访问被拒绝",
+          "errorAlreadyActive": "元素选择已处于活动状态",
+          "errorInjectionFailed": "无法在此页面上启动元素选择"
         }
       },
       "pluginCatalog": {
@@ -16407,6 +16407,15 @@
       "unassignedInstruction": "在聚焦窗格中开始语音听写前，请先指定听写快捷键。",
       "settingsInstruction": "随时可在此处更改模型、听写模式或快捷键",
       "settingsLink": "设置 → 语音"
+    }
+  },
+  "shared": {
+    "github": {
+      "pullRequestMergeMethods": {
+        "squashAndMerge": "压缩并合并",
+        "createMergeCommit": "创建合并提交",
+        "rebaseAndMerge": "变基并合并"
+      }
     }
   },
   "common": {

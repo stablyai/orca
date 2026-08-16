@@ -16918,6 +16918,15 @@
       "settingsLink": "Settings → Voice"
     }
   },
+  "shared": {
+    "github": {
+      "pullRequestMergeMethods": {
+        "squashAndMerge": "Squash and merge",
+        "createMergeCommit": "Create merge commit",
+        "rebaseAndMerge": "Rebase and merge"
+      }
+    }
+  },
   "common": {
     "unassigned": "Unassigned"
   }

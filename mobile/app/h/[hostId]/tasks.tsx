@@ -163,6 +163,8 @@ import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
 } from '../../../../src/shared/github/project-identity'
+import { GITHUB_PR_MERGE_METHOD_I18N_KEYS } from '../../../../src/shared/github/pull-request-merge-methods'
+import { translate } from '../../../../src/renderer/src/i18n/i18n'
 
 type RepoSummary = {
   id: string
@@ -1280,13 +1282,14 @@ function getGitHubMergeLabel(item: GitHubWorkItem): string {
 }
 
 function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
-  if (method === 'squash') {
-    return 'Squash and merge'
-  }
-  if (method === 'rebase') {
-    return 'Rebase and merge'
-  }
-  return 'Create merge commit'
+  return translate(
+    GITHUB_PR_MERGE_METHOD_I18N_KEYS[method],
+    method === 'squash'
+      ? 'Squash and merge'
+      : method === 'rebase'
+        ? 'Rebase and merge'
+        : 'Create merge commit'
+  )
 }
 
 function hostedReviewMergeTargetLabel(item: HostedReviewItem): string {
@@ -1296,9 +1299,12 @@ function hostedReviewMergeTargetLabel(item: HostedReviewItem): string {
 function getHostedMergeConfirmMessage(pending: PendingHostedMerge): string {
   const target = hostedReviewMergeTargetLabel(pending.item)
   if (pending.method === 'squash') {
-    return `Squash and merge ${target} #${pending.item.source.number}?`
+    return `${translate(GITHUB_PR_MERGE_METHOD_I18N_KEYS.squash, 'Squash and merge')} ${target} #${pending.item.source.number}?`
   }
-  const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
+  const action =
+    pending.method === 'rebase'
+      ? translate(GITHUB_PR_MERGE_METHOD_I18N_KEYS.rebase, 'Rebase and merge')
+      : translate(GITHUB_PR_MERGE_METHOD_I18N_KEYS.merge, 'Merge')
   return `${action} ${target} #${pending.item.source.number}?`
 }
 
