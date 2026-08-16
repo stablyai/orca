@@ -7,24 +7,35 @@ import type { AgentContextReport } from '../../../../shared/agent-context'
 
 const testState = vi.hoisted(() => ({
   worktree: null as null | { id: string; path: string },
-  runtimeTarget: { kind: 'local' } as unknown,
+  hostKind: 'local' as 'local' | 'runtime' | 'ssh' | 'unresolved',
   pending: new Map<string, (report: AgentContextReport) => void>()
 }))
 
 vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => testState.worktree }))
-vi.mock('@/hooks/use-active-skill-discovery-runtime-target', () => ({
-  useActiveSkillDiscoveryRuntimeTarget: () => testState.runtimeTarget
+vi.mock('@/store', () => ({
+  useAppStore: <T,>(selector: (state: unknown) => T): T => selector({})
 }))
-vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
-  useActiveProjectSkillRuntime: () => ({ discoveryTarget: { runtime: 'native-host' } })
+vi.mock('@/components/native-chat/native-chat-skill-discovery-context', () => ({
+  selectNativeChatSkillStateInputs: (state: unknown) => state
 }))
-vi.mock('@/hooks/useInstalledAgentSkills', () => ({
-  useInstalledAgentSkillNames: () => ({
-    skills: [],
-    sources: [],
-    loading: false,
-    refresh: async () => true
-  })
+vi.mock('./workspace-context-target', () => ({
+  resolveWorkspaceContextTarget: (_state: unknown, worktreeId: string | null) => {
+    if (!worktreeId || !testState.worktree || testState.hostKind === 'unresolved') {
+      return null
+    }
+    const cwd = testState.worktree.path
+    return {
+      key: JSON.stringify([testState.hostKind, cwd]),
+      cwd,
+      executionHostKind: testState.hostKind,
+      runtimeTarget: { kind: 'local' },
+      discoveryTarget: { cwd, worktreeId }
+    }
+  }
+}))
+vi.mock('@/runtime/runtime-skills-client', () => ({
+  // Why: skills stay pending; these tests watch the report path.
+  discoverSkillsForRuntimeTarget: () => new Promise(() => {})
 }))
 vi.mock('@/runtime/runtime-agent-context-client', () => ({
   inspectAgentContextForRuntimeTarget: (_runtime: unknown, target: { cwd: string }) =>
@@ -60,6 +71,7 @@ describe('useWorkspaceAgentContext', () => {
   }
 
   beforeEach(() => {
+    testState.hostKind = 'local'
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -93,6 +105,21 @@ describe('useWorkspaceAgentContext', () => {
     })
     expect(latest?.report?.target.cwd).toBe('/w/b')
     expect(latest?.loading).toBe(false)
+  })
+
+  it('names why nothing can be read for SSH and unresolved-runtime workspaces', () => {
+    testState.worktree = { id: 'a', path: '/w/a' }
+    testState.hostKind = 'ssh'
+    act(() => root.render(<Probe />))
+    expect(latest?.unavailable).toBe('ssh')
+    expect(latest?.loading).toBe(false)
+    expect(testState.pending.size).toBe(0)
+
+    testState.hostKind = 'unresolved'
+    testState.worktree = { id: 'b', path: '/w/b' }
+    act(() => root.render(<Probe />))
+    expect(latest?.unavailable).toBe('runtime-unresolved')
+    expect(latest?.report).toBeNull()
   })
 
   it('clears the report and stops loading without a worktree', () => {
