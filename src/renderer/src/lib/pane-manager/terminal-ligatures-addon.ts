@@ -98,16 +98,25 @@ function createCachedCharacterJoiner(
  *  matcher otherwise retries every known ligature at every character. */
 export class TerminalLigaturesAddon extends LigaturesAddon {
   override activate(terminal: Terminal): void {
-    const cache = new LigatureRangeCache()
+    // Why one cache per joiner (not one shared cache): the cache is keyed only
+    // by row text, so a shared instance made one joiner's cached result
+    // shadow every other joiner registered through this proxy — the ligature
+    // joiner's `[]` suppressed later joiners for the same row entirely.
+    const caches: LigatureRangeCache[] = []
     const terminalForAddon = new Proxy(terminal, {
       get(target, property) {
         if (property === 'registerCharacterJoiner') {
-          return (joiner: CharacterJoiner): number =>
-            target.registerCharacterJoiner(createCachedCharacterJoiner(target, joiner, cache))
+          return (joiner: CharacterJoiner): number => {
+            const cache = new LigatureRangeCache()
+            caches.push(cache)
+            return target.registerCharacterJoiner(createCachedCharacterJoiner(target, joiner, cache))
+          }
         }
         if (property === 'refresh') {
           return (start: number, end: number): void => {
-            cache.clear()
+            for (const cache of caches) {
+              cache.clear()
+            }
             target.refresh(start, end)
           }
         }
