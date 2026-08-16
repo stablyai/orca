@@ -414,7 +414,7 @@ describe('useAllHostClients', () => {
     connectMock.mockReturnValue(client)
     loadHostsMock.mockResolvedValue([HOST])
     let pendingPath: MobileConnectionPath | null | undefined
-    let renderer: ReturnType<typeof create> | null = null
+    let renderer!: ReturnType<typeof create>
 
     function Probe(): null {
       pendingPath = useAllHostClients([HOST.id])[0]?.pendingPath
@@ -430,7 +430,7 @@ describe('useAllHostClients', () => {
     act(() => client.emitPendingPath('relay'))
     expect(pendingPath).toBe('relay')
 
-    act(() => renderer?.unmount())
+    act(() => renderer.unmount())
   })
 
   it('only opens the requested startup subset', async () => {
