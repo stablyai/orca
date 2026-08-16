@@ -137,7 +137,7 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'jcode',
-        args: ['run', '--no-update', '--quiet', '--json', 'name this branch'],
+        args: ['--no-update', '--quiet', '--no-selfdev', 'run', '--json', 'name this branch'],
         stdinPayload: null,
         label: 'Jcode'
       }

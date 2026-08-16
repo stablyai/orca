@@ -730,9 +730,12 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     // branch naming and small diffs, argv-capped on Windows).
     promptDelivery: 'argv',
     buildArgs: ({ prompt, model }) => [
-      'run',
+      // Why: the documented wrapper pattern is `jcode --quiet --no-update
+      // --no-selfdev run "…"` — global flags before the subcommand.
       '--no-update',
       '--quiet',
+      '--no-selfdev',
+      'run',
       '--json',
       // Why: bare `default` (or an empty model) lets jcode use the model
       // configured in its own config.toml, so no provider is hardcoded here.

@@ -63,6 +63,21 @@ describe('parseJcodeSessionFile', () => {
     expect(session?.resumeCommand).toContain("jcode --resume 'session_badger_123'")
   })
 
+  it('skips a malformed (partially written) session doc', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-jcode-parser-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'session_badger_456.json')
+    const mtimeMs = Date.now()
+    await writeFile(path, '{"id": "session_badger_456", "messages": [{"role": "user",')
+
+    const session = await parseJcodeSessionFile({
+      path,
+      mtimeMs,
+      modifiedAt: new Date(mtimeMs).toISOString()
+    })
+    expect(session).toBeNull()
+  })
+
   it('falls back to the file name for the session id', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-jcode-parser-'))
     tempDirs.push(dir)

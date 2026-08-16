@@ -360,6 +360,23 @@ describe('shared agent-hook-listener', () => {
     expect(event?.providerSession).toEqual({ key: 'session_id', id: 'session_jc_4' })
   })
 
+  it('does not count a direct jcode prompt without journal evidence as explicit', () => {
+    // Why: regression — a post_tool/turn_end prompt without a usable session id
+    // has no journal backing, so it must not set hasExplicitPrompt.
+    const event = normalizeHookPayload(
+      state,
+      'jcode',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'post_tool',
+        payload: { event: 'post_tool', tool_name: 'read_file', prompt: 'fix the bug' }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({ agentType: 'jcode', state: 'working' })
+    expect(event?.hasExplicitPrompt).toBeFalsy()
+  })
+
   it('keeps a normal Claude PreToolUse tool call as working', () => {
     const event = normalizeHookPayload(
       state,

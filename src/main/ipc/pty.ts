@@ -6282,13 +6282,16 @@ export function registerPtyHandlers(
           }
           // Why: jcode runs one server/client daemon per runtime dir, so a
           // per-pane dir keeps every PTY on its own daemon (hooks inherit the
-          // pane key instead of the first pane's). Local unix sockets only;
-          // the dir is created idempotently here for both the renderer
-          // pty:spawn path and the runtime createTerminal path.
+          // pane key instead of the first pane's). Local unix sockets only.
+          // LocalPtyProvider.spawn creates the dir async; daemon-host spawns
+          // skip that provider, so ensure sync here — an extra await before
+          // provider.spawn would reorder the pane-spawn reservation race.
           if (!args.connectionId) {
             const jcodeEnv = buildJcodeRuntimeDirEnv(stablePaneKey)
             if (jcodeEnv) {
-              mkdirSync(jcodeEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+              if (isDaemonHostSpawn) {
+                mkdirSync(jcodeEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+              }
               Object.assign(baseEnv, jcodeEnv)
             }
           }

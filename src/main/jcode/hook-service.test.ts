@@ -14,6 +14,7 @@ vi.mock('os', async () => {
 
 import { JcodeHookService } from './hook-service'
 import { getJcodeConfigPath, getJcodeManagedScriptPath } from './hook-settings'
+import { tomlQuoteString } from './hook-config'
 
 describe('JcodeHookService', () => {
   let homeDir: string
@@ -21,6 +22,9 @@ describe('JcodeHookService', () => {
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-jcode-home-'))
     homedirMock.mockReturnValue(homeDir)
+    // Why: getJcodeConfigPath prefers JCODE_HOME; an ambient value would write
+    // outside the temp home and leak the written config past afterEach.
+    vi.stubEnv('JCODE_HOME', '')
   })
 
   afterEach(() => {
@@ -47,7 +51,9 @@ describe('JcodeHookService', () => {
 
     const config = readFileSync(getJcodeConfigPath(), 'utf8')
     for (const event of ['turn_end', 'session_start', 'session_end', 'post_tool']) {
-      expect(config).toContain(`${event} = "${getJcodeManagedScriptPath()}"`)
+      // Why: tomlQuoteString doubles backslashes, so the serialized value (not
+      // the raw path) is what appears in the config.
+      expect(config).toContain(`${event} = ${tomlQuoteString(getJcodeManagedScriptPath())}`)
     }
     const script = readFileSync(getJcodeManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/jcode')

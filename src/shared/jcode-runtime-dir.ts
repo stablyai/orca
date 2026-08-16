@@ -5,6 +5,7 @@
 // instead of the first pane's. Without this, a second jcode pane connects the
 // first pane's daemon and its status is attributed to the wrong tab.
 import { createHash } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -32,4 +33,20 @@ export function buildJcodeRuntimeDirEnv(
   return shouldInjectJcodeRuntimeDir(platform)
     ? { [JCODE_RUNTIME_DIR_ENV_KEY]: buildJcodeRuntimeDir(paneKey) }
     : undefined
+}
+
+/**
+ * Ensures the per-pane jcode runtime dir exists before a PTY spawn (jcode fails
+ * fast when it is missing) and returns the env to merge into the spawn env.
+ * Async so the spawn hot path never blocks on a filesystem syscall.
+ */
+export async function ensureJcodeRuntimeDir(
+  paneKey: string,
+  platform: NodeJS.Platform = process.platform
+): Promise<Record<string, string> | undefined> {
+  const env = buildJcodeRuntimeDirEnv(paneKey, platform)
+  if (env) {
+    await mkdir(env[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+  }
+  return env
 }

@@ -50,7 +50,14 @@ export function parseJcodeSessionContent(
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {}
 ): AiVaultSession | null {
-  const record = asRecord(JSON.parse(content) as unknown)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    // Why: a partially written session doc must not abort the scan; skip it.
+    return null
+  }
+  const record = asRecord(parsed)
   if (!record) {
     return null
   }

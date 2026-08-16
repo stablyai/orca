@@ -14,7 +14,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../..
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
-import { buildJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
+import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import type * as Wsl from '../wsl'
@@ -2118,7 +2118,12 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'wt-1'
       })
       const spawnOptions = spawnMock.mock.calls.at(-1)![2] as { env: Record<string, string> }
-      expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      // Why: buildJcodeRuntimeDirEnv intentionally omits the var on win32.
+      if (shouldInjectJcodeRuntimeDir(process.platform)) {
+        expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      } else {
+        expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBeUndefined()
+      }
     })
 
     it('lets caller-provided env override LANG', async () => {

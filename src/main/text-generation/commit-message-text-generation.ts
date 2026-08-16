@@ -233,6 +233,19 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
   return `${label} cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.`
 }
 
+// Why: Windows caps the CreateProcess command line at 32,767 UTF-16 code units,
+// including the executable path, per-arg quoting, and separators. The budget
+// leaves headroom for cmd.exe `/d /c` shim wrappers.
+const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
+
+function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
+  let units = command.length + args.length
+  for (const arg of args) {
+    units += arg.length + 2
+  }
+  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
+}
+
 function toModelDiscoveryCapability(
   spec: AgentModelProbeSpec,
   models = spec.models,
@@ -643,6 +656,16 @@ function runLocalPlan(
     let child: ChildProcess
     try {
       const spawnEnv = env ?? process.env
+      if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(binary, args)) {
+        markProcessClosed()
+        resolve({
+          success: false,
+          // Why: jcode rides the whole prompt on argv; a large staged diff would
+          // exceed Windows' 32,767-unit command line and fail to spawn at all.
+          error: `${label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+        })
+        return
+      }
       if (process.platform === 'win32' && wslDistro) {
         child = wslAwareSpawn(binary, args, {
           cwd,

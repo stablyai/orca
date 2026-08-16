@@ -19,6 +19,11 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/li
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import {
+  buildJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../shared/jcode-runtime-dir'
+import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../shared/review-head-tracking-ref'
@@ -12999,6 +13004,15 @@ describe('OrcaRuntimeService', () => {
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
+    // exactly like the renderer pty:spawn path (unix platforms only).
+    if (shouldInjectJcodeRuntimeDir(process.platform)) {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
+        buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
+      )
+    } else {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBeUndefined()
+    }
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',

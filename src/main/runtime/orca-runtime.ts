@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: OrcaRuntimeService still owns the mutable live graph, PTY handles, waiters, mobile floor/layout state, and managed-worktree reconciliation. Stateless browser and file command adapters live beside it; the remaining split points need state-owner extraction before enforcing max-lines. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
-import { mkdirSync } from 'node:fs'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
@@ -12,7 +11,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
-import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
+import { ensureJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -26166,7 +26165,7 @@ export class OrcaRuntimeService {
         // Why: setup/agent sequencing wraps the PTY launch in a wait shell before
         // Claude Agent Teams runs. Preserve the direct Claude command separately
         // so the wrapper can exec the teammate-mode variant after setup completes.
-        const env = this.buildTerminalWorkspaceEnv(
+        const env = await this.buildTerminalWorkspaceEnv(
           workspace,
           {
             ...baseEnv,
@@ -27883,7 +27882,7 @@ export class OrcaRuntimeService {
       cwd: workspace.path,
       command: opts.command,
       commandDelivery: 'provider',
-      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
+      env: await this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
@@ -29165,24 +29164,19 @@ export class OrcaRuntimeService {
     }
   }
 
-  private buildTerminalWorkspaceEnv(
+  private async buildTerminalWorkspaceEnv(
     scope: TerminalWorkspaceLaunchScope,
     baseEnv: Record<string, string>,
     paneKey: string,
     tabId: string,
     agentTeamsEnv?: Record<string, string>
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
     const cleanBaseEnv = { ...baseEnv }
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
     const jcodeRuntimeDirEnv =
-      scope.connectionId === null ? buildJcodeRuntimeDirEnv(paneKey) : undefined
-    if (jcodeRuntimeDirEnv) {
-      // Why: jcode fails fast when its runtime dir is missing; the daemon lock
-      // and sockets live inside it. mkdir is idempotent per pane.
-      mkdirSync(jcodeRuntimeDirEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
-    }
+      scope.connectionId === null ? await ensureJcodeRuntimeDir(paneKey) : undefined
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,

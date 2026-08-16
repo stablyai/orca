@@ -89,5 +89,7 @@ session_start = "~/bin/mine"
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
     expect(result.content).toContain('\r\n')
     expect(result.content).not.toContain('\n[hooks]')
+    // Why: preserved CRLF lines must not gain a second `\r` on every edit.
+    expect(result.content).not.toContain('\r\r')
   })
 })

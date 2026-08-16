@@ -4560,7 +4560,9 @@ export function normalizeHookPayload(
     case 'jcode':
       {
         const transcriptPrompt = readLastJcodeUserPromptFromHookPayload(hookPayloadRecord)
-        hasTranscriptPromptEvidence = transcriptPrompt !== undefined
+        // Why: the reader returns null (not undefined) when no journal prompt is
+        // recoverable; only a real transcript hit counts as prompt evidence.
+        hasTranscriptPromptEvidence = transcriptPrompt !== null
         promptInteractionKey = transcriptPrompt?.interactionKey
         resolvedPromptText = transcriptPrompt?.text ?? ''
         if (promptText && extractedPrompt.source !== 'message') {

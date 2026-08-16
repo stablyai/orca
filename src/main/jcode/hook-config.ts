@@ -90,7 +90,9 @@ export function applyJcodeManagedHooks(
   scriptFileName: string
 ): JcodeHooksEdit {
   const isManaged = createManagedCommandMatcher(scriptFileName)
-  const lines = content.split('\n')
+  // Why: a CRLF config leaves a trailing `\r` on each split line; re-joining
+  // with the CRLF eol would double it into `\r\r\n` and grow the file per edit.
+  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
   const usesCrlf = content.includes('\r\n')
   const eol = usesCrlf ? '\r\n' : '\n'
   let state = createTomlLineScanState()
@@ -159,7 +161,8 @@ export function removeJcodeManagedHooks(
   scriptFileName: string
 ): { content: string; changed: boolean } {
   const isManaged = createManagedCommandMatcher(scriptFileName)
-  const lines = content.split('\n')
+  // Why: same CRLF strip as applyJcodeManagedHooks so re-joining never doubles `\r`.
+  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
   const usesCrlf = content.includes('\r\n')
   const eol = usesCrlf ? '\r\n' : '\n'
   let state = createTomlLineScanState()

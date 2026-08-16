@@ -13,6 +13,7 @@ import {
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -89,6 +90,7 @@ import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
+import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -563,6 +565,14 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (args.attachOnly) {
       throw new SessionNotFoundError(args.sessionId ?? '')
+    }
+    // Why: the jcode runtime dir is stamped into the spawn env by the pty:spawn
+    // handler and the runtime env builder; create it async here at the provider
+    // chokepoint both paths pass through, keeping the sync spawn path free of
+    // filesystem syscalls.
+    const jcodeRuntimeDir = args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
+    if (jcodeRuntimeDir) {
+      await mkdir(jcodeRuntimeDir, { recursive: true })
     }
     const id = allocatePtyId(reattachId ?? undefined)
     const incarnationId = randomUUID()
