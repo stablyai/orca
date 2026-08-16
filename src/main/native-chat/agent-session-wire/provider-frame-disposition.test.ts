@@ -78,4 +78,15 @@ describe('provider frame classification catalog', () => {
     )
     expect(classifyProviderFrame('claude', 'message:future_delta', {})).toBe('stream-into-item')
   })
+
+  it('dispositions codex item-form frames, which the method catalog never matches', () => {
+    // `thread/compacted` is already chrome; its item form is the same event and
+    // must not leak `codex · item:contextCompaction` into the transcript.
+    expect(classifyProviderFrame('codex', 'item:contextCompaction', {})).toBe('status-chrome')
+    expect(classifyProviderFrame('codex', 'notification:thread/compacted', {})).toBe(
+      'status-chrome'
+    )
+    // An item type nobody has dispositioned still falls through visibly.
+    expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
+  })
 })

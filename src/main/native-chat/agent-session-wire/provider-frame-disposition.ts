@@ -180,8 +180,21 @@ function hasProviderError(payload: unknown): boolean {
   return false
 }
 
+/** Codex thread-item types with no typed renderer, dispositioned by hand so a
+ *  new item type cannot leak `codex · item:<type>` into the transcript. The
+ *  notification catalog above is keyed by METHOD and never matches these. */
+const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
+  // The `thread/compacted` notification is already chrome; its item form is the
+  // same event and must not read as a mysterious opcode row.
+  contextCompaction: 'status-chrome'
+}
+
 function notificationKind(kind: string): string {
   return kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+}
+
+function itemKind(kind: string): string | null {
+  return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
 export function isDeltaShapedProviderFrameKind(kind: string): boolean {
@@ -193,6 +206,10 @@ function catalogClassification(
   kind: string
 ): ProviderFrameClassification | undefined {
   if (provider === 'codex') {
+    const item = itemKind(kind)
+    if (item !== null) {
+      return CODEX_ITEM_CLASSIFICATIONS[item]
+    }
     return PROVIDER_FRAME_CLASSIFICATIONS.codex[
       notificationKind(kind) as CodexAppServerNotificationMethod
     ]

@@ -20,6 +20,36 @@ function serializeProviderPayload(payload: unknown): string {
   }
 }
 
+/** Fields providers use for the human-facing sentence on a frame, most specific
+ *  first. Nested one level because warnings arrive wrapped as often as not. */
+const MESSAGE_KEYS = ['message', 'text', 'warning', 'detail', 'description', 'reason'] as const
+
+function readableMessage(payload: unknown): string | null {
+  if (typeof payload === 'string') {
+    return payload.trim() || null
+  }
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null
+  }
+  const record = payload as Record<string, unknown>
+  for (const key of MESSAGE_KEYS) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim()
+    }
+  }
+  for (const key of MESSAGE_KEYS) {
+    const nested = record[key]
+    if (typeof nested === 'object' && nested !== null && !Array.isArray(nested)) {
+      const inner = readableMessage(nested)
+      if (inner) {
+        return inner
+      }
+    }
+  }
+  return null
+}
+
 /** Substantive adapter fallbacks become visible, bounded journal rows. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
@@ -37,10 +67,14 @@ export function unhandledProviderFrameJournalItem(
   }
   const serialized = serializeProviderPayload(payload)
   const bounded = boundPayload(serialized, limits)
+  // Why: the opcode alone ("codex · notification:warning") tells the user nothing
+  // and reads as protocol noise. Lead with the provider's own sentence when it has
+  // one; the raw frame stays behind the row's disclosure either way.
+  const message = readableMessage(payload)
   return {
     body: {
       kind: 'status',
-      text: `${provider} · ${kind}`,
+      text: message ?? `${provider} · ${kind}`,
       providerFrame: { provider, kind, payload: bounded }
     },
     blobs: bounded.truncated ? [{ digest: bounded.digest, payload: serialized }] : []
