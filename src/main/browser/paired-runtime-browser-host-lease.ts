@@ -12,6 +12,10 @@ import {
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import {
+  assertBrowserClientHostAttachOptions,
+  createBrowserClientHostAttachRequest
+} from './browser-client-host-attach-request'
 import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
 import {
   BrowserHostCommandResultSettler,
@@ -29,6 +33,7 @@ export class PairedRuntimeBrowserHostLease {
   private closed = false
 
   constructor(private readonly options: PairedRuntimeBrowserHostLeaseOptions) {
+    assertBrowserClientHostAttachOptions(options)
     this.commandResultSettler = new BrowserHostCommandResultSettler({
       maxConcurrent: options.maxConcurrentCommandResults,
       maxUnsettled: options.maxUnsettledCommandResults,
@@ -66,16 +71,12 @@ export class PairedRuntimeBrowserHostLease {
     void ready.catch(() => undefined)
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
-      const pageCommandProtocolVersion = this.requestedPageCommandProtocolVersion()
+      const { pageCommandProtocolVersion, pageInventoryProtocolVersion, params } =
+        createBrowserClientHostAttachRequest(this.options)
       const subscription = await subscribeRemoteRuntimeRequest(
         this.options.pairing,
         'browser.clientHost.attach',
-        {
-          authorityRuntimeId: this.options.authorityRuntimeId,
-          browserHostClientId: this.options.browserHostClientId,
-          hostCapabilities: [...this.options.hostCapabilities],
-          ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {})
-        },
+        params,
         timeoutMs,
         {
           onResponse: (response) => {
@@ -117,6 +118,13 @@ export class PairedRuntimeBrowserHostLease {
               this.fail(new Error('Invalid browser host lease response'), rejectReady)
               return
             }
+            if (
+              parsed.data.pageInventoryProtocolVersion !== undefined &&
+              parsed.data.pageInventoryProtocolVersion !== pageInventoryProtocolVersion
+            ) {
+              this.fail(new Error('Invalid browser host lease response'), rejectReady)
+              return
+            }
             if (parsed.data.pageCommandProtocolVersion && !this.subscription?.sendRequest) {
               this.fail(new Error('Browser host command result transport unavailable'), rejectReady)
               return
@@ -128,6 +136,9 @@ export class PairedRuntimeBrowserHostLease {
               browserHostGeneration: parsed.data.browserHostGeneration,
               ...(parsed.data.pageCommandProtocolVersion
                 ? { pageCommandProtocolVersion: parsed.data.pageCommandProtocolVersion }
+                : {}),
+              ...(parsed.data.pageInventoryProtocolVersion
+                ? { pageInventoryProtocolVersion: parsed.data.pageInventoryProtocolVersion }
                 : {})
             })
             if (this.authority) {
@@ -194,10 +205,6 @@ export class PairedRuntimeBrowserHostLease {
     void closing.catch((closeError) =>
       this.reportError(closeError instanceof Error ? closeError : new Error(String(closeError)))
     )
-  }
-
-  private requestedPageCommandProtocolVersion(): 1 | undefined {
-    return this.options.onPageCommand ? this.options.pageCommandProtocolVersion : undefined
   }
 
   private handlePageCommand(

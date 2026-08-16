@@ -1,4 +1,5 @@
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
@@ -17,6 +18,7 @@ type ComposedPageExecutor = {
   ): Promise<BrowserClientHostCommandResult>
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
+  snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
   close(): Promise<void>
 }
 
@@ -42,6 +44,7 @@ type PairedRuntimeBrowserClientHostCompositionOptions = {
       signal: AbortSignal
     ): Promise<BrowserClientHostCommandResult>
     onAuthority(authority: BrowserClientHostLeaseAuthority): void
+    getPageInventory(): readonly BrowserClientHostedPageInventory[]
     onError(error: Error): void
   }): ComposedClientHost
   onError?: (error: Error) => void
@@ -63,6 +66,7 @@ export class PairedRuntimeBrowserClientHostComposition {
     })
     this.host = options.createHost({
       handler: (event, signal) => this.executor.handle(event, signal),
+      getPageInventory: () => this.executor.snapshotPageInventory(),
       onAuthority: (authority) => this.activateRoutes(authority),
       onError: (error) => this.handleHostError(error)
     })

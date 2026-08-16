@@ -2604,6 +2604,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
@@ -2637,7 +2638,10 @@
         "src/main/browser/paired-runtime-browser-client-host-composition.test.ts",
         "src/main/browser/paired-runtime-browser-client-host-registry.test.ts",
         "src/main/browser/paired-runtime-browser-client-host-runtime.test.ts",
+        "src/main/browser/browser-client-host-attach-request.test.ts",
         "src/main/browser/browser-client-page-command-executor.test.ts",
+        "src/main/browser/browser-client-page-command-integration.test.ts",
+        "src/main/browser/browser-client-page-inventory.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
         "src/main/ipc/runtime-environments.test.ts",
         "src/main/browser/browser-client-host-command-dispatcher.test.ts",
@@ -2697,7 +2701,7 @@
           "assertions": [
             "exact current pages retain without navigation while runtime-missing pages restore and client orphans close",
             "profile, execution-host, authority, generation, and outcome-unknown mismatches require a close-before-restore barrier",
-            "old-epoch reclaim requires one exact persisted previous authority, an epoch transition, and the same browser-host client identity while allowing counters to restart under the new epoch",
+            "old-epoch reclaim requires one exact persisted previous authority, authenticated paired-device provenance, an epoch transition, and the same browser-host client identity while allowing counters to restart under the new epoch",
             "duplicate and over-capacity inventories fail atomically before returning a partial plan",
             "invalid identities, generations, URLs, states, limits, duplicate inventories, and over-capacity inventories fail atomically while valid records and action lists are immutable"
           ]
@@ -2713,7 +2717,10 @@
             "lease replacement invalidates every grant from the old host generation",
             "late page cleanup cannot remove a replacement client generation or server placement",
             "retired page placement leaves no tombstone and a reused ID receives a higher global generation",
-            "page placement generations are monotonic and stale lease authority is rejected"
+            "page placement generations are monotonic and stale lease authority is rejected",
+            "incomplete, unsupported-version, duplicate, over-budget, and foreign-client inventories fail before lease replacement",
+            "a previous-runtime inventory remains eligible for exact persisted-authority restart reconciliation",
+            "the exact authenticated lease retains an immutable inventory snapshot"
           ]
         },
         {
@@ -2727,6 +2734,8 @@
           "file": "src/shared/browser-client-host-protocol.test.ts",
           "assertions": [
             "page-command v1 negotiation is optional and independent of the legacy ready/revoked stream",
+            "page-inventory v1 is optional, independently echoed, authority-bound, duplicate-free, capped at 256 pages and 768 KiB, and stripped by old attach and ready decoders",
+            "inventory-only identities are capped after JSON escaping so 256 worst-case valid page records remain within budget without narrowing legacy fields",
             "create and navigate commands bind bounded IDs and sequences to exact runtime, epoch, host, and page generations",
             "unknown versions, command kinds, invalid generations, and oversized identities fail before delivery",
             "command-result acknowledgements require an explicit boolean accepted field"
@@ -2737,6 +2746,7 @@
           "assertions": [
             "a client requests commands only with a delivery handler and accepts them only after an exact v1 echo",
             "an old host that omits the echo cannot deliver a command",
+            "one complete inventory snapshot is sampled before attach, a missing echo stays unsupported, and an unsolicited echo closes the lease",
             "stale authority commands close the exact lease before handler delivery",
             "completed and failed results submit exact command authority on the established subscription",
             "missing result transport, handler failure, server rejection, and malformed or wrong-runtime acknowledgement close the lease",
@@ -2760,11 +2770,42 @@
           "file": "src/main/browser/paired-runtime-browser-client-host-composition.test.ts",
           "assertions": [
             "exact route authority activates before the first page command",
+            "host attach samples the executor's exact page inventory once",
             "page retirement settles dispatcher ownership before guest cleanup and ledger forget",
             "shutdown closes control transport before executor pages and every retained route",
             "non-settling handlers remove network reach immediately and defer page cleanup until exact late settlement",
             "deferred executor cleanup failures remain fenced and emit an observable composition error",
             "cleanly absent failed creates are forgotten while unresolved cleanup remains fenced"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-host-attach-request.test.ts",
+          "assertions": [
+            "an unencodable optional inventory is omitted without changing legacy page-command negotiation"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-command-executor.test.ts",
+          "assertions": [
+            "in-flight create, ambiguous cleanup, and stale renderer authority snapshot as outcome unknown",
+            "a destroyed exact guest snapshots as outcome unknown before executor retirement",
+            "create-to-active transition emits one exact page record without duplicate identity",
+            "successful normalized navigation updates the immutable current URL snapshot unless normalization exceeds the URL field bound",
+            "legacy-valid command identities remain executable even when optional inventory cannot encode them",
+            "executor capacity cannot exceed the shared 256-page attach limit"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-command-integration.test.ts",
+          "assertions": [
+            "spontaneous exact guest destruction revokes active inventory before explicit page retirement"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-inventory.test.ts",
+          "assertions": [
+            "optional URLs compact by deterministic codepoint order without dropping required page identity",
+            "an unencodable complete snapshot declines inventory negotiation instead of dropping a page"
           ]
         },
         {
@@ -2830,6 +2871,7 @@
             "the control method stays out of production registration",
             "only a negotiated authenticated paired-runtime connection receives a server-owned epoch and generation",
             "page-command v1 is echoed only to an explicit v1 attach while legacy event shapes remain unchanged",
+            "page-inventory v1 is echoed only after a complete authenticated inventory is retained on the exact lease",
             "only the exact negotiated connection, paired device, and live page placement can settle a server-owned command",
             "an unnegotiated runtime connection cannot submit command results",
             "exact duplicate results are idempotent while conflicts and stale or retired placement fail closed",
@@ -3025,6 +3067,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.3,
+          "summary": "Eleven files passed 145 exact inventory negotiation, 256-page and 768 KiB atomic bounds, worst-case JSON-escaped inventory identities, deterministic optional-URL compaction, legacy-command preservation when inventory is unencodable, legacy strip, immutable authenticated lease snapshot, strict v1/duplicate/foreign-client rejection, paired-device-bound previous-runtime restart admission, missing and unsolicited echo, create-to-active deduplication, renderer/guest-stale outcome-unknown classification, normalized URL bounds, composition sampling, RPC retention, and reconciliation tests."
+        },
         {
           "date": "2026-08-14",
           "runner": "local",

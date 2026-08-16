@@ -21,6 +21,7 @@ export type BrowserRouteGuestLifecycleClaim = Readonly<{
   registration: BrowserRoutePageGuestIdentity
   guestAuthority: symbol
   whenDestroyed: Promise<void>
+  isCurrent: () => boolean
 }>
 
 export type BrowserRoutePageAuthority = BrowserRoutePageOwnerIdentity &

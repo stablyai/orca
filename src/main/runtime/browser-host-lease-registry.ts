@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
@@ -27,10 +28,12 @@ import {
   type RuntimeBrowserPlacement
 } from './browser-host-page-placement'
 import { createBrowserHostFence, type BrowserHostFenceReason } from './browser-host-lease-fence'
+import { fenceBrowserHostLease, fenceBrowserHostRoute } from './browser-host-lease-fencing'
 import {
   BROWSER_HOST_WEBVIEW_CAPABILITY,
   selectBrowserHostLease
 } from './browser-host-capability-selection'
+import { snapshotBrowserHostPageInventory } from './browser-host-page-inventory-snapshot'
 
 export class BrowserHostLeaseRegistry {
   readonly authorityRuntimeId: string
@@ -55,7 +58,10 @@ export class BrowserHostLeaseRegistry {
     pairedDeviceId: string
     hostCapabilities: readonly string[]
     pageCommandProtocolVersion?: 1
+    pageInventoryProtocolVersion?: 1
+    pageInventory?: readonly BrowserClientHostedPageInventory[]
   }): BrowserHostLeaseHandle {
+    const pageInventory = snapshotBrowserHostPageInventory(input)
     const existing = this.leasesByClientId.get(input.browserHostClientId)
     if (existing) {
       if (existing.lease.pairedDeviceId !== input.pairedDeviceId) {
@@ -77,7 +83,13 @@ export class BrowserHostLeaseRegistry {
         connectionId: input.connectionId,
         pairedDeviceId: input.pairedDeviceId,
         hostCapabilities: Object.freeze([...input.hostCapabilities]),
-        ...(input.pageCommandProtocolVersion ? { pageCommandProtocolVersion: 1 as const } : {})
+        ...(input.pageCommandProtocolVersion ? { pageCommandProtocolVersion: 1 as const } : {}),
+        ...(pageInventory
+          ? {
+              pageInventoryProtocolVersion: 1 as const,
+              pageInventory
+            }
+          : {})
       }),
       fence: createBrowserHostFence(),
       routes: new Set(),
@@ -285,26 +297,13 @@ export class BrowserHostLeaseRegistry {
   }
 
   private fenceLease(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void {
-    if (this.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
-      return
-    }
-    this.leasesByClientId.delete(state.lease.browserHostClientId)
-    for (const route of state.routes) {
-      this.fenceRoute(route, reason === 'replaced' ? 'lease_replaced' : 'lease_released')
-    }
-    state.executionHostGrants.clear()
-    state.commandLedger?.close()
-    state.fence.resolve(reason)
+    fenceBrowserHostLease(state, reason, this.leasesByClientId, (route, routeReason) =>
+      this.fenceRoute(route, routeReason)
+    )
   }
 
   private fenceRoute(state: BrowserHostRouteState, reason: BrowserHostFenceReason): void {
-    state.releaseGrantLink?.()
-    state.releaseGrantLink = undefined
-    state.lease.routes.delete(state)
-    if (this.routesByKey.get(state.key)?.token === state.token) {
-      this.routesByKey.delete(state.key)
-    }
-    state.fence.resolve(reason)
+    fenceBrowserHostRoute(state, reason, this.routesByKey)
   }
 }
 

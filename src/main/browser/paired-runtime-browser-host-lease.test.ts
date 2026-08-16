@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
+} from '../../shared/browser-client-host-protocol'
+import {
+  BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
+  browserClientHostedPageInventoryByteLength
 } from '../../shared/browser-client-host-protocol'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type {
@@ -38,7 +43,9 @@ describe('PairedRuntimeBrowserHostLease', () => {
   it.each([
     [{ maxConcurrentCommandResults: 17 }, 'limit is invalid'],
     [{ maxUnsettledCommandResults: 257 }, 'limit is invalid'],
-    [{ maxConcurrentCommandResults: 2, maxUnsettledCommandResults: 1 }, 'limits are inconsistent']
+    [{ maxConcurrentCommandResults: 2, maxUnsettledCommandResults: 1 }, 'limits are inconsistent'],
+    [{ getPageInventory: () => [] }, 'inventory negotiation is incomplete'],
+    [{ pageInventoryProtocolVersion: 1 as const }, 'inventory negotiation is incomplete']
   ])('rejects unsafe command-result limits', (limits, expectedMessage) => {
     expect(() => createLease(limits)).toThrow(expectedMessage)
   })
@@ -134,6 +141,96 @@ describe('PairedRuntimeBrowserHostLease', () => {
       15_000
     )
     expect(close).not.toHaveBeenCalled()
+    await lease.close()
+  })
+
+  it('sends one complete inventory snapshot and activates it only after the echo', async () => {
+    const { callbacks } = await subscribeLease()
+    const page = inventoryPage()
+    const getPageInventory = vi.fn(() => [page])
+    const lease = createLease({
+      pageInventoryProtocolVersion: 1,
+      getPageInventory
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+
+    expect(getPageInventory).toHaveBeenCalledOnce()
+    expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      pairing,
+      'browser.clientHost.attach',
+      expect.objectContaining({
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [page]
+      }),
+      15_000,
+      expect.any(Object),
+      expect.any(Object)
+    )
+    callbacks.current!.onResponse(readyResponse({ pageInventoryProtocolVersion: 1 }))
+
+    await expect(starting).resolves.toMatchObject({ pageInventoryProtocolVersion: 1 })
+    await lease.close()
+  })
+
+  it('omits optional URLs deterministically to keep every page identity within budget', async () => {
+    const { callbacks } = await subscribeLease()
+    const inventory = Array.from({ length: 256 }, (_, index) => ({
+      ...inventoryPage(),
+      browserPageId: `page-${index.toString().padStart(3, '0')}`,
+      currentUrl: `https://remote.internal/${index}/${'x'.repeat(4096)}`
+    }))
+    const lease = createLease({
+      pageInventoryProtocolVersion: 1,
+      getPageInventory: () => inventory
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    const attach = subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2] as {
+      pageInventory: BrowserClientHostedPageInventory[]
+    }
+
+    expect(attach.pageInventory).toHaveLength(256)
+    expect(browserClientHostedPageInventoryByteLength(attach.pageInventory)).toBeLessThanOrEqual(
+      BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES
+    )
+    expect(attach.pageInventory.some((page) => page.currentUrl === undefined)).toBe(true)
+    expect(new Set(attach.pageInventory.map((page) => page.browserPageId)).size).toBe(256)
+    callbacks.current!.onResponse(readyResponse({ pageInventoryProtocolVersion: 1 }))
+    await starting
+    await lease.close()
+  })
+
+  it('treats a missing inventory echo as unsupported rather than accepted empty state', async () => {
+    const { callbacks } = await subscribeLease()
+    const lease = createLease({
+      pageInventoryProtocolVersion: 1,
+      getPageInventory: () => []
+    })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse())
+
+    await expect(starting).resolves.not.toHaveProperty('pageInventoryProtocolVersion')
+    expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      pairing,
+      'browser.clientHost.attach',
+      expect.objectContaining({ pageInventoryProtocolVersion: 1, pageInventory: [] }),
+      15_000,
+      expect.any(Object),
+      expect.any(Object)
+    )
+    await lease.close()
+  })
+
+  it('rejects an unsolicited inventory echo', async () => {
+    const { callbacks } = await subscribeLease()
+    const lease = createLease()
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageInventoryProtocolVersion: 1 }))
+
+    await expect(starting).rejects.toThrow('Invalid browser host lease response')
     await lease.close()
   })
 
@@ -643,6 +740,7 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
 
 function createLease(
   overrides: {
+    getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
     maxConcurrentCommandResults?: number
     maxUnsettledCommandResults?: number
     onError?: (error: Error) => void
@@ -650,6 +748,7 @@ function createLease(
       command: BrowserClientHostCommandEvent
     ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>
     pageCommandProtocolVersion?: 1
+    pageInventoryProtocolVersion?: 1
   } = {}
 ): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
@@ -661,7 +760,24 @@ function createLease(
   })
 }
 
-function readyResponse(overrides: { pageCommandProtocolVersion?: 1 } = {}) {
+function inventoryPage(): BrowserClientHostedPageInventory {
+  return {
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: 'epoch-old',
+    browserHostClientId: 'host-a',
+    browserHostGeneration: 2,
+    browserPageId: 'page-a',
+    pageHostGeneration: 3,
+    browserProfileId: 'profile-a',
+    executionHostKey: 'native:runtime-a:1',
+    state: 'active',
+    currentUrl: 'https://remote.internal/'
+  }
+}
+
+function readyResponse(
+  overrides: { pageCommandProtocolVersion?: 1; pageInventoryProtocolVersion?: 1 } = {}
+) {
   return {
     id: 'browser-host',
     ok: true as const,

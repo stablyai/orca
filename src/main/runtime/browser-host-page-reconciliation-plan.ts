@@ -1,3 +1,5 @@
+import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
+
 const DEFAULT_MAX_PAGES = 256
 const MAX_GENERATION = 0xffff_ffff
 const MAX_IDENTITY_LENGTH = 256
@@ -16,17 +18,10 @@ export type BrowserHostRuntimePageIntent = BrowserHostPageAuthority &
     browserPageId: string
     browserProfileId: string
     executionHostKey: string
-    reclaimFrom?: BrowserHostPageAuthority
+    reclaimFrom?: BrowserHostPageAuthority & Readonly<{ pairedDeviceId: string }>
   }>
 
-export type BrowserClientHostedPageInventory = BrowserHostPageAuthority &
-  Readonly<{
-    browserPageId: string
-    browserProfileId: string
-    executionHostKey: string
-    state: 'active' | 'outcomeUnknown'
-    currentUrl?: string
-  }>
+export type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 
 type PagePair = Readonly<{
   intent: BrowserHostRuntimePageIntent
@@ -44,8 +39,9 @@ export type BrowserHostPageReconciliationPlan = Readonly<{
 export function planBrowserHostPageReconciliation(
   intentInput: readonly BrowserHostRuntimePageIntent[],
   pageInput: readonly BrowserClientHostedPageInventory[],
-  options: { maxPages?: number } = {}
+  options: { inventoryPairedDeviceId: string; maxPages?: number }
 ): BrowserHostPageReconciliationPlan {
+  assertIdentity(options.inventoryPairedDeviceId)
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES
   assertCapacity(maxPages, intentInput.length, pageInput.length)
   const intents = freezeUniqueRecords(intentInput, freezeIntent)
@@ -69,7 +65,7 @@ export function planBrowserHostPageReconciliation(
       retain.push(Object.freeze({ intent, page }))
       continue
     }
-    if (page.state === 'active' && canReclaimPage(intent, page)) {
+    if (page.state === 'active' && canReclaimPage(intent, page, options.inventoryPairedDeviceId)) {
       reclaim.push(Object.freeze({ intent, page }))
       continue
     }
@@ -103,10 +99,12 @@ function sameCurrentPage(
 
 function canReclaimPage(
   intent: BrowserHostRuntimePageIntent,
-  page: BrowserClientHostedPageInventory
+  page: BrowserClientHostedPageInventory,
+  inventoryPairedDeviceId: string
 ): boolean {
   return Boolean(
     intent.reclaimFrom &&
+    intent.reclaimFrom.pairedDeviceId === inventoryPairedDeviceId &&
     intent.authorityEpoch !== intent.reclaimFrom.authorityEpoch &&
     sameAuthority(intent.reclaimFrom, page) &&
     intent.browserHostClientId === intent.reclaimFrom.browserHostClientId &&
@@ -144,6 +142,7 @@ function freezeIntent(intent: BrowserHostRuntimePageIntent): BrowserHostRuntimeP
   assertPageRecord(intent)
   if (intent.reclaimFrom) {
     assertAuthority(intent.reclaimFrom)
+    assertIdentity(intent.reclaimFrom.pairedDeviceId)
   }
   return Object.freeze({
     ...intent,

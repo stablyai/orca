@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
@@ -36,6 +37,27 @@ afterEach(() => {
 })
 
 describe('PairedRuntimeBrowserClientHost', () => {
+  it('forwards a complete inventory provider to the lease attach', async () => {
+    const { callbacks } = subscribeHost()
+    const getPageInventory = vi.fn(() => [] as readonly BrowserClientHostedPageInventory[])
+    const host = createHost(() => ({ status: 'completed' }), undefined, undefined, getPageInventory)
+    const starting = host.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+
+    expect(getPageInventory).toHaveBeenCalledOnce()
+    expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      pairing,
+      'browser.clientHost.attach',
+      expect.objectContaining({ pageInventoryProtocolVersion: 1, pageInventory: [] }),
+      15_000,
+      expect.any(Object),
+      expect.any(Object)
+    )
+    callbacks.current!.onResponse(readyResponse())
+    await starting
+    await host.close()
+  })
+
   it('constructs command authority before the first command can arrive', async () => {
     const { callbacks, sendRequest } = subscribeHost()
     const handler = vi.fn((_command: BrowserClientHostCommandEvent, _signal: AbortSignal) => ({
@@ -271,7 +293,8 @@ function createHost(
     signal: AbortSignal
   ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>,
   onError?: (error: Error) => void,
-  dispatcher?: { joinTimeoutMs?: number }
+  dispatcher?: { joinTimeoutMs?: number },
+  getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
 ): PairedRuntimeBrowserClientHost {
   return new PairedRuntimeBrowserClientHost({
     pairing,
@@ -279,6 +302,7 @@ function createHost(
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],
     handler,
+    getPageInventory,
     onError,
     dispatcher
   })

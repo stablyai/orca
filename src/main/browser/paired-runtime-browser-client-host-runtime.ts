@@ -43,13 +43,14 @@ const browserClientHosts =
             routeSessions: browserRouteSessionRegistry,
             routeWebContents: browserRouteWebContentsRegistry
           }),
-        createHost: ({ handler, onAuthority, onError }) =>
+        createHost: ({ handler, getPageInventory, onAuthority, onError }) =>
           new PairedRuntimeBrowserClientHost({
             pairing: input.pairing,
             authorityRuntimeId: input.authorityRuntimeId,
             browserHostClientId,
             hostCapabilities: ['webview'],
             handler,
+            getPageInventory,
             onAuthority,
             onError
           }),

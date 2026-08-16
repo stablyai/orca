@@ -1,4 +1,5 @@
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
@@ -17,6 +18,7 @@ export type PairedRuntimeBrowserClientHostOptions = {
   browserHostClientId: string
   hostCapabilities: readonly string[]
   handler: CommandHandler
+  getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
   dispatcher?: DispatcherLimits
   timeoutMs?: number
   subscription?: RemoteRuntimeSubscriptionOptions
@@ -40,6 +42,12 @@ export class PairedRuntimeBrowserClientHost {
       browserHostClientId: options.browserHostClientId,
       hostCapabilities: options.hostCapabilities,
       pageCommandProtocolVersion: 1,
+      ...(options.getPageInventory
+        ? {
+            pageInventoryProtocolVersion: 1,
+            getPageInventory: options.getPageInventory
+          }
+        : {}),
       onAuthority: (authority) => this.activateDispatcher(authority),
       onPageCommand: (command) => this.dispatch(command),
       timeoutMs: options.timeoutMs,

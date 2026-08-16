@@ -24,6 +24,16 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     expect(rig.order).toEqual(['activate-routes', 'handle-command'])
   })
 
+  it('provides the exact executor inventory to the host attach', () => {
+    const rig = createRig()
+    rig.createComposition()
+
+    expect(rig.hostOptions.getPageInventory?.()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
+    ])
+    expect(rig.executor.snapshotPageInventory).toHaveBeenCalledOnce()
+  })
+
   it('settles dispatcher retirement before destroying and forgetting the page', async () => {
     const rig = createRig()
     const composition = rig.createComposition()
@@ -127,6 +137,19 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
+    snapshotPageInventory: vi.fn(() => [
+      {
+        authorityRuntimeId: 'runtime-a',
+        authorityEpoch: 'epoch-a',
+        browserHostClientId: 'client-a',
+        browserHostGeneration: 4,
+        browserPageId: 'page-a',
+        pageHostGeneration: 7,
+        browserProfileId: 'profile-a',
+        executionHostKey: 'execution-host-a',
+        state: 'active' as const
+      }
+    ]),
     close: vi.fn(async () => {
       order.push('close-executor')
       if (options.executorCloseError) {
@@ -135,6 +158,7 @@ function createRig(options: { executorCloseError?: Error; hostSettled?: boolean 
     })
   }
   let hostOptions: {
+    getPageInventory?: () => readonly unknown[]
     onAuthority?: (next: BrowserClientHostLeaseAuthority) => void
     handler?: (
       event: BrowserClientHostCommandEvent,

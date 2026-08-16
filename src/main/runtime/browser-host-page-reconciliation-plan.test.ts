@@ -5,6 +5,8 @@ import {
   type BrowserHostRuntimePageIntent
 } from './browser-host-page-reconciliation-plan'
 
+const inventorySource = { inventoryPairedDeviceId: 'device-a' }
+
 const currentIntent = (overrides: Partial<BrowserHostRuntimePageIntent> = {}) => ({
   authorityRuntimeId: 'runtime-new',
   authorityEpoch: 'epoch-new',
@@ -24,12 +26,24 @@ const currentPage = (overrides: Partial<BrowserClientHostedPageInventory> = {}) 
   ...overrides
 })
 
+function inventoryPageAuthority(
+  previous: NonNullable<BrowserHostRuntimePageIntent['reclaimFrom']>
+) {
+  return {
+    authorityRuntimeId: previous.authorityRuntimeId,
+    authorityEpoch: previous.authorityEpoch,
+    browserHostClientId: previous.browserHostClientId,
+    browserHostGeneration: previous.browserHostGeneration,
+    pageHostGeneration: previous.pageHostGeneration
+  }
+}
+
 describe('browser host page reconciliation plan', () => {
   it('retains an exact current page without navigation or restoration', () => {
     const intent = currentIntent()
     const page = currentPage()
 
-    const plan = planBrowserHostPageReconciliation([intent], [page])
+    const plan = planBrowserHostPageReconciliation([intent], [page], inventorySource)
 
     expect(plan).toEqual({
       retain: [{ intent, page }],
@@ -43,7 +57,7 @@ describe('browser host page reconciliation plan', () => {
   it('restores runtime pages missing from authoritative client inventory', () => {
     const intent = currentIntent()
 
-    expect(planBrowserHostPageReconciliation([intent], [])).toEqual({
+    expect(planBrowserHostPageReconciliation([intent], [], inventorySource)).toEqual({
       retain: [],
       reclaim: [],
       close: [],
@@ -55,7 +69,7 @@ describe('browser host page reconciliation plan', () => {
   it('closes client orphans that have no runtime intent', () => {
     const page = currentPage()
 
-    expect(planBrowserHostPageReconciliation([], [page])).toEqual({
+    expect(planBrowserHostPageReconciliation([], [page], inventorySource)).toEqual({
       retain: [],
       reclaim: [],
       close: [page],
@@ -74,7 +88,7 @@ describe('browser host page reconciliation plan', () => {
     const intent = currentIntent()
     const page = currentPage(mismatch)
 
-    expect(planBrowserHostPageReconciliation([intent], [page])).toEqual({
+    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({
       retain: [],
       reclaim: [],
       close: [],
@@ -89,12 +103,13 @@ describe('browser host page reconciliation plan', () => {
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
-      pageHostGeneration: 7
+      pageHostGeneration: 7,
+      pairedDeviceId: 'device-a'
     }
     const intent = currentIntent({ reclaimFrom: previous })
-    const page = currentPage({ ...previous })
+    const page = currentPage(inventoryPageAuthority(previous))
 
-    expect(planBrowserHostPageReconciliation([intent], [page])).toEqual({
+    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({
       retain: [],
       reclaim: [{ intent, page }],
       close: [],
@@ -115,6 +130,7 @@ describe('browser host page reconciliation plan', () => {
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
       pageHostGeneration: 7,
+      pairedDeviceId: 'device-a',
       ...previousOverride
     }
     const intent = currentIntent(previousOverride === undefined ? {} : { reclaimFrom: previous })
@@ -125,7 +141,7 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 7
     })
 
-    expect(planBrowserHostPageReconciliation([intent], [page])).toMatchObject({
+    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toMatchObject({
       retain: [],
       reclaim: [],
       close: [],
@@ -140,14 +156,15 @@ describe('browser host page reconciliation plan', () => {
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
-      pageHostGeneration: 7
+      pageHostGeneration: 7,
+      pairedDeviceId: 'device-a'
     }
     const intent = currentIntent({ browserHostClientId: 'client-b', reclaimFrom: previous })
-    const page = currentPage({ ...previous })
+    const page = currentPage(inventoryPageAuthority(previous))
 
-    expect(planBrowserHostPageReconciliation([intent], [page]).closeThenRestore).toEqual([
-      { intent, page }
-    ])
+    expect(
+      planBrowserHostPageReconciliation([intent], [page], inventorySource).closeThenRestore
+    ).toEqual([{ intent, page }])
   })
 
   it('rejects reclaim within one authority epoch even when previous identity is exact', () => {
@@ -156,18 +173,19 @@ describe('browser host page reconciliation plan', () => {
       authorityEpoch: 'epoch-new',
       browserHostClientId: 'client-a',
       browserHostGeneration: 9,
-      pageHostGeneration: 12
+      pageHostGeneration: 12,
+      pairedDeviceId: 'device-a'
     }
     const intent = currentIntent({
       browserHostGeneration: 8,
       pageHostGeneration: 11,
       reclaimFrom: previous
     })
-    const page = currentPage({ ...previous })
+    const page = currentPage(inventoryPageAuthority(previous))
 
-    expect(planBrowserHostPageReconciliation([intent], [page]).closeThenRestore).toEqual([
-      { intent, page }
-    ])
+    expect(
+      planBrowserHostPageReconciliation([intent], [page], inventorySource).closeThenRestore
+    ).toEqual([{ intent, page }])
   })
 
   it('permits generation counters to restart under a new authority epoch', () => {
@@ -176,16 +194,38 @@ describe('browser host page reconciliation plan', () => {
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 9,
-      pageHostGeneration: 12
+      pageHostGeneration: 12,
+      pairedDeviceId: 'device-a'
     }
     const intent = currentIntent({
       browserHostGeneration: 1,
       pageHostGeneration: 1,
       reclaimFrom: previous
     })
-    const page = currentPage({ ...previous })
+    const page = currentPage(inventoryPageAuthority(previous))
 
-    expect(planBrowserHostPageReconciliation([intent], [page]).reclaim).toEqual([{ intent, page }])
+    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource).reclaim).toEqual([
+      { intent, page }
+    ])
+  })
+
+  it('rejects restart reclaim from a different authenticated paired device', () => {
+    const previous = {
+      authorityRuntimeId: 'runtime-old',
+      authorityEpoch: 'epoch-old',
+      browserHostClientId: 'client-a',
+      browserHostGeneration: 4,
+      pageHostGeneration: 7,
+      pairedDeviceId: 'device-a'
+    }
+    const intent = currentIntent({ reclaimFrom: previous })
+    const page = currentPage(inventoryPageAuthority(previous))
+
+    expect(
+      planBrowserHostPageReconciliation([intent], [page], {
+        inventoryPairedDeviceId: 'device-b'
+      }).closeThenRestore
+    ).toEqual([{ intent, page }])
   })
 
   it('never retains or reclaims an outcome-unknown page', () => {
@@ -195,12 +235,13 @@ describe('browser host page reconciliation plan', () => {
         authorityEpoch: 'epoch-new',
         browserHostClientId: 'client-a',
         browserHostGeneration: 9,
-        pageHostGeneration: 12
+        pageHostGeneration: 12,
+        pairedDeviceId: 'device-a'
       }
     })
     const page = currentPage({ state: 'outcomeUnknown' })
 
-    expect(planBrowserHostPageReconciliation([intent], [page])).toEqual({
+    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({
       retain: [],
       reclaim: [],
       close: [],
@@ -213,7 +254,7 @@ describe('browser host page reconciliation plan', () => {
     ['runtime intent', [currentIntent(), currentIntent()], []],
     ['client inventory', [], [currentPage(), currentPage()]]
   ])('rejects duplicate page IDs in %s', (_label, intents, pages) => {
-    expect(() => planBrowserHostPageReconciliation(intents, pages)).toThrow(
+    expect(() => planBrowserHostPageReconciliation(intents, pages, inventorySource)).toThrow(
       'browser_host_page_reconciliation_duplicate'
     )
   })
@@ -223,7 +264,7 @@ describe('browser host page reconciliation plan', () => {
       planBrowserHostPageReconciliation(
         [currentIntent(), currentIntent({ browserPageId: 'page-b' })],
         [],
-        { maxPages: 1 }
+        { ...inventorySource, maxPages: 1 }
       )
     ).toThrow('browser_host_page_reconciliation_capacity')
   })
@@ -234,32 +275,41 @@ describe('browser host page reconciliation plan', () => {
     ['zero generation', currentIntent({ pageHostGeneration: 0 }), 'generation'],
     ['oversized generation', currentIntent({ pageHostGeneration: 0x1_0000_0000 }), 'generation']
   ])('rejects %s', (_label, intent, errorKind) => {
-    expect(() => planBrowserHostPageReconciliation([intent], [])).toThrow(
+    expect(() => planBrowserHostPageReconciliation([intent], [], inventorySource)).toThrow(
       `browser_host_page_reconciliation_${errorKind}_invalid`
     )
   })
 
   it('rejects oversized URLs and unknown client page states', () => {
     expect(() =>
-      planBrowserHostPageReconciliation([], [currentPage({ currentUrl: 'u'.repeat(8193) })])
+      planBrowserHostPageReconciliation(
+        [],
+        [currentPage({ currentUrl: 'u'.repeat(8193) })],
+        inventorySource
+      )
     ).toThrow('browser_host_page_reconciliation_url_invalid')
     const invalidState = { ...currentPage(), state: 'other' }
     expect(() =>
       planBrowserHostPageReconciliation(
         [],
-        [invalidState as unknown as BrowserClientHostedPageInventory]
+        [invalidState as unknown as BrowserClientHostedPageInventory],
+        inventorySource
       )
     ).toThrow('browser_host_page_reconciliation_state_invalid')
   })
 
   it.each([0, 257])('rejects invalid max page limit %s', (maxPages) => {
-    expect(() => planBrowserHostPageReconciliation([], [], { maxPages })).toThrow(
-      'browser_host_page_reconciliation_limit_invalid'
-    )
+    expect(() =>
+      planBrowserHostPageReconciliation([], [], { ...inventorySource, maxPages })
+    ).toThrow('browser_host_page_reconciliation_limit_invalid')
   })
 
   it('returns immutable records and action lists', () => {
-    const plan = planBrowserHostPageReconciliation([currentIntent()], [currentPage()])
+    const plan = planBrowserHostPageReconciliation(
+      [currentIntent()],
+      [currentPage()],
+      inventorySource
+    )
 
     expect(Object.isFrozen(plan)).toBe(true)
     expect(Object.isFrozen(plan.retain)).toBe(true)

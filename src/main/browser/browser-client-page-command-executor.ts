@@ -1,14 +1,20 @@
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
+import {
+  BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES,
+  type BrowserClientHostedPageInventory,
+  type BrowserClientHostCommandEvent,
+  type BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   cleanupBrowserClientPage,
   type BrowserClientPageNetworkRoute as RetainedNetworkRoute,
-  type BrowserClientPageRenderer,
-  type BrowserClientPageRendererIdentity as RendererPageIdentity
+  type BrowserClientPageRenderer
 } from './browser-client-page-cleanup'
+import {
+  assertBrowserClientPageCommandNotAborted,
+  assertCurrentBrowserClientPageRenderer,
+  browserClientPageIdentity
+} from './browser-client-page-command-admission'
 import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity
@@ -21,6 +27,11 @@ import {
   BrowserClientPageCommandError,
   isBrowserClientPageCleanupFailure
 } from './browser-client-page-command-failure'
+import {
+  createBrowserClientPageInventory,
+  snapshotBrowserClientPageInventoryList,
+  updateBrowserClientPageInventoryCurrentUrl
+} from './browser-client-page-inventory'
 
 type BrowserClientPageCommandExecutorDependencies = {
   orcaProfileId: string
@@ -41,6 +52,7 @@ type BrowserClientPageCommandExecutorDependencies = {
 
 type RetainedPage = {
   generation: number
+  inventory: BrowserClientHostedPageInventory
   registration: BrowserRoutePageGuestIdentity
   lifecycleClaim: BrowserRouteGuestLifecycleClaim
   renderer: BrowserClientPageRenderer
@@ -52,14 +64,18 @@ type RetainedPage = {
 export class BrowserClientPageCommandExecutor {
   private readonly maxPages: number
   private readonly pages = new Map<string, RetainedPage>()
-  private readonly creatingPageIds = new Set<string>()
-  private readonly failedPages = new Map<string, number>()
+  private readonly creatingPages = new Map<string, BrowserClientHostedPageInventory>()
+  private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
   private closePromise: Promise<void> | null = null
   private closed = false
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
-    this.maxPages = dependencies.maxPages ?? 256
-    if (!Number.isInteger(this.maxPages) || this.maxPages < 1) {
+    this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
+    if (
+      !Number.isInteger(this.maxPages) ||
+      this.maxPages < 1 ||
+      this.maxPages > BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
+    ) {
       throw new Error('browser_client_page_limit_invalid')
     }
   }
@@ -86,7 +102,15 @@ export class BrowserClientPageCommandExecutor {
   }
 
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean {
-    return this.failedPages.get(browserPageId) === pageHostGeneration
+    return this.failedPages.get(browserPageId)?.pageHostGeneration === pageHostGeneration
+  }
+
+  snapshotPageInventory(): readonly BrowserClientHostedPageInventory[] {
+    return snapshotBrowserClientPageInventoryList(
+      this.creatingPages,
+      this.pages.values(),
+      this.failedPages
+    )
   }
 
   close(): Promise<void> {
@@ -116,24 +140,25 @@ export class BrowserClientPageCommandExecutor {
     }
     if (
       this.pages.has(event.browserPageId) ||
-      this.creatingPageIds.has(event.browserPageId) ||
+      this.creatingPages.has(event.browserPageId) ||
       this.failedPages.has(event.browserPageId)
     ) {
       throw new BrowserClientPageCommandError('browser_client_page_generation_conflict')
     }
-    if (this.pages.size + this.creatingPageIds.size + this.failedPages.size >= this.maxPages) {
+    if (this.pages.size + this.creatingPages.size + this.failedPages.size >= this.maxPages) {
       throw new BrowserClientPageCommandError('browser_client_page_capacity')
     }
-    this.creatingPageIds.add(event.browserPageId)
+    const unknownInventory = createBrowserClientPageInventory(event, 'outcomeUnknown')
+    this.creatingPages.set(event.browserPageId, unknownInventory)
     try {
       await this.createReservedPage(event, signal)
     } catch (error) {
       if (isBrowserClientPageCleanupFailure(error)) {
-        this.failedPages.set(event.browserPageId, event.pageHostGeneration)
+        this.failedPages.set(event.browserPageId, unknownInventory)
       }
       throw error
     } finally {
-      this.creatingPageIds.delete(event.browserPageId)
+      this.creatingPages.delete(event.browserPageId)
     }
   }
 
@@ -144,7 +169,7 @@ export class BrowserClientPageCommandExecutor {
     if (event.command.type !== 'createPage') {
       throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
     }
-    assertNotAborted(signal)
+    assertBrowserClientPageCommandNotAborted(signal)
     let route: RetainedNetworkRoute | null = null
     let routeSession: BrowserRouteSessionHandle | null = null
     let renderer: BrowserClientPageRenderer | null = null
@@ -156,9 +181,9 @@ export class BrowserClientPageCommandExecutor {
       if (route.key !== event.command.executionHostKey) {
         throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
       }
-      assertNotAborted(signal)
+      assertBrowserClientPageCommandNotAborted(signal)
       renderer = this.dependencies.selectRenderer()
-      assertCurrentRenderer(renderer)
+      assertCurrentBrowserClientPageRenderer(renderer)
       routeSession = await this.dependencies.routeSessions.preparePage({
         identity: {
           orcaProfileId: this.dependencies.orcaProfileId,
@@ -171,9 +196,9 @@ export class BrowserClientPageCommandExecutor {
         rendererWebContentsId: renderer.rendererWebContentsId,
         proxyEndpoint: route.proxyEndpoint
       })
-      assertNotAborted(signal)
-      assertCurrentRenderer(renderer)
-      const page = pageIdentity(event, routeSession.partition)
+      assertBrowserClientPageCommandNotAborted(signal)
+      assertCurrentBrowserClientPageRenderer(renderer)
+      const page = browserClientPageIdentity(event, routeSession.partition)
       mountAttempted = true
       const mounted = await renderer.mountPage(page, signal)
       registration = {
@@ -185,8 +210,8 @@ export class BrowserClientPageCommandExecutor {
       if (!lifecycleClaim) {
         throw new BrowserClientPageCommandError('browser_client_page_guest_observation_failed')
       }
-      assertNotAborted(signal)
-      assertCurrentRenderer(renderer)
+      assertBrowserClientPageCommandNotAborted(signal)
+      assertCurrentBrowserClientPageRenderer(renderer)
       if (!this.dependencies.routeWebContents.registerGuest(registration)) {
         throw new BrowserClientPageCommandError('browser_client_page_guest_registration_failed')
       }
@@ -198,6 +223,7 @@ export class BrowserClientPageCommandExecutor {
       }
       this.pages.set(event.browserPageId, {
         generation: event.pageHostGeneration,
+        inventory: createBrowserClientPageInventory(event, 'active'),
         registration,
         lifecycleClaim,
         renderer,
@@ -211,7 +237,9 @@ export class BrowserClientPageCommandExecutor {
           guestMayExist: mountAttempted,
           lifecycleClaim,
           renderer,
-          rendererPage: routeSession ? pageIdentity(event, routeSession.partition) : null,
+          rendererPage: routeSession
+            ? browserClientPageIdentity(event, routeSession.partition)
+            : null,
           route,
           routeSession
         })
@@ -232,8 +260,8 @@ export class BrowserClientPageCommandExecutor {
     if (!page || page.generation !== event.pageHostGeneration || page.retiring) {
       throw new BrowserClientPageCommandError('browser_client_page_generation_stale')
     }
-    assertNotAborted(signal)
-    assertCurrentRenderer(page.renderer)
+    assertBrowserClientPageCommandNotAborted(signal)
+    assertCurrentBrowserClientPageRenderer(page.renderer)
     const normalized = normalizeBrowserNavigationUrl(event.command.url)
     if (!normalized || normalized.startsWith('file:')) {
       throw new BrowserClientPageCommandError('browser_client_page_navigation_invalid')
@@ -245,6 +273,7 @@ export class BrowserClientPageCommandExecutor {
     if (!navigated) {
       throw new BrowserClientPageCommandError('browser_client_page_navigation_failed')
     }
+    page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, normalized)
   }
 
   private async cleanupPage(page: RetainedPage): Promise<void> {
@@ -252,7 +281,7 @@ export class BrowserClientPageCommandExecutor {
       guestMayExist: true,
       lifecycleClaim: page.lifecycleClaim,
       renderer: page.renderer,
-      rendererPage: pageIdentity(page.registration, page.registration.partition),
+      rendererPage: browserClientPageIdentity(page.registration, page.registration.partition),
       route: page.route,
       routeSession: page.routeSession
     })
@@ -260,7 +289,7 @@ export class BrowserClientPageCommandExecutor {
 
   private async closePages(): Promise<void> {
     const failures: unknown[] = [
-      ...(this.creatingPageIds.size > 0
+      ...(this.creatingPages.size > 0
         ? [new Error('browser_client_page_creation_still_running')]
         : []),
       ...(this.failedPages.size > 0 ? [new Error('browser_client_page_cleanup_unresolved')] : [])
@@ -279,32 +308,5 @@ export class BrowserClientPageCommandExecutor {
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Browser client page executor cleanup failed')
     }
-  }
-}
-
-function pageIdentity(
-  page: Pick<BrowserClientHostCommandEvent, 'browserPageId' | 'pageHostGeneration'>,
-  partition: string
-): RendererPageIdentity {
-  return {
-    partition,
-    browserPageId: page.browserPageId,
-    pageHostGeneration: page.pageHostGeneration
-  }
-}
-
-function assertCurrentRenderer(renderer: BrowserClientPageRenderer): void {
-  if (
-    !Number.isInteger(renderer.rendererWebContentsId) ||
-    renderer.rendererWebContentsId <= 0 ||
-    !renderer.isCurrent()
-  ) {
-    throw new BrowserClientPageCommandError('browser_client_page_renderer_stale')
-  }
-}
-
-function assertNotAborted(signal: AbortSignal): void {
-  if (signal.aborted) {
-    throw new BrowserClientPageCommandError('browser_client_page_command_aborted')
   }
 }

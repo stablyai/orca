@@ -37,12 +37,14 @@ function createCommand(
 
 function createLifecycleClaim(
   registration: BrowserRoutePageGuestIdentity,
-  whenDestroyed: Promise<void> = Promise.resolve()
+  whenDestroyed: Promise<void> = Promise.resolve(),
+  isCurrent = () => true
 ): BrowserRouteGuestLifecycleClaim {
   return {
     registration: { ...registration },
     guestAuthority: Symbol('guest-authority'),
-    whenDestroyed
+    whenDestroyed,
+    isCurrent
   }
 }
 
@@ -190,6 +192,111 @@ describe('BrowserClientPageCommandExecutor', () => {
       lifecycleClaim,
       'https://example.internal/path'
     )
+    expect(executor.snapshotPageInventory()).toEqual([
+      {
+        authorityRuntimeId: 'runtime-a',
+        authorityEpoch: 'epoch-a',
+        browserHostClientId: 'client-a',
+        browserHostGeneration: 3,
+        browserPageId: 'page-a',
+        pageHostGeneration: 7,
+        browserProfileId: 'profile-a',
+        executionHostKey: 'execution-host-a',
+        state: 'active',
+        currentUrl: 'https://example.internal/path'
+      }
+    ])
+  })
+
+  it('keeps legacy-valid command identities when inventory cannot encode them', async () => {
+    const { executor } = createHarness()
+    const browserProfileId = '\0'.repeat(256)
+
+    await expect(
+      executor.handle(
+        createCommand('createPage', {
+          command: { type: 'createPage', browserProfileId, executionHostKey: 'execution-host-a' }
+        }),
+        new AbortController().signal
+      )
+    ).resolves.toEqual({ status: 'completed' })
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserProfileId, state: 'active' })
+    ])
+  })
+
+  it('omits a normalized URL that expands beyond the inventory field bound', async () => {
+    const { dependencies, executor } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+    const requestedUrl = `https://example.internal/${'é'.repeat(4_000)}`
+
+    await expect(
+      executor.handle(
+        createCommand('navigate', { command: { type: 'navigate', url: requestedUrl } }),
+        new AbortController().signal
+      )
+    ).resolves.toEqual({ status: 'completed' })
+
+    expect(dependencies.routeWebContents.navigateGuest).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.stringMatching(/^https:\/\/example\.internal\/%C3%A9%C3%A9/)
+    )
+    expect(executor.snapshotPageInventory()[0]).not.toHaveProperty('currentUrl')
+  })
+
+  it('snapshots in-flight and unresolved pages as outcome unknown', async () => {
+    const { dependencies, executor, route } = createHarness()
+    let resolveRoute = (_route: typeof route): void => {}
+    dependencies.retainNetworkRoute.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRoute = resolve
+        })
+    )
+    const creating = executor.handle(createCommand('createPage'), new AbortController().signal)
+    await Promise.resolve()
+
+    const inFlight = executor.snapshotPageInventory()
+    expect(inFlight).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
+    expect(Object.isFrozen(inFlight)).toBe(true)
+    expect(Object.isFrozen(inFlight[0])).toBe(true)
+
+    resolveRoute(route)
+    await expect(creating).resolves.toEqual({ status: 'completed' })
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
+    ])
+  })
+
+  it('never duplicates a page during its create-to-active transition', async () => {
+    const { dependencies, executor, order } = createHarness()
+    let transitionSnapshot: ReturnType<typeof executor.snapshotPageInventory> = []
+    dependencies.routeWebContents.grantNavigation.mockImplementationOnce(() => {
+      order.push('grant-navigation')
+      queueMicrotask(() => {
+        transitionSnapshot = executor.snapshotPageInventory()
+      })
+      return true
+    })
+
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+
+    expect(transitionSnapshot).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'active' })
+    ])
+  })
+
+  it('never reports a page as active after its renderer authority is replaced', async () => {
+    const { executor, setRendererCurrent } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+
+    setRendererCurrent(false)
+
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
   })
 
   it('rejects stale generations and local-file navigation without touching Chromium', async () => {
@@ -293,6 +400,9 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(order.slice(-2)).toEqual(['mount-page', 'retire-renderer-page'])
     expect(routeSession.release).not.toHaveBeenCalled()
     expect(route.release).not.toHaveBeenCalled()
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
     await expect(
       executor.handle(
         createCommand('createPage', { pageHostGeneration: 8 }),
@@ -380,6 +490,9 @@ describe('BrowserClientPageCommandExecutor', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(order.slice(-2)).toEqual(['retire-guest', 'retire-renderer-page'])
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
     acknowledgeDestroyed()
     await expect(retiring).resolves.toBe(true)
     expect(order.slice(-4)).toEqual([
@@ -488,6 +601,10 @@ describe('BrowserClientPageCommandExecutor', () => {
     ).resolves.toEqual({ status: 'failed', errorCode: 'browser_client_page_capacity' })
     resolveRoute(route)
     await expect(first).resolves.toEqual({ status: 'completed' })
+  })
+
+  it('rejects a page limit above the attach inventory maximum', () => {
+    expect(() => createHarness({ maxPages: 257 })).toThrow('browser_client_page_limit_invalid')
   })
 
   it('does not retain a page when close races its in-flight creation', async () => {

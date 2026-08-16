@@ -1,4 +1,5 @@
 import type {
+  BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
@@ -12,6 +13,8 @@ export type PairedRuntimeBrowserHostLeaseOptions = {
   browserHostClientId: string
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
+  pageInventoryProtocolVersion?: 1
+  getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
   onPageCommand?: (
     command: BrowserClientHostCommandEvent
   ) => BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>

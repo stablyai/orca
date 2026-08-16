@@ -33,6 +33,7 @@ export function sameBrowserClientHostLeaseAuthority(
     left.authorityEpoch === right.authorityEpoch &&
     left.browserHostClientId === right.browserHostClientId &&
     left.browserHostGeneration === right.browserHostGeneration &&
-    left.pageCommandProtocolVersion === right.pageCommandProtocolVersion
+    left.pageCommandProtocolVersion === right.pageCommandProtocolVersion &&
+    left.pageInventoryProtocolVersion === right.pageInventoryProtocolVersion
   )
 }

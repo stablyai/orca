@@ -6,7 +6,11 @@ import { RpcDispatcher } from '../dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 import { ALL_RPC_METHODS } from './index'
 
-function request(browserHostClientId = 'host-a', pageCommandProtocolVersion?: 1) {
+function request(
+  browserHostClientId = 'host-a',
+  pageCommandProtocolVersion?: 1,
+  pageInventoryProtocolVersion?: 1
+) {
   return {
     id: `browser-host:${browserHostClientId}`,
     authToken: 'bound-by-websocket',
@@ -15,7 +19,10 @@ function request(browserHostClientId = 'host-a', pageCommandProtocolVersion?: 1)
       authorityRuntimeId: 'runtime-a',
       browserHostClientId,
       hostCapabilities: ['webview'],
-      ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {})
+      ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {}),
+      ...(pageInventoryProtocolVersion
+        ? { pageInventoryProtocolVersion, pageInventory: [inventoryPage()] }
+        : {})
     }
   }
 }
@@ -130,6 +137,36 @@ describe('browser.clientHost.attach RPC', () => {
     cleanups.get('browser-client-host:host-a')?.()
     await dispatch
     expect(JSON.parse(replies[1]!).result).not.toHaveProperty('pageCommandProtocolVersion')
+  })
+
+  it('echoes and retains only an explicitly negotiated complete page inventory', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const replies: string[] = []
+    const dispatch = dispatcher.dispatchStreaming(
+      request('host-a', undefined, 1),
+      (reply) => replies.push(reply),
+      {
+        connectionId: 'connection-a',
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a',
+        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+      }
+    )
+
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    expect(JSON.parse(replies[0]!).result).toMatchObject({ pageInventoryProtocolVersion: 1 })
+    expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [inventoryPage()]
+    })
+
+    cleanups.get('browser-client-host:host-a')?.()
+    await dispatch
   })
 
   it('publishes one server-owned command and fences result authority', async () => {
@@ -412,5 +449,20 @@ function unownedCommandResult(authorityRuntimeId: string) {
     commandSequence: 1,
     commandId: 'command-a',
     result: { status: 'completed' }
+  }
+}
+
+function inventoryPage() {
+  return {
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: 'epoch-old',
+    browserHostClientId: 'host-a',
+    browserHostGeneration: 2,
+    browserPageId: 'page-a',
+    pageHostGeneration: 3,
+    browserProfileId: 'profile-a',
+    executionHostKey: 'native:runtime-a:1',
+    state: 'active' as const,
+    currentUrl: 'https://remote.internal/'
   }
 }

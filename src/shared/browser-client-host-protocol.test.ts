@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import { REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES } from './remote-runtime-memory-limits'
 import {
+  BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
+  BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES,
+  BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION,
   BrowserClientHostAttachParams,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResultAck,
@@ -57,6 +62,184 @@ describe('browser client-host control protocol', () => {
         hostCapabilities: ['webview']
       })
     ).not.toHaveProperty('pageCommandProtocolVersion')
+  })
+
+  it('negotiates a complete bounded page inventory independently of commands', () => {
+    const page = {
+      authorityRuntimeId: 'runtime-a',
+      authorityEpoch: 'epoch-old',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 2,
+      browserPageId: 'page-a',
+      pageHostGeneration: 3,
+      browserProfileId: 'profile-a',
+      executionHostKey: 'native:runtime-a:1',
+      state: 'active' as const,
+      currentUrl: 'https://remote.internal/'
+    }
+    const attach = BrowserClientHostAttachParams.parse({
+      authorityRuntimeId: 'runtime-a',
+      browserHostClientId: 'host-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION,
+      pageInventory: [page]
+    })
+
+    expect(attach).toMatchObject({ pageInventoryProtocolVersion: 1, pageInventory: [page] })
+    expect(
+      BrowserClientHostReady.parse({
+        type: 'ready',
+        authorityEpoch: 'epoch-a',
+        browserHostGeneration: 4,
+        pageInventoryProtocolVersion: 1
+      })
+    ).toMatchObject({ pageInventoryProtocolVersion: 1 })
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1
+      })
+    ).toThrow()
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventory: [page]
+      })
+    ).toThrow()
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [page, page]
+      })
+    ).toThrow()
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: Array.from({ length: 257 }, (_, index) => ({
+          ...page,
+          browserPageId: `page-${index}`
+        }))
+      })
+    ).toThrow()
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: Array.from({ length: 256 }, (_, index) => ({
+          ...page,
+          browserPageId: `page-${index}`,
+          currentUrl: `https://remote.internal/${'x'.repeat(4096)}`
+        }))
+      })
+    ).toThrow('Browser page inventory exceeds its byte budget')
+    expect(BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES).toBeLessThan(
+      REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES
+    )
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [{ ...page, browserHostClientId: 'host-b' }]
+      })
+    ).toThrow('Browser page inventory authority does not match the attaching host')
+  })
+
+  it('bounds inventory identities after JSON escaping without narrowing legacy identities', () => {
+    const authorityRuntimeId = maxInventoryIdentity('runtime-')
+    const browserHostClientId = maxInventoryIdentity('host-')
+    const pageInventory = Array.from({ length: 256 }, (_, index) => ({
+      authorityRuntimeId,
+      authorityEpoch: maxInventoryIdentity('epoch-'),
+      browserHostClientId,
+      browserHostGeneration: 2,
+      browserPageId: maxInventoryIdentity(`page-${index.toString().padStart(3, '0')}-`),
+      pageHostGeneration: 3,
+      browserProfileId: maxInventoryIdentity('profile-'),
+      executionHostKey: maxInventoryIdentity('execution-'),
+      state: 'active' as const
+    }))
+    const firstPage = pageInventory.at(0)
+    if (!firstPage) {
+      throw new Error('expected inventory page')
+    }
+
+    expect(
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-new',
+        browserHostClientId,
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory
+      }).pageInventory
+    ).toHaveLength(256)
+    expect(
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'é'.repeat(256),
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview']
+      })
+    ).toMatchObject({ authorityRuntimeId: 'é'.repeat(256) })
+    expect(() =>
+      BrowserClientHostAttachParams.parse({
+        authorityRuntimeId: 'runtime-new',
+        browserHostClientId,
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [
+          {
+            ...firstPage,
+            browserProfileId: `${maxInventoryIdentity('profile-')}x`
+          }
+        ]
+      })
+    ).toThrow('Browser page inventory identity exceeds its JSON byte budget')
+  })
+
+  it('keeps old attach and ready decoders compatible with optional inventory fields', () => {
+    const legacyAttach = z.object({
+      authorityRuntimeId: z.string(),
+      browserHostClientId: z.string(),
+      hostCapabilities: z.array(z.string()),
+      pageCommandProtocolVersion: z.literal(1).optional()
+    })
+    const legacyReady = z.object({
+      type: z.literal('ready'),
+      authorityEpoch: z.string(),
+      browserHostGeneration: z.number(),
+      pageCommandProtocolVersion: z.literal(1).optional()
+    })
+
+    expect(
+      legacyAttach.parse({
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        pageInventoryProtocolVersion: 1,
+        pageInventory: []
+      })
+    ).not.toHaveProperty('pageInventory')
+    expect(
+      legacyReady.parse({
+        type: 'ready',
+        authorityEpoch: 'epoch-a',
+        browserHostGeneration: 2,
+        pageInventoryProtocolVersion: 1
+      })
+    ).not.toHaveProperty('pageInventoryProtocolVersion')
   })
 
   it('binds create-page commands and results to exact bounded authority', () => {
@@ -227,3 +410,23 @@ describe('browser client-host control protocol', () => {
     })
   })
 })
+
+function maxInventoryIdentity(prefix: string): string {
+  let value = prefix
+  while (
+    value.length < 256 &&
+    jsonByteLength(`${value}\0`) <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES
+  ) {
+    value += '\0'
+  }
+  while (
+    jsonByteLength(`${value}x`) <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES
+  ) {
+    value += 'x'
+  }
+  return value
+}
+
+function jsonByteLength(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength
+}

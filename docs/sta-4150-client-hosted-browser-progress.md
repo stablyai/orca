@@ -36,10 +36,10 @@ Old clients and callers that omit placement must retain current server-hosted be
 - Stage 0 compatibility hardening: PR
   [#14402](https://github.com/stablyai/orca/pull/14402) is merged. It is not the long-term
   architecture and is not part of this draft stack.
-- Latest published stack tip: `sta-4150-browser-client-page-reconciliation`, draft PR
-  [#14617](https://github.com/stablyai/orca/pull/14617), stacked on composition PR
-  [#14613](https://github.com/stablyai/orca/pull/14613); CI is rerunning after the import-side-effect
-  fix and latest-main rebase.
+- Latest published stack tip: `sta-4150-browser-client-page-inventory`, draft PR
+  [#14648](https://github.com/stablyai/orca/pull/14648), stacked on reconciliation PR
+  [#14617](https://github.com/stablyai/orca/pull/14617); CI is running after the
+  `origin/main@a3b472d050` rebase.
 - PR #14566: final lifecycle/correctness/security review clean; all 43 required CI checks pass.
 - Published bridge branch: `sta-4150-browser-client-page-mount-bridge` locally rebased to
   `830cb95c25`, draft PR [#14578](https://github.com/stablyai/orca/pull/14578), stacked on #14566;
@@ -89,6 +89,7 @@ ownership.
 | [#14596](https://github.com/stablyai/orca/pull/14596) | Renderer registry | Bounded document-owned blank guest retention and lifecycle                |
 | [#14613](https://github.com/stablyai/orca/pull/14613) | Host composition  | Environment-scoped host, executor, renderer, and route composition        |
 | [#14617](https://github.com/stablyai/orca/pull/14617) | Reconciliation    | Bounded retain, reclaim, restore, and close semantics                     |
+| [#14648](https://github.com/stablyai/orca/pull/14648) | Page inventory    | Optional authenticated complete client-page snapshot                      |
 
 ## Current stage: exact renderer bridge
 
@@ -299,35 +300,88 @@ Current evidence:
 - This stage pins semantics only. Authenticated inventory transport, runtime integration,
   executor inventory, pending-close resolution, and real reconnect/restart journeys remain.
 
+## Published stage: authenticated hosted-page inventory (#14648)
+
+Branch `sta-4150-browser-client-page-inventory` is stacked on #14617 as draft PR
+[#14648](https://github.com/stablyai/orca/pull/14648). It carries one optional, complete page
+snapshot on the existing authenticated browser-host attach. It does not execute the reconciliation
+plan, advertise a runtime capability, activate client placement, or change current browser
+behavior.
+
+Implemented:
+
+- Independent `pageInventoryProtocolVersion: 1` negotiation on attach, ready, and exact lease
+  authority. Missing server echo remains unsupported/unknown; an unsolicited echo fails closed.
+- A frozen inventory record with exact runtime, epoch, client, host/page generations, browser
+  profile, execution-host key, `active` or `outcomeUnknown` state, and optional normalized URL.
+- Atomic limits of 256 unique page IDs, 384 JSON-encoded bytes per inventory-only identity, and 768
+  KiB total, below the remote subscription's 1 MiB retained parameter ceiling and the 8 MiB
+  encrypted WebSocket frame ceiling. Existing wire identities keep their old 256-character bound.
+  Optional URLs are omitted in deterministic codepoint order when needed; page identity is never
+  truncated or dropped. If a legacy-valid identity cannot fit the optional inventory encoding, the
+  client keeps executing page commands and declines inventory negotiation for that attach.
+- Attach-level and runtime-registry rejection for incomplete negotiation, duplicate pages, foreign
+  client authority, invalid records, and oversized snapshots. A previous runtime authority remains
+  available for exact persisted-authority restart reconciliation, which additionally requires the
+  inventory lease's authenticated paired-device identity to match persisted provenance. Old attach
+  and ready decoders strip the optional fields.
+- Executor snapshots classify in-flight creation, retirement, ambiguous cleanup, stale renderer,
+  and destroyed guest authority as `outcomeUnknown`; an exact current retained guest is `active`.
+  Create-to-active transitions cannot emit a duplicate page ID, successful normalized navigation
+  updates the frozen URL snapshot, and percent-expanded URLs that exceed the field bound are omitted.
+- Composition samples the executor exactly once before attach, and the runtime stores a separate
+  immutable snapshot on the exact authenticated lease.
+
+Deterministic evidence:
+
+- Baseline: 5 files failed 7 expected assertions because the inventory contracts and accessors did
+  not exist.
+- Focused inventory/reconciliation gate: 11 files / 145 tests passed.
+- Broader authenticated lease/tunnel gate: 16 files / 188 tests passed.
+- Real old/new terminal wire compatibility: 5/5 journeys passed.
+- Full node/CLI/web typecheck, lint and native/type-aware audits, the 86-gate reliability manifest,
+  changed-code quality, max-lines ratchet, formatting, diff checks, CLI build, Electron build, and
+  paired-web projection passed on `origin/main@a3b472d050`.
+- Two fresh read-only reviews found no P0/P1 or must-fix item. Their notes preserve intentional
+  restart acceptance, bounded ambiguous-cleanup tombstones, atomic inventory opt-out, and the
+  one-shot snapshot as an activation blocker rather than weakening those fences.
+
+Architectural limitation: the current executor still belongs to one lease composition. Initial
+attach therefore normally reports an empty inventory, and transport loss closes the executor and
+its pages. Reconnect recovery cannot become live until a later stage preserves or transfers
+executor/page lifetime across the bounded grace period and feeds the stored inventory plus runtime
+intent into the already-pinned reconciliation planner. Treating a missing or unavailable snapshot
+as empty remains forbidden.
+
 ## Acceptance matrix
 
-| Requirement                                                        | State                     | Evidence or blocker                                                                                               |
-| ------------------------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Negotiated client-host and tunnel contracts                        | Partial                   | Schemas/RPC methods exist; runtime capabilities are intentionally not advertised                                  |
-| Runtime placement, leases, authority epochs, host/page generations | Partial                   | Deterministic registries exist; normal browser creation does not call them                                        |
-| Main browser-host registry                                         | Partial                   | Environment-scoped lease/executor/route composition exists but has no production caller                           |
-| Renderer-owned retained webview registry and surface               | Partial                   | Local exact-tuple preload/registry stage passes deterministic and Electron proof; no BrowserPane adoption exists  |
-| Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                     |
-| SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                         |
-| Agent/CLI routing by placement                                     | Missing                   | Only create/navigate command foundations exist; public browser methods still use current server behavior          |
-| Inventory/reconciliation after ambiguous outcomes and restart      | Missing                   | Failed/ambiguous creates intentionally consume bounded capacity until authenticated reconciliation exists         |
-| Independent bounded control/tunnel/mirror/binary channels          | Partial                   | Control and tunnel are separate/bounded; mirror and large-result paths are incomplete                             |
-| Mixed client/server compatibility                                  | Partial                   | Optional/capability-gated contracts and cross-version tests exist; activated rolling-upgrade behavior is unproven |
-| Local pointer/keyboard/chrome with no runtime round trip           | Missing                   | Requires the renderer surface and interaction-owner fencing                                                       |
-| No screencast for client placement                                 | Missing                   | No live client placement exists yet                                                                               |
-| Remote localhost/private DNS/subresources/workers/WebSockets       | Unproven                  | Requires real Electron CDP plus traffic/DNS evidence                                                              |
-| Tunnel loss fails closed with no desktop fallback                  | Partial                   | State-machine route fencing exists; live Electron/network-service proof is missing                                |
-| Browserless runtime can serve client-hosted pages                  | Unproven                  | Needs a real paired browserless runtime journey                                                                   |
-| Server/offscreen placement remains stable                          | Preserved so far          | Entire draft stack is inert; activation and rollback tests remain                                                 |
-| Headed paired-Electron terminal-link journey                       | Missing                   | Must prove page load, stable PTY/multiplex identity, and no reconnect UI                                          |
-| macOS/Linux/Windows, SSH/WSL, worktree/folder, multi-client        | Mostly missing live proof | Deterministic platform-neutral contracts exist; physical and paired topology matrix remains                       |
+| Requirement                                                        | State                     | Evidence or blocker                                                                                                 |
+| ------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Negotiated client-host and tunnel contracts                        | Partial                   | Schemas/RPC methods exist; runtime capabilities are intentionally not advertised                                    |
+| Runtime placement, leases, authority epochs, host/page generations | Partial                   | Deterministic registries exist; normal browser creation does not call them                                          |
+| Main browser-host registry                                         | Partial                   | Environment-scoped lease/executor/route composition exists but has no production caller                             |
+| Renderer-owned retained webview registry and surface               | Partial                   | Local exact-tuple preload/registry stage passes deterministic and Electron proof; no BrowserPane adoption exists    |
+| Route/profile-scoped partition before first request                | Partial                   | Deterministic policy ordering passes; real Electron worker/popup/speculation proof is missing                       |
+| SOCKS5 tunnel with remote DNS and bounded flow control             | Partial                   | Native and SSH route foundations exist; WSL and production route retention are incomplete                           |
+| Agent/CLI routing by placement                                     | Missing                   | Only create/navigate command foundations exist; public browser methods still use current server behavior            |
+| Inventory/reconciliation after ambiguous outcomes and restart      | Partial                   | Planner and authenticated bounded inventory snapshot exist; executor lifetime, plan execution, and reconnect remain |
+| Independent bounded control/tunnel/mirror/binary channels          | Partial                   | Control and tunnel are separate/bounded; mirror and large-result paths are incomplete                               |
+| Mixed client/server compatibility                                  | Partial                   | Optional/capability-gated contracts and cross-version tests exist; activated rolling-upgrade behavior is unproven   |
+| Local pointer/keyboard/chrome with no runtime round trip           | Missing                   | Requires the renderer surface and interaction-owner fencing                                                         |
+| No screencast for client placement                                 | Missing                   | No live client placement exists yet                                                                                 |
+| Remote localhost/private DNS/subresources/workers/WebSockets       | Unproven                  | Requires real Electron CDP plus traffic/DNS evidence                                                                |
+| Tunnel loss fails closed with no desktop fallback                  | Partial                   | State-machine route fencing exists; live Electron/network-service proof is missing                                  |
+| Browserless runtime can serve client-hosted pages                  | Unproven                  | Needs a real paired browserless runtime journey                                                                     |
+| Server/offscreen placement remains stable                          | Preserved so far          | Entire draft stack is inert; activation and rollback tests remain                                                   |
+| Headed paired-Electron terminal-link journey                       | Missing                   | Must prove page load, stable PTY/multiplex identity, and no reconnect UI                                            |
+| macOS/Linux/Windows, SSH/WSL, worktree/folder, multi-client        | Mostly missing live proof | Deterministic platform-neutral contracts exist; physical and paired topology matrix remains                         |
 
 ## Remaining implementation order
 
 1. Monitor #14596, #14613, and #14617 CI and fix any actionable failure without merging or
    marking them ready.
-2. Finish authenticated inventory transport and compose the pinned reclaim/restore/close plan
-   before recovering ambiguous slots or routes.
+2. Preserve executor/page lifetime through reconnect grace and compose authenticated inventory
+   with the pinned reclaim/restore/close plan before recovering ambiguous slots or routes.
 3. Add optional placement to logical session-tab publication and renderer state. Follow
    `docs/reference/remote-wire-compatibility.md`; old callers and clients remain server-hosted.
 4. Route create and every existing browser command by explicit placement. Never silently fall
@@ -394,7 +448,7 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Pushed the STA-4150 staged branches listed in the draft-stack table.
 - Opened and maintained their linked draft PRs; none were merged or marked ready.
 - Attached draft PRs and posted one concise checkpoint per stage on STA-4150.
-- Latest public checkpoint: attached/commented draft PR #14617; CI is rerunning.
+- Latest public checkpoint: attached/commented draft PR #14648; CI is running.
 - Updated the Orca worktree comment/status at context, reproduction, fix, validation, and review
   checkpoints.
 - Pushed the renderer-bridge branch, opened draft PR #14578 on #14566, attached it to STA-4150,
@@ -412,6 +466,10 @@ topology, versions, and explicit gaps at every later checkpoint.
 - Rebased all 27 branches onto `origin/main@500b72d8ef` and force-pushed them with lease checks.
   Range-diff preserved the first 24 stages; the bridge date was already upstream, and the
   composition delta is the intentional lazy Electron IPC fix.
+- Rebased all 28 stack branches onto `origin/main@a3b472d050`, confirmed all 29 patches identical
+  by `git range-diff`, and force-pushed them with lease checks.
+- Pushed the authenticated inventory stage, opened draft PR #14648 on #14617, attached it to
+  STA-4150, and posted one concise checkpoint. The ticket remains In Progress.
 - No PR was merged or marked ready.
 
 ## Completion rule

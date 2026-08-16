@@ -31,7 +31,9 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
         connectionId,
         pairedDeviceId,
         hostCapabilities: params.hostCapabilities,
-        pageCommandProtocolVersion: params.pageCommandProtocolVersion
+        pageCommandProtocolVersion: params.pageCommandProtocolVersion,
+        pageInventoryProtocolVersion: params.pageInventoryProtocolVersion,
+        pageInventory: params.pageInventory
       })
       let releaseCommandDelivery = (): void => {}
       let cleaned = false
@@ -68,6 +70,9 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
           browserHostGeneration: handle.lease.browserHostGeneration,
           ...(params.pageCommandProtocolVersion
             ? { pageCommandProtocolVersion: params.pageCommandProtocolVersion }
+            : {}),
+          ...(params.pageInventoryProtocolVersion
+            ? { pageInventoryProtocolVersion: params.pageInventoryProtocolVersion }
             : {})
         })
         const reason = await handle.whenFenced

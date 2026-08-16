@@ -5,6 +5,67 @@ const registry = (): BrowserHostLeaseRegistry =>
   new BrowserHostLeaseRegistry({ authorityRuntimeId: 'runtime-a', authorityEpoch: 'epoch-a' })
 
 describe('BrowserHostLeaseRegistry', () => {
+  it('rejects incomplete, duplicate, and foreign-client inventory before replacing a lease', () => {
+    const leases = registry()
+    const attach = (overrides: Record<string, unknown>) =>
+      leases.attach({
+        browserHostClientId: 'host-a',
+        connectionId: 'connection-a',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: ['webview'],
+        ...overrides
+      })
+    const page = inventoryPage()
+
+    expect(() => attach({ pageInventoryProtocolVersion: 1 })).toThrow(
+      'browser_host_page_inventory_negotiation_incomplete'
+    )
+    expect(() =>
+      attach({ pageInventoryProtocolVersion: 2 as never, pageInventory: [page] })
+    ).toThrow('browser_host_page_inventory_protocol_unsupported')
+    expect(() => attach({ pageInventory: [page] })).toThrow(
+      'browser_host_page_inventory_negotiation_incomplete'
+    )
+    expect(() => attach({ pageInventoryProtocolVersion: 1, pageInventory: [page, page] })).toThrow(
+      'Duplicate browser page inventory identity'
+    )
+    expect(() =>
+      attach({
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [{ ...page, browserHostClientId: 'host-b' }]
+      })
+    ).toThrow('browser_host_page_inventory_authority_mismatch')
+    expect(
+      attach({
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [{ ...page, authorityRuntimeId: 'runtime-old' }]
+      }).lease.pageInventory
+    ).toEqual([expect.objectContaining({ authorityRuntimeId: 'runtime-old' })])
+  })
+
+  it('retains an immutable inventory snapshot on the authenticated lease', () => {
+    const leases = registry()
+    const page = inventoryPage()
+    const pageInventory = [page]
+    const lease = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageInventoryProtocolVersion: 1,
+      pageInventory
+    }).lease
+
+    page.currentUrl = 'https://mutated.invalid/'
+    pageInventory.length = 0
+
+    expect(lease.pageInventory).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', currentUrl: 'https://remote.internal/' })
+    ])
+    expect(Object.isFrozen(lease.pageInventory)).toBe(true)
+    expect(Object.isFrozen(lease.pageInventory?.[0])).toBe(true)
+  })
+
   it('selects only an exact host when more than one lease is live', () => {
     const leases = registry()
     leases.attach({
@@ -346,3 +407,18 @@ describe('BrowserHostLeaseRegistry', () => {
     ).toThrow('browser_tunnel_execution_host_not_granted')
   })
 })
+
+function inventoryPage() {
+  return {
+    authorityRuntimeId: 'runtime-a',
+    authorityEpoch: 'epoch-old',
+    browserHostClientId: 'host-a',
+    browserHostGeneration: 2,
+    browserPageId: 'page-a',
+    pageHostGeneration: 3,
+    browserProfileId: 'profile-a',
+    executionHostKey: 'native:runtime-a:1',
+    state: 'active' as const,
+    currentUrl: 'https://remote.internal/'
+  }
+}

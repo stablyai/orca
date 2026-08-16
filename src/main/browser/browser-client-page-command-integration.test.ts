@@ -71,6 +71,9 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     expect(guest.url()).toBe('https://example.internal/path')
 
     guest.destroy()
+    expect(executor.snapshotPageInventory()).toEqual([
+      expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
+    ])
     await expect(executor.retirePage('page-a', 7)).resolves.toBe(true)
     expect(guest.webContents.close).not.toHaveBeenCalled()
     expect(rendererRetire).toHaveBeenCalledOnce()
