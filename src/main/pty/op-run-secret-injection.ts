@@ -13,8 +13,9 @@ export const OP_SECRET_REFERENCE_PREFIX = 'op://'
 // Why: chained/multiline commands must stay inside `op run`'s env — `op run -- a && b` would run `b` unresolved.
 const SHELL_METACHAR_RE = /[|&;<>()`$\r\n]/
 
-// Why: `FOO=bar cmd` is shell assignment syntax, not an argv — `op run -- FOO=bar cmd` would exec "FOO=bar".
-const LEADING_ENV_ASSIGNMENT_RE = /^\s*[A-Za-z_][A-Za-z0-9_]*=/
+// Why: `FOO=bar cmd` (and bash's `FOO+=bar cmd`) is shell assignment syntax, not an argv —
+// `op run -- FOO=bar cmd` would exec "FOO=bar".
+const LEADING_ENV_ASSIGNMENT_RE = /^\s*[A-Za-z_][A-Za-z0-9_]*\+?=/
 
 function needsShellWrapping(command: string): boolean {
   return SHELL_METACHAR_RE.test(command) || LEADING_ENV_ASSIGNMENT_RE.test(command)

@@ -137,6 +137,15 @@ describe('op run gating and shell-assignment commands (Codex review)', () => {
     )
   })
 
+  it("sh -c wraps bash's append-assignment form too", () => {
+    expect(wrapStartupCommandWithOpRun('NODE_OPTIONS+=--require ./p.js node app.js', 'linux')).toBe(
+      "op run -- sh -c 'NODE_OPTIONS+=--require ./p.js node app.js'"
+    )
+    expect(wrapStartupCommandWithOpRun('PATH+=:/evil claude', 'darwin')).toBe(
+      "op run -- sh -c 'PATH+=:/evil claude'"
+    )
+  })
+
   it('does not mistake an equals sign later in the command for an assignment', () => {
     expect(wrapStartupCommandWithOpRun('claude --flag=value', 'linux')).toBe(
       'op run -- claude --flag=value'
