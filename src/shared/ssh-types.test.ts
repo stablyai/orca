@@ -19,6 +19,18 @@ describe('SSH types', () => {
     expect(target.host).toBe('myserver.com')
   })
 
+  it('SshTarget accepts optional runGitLabCliOnHost opt-in', () => {
+    const target: SshTarget = {
+      id: 'target-2',
+      label: 'Builder',
+      host: 'builder.example.com',
+      port: 22,
+      username: 'dev',
+      runGitLabCliOnHost: true
+    }
+    expect(target.runGitLabCliOnHost).toBe(true)
+  })
+
   it('SshConnectionStatus covers all expected states', () => {
     const statuses: SshConnectionStatus[] = [
       'disconnected',

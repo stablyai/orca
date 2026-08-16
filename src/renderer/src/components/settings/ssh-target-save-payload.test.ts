@@ -88,4 +88,32 @@ describe('buildSshTargetSavePayload', () => {
       expect(result.error).toContain('Terminal timeout')
     }
   })
+
+  it('persists runGitLabCliOnHost only when enabled', () => {
+    const off = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'builder.example.com',
+      username: 'dev',
+      runGitLabCliOnHost: false
+    })
+    expect(off.ok).toBe(true)
+    if (!off.ok) {
+      throw new Error(off.error)
+    }
+    expect(off.payload.target).not.toHaveProperty('runGitLabCliOnHost')
+    expect(off.payload.updates.runGitLabCliOnHost).toBeUndefined()
+
+    const on = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'builder.example.com',
+      username: 'dev',
+      runGitLabCliOnHost: true
+    })
+    expect(on.ok).toBe(true)
+    if (!on.ok) {
+      throw new Error(on.error)
+    }
+    expect(on.payload.target.runGitLabCliOnHost).toBe(true)
+    expect(on.payload.updates.runGitLabCliOnHost).toBe(true)
+  })
 })

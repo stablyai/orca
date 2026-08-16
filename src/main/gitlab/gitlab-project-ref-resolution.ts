@@ -246,9 +246,16 @@ export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string } {
+): {
+  cwd?: string
+  wslDistro?: string
+  sshTargetId?: string
+  remoteCwd?: string
+} {
+  // Why: sshTargetId lets glabExecFileAsync try host-side glab when the target opts in;
+  // remoteCwd is only used on that path. Local fallback keeps today's no-cwd behavior.
   return connectionId
-    ? {}
+    ? { sshTargetId: connectionId, remoteCwd: repoPath }
     : {
         cwd: repoPath,
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})

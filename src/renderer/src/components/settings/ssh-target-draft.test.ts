@@ -220,6 +220,28 @@ describe('getEditingTargetForSshTarget', () => {
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
 
+  it('defaults runGitLabCliOnHost off and preserves explicit opt-ins', () => {
+    expect(EMPTY_FORM.runGitLabCliOnHost).toBe(false)
+    const off = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    expect(off.runGitLabCliOnHost).toBe(false)
+
+    const on = getEditingTargetForSshTarget({
+      id: 'ssh-2',
+      label: 'GitLab host',
+      host: 'builder.example.com',
+      port: 22,
+      username: 'dev',
+      runGitLabCliOnHost: true
+    })
+    expect(on.runGitLabCliOnHost).toBe(true)
+  })
+
   it('uses the default persistence for targets without an explicit grace period', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',

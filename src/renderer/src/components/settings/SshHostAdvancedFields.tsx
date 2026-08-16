@@ -117,6 +117,36 @@ export function SshHostAdvancedFields({
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">
                 {translate(
+                  'auto.components.settings.SshTargetForm.runGitLabCliOnHost',
+                  'Run GitLab CLI (glab) on this host'
+                )}
+              </Label>
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.runGitLabCliOnHostHelp',
+                  'Use when glab credentials live on the remote host. Repo-scoped GitLab features run glab over SSH instead of locally.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={form.runGitLabCliOnHost}
+              disabled={disabled}
+              onChange={() =>
+                onFormChange((f) => ({
+                  ...f,
+                  runGitLabCliOnHost: !f.runGitLabCliOnHost
+                }))
+              }
+              ariaLabel={translate(
+                'auto.components.settings.SshTargetForm.runGitLabCliOnHost',
+                'Run GitLab CLI (glab) on this host'
+              )}
+            />
+          </div>
+          <div className="flex items-start justify-between gap-4 py-1 text-xs">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <Label className="text-xs font-medium">
+                {translate(
                   'auto.components.settings.SshTargetForm.71fc546097',
                   'Keep terminals alive until reset'
                 )}

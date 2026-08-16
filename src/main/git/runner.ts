@@ -55,6 +55,7 @@ import {
 } from './wsl-linked-worktree-git-routing'
 // Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
 import { extractExecError, parseRetryAfterMs } from './exec-error'
+import { tryGlabOnSshHost } from './glab-ssh-execution'
 export { extractExecError, parseRetryAfterMs }
 
 // ─── Core resolution ────────────────────────────────────────────────
@@ -1833,6 +1834,10 @@ type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
   wslDistro?: string
   idempotent?: boolean
   allowDefaultWslFallback?: boolean
+  /** SSH target id (connectionId) for opt-in remote glab via relay. */
+  sshTargetId?: string | null
+  /** Remote worktree/repo path used as cwd when glab runs on the SSH host. */
+  remoteCwd?: string
 }
 
 /** Async glab CLI execution; drop-in for execFileAsync('glab', …). Retry policy mirrors ghExecFileAsync. */
@@ -1863,6 +1868,19 @@ export async function glabExecFileAsync(
   options: GlabExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
   ;({ args, options } = redirectPortedHostnameToEnv(args, options))
+  // Why: repo-scoped SSH workspaces can opt into host-side glab (credentials live on the box).
+  if (options.sshTargetId) {
+    const remote = await tryGlabOnSshHost(args, {
+      sshTargetId: options.sshTargetId,
+      remoteCwd: options.remoteCwd,
+      timeout: options.timeout,
+      env: options.env,
+      signal: options.signal
+    })
+    if (remote) {
+      return remote
+    }
+  }
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedDefaultWslFallback = false

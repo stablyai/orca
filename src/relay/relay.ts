@@ -40,6 +40,7 @@ import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
+import { GlabExecHandler } from './glab-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
 import { createRelayAiVaultService } from './ai-vault-service-factory'
@@ -724,6 +725,9 @@ async function main(): Promise<void> {
 
   const _agentExecHandler = new AgentExecHandler(dispatcher)
   void _agentExecHandler
+
+  const _glabExecHandler = new GlabExecHandler(dispatcher)
+  void _glabExecHandler
 
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler

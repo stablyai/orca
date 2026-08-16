@@ -53,7 +53,13 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** When true, repo-scoped `glab` calls for workspaces on this host run on the
+   *  remote via relay (credentials live on the box). Default off / omitted. */
+  runGitLabCliOnHost?: boolean
 }
+
+/** Relay RPC for opt-in remote `glab` execution (additive; older relays → -32601). */
+export const GLAB_EXEC_METHOD = 'glab.exec' as const
 
 /** Public target identity safe to mirror to a paired client. */
 export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
