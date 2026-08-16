@@ -20,7 +20,8 @@ export class CdpDebuggerChannel {
     private readonly responder: CdpClientResponseWriter,
     private readonly sessions: CdpSyntheticSessionRegistry,
     private readonly getClient: () => WebSocket | null,
-    private readonly onDetached: () => void
+    private readonly onDetached: () => void,
+    private readonly injectAntiDetection: boolean
   ) {}
 
   async attachDebugger(): Promise<void> {
@@ -34,16 +35,16 @@ export class CdpDebuggerChannel {
     }
     this.attached = true
 
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Inject before any page loads so challenges succeed.
-    try {
-      await this.webContents.debugger.sendCommand('Page.enable', {})
-      await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-        source: ANTI_DETECTION_SCRIPT
-      })
-    } catch {
-      /* best-effort — page domain may not be ready yet */
+    // Why: BrowserManager owns registered guests; standalone window proxies still need the fallback.
+    if (this.injectAntiDetection) {
+      try {
+        await this.webContents.debugger.sendCommand('Page.enable', {})
+        await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+          source: ANTI_DETECTION_SCRIPT
+        })
+      } catch {
+        /* best-effort — page domain may not be ready yet */
+      }
     }
 
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {

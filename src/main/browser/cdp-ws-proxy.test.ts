@@ -56,6 +56,24 @@ describe('CdpWsProxy', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
 
+  it('does not duplicate anti-detection for a preload-backed webview', async () => {
+    await proxy.stop()
+    mock = createMockWebContents('webview')
+    proxy = new CdpWsProxy(mock.webContents as never)
+    endpoint = await proxy.start()
+
+    expect(getSendCommandMethods(mock)).not.toContain('Page.addScriptToEvaluateOnNewDocument')
+  })
+
+  it('does not duplicate BrowserManager anti-detection for a managed offscreen guest', async () => {
+    await proxy.stop()
+    mock = createMockWebContents('window')
+    proxy = new CdpWsProxy(mock.webContents as never, 'browser-manager')
+    endpoint = await proxy.start()
+
+    expect(getSendCommandMethods(mock)).not.toContain('Page.addScriptToEvaluateOnNewDocument')
+  })
+
   // ── CDP message ID correlation ──
 
   it('correlates CDP request/response IDs', async () => {

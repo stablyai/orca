@@ -1,6 +1,8 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
+import { installBrowserAntiDetection as installCdpAntiDetection } from '../../shared/browser-anti-detection'
+import { installBrowserAntiDetection as installPreloadAntiDetection } from '../../preload/browser-anti-detection-installation'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 
@@ -74,6 +76,10 @@ function createContext(args: {
 }
 
 describe('ANTI_DETECTION_SCRIPT', () => {
+  it('keeps the standalone preload installer identical to the CDP installer', () => {
+    expect(installPreloadAntiDetection.toString()).toBe(installCdpAntiDetection.toString())
+  })
+
   it('does not expose Chrome globals under a Firefox identity', () => {
     const context = createContext({
       nativeNotificationPermission: 'denied',
@@ -98,6 +104,27 @@ describe('ANTI_DETECTION_SCRIPT', () => {
     expect(context.window.chrome?.runtime).toBeUndefined()
     expect(context.window.chrome?.csi).toBeTypeOf('function')
     expect(context.window.chrome?.loadTimes).toBeTypeOf('function')
+  })
+
+  it('keeps one permission shim when installation repeats in a document', async () => {
+    const context = createContext({
+      nativeNotificationPermission: 'denied',
+      requestedNotificationPermission: 'granted'
+    })
+
+    runInNewContext(ANTI_DETECTION_SCRIPT, context)
+    const permissionQuery = context.navigator.permissions.query
+    const requestPermission = context.Notification.requestPermission
+    await expect(context.Notification.requestPermission()).resolves.toBe('granted')
+
+    expect(() => runInNewContext(ANTI_DETECTION_SCRIPT, context)).not.toThrow()
+    expect(context.navigator.permissions.query).toBe(permissionQuery)
+    expect(context.Notification.requestPermission).toBe(requestPermission)
+    expect(context.Notification.permission).toBe('granted')
+    await expect(context.navigator.permissions.query({ name: 'notifications' })).resolves.toEqual({
+      state: 'granted',
+      onchange: null
+    })
   })
 
   it.each(['geolocation', 'idle-detection', 'midi', 'storage-access'])(

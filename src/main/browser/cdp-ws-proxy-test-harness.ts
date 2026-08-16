@@ -25,6 +25,7 @@ export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
+    getType: Mock<() => string>
     focus: Mock<() => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
@@ -37,7 +38,7 @@ export type MockWebContents = {
   emit: (event: string, ...args: unknown[]) => void
 }
 
-export function createMockWebContents(): MockWebContents {
+export function createMockWebContents(type = 'window'): MockWebContents {
   const listeners = new Map<string, DebuggerListener[]>()
   let debuggerAttached = false
   let destroyed = false
@@ -71,6 +72,7 @@ export function createMockWebContents(): MockWebContents {
     webContents: {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
+      getType: vi.fn(() => type),
       focus: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),

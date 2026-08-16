@@ -47,7 +47,6 @@ import {
 } from './snapshot-engine'
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
 const CAPTURE_LOG_LIMIT = 1000
 
@@ -1155,11 +1154,6 @@ export class CdpBridge {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true
-    })
-
-    // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
-    await sender('Page.addScriptToEvaluateOnNewDocument', {
-      source: ANTI_DETECTION_SCRIPT
     })
 
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.

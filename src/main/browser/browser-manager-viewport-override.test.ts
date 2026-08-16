@@ -223,6 +223,65 @@ describe('browserManager', () => {
       })
     })
 
+    it('restores the full standing viewport override after debugger reattachment', async () => {
+      vi.useFakeTimers()
+      const { guest, debuggerAttach, debuggerIsAttached, debuggerOn, debuggerSendCommand } =
+        makeGuest(4248)
+      debuggerAttach.mockImplementation(() => {
+        debuggerIsAttached.mockReturnValue(true)
+      })
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-reattach-nav',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+      await browserManager.setViewportOverride('tab-reattach-nav', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+
+      const detachHandler = debuggerOn.mock.calls.find(([event]) => event === 'detach')?.[1] as
+        | (() => void)
+        | undefined
+      expect(detachHandler).toBeTypeOf('function')
+      debuggerSendCommand.mockClear()
+      debuggerIsAttached.mockReturnValue(false)
+      detachHandler?.()
+      vi.advanceTimersByTime(500)
+      await flushViewportOps()
+
+      expect(debuggerAttach).toHaveBeenCalledTimes(1)
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
+        enabled: false,
+        maxTouchPoints: 0
+      })
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: GUEST_CLEAN_UA
+      })
+
+      debuggerSendCommand.mockClear()
+      const didStartNavigation = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+      didStartNavigation(null, 'https://example.org/', false, true)
+      await flushViewportOps()
+
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: GUEST_CLEAN_UA
+      })
+      browserManager.unregisterAll()
+    })
+
     // Why: not an ordering race — debugger.sendCommand dispatches in call order over one channel, so
     // the later-issued write always wins. The defect is post-await staleness: verified against real
     // Electron 43.1.0, did-start-navigation fires while an awaited sendCommand is still pending, and
@@ -772,8 +831,7 @@ describe('browserManager', () => {
 
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).toHaveBeenCalled()
-      // Why: detaching would clear Page.addScriptToEvaluateOnNewDocument
-      // (anti-detection). Guard regression.
+      // Why: detaching would immediately clear the viewport and device-emulation state just installed.
       expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
     })
 

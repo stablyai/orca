@@ -3,7 +3,7 @@
   "entry": [
     "src/main/index.ts",
     "src/preload/index.ts",
-    "src/preload/browser-window-close.ts",
+    "src/preload/browser-guest.ts",
     "src/main/daemon/daemon-entry.ts",
     "src/main/plugins/plugin-host-entry.ts",
     "src/main/computer/sidecar-entry.ts",

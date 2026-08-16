@@ -2320,7 +2320,7 @@ export class AgentBrowserBridge {
       // Why: the daemon persists sessions (incl. CDP port) across restarts; close the stale one first or it ignores --cdp and hits the dead port.
       await this.closeStaleAgentBrowserSession(sessionName)
 
-      const proxy = new CdpWsProxy(wc)
+      const proxy = new CdpWsProxy(wc, 'browser-manager')
       const cdpEndpoint = await proxy.start()
 
       this.sessions.set(sessionName, {

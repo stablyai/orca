@@ -9,6 +9,8 @@ import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 
+type AntiDetectionOwner = 'browser-manager' | 'proxy'
+
 export class CdpWsProxy {
   private httpServer: Server | null = null
   private wss: WebSocketServer | null = null
@@ -23,7 +25,10 @@ export class CdpWsProxy {
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
 
-  constructor(private readonly webContents: WebContents) {
+  constructor(
+    private readonly webContents: WebContents,
+    antiDetectionOwner: AntiDetectionOwner = 'proxy'
+  ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
       this.responder,
@@ -35,7 +40,8 @@ export class CdpWsProxy {
       this.responder,
       this.sessions,
       () => this.client,
-      () => this.stop()
+      () => this.stop(),
+      antiDetectionOwner === 'proxy' && webContents.getType() !== 'webview'
     )
     this.navigation = new CdpPageNavigationCommands(
       webContents,
