@@ -60,6 +60,8 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // treat a preallocated page ID as canonical when this is advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
+export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const
+export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
