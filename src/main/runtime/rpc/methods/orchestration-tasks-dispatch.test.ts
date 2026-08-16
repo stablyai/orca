@@ -185,6 +185,25 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('rejects resetting a task to ready while its dispatch is active', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_a')
+
+      await expect(
+        call('orchestration.taskUpdate', {
+          id: task.id,
+          status: 'ready'
+        })
+      ).rejects.toMatchObject({
+        code: 'task_not_startable',
+        message: expect.stringContaining(`active Dispatch ${dispatch.id}`)
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    })
+
     it('throws on nonexistent task', async () => {
       setup()
       await expect(

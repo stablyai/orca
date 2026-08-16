@@ -1409,6 +1409,17 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           `Task ${params.id} was not found in Run ${run.id}.`
         )
       }
+      const latestDispatch = db.getDispatchContext(params.id)
+      if (
+        params.status === 'ready' &&
+        latestDispatch &&
+        (latestDispatch.status === 'pending' || latestDispatch.status === 'dispatched')
+      ) {
+        throw new OrchestrationError(
+          'task_not_startable',
+          `Task ${params.id} has active Dispatch ${latestDispatch.id}; settle it before resetting the Task to ready.`
+        )
+      }
       const task = db.updateTaskStatus(params.id, params.status, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
