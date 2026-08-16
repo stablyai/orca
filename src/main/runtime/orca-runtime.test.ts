@@ -3793,16 +3793,32 @@ describe('OrcaRuntimeService', () => {
         tabs: { type: string; leafId?: string; lifecycle?: string }[]
       }
     }
-    // Record connected PTYs first so the worktree fallback binds each tab.
-    internals.recordPtyWorktree('pty-live', TEST_WORKTREE_ID, { connected: true })
-    internals.recordPtyWorktree('pty-exited', TEST_WORKTREE_ID, { connected: true })
-    internals.recordPtyWorktree('pty-disc', TEST_WORKTREE_ID, { connected: true })
+    // Bind each lifecycle assertion to an exact PTY identity.
+    internals.recordPtyWorktree('pty-live', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'lc',
+      paneKey: 'lc:leaf-live'
+    })
+    internals.recordPtyWorktree('pty-exited', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'lc',
+      paneKey: 'lc:leaf-exited'
+    })
+    internals.recordPtyWorktree('pty-disc', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'lc',
+      paneKey: 'lc:leaf-disc'
+    })
+    internals.recordPtyWorktree('pty-fallback', TEST_WORKTREE_ID, { connected: true })
     const exited = internals.ptysById.get('pty-exited')!
     exited.connected = false
     exited.lastExitCode = 7
     const disconnected = internals.ptysById.get('pty-disc')!
     disconnected.connected = false
     disconnected.lastExitCode = null
+    const fallback = internals.ptysById.get('pty-fallback')!
+    fallback.connected = false
+    fallback.lastExitCode = 9
 
     const terminalTab = (leafId: string, ptyId: string, isActive: boolean) => ({
       type: 'terminal' as const,
@@ -3823,7 +3839,8 @@ describe('OrcaRuntimeService', () => {
       tabs: [
         terminalTab('leaf-live', 'pty-live', true),
         terminalTab('leaf-exited', 'pty-exited', false),
-        terminalTab('leaf-disc', 'pty-disc', false)
+        terminalTab('leaf-disc', 'pty-disc', false),
+        terminalTab('leaf-fallback', 'pty-fallback', false)
       ]
     })
 
@@ -3833,6 +3850,7 @@ describe('OrcaRuntimeService', () => {
     expect(byLeaf('leaf-live')?.lifecycle).toBe('live')
     expect(byLeaf('leaf-exited')?.lifecycle).toBe('exited')
     expect(byLeaf('leaf-disc')?.lifecycle).toBe('disconnected')
+    expect(byLeaf('leaf-fallback')?.lifecycle).toBeUndefined()
   })
 
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {

@@ -33628,11 +33628,14 @@ export class OrcaRuntimeService {
         typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
           ? rawTurnCompletedAt
           : undefined
+      const lifecyclePty =
+        liveLeafPty ??
+        (pty && this.mobileTerminalTabMatchesPty(snapshot.worktree, tab, pty) ? pty : null)
       // Host-owned lifecycle distinguishes a process exit from a lost PTY record.
       const lifecycle: 'live' | 'disconnected' | 'exited' | undefined = terminalHandle
         ? 'live'
-        : pty
-          ? pty.lastExitCode !== null
+        : lifecyclePty
+          ? lifecyclePty.lastExitCode !== null
             ? 'exited'
             : 'disconnected'
           : undefined

@@ -65,9 +65,7 @@ describe('terminal multiplex exit capability', () => {
     expect(events.find((event) => event.type === 'subscribed')).toMatchObject({
       capabilities: { terminalExited: 1 }
     })
-    const exitedIndex = events.findIndex(
-      (event) => event.type === 'exited' && event.streamId === 7
-    )
+    const exitedIndex = events.findIndex((event) => event.type === 'exited' && event.streamId === 7)
     const endIndex = events.findIndex((event) => event.type === 'end' && event.streamId === 7)
     expect(events[exitedIndex]).toMatchObject({
       type: 'exited',
@@ -97,8 +95,7 @@ describe('terminal multiplex exit capability', () => {
       expect(
         harness.messages.some(
           (message) =>
-            JSON.parse(message).result?.type === 'end' &&
-            JSON.parse(message).result?.streamId === 7
+            JSON.parse(message).result?.type === 'end' && JSON.parse(message).result?.streamId === 7
         )
       ).toBe(true)
     )
