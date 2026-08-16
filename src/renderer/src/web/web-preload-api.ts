@@ -2877,6 +2877,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
+    openOrcaDeepLink: () => {},
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
     onMoveSessionTab: () => noopUnsubscribe,

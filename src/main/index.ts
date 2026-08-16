@@ -184,6 +184,8 @@ import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
+import { parseOrcaDeepLink } from '../shared/orca-deep-link'
+import { OrcaFocusDeepLinkState } from './startup/orca-focus-deep-link-state'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -401,6 +403,7 @@ const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
+const orcaFocusDeepLinks = new OrcaFocusDeepLinkState()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -700,10 +703,33 @@ function focusExistingWindow(): void {
   })
 }
 
+// Why: reuse runtime.focusTerminal, the canonical action behind `orca terminal focus` and notification clicks.
+function deliverPendingOrcaFocus(): void {
+  const currentRuntime = runtime
+  // Why: a cold-launch link can land before the window/runtime exist; leave it pending for the whenReady replay.
+  if (!currentRuntime || !mainWindow) {
+    return
+  }
+  const handle = orcaFocusDeepLinks.consume()
+  if (!handle) {
+    return
+  }
+  focusExistingWindow()
+  void currentRuntime.focusTerminal(handle).catch((error) => {
+    console.warn(`[deep-link] Failed to focus terminal ${handle}:`, error)
+  })
+}
+
+/** Only a valid parsed link focuses anything, so a hostile terminal cannot steal focus with garbage `orca://` strings. */
+function routeOrcaFocusDeepLink(argv: readonly string[]): void {
+  orcaFocusDeepLinks.capture(argv, deliverPendingOrcaFocus)
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
   skillShareDeepLinks.capture(argv, (shareId) => {
     mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  routeOrcaFocusDeepLink(argv)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
@@ -712,7 +738,8 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
 }
 
 app.on('open-url', (event, url) => {
-  if (!parseSkillShareId(url)) {
+  // Why: macOS delivers both link kinds here; unclaimed URLs keep the default handling.
+  if (!parseSkillShareId(url) && !parseOrcaDeepLink(url)) {
     return
   }
   event.preventDefault()
@@ -720,6 +747,7 @@ app.on('open-url', (event, url) => {
 })
 
 skillShareDeepLinks.capture(process.argv)
+orcaFocusDeepLinks.capture(process.argv)
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
@@ -908,6 +936,14 @@ ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
 
 ipcMain.handle('ui:consumePendingSkillShare', () => {
   return skillShareDeepLinks.consume()
+})
+
+// Why: an in-terminal OSC 8 click is intercepted in the renderer and forwarded here, so it shares the argv/open-url path instead of an OS round-trip.
+ipcMain.on('ui:openOrcaDeepLink', (_event, url: unknown) => {
+  if (typeof url !== 'string') {
+    return
+  }
+  routeOrcaFocusDeepLink([url])
 })
 
 ipcMain.handle(
@@ -3165,6 +3201,9 @@ void app.whenReady().then(async () => {
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
   }
+
+  // Why: the window and runtime now exist, so replay an orca://focus link held from a cold launch.
+  deliverPendingOrcaFocus()
 
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {

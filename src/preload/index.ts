@@ -4114,6 +4114,10 @@ const api = {
       ipcRenderer.on('ui:focusTerminal', listener)
       return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
     },
+    // Forward an in-terminal orca:// link click to the main process, which resolves the target tab.
+    openOrcaDeepLink: (url: string): void => {
+      ipcRenderer.send('ui:openOrcaDeepLink', url)
+    },
     onFocusEditorTab: (
       callback: (data: { tabId: string; worktreeId: string }) => void
     ): (() => void) => {

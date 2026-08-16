@@ -174,6 +174,7 @@ export type UiCommandEventApi = {
       scrollToBottomIfOutputSinceLastView?: boolean
     }) => void
   ) => () => void
+  openOrcaDeepLink: (url: string) => void
   onFocusEditorTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onMoveSessionTab: (
