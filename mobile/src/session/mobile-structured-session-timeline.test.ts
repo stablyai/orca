@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import {
   buildMobileStructuredTimeline,
   activeMobileStructuredTurnId,
@@ -72,6 +73,22 @@ describe('mobile structured session timeline', () => {
       outbox: { state: 'unconfirmed' },
       message: { blocks: [{ type: 'text', text: 'look' }, { url: 'file:///preview.png' }] }
     })
+  })
+
+  it('adopts the WAL row instead of drawing the send twice while it dispatches', () => {
+    const wal: AgentJournalRenderItem = {
+      itemId: agentJournalSubmissionKey(OUTBOX.clientMessageId),
+      revision: 0,
+      sequence: 1,
+      observedAt: 3,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'look' }] }
+    }
+
+    const rows = buildMobileStructuredTimeline([wal], [OUTBOX])
+
+    expect(rows).toHaveLength(1)
+    // The entry rides the canonical row, so Retry / edit-queued stay reachable.
+    expect(rows[0]).toMatchObject({ key: wal.itemId, outbox: { state: 'unconfirmed' } })
   })
 
   it('restores host paths and local previews when a queued send is edited', () => {

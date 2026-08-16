@@ -19,7 +19,7 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -311,8 +311,7 @@ export function NativeChatMessageList({
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
   )
-  const showTypingIndicator =
-    isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
+  const showTypingIndicator = shouldShowNativeChatTypingIndicator({ messages, isWorking })
 
   // When an older page prepends, the scroll content grows above the viewport.
   // Capture the pre-render scroll height so the layout effect can restore the
