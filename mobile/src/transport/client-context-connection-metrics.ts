@@ -10,8 +10,8 @@ export function useLastConnectedAt(hostId: string | undefined): number | null {
   return useHostMetric(hostId, (context, id) => context.getLastConnectedAt(id), null)
 }
 
-export function useConnectionPath(hostId: string | undefined): MobileConnectionPath {
-  return useHostMetric(hostId, (context, id) => context.getActivePath(id), 'lan')
+export function usePendingConnectionPath(hostId: string | undefined): MobileConnectionPath | null {
+  return useHostMetric(hostId, (context, id) => context.getPendingPath(id), null)
 }
 
 function useHostMetric<T>(

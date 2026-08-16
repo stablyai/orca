@@ -26,7 +26,7 @@ describe('classifyConnection Tailscale hint', () => {
       ...base,
       reconnectAttempts: 3,
       endpoint: 'ws://100.65.9.106:6768',
-      path: 'tailscale'
+      pendingPath: null
     })
     expect(verdict).toMatchObject({ kind: 'warning', hint: 'check Tailscale' })
   })
@@ -76,12 +76,29 @@ describe('classifyConnection Tailscale hint', () => {
       ...base,
       reconnectAttempts: 5,
       endpoint: 'ws://100.88.90.25:6768',
-      path: 'relay' as const
+      pendingPath: 'relay' as const
     }
 
-    const verdict = classifyConnection(incident)
+    for (const state of ['connecting', 'handshaking', 'reconnecting', 'disconnected'] as const) {
+      const verdict = classifyConnection({ ...incident, state })
+      expect(verdict).toEqual({ kind: 'normal', label: 'Connecting via Relay…' })
+      expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
+    }
+  })
 
-    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting via Relay…' })
+  it('escalates a prolonged relay recovery without reviving the Tailscale hint', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 12,
+      endpoint: 'ws://100.88.90.25:6768',
+      pendingPath: 'relay'
+    })
+
+    expect(verdict).toEqual({
+      kind: 'unreachable',
+      label: "Can't connect via Relay",
+      reason: 'never-connected'
+    })
     expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
   })
 })

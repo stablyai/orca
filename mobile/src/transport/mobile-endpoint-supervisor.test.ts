@@ -91,6 +91,24 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
+  it('keeps Relay pending through a failed dial cooldown and clears it on stop', async () => {
+    const logical = new FakeLogicalClient('reconnecting', 'lan')
+    const deps = dependencies({
+      openRelay: vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4408))),
+      randomBytes: () => new Uint8Array([128, 0])
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+
+    expect(logical.getPendingPath()).toBe('relay')
+    await vi.advanceTimersByTimeAsync(249)
+    expect(logical.getPendingPath()).toBe('relay')
+
+    supervisor.stop()
+    expect(logical.getPendingPath()).toBeNull()
+  })
+
   it('does not spend a queued relay retry while direct authentication is progressing', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4408)))

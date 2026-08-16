@@ -50,7 +50,7 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
-  path?: MobileConnectionPath
+  pendingPath?: MobileConnectionPath | null
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -67,12 +67,20 @@ export function classifyConnection(args: {
     return { kind: 'normal', label: 'Connected' }
   }
 
-  if (state === 'disconnected') {
-    return { kind: 'normal', label: 'Disconnected' }
+  if (args.pendingPath === 'relay') {
+    if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+      if (lastConnectedAt == null) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }
+      }
+      if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'stale' }
+      }
+    }
+    return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
-  if (args.path === 'relay') {
-    return { kind: 'normal', label: 'Connecting via Relay…' }
+  if (state === 'disconnected') {
+    return { kind: 'normal', label: 'Disconnected' }
   }
 
   // connecting / handshaking / reconnecting from here. The gates apply to all

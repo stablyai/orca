@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
@@ -31,12 +32,15 @@ import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
+  emitPendingPath: (path: MobileConnectionPath | null) => void
   closeMock: ReturnType<typeof vi.fn>
 }
 
 function makeFakeClient(initialState: ConnectionState): FakeClient {
   let state = initialState
+  let pendingPath: MobileConnectionPath | null = null
   const listeners = new Set<(state: ConnectionState) => void>()
+  const pathListeners = new Set<() => void>()
   const closeMock = vi.fn()
   return {
     sendRequest: vi.fn(),
@@ -45,6 +49,12 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
+    getActivePath: () => 'tailscale',
+    getPendingPath: () => pendingPath,
+    onConnectionPathChange: (listener: () => void) => {
+      pathListeners.add(listener)
+      return () => pathListeners.delete(listener)
+    },
     onStateChange: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -56,6 +66,12 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
       state = next
       for (const listener of listeners) {
         listener(next)
+      }
+    },
+    emitPendingPath: (next) => {
+      pendingPath = next
+      for (const listener of pathListeners) {
+        listener()
       }
     }
   } as FakeClient
@@ -393,6 +409,30 @@ describe('useHostClient', () => {
 })
 
 describe('useAllHostClients', () => {
+  it('rerenders when Relay becomes pending without a transport-state change', async () => {
+    const client = makeFakeClient('reconnecting')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValue([HOST])
+    let pendingPath: MobileConnectionPath | null | undefined
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      pendingPath = useAllHostClients([HOST.id])[0]?.pendingPath
+      return null
+    }
+
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      await Promise.resolve()
+    })
+    expect(pendingPath).toBeNull()
+
+    act(() => client.emitPendingPath('relay'))
+    expect(pendingPath).toBe('relay')
+
+    act(() => renderer?.unmount())
+  })
+
   it('only opens the requested startup subset', async () => {
     const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
     connectMock.mockReturnValue(makeFakeClient('connected'))

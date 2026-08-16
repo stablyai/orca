@@ -65,6 +65,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
 
 export class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
+  private recoveryPath: MobileConnectionPath | null = null
   private generation = 1
 
   constructor(state: ConnectionState, path: MobileConnectionPath) {
@@ -95,8 +96,11 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
   )
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
   getActivePath = () => this.path
-  // This fake migrates instantly, so no dial is ever in flight to name.
-  getPendingPath = () => null
+  getPendingPath = () => this.recoveryPath
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+    this.recoveryPath = path
+  })
+  onConnectionPathChange = vi.fn(() => () => {})
   getGeneration = () => this.generation
 }
 
