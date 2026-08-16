@@ -115,6 +115,7 @@ export class HerdrDaemon {
   private readonly pluginLogs: { name: string; message: string; ts: number }[] = []
   private readonly integrations = new Set<string>()
   private saveTimer: NodeJS.Timeout | null = null
+  private disposed = false
   private readonly sshStore: HerdrDaemonSshStore
 
   constructor(
@@ -153,6 +154,7 @@ export class HerdrDaemon {
   private restoreOnBoot(): void {
     const { restored, paneBuffers } = loadSession(
       this.model,
+      this.dataDir,
       this.model.sessionName,
       HERDR_PROTOCOL_VERSION
     )
@@ -178,6 +180,9 @@ export class HerdrDaemon {
   }
 
   private scheduleSave(): void {
+    if (this.disposed) {
+      return
+    }
     if (this.saveTimer) {
       return
     }
@@ -188,7 +193,13 @@ export class HerdrDaemon {
         paneBuffers.set(paneId, state.buffer)
       }
       try {
-        saveSession(this.model, this.model.sessionName, HERDR_PROTOCOL_VERSION, paneBuffers)
+        saveSession(
+          this.model,
+          this.dataDir,
+          this.model.sessionName,
+          HERDR_PROTOCOL_VERSION,
+          paneBuffers
+        )
       } catch {
         // Why: a failed save must not crash the daemon; the next mutation retries.
       }
@@ -2616,6 +2627,7 @@ export class HerdrDaemon {
   // pairs; after enough runs the host's pty/pid budget is exhausted and
   // subsequent posix_openpt calls fail with ENXIO.
   async dispose(): Promise<void> {
+    this.disposed = true
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null

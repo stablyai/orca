@@ -3,12 +3,18 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync
 import type { HerdrDaemonModel } from './herdr-daemon-model'
 import type { HerdrAgentStatus } from './herdr-runtime-contract'
 import type { ModelTab, ModelWorkspace } from './herdr-daemon-model-types'
-import { getHerdrDataDir, getSessionDir } from './herdr-daemon-helpers'
+import { getSessionDir } from './herdr-daemon-helpers'
 
 // Why: soft reattach. The daemon persists the session model + per-pane
 // scrollback to the data dir and reloads them on boot so quit+reopen restores
 // the layout and prior output. Running processes are NOT resumed; fresh
 // shells start in the saved cwds with the saved scrollback prepended.
+
+// Why: dataDir is threaded in explicitly instead of re-reading
+// getHerdrDataDir() here. The daemon resolves it once in its constructor; a
+// later save must target that same dir even if the env variable changed (for
+// example a disposed daemon's pending timer firing after a new session dir was
+// selected).
 
 type SavedPane = {
   pane_id: string
@@ -31,27 +37,28 @@ type SessionState = {
   counters: { workspace: number; tab: number; pane: number }
 }
 
-export function getSessionStatePath(sessionName: string): string {
-  return join(getSessionDir(getHerdrDataDir(), sessionName), 'session.json')
+export function getSessionStatePath(dataDir: string, sessionName: string): string {
+  return join(getSessionDir(dataDir, sessionName), 'session.json')
 }
 
-function getPaneBufferDir(sessionName: string): string {
-  return join(getSessionDir(getHerdrDataDir(), sessionName), 'panes')
+function getPaneBufferDir(dataDir: string, sessionName: string): string {
+  return join(getSessionDir(dataDir, sessionName), 'panes')
 }
 
-export function getPaneBufferPath(sessionName: string, paneId: string): string {
-  return join(getPaneBufferDir(sessionName), `${paneId}.buffer`)
+export function getPaneBufferPath(dataDir: string, sessionName: string, paneId: string): string {
+  return join(getPaneBufferDir(dataDir, sessionName), `${paneId}.buffer`)
 }
 
 export function saveSession(
   model: HerdrDaemonModel,
+  dataDir: string,
   sessionName: string,
   protocol: number,
   paneBuffers: Map<string, string>
 ): void {
-  const sessionDir = getSessionDir(getHerdrDataDir(), sessionName)
+  const sessionDir = getSessionDir(dataDir, sessionName)
   mkdirSync(sessionDir, { recursive: true })
-  mkdirSync(getPaneBufferDir(sessionName), { recursive: true })
+  mkdirSync(getPaneBufferDir(dataDir, sessionName), { recursive: true })
 
   const state: SessionState = {
     protocol,
@@ -71,16 +78,16 @@ export function saveSession(
     })),
     counters: model.getCounters()
   }
-  writeFileSync(getSessionStatePath(sessionName), JSON.stringify(state))
+  writeFileSync(getSessionStatePath(dataDir, sessionName), JSON.stringify(state))
 
   for (const [paneId, buffer] of paneBuffers) {
-    writeFileSync(getPaneBufferPath(sessionName, paneId), buffer)
+    writeFileSync(getPaneBufferPath(dataDir, sessionName, paneId), buffer)
   }
-  pruneStaleBuffers(sessionName, new Set(paneBuffers.keys()))
+  pruneStaleBuffers(dataDir, sessionName, new Set(paneBuffers.keys()))
 }
 
-function pruneStaleBuffers(sessionName: string, livePaneIds: Set<string>): void {
-  const dir = getPaneBufferDir(sessionName)
+function pruneStaleBuffers(dataDir: string, sessionName: string, livePaneIds: Set<string>): void {
+  const dir = getPaneBufferDir(dataDir, sessionName)
   if (!existsSync(dir)) {
     return
   }
@@ -97,10 +104,11 @@ function pruneStaleBuffers(sessionName: string, livePaneIds: Set<string>): void 
 
 export function loadSession(
   model: HerdrDaemonModel,
+  dataDir: string,
   sessionName: string,
   expectedProtocol: number
 ): { restored: boolean; paneBuffers: Map<string, string> } {
-  const statePath = getSessionStatePath(sessionName)
+  const statePath = getSessionStatePath(dataDir, sessionName)
   if (!existsSync(statePath)) {
     return { restored: false, paneBuffers: new Map() }
   }
@@ -141,7 +149,7 @@ export function loadSession(
 
   const paneBuffers = new Map<string, string>()
   for (const pane of state.panes ?? []) {
-    const bufferPath = getPaneBufferPath(sessionName, pane.pane_id)
+    const bufferPath = getPaneBufferPath(dataDir, sessionName, pane.pane_id)
     if (existsSync(bufferPath)) {
       try {
         paneBuffers.set(pane.pane_id, readFileSync(bufferPath, 'utf8'))

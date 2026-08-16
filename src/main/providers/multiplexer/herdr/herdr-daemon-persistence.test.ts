@@ -5,6 +5,7 @@ import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { HerdrTransport } from './herdr-transport'
 import { HerdrDaemon } from './herdr-daemon-class'
 import { getSessionStatePath } from './herdr-daemon-persistence'
+import { getHerdrDataDir } from './herdr-daemon-helpers'
 import { restoreHerdrTestDataDir, setHerdrTestDataDir } from './herdr-daemon-test-env'
 
 // Why: soft reattach. The daemon persists the session model + pane buffers to
@@ -67,8 +68,8 @@ describe('herdr daemon persistence + reattach', () => {
     await roundTrip('pane.send_text', { pane_id: paneId, text: 'echo hello\r' })
     await new Promise((resolve) => setTimeout(resolve, 1300))
 
-    expect(existsSync(getSessionStatePath('orca'))).toBe(true)
-    const state = JSON.parse(readFileSync(getSessionStatePath('orca'), 'utf8'))
+    expect(existsSync(getSessionStatePath(getHerdrDataDir(), 'orca'))).toBe(true)
+    const state = JSON.parse(readFileSync(getSessionStatePath(getHerdrDataDir(), 'orca'), 'utf8'))
     expect(state.workspaces[0].label).toBe('proj')
     expect(state.panes.length).toBe(2)
     expect(state.panes.some((pane: { pane_id: string }) => pane.pane_id === paneId)).toBe(true)
@@ -137,7 +138,7 @@ describe('herdr daemon persistence + reattach', () => {
     server = null
 
     // Corrupt the protocol version in the saved state.
-    const statePath = getSessionStatePath('orca')
+    const statePath = getSessionStatePath(getHerdrDataDir(), 'orca')
     const state = JSON.parse(readFileSync(statePath, 'utf8'))
     state.protocol = 999
     require('node:fs').writeFileSync(statePath, JSON.stringify(state))
