@@ -241,6 +241,9 @@ type UseTerminalPaneLifecycleDeps = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    /** Relaunch caused by a Codex account switch: the resume must follow the new
+     *  selection instead of the account that owns the rollout. */
+    codexAccountSwitchRestart?: boolean
     launchToken?: string
     launchAgent?: TuiAgent
     draftPrompt?: string

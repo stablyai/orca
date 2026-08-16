@@ -554,6 +554,23 @@ export function createPtyOutputProcessor({
 }
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
+  // Why one-shot: the account switch this flag describes happened once, but a
+  // transport respawns for other reasons too — a hibernation wake, a pending
+  // spawn retry, an attach fallback. Leaving it set would repin those later
+  // spawns to whatever account is selected by then, moving a conversation and
+  // its goal the user never asked to move.
+  let pendingCodexAccountSwitchRestart = opts.codexAccountSwitchRestart === true
+  const claimCodexAccountSwitchRestart = (perSpawn?: boolean): boolean =>
+    pendingCodexAccountSwitchRestart || perSpawn === true
+  // Why settle rather than clear at claim time: a connect that throws, or that
+  // main answers with a reattach, never reaches the account-switch launch path —
+  // spending the flag there would leave the pane's next spawn on the account the
+  // user just left, silently reinstating the bug this branch fixes.
+  const settleCodexAccountSwitchRestart = (spawnedFresh: boolean): void => {
+    if (spawnedFresh) {
+      pendingCodexAccountSwitchRestart = false
+    }
+  }
   const {
     cwd,
     cwdFallback,
@@ -831,6 +848,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
                 resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
               }
             : {}),
+          ...(claimCodexAccountSwitchRestart(options.codexAccountSwitchRestart)
+            ? { codexAccountSwitchRestart: true }
+            : {}),
           ...((options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }
             : {}),
@@ -873,6 +893,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           await retireFreshSpawn()
           return spawnResult
         }
+
+        // Why settled here rather than at the spawn reply: the two paths above
+        // kill the process they just created, so the account switch never
+        // reached a shell the user can see. Spending the flag there would leave
+        // this transport's next spawn on the account the user asked to leave.
+        settleCodexAccountSwitchRestart(spawnResult.isReattach !== true)
 
         if (spawnResult.isReattach && !admittedSessionId) {
           storedCallbacks.onReattachDetermined?.()

@@ -1,10 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  lstatSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   _internals,
   bridgeCodexSessionsIntoAccountHome,
+  linkCodexRolloutIntoAccountHome,
   startCodexAccountSessionBridgeInBackground
 } from './codex-account-session-bridge'
 
@@ -161,5 +171,74 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
 
     expect(readFileSync(rolloutPath(firstTarget, ROLLOUT_A), 'utf-8')).toBe('session\n')
     expect(readFileSync(rolloutPath(secondTarget, ROLLOUT_A), 'utf-8')).toBe('session\n')
+  })
+})
+
+describe('linkCodexRolloutIntoAccountHome', () => {
+  it('places one named rollout under the target home ahead of the whole-tree sweep', () => {
+    const sourceHome = join(workspaceRoot, 'account-a')
+    const targetHome = join(workspaceRoot, 'account-b')
+    const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_A, 'session\n')
+
+    const linkedPath = linkCodexRolloutIntoAccountHome({
+      sourceCodexHomePath: sourceHome,
+      targetCodexHomePath: targetHome,
+      rolloutFilePath
+    })
+
+    expect(linkedPath).toBe(rolloutPath(targetHome, ROLLOUT_A))
+    expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('session\n')
+    expect(statSync(rolloutPath(targetHome, ROLLOUT_A)).ino).toBe(statSync(rolloutFilePath).ino)
+  })
+
+  it('reports the existing path when the sweep already linked that rollout', () => {
+    const sourceHome = join(workspaceRoot, 'account-a')
+    const targetHome = join(workspaceRoot, 'account-b')
+    const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_A, 'session\n')
+    writeRollout(targetHome, ROLLOUT_A, 'already-there\n')
+
+    expect(
+      linkCodexRolloutIntoAccountHome({
+        sourceCodexHomePath: sourceHome,
+        targetCodexHomePath: targetHome,
+        rolloutFilePath
+      })
+    ).toBe(rolloutPath(targetHome, ROLLOUT_A))
+    expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('already-there\n')
+  })
+
+  it('replaces a symlink the sweep left so the hardlink can still land', () => {
+    const sourceHome = join(workspaceRoot, 'account-a')
+    const targetHome = join(workspaceRoot, 'account-b')
+    const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_B, 'session\n')
+    const targetFilePath = rolloutPath(targetHome, ROLLOUT_B)
+    mkdirSync(join(targetFilePath, '..'), { recursive: true })
+    symlinkSync(rolloutFilePath, targetFilePath)
+
+    expect(
+      linkCodexRolloutIntoAccountHome({
+        sourceCodexHomePath: sourceHome,
+        targetCodexHomePath: targetHome,
+        rolloutFilePath
+      })
+    ).toBe(targetFilePath)
+    expect(lstatSync(targetFilePath).isSymbolicLink()).toBe(false)
+    expect(statSync(targetFilePath).ino).toBe(statSync(rolloutFilePath).ino)
+  })
+
+  it('refuses a rollout that lies outside the source home sessions tree', () => {
+    const sourceHome = join(workspaceRoot, 'account-a')
+    const targetHome = join(workspaceRoot, 'account-b')
+    const strayPath = join(workspaceRoot, 'elsewhere', 'rollout-2026-07-20T10-00-00-aaaa.jsonl')
+    mkdirSync(join(strayPath, '..'), { recursive: true })
+    writeFileSync(strayPath, 'session\n')
+
+    expect(
+      linkCodexRolloutIntoAccountHome({
+        sourceCodexHomePath: sourceHome,
+        targetCodexHomePath: targetHome,
+        rolloutFilePath: strayPath
+      })
+    ).toBeNull()
   })
 })

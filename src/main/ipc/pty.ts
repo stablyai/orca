@@ -1298,6 +1298,7 @@ export type PrepareCodexSessionResume = (args: {
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
+  accountSwitchRestart?: boolean
 }) => Promise<CodexSessionResumePreparation | null>
 
 export type CodexHomePtySpawnedLifecycleArgs = {
@@ -4341,6 +4342,7 @@ export function registerPtyHandlers(
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
     workspacePath?: string
+    accountSwitchRestart?: boolean
   }): {
     providerSession: AgentProviderSessionMetadata
     preparation: Promise<CodexSessionResumePreparation | null>
@@ -4358,7 +4360,8 @@ export function registerPtyHandlers(
         providerSession,
         target: args.target,
         launchEnv: args.launchEnv,
-        workspacePath: args.workspacePath
+        workspacePath: args.workspacePath,
+        ...(args.accountSwitchRestart ? { accountSwitchRestart: true } : {})
       })
     }
   }
@@ -4676,7 +4679,8 @@ export function registerPtyHandlers(
             providerSession: args.resumeProviderSession,
             target: codexSelectionTarget,
             launchEnv: args.env,
-            workspacePath: cwd
+            workspacePath: cwd,
+            accountSwitchRestart: args.codexAccountSwitchRestart === true
           })
       const codexResumeLaunch = codexResumePreparation
         ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -6063,6 +6067,8 @@ export function registerPtyHandlers(
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
         resumeProviderSession?: AgentProviderSessionMetadata
+        /** Set when the pane relaunches because the user switched Codex accounts. */
+        codexAccountSwitchRestart?: boolean
         launchToken?: unknown
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
@@ -6481,7 +6487,8 @@ export function registerPtyHandlers(
               providerSession: args.resumeProviderSession,
               target: codexSelectionTarget,
               launchEnv: baseEnv,
-              workspacePath: cwd
+              workspacePath: cwd,
+              accountSwitchRestart: args.codexAccountSwitchRestart === true
             })
         const codexResumeLaunch = codexResumePreparation
           ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)

@@ -3855,6 +3855,7 @@ export function connectPanePty(
     ...(paneStartup?.resumeProviderSession
       ? { resumeProviderSession: paneStartup.resumeProviderSession }
       : {}),
+    ...(paneStartup?.codexAccountSwitchRestart ? { codexAccountSwitchRestart: true } : {}),
     ...((paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt)
       ? { agentPrompt: paneStartup?.initialAgentStatus?.prompt ?? paneStartup?.draftPrompt }
       : {}),

@@ -568,6 +568,9 @@ export type TerminalSlice = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      /** Relaunch caused by a Codex account switch: the resume must follow the
+       *  new selection instead of the account that owns the rollout. */
+      codexAccountSwitchRestart?: boolean
       launchToken?: string
       launchAgent?: TuiAgent
       /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
@@ -750,6 +753,9 @@ export type TerminalSlice = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      /** Relaunch caused by a Codex account switch: the resume must follow the
+       *  new selection instead of the account that owns the rollout. */
+      codexAccountSwitchRestart?: boolean
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -770,6 +776,7 @@ export type TerminalSlice = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    codexAccountSwitchRestart?: boolean
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null

@@ -756,45 +756,69 @@ export function AccountsPane({
       await syncCodexAccounts(next)
       recordFeatureInteraction('codex-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
+      // Why: `add` creates the managed home against the machine's own distro,
+      // so the slot it wrote is the created account's — not this row's, which
+      // may still say "WSL default". Found by diffing the roster rather than
+      // by the row's active id, which resolves to null once two distro slots
+      // are filled and would send the notice to the wrong lane.
+      const newAccounts =
+        action === 'adding'
+          ? next.accounts.filter(
+              (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
+            )
+          : []
+      // Why exactly one: an unloaded prior roster makes every account look new,
+      // and picking one of those would aim the notice at an unrelated lane.
+      // Falling back to the row is the pre-existing behaviour, not a new risk.
+      const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
+      // Why the added account's own lane rather than this row's: the row's id
+      // reads null once two WSL distro slots hold different accounts, so a
+      // row-level comparison would report "nothing changed" for a distro slot
+      // the add just claimed, and silently drop the restart prompt.
+      const addedAccountLane = addedAccount ? getProviderAccountRuntime(addedAccount) : null
+      const addingChangedSelection =
+        addedAccountLane !== null &&
+        getProviderAccountActiveIdForView(codexAccounts, addedAccountLane) !==
+          getProviderAccountActiveIdForView(next, addedAccountLane)
       const shouldPromptRestart =
-        action === 'adding' ||
+        // Why not every `adding`: adding an account does not always select it,
+        // and a prompt raised while the selection is unchanged sends the user to
+        // restart panes that come back on the same account (#12098).
+        (action === 'adding' &&
+          (addingChangedSelection || previousActiveAccountId !== nextActiveAccountId)) ||
         (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
         (action.startsWith('reauth:') &&
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
-        // Why: `add` creates the managed home against the machine's own distro,
-        // so the slot it wrote is the created account's — not this row's, which
-        // may still say "WSL default". Found by diffing the roster rather than
-        // by the row's active id, which resolves to null once two distro slots
-        // are filled and would send the notice to the wrong lane.
-        const newAccounts =
-          action === 'adding'
-            ? next.accounts.filter(
-                (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
-              )
-            : []
-        // Why exactly one: an unloaded prior roster makes every account look new,
-        // and picking one of those would aim the notice at an unrelated lane.
-        // Falling back to the row is the pre-existing behaviour, not a new risk.
-        const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
+        // Why the added account's lane wins: the row's id reads null once two
+        // WSL distro slots hold different accounts, and a notice whose before
+        // and after are both null looks to the store like a switch back to the
+        // launch account — so it drops the very prompt this add earned.
+        const noticeLane = addedAccountLane ?? actionRuntime
+        const noticePreviousAccountId = addedAccountLane
+          ? getProviderAccountActiveIdForView(codexAccounts, addedAccountLane)
+          : previousActiveAccountId
+        const noticeNextAccountId = addedAccountLane
+          ? getProviderAccountActiveIdForView(next, addedAccountLane)
+          : nextActiveAccountId
         void markLiveCodexSessionsForRestart({
           previousAccountLabel: resolveCodexRestartPromptAccountLabel(
             codexAccounts.accounts,
-            previousActiveAccountId
+            noticePreviousAccountId
           ),
           nextAccountLabel: resolveCodexRestartPromptAccountLabel(
             next.accounts,
-            nextActiveAccountId
+            noticeNextAccountId
           ),
           // Why: two accounts can share an email, so the labels alone cannot
           // tell the store whether this switch lands back on the launch account.
-          previousAccountId: previousActiveAccountId ?? null,
-          nextAccountId: nextActiveAccountId ?? null,
+          previousAccountId: noticePreviousAccountId ?? null,
+          nextAccountId: noticeNextAccountId ?? null,
           // Why: the mutation wrote this row's slot only, so panes on any other
           // lane still launch under the account they already had.
-          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
+          target: noticeLane,
           // Why: clearing a distro-less WSL row nulls every distro slot at once.
           clearsEveryWslDistro: action === 'select:system'
         })

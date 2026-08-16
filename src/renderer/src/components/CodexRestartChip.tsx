@@ -14,7 +14,22 @@ function isInsideHiddenTree(element: HTMLElement): boolean {
 type RestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  /** null is the system default. undefined means the notice did not name one. */
+  nextAccountId?: string | null
   homeRouteChanged?: true
+}
+
+/**
+ * True when restarting will start a new conversation instead of continuing this one.
+ *
+ * Why only the system default: a managed account gets the rollout listed under
+ * its own home, so the conversation follows the switch. The system default runs
+ * Codex against the user's own ~/.codex, which Orca never writes into, so there
+ * is nowhere to list it — and the user deserves to know that before pressing
+ * Restart, not after the pane comes back empty.
+ */
+function startsFreshConversation(notice: RestartNotice): boolean {
+  return notice.homeRouteChanged !== true && notice.nextAccountId === null
 }
 
 export default function CodexRestartChip({
@@ -139,11 +154,17 @@ function LoudRestartOverlay({
                 'auto.components.CodexRestartChip.e6b7139d2a',
                 'Restart this session to load your current Codex configuration.'
               )
-            : translate(
-                'auto.components.CodexRestartChip.9375620cc3',
-                'Restart this session to use {{value0}}. It stays on the previous account until you do.',
-                { value0: restartNotice.nextAccountLabel }
-              )}
+            : startsFreshConversation(restartNotice)
+              ? translate(
+                  'auto.components.CodexRestartChip.b7d31e05a9',
+                  'Restarting this terminal switches it to {{value0}}, and this conversation will not come along — the terminal starts a new one. To carry a conversation across a switch, add a separate Codex account and switch to that instead.',
+                  { value0: restartNotice.nextAccountLabel }
+                )
+              : translate(
+                  'auto.components.CodexRestartChip.5c1f8ab470',
+                  'Restarting this terminal switches it to {{value0}}. Your work carries over, and usage is counted against the account you switch to.',
+                  { value0: restartNotice.nextAccountLabel }
+                )}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>

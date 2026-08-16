@@ -1013,6 +1013,8 @@ const api = {
       commandDelivery?: 'renderer' | 'provider'
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      /** Set when the pane relaunches because the user switched Codex accounts. */
+      codexAccountSwitchRestart?: boolean
       launchToken?: string
       launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
