@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { skillGuideCliVersion, skillGuideContentSha256 } from './skill-guide-fingerprint'
 
 describe('skillGuideContentSha256', () => {
-  it('returns a stable 64-hex digest', () => {
+  it('returns the expected SHA-256 digest', () => {
     expect(skillGuideContentSha256('hello')).toMatch(/^[a-f0-9]{64}$/)
-    expect(skillGuideContentSha256('hello')).toBe(skillGuideContentSha256('hello'))
+    expect(skillGuideContentSha256('hello')).toBe(
+      '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+    )
     expect(skillGuideContentSha256('hello')).not.toBe(skillGuideContentSha256('world'))
   })
 })
