@@ -17,29 +17,33 @@ import {
   type GraphqlVars
 } from './internals'
 import { classifyProjectError, rateLimitedError } from './project-error-classification'
-import { githubProjectHost } from '../../../shared/github-project-identity'
-import type { GitHubAssignableUser, GitHubWorkItemDetails, PRComment } from '../../../shared/types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
+import type { PRComment } from '../../../shared/github/comment-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
+import type { GitHubProjectFieldMutationValue } from '../../../shared/github/project-types'
+import type {
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugResult,
+  ProjectWorkItemDetailsBySlugResult
+} from '../../../shared/github/project-result-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
-  GitHubProjectCommentMutationResult,
-  GitHubProjectFieldMutationValue,
-  GitHubProjectMutationResult,
   ListAssignableUsersBySlugArgs,
-  ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugArgs,
-  ListIssueTypesBySlugResult,
   ListLabelsBySlugArgs,
-  ListLabelsBySlugResult,
   ProjectWorkItemDetailsBySlugArgs,
-  ProjectWorkItemDetailsBySlugResult,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../../../shared/github-project-types'
+} from '../../../shared/github/project-request-types'
 
 function githubHostExecOptions(args: { host?: string }): { host: string } {
   return { host: githubProjectHost(args.host) }

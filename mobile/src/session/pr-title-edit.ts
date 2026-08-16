@@ -1,4 +1,4 @@
-import type { PRState } from '../../../src/shared/types'
+import type { PRState } from '../../../src/shared/github/pull-request-types'
 
 // Pure helpers for the inline PR-title edit affordance. Kept free of React/native
 // imports so they unit-test under the node Vitest config, mirroring the other

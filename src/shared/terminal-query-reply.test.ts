@@ -1,6 +1,10 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import { isTerminalQueryReply } from './terminal-query-reply'
+import {
+  extractOnlyCookedEchoSafeQueryReplies,
+  isTerminalQueryReply,
+  needsCookedEchoSafeQueryReply
+} from './terminal-query-reply'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -9,6 +13,9 @@ describe('isTerminalQueryReply', () => {
     expect(isTerminalQueryReply('\x1b[22;1R')).toBe(true)
     // DSR device status.
     expect(isTerminalQueryReply('\x1b[0n')).toBe(true)
+    // Contour color-scheme report (answer to CSI ?996n / mode-2031 push).
+    expect(isTerminalQueryReply('\x1b[?997;1n')).toBe(true)
+    expect(isTerminalQueryReply('\x1b[?997;2n')).toBe(true)
     // DA1/DA2/DA3 device attributes.
     expect(isTerminalQueryReply('\x1b[?1;2c')).toBe(true)
     expect(isTerminalQueryReply('\x1b[?61;4c')).toBe(true)
@@ -59,6 +66,27 @@ describe('isTerminalQueryReply', () => {
     // Classified as a reply on purpose: order is still preserved (the immediate
     // path flushes pending input first); see the comment in terminal-query-reply.ts.
     expect(isTerminalQueryReply('\x1b[1;2R')).toBe(true)
+  })
+
+  it('routes only cooked-echo-risk replies through the ECHO-safe write path', () => {
+    // Color-scheme private DSR + OSC color — cooked prompt paint risk (#13137).
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;2n')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
+    // Latency-critical CPR / public DSR / DA stay immediate (#7329).
+    expect(needsCookedEchoSafeQueryReply('\x1b[3;1R')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[0n')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[?1;2c')).toBe(false)
+    // Ordinary input must never take the echo-safe reply path.
+    expect(needsCookedEchoSafeQueryReply('y')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[A')).toBe(false)
+    // Dual-answerer coalesced payload is not a single reply — use extract.
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n\x1b[?997;1n')).toBe(false)
+    expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1n\x1b[?997;1n')).toEqual([
+      '\x1b[?997;1n',
+      '\x1b[?997;1n'
+    ])
+    expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1ny')).toBe(null)
   })
 
   it('does NOT match ordinary typed input or navigation sequences', () => {

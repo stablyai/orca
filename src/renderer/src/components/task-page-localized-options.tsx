@@ -4,7 +4,6 @@ import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
-import { getTaskPresetQuery } from '@/lib/new-workspace'
 import {
   LINEAR_DISPLAY_PROPERTIES,
   LINEAR_GROUP_BY_OPTIONS,
@@ -14,8 +13,10 @@ import {
   type LinearGroupBy,
   type LinearOrderBy,
   type LinearViewMode
-} from '../../../shared/linear-issue-view-resume-state'
-import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
+} from '../../../shared/linear/issue-view-resume-state'
+import { getTaskPresetQuery } from '../../../shared/task-preset-query'
+import type { TaskProvider } from '../../../shared/task-providers'
+import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -46,7 +47,7 @@ export type {
   LinearGroupBy,
   LinearOrderBy,
   LinearViewMode
-} from '../../../shared/linear-issue-view-resume-state'
+} from '../../../shared/linear/issue-view-resume-state'
 
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (

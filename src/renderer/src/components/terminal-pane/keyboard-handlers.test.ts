@@ -11,48 +11,22 @@ import {
 function makeKeyEvent(
   overrides: Partial<{
     key: string
-    code: string
     metaKey: boolean
     ctrlKey: boolean
     shiftKey: boolean
     altKey: boolean
     repeat: boolean
-    isComposing: boolean
-    keyCode: number
   }>
-) {
+): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'> {
   return {
     key: 'g',
-    code: 'KeyG',
     metaKey: false,
     ctrlKey: false,
     shiftKey: false,
     altKey: false,
     repeat: false,
-    isComposing: false,
-    keyCode: 0,
     ...overrides
   }
-}
-
-function resolveShortcutAction(
-  overrides: Parameters<typeof makeKeyEvent>[0],
-  isMac = true,
-  isWindows = false
-) {
-  return resolveTerminalKeyboardShortcutAction(
-    makeKeyEvent(overrides),
-    isMac,
-    'false',
-    0,
-    isWindows,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    () => 'alt-enter',
-    () => true
-  )
 }
 
 describe('matchSearchNavigate', () => {
@@ -93,15 +67,8 @@ describe('matchSearchNavigate', () => {
   })
 
   it('returns null for wrong key', () => {
-    // `code` too, not just `key`: matching is physical-key based so a CJK IME rewriting
-    // `key` cannot hide the shortcut (#13033). A different key means a different `code`.
-    const e = makeKeyEvent({ metaKey: true, key: 'f', code: 'KeyF' })
+    const e = makeKeyEvent({ metaKey: true, key: 'f' })
     expect(matchSearchNavigate(e, isMac, true, searchState)).toBeNull()
-  })
-
-  it('still matches Cmd+G when a Korean IME has rewritten key (#13033)', () => {
-    const e = makeKeyEvent({ metaKey: true, key: 'ㅎ', code: 'KeyG' })
-    expect(matchSearchNavigate(e, isMac, true, searchState)).toBe('next')
   })
 
   it('returns null when alt is pressed', () => {
@@ -127,40 +94,41 @@ describe('matchSearchNavigate', () => {
 
 describe('resolveTerminalKeyboardShortcutAction', () => {
   it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
-    expect(resolveShortcutAction({ key: 'Enter', shiftKey: true })).toEqual({
-      type: 'sendInput',
-      data: '\x1b\r'
-    })
-  })
-
-  it('refuses a marked real Enter before shortcut resolution', () => {
-    const event = makeKeyEvent({
-      key: 'Enter',
-      code: 'Enter',
-      shiftKey: true,
-      isComposing: true,
-      keyCode: 13
-    })
-    expect(resolveShortcutAction(event)).toBeNull()
-  })
-
-  it('refuses marked copy without changing the ordinary clipboard shortcut', () => {
-    const resolve = (isComposing: boolean) =>
-      resolveShortcutAction(
-        {
-          key: 'c',
-          code: 'KeyC',
-          ctrlKey: true,
-          shiftKey: true,
-          isComposing,
-          keyCode: 67
-        },
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
         false,
-        true
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'alt-enter',
+        () => true
       )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
 
-    expect(resolve(true)).toBeNull()
-    expect(resolve(false)).toEqual({ type: 'copySelection' })
+  it('forwards trusted Ctrl+Enter authority to the shared policy', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        () => true,
+        () => false,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
   })
 })
 

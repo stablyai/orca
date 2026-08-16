@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { collectLocalizationCandidates } from './audit-localization-coverage.mjs'
+import { collectLocalizationCandidates, isSkippedFile } from './audit-localization-coverage.mjs'
 
 const ROOT = process.cwd()
 
@@ -40,5 +40,25 @@ describe('localization coverage candidates', () => {
     )
 
     expect(reports).toEqual([])
+  })
+})
+
+describe('localization coverage file skipping', () => {
+  function skipped(relativePath) {
+    return isSkippedFile(ROOT, `${ROOT}/${relativePath}`)
+  }
+
+  it('skips test-only modules that sit beside their spec', () => {
+    expect(skipped('src/renderer/src/components/browser-pane/stream-test-harness.ts')).toBe(true)
+    expect(skipped('src/renderer/src/hooks/ipc-events-test-fixtures.ts')).toBe(true)
+    expect(skipped('src/renderer/src/lib/session-test-state.ts')).toBe(true)
+    expect(skipped('src/renderer/src/store/slices/routing-fixture.ts')).toBe(true)
+    expect(skipped('src/renderer/src/components/tab-bar/icon-stub.fixture.tsx')).toBe(true)
+  })
+
+  it('still scans shipped modules whose names merely mention a fixture concept', () => {
+    expect(skipped('src/renderer/src/components/browser-pane/fixture-picker.tsx')).toBe(false)
+    expect(skipped('src/renderer/src/components/settings/fixtures-panel.tsx')).toBe(false)
+    expect(skipped('src/renderer/src/components/browser-pane/BrowserPane.tsx')).toBe(false)
   })
 })

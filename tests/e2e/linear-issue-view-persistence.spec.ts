@@ -1,10 +1,11 @@
 /**
  * Linear issue list view persistence.
  *
- * Layout (list/board), grouping, ordering, and per-workspace attribute filters
- * ride `taskResumeState.linearIssueView` through ui.set and rehydrate on TaskPage
- * mount. Unit tests cover serialize/sanitize; these specs prove the user-visible
- * round-trip with a mocked Linear IPC backend.
+ * Layout (list/board), grouping, ordering, and per-workspace attribute filters are
+ * a per-device preference: they persist to renderer localStorage, NOT through
+ * `ui.set`, so a paired host that predates the field cannot discard the resume
+ * state around it. Unit tests cover serialize/sanitize; these specs prove the
+ * user-visible round-trip with a mocked Linear IPC backend.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -13,6 +14,10 @@ import { test, expect } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { TEST_REPO_PATH_FILE } from './global-setup'
+
+// Mirrors src/renderer/src/components/linear-issue-view-storage.ts; hardcoded so a
+// silent key rename shows up here as a failing round-trip.
+const LINEAR_ISSUE_VIEW_STORAGE_KEY = 'orca.linear.issue-view.v1'
 
 const WORKSPACE_A = {
   id: 'linear-workspace-a',
@@ -331,15 +336,16 @@ async function waitForLinearIssueViewPersisted(
   await expect
     .poll(
       async () => {
-        const resume = await getStoreState<{ linearIssueView?: LinearIssueViewResume } | undefined>(
-          page,
-          'taskResumeState'
+        const stored = await page.evaluate(
+          (key) => window.localStorage.getItem(key),
+          LINEAR_ISSUE_VIEW_STORAGE_KEY
         )
-        return predicate(resume?.linearIssueView) ? 'ready' : 'pending'
+        const view = stored ? (JSON.parse(stored) as LinearIssueViewResume) : undefined
+        return predicate(view) ? 'ready' : 'pending'
       },
       {
         timeout: 10_000,
-        message: 'Linear issue view preferences did not persist to taskResumeState'
+        message: 'Linear issue view preferences did not persist to local storage'
       }
     )
     .toBe('ready')

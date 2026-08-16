@@ -3,7 +3,6 @@ import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { MarkupToolbar } from './MarkupToolbar'
 import type { MarkupBaseImage } from './markup-base-image'
 import type { MarkupShape } from './markup-drawing-model'
@@ -24,7 +23,6 @@ export function MarkupOverlay({
   onCancel
 }: MarkupOverlayProps): React.JSX.Element {
   const baseImgRef = useRef<HTMLImageElement | null>(null)
-  const imeEnter = useImeEnterGestureOwnership()
   const [baseLoaded, setBaseLoaded] = useState(false)
   const editor = useMarkupEditor(busy, onCancel)
   const { pendingText } = editor
@@ -78,21 +76,14 @@ export function MarkupOverlay({
           defaultValue={pendingText.initial}
           aria-label={translate('auto.components.browser-pane.markup.textInput', 'Annotation text')}
           onPointerDown={(event) => event.stopPropagation()}
-          onBlur={(event) => {
-            imeEnter.reset()
-            editor.commitPendingText(event.target.value)
-          }}
-          onCompositionStart={() => imeEnter.setComposing(true)}
-          onCompositionEnd={() => imeEnter.setComposing(false)}
-          onKeyUp={imeEnter.onKeyUp}
+          onBlur={(event) => editor.commitPendingText(event.target.value)}
           onKeyDown={(event) => {
             // Why: keep keystrokes local — without this the browser pane's global
             // key handlers can swallow typing before it reaches the input.
             event.stopPropagation()
-            if (imeEnter.ownsKeyDown(event)) {
-              return
-            }
-            if (event.key === 'Enter') {
+            // Why: during IME composition (e.g. Japanese conversion), Enter
+            // confirms the candidate — it must NOT also commit the annotation.
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
             } else if (event.key === 'Escape') {

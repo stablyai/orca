@@ -242,7 +242,7 @@ function NativeChatSessionOptionPickersInner({
             disabledReason={optionsReason}
             dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
           />
-          <DropdownMenuContent align="start" className="w-60">
+          <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
             {options.map((descriptor, index) => {
               const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
               return (
@@ -272,7 +272,7 @@ function NativeChatSessionOptionPickersInner({
           disabledReason={modelReason}
           dispatched={model.valueSource === 'dispatched'}
         />
-        <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
           {modelReason && !model.settable ? (
             <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
           ) : null}

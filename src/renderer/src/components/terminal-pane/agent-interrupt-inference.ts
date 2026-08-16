@@ -9,14 +9,13 @@ import {
 } from '../../../../shared/agent-interrupt-intent'
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 export type AgentInterruptInference = {
   observeInputIntent(
     intent: AgentInterruptInputIntent,
     entry?: AgentStatusEntry | null,
     baselineSequence?: number
-  ): void
+  ): boolean | Promise<boolean> | undefined
   flushPending(): boolean | Promise<boolean>
   dispose(): void
 }
@@ -51,7 +50,8 @@ function shouldFlushInterruptImmediately(
 ): boolean {
   return (
     requiresDoubleEscapeForAgent(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini'
+    baseline.agentType === 'gemini' ||
+    (baseline.agentType === 'codex' && baseline.intent === 'plain-escape')
   )
 }
 
@@ -100,7 +100,7 @@ export function isCtrlCKeyEvent(
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat'>
 ): boolean {
   return (
-    isLatinShortcutKey(event, 'c') &&
+    event.key.toLowerCase() === 'c' &&
     !event.repeat &&
     event.ctrlKey &&
     !event.metaKey &&
@@ -262,12 +262,12 @@ export function createAgentInterruptInference({
       }
       pendingBaseline = baseline
       if (shouldFlushInterruptImmediately(baseline)) {
-        // Why: these agents can emit their idle/done hook immediately after an
-        // accepted interrupt. Flush before that hook overwrites the working baseline.
-        void flushPending()
-        return
+        // Why: these interrupts can emit an idle/done hook before the settle timer,
+        // overwriting the working baseline and losing the interrupted outcome.
+        return flushPending()
       }
       pendingTimer = setTimer(flushPendingFromTimer, AGENT_INTERRUPT_SETTLE_MS)
+      return undefined
     },
     flushPending,
     dispose() {

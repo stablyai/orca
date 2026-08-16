@@ -1,5 +1,12 @@
+// @vitest-environment happy-dom
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consumeBrowserFocusRequest, queueBrowserFocusRequest } from './browser-focus'
+import {
+  consumeBrowserFocusRequest,
+  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  queueBrowserFocusRequest,
+  requestBrowserFocus
+} from './browser-focus'
 
 describe('browser-focus', () => {
   afterEach(() => {
@@ -11,6 +18,20 @@ describe('browser-focus', () => {
 
     expect(consumeBrowserFocusRequest('page-1')).toBe('webview')
     expect(consumeBrowserFocusRequest('page-1')).toBeNull()
+  })
+
+  it('requestBrowserFocus queues and dispatches the focus event', () => {
+    const detail = { pageId: 'page-req', target: 'address-bar' as const }
+    const events: CustomEvent[] = []
+    const onFocusRequest = (event: Event): void => {
+      events.push(event as CustomEvent)
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
+    requestBrowserFocus(detail)
+    window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
+
+    expect(consumeBrowserFocusRequest('page-req')).toBe('address-bar')
+    expect(events[0]?.detail).toEqual(detail)
   })
 
   it('overwrites older requests for the same page id', () => {

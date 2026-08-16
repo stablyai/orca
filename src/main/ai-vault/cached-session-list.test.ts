@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 
-const { scanAiVaultSessions } = vi.hoisted(() => ({ scanAiVaultSessions: vi.fn() }))
+const { scanAiVaultSessionsInWorker } = vi.hoisted(() => ({
+  scanAiVaultSessionsInWorker: vi.fn()
+}))
 
-vi.mock('./session-scanner', () => ({ scanAiVaultSessions }))
+vi.mock('./session-scanner-worker-spawn', () => ({
+  scanAiVaultSessionsInWorker,
+  resetAiVaultScannerWorkerForTests: vi.fn()
+}))
 vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(),
   listWslDistrosAsync: vi.fn().mockResolvedValue([])
@@ -23,7 +28,7 @@ function scanResult(scannedAt: string): AiVaultListResult {
 // mid-flight.
 function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
   let resolveFn: (value: AiVaultListResult) => void = () => {}
-  scanAiVaultSessions.mockReturnValueOnce(
+  scanAiVaultSessionsInWorker.mockReturnValueOnce(
     new Promise<AiVaultListResult>((resolve) => {
       resolveFn = resolve
     })
@@ -34,7 +39,7 @@ function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
 describe('invalidateAiVaultSessionListCache generation guard', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
-    scanAiVaultSessions.mockReset()
+    scanAiVaultSessionsInWorker.mockReset()
   })
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
@@ -54,21 +59,21 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     // A non-force list must re-scan (cache empty) rather than serve A's stale
     // result — proof A's late .then() did not repopulate the cache.
-    scanAiVaultSessions.mockResolvedValueOnce(scanResult('scan-B'))
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-B'))
     const next = await listAiVaultSessions()
 
     expect(next.scannedAt).toBe('scan-B')
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
   })
 
   it('caches normally when no invalidation interrupts the scan', async () => {
-    scanAiVaultSessions.mockResolvedValueOnce(scanResult('scan-A'))
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
     await listAiVaultSessions()
 
     // Second non-force call is a cache hit — no second scan.
     const cached = await listAiVaultSessions()
 
     expect(cached.scannedAt).toBe('scan-A')
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
   })
 })

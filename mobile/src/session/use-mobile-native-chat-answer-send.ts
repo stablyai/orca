@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
@@ -8,7 +6,9 @@ import {
   hasAskAnswer,
   type AskAnswerSelection,
   type AskPrompt
-} from './mobile-native-chat-ask'
+} from '../../../src/shared/native-chat-ask'
+import type { RpcClient } from '../transport/rpc-client'
+import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome

@@ -61,7 +61,9 @@ import {
   type ActivityPortalReadinessLatch,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -82,7 +84,6 @@ import {
   resolveActivityThreadStatusPreview
 } from '@/lib/activity-thread-display'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -1104,7 +1105,7 @@ export function isActivityFilterFocusShortcut(
   event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
   isMac = navigator.userAgent.includes('Mac')
 ): boolean {
-  if (!isLatinShortcutKey(event, 'f') || event.shiftKey || event.altKey) {
+  if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
     return false
   }
   return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey

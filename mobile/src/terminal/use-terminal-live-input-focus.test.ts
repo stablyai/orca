@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalLiveInputFocusTarget,
   TerminalLiveInputFocusTimerRef
@@ -19,17 +19,6 @@ type HarnessProps = {
 }
 
 type FocusHandlers = ReturnType<typeof useTerminalLiveInputFocus>
-
-function suppressReactTestRendererWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
-}
 
 function createFocusTarget(initiallyFocused = false): TerminalLiveInputFocusTarget & {
   readonly blur: ReturnType<typeof vi.fn>
@@ -67,14 +56,9 @@ function createHarness(initialProps: HarnessProps): {
     return null
   }
 
-  const restoreWarning = suppressReactTestRendererWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(Harness, initialProps))
-    })
-  } finally {
-    restoreWarning()
-  }
+  act(() => {
+    renderer = create(createElement(Harness, initialProps))
+  })
   if (!handlers || !renderer) {
     throw new Error('terminal live input focus harness did not render')
   }
@@ -113,10 +97,6 @@ function connectedProps(
 }
 
 describe('terminal live input focus hook', () => {
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     vi.useRealTimers()
   })

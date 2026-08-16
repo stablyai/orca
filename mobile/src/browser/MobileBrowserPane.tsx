@@ -9,7 +9,6 @@ import {
   Image,
   PanResponder,
   PixelRatio,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -19,7 +18,6 @@ import {
   type PanResponderGestureState
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
-import { imeGuardedSubmitProps } from '../ime/ime-submit-carry'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type {
@@ -55,6 +53,7 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 
 export type MobileBrowserTab = {
@@ -141,7 +140,7 @@ export function MobileBrowserPane({
   onToast
 }: MobileBrowserPaneProps) {
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
@@ -156,7 +155,6 @@ export function MobileBrowserPane({
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
-  const [ready, setReady] = useState(cachedInitialFrame !== null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
@@ -175,7 +173,6 @@ export function MobileBrowserPane({
   const browserLayerRefs = useRef<[View | null, View | null]>([null, null])
   const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
   const visibleFrameLayerRef = useRef<FrameLayer>(0)
-  const readyRef = useRef(cachedInitialFrame !== null)
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
   const pendingThrottledFrameRef = useRef<{
@@ -266,6 +263,10 @@ export function MobileBrowserPane({
     resetBrowserZoomState()
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
+  useEffect(() => {
+    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
+  }, [tab.browserPageId, tab.url, worktreeId])
+
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
       return null
@@ -305,10 +306,6 @@ export function MobileBrowserPane({
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
-    }
-    if (!readyRef.current) {
-      readyRef.current = true
-      setReady(true)
     }
   }, [])
 
@@ -397,16 +394,12 @@ export function MobileBrowserPane({
         frameMetadataRef.current = cachedFrame.metadata
         setFrameUri(cachedFrame.uri)
         setFrameMetadata(cachedFrame.metadata)
-        readyRef.current = true
-        setReady(true)
       } else {
         frameUriRef.current = null
         frameMountedRef.current = false
         setFrameUri(null)
         setFrameMetadata(null)
         frameMetadataRef.current = null
-        readyRef.current = false
-        setReady(false)
       }
     } else {
       frameMountedRef.current = true
@@ -475,10 +468,6 @@ export function MobileBrowserPane({
         }
         if (event.type === 'ready') {
           clearStartupTimer()
-          if (!readyRef.current) {
-            readyRef.current = true
-            setReady(true)
-          }
           if (busyRef.current) {
             busyRef.current = false
             setBusy(false)
@@ -492,10 +481,6 @@ export function MobileBrowserPane({
           }
         } else if (event.type === 'end') {
           clearStartupTimer()
-          if (readyRef.current) {
-            readyRef.current = false
-            setReady(false)
-          }
           if (busyRef.current) {
             busyRef.current = false
             setBusy(false)
@@ -515,10 +500,6 @@ export function MobileBrowserPane({
           }
           const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
           if (shouldSurfaceBrowserError(message)) {
-            if (readyRef.current) {
-              readyRef.current = false
-              setReady(false)
-            }
             setError(message)
           }
         }
@@ -1019,10 +1000,6 @@ export function MobileBrowserPane({
   )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
-  const addressSelection = useMemo(
-    () => (addressFocused ? undefined : { start: 0, end: 0 }),
-    [addressFocused]
-  )
   const goBack = useCallback(() => {
     if (controlsDisabled || !tab.canGoBack) {
       return
@@ -1046,8 +1023,7 @@ export function MobileBrowserPane({
       if (browserViewMode === mode) {
         return
       }
-      // Why: browser panes can remount during normal tab/workspace navigation;
-      // keep a page-scoped choice while new browser pages still default to Web.
+      // Why: preserve explicit page-scoped choices across normal browser pane remounts.
       saveMobileBrowserViewMode(worktreeId, tab.browserPageId, mode)
       setBrowserViewMode(mode)
       resetBrowserZoomState()
@@ -1105,23 +1081,14 @@ export function MobileBrowserPane({
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
-        <TextInput
-          style={styles.addressInput}
+        <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
           onFocus={() => setAddressFocused(true)}
           onBlur={() => setAddressFocused(false)}
-          onSubmitEditing={() => void navigateToAddress()}
-          selectTextOnFocus
-          selection={addressSelection}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-          numberOfLines={1}
-          returnKeyType="go"
-          placeholder="URL"
-          placeholderTextColor={colors.textMuted}
-          editable={!controlsDisabled}
+          onSubmit={() => void navigateToAddress()}
+          focused={addressFocused}
+          disabled={controlsDisabled}
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}
@@ -1220,7 +1187,9 @@ export function MobileBrowserPane({
         ) : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
-            {busy || (!ready && !error) ? (
+            {/* Why: a stream can report ready and then deliver no frames, so key the
+                indicator off actually having pixels or it clears into a blank pane. */}
+            {busy || (!renderedFrameSource && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -1284,7 +1253,7 @@ export function MobileBrowserPane({
             autoCapitalize="none"
             autoCorrect={false}
             editable={!controlsDisabled}
-            {...imeGuardedSubmitProps(Platform.OS, () => void sendKeyboardText())}
+            onSubmitEditing={() => void sendKeyboardText()}
           />
           <Pressable
             style={[styles.sendButton, (controlsDisabled || !keyboardValue) && styles.disabled]}
@@ -1494,21 +1463,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  addressInput: {
-    flex: 1,
-    minWidth: 0,
-    height: 28,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    fontSize: 12,
-    lineHeight: 16,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
   },
   viewport: {
     flex: 1,

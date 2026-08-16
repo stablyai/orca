@@ -41,6 +41,12 @@ const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u00
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+// Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
+// Prefix form peels consecutive replies out of one coalesced payload.
+const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
+const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
+  '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+)
 /* oxlint-enable no-control-regex */
 
 /**
@@ -66,4 +72,75 @@ export function isTerminalQueryReply(data: string): boolean {
     OSC_RESPONSE_RE.test(data) ||
     DCS_RESPONSE_RE.test(data)
   )
+}
+
+/** End index (exclusive) of one cooked-echo-risk reply at `start`, else -1. */
+function cookedEchoSafeReplyEnd(data: string, start: number): number {
+  if (start >= data.length || data[start] !== ESC) {
+    return -1
+  }
+  const slice = data.slice(start)
+  const dsr = COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE.exec(slice)
+  if (dsr?.[0]) {
+    return start + dsr[0].length
+  }
+  const osc = COOKED_ECHO_RISK_OSC_PREFIX_RE.exec(slice)
+  if (osc?.[0]) {
+    return start + osc[0].length
+  }
+  return -1
+}
+
+/**
+ * If `data` is entirely one or more consecutive cooked-echo-risk replies, return each
+ * reply. Repeats still arrive coalesced from a rapid theme flip or an older client that
+ * answers 2031 subscribes (this host stopped — #9993), so peel them individually.
+ * Mixed payloads (reply + keystroke) return null so hosts fall through to raw write.
+ */
+export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | null {
+  if (data.length < 4 || data[0] !== ESC) {
+    return null
+  }
+  const replies: string[] = []
+  let offset = 0
+  while (offset < data.length) {
+    const end = cookedEchoSafeReplyEnd(data, offset)
+    if (end === -1) {
+      return null
+    }
+    replies.push(data.slice(offset, end))
+    offset = end
+  }
+  return replies.length > 0 ? replies : null
+}
+
+/**
+ * Query replies that must use the ECHO-safe write path on POSIX PTYs so cooked
+ * prompts do not paint reply bytes (e.g. `997;1n` on `npx` confirm, #13137).
+ * Latency-critical CPR/DSR without `?` stay on the immediate write path.
+ *
+ * Whole-string only: a single complete reply. For repeated / write-queue
+ * coalesced payloads use {@link extractOnlyCookedEchoSafeQueryReplies}.
+ */
+export function needsCookedEchoSafeQueryReply(data: string): boolean {
+  const replies = extractOnlyCookedEchoSafeQueryReplies(data)
+  return replies !== null && replies.length === 1
+}
+
+/** True if at least one extracted cooked-echo-risk reply is accepted by `answer`. */
+export function answerEachCookedEchoSafeQueryReply(
+  data: string,
+  answer: (reply: string) => boolean
+): boolean {
+  const replies = extractOnlyCookedEchoSafeQueryReplies(data)
+  if (!replies) {
+    return false
+  }
+  let accepted = false
+  for (const part of replies) {
+    if (answer(part)) {
+      accepted = true
+    }
+  }
+  return accepted
 }

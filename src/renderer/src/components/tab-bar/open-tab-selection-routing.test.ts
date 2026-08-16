@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   activateBrowserPage: vi.fn(),
   activateSimulatorTab: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
-  queueBrowserFocusRequest: vi.fn()
+  requestBrowserFocus: vi.fn()
 }))
 
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
@@ -24,13 +24,13 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 vi.mock('@/components/browser-pane/browser-focus', () => ({
-  ORCA_BROWSER_FOCUS_REQUEST_EVENT: 'orca:browser-focus-request',
-  queueBrowserFocusRequest: mocks.queueBrowserFocusRequest
+  requestBrowserFocus: mocks.requestBrowserFocus
 }))
 
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 
-const terminalResult: OpenTabSearchResult = {
+const terminalResult: Extract<OpenTabSearchResult, { source: 'workspace' }> = {
+  executionHostId: 'runtime:host-1',
   source: 'workspace',
   id: 'open-tab:workspace:tab-1',
   title: 'Claude Code',
@@ -53,6 +53,7 @@ const editorResult: OpenTabSearchResult = {
 }
 
 const browserResult: OpenTabSearchResult = {
+  executionHostId: 'runtime:host-1',
   source: 'browser',
   id: 'open-tab:browser:page-1',
   title: 'Project Docs',
@@ -64,6 +65,7 @@ const browserResult: OpenTabSearchResult = {
 }
 
 const simulatorResult: OpenTabSearchResult = {
+  executionHostId: 'runtime:host-1',
   source: 'simulator',
   id: 'open-tab:simulator:tab-3',
   title: 'iPhone 15',
@@ -92,6 +94,7 @@ describe('activateOpenTabSearchResult', () => {
     expect(mocks.activateWorkspaceTab).toHaveBeenCalledWith({
       contentType: 'terminal',
       entityId: 'term-1',
+      executionHostId: 'runtime:host-1',
       groupId: 'group-2',
       tabId: 'tab-1',
       worktreeId: 'wt-1'
@@ -112,36 +115,33 @@ describe('activateOpenTabSearchResult', () => {
   it('carries the activation focus target into the browser focus request', () => {
     const outcome = activateOpenTabSearchResult(browserResult)
     expect(mocks.activateBrowserPage).toHaveBeenCalledWith({
+      executionHostId: 'runtime:host-1',
       pageId: 'page-1',
       workspaceId: 'ws-1',
       worktreeId: 'wt-1'
     })
 
-    const events: CustomEvent[] = []
-    const onFocusRequest = (event: Event): void => {
-      events.push(event as CustomEvent)
-    }
-    window.addEventListener('orca:browser-focus-request', onFocusRequest)
     if (outcome.status !== 'activated') {
       throw new Error('expected activation')
     }
     outcome.focus?.()
-    window.removeEventListener('orca:browser-focus-request', onFocusRequest)
 
-    const detail = { pageId: 'page-1', target: 'address-bar' }
-    expect(mocks.queueBrowserFocusRequest).toHaveBeenCalledWith(detail)
-    expect(events[0]?.detail).toEqual(detail)
+    expect(mocks.requestBrowserFocus).toHaveBeenCalledWith({
+      pageId: 'page-1',
+      target: 'address-bar'
+    })
   })
 
-  it('focuses the simulator tab the activation reports', () => {
+  it('leaves focus unchanged after activating a simulator tab', () => {
     const outcome = activateOpenTabSearchResult(simulatorResult)
 
-    if (outcome.status !== 'activated') {
-      throw new Error('expected activation')
-    }
-    outcome.focus?.()
-    expect(mocks.activateSimulatorTab).toHaveBeenCalledWith({ tabId: 'tab-3', worktreeId: 'wt-1' })
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-3')
+    expect(mocks.activateSimulatorTab).toHaveBeenCalledWith({
+      executionHostId: 'runtime:host-1',
+      tabId: 'tab-3',
+      worktreeId: 'wt-1'
+    })
+    expect(outcome).toEqual({ status: 'activated', focus: null })
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 
   it('reports a stale target per source', () => {
@@ -166,9 +166,14 @@ describe('activateOpenTabSearchResult', () => {
 
   it('reports a missing worktree distinguishably from a stale tab', () => {
     mocks.activateWorkspaceTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
+    mocks.activateBrowserPage.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
     mocks.activateSimulatorTab.mockReturnValue({ status: 'failed', reason: 'missing-worktree' })
 
     expect(activateOpenTabSearchResult(terminalResult)).toEqual({
+      status: 'failed',
+      message: 'Workspace no longer exists'
+    })
+    expect(activateOpenTabSearchResult(browserResult)).toEqual({
       status: 'failed',
       message: 'Workspace no longer exists'
     })

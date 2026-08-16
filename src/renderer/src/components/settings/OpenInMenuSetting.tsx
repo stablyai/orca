@@ -1,7 +1,8 @@
 import type React from 'react'
 import { useState } from 'react'
 import { Check, ChevronDown, Pencil, Trash2 } from 'lucide-react'
-import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { OPEN_IN_APPLICATIONS_MAX } from '../../../../shared/open-in-applications'
 import { Button } from '../ui/button'
 import {
@@ -14,7 +15,6 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getOpenInAppPreset,
   isOpenInAppPresetAdded,
@@ -187,10 +187,6 @@ function OpenInMenuRow({
                 }
                 onBlur={onCommit}
                 onKeyDown={(event) => {
-                  // Why: an Enter confirming a CJK IME candidate must not commit a half-composed label.
-                  if (isImeCompositionKeyDown(event)) {
-                    return
-                  }
                   if (event.key === 'Enter') {
                     onCommit()
                     event.currentTarget.blur()
@@ -219,10 +215,6 @@ function OpenInMenuRow({
               }
               onBlur={onCommit}
               onKeyDown={(event) => {
-                // Why: an Enter confirming a CJK IME candidate must not commit a half-composed command.
-                if (isImeCompositionKeyDown(event)) {
-                  return
-                }
                 if (event.key === 'Enter') {
                   onCommit()
                   event.currentTarget.blur()

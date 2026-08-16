@@ -9,7 +9,6 @@ import {
   translateRemotePairingEndpointKind
 } from '@/lib/remote-pairing-copy'
 import type { ParseHostAccessLinkResult } from '../../../../shared/remote-pairing-address'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { applyParsedSshHostInput, type EditingTarget } from '../settings/ssh-target-draft'
 import { SshHostAdvancedFields } from '../settings/SshHostAdvancedFields'
 
@@ -32,7 +31,7 @@ export function SshHostFields({
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
   return (
-    <ImeEnterGuardedForm
+    <form
       className="grid gap-3 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault()
@@ -136,7 +135,7 @@ export function SshHostFields({
         disabled={disabled}
         onFormChange={onFormChange}
       />
-    </ImeEnterGuardedForm>
+    </form>
   )
 }
 
@@ -170,7 +169,7 @@ export function RemoteServerFields({
       ? 'add-server-loopback-blocked'
       : 'add-server-pairing-code-help'
   return (
-    <ImeEnterGuardedForm
+    <form
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault()
@@ -267,6 +266,6 @@ export function RemoteServerFields({
           )}
         </p>
       ) : null}
-    </ImeEnterGuardedForm>
+    </form>
   )
 }

@@ -491,6 +491,174 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
   })
 
+  it('keeps an ignored reattach exit from poisoning a same-ID launch already starting', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.finishLaunch('stable-pty', 3)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 2)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scanDates: expect.any(Array),
+        writeCompletionMarker: false,
+        writeBoundedCompletionMarker: false
+      }),
+      undefined
+    )
+  })
+
+  it('matches an ignored reattach exit that arrived before its lifecycle callback', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.finishLaunch('stable-pty', 2)
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 3)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scanDates: expect.any(Array),
+        writeCompletionMarker: false,
+        writeBoundedCompletionMarker: false
+      }),
+      undefined
+    )
+  })
+
+  it('keeps a newer same-ID launch active while the ignored incarnation exits', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 2)
+    scheduler.finishLaunch('stable-pty', 3)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({ writeCompletionMarker: false }),
+      undefined
+    )
+
+    scheduler.finishLaunch('stable-pty', 4)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: true }),
+      undefined
+    )
+  })
+
+  it('releases a stranded active launch once the ignored incarnation ages out', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    // The ignored incarnation never reports its exit, so only the newer launch ever finishes.
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 2)
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: false }),
+      undefined
+    )
+
+    scheduler.finishLaunch('stable-pty', 3)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: true }),
+      undefined
+    )
+  })
+
+  it('keeps late duplicate ignored callbacks from poisoning reuse', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.finishLaunch('stable-pty', 3)
+    scheduler.ignoreLaunch('stable-pty', 2)
+    scheduler.ignoreLaunch('stable-pty', 2)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 4)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenCalledTimes(1)
+
+    scheduler.finishLaunch('stable-pty', 5)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenCalledTimes(2)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: true }),
+      undefined
+    )
+  })
+
+  it('keeps three exit-before-callback reattaches from stranding a reused ID', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.finishLaunch('stable-pty', 4)
+    scheduler.ignoreLaunch('stable-pty', 1)
+    scheduler.ignoreLaunch('stable-pty', 2)
+    scheduler.ignoreLaunch('stable-pty', 3)
+    scheduler.beginLaunch('stable-pty', false, new Date(), 5)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: false }),
+      undefined
+    )
+
+    scheduler.finishLaunch('stable-pty', 6)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(startBackfill).toHaveBeenCalledTimes(2)
+    expect(startBackfill).toHaveBeenLastCalledWith(
+      expect.objectContaining({ writeCompletionMarker: true }),
+      undefined
+    )
+  })
+
   it('does not consume an exit from an earlier stable-id incarnation', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const scheduler = createCodexSessionMigrationScheduler({

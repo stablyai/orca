@@ -283,7 +283,7 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
   const result: Record<string, unknown> = {}
   let count = 0
   for (const key in value) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    if (!Object.hasOwn(value, key)) {
       continue
     }
     if (count >= MAX_PREVIEW_COLLECTION_ITEMS) {

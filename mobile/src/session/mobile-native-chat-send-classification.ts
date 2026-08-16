@@ -2,7 +2,7 @@
 // (src/renderer/src/components/native-chat/NativeChatComposer.tsx): slash/skill
 // sends are TUI control actions, not chat turns — they never echo as a user
 // bubble, because the transcript will never contain a matching user turn and
-// the optimistic echo would sit at "Queued" forever.
+// the optimistic echo would never reconcile.
 
 import {
   getNativeChatAgentProfile,

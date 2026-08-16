@@ -9,7 +9,7 @@ import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
-import { normalizeAgentSessionsDir } from './session-scanner-values'
+import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const CODEX_SESSIONS_DIR = join(
@@ -29,6 +29,10 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
 )
+// Why: Prime Agent brands Pi's env contract with its own prefix and adds a
+// dedicated sessions-root override, so resolution differs from Pi/OMP in shape
+// as well as in variable name.
+const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
@@ -179,6 +183,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // own picker only globs `*/*.jsonl`, so it never offers them either.
     // Depth 0 is the workspace dir, which is never an artifact dir.
     directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+  },
+  'prime-agent': {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.primeAgentSessionsDir ?? PRIME_AGENT_SESSIONS_DIR, wslHomeDirs, [
+        '.prime',
+        'agent',
+        'sessions'
+      ]),
+    extensions: ['.jsonl']
   },
   openclaw: {
     // Sessions live under <stateDir>/agents; a stateDir already ending in

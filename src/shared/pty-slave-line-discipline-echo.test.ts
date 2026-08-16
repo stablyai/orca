@@ -3,7 +3,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const execFileMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
-import { createPtySlaveEchoProbe, readPtySlavePath } from './pty-slave-line-discipline-echo'
+import {
+  createPtySlaveEchoProbe,
+  createPtySlaveLineEditorProbe,
+  readPtySlavePath
+} from './pty-slave-line-discipline-echo'
 
 /** Replies to the next stty call with the given output, or an error when `output` is null. */
 function answerStty(output: string | null): void {
@@ -14,6 +18,7 @@ function answerStty(output: string | null): void {
 
 const COOKED = 'speed 38400 baud;\nlflags: icanon isig iexten echo echoe echok echoctl\n'
 const RAW = 'speed 38400 baud;\nlflags: -icanon -isig -iexten -echo -echoe -echok -echoctl\n'
+const LINE_EDITOR = `${RAW}cchars: lnext = <undef>; min = 1; time = 0;\n`
 
 beforeEach(() => {
   execFileMock.mockReset()
@@ -108,6 +113,21 @@ describe('createPtySlaveEchoProbe', () => {
     expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 
+  it('shares one in-flight stty process per PTY', async () => {
+    const probe = createPtySlaveEchoProbe('/dev/ttys048', 'darwin')
+    const pending: { finish?: () => void } = {}
+    execFileMock.mockImplementationOnce((_cmd, _args, _opts, callback) => {
+      pending.finish = () => callback(null, RAW, '')
+    })
+
+    const first = probe?.()
+    const second = probe?.()
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    pending.finish?.()
+    await expect(first).resolves.toBe('quiet')
+    await expect(second).resolves.toBe('quiet')
+  })
+
   it('passes the device with the flag its own platform understands', async () => {
     answerStty(RAW)
     await createPtySlaveEchoProbe('/dev/ttys048', 'darwin')?.()
@@ -115,5 +135,23 @@ describe('createPtySlaveEchoProbe', () => {
     answerStty(RAW)
     await createPtySlaveEchoProbe('/dev/pts/3', 'linux')?.()
     expect(execFileMock.mock.calls[1]?.[1]).toEqual(['-a', '-F', '/dev/pts/3'])
+  })
+})
+
+describe('createPtySlaveLineEditorProbe', () => {
+  it('requires raw quiet mode with the line editor disabling literal-next', async () => {
+    const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
+    answerStty(LINE_EDITOR)
+    await expect(probe?.()).resolves.toBe('line-editor')
+    answerStty(`${RAW}cchars: lnext = ^V; min = 1; time = 0;\n`)
+    await expect(probe?.()).resolves.toBe('other')
+    answerStty(COOKED)
+    await expect(probe?.()).resolves.toBe('other')
+  })
+
+  it('fails closed when the terminal state is incomplete', async () => {
+    const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
+    answerStty('lflags: -echo\ncchars: lnext = <undef>;\n')
+    await expect(probe?.()).resolves.toBe('unknown')
   })
 })

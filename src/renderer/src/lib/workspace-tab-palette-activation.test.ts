@@ -175,6 +175,17 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
   })
 
+  it('scopes activation to the host carried by the search result', () => {
+    const executionHostId = 'runtime:host-1' as const
+
+    expect(activateWorkspaceTabPaletteResult({ ...makeResult(), executionHostId })).toEqual({
+      status: 'activated'
+    })
+
+    expect(mocks.store.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', executionHostId)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
+  })
+
   it('activates tabs in known folder or detected workspaces', () => {
     mocks.store.worktreesByRepo = {}
     mocks.store.getKnownWorktreeById.mockReturnValue({ id: 'wt-1', repoId: 'repo-1' })

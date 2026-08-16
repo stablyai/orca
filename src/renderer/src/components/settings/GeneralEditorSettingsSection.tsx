@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -159,8 +159,6 @@ export function GeneralEditorSettingsSection({
             onChange={(e) => updateAutoSaveDelayDraft(e.target.value)}
             onBlur={commitAutoSaveDelay}
             onKeyDown={(e) => {
-              // No IME guard: Chromium blanks number inputs at compositionstart, so a
-              // confirm-Enter only ever reaches the empty-draft reset in commitAutoSaveDelay.
               if (e.key === 'Enter') {
                 commitAutoSaveDelay()
               }

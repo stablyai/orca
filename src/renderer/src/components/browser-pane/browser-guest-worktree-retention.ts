@@ -1,4 +1,4 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 
 // Why 4: every hidden worktree that retains browser guests keeps one Electron
 // guest process per page alive purely for instant revisits, so guest memory

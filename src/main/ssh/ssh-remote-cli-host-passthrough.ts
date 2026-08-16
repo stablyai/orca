@@ -25,6 +25,7 @@ import {
 } from '../../shared/orchestration-compatibility-evidence'
 import {
   REMOTE_ARTIFACT_INPUT_ENV,
+  sshArtifactSourceKey,
   type RemoteArtifactInput
 } from '../../shared/artifact-cli-bridge'
 
@@ -178,7 +179,7 @@ export function buildHostCliEnv(args: {
   }
   if (args.artifactInput) {
     const sourceKey = args.runtimeAuthority
-      ? JSON.stringify(['ssh', args.runtimeAuthority.targetId, args.artifactInput.sourceKey])
+      ? sshArtifactSourceKey(args.runtimeAuthority.targetId, args.artifactInput.sourceKey)
       : args.artifactInput.sourceKey
     env[REMOTE_ARTIFACT_INPUT_ENV] = JSON.stringify({ ...args.artifactInput, sourceKey })
   }

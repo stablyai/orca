@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   buildAskAnswerKeys,
   extractPendingAsk,
   formatAskAnswer,
   parseAskFromStatus
-} from './mobile-native-chat-ask'
+} from '../../../src/shared/native-chat-ask'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(blocks: NativeChatMessage['blocks'], id = 'm'): NativeChatMessage {
   return { id, role: 'assistant', blocks, timestamp: 0, source: 'transcript' }

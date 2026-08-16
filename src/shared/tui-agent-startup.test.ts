@@ -778,6 +778,23 @@ describe('tui agent startup plans', () => {
     ).toBeNull()
   })
 
+  it('keeps grok on the composer-glyph paste draft route', () => {
+    // Why: grok has no --prefill-style flag, so every launch draft goes through
+    // paste-after-ready — and its shimmering startup logo never settles the
+    // quiet window, which is what made the paste take the full hard timeout.
+    expect(TUI_AGENT_CONFIG.grok.draftPasteReadySignal).toBe('grok-composer-prompt')
+    expect(TUI_AGENT_CONFIG.grok.draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG.grok.draftPromptEnvVar).toBeUndefined()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'grok',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
   it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
     const plan = buildAgentStartupPlan({
       agent: 'kiro',

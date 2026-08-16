@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
@@ -44,7 +43,7 @@ export function BrowserNewProfileDialog({
             {translate('auto.components.settings.BrowserPane.8481ee0331', 'New Browser Profile')}
           </DialogTitle>
         </DialogHeader>
-        <ImeEnterGuardedForm
+        <form
           onSubmit={async (e) => {
             e.preventDefault()
             const trimmed = newProfileName.trim()
@@ -114,7 +113,7 @@ export function BrowserNewProfileDialog({
                 : translate('auto.components.settings.BrowserPane.64898ecdab', 'Create')}
             </Button>
           </DialogFooter>
-        </ImeEnterGuardedForm>
+        </form>
       </DialogContent>
     </Dialog>
   )

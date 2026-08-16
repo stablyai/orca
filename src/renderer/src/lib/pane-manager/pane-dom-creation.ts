@@ -70,7 +70,7 @@ export function createPaneDOM(
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
+    options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
       hover: (_event, uri) => {
         if (uri) {
@@ -121,6 +121,7 @@ export function createPaneDOM(
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    webglRebuildDeferred: false,
     hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
@@ -136,6 +137,7 @@ export function createPaneDOM(
     panePointerDownHandler,
     paneMouseEnterHandler,
     paneDragCleanup,
+    compositionHandler: null,
     focusClassSyncCleanup: null,
     terminalScrollIntentDisposable: null,
     linkifierMouseLeaveResetDisposable: null,

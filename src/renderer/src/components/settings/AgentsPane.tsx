@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Terminal
 } from 'lucide-react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
@@ -54,9 +55,9 @@ import {
 } from '../../../../shared/tui-agent-permissions'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -303,10 +304,6 @@ function AgentCommandOverrideInput({
           onChange={(e) => setCmdDraft(e.target.value)}
           onBlur={commitCmd}
           onKeyDown={(e) => {
-            // Why: an Enter confirming a CJK IME candidate must not commit a half-composed command.
-            if (isImeCompositionKeyDown(e)) {
-              return
-            }
             if (e.key === 'Enter') {
               commitCmd()
               e.currentTarget.blur()
@@ -362,10 +359,6 @@ function AgentDefaultArgsInput({
           onChange={(e) => setArgsDraft(e.target.value)}
           onBlur={commitArgs}
           onKeyDown={(e) => {
-            // Why: an Enter confirming a CJK IME candidate must not commit half-composed arguments.
-            if (isImeCompositionKeyDown(e)) {
-              return
-            }
             if (e.key === 'Enter') {
               commitArgs()
               e.currentTarget.blur()
@@ -437,10 +430,6 @@ function AgentDefaultEnvInput({
           }}
           onBlur={commitEnv}
           onKeyDown={(e) => {
-            // Why: an Enter confirming a CJK IME candidate must not commit a half-composed env draft.
-            if (isImeCompositionKeyDown(e)) {
-              return
-            }
             if (e.key === 'Enter') {
               commitEnv()
               e.currentTarget.blur()
@@ -880,7 +869,9 @@ export function AgentsPane({
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
-      <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      {!isPairedWebClientWindow() ? (
+        <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 

@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Keyboard
 } from 'react-native'
-import { ChevronDown, ChevronUp } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Monitor } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
@@ -20,6 +20,7 @@ import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-naviga
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import {
   isSetupHookTrusted,
@@ -29,8 +30,11 @@ import {
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
-import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
+import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
 import {
   NEW_WORKTREE_AGENT_OPTIONS as AGENT_OPTIONS,
   NEW_WORKTREE_BLANK_AGENT as BLANK_TERMINAL,
@@ -63,17 +67,26 @@ import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
+import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
+import {
+  buildNewWorkspaceProjectOptions,
+  buildNewWorkspaceRunTargetOptions,
+  getNewWorkspaceRunTarget
+} from './new-workspace-project-targets'
 
-type Repo = {
-  id: string
-  displayName: string
-  path: string
-  badgeColor?: string
-  connectionId?: string | null
-  kind?: 'git' | 'folder'
-  upstream?: { owner: string; repo: string } | null
-  gitRemoteIdentity?: { remoteUrl?: string; canonicalKey?: string } | null
-}
+type Repo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
+  Partial<
+    Pick<
+      SharedRepo,
+      | 'badgeColor'
+      | 'connectionId'
+      | 'executionHostId'
+      | 'kind'
+      | 'upstream'
+      | 'repoIcon'
+      | 'gitRemoteIdentity'
+    >
+  >
 
 type SetupDecision = 'inherit' | 'run' | 'skip'
 type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -186,6 +199,18 @@ function NewWorktreeModalContent({
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
+  // Why: a deleted workspace's directory can still hold agent conversation state keyed by cwd, so
+  // its name must never be suggested again. Fetched per selected repo while the sheet is open.
+  // Keyed on the path set rather than the array so a poll that changes nothing does not refetch.
+  const retiredNamesRefreshKey = useMemo(
+    () => [...(existingWorktreePaths ?? [])].sort().join('\0'),
+    [existingWorktreePaths]
+  )
+  const retiredWorktreeNames = useRetiredWorktreeNames(
+    client,
+    selectedRepo?.id,
+    retiredNamesRefreshKey
+  )
   const { drawerView, formSheetVisible, formSheetInteractive, transitionDrawer, openSourceDrawer } =
     useNewWorktreeDrawerNavigation(visible)
   const createInFlightRef = useRef(false)
@@ -200,10 +225,8 @@ function NewWorktreeModalContent({
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
-  const { tasksSupported, getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(
-    client,
-    visible
-  )
+  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
+    useNewWorktreeRuntimeCapabilities(client, visible)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -601,7 +624,9 @@ function NewWorktreeModalContent({
       // the authoritative collision is checked server-side against git
       // branches/remotes/PRs, so we also retry-with-suffix on conflict.
       const trimmedName = composer.name.trim()
-      const baseName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
+      const baseName =
+        trimmedName ||
+        getSuggestedCreatureName(existingWorktreePaths ?? [], undefined, retiredWorktreeNames)
 
       let setupDecision: SetupDecision = 'inherit'
       if (setupCommand) {
@@ -655,6 +680,9 @@ function NewWorktreeModalContent({
             client,
             repoId: selectedRepo.id,
             baseName,
+            // `baseName` is the suggestion exactly when the user typed nothing, so no identity check
+            // is needed — desktop's seeded composer needs one (useComposerState `nameWasGenerated`).
+            nameWasGenerated: !trimmedName,
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
@@ -694,10 +722,17 @@ function NewWorktreeModalContent({
             isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
         )
   const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
-  const repoPickerItems = useMemo(
-    () => repos.map((repo) => ({ id: repo.id, label: repo.displayName, repo })),
-    [repos]
+  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
+  const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
+  const selectedProject =
+    projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
+  const runTargetPickerItems = useMemo(
+    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform),
+    [hostPlatform, repos, selectedProjectId]
   )
+  const selectedRunTarget = selectedRepo
+    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
+    : null
 
   function prepareSelectionPickerOpen(): void {
     // Why: picker taps can beat an open soft keyboard; dismissing it prevents the
@@ -785,10 +820,7 @@ function NewWorktreeModalContent({
     >
       <BottomDrawer visible={formSheetVisible} interactive={formSheetInteractive} onClose={onClose}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Workspace</Text>
-          <Text style={styles.subtitle}>
-            Pick a repository and agent to spin up a new workspace.
-          </Text>
+          <Text style={styles.title}>Create worktree</Text>
         </View>
 
         {loading ? (
@@ -797,33 +829,23 @@ function NewWorktreeModalContent({
           </View>
         ) : repos.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.emptyText}>No repositories found</Text>
+            <Text style={styles.emptyText}>No projects found</Text>
           </View>
         ) : (
           <>
-            <View style={styles.field}>
-              <Text style={styles.label}>Repository</Text>
-              <Pressable
-                style={styles.fieldButton}
-                onPress={() => {
-                  prepareSelectionPickerOpen()
-                  transitionDrawer('repo')
-                }}
-              >
-                {selectedRepo ? (
-                  <View
-                    style={[styles.repoDot, { backgroundColor: repoBadgeColor(selectedRepo) }]}
-                  />
-                ) : null}
-                <Text
-                  style={[styles.fieldButtonText, !selectedRepo && styles.fieldButtonPlaceholder]}
-                  numberOfLines={1}
-                >
-                  {selectedRepo?.displayName ?? 'Select a repository'}
-                </Text>
-                <ChevronDown size={14} color={colors.textMuted} />
-              </Pressable>
-            </View>
+            <NewWorktreeProjectTargetFields
+              project={selectedProject}
+              runTarget={selectedRunTarget}
+              projectBadgeColor={selectedRepo ? repoBadgeColor(selectedRepo) : null}
+              onOpenProject={() => {
+                prepareSelectionPickerOpen()
+                transitionDrawer('project')
+              }}
+              onOpenRunTarget={() => {
+                prepareSelectionPickerOpen()
+                transitionDrawer('runTarget')
+              }}
+            />
 
             <SmartWorkspaceSourceField
               composer={composer}
@@ -893,7 +915,7 @@ function NewWorktreeModalContent({
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
-                  {sshGate.requiresConnection ? 'Connect repository first' : selectedAgent.label}
+                  {sshGate.requiresConnection ? 'Connect target first' : selectedAgent.label}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
@@ -995,7 +1017,7 @@ function NewWorktreeModalContent({
                   <ActivityIndicator size="small" color={colors.bgBase} />
                 ) : (
                   <Text style={styles.createText}>
-                    {sshGate.requiresConnection ? 'Connect Repository' : 'Create Workspace'}
+                    {sshGate.requiresConnection ? 'Connect target' : 'Create worktree'}
                   </Text>
                 )}
               </Pressable>
@@ -1024,15 +1046,25 @@ function NewWorktreeModalContent({
       />
 
       <PickerListDrawer
-        visible={visible && drawerView === 'repo'}
-        title="Repository"
-        items={repoPickerItems}
-        selectedId={selectedRepo?.id ?? ''}
+        visible={visible && drawerView === 'project'}
+        title="Project"
+        items={projectPickerItems}
+        selectedId={selectedProjectId ?? ''}
         onSelect={(item) => handleRepoSelected(item.repo)}
         onClose={() => transitionDrawer('form')}
         renderIcon={(item) => {
           return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
+      />
+
+      <PickerListDrawer
+        visible={visible && drawerView === 'runTarget'}
+        title="Run on"
+        items={runTargetPickerItems}
+        selectedId={selectedRepo?.id ?? ''}
+        onSelect={(item) => handleRepoSelected(item.repo)}
+        onClose={() => transitionDrawer('form')}
+        renderIcon={() => <Monitor size={16} color={colors.textMuted} />}
       />
 
       <PickerListDrawer
@@ -1071,11 +1103,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
   loadingContainer: {
     paddingVertical: spacing.xl,
     alignItems: 'center'
@@ -1109,7 +1136,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle
   },
   fieldButtonText: {
-    flex: 1,
     fontSize: typography.bodySize,
     color: colors.textPrimary
   },

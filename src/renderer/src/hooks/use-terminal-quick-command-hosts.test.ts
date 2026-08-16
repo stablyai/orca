@@ -5,24 +5,29 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalQuickCommands } from '@/store/slices/terminal-quick-command-hosts'
 
 const testState = vi.hoisted(() => ({
   executionHostId: 'runtime:build' as ExecutionHostId,
   loadRuntimeTerminalQuickCommands: vi.fn(async () => {}),
+  resolveExecutionHostId: vi.fn(() => 'runtime:build' as ExecutionHostId),
   runtimeEnvironments: [] as { id: string; name: string }[],
   runtimeStatusByEnvironmentId: new Map<string, { connectionGeneration?: number }>(),
   runtimeTerminalQuickCommands: new Map<string, RuntimeTerminalQuickCommands>(),
-  settings: null as GlobalSettings | null
+  settings: null as GlobalSettings | null,
+  subscribedSelectors: [] as ((state: unknown) => unknown)[]
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof testState) => unknown) => selector(testState)
+  useAppStore: (selector: (state: typeof testState) => unknown) => {
+    testState.subscribedSelectors.push(selector as (state: unknown) => unknown)
+    return selector(testState)
+  }
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => testState.executionHostId
+  getExecutionHostIdForWorktree: () => testState.resolveExecutionHostId()
 }))
 
 import {
@@ -34,12 +39,16 @@ import {
 } from './use-terminal-quick-command-hosts'
 
 let renderedHosts: TerminalQuickCommandHost[] = []
+let renderedExecutionHostId: ExecutionHostId = 'local'
+let refreshRemoteHost = (): void => {}
 let remoteHostLoadFailed = false
 let remoteHostPending = false
 
-function Probe(): null {
-  const result = useTerminalQuickCommandHosts('worktree-1')
+function Probe({ enabled = true }: { enabled?: boolean }): null {
+  const result = useTerminalQuickCommandHosts('worktree-1', enabled)
+  renderedExecutionHostId = result.executionHostId
   renderedHosts = result.hosts
+  refreshRemoteHost = result.refreshRemoteHost
   remoteHostLoadFailed = result.remoteHostLoadFailed
   remoteHostPending = result.remoteHostPending
   return null
@@ -51,10 +60,13 @@ describe('useTerminalQuickCommandHosts', () => {
   beforeEach(() => {
     testState.executionHostId = 'runtime:build'
     testState.loadRuntimeTerminalQuickCommands.mockClear()
+    testState.resolveExecutionHostId.mockClear()
+    testState.resolveExecutionHostId.mockImplementation(() => testState.executionHostId)
     testState.runtimeEnvironments = [{ id: 'build', name: 'Build Server' }]
     testState.runtimeStatusByEnvironmentId = new Map([['build', { connectionGeneration: 4 }]])
     testState.runtimeTerminalQuickCommands = new Map()
     testState.settings = getDefaultSettings('/tmp')
+    testState.subscribedSelectors = []
     renderedHosts = []
     remoteHostLoadFailed = false
     remoteHostPending = false
@@ -73,6 +85,37 @@ describe('useTerminalQuickCommandHosts', () => {
     expect(
       shouldShowTerminalQuickCommandHostOwnership([{ id: 'local' }, { id: 'runtime:build' }])
     ).toBe(true)
+  })
+
+  it('skips host resolution and remote loading while disabled', async () => {
+    await act(async () => root.render(createElement(Probe, { enabled: false })))
+
+    const disabledHosts = renderedHosts
+    expect(testState.subscribedSelectors).toHaveLength(1)
+    for (let write = 0; write < 1_000; write += 1) {
+      testState.subscribedSelectors[0](testState)
+    }
+    refreshRemoteHost()
+
+    expect(renderedExecutionHostId).toBe('local')
+    expect(renderedHosts).toEqual([])
+    expect(remoteHostLoadFailed).toBe(false)
+    expect(remoteHostPending).toBe(false)
+    expect(testState.resolveExecutionHostId).not.toHaveBeenCalled()
+    expect(testState.loadRuntimeTerminalQuickCommands).not.toHaveBeenCalled()
+
+    testState.executionHostId = 'runtime:other'
+    await act(async () => root.render(createElement(Probe, { enabled: false })))
+
+    expect(renderedHosts).toBe(disabledHosts)
+    expect(testState.resolveExecutionHostId).not.toHaveBeenCalled()
+    expect(testState.loadRuntimeTerminalQuickCommands).not.toHaveBeenCalled()
+
+    testState.executionHostId = 'runtime:build'
+    await act(async () => root.render(createElement(Probe)))
+
+    expect(testState.resolveExecutionHostId).toHaveBeenCalledOnce()
+    expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
   })
 
   it.each([

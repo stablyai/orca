@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -42,10 +41,6 @@ export function UntitledFileRenameDialog({
   const focusFrameRef = useRef<number | null>(null)
   const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
   const mountedRef = useMountedRef()
-  // Why: one instance per field — a shared instance lets a composition armed in
-  // one input be consumed by the other's Enter.
-  const nameImeEnter = useImeEnterGestureOwnership()
-  const dirImeEnter = useImeEnterGestureOwnership()
 
   const displayError = externalError ?? error
 
@@ -161,17 +156,7 @@ export function UntitledFileRenameDialog({
                   setName(e.target.value)
                   setError(null)
                 }}
-                onBlur={nameImeEnter.reset}
-                onCompositionStart={() => nameImeEnter.setComposing(true)}
-                onCompositionEnd={() => nameImeEnter.setComposing(false)}
-                onKeyUp={nameImeEnter.onKeyUp}
                 onKeyDown={(e) => {
-                  // Why: this Enter writes a file to disk. A conversion-confirm
-                  // Enter must never reach handleSubmit — the carry hook also
-                  // covers the unmarked Enter/13 redispatched after compositionend.
-                  if (nameImeEnter.ownsKeyDown(e)) {
-                    return
-                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()
@@ -200,14 +185,7 @@ export function UntitledFileRenameDialog({
                   setDir(e.target.value)
                   setError(null)
                 }}
-                onBlur={dirImeEnter.reset}
-                onCompositionStart={() => dirImeEnter.setComposing(true)}
-                onCompositionEnd={() => dirImeEnter.setComposing(false)}
-                onKeyUp={dirImeEnter.onKeyUp}
                 onKeyDown={(e) => {
-                  if (dirImeEnter.ownsKeyDown(e)) {
-                    return
-                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()

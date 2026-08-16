@@ -1,7 +1,6 @@
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
-import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import { clearPreHandlerPtyState, drainPreHandlerPtyData } from './pty-pre-handler-buffer'
 import type { PtyDataMeta } from './pty-dispatcher'
+import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
@@ -25,8 +24,7 @@ export type PtyDataHandlerShutdownSnapshot = {
 type PendingPtyHandlerShutdown = {
   owners: number
   committed: boolean
-  bufferedBytes: number
-  events: PtyShutdownOutputEvent[]
+  outputQueue: PtyShutdownOutputQueue
   dataHandler?: (data: string, meta?: PtyDataMeta) => void
   replayHandler?: (data: string) => void
   teardownHandler?: () => void
@@ -34,13 +32,8 @@ type PendingPtyHandlerShutdown = {
 }
 
 const pendingPtyHandlerShutdowns = new Map<string, PendingPtyHandlerShutdown>()
-type PtyShutdownOutputEvent =
-  | { kind: 'data'; data: string; meta?: PtyDataMeta }
-  | { kind: 'replay'; data: string }
-
-const rolledBackShutdownEvents = new Map<string, PtyShutdownOutputEvent[]>()
+const rolledBackShutdownEvents = new Map<string, PtyShutdownOutputQueue>()
 const ROLLED_BACK_SHUTDOWN_REPLAY_MAX_PTYS = 64
-const shutdownBufferTextEncoder = new TextEncoder()
 
 /** Suspend delivery until every overlapping shutdown owner commits or rolls back. */
 export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutdownSnapshot[] {
@@ -50,16 +43,12 @@ export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutd
     if (pending) {
       pending.owners += 1
     } else {
-      const retainedEvents = rolledBackShutdownEvents.get(id) ?? []
+      const outputQueue = rolledBackShutdownEvents.get(id) ?? new PtyShutdownOutputQueue()
       rolledBackShutdownEvents.delete(id)
       pending = {
         owners: 1,
         committed: false,
-        bufferedBytes: retainedEvents.reduce(
-          (total, event) => total + shutdownBufferTextEncoder.encode(event.data).byteLength,
-          0
-        ),
-        events: retainedEvents,
+        outputQueue,
         dataHandler: ptyDataHandlers.get(id),
         replayHandler: ptyReplayHandlers.get(id),
         teardownHandler: ptyTeardownHandlers.get(id),
@@ -113,17 +102,7 @@ function bufferPtyShutdownOutput(ptyId: string, event: PtyShutdownOutputEvent): 
   if (!pending) {
     return false
   }
-  const clamped = clampUtf8Tail(event.data, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
-  pending.events.push({ ...event, data: clamped.data })
-  pending.bufferedBytes += clamped.bytes
-  while (
-    pending.bufferedBytes > TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
-    pending.events.length > 1
-  ) {
-    pending.bufferedBytes -= shutdownBufferTextEncoder.encode(
-      pending.events.shift()?.data ?? ''
-    ).byteLength
-  }
+  pending.outputQueue.enqueue(event)
   return true
 }
 
@@ -131,14 +110,14 @@ export function drainRolledBackPtyShutdownData(ptyId: string): void {
   if (pendingPtyHandlerShutdowns.has(ptyId)) {
     return
   }
-  const events = rolledBackShutdownEvents.get(ptyId)
+  const outputQueue = rolledBackShutdownEvents.get(ptyId)
   const dataHandler = ptyDataHandlers.get(ptyId)
   const replayHandler = ptyReplayHandlers.get(ptyId)
-  if (!events || !dataHandler || !replayHandler) {
+  if (!outputQueue || !dataHandler || !replayHandler) {
     return
   }
   rolledBackShutdownEvents.delete(ptyId)
-  deliverShutdownEvents(ptyId, events, dataHandler, replayHandler)
+  outputQueue.drain((event) => deliverShutdownEvent(ptyId, event, dataHandler, replayHandler))
 }
 
 function settlePtyDataHandlerShutdown(ptyId: string, committed: boolean): void {
@@ -154,6 +133,7 @@ function settlePtyDataHandlerShutdown(ptyId: string, committed: boolean): void {
   pendingPtyHandlerShutdowns.delete(ptyId)
   if (pending.committed) {
     rolledBackShutdownEvents.delete(ptyId)
+    pending.outputQueue.discard()
     pending.lifecycleHandler?.commit()
     deleteCapturedHandler(ptyDataHandlers, ptyId, pending.dataHandler)
     deleteCapturedHandler(ptyReplayHandlers, ptyId, pending.replayHandler)
@@ -173,10 +153,12 @@ function settlePtyDataHandlerShutdown(ptyId: string, committed: boolean): void {
   const dataHandler = ptyDataHandlers.get(ptyId)
   const replayHandler = ptyReplayHandlers.get(ptyId)
   if (dataHandler && replayHandler) {
-    deliverShutdownEvents(ptyId, pending.events, dataHandler, replayHandler)
-  } else if (pending.events.length > 0) {
+    pending.outputQueue.drain((event) =>
+      deliverShutdownEvent(ptyId, event, dataHandler, replayHandler)
+    )
+  } else if (pending.outputQueue.length > 0) {
     // Why: a hidden pane can detach during the RPC; retain rollback output until both ordered channels reattach.
-    rolledBackShutdownEvents.set(ptyId, pending.events)
+    rolledBackShutdownEvents.set(ptyId, pending.outputQueue)
     while (rolledBackShutdownEvents.size > ROLLED_BACK_SHUTDOWN_REPLAY_MAX_PTYS) {
       const oldestPtyId = rolledBackShutdownEvents.keys().next().value
       if (typeof oldestPtyId !== 'string') {
@@ -197,20 +179,18 @@ function deleteCapturedHandler<T>(
   }
 }
 
-function deliverShutdownEvents(
+function deliverShutdownEvent(
   ptyId: string,
-  events: readonly PtyShutdownOutputEvent[],
+  event: PtyShutdownOutputEvent,
   dataHandler: (data: string, meta?: PtyDataMeta) => void,
   replayHandler: (data: string) => void
 ): void {
-  for (const event of events) {
-    if (event.kind === 'replay') {
-      replayHandler(event.data)
-      continue
-    }
-    dataHandler(event.data, event.meta)
-    for (const sidecar of Array.from(ptyDataSidecars.get(ptyId) ?? [])) {
-      sidecar(event.data)
-    }
+  if (event.kind === 'replay') {
+    replayHandler(event.data)
+    return
+  }
+  dataHandler(event.data, event.meta)
+  for (const sidecar of Array.from(ptyDataSidecars.get(ptyId) ?? [])) {
+    sidecar(event.data)
   }
 }

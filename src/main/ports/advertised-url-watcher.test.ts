@@ -147,6 +147,13 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://local.getmontecarlo.com:3001')
   })
 
+  it('preserves a split URL inside the bounded suffix', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, `${'x'.repeat(4080)} https://local.`)
+    watcher.ingest(PTY, 'example.com:3003/\n')
+    expect(watcher.lookup(WORKTREE, 3003)?.origin).toBe('https://local.example.com:3003')
+  })
+
   it('does not scan buffered PTY text until a line break arrives', () => {
     const watcher = bindFresh()
     const charCodeAtSpy = vi.spyOn(String.prototype, 'charCodeAt')
@@ -166,6 +173,35 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     watcher.ingest(PTY, '[0m\n')
     expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://example.com:3001')
+  })
+
+  it('keeps URLs whose scheme is split by terminal controls', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'H\x1b[32mtT\x1b[0mP://example.com:3001/\n')
+    expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('http://example.com:3001')
+  })
+
+  it('rejects finalized lines missing any character required by an HTTP URL', () => {
+    const watcher = bindFresh()
+    for (const line of [
+      'ttp://example.com:3001/\n',
+      'hhp://example.com:3001/\n',
+      'htt://example.com:3001/\n',
+      'http//example.com/3001\n',
+      'http:example.com:3001\n'
+    ]) {
+      watcher.ingest(PTY, line)
+    }
+    expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
+  })
+
+  it('retains exactly the latest bounded tail across oversized chunks', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, `https://stale.example.com:3001/${'x'.repeat(4096)}`)
+    watcher.ingest(PTY, ' https://fresh.example.com:3002/\n')
+
+    expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
+    expect(watcher.lookup(WORKTREE, 3002)?.host).toBe('fresh.example.com')
   })
 
   it('sanitizes to origin (drops path, query, fragment, userinfo)', () => {
