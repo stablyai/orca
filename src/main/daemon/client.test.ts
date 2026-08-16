@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
+import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
 import { getDaemonSocketPath } from './daemon-spawner'
@@ -368,7 +369,7 @@ describe('DaemonClient', () => {
       await client.ensureConnected()
       const internals = client as unknown as {
         controlSocket: Socket
-        pendingRequests: Map<string, unknown>
+        pendingRequests: DaemonPendingRequests
       }
       const writeSpy = vi.spyOn(internals.controlSocket, 'write')
       const timerSpy = vi.spyOn(globalThis, 'setTimeout')

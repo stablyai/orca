@@ -4,7 +4,7 @@ import {
   registerPersistentWebview,
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { createWebview, makeFolderWorkspace, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -208,6 +208,92 @@ describe('markWorktreeVisited', () => {
     store.getState().pruneLastVisitedTimestamps()
 
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+
+  it('pruneLastVisitedTimestamps defers an empty list with no detected record (unhydrated shape)', () => {
+    const store = createTestStore()
+    store.setState({
+      worktreesByRepo: { repo1: [] },
+      lastVisitedAtByWorktreeId: { 'repo1::/hidden': 100 }
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    // An empty list is the not-yet-hydrated shape, not an authoritative "no worktrees",
+    // so focus-recency is kept until an authoritative scan lands.
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+
+  it('pruneLastVisitedTimestamps clears the derived worktree-scoped active workspace key with a stale active worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/gone'),
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // The derived workspace key would keep the phantom workspace selected, so it goes too.
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+    expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves a folder-scoped active workspace key when the active worktree is stale', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // Folder-scoped keys are never dropped here (matches the removal paths).
+    expect(store.getState().activeWorkspaceKey).toBe(folderWorkspaceKey('folder-1'))
+    expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves an active workspace key pointing at a different live worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/a'),
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // Only the stale worktree's own derived key is dropped.
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey('repo1::/a'))
+  })
+
+  it('pruneLastVisitedTimestamps clears a legacy unprefixed active workspace key for the stale worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      // Sessions predating the `worktree:` prefix stored the bare id (see the purge path).
+      activeWorkspaceKey: 'repo1::/gone',
+      lastVisitedAtByWorktreeId: {}
+    } as unknown as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorkspaceKey).toBeNull()
   })
 })
 

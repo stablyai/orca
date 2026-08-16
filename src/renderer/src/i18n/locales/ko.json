@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "이 파일은 충돌 상태에 있지만 편집할 수 있는 작업 트리 파일이 없습니다.",
+          "conflictPlaceholderGuidance": "Git에서 충돌을 해결하거나 한쪽을 복원한 후 다시 여세요.",
           "51f15c37d3": "디렉터리를 열 수 없습니다: {{value0}}",
           "f2e00db373": "파일을 찾을 수 없습니다: {{value0}}",
           "checkRunDetailsUnavailable": "이 체크에 사용할 수 있는 세부 정보가 없습니다.",
@@ -8769,6 +8770,9 @@
               "4575341c77": "로컬 데스크톱을 선택하고, 저장된 원격 Orca 서버를 추가하거나, 페어링 URL을 생성하세요."
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Mission Control에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요."
         },
         "shortcuts": {
           "search": {

@@ -96,15 +96,11 @@ import {
 } from './github-api-repository'
 import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 export { _resetOwnerRepoCache } from './gh-utils'
-export {
-  getIssue,
-  listIssues,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  listLabels,
-  listAssignableUsers
-} from './issues'
+export { getIssue, listIssues } from './issues'
+export { createIssue } from './issue-create'
+export { updateIssue } from './issue-update'
+export { addIssueComment } from './issue-comment'
+export { listLabels, listAssignableUsers } from './issue-field-options'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,

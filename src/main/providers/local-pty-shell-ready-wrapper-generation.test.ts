@@ -9,6 +9,9 @@ import {
   restoreUserDataPathAfterEach,
   setTestUserDataPath
 } from './local-pty-shell-ready-test-harness'
+// Why: rcfile content is pure, so a static import is equivalent to the fresh-module import used for wrapper writing.
+import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
+import { getZshShellReadyRcfileContent } from './local-pty-shell-ready-wrapper-generation'
 
 restoreUserDataPathAfterEach()
 
@@ -264,8 +267,7 @@ describePosix('local PTY shell-ready launch config', () => {
   })
 
   it('writes wrappers without restoring Pi/OMP homes after user startup files', async () => {
-    const { getBashShellReadyRcfileContent, getShellReadyLaunchConfig } =
-      await importFreshLocalPtyShellReady()
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
 
@@ -311,9 +313,6 @@ describePosix('local PTY shell-ready launch config', () => {
 
   // Why: issue #2422 — without OSC 133 C/D markers, bash sessions kept the worktree spinner "working" ~30min after the agent exited.
   it('emits OSC 133 C/D markers in the bash wrapper so agent exit cleanup fires', async () => {
-    const { getBashShellReadyRcfileContent, getZshShellReadyRcfileContent } =
-      await importFreshLocalPtyShellReady()
-
     const bashRc = getBashShellReadyRcfileContent()
     const zshRc = getZshShellReadyRcfileContent()
 
@@ -332,15 +331,12 @@ describePosix('local PTY shell-ready launch config', () => {
   })
 
   itWithBash('runs the bash wrapper without fake C/D markers before the first prompt', async () => {
-    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
-
     const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
 
     expectBashOsc133Lifecycle(output)
   })
 
-  itWithBash('emits lifecycle for foreground text ending like an internal hook', async () => {
-    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
+  itWithBash('emits lifecycle for foreground text ending like an internal hook', () => {
     const input = 'echo user:__orca_osc133_prompt_done\nfalse\nexit 0\n'
     const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath, input)
 
@@ -351,7 +347,6 @@ describePosix('local PTY shell-ready launch config', () => {
   itWithBash(
     'preserves prompt hooks and existing DEBUG traps without fake command markers',
     async () => {
-      const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -371,8 +366,7 @@ describePosix('local PTY shell-ready launch config', () => {
     }
   )
 
-  itWithBash('forwards a DEBUG trap replaced with local functrace', async () => {
-    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
+  itWithBash('forwards a DEBUG trap replaced with local functrace', () => {
     writeFileSync(
       join(userDataPath, '.bash_profile'),
       [
@@ -390,7 +384,6 @@ describePosix('local PTY shell-ready launch config', () => {
   })
 
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
-    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
     writeFileSync(
       join(userDataPath, '.bash_profile'),
       'PROMPT_COMMAND=(\'printf "PROMPT_ARRAY_A\\n"\' \'printf "PROMPT_ARRAY_B\\n";  \')\n'
@@ -403,8 +396,7 @@ describePosix('local PTY shell-ready launch config', () => {
     expectBashOsc133Lifecycle(output)
   })
 
-  itWithBash('composes an inherited PROMPT_COMMAND ending in separators', async () => {
-    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
+  itWithBash('composes an inherited PROMPT_COMMAND ending in separators', () => {
     writeFileSync(
       join(userDataPath, '.bash_profile'),
       'PROMPT_COMMAND=\'printf "PROMPT_SEPARATOR\\n"; ;\t\n;;  \'\n'

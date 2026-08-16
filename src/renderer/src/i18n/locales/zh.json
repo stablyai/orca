@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "该文件处于冲突状态，但没有可编辑的工作树文件。",
+          "conflictPlaceholderGuidance": "请在 Git 中解决冲突，或恢复其中一侧后再重新打开。",
           "51f15c37d3": "无法打开目录：{{value0}}",
           "f2e00db373": "未找到文件：{{value0}}",
           "checkRunDetailsUnavailable": "此检查没有可用的详细信息。",
@@ -8781,6 +8782,9 @@
               "4575341c77": "选择本地桌面、添加已保存的远程 Orca 服务器或生成配对 URL。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "已被调度中心拦截。在此重新映射，或在系统设置中更改。"
         },
         "shortcuts": {
           "search": {

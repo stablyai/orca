@@ -13,7 +13,8 @@ import {
   parseGitHubIssueOrPRLink,
   normalizeGitHubLinkQuery
 } from '@/lib/github-links'
-import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -2795,12 +2796,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
       const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
-      if (!option || option.kind !== 'ready') {
+      const target =
+        option?.kind === 'ready'
+          ? option
+          : // Why: a just-created setup lands in the store before the memoized picker options refresh.
+            useAppStore
+              .getState()
+              .projectHostSetups.find(
+                (candidate) => candidate.id === setupId && candidate.setupState === 'ready'
+              )
+      if (!target) {
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
-      setSelectedProjectHostSetupOverrideId(option.id)
-      handleRepoChange(option.repoId, {
+      setSelectedProjectHostSetupOverrideId(target.id)
+      handleRepoChange(target.repoId, {
         preserveStartFrom: true,
         forceResetStartFrom: true
       })

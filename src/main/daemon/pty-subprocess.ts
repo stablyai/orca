@@ -3,7 +3,7 @@ import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { DaemonProtocolError } from './types'
 import {
   getMarkerlessShellLaunchConfig,
@@ -15,7 +15,7 @@ import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
   resolveUnixShellPath,
-  validateWorkingDirectory
+  validateWorkingDirectoryAsync
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
@@ -68,6 +68,7 @@ import {
   type StartupCommandDelivery
 } from '../../shared/codex-startup-delivery'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { TerminalAttachCanceledError } from './daemon-errors'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
@@ -133,6 +134,7 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  isCanceled?: () => boolean
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
@@ -383,10 +385,10 @@ function isNativeWindowsPath(path: string): boolean {
 /**
  * Validates explicit native Windows cwd paths before ConPTY launch.
  */
-function preflightWindowsPtySpawnEnvironment(args: {
+async function preflightWindowsPtySpawnEnvironment(args: {
   validationCwd: string
   cwdWasExplicit: boolean
-}): void {
+}): Promise<void> {
   if (process.platform !== 'win32' || !args.cwdWasExplicit) {
     return
   }
@@ -395,17 +397,17 @@ function preflightWindowsPtySpawnEnvironment(args: {
     return
   }
 
-  validateWorkingDirectory(args.validationCwd)
+  await validateWorkingDirectoryAsync(args.validationCwd)
 }
 
 /**
  * Validates POSIX spawn cwd before node-pty can fail with an opaque ENOENT.
  */
-function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
+async function preflightPosixPtySpawnEnvironment(validationCwd: string): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
-  validateWorkingDirectory(validationCwd)
+  await validateWorkingDirectoryAsync(validationCwd)
 }
 
 /**
@@ -621,7 +623,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
  * The returned handle records whether the startup command was already embedded
  * in Windows shell args so the daemon host does not write it a second time.
  */
-export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
+export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
@@ -855,11 +857,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
-  preflightPosixPtySpawnEnvironment(validationCwd)
-  preflightWindowsPtySpawnEnvironment({
+  await preflightPosixPtySpawnEnvironment(validationCwd)
+  await preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined
   })
+  if (opts.isCanceled?.()) {
+    throw new TerminalAttachCanceledError(opts.sessionId)
+  }
 
   let proc: pty.IPty
   try {

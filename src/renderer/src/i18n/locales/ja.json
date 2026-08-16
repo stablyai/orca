@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "このファイルは競合状態にありますが、編集できる作業ツリーファイルがありません。",
+          "conflictPlaceholderGuidance": "Git で競合を解決するか、いずれかの側を復元してから開き直してください。",
           "51f15c37d3": "ディレクトリを開けません: {{value0}}",
           "f2e00db373": "ファイルが見つかりません: {{value0}}",
           "checkRunDetailsUnavailable": "このチェックの詳細はありません。",
@@ -8806,6 +8807,9 @@
               "4575341c77": "ローカルデスクトップを選択するか、保存されたリモート Orca サーバーを追加するか、ペアリング URL を生成します。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
         "shortcuts": {
           "search": {

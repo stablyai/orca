@@ -40,7 +40,9 @@ export function createSetWorktreesPinnedAndReveal(
       return
     }
     // updateWorktreesMeta applies the store update synchronously, so the reveal below sees the row already rendered.
-    void get().updateWorktreesMeta(updates)
+    if (updates.size > 0) {
+      void get().updateWorktreesMeta(updates)
+    }
     if (revealWorktreeId !== null) {
       get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
     }

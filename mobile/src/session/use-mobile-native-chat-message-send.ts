@@ -85,14 +85,12 @@ export function useMobileNativeChatMessageSend(args: {
 
   const sendMessage = useCallback(
     async (
-      rawText: string,
+      text: string,
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number
     ): Promise<MobileNativeChatSendOutcome> => {
-      // The host writes trailing whitespace verbatim, where it can glue the next send.
-      const text = rawText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text)
       const agent = agentRef.current
@@ -218,7 +216,7 @@ export function useMobileNativeChatMessageSend(args: {
       } else if (recordControlSend) {
         // The session-option catalog can recognize controls omitted from the
         // autocomplete catalog (for example Claude `/model` and `/fast`).
-        recordCommand(text)
+        recordCommand(text.trim())
       }
       return 'accepted'
     },

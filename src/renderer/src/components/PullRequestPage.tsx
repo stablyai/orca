@@ -66,7 +66,7 @@ import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
+import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,

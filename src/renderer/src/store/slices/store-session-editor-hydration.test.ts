@@ -383,6 +383,47 @@ describe('hydrateEditorSession', () => {
     )
   })
 
+  it('drops a duplicate persisted file that would restore under an already used id', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const filePath = '/path/wt1/src/app.ts'
+    const runtimeEnvironmentId = 'runtime-1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    const persistedFile = {
+      filePath,
+      relativePath: 'src/app.ts',
+      worktreeId: wt,
+      language: 'typescript',
+      runtimeEnvironmentId
+    }
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      // The schema allows a repeated (path, worktree, runtime) tuple; both entries resolve to one owned id.
+      openFilesByWorktree: { [wt]: [persistedFile, { ...persistedFile }] },
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: { [wt]: 'editor' as const }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles.map((file) => file.id)).toEqual([
+      ownedEditorFileId(filePath, wt, runtimeEnvironmentId)
+    ])
+  })
+
   it('keeps floating owner-qualified editor ids aligned with restored unified tabs', () => {
     const store = createTestStore()
     const sharedPath = '/path/wt1/README.md'

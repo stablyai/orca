@@ -2,6 +2,7 @@ import os from 'node:os'
 import { app } from 'electron'
 import {
   isCrashReportReason,
+  sanitizeCrashReportDetails,
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
@@ -26,6 +27,12 @@ import {
   type ProcessGoneDedupe
 } from './process-gone-dedupe'
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
+import {
+  captureMinidumpSignature,
+  scheduleCrashpadDumpPrune,
+  type CapturedMinidump
+} from './crashpad-capture'
+import { minidumpSignatureDetails } from './minidump-crash-signature'
 import { flushActiveSink, startSpan } from '../observability/tracer'
 
 export type ProcessGoneCrashEvent = {
@@ -37,7 +44,28 @@ export type ProcessGoneCrashEvent = {
   details: Record<string, unknown>
 }
 
-type CrashReportRecorderStore = Pick<CrashReportStore, 'record'>
+type CrashReportRecorderStore = Pick<CrashReportStore, 'record' | 'attachDetails'>
+
+/** Injectable so tests can drive the pairing without a Crashpad handler. */
+export type MinidumpCapture = (
+  crashedAtMs: number,
+  expectedProcessType: string
+) => Promise<CapturedMinidump | null>
+
+const CHILD_CRASHPAD_PROCESS_TYPES: Readonly<Record<string, string>> = {
+  gpu: 'gpu-process',
+  utility: 'utility',
+  zygote: 'zygote'
+}
+
+function expectedCrashpadProcessType(event: ProcessGoneCrashEvent): string | null {
+  return event.source === 'renderer'
+    ? 'renderer'
+    : (CHILD_CRASHPAD_PROCESS_TYPES[event.processType.trim().toLowerCase()] ?? null)
+}
+
+const captureProcessMinidump: MinidumpCapture = (crashedAtMs, expectedProcessType) =>
+  captureMinidumpSignature(crashedAtMs, { expectedProcessType })
 
 // Why: the coalesce map prunes every key against the calling window, so a shorter
 // one here would weaken the other 30s coalescers. Stay uniform with them.
@@ -75,14 +103,57 @@ function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
   }
 }
 
+/**
+ * Folds the Crashpad signature into a report that is already on disk.
+ *
+ * Why separate from the record write: an exit code of 0x80000003 only says "a
+ * CHECK fired"; the name, file and line live in the dump, which Crashpad is
+ * still writing when process-gone fires. Waiting inline would stall recovery.
+ */
+async function attachMinidumpSignature(
+  store: CrashReportRecorderStore,
+  reportId: string,
+  crashedAtMs: number,
+  expectedProcessType: string | null,
+  capture: MinidumpCapture
+): Promise<void> {
+  const captured = expectedProcessType ? await capture(crashedAtMs, expectedProcessType) : null
+  if (!captured) {
+    await store.attachDetails(reportId, { minidumpStatus: 'absent' })
+    return
+  }
+  const signatureDetails = sanitizeCrashReportDetails(minidumpSignatureDetails(captured.signature))
+  await store.attachDetails(reportId, {
+    ...signatureDetails,
+    minidumpStatus: 'captured',
+    minidumpPath: captured.filePath,
+    minidumpBytes: captured.sizeBytes
+  })
+  // Why: the crash-report record is capped at 5 entries and is user-facing;
+  // the span is what makes the signature countable in the diagnostics bundle.
+  const span = startSpan('electron.minidump_signature', {
+    attributes: {
+      'crash.report_id': reportId,
+      'crash.minidump_bytes': captured.sizeBytes,
+      ...signatureDetails
+    }
+  })
+  span.end()
+  flushActiveSink()
+}
+
 export function recordProcessGoneCrash(
   store: CrashReportRecorderStore | null,
   event: ProcessGoneCrashEvent,
-  dedupe: ProcessGoneDedupe = processGoneDedupe
+  dedupe: ProcessGoneDedupe = processGoneDedupe,
+  capture: MinidumpCapture = captureProcessMinidump
 ): void {
   if (!isCrashReportReason(event.reason)) {
     return
   }
+  // Crashpad captures suppressed service crashes too; keep a crash loop from
+  // filling the disk even when no user-facing report is created.
+  scheduleCrashpadDumpPrune()
   if (
     !shouldRecordProcessGoneCrash({
       source: event.source,
@@ -152,6 +223,8 @@ export function recordProcessGoneCrash(
   )
   flushActiveSink()
 
+  const crashedAtMs = Date.now()
+  const expectedProcessType = expectedCrashpadProcessType(event)
   void store
     .record({
       source: event.source,
@@ -166,6 +239,24 @@ export function recordProcessGoneCrash(
       chromeVersion: process.versions.chrome ?? 'unknown',
       details: crashDetails,
       breadcrumbs
+    })
+    .then((report) => {
+      // Why: kept off the returned chain so a minidump failure can never reach
+      // the persist-failure handler below and release a claim that did persist.
+      void attachMinidumpSignature(
+        store,
+        report.id,
+        crashedAtMs,
+        expectedProcessType,
+        capture
+      ).catch((error) => {
+        console.error('[crash-reporting] Failed to attach minidump signature:', error)
+        recordDurableCrashBreadcrumb(
+          'minidump_signature_attach_failed',
+          processGoneBreadcrumbData(event),
+          error instanceof Error ? error.message : String(error)
+        )
+      })
     })
     .catch((error) => {
       dedupe.release(claim)

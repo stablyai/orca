@@ -54,7 +54,8 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
-    validateWorkingDirectory: validateWorkingDirectoryMock
+    validateWorkingDirectory: validateWorkingDirectoryMock,
+    validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
 })
 
@@ -91,12 +92,12 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('validates the requested Windows cwd before launching WSL on Windows', () => {
+  it('validates the requested Windows cwd before launching WSL on Windows', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      expect(() =>
+      await expect(
         createPtySubprocess({
           sessionId: 'test',
           cols: 80,
@@ -104,7 +105,7 @@ describe('createPtySubprocess', () => {
           cwd: 'C:\\definitely-missing-orca-wsl-cwd',
           shellOverride: 'wsl.exe'
         })
-      ).toThrow(/Working directory "C:\\definitely-missing-orca-wsl-cwd" does not exist/)
+      ).rejects.toThrow(/Working directory "C:\\definitely-missing-orca-wsl-cwd" does not exist/)
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -114,7 +115,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to /mnt/c before launching WSL when cwd is not a native Windows path', () => {
+  it('falls back to /mnt/c before launching WSL when cwd is not a native Windows path', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -123,7 +124,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -150,7 +151,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('uses the preferred WSL distro for daemon WSL terminals with Windows cwd', () => {
+  it('uses the preferred WSL distro for daemon WSL terminals with Windows cwd', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -160,7 +161,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -181,7 +182,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('launches WSL for WSL worktree cwd even when a stale Windows shell override is present', () => {
+  it('launches WSL for WSL worktree cwd even when a stale Windows shell override is present', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -189,7 +190,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -209,7 +210,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('does not pass a Windows Codex home into daemon WSL terminals', () => {
+  it('does not pass a Windows Codex home into daemon WSL terminals', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -217,7 +218,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -242,7 +243,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('does not pass a WSL managed Codex home into daemon Windows terminals', () => {
+  it('does not pass a WSL managed Codex home into daemon Windows terminals', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -250,7 +251,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -280,7 +281,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('routes daemon default WSL terminals to the Codex home distro without losing cwd', () => {
+  it('routes daemon default WSL terminals to the Codex home distro without losing cwd', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -289,7 +290,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -328,7 +329,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('preserves an explicit Linux Codex home in daemon WSL terminals', () => {
+  it('preserves an explicit Linux Codex home in daemon WSL terminals', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -336,7 +337,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -358,7 +359,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('marks Orca terminal handles for WSL env import in daemon WSL terminals', () => {
+  it('marks Orca terminal handles for WSL env import in daemon WSL terminals', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -370,7 +371,7 @@ describe('createPtySubprocess', () => {
     delete process.env.ORCA_CODEX_HOME
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -413,7 +414,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', () => {
+  it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -421,7 +422,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -442,7 +443,7 @@ describe('createPtySubprocess', () => {
 
   it.each(['/home/jin/repo/subdir', '/a', '/c'])(
     'keeps daemon WSL split panes in their distro when cwd is POSIX (%s)',
-    (cwd) => {
+    async (cwd) => {
       const proc = mockPtyProcess()
       spawnMock.mockReturnValue(proc)
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -450,7 +451,7 @@ describe('createPtySubprocess', () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
 
       try {
-        createPtySubprocess({
+        await createPtySubprocess({
           sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
           cols: 80,
           rows: 24,

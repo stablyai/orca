@@ -295,7 +295,7 @@ describe('runHook', () => {
     })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         {
           ...makeRepo(),

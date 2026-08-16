@@ -13,7 +13,13 @@ export function createMarkWorktreesDeleting(
       let changed = false
       for (const worktreeId of new Set(worktreeIds)) {
         const current = nextDeleteState[worktreeId]
-        if (current?.isDeleting && current.error === null && !current.canForceDelete) {
+        // Phase-aware: a queued row must still be promoted to deleting.
+        if (
+          current?.isDeleting &&
+          current.phase === 'deleting' &&
+          current.error === null &&
+          !current.canForceDelete
+        ) {
           continue
         }
         nextDeleteState[worktreeId] = {

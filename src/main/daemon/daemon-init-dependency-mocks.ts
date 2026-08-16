@@ -181,14 +181,26 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     }),
     daemonHealth: () => ({
       checkDaemonHealth: checkDaemonHealthMock,
-      getDaemonCommandLine: getDaemonCommandLineMock,
-      getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
       getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
-      getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock,
-      healthCheckDaemon: healthCheckDaemonMock,
-      isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock,
-      killStaleDaemon: killStaleDaemonMock,
-      getProcessStartedAtMs: getProcessStartedAtMsMock,
+      healthCheckDaemon: healthCheckDaemonMock
+    }),
+    daemonPidIdentity: () => ({
+      getDaemonCommandLine: getDaemonCommandLineMock,
+      getDaemonLaunchIdentity: getDaemonLaunchIdentityMock
+    }),
+    daemonTccAttribution: () => ({
+      getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
+    }),
+    daemonBundleStaleness: () => ({
+      isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock
+    }),
+    daemonStaleKill: () => ({
+      killStaleDaemon: killStaleDaemonMock
+    }),
+    daemonProcessStartTime: () => ({
+      getProcessStartedAtMs: getProcessStartedAtMsMock
+    }),
+    daemonPidFileParse: () => ({
       parseDaemonPidFile: parseDaemonPidFileMock
     }),
     client: () => ({

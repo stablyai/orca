@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
+import { isTerminalLeafId } from '../shared/stable-pane-id'
 import {
   testState,
   createStore,
@@ -163,6 +164,63 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
 
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('canonical-local')
+  })
+
+  it('rewrites legacy pane ids inside a host partition and remaps its leases', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'ssh:host-b': {
+          ...getDefaultWorkspaceSession(),
+          activeRepoId: 'repo-ssh',
+          activeWorktreeId: 'repo-ssh::/worktree',
+          activeTabId: 'tab-ssh',
+          tabsByWorktree: {
+            'repo-ssh::/worktree': [
+              {
+                id: 'tab-ssh',
+                worktreeId: 'repo-ssh::/worktree',
+                title: 'Terminal',
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: 1,
+                ptyId: 'remote-pty'
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {
+            'tab-ssh': {
+              root: { type: 'leaf', leafId: 'pane:1' },
+              activeLeafId: 'pane:1',
+              expandedLeafId: null,
+              ptyIdsByLeafId: { 'pane:1': 'remote-pty' }
+            }
+          }
+        }
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'ssh-1',
+          ptyId: 'remote-pty',
+          worktreeId: 'repo-ssh::/worktree',
+          tabId: 'tab-ssh',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    const root = store.getWorkspaceSession('ssh:host-b').terminalLayoutsByTabId['tab-ssh']?.root
+    const leafId = root?.type === 'leaf' ? root.leafId : null
+    expect(leafId && isTerminalLeafId(leafId)).toBe(true)
+    // The lease follows the partition's rewritten leaf, not the legacy `pane:1`.
+    expect(store.getSshRemotePtyLeases('ssh-1')[0]?.leafId).toBe(leafId)
   })
 
   it('isolates writes: setting host A does not mutate host B or local', async () => {

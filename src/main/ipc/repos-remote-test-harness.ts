@@ -144,7 +144,9 @@ export function gitWorktreeModuleMock(mocks: ReposIpcMocks): Record<string, unkn
   return { listWorktreeGraph: mocks.listWorktreeGraphMock }
 }
 
-export function filesystemAuthModuleMock(mocks: ReposIpcMocks): Record<string, unknown> {
+export function registeredWorktreeRootsCacheModuleMock(
+  mocks: ReposIpcMocks
+): Record<string, unknown> {
   return { invalidateAuthorizedRootsCache: mocks.invalidateAuthorizedRootsCacheMock }
 }
 

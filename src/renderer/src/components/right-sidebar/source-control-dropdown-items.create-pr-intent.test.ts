@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveDropdownItems,
-  type DropdownActionInputs,
-  type DropdownItem
-} from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.

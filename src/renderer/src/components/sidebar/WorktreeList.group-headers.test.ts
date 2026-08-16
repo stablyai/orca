@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/sidebar-row-reveal-ancestors'
+import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/navigation/reveal-ancestors'
 import {
   createAppStoreModuleMock,
   createDropdownMenuModuleMock,

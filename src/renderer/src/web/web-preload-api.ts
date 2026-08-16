@@ -582,6 +582,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
+      // The web client cannot inspect local Mission Control shortcuts.
+      getMacCapturedDigitRowChords: () => Promise.resolve([]),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
@@ -2819,6 +2821,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),
+    onOpenSkillShare: () => noopUnsubscribe,
+    consumePendingSkillShare: () => Promise.resolve(null),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
@@ -3130,6 +3134,39 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelUpdateRun: () => Promise.resolve(),
     acknowledgeUpdateRun: () => Promise.resolve(),
     getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    prepareShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
+    publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
+    cancelShare: () => Promise.resolve(),
+    releaseShare: () => Promise.resolve(),
+    resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
+    createDownloadGrant: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installBundleShare: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installPackageVersion: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installBundlePackageVersion: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    cancelInstall: () => Promise.resolve({ cancelled: false }),
+    previewInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    previewBundleInstall: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    removeInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    listManagedInstalls: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    getPackage: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    listOwnedShares: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    revokeShare: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    deletePackageVersion: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    deletePackage: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    listWslDistros: () => Promise.resolve([]),
+    onInstallProgress: () => () => {},
+    onShareProgress: () => () => {},
     onUpdateRun: () => () => {}
   }
 }
@@ -3887,6 +3924,9 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     // sends it back, so web shows what the host enforces instead of a local value it ignores.
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
       runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
+    }
+    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
+      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
     }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
