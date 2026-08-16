@@ -8,6 +8,9 @@ import { getRelayShellLaunchConfig } from './pty-shell-launch'
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
+const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+const itWithZsh = hasZsh ? it : it.skip
+
 function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
   const result = spawnSync(
     'bash',
@@ -136,6 +139,58 @@ describe('getRelayShellLaunchConfig', () => {
       'export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'overlay .zshenv falls back to the preserved ORCA_ORIG_ZDOTDIR, not $HOME (#12507)',
+    () => {
+      getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+      })
+      const zshenv = readFileSync(
+        join(homeDir, '.orca-relay', 'shell-ready', 'zsh', '.zshenv'),
+        'utf8'
+      )
+      // The overlay path always matches this arm (ZDOTDIR is the overlay dir),
+      // so hard-coding $HOME here discarded the user's real ZDOTDIR.
+      expect(zshenv).toContain(
+        '*/shell-ready/zsh) export ORCA_USER_ZDOTDIR="${ORCA_ORIG_ZDOTDIR:-$HOME}" ;;'
+      )
+      expect(zshenv).not.toContain('*/shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;')
+    }
+  )
+
+  itWithZsh(
+    'resolves ORCA_USER_ZDOTDIR to the real config dir under the relay overlay, not $HOME (#12507)',
+    () => {
+      // Reporter's XDG layout: real zsh config lives elsewhere and the relay
+      // preserved it into ORCA_ORIG_ZDOTDIR, while the shell was launched with
+      // ZDOTDIR pointing at the overlay dir.
+      const realConfig = join(homeDir, '.config', 'zsh')
+      mkdirSync(realConfig, { recursive: true })
+      getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshenv = join(zshRoot, '.zshenv')
+
+      const result = spawnSync(
+        'zsh',
+        ['-fc', 'source "$1"; printf "%s" "$ORCA_USER_ZDOTDIR"', 'zsh', zshenv],
+        {
+          encoding: 'utf8',
+          env: { HOME: homeDir, ZDOTDIR: zshRoot, ORCA_ORIG_ZDOTDIR: realConfig },
+          timeout: 5000
+        }
+      )
+
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+      // Before the fix this returned homeDir; the preserved config dir must win.
+      expect(result.stdout).toBe(realConfig)
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'wraps zsh when MiMo home must survive shell startup',

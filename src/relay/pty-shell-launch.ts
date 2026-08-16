@@ -93,7 +93,10 @@ esac
 [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
 export ORCA_USER_ZDOTDIR="\${ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
 case "\${ORCA_USER_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
+  # Why ORCA_ORIG_ZDOTDIR, not $HOME: ZDOTDIR is the overlay path here (the relay
+  # launched zsh with it), so this arm always fires; falling back to $HOME would
+  # discard the user's real preserved ZDOTDIR (#12507).
+  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}" ;;
 esac
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
