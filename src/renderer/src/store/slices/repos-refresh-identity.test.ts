@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Project, Repo } from '../../../../shared/types'
+import type { Project } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 import { getRepoHostIdentityForParts } from './repo-host-identity'
 import { createTestStore } from './store-test-helpers'

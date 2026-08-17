@@ -1,4 +1,5 @@
-import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost

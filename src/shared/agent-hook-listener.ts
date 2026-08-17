@@ -27,12 +27,14 @@ import {
 import { normalizeOptionalField } from './agent-status-field-normalization'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
+  claudeRosterHasRestoredSnapshotSubagent,
+  claudeRosterHasRuntimeWorkingSubagent,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
-  reapRestoredClaudeSubagentsWithoutLiveAgent,
+  reapUnconfirmedRestoredClaudeSubagents,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -133,6 +135,8 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  /** One-normalization provenance marker for a status backed only by restored child state. */
+  claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
@@ -152,8 +156,10 @@ export type ClaudeLeadTurnState = {
   waitingAgentId?: string
   /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
   waitingToolUseId?: string
+  /** End time of the lead turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
+  turnCompletedAt?: number
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
-  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'>
 }
 
 type CodexLeadTurnState = {
@@ -172,6 +178,7 @@ export function createHookListenerState(): HookListenerState {
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
+    claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
     claudeActiveSessionCronPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
@@ -188,6 +195,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -234,6 +242,7 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
@@ -278,6 +287,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
+  state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.codexSubagentRosterByPaneKey.clear()
@@ -328,6 +338,8 @@ export type AgentHookEventPayload = {
   connectionId: string | null
   /** True when the event carried prompt text directly, not the listener's cached prompt from an earlier event in the pane. */
   hasExplicitPrompt?: boolean
+  /** The emitted nonterminal state is backed only by child state restored from disk. */
+  restoredUnconfirmed?: true
   /** Stable per-turn key to distinguish duplicate hook delivery from a same-text prompt rerun (when the source exposes enough context). */
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
@@ -2599,17 +2611,39 @@ function normalizeClaudeSubagentLifecycleEvent(
   if (!lifecycleId) {
     return null
   }
-  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  const cachedLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const ownsUnbackedWait =
+    cachedLead?.state === 'waiting' &&
+    cachedLead.stateBeforeWait === undefined &&
+    cachedLead.waitingAgentId !== undefined &&
+    (eventName === 'TeammateIdle'
+      ? claudeTeammateIdMatchesName(cachedLead.waitingAgentId, lifecycleId)
+      : cachedLead.waitingAgentId === lifecycleId)
+  const hasCachedLeadEvidence = cachedLead !== undefined && !ownsUnbackedWait
+  let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  let endedChildWork = false
+  let endedRuntimeChildWork = false
   if (eventName === 'TeammateIdle') {
     const teammateName = lifecycleId
     // Why: on claude 2.1.21x teammates are turn-based — TeammateIdle means "turn over, awaiting mail", not finished. The row parks as idle (confirmed teammate) instead of leaving, so the sidebar keeps showing resumable children.
-    idleClaudeTeammateByName(roster, teammateName)
+    if (roster) {
+      let wasWorking = false
+      for (const [id, tracked] of roster) {
+        if (tracked.state === 'working' && claudeTeammateIdMatchesName(id, teammateName)) {
+          wasWorking = true
+          endedRuntimeChildWork ||= tracked.restoredFromSnapshot !== true
+        }
+      }
+      idleClaudeTeammateByName(roster, teammateName)
+      endedChildWork = wasWorking
+    }
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
   } else {
     const agentId = lifecycleId
     if (eventName === 'SubagentStart') {
+      roster = getOrCreateClaudeSubagentRoster(state, paneKey)
       upsertWorkingClaudeSubagent(
         roster,
         agentId,
@@ -2617,13 +2651,37 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      // Why: one-shot stops are true finishes (row removed); teammate-shaped stops are turn ends on 2.1.21x — the row parks idle and a later SubagentStart revives it.
-      stopClaudeSubagent(roster, agentId)
+      if (roster) {
+        const tracked = roster.get(agentId)
+        const wasWorking = tracked?.state === 'working'
+        endedRuntimeChildWork = wasWorking && tracked.restoredFromSnapshot !== true
+        // Why: one-shot stops are true finishes (row removed); teammate-shaped stops are turn ends on 2.1.21x — the row parks idle and a later SubagentStart revives it.
+        stopClaudeSubagent(roster, agentId)
+        endedChildWork = wasWorking && roster.get(agentId)?.state !== 'working'
+      }
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
-  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+  const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
+  const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
+  if (roster?.size === 0) {
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  }
+  if (
+    !hasCachedLeadEvidence &&
+    endedChildWork &&
+    !workingChildEvidence &&
+    (hasUnconfirmedChild || !endedRuntimeChildWork)
+  ) {
+    // Why: a restored-only ending proves no lead boundary, and an unmatched restored sibling proves no current liveness; persist the roster transition without publishing fresh work or completion.
+    state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+  }
+  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+    workingChildEvidence,
+    endedChildWork,
+    endedRuntimeChildWork
+  })
 }
 
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
@@ -2671,7 +2729,7 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   paneKey: string
 ): boolean {
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (!roster || !reapRestoredClaudeSubagentsWithoutLiveAgent(roster)) {
+  if (!roster || !reapUnconfirmedRestoredClaudeSubagents(roster)) {
     return false
   }
   if (roster.size === 0) {
@@ -2680,7 +2738,7 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   return true
 }
 
-/** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state; without a stash, fall back to 'working' (a transient spinner beats a permanently stuck card). */
+/** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state. */
 function clearClaudePendingWaitForAgent(
   state: HookListenerState,
   paneKey: string,
@@ -2697,7 +2755,7 @@ function clearClaudePendingWaitForAgent(
 export function clearClaudeAnsweredQuestionWait(
   state: HookListenerState,
   paneKey: string
-): Pick<ClaudeLeadTurnState, 'state' | 'interrupted'> {
+): Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'> {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const restored =
     lead?.state === 'waiting'
@@ -2712,7 +2770,15 @@ export function clearClaudeAnsweredQuestionWait(
       : {}
   )
   const effectiveState = resolveClaudePaneState(state, paneKey, restored)
-  return effectiveState === restored.state ? restored : { state: effectiveState }
+  return effectiveState === restored.state
+    ? restored
+    : {
+        state: effectiveState,
+        ...(restored.interrupted ? { interrupted: true as const } : {}),
+        ...(restored.turnCompletedAt !== undefined
+          ? { turnCompletedAt: restored.turnCompletedAt }
+          : {})
+      }
 }
 
 /** Re-emit the cached lead state without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
@@ -2720,18 +2786,35 @@ function buildClaudeCachedLeadStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  evidence: {
+    workingChildEvidence?: boolean
+    endedChildWork?: boolean
+    endedRuntimeChildWork?: boolean
+  } = {}
 ): ParsedAgentStatusPayload | null {
-  // Why: default 'working' — a spawn proves activity even before the lead's first state-bearing event (e.g. Orca restarted mid-session).
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const leadState = lead?.state ?? 'working'
+  let leadState = lead?.state
+  if (!leadState) {
+    if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
+      // Why: ending a current-runtime child wakes its parent; only a cached lead boundary can prove the whole pane completed.
+      leadState = 'working'
+    } else if (evidence.endedChildWork) {
+      // Why: a restored child ending proves only that child ended; persist its roster transition as unconfirmed working, never as lead completion.
+      leadState = 'working'
+    } else {
+      return null
+    }
+  }
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
     stateName: resolveClaudePaneState(state, paneKey, {
       state: leadState,
       interrupted: lead?.interrupted
     }),
     updateToolSnapshot: false,
-    interrupted: lead?.interrupted
+    interrupted: lead?.interrupted,
+    // Why: draining the last background child is this turn's all-clear; the stamp lets a consumer pair it with the announcement already sent.
+    turnCompletedAt: lead?.turnCompletedAt
   })
 }
 
@@ -2877,7 +2960,9 @@ function normalizeClaudeEvent(
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+        workingChildEvidence: true
+      })
     }
     const isParallelSiblingCompletionDuringChildQuestion =
       (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
@@ -2885,7 +2970,9 @@ function normalizeClaudeEvent(
       eventToolUseId !== undefined &&
       eventToolUseId !== lead.waitingToolUseId
     if (isParallelSiblingCompletionDuringChildQuestion) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+        workingChildEvidence: true
+      })
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
@@ -2894,13 +2981,18 @@ function normalizeClaudeEvent(
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: resolveClaudePaneState(state, paneKey, restored),
       updateToolSnapshot: true,
-      interrupted: restored.interrupted
+      interrupted: restored.interrupted,
+      turnCompletedAt: restored.turnCompletedAt
     })
   }
 
   // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
   if (eventAgentId && !isWaitingInducing) {
-    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      workingChildEvidence: claudeRosterHasRuntimeWorkingSubagent(
+        state.claudeSubagentRosterByPaneKey.get(paneKey)
+      )
+    })
   }
 
   if (isTurnBoundary && eventAgentId === undefined) {
@@ -2922,17 +3014,14 @@ function normalizeClaudeEvent(
         ? previousLead.stateBeforeWait
         : {
             state: previousLead.state,
-            ...(previousLead.interrupted ? { interrupted: true as const } : {})
+            ...(previousLead.interrupted ? { interrupted: true as const } : {}),
+            // Why: a child's permission pause displaces an already-finished lead; keep the end time so the later drain is still that turn's tail.
+            ...(previousLead.turnCompletedAt !== undefined
+              ? { turnCompletedAt: previousLead.turnCompletedAt }
+              : {})
           }
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
-  state.claudeLeadStateByPaneKey.set(paneKey, {
-    state: reportedStateName,
-    ...(interrupted ? { interrupted } : {}),
-    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
-    ...(stateBeforeWait ? { stateBeforeWait } : {})
-  })
 
   if (interrupted && eventAgentId === undefined) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -2943,11 +3032,44 @@ function normalizeClaudeEvent(
     state: reportedStateName,
     interrupted
   })
+  // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
+  const turnCompletedAt =
+    eventAgentId === undefined &&
+    isTurnBoundary &&
+    reportedStateName === 'done' &&
+    effectiveState === 'working' &&
+    interrupted !== true
+      ? Date.now()
+      : undefined
+
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: reportedStateName,
+    ...(interrupted ? { interrupted } : {}),
+    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
+    ...(stateBeforeWait ? { stateBeforeWait } : {}),
+    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+  })
+
+  const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (
+    isTurnBoundary &&
+    eventAgentId === undefined &&
+    effectiveState === 'working' &&
+    claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
+    !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
+    !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
+    !state.claudeActiveSessionCronPaneKeys.has(paneKey)
+  ) {
+    // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.
+    state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+  }
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
     updateToolSnapshot: true,
-    interrupted
+    interrupted,
+    turnCompletedAt
   })
 }
 
@@ -2962,6 +3084,7 @@ function buildClaudeStatusPayload(
     updateToolSnapshot: boolean
     interrupted?: boolean
     sessionBoundary?: boolean
+    turnCompletedAt?: number
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -2986,6 +3109,7 @@ function buildClaudeStatusPayload(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
+    turnCompletedAt: options.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
 }
@@ -4182,6 +4306,9 @@ export function normalizeHookPayload(
   const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
+  if (source === 'claude') {
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+  }
   let promptInteractionKey: string | undefined
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
@@ -4373,6 +4500,8 @@ export function normalizeHookPayload(
     (providerSessionOnly
       ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
+  const restoredUnconfirmed =
+    source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   return transportPayload
     ? {
         paneKey,
@@ -4382,6 +4511,7 @@ export function normalizeHookPayload(
         worktreeId,
         // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.
         connectionId: null,
+        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         hasExplicitPrompt:
           source === 'amp'
             ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)

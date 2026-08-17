@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import {
   isPathInsideOrEqual,

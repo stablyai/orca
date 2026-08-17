@@ -4,7 +4,6 @@
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
-  isCursorAgentTitle,
   isCursorNativeAgentTitle,
   isOpenCodeNativeTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
@@ -14,6 +13,10 @@ import {
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import {
+  assertAgentSkillSharingAllowed,
+  isAgentSkillSharingEnabled
+} from '../../shared/agent-skill-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -104,6 +107,7 @@ import {
   nonInteractiveGitEnv
 } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
+import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -114,7 +118,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
@@ -147,6 +151,73 @@ import type {
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
+import type {
+  SkillCloudDownloadGrant,
+  SkillCloudOperation,
+  SkillCloudOptions,
+  SkillCloudPackageDetails,
+  SkillCloudPublishRequest,
+  SkillCloudPublishResult,
+  SkillCloudVersion
+} from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
+import {
+  AGENT_SKILL_NOT_SHAREABLE_CODE,
+  AGENT_SKILL_SHARING_BUSY_CODE,
+  AgentSkillSharingError,
+  type AgentSkillShareOperation,
+  type AgentSkillShareRequest
+} from '../../shared/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../shared/skills'
+import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
+import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
+import type {
+  SkillInstallPreview,
+  SkillInstallPreviewRequest,
+  SkillInstallRequest,
+  SkillInstallResult,
+  ManagedSkillInstall,
+  SkillRemoveRequest
+} from '../../shared/skill-install-contract'
+import type {
+  SkillBundleInstallPreview,
+  SkillBundleInstallPreviewRequest,
+  SkillBundleInstallProgress,
+  SkillBundleInstallRequest,
+  SkillBundleInstallResult
+} from '../../shared/skill-bundle-install-contract'
+import { SkillBundleInstallPreviewSchema } from '../../shared/skill-bundle-install-contract'
+import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
+import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
+import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
+import {
+  previewSharedSkillBundleInstall,
+  previewSharedSkillInstall,
+  removeSharedSkillInstall
+} from '../skills/skill-install-management-service'
+import { listManagedSkillInstalls } from '../skills/skill-install-provenance'
+import { getWslHome, toLinuxPath } from '../wsl'
+import { WslSkillInstallFilesystem } from '../skills/skill-wsl-install-filesystem'
+import { nativeSkillInstallFilesystem } from '../skills/skill-install-filesystem'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import {
+  resolveEnvironmentSkillProviderRoots,
+  resolveWslGrokSkillProviderRoot,
+  withClaudeSkillProviderRoot
+} from '../skills/skill-provider-runtime-roots'
+import type {
+  SkillUploadBeginRequest,
+  SkillUploadChunkRequest
+} from '../../shared/skill-upload-session-contract'
+import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
+import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
+import { installSkillBundleOnSshHost } from '../skills/skill-bundle-ssh-relay-service'
+import {
+  installSkillOnSshHost,
+  listSkillInstallsOnSshHost,
+  previewSkillInstallOnSshHost,
+  removeSkillInstallOnSshHost
+} from '../skills/skill-ssh-relay-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -167,8 +238,14 @@ import {
   releaseFederationAckCheckpoint
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
-import { formatMessagePointer } from './orchestration/formatter'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
+import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
+import { OrchestrationMailboxNotificationCoordinator } from './orchestration/mailbox-notification-coordinator'
+import { OrchestrationMailboxDeliveryTarget } from './orchestration/mailbox-delivery-target'
+import {
+  OrchestrationMailboxPointerDelivery,
+  type OrchestrationMessageWaiter
+} from './orchestration/mailbox-pointer-delivery'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
@@ -177,24 +254,52 @@ import type {
   AutomationUpdateInput,
   AutomationWorkspaceMode
 } from '../../shared/automations-types'
+import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
 import type {
-  AutomationWorkspaceProvenance,
-  CliWorkspaceProvenance,
-  BaseRefSearchResult,
-  CreateWorktreeResult,
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  ForceDeleteWorktreeBranchResult,
-  GitHubPrStartPoint,
-  GitPushTarget,
-  BranchPrefixStrategy,
-  GitWorktreeInfo,
+  GitHubPRReviewCommentInput,
+  GitHubReactionContent
+} from '../../shared/github/comment-types'
+import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
+import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
+import type {
+  GitLabIssueUpdate,
+  GitLabMRInlineCommentInput,
+  GitLabProjectRef,
+  GitLabWorkItem,
+  MRListState
+} from '../../shared/gitlab-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type {
   GitHubCreateIssueFields,
-  GitHubOwnerRepo,
-  GlobalSettings,
-  PersistedUIState,
+  GitHubIssueUpdate,
+  GitHubPullRequestStateUpdate,
+  LinearIssueUpdate
+} from '../../shared/issue-mutation-types'
+import type {
+  JiraConnectArgs,
+  JiraCreateIssueArgs,
+  JiraIssueFilter,
+  JiraIssueUpdate,
+  JiraSiteSelection
+} from '../../shared/jira-types'
+import type { LinearCustomViewModel, LinearProjectSummary } from '../../shared/linear/project-types'
+import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../shared/managed-account-types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroup,
+  ProjectGroupImportMode,
+  ProjectGroupImportResult
+} from '../../shared/project-group-types'
+import type {
   Project,
-  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCloneArgs,
   ProjectHostSetupCreateArgs,
@@ -205,60 +310,47 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
-  Repo,
-  RemoveWorktreeResult,
-  StatsSummary,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage,
-  WorkspaceKey,
-  WorktreeLineageWarning,
-  WorktreeMeta,
-  WorktreeBaseStatusEvent,
-  WorktreeRemoteBranchConflictEvent,
-  WorktreeStartupLaunch,
-  LinearCustomViewModel,
-  JiraConnectArgs,
-  JiraCreateIssueArgs,
-  JiraIssueFilter,
-  JiraIssueUpdate,
-  JiraSiteSelection,
-  LinearIssueUpdate,
-  LinearProjectSummary,
-  LinearWorkspaceSelection,
-  NestedRepoScanResult,
-  ProjectGroup,
-  FolderWorkspace,
-  ProjectGroupImportMode,
-  ProjectGroupImportResult,
-  MemorySnapshot,
-  Tab,
-  TabGroupLayoutNode,
-  TerminalQuickCommand,
+  ProjectUpdateArgs
+} from '../../shared/project-types'
+import type { BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { Tab, TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
+import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceSessionState,
+  TerminalTab
+} from '../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
+import type {
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../../shared/worktree/base-ref-drift-types'
+import type {
+  CreateWorktreeResult,
+  ForceDeleteWorktreeBranchResult,
+  RemoveWorktreeResult
+} from '../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type {
+  WorkspaceLineage,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from '../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type {
+  AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
+  GitHubPrStartPoint,
+  GitPushTarget,
+  GitWorktreeInfo,
   WorkspaceLinkedItem,
-  DirEntry,
-  FilesystemPathFlavor,
-  GitHubIssueUpdate,
-  GitHubPullRequestStateUpdate,
-  GitHubPRFile,
-  GitHubPRReviewCommentInput,
-  GitHubReactionContent,
-  GitLabIssueUpdate,
-  GitLabMRInlineCommentInput,
-  GitLabProjectRef,
-  GitLabWorkItem,
-  ListWorkItemsResult,
-  MRListState,
-  PRRefreshOutcome,
-  ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
-} from '../../shared/types'
+  Worktree
+} from '../../shared/worktree/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import {
@@ -329,6 +421,7 @@ import {
   type RuntimeTerminalSplit,
   type RuntimeTerminalFocus,
   type RuntimeTerminalClose,
+  type RuntimeTerminalListHostScope,
   type RuntimeTerminalListResult,
   type RuntimeTerminalOrphanAdoptionRequest,
   type RuntimeTerminalOrphanAdoptionResult,
@@ -373,11 +466,16 @@ import {
   type RuntimeSessionTabCloseReason,
   type RuntimeBrowserDriverState,
   type RuntimeTerminalDriverState,
+  type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
   type RuntimeWorktreeListResult,
   type BrowserTabInfo,
   type BrowserScreencastResult
 } from '../../shared/runtime-types'
+import {
+  RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
+  RuntimeGraphReloadLifecycle
+} from './runtime-graph-reload-lifecycle'
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
@@ -419,6 +517,7 @@ import {
   parsePaneKey
 } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
@@ -453,6 +552,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
@@ -494,7 +594,7 @@ import {
 import { isAgentScratchRepoRootPath } from '../../shared/agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
-  normalizeCustomWorktreeVisibilitySources,
+  resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
 import {
@@ -719,6 +819,14 @@ import {
 } from './repo-worktree-resolution-scan'
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
 import {
+  listStoredWorktreeRowsForRepo,
+  resolveRepoWorktreeRows,
+  resolveScopedWorktreeIdRow,
+  RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+  type RepoWorktreeRowDeps
+} from './repo-worktree-row-resolution'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
@@ -854,7 +962,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-types'
+} from '../../shared/github/project-request-types'
 import {
   getBaseRefDefault,
   getDefaultRemote,
@@ -888,23 +996,24 @@ import {
   removeWorktree
 } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { isENOENT, invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import {
-  createSetupRunnerScript,
-  getDefaultTabCommandTrustContent,
-  getDefaultTabsLaunch,
   getEffectiveHooks,
-  getEffectiveSetupRunPolicy,
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
   parseOrcaYaml,
-  readIssueCommand,
-  resolveSetupRunnerShell,
-  runHook,
-  shouldRunSetupForCreate,
-  writeIssueCommand
+  runHook
 } from '../hooks'
+import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import {
+  getDefaultTabCommandTrustContent,
+  getDefaultTabsLaunch,
+  getEffectiveSetupRunPolicy,
+  shouldRunSetupForCreate
+} from '../effective-hook-config'
+import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -934,9 +1043,20 @@ import {
 } from '../ipc/worktree-remote'
 import {
   getBranchNameOverrideCandidate,
+  getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
+  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../worktree-create-candidates'
+import {
+  failedWorktreeCreationNeedsRetirement,
+  getRetiredNameRegistryForRepo,
+  retireGeneratedWorktreeName
+} from '../worktree-name-retirement'
+import {
+  createRetiredNameLookup,
+  type RetiredNameRegistry
+} from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -1113,6 +1233,9 @@ export type CodexRateLimitResetRpcResult = {
 type RuntimeStore = {
   getRepos: Store['getRepos']
   getRepo: Store['getRepo']
+  addRetiredWorktreeName: Store['addRetiredWorktreeName']
+  getRetiredWorktreeNameRegistry: Store['getRetiredWorktreeNameRegistry']
+  mergeRetiredWorktreeNames: Store['mergeRetiredWorktreeNames']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   getProjects?: Store['getProjects']
@@ -1171,6 +1294,7 @@ type RuntimeStore = {
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
@@ -1191,6 +1315,7 @@ type RuntimeStore = {
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
+    agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -1301,13 +1426,6 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   paneTitleUpdatedAt: number | null
-}
-
-function isCursorAgentOrchestrationTarget(
-  leaf: RuntimeLeafRecord,
-  tabTitle: string | null | undefined
-): boolean {
-  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
 type RuntimePtyWorktreeRecord = {
@@ -1727,6 +1845,7 @@ type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
+  writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -1750,6 +1869,10 @@ type RuntimePtyController = {
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
   listProcesses?(connectionId?: string | null): Promise<PtyProcessInfo[]>
+  listProcessesWithHostScope?(): Promise<{
+    processes: PtyProcessInfo[]
+    hostIds: ExecutionHostId[]
+  }>
   serializeBuffer?(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
@@ -1794,6 +1917,7 @@ type PtyControllerInventory = Readonly<{
   // must consult the unscoped inventory or a misattributed live PTY reads as dead.
   allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
+  queriedHostIds: ReadonlySet<ExecutionHostId>
 }>
 
 type WorktreeStartupDraftPaste = {
@@ -1834,15 +1958,15 @@ const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
-const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
-const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
-const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
-// Why: Claude emits show-cursor while rendering its composer; output must settle afterward.
-const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
+const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
+const AGENT_PROMPT_RENDER_QUIET_MS = 1500
+// Why: Claude and Codex emit show-cursor after accepting bracketed paste.
+const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
+const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
@@ -1975,7 +2099,10 @@ type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
-  closeTerminalTab?(tabId: string): Promise<void>
+  closeTerminalTab?(
+    tabId: string,
+    options?: { localPtyTeardownOwnedExternally?: boolean }
+  ): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
@@ -2011,6 +2138,12 @@ type TerminalHandleRecord = {
   leafId: string
   ptyId: string | null
   ptyGeneration: number
+}
+
+type PtyIncarnationHandleRecord = {
+  handle: string
+  incarnationId: string
+  leafKey: string
 }
 
 export type OrchestrationCompatibilityTerminalAuthority = {
@@ -2068,33 +2201,14 @@ type TerminalWaiter = {
   abortCleanup: (() => void) | null
 }
 
-type MessageWaiter = {
+type MessageWaiter = OrchestrationMessageWaiter & {
   handle: string
-  typeFilter: string[] | undefined
   resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
 }
 
 export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
-
-// Why: an unfiltered waiter claims every type. A row a live waiter will return
-// from orchestration.check must not also be pushed into the pane — check reads
-// by `read`, push stamps `delivered_at`, so neither hides the row from the other.
-function messageTypeHasLiveWaiter(
-  waiters: Set<MessageWaiter> | undefined,
-  messageType: string
-): boolean {
-  if (!waiters) {
-    return false
-  }
-  for (const waiter of waiters) {
-    if (!waiter.typeFilter || waiter.typeFilter.includes(messageType)) {
-      return true
-    }
-  }
-  return false
-}
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -2731,6 +2845,11 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
+export type RuntimeRendererReloadFence = Readonly<{
+  revision: number
+  recovery: 'renderer' | 'headless' | 'reloading'
+}>
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -2751,6 +2870,18 @@ export class OrcaRuntimeService {
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
+  private headlessGraphFallbackAvailable = false
+  private pendingHeadlessPromotionWindowId: number | null = null
+  private rendererGeneration: string | null = null
+  private readonly graphReloadLifecycle = new RuntimeGraphReloadLifecycle({
+    timeoutMs: RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
+    onSettled: ({ revision, windowId, outcome, durationMs }) => {
+      console.info(
+        `[runtime-graph] reload revision=${revision} window=${windowId} outcome=${outcome} durationMs=${durationMs}`
+      )
+    },
+    onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
+  })
   // Why: paired graph transactions need foreground timer cadence only until their publication settles.
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
@@ -2853,10 +2984,7 @@ export class OrcaRuntimeService {
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
-  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
-  private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
-  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
-  private readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
+  private handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
   private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )
@@ -2899,6 +3027,58 @@ export class OrcaRuntimeService {
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
+  private readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
+    getDb: () => this._orchestrationDb,
+    getLeaf: (leafKey) => this.leaves.get(leafKey),
+    getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+    getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    onRoutedMessageTypes: (mailboxHandle, types) =>
+      this.orchestrationMailboxNotifications.wakeRoutedMessageWaiters(mailboxHandle, types),
+    onForeignMailboxRouted: (mailboxHandle, messageType) =>
+      this.notifyMessageArrived(mailboxHandle, messageType)
+  })
+  private readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
+    getDb: () => this._orchestrationDb,
+    getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    hasTerminalHandle: (handle) => this.handles.has(handle),
+    canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
+    controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
+    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
+  })
+  private readonly orchestrationMailboxPointerDelivery =
+    new OrchestrationMailboxPointerDelivery<MessageWaiter>({
+      mailboxOwner: this.orchestrationMailboxOwner,
+      deliveryTarget: this.orchestrationMailboxDeliveryTarget,
+      getDb: () => this._orchestrationDb,
+      getLeaf: (leafKey) => this.leaves.get(leafKey),
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+      getMessageWaiters: (mailboxHandle) => this.messageWaitersByHandle.get(mailboxHandle),
+      getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
+      getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+      isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+      redriveMailbox: (mailboxHandle, reservedTypes) =>
+        this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
+      writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    })
+  private readonly orchestrationMailboxNotifications =
+    new OrchestrationMailboxNotificationCoordinator<MessageWaiter>({
+      mailboxOwner: this.orchestrationMailboxOwner,
+      pointerDelivery: this.orchestrationMailboxPointerDelivery,
+      getDb: () => this._orchestrationDb,
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+      getPaneKeyForHandle: (handle) => {
+        const record = this.handles.get(handle)
+        return record ? `${record.tabId}:${record.leafId}` : undefined
+      },
+      getMessageWaiters: (mailboxHandle) => this.messageWaitersByHandle.get(mailboxHandle),
+      hasTerminalHandle: (handle) => this.handles.has(handle),
+      deliverForHandle: (handle, reservedTypes) =>
+        this.deliverPendingMessagesForHandle(handle, reservedTypes),
+      notifyMessageArrived: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
+      resolveMessageWaiter: (waiter) => this.resolveMessageWaiter(waiter, 'notified')
+    })
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
   // without polling. Keyed by ptyId for O(1) lookup per data event.
@@ -3324,6 +3504,12 @@ export class OrcaRuntimeService {
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
   private artifactService: ArtifactCloudService | null = null
+  private skillCloudService: SkillCloudService | null = null
+  private agentSkillShareInProgress = false
+  private skillUploadSessions: SkillUploadSessionService | null = null
+  private readonly skillTransactionRecovery: Promise<unknown>
+  private readonly skillInstallOperations = new Map<string, AbortController>()
+  private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
   private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
   private mobileDictation: {
     id: string
@@ -3375,6 +3561,7 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      skillTransactionRecovery?: Promise<unknown>
     }
   ) {
     this.store = store
@@ -3387,6 +3574,7 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.skillTransactionRecovery = deps?.skillTransactionRecovery ?? Promise.resolve()
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3512,6 +3700,7 @@ export class OrcaRuntimeService {
 
   getClientSettings(): Pick<
     GlobalSettings,
+    | 'worktreeVisibilityDefaults'
     | 'defaultTuiAgent'
     | 'disabledTuiAgents'
     | 'agentCmdOverrides'
@@ -3532,12 +3721,14 @@ export class OrcaRuntimeService {
     // Read-only on purpose: clients preflight the publish capability here, but SettingsUpdate
     // still omits the key so no RPC caller can grant it to itself.
     | 'artifactSharingEnabled'
+    | 'agentSkillSharingEnabled'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
     const settings = this.store.getSettings()
     return {
+      worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
@@ -3555,7 +3746,8 @@ export class OrcaRuntimeService {
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
-      artifactSharingEnabled: isArtifactSharingEnabled(settings)
+      artifactSharingEnabled: isArtifactSharingEnabled(settings),
+      agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings)
     }
   }
 
@@ -3589,6 +3781,7 @@ export class OrcaRuntimeService {
   async updateClientSettings(
     updates: Pick<
       Partial<GlobalSettings>,
+      | 'worktreeVisibilityDefaults'
       | 'agentStatusHooksEnabled'
       | 'defaultTuiAgent'
       | 'disabledTuiAgents'
@@ -3609,6 +3802,7 @@ export class OrcaRuntimeService {
   ): Promise<
     Pick<
       GlobalSettings,
+      | 'worktreeVisibilityDefaults'
       | 'defaultTuiAgent'
       | 'disabledTuiAgents'
       | 'agentCmdOverrides'
@@ -3635,6 +3829,9 @@ export class OrcaRuntimeService {
     const before = beforeSettings.agentStatusHooksEnabled !== false
     this.store.updateSettings(updates, { notifyListeners: true })
     const settings = this.store.getSettings()
+    if (updates.worktreeVisibilityDefaults !== undefined) {
+      this.notifyReposChanged()
+    }
     if (
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
@@ -3890,8 +4087,6 @@ export class OrcaRuntimeService {
   setOrchestrationDb(db: OrchestrationDb): void {
     this.stopOrchestrationFederationRelay()
     this.mailPointerRepointScheduler.clear()
-    this.lastPointedMessageSequenceByHandle.clear()
-    this.pointedMessageIdsByHandle.clear()
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
@@ -4608,6 +4803,704 @@ export class OrcaRuntimeService {
     this.artifactService = service
   }
 
+  setSkillCloudService(service: SkillCloudService): void {
+    this.skillCloudService = service
+  }
+
+  assertAgentSkillSharingAllowed(): void {
+    assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.store?.getSettings()))
+  }
+
+  async publishDiscoveredSkillsFromAgent(
+    request: AgentSkillShareRequest,
+    discoveredSkills: readonly DiscoveredSkill[],
+    signal?: AbortSignal
+  ): Promise<AgentSkillShareOperation> {
+    this.assertAgentSkillSharingAllowed()
+    if (this.agentSkillShareInProgress) {
+      throw new AgentSkillSharingError(
+        AGENT_SKILL_SHARING_BUSY_CODE,
+        'Another agent skill bundle is being published. Wait for it to finish and try again.'
+      )
+    }
+    this.agentSkillShareInProgress = true
+    try {
+      return await this.executeAgentSkillShare(request, discoveredSkills, signal)
+    } finally {
+      this.agentSkillShareInProgress = false
+    }
+  }
+
+  private async executeAgentSkillShare(
+    request: AgentSkillShareRequest,
+    discoveredSkills: readonly DiscoveredSkill[],
+    signal?: AbortSignal
+  ): Promise<AgentSkillShareOperation> {
+    const selectedSkills = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
+    const operationRoot = join(app.getPath('userData'), 'agent-skill-share-operations')
+    const cloud = this.requireSkillCloudService()
+    const preparations = new SkillSharePreparationService(operationRoot, {
+      publishVersion: (input) => cloud.publishVersion(input),
+      createShare: (packageId, input) => cloud.createShare(packageId, input)
+    })
+    let preparationId: string | null = null
+    const cancel = (): void => {
+      if (preparationId) {
+        preparations.cancel(preparationId)
+      }
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
+    try {
+      if (signal?.aborted) {
+        throw signal.reason ?? new Error('skill-share-cancelled')
+      }
+      const preview = await preparations
+        .prepare({
+          sources: selectedSkills.map((skill) => ({
+            id: skill.name,
+            sourceDirectory: skill.directoryPath
+          })),
+          bundleName: request.bundleName,
+          description:
+            selectedSkills.length === 1
+              ? (selectedSkills[0].description ?? '')
+              : `${selectedSkills.length} shared skills`
+        })
+        .catch((error: unknown) => {
+          if (
+            error instanceof Error &&
+            ['skill-package-skill-name-required', 'skill-package-skill-name-invalid'].includes(
+              error.message
+            )
+          ) {
+            throw new AgentSkillSharingError(
+              AGENT_SKILL_NOT_SHAREABLE_CODE,
+              'A selected skill cannot be shared. Its SKILL.md must declare a lowercase name containing only letters, numbers, and hyphens.'
+            )
+          }
+          throw error
+        })
+      preparationId = preview.preparationId
+      if (signal?.aborted) {
+        throw signal.reason ?? new Error('skill-share-cancelled')
+      }
+      this.assertAgentSkillSharingAllowed()
+      const published = await preparations.publish({
+        preparationId,
+        releaseNotes: request.releaseNotes
+      })
+      return published.status === 'ok'
+        ? {
+            status: 'ok',
+            value: {
+              ...published.value,
+              selectedSkills: selectedSkills.map(({ id, name, description }) => ({
+                id,
+                name,
+                description
+              }))
+            }
+          }
+        : published
+    } finally {
+      signal?.removeEventListener('abort', cancel)
+      await preparations.dispose()
+    }
+  }
+
+  publishSkillPackage(
+    request: SkillCloudPublishRequest
+  ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
+    return this.requireSkillCloudService().publish(request)
+  }
+
+  publishSkillPackageVersion(
+    request: SkillCloudPublishRequest
+  ): Promise<SkillCloudOperation<SkillCloudVersion>> {
+    return this.requireSkillCloudService().publishVersion(request)
+  }
+
+  createSkillPackageShare(
+    packageId: string,
+    request: SkillCloudOptions & {
+      pinnedVersionId?: string
+      idempotencyKey?: string
+    }
+  ) {
+    return this.requireSkillCloudService().createShare(packageId, request)
+  }
+
+  resolveSkillShare(
+    shareId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<{ id: string; version: SkillCloudVersion }>> {
+    return this.requireSkillCloudService().resolveShare(shareId, options)
+  }
+
+  createSkillDownloadGrant(
+    shareId: string,
+    options: SkillCloudOptions & {
+      versionId?: string
+      installTarget?: 'local' | 'remote'
+    }
+  ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
+    return this.requireSkillCloudService().createDownloadGrant(shareId, options)
+  }
+
+  createSkillPackageVersionDownloadGrant(
+    packageId: string,
+    versionId: string,
+    options: SkillCloudOptions & { installTarget?: 'local' | 'remote' }
+  ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
+    return this.requireSkillCloudService().createPackageVersionDownloadGrant(
+      packageId,
+      versionId,
+      options
+    )
+  }
+
+  getSkillPackage(
+    packageId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<SkillCloudPackageDetails>> {
+    return this.requireSkillCloudService().getPackage(packageId, options)
+  }
+
+  listOwnedSkillShares(options: SkillCloudOptions) {
+    return this.requireSkillCloudService().listOwnedShares(options)
+  }
+
+  revokeSkillShare(
+    shareId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().revokeShare(shareId, options)
+  }
+
+  deleteSkillPackageVersion(
+    packageId: string,
+    versionId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().deleteVersion(packageId, versionId, options)
+  }
+
+  deleteSkillPackage(
+    packageId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().deletePackage(packageId, options)
+  }
+
+  async installSharedSkillRequest(
+    request: SkillInstallRequest,
+    signal?: AbortSignal
+  ): Promise<SkillInstallResult> {
+    if (this.skillInstallOperations.has(request.operationId)) {
+      throw new Error('skill-install-operation-in-progress')
+    }
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    if (signal?.aborted) {
+      abort()
+    } else {
+      signal?.addEventListener('abort', abort, { once: true })
+    }
+    this.skillInstallOperations.set(request.operationId, controller)
+    try {
+      return await this.executeSharedSkillInstall(request, controller.signal)
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      if (this.skillInstallOperations.get(request.operationId) === controller) {
+        this.skillInstallOperations.delete(request.operationId)
+      }
+    }
+  }
+
+  async installSharedSkillBundleRequest(
+    request: SkillBundleInstallRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: SkillBundleInstallProgress) => void
+  ): Promise<SkillBundleInstallResult> {
+    if (this.skillInstallOperations.has(request.operationId)) {
+      throw new Error('skill-install-operation-in-progress')
+    }
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    if (signal?.aborted) {
+      abort()
+    } else {
+      signal?.addEventListener('abort', abort, { once: true })
+    }
+    this.skillInstallOperations.set(request.operationId, controller)
+    const reportProgress = (progress: SkillBundleInstallProgress): void => {
+      this.skillInstallProgress.set(request.operationId, progress)
+      try {
+        onProgress?.(progress)
+      } catch {
+        // Why: renderer teardown must not change the host-owned install outcome.
+      }
+    }
+    try {
+      const runtimeId = this.getStatus().runtimeId
+      const sshTarget = await this.resolveSkillSshTarget(request.destination)
+      if (sshTarget) {
+        return installSkillBundleOnSshHost({
+          provider: sshTarget.provider,
+          userDataPath: app.getPath('userData'),
+          request: {
+            ...request,
+            destination:
+              request.destination.scope === 'global'
+                ? { scope: 'global', executionTarget: { kind: 'host' } }
+                : request.destination
+          },
+          workspace: sshTarget.workspace,
+          requireHttps: app.isPackaged,
+          signal: controller.signal,
+          onProgress: reportProgress
+        })
+      }
+      await this.skillTransactionRecovery
+      const allowedDownloadOrigins = ['https://storage.googleapis.com']
+      if (!app.isPackaged && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+        allowedDownloadOrigins.push(
+          ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean)
+        )
+      }
+      return await executeSkillBundleInstallRequest(request, {
+        authority: this.skillInstallDestinationAuthority(runtimeId),
+        stateDirectory: app.getPath('userData'),
+        allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
+        requireHttps: app.isPackaged,
+        resolveStagedUpload: (uploadId, identity) =>
+          this.requireSkillUploadSessions().take(uploadId, identity),
+        detectProviders: detectInstalledAgentsWithShellPathHydration,
+        resolveProviderRootOverrides: (destination) =>
+          this.resolveSkillProviderRootOverrides(destination),
+        signal: controller.signal,
+        onProgress: reportProgress
+      })
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      if (this.skillInstallOperations.get(request.operationId) === controller) {
+        this.skillInstallOperations.delete(request.operationId)
+      }
+      this.skillInstallProgress.delete(request.operationId)
+    }
+  }
+
+  getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null {
+    return this.skillInstallProgress.get(operationId) ?? null
+  }
+
+  cancelSharedSkillInstall(operationId: string): boolean {
+    const operation = this.skillInstallOperations.get(operationId)
+    operation?.abort()
+    return Boolean(operation)
+  }
+
+  private async executeSharedSkillInstall(
+    request: SkillInstallRequest,
+    signal: AbortSignal
+  ): Promise<SkillInstallResult> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return installSkillOnSshHost({
+        provider: sshTarget.provider,
+        userDataPath: app.getPath('userData'),
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace,
+        requireHttps: app.isPackaged,
+        signal
+      })
+    }
+    await this.skillTransactionRecovery
+    const allowedDownloadOrigins = ['https://storage.googleapis.com']
+    if (!app.isPackaged && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+      allowedDownloadOrigins.push(
+        ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean)
+      )
+    }
+    return executeSkillInstallRequest(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
+      requireHttps: app.isPackaged,
+      resolveStagedUpload: (uploadId, identity) =>
+        this.requireSkillUploadSessions().take(uploadId, identity),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination),
+      signal
+    })
+  }
+
+  async previewSharedSkillInstallRequest(
+    request: SkillInstallPreviewRequest
+  ): Promise<SkillInstallPreview> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return previewSkillInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
+      })
+    }
+    await this.skillTransactionRecovery
+    return previewSharedSkillInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async previewSharedSkillBundleInstallRequest(
+    request: SkillBundleInstallPreviewRequest
+  ): Promise<SkillBundleInstallPreview> {
+    if (await this.resolveSkillSshTarget(request.destination)) {
+      const previews: SkillInstallPreview[] = []
+      for (let offset = 0; offset < request.selectedSkills.length; offset += 8) {
+        const batch = request.selectedSkills.slice(offset, offset + 8)
+        previews.push(
+          ...(await Promise.all(
+            batch.map((skill) =>
+              this.previewSharedSkillInstallRequest({
+                package: {
+                  packageId: request.package.packageId,
+                  versionId: request.package.versionId,
+                  packageDigest: skill.digest,
+                  archiveSha256: request.package.archiveSha256,
+                  compressedBytes: request.package.compressedBytes
+                },
+                name: skill.name,
+                destination: request.destination
+              })
+            )
+          ))
+        )
+      }
+      return SkillBundleInstallPreviewSchema.parse({
+        packageId: request.package.packageId,
+        versionId: request.package.versionId,
+        bundleDigest: request.package.bundleDigest,
+        destinationIdentity: previews[0]?.destinationIdentity ?? '',
+        skills: request.selectedSkills.map((skill, index) => ({
+          ...skill,
+          currentState: previews[index].currentState
+        }))
+      })
+    }
+    await this.skillTransactionRecovery
+    const runtimeId = this.getStatus().runtimeId
+    return previewSharedSkillBundleInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return removeSkillInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
+      })
+    }
+    await this.skillTransactionRecovery
+    return removeSharedSkillInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
+    if (connectionId) {
+      const provider = this.requireSkillSshProvider(connectionId)
+      return listSkillInstallsOnSshHost({
+        provider,
+        connectionId,
+        workspaces: await this.listSkillSshWorkspaces(connectionId)
+      })
+    }
+    await this.skillTransactionRecovery
+    const runtimeId = this.getStatus().runtimeId
+    const [installs, worktrees] = await Promise.all([
+      listManagedSkillInstalls(join(app.getPath('userData'), 'skill-installs'), {
+        observeReceipt: async (receipt) => {
+          if (!receipt.wslDistro) {
+            return nativeSkillInstallFilesystem.observeSkill(
+              receipt.canonicalPath,
+              receipt.fileModes
+            )
+          }
+          const filesystem = new WslSkillInstallFilesystem(receipt.wslDistro, [
+            dirname(receipt.canonicalPath)
+          ])
+          return filesystem.observeSkill(receipt.canonicalPath, receipt.fileModes)
+        }
+      }),
+      this.listResolvedWorktrees()
+    ])
+    const folderWorkspaces = this.listFolderWorkspaces()
+    return installs.flatMap((install): ManagedSkillInstall[] => {
+      if (install.scope === 'global') {
+        const wslPrefix = `global:${runtimeId}:wsl:`
+        return [
+          {
+            ...install,
+            destination: install.destinationIdentity.startsWith(wslPrefix)
+              ? {
+                  scope: 'global',
+                  executionTarget: {
+                    kind: 'wsl',
+                    distro: install.destinationIdentity.slice(wslPrefix.length)
+                  }
+                }
+              : { scope: 'global' }
+          }
+        ]
+      }
+      const worktree = worktrees.find(
+        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
+      )
+      if (worktree) {
+        return [{ ...install, destination: { scope: 'workspace', worktreeId: worktree.id } }]
+      }
+      const folder = folderWorkspaces.find(
+        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
+      )
+      return folder
+        ? [{ ...install, destination: { scope: 'workspace', folderWorkspaceId: folder.id } }]
+        : []
+    })
+  }
+
+  async skillInstallDestinationUsesSsh(
+    destination: SkillInstallRequest['destination']
+  ): Promise<boolean> {
+    return Boolean(await this.resolveSkillSshTarget(destination))
+  }
+
+  async resolveSkillDiscoveryProviderRoots(target: {
+    kind: 'native-host' | 'wsl'
+    distro?: string
+  }): Promise<SkillProviderRootOverrides> {
+    const roots = await this.resolveSkillProviderRootOverrides({
+      scope: 'global',
+      homeDirectory: homedir(),
+      ...(target.kind === 'wsl' && target.distro ? { wslDistro: target.distro } : {})
+    })
+    if (target.kind !== 'wsl') {
+      return roots
+    }
+    return Object.fromEntries(
+      Object.entries(roots).map(([provider, root]) => [provider, toLinuxPath(root)])
+    )
+  }
+
+  private async resolveSkillProviderRootOverrides(destination: {
+    scope: 'global' | 'workspace'
+    homeDirectory: string
+    workspaceDirectory?: string
+    wslDistro?: string
+  }): Promise<SkillProviderRootOverrides> {
+    if (destination.scope !== 'global') {
+      return {}
+    }
+    const wslGrokRoot = destination.wslDistro
+      ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
+      : null
+    const roots: SkillProviderRootOverrides = destination.wslDistro
+      ? wslGrokRoot
+        ? { grok: wslGrokRoot }
+        : {}
+      : resolveEnvironmentSkillProviderRoots()
+    const claudeConfigDirectory = this.accountServices?.claudeAccounts.getRuntimeConfigDir(
+      destination.wslDistro
+        ? { runtime: 'wsl', wslDistro: destination.wslDistro }
+        : { runtime: 'host' }
+    )
+    return withClaudeSkillProviderRoot(roots, claudeConfigDirectory)
+  }
+
+  private skillInstallDestinationAuthority(runtimeId: string): SkillInstallDestinationAuthority {
+    return {
+      environmentId: runtimeId,
+      homeDirectory: homedir(),
+      resolveWorktree: async (id) => {
+        const repo = this.listRepos().find(
+          (candidate) => candidate.id === getRepoIdFromWorktreeId(id)
+        )
+        if (repo?.connectionId) {
+          throw new Error('skill-install-ssh-dispatch-required')
+        }
+        const projectRuntime = this.resolveProjectRuntimeForWorktree(id)
+        const worktree = await this.showManagedWorktree(`id:${id}`)
+        if (worktree.id !== id) {
+          return null
+        }
+        return {
+          id,
+          path: worktree.path,
+          ...(projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+            ? { wslDistro: projectRuntime.runtime.distro }
+            : {})
+        }
+      },
+      resolveFolderWorkspace: async (id) => {
+        const workspace = this.listFolderWorkspaces().find((candidate) => candidate.id === id)
+        if (!workspace || workspace.connectionId) {
+          return null
+        }
+        return {
+          id,
+          path: workspace.folderPath,
+          ...(parseWslUncPath(workspace.folderPath)?.distro
+            ? { wslDistro: parseWslUncPath(workspace.folderPath)!.distro }
+            : {})
+        }
+      },
+      resolveWsl: async (distro) => {
+        if (process.platform !== 'win32') {
+          return null
+        }
+        const homeDirectory = getWslHome(distro)
+        return homeDirectory ? { homeDirectory } : null
+      }
+    }
+  }
+
+  private async resolveSkillSshTarget(destination: SkillInstallRequest['destination']): Promise<{
+    provider: IPtyProvider
+    workspace?: SkillSshWorkspaceAuthority
+  } | null> {
+    if (destination.scope === 'global') {
+      return destination.executionTarget?.kind === 'ssh'
+        ? { provider: this.requireSkillSshProvider(destination.executionTarget.connectionId) }
+        : null
+    }
+    if (destination.worktreeId) {
+      const repo = this.listRepos().find(
+        (candidate) => candidate.id === getRepoIdFromWorktreeId(destination.worktreeId!)
+      )
+      if (!repo?.connectionId) {
+        return null
+      }
+      const worktree = await this.showManagedWorktree(`id:${destination.worktreeId}`)
+      if (worktree.id !== destination.worktreeId) {
+        throw new Error('skill-install-workspace-not-found')
+      }
+      return {
+        provider: this.requireSkillSshProvider(repo.connectionId),
+        workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
+      }
+    }
+    const folder = this.listFolderWorkspaces().find(
+      (candidate) => candidate.id === destination.folderWorkspaceId
+    )
+    if (!folder?.connectionId) {
+      return null
+    }
+    return {
+      provider: this.requireSkillSshProvider(folder.connectionId),
+      workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
+    }
+  }
+
+  private requireSkillSshProvider(connectionId: string): IPtyProvider {
+    const provider = this.getSshProviderFn?.(connectionId)
+    if (!provider?.requestHostRpc) {
+      throw new Error('skill-install-ssh-relay-unavailable')
+    }
+    return provider
+  }
+
+  private async listSkillSshWorkspaces(
+    connectionId: string
+  ): Promise<SkillSshWorkspaceAuthority[]> {
+    const repos = new Map(
+      this.listRepos()
+        .filter((repo) => repo.connectionId === connectionId)
+        .map((repo) => [repo.id, repo])
+    )
+    const worktrees = (await this.listResolvedWorktrees())
+      .filter((worktree) => repos.has(getRepoIdFromWorktreeId(worktree.id)))
+      .map(
+        (worktree): SkillSshWorkspaceAuthority => ({
+          kind: 'worktree',
+          id: worktree.id,
+          path: worktree.path
+        })
+      )
+    const folders = this.listFolderWorkspaces()
+      .filter((folder) => folder.connectionId === connectionId)
+      .map(
+        (folder): SkillSshWorkspaceAuthority => ({
+          kind: 'folder',
+          id: folder.id,
+          path: folder.folderPath
+        })
+      )
+    return [...worktrees, ...folders]
+  }
+
+  beginSkillUpload(request: SkillUploadBeginRequest): Promise<{
+    uploadId: string
+    chunkBytes: number
+    acknowledgedOffset: number
+  }> {
+    return this.requireSkillUploadSessions().begin(request)
+  }
+
+  appendSkillUploadChunk(
+    request: SkillUploadChunkRequest
+  ): Promise<{ acknowledgedOffset: number }> {
+    return this.requireSkillUploadSessions().append(request)
+  }
+
+  commitSkillUpload(uploadId: string): Promise<{ uploadId: string }> {
+    return this.requireSkillUploadSessions().commit(uploadId)
+  }
+
+  cancelSkillUpload(uploadId: string): Promise<void> {
+    return this.requireSkillUploadSessions().cancel(uploadId)
+  }
+
   listArtifacts(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
     return this.requireArtifactService().list(options)
   }
@@ -4647,6 +5540,20 @@ export class OrcaRuntimeService {
       throw new Error('Artifact service is unavailable.')
     }
     return this.artifactService
+  }
+
+  private requireSkillCloudService(): SkillCloudService {
+    if (!this.skillCloudService) {
+      throw new Error('Skill Cloud service is unavailable.')
+    }
+    return this.skillCloudService
+  }
+
+  private requireSkillUploadSessions(): SkillUploadSessionService {
+    this.skillUploadSessions ??= new SkillUploadSessionService(
+      join(app.getPath('userData'), 'skill-installs', 'remote-uploads')
+    )
+    return this.skillUploadSessions
   }
 
   getRuntimeId(): string {
@@ -4869,6 +5776,9 @@ export class OrcaRuntimeService {
       if (!workspace) {
         return null
       }
+      if (workspace.executionHostId != null) {
+        return parseExecutionHostId(workspace.executionHostId)?.id ?? null
+      }
       const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
@@ -4916,6 +5826,48 @@ export class OrcaRuntimeService {
     return worktreeIds
   }
 
+  // Every execution host known to this runtime; knowledge is not coverage.
+  private listKnownExecutionHostIds(
+    additionalHostIds: Iterable<ExecutionHostId> = [],
+    includeConfiguredHosts = true
+  ): Set<ExecutionHostId> {
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
+      hostIds.add(hostId)
+    }
+    for (const hostId of additionalHostIds) {
+      hostIds.add(hostId)
+    }
+    if (!includeConfiguredHosts) {
+      return hostIds
+    }
+    const repos = this.store?.getRepos?.() ?? []
+    for (const repo of repos) {
+      hostIds.add(getRepoExecutionHostId(repo))
+    }
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    for (const workspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      if (workspace.executionHostId != null) {
+        const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
+        if (explicitHostId) {
+          hostIds.add(explicitHostId)
+        }
+        continue
+      }
+      const connection = inferFolderWorkspacePathConnection({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        connectionId: workspace.connectionId ?? null,
+        projectGroups,
+        repos
+      })
+      if (connection.kind === 'ssh') {
+        hostIds.add(toSshExecutionHostId(connection.connectionId))
+      }
+    }
+    return hostIds
+  }
+
   private getWorkspaceSessionHydrationTargets(
     includeAllPersistedWorktrees: boolean
   ): Map<string, WorkspaceSessionState> {
@@ -4932,7 +5884,7 @@ export class OrcaRuntimeService {
         ] as const
       })
     )
-    const hostIds = new Set<ExecutionHostId>(['local'])
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
@@ -5329,6 +6281,7 @@ export class OrcaRuntimeService {
   }
 
   private notifyReposChanged(): void {
+    wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
   }
@@ -5508,11 +6461,18 @@ export class OrcaRuntimeService {
 
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      if (
+        this.pendingHeadlessPromotionWindowId !== null &&
+        windowId !== this.pendingHeadlessPromotionWindowId
+      ) {
+        return
+      }
       // Why: promotion is a renderer reload of the same graph owner, not a new
       // runtime; stale handles must transition before the real window publishes.
       this.persistWindowlessPtyBindingsForDesktopAttach()
-      this.markRendererReloading(HEADLESS_RUNTIME_WINDOW_ID)
+      this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
+      this.beginGraphReload(windowId)
       return
     }
     if (this.authoritativeWindowId === null) {
@@ -5589,12 +6549,44 @@ export class OrcaRuntimeService {
     }
   }
 
-  syncWindowGraph(windowId: number, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult {
+  syncWindowGraph(
+    windowId: number,
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
+  ): RuntimeSyncWindowGraphResult {
+    if (
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      this.headlessGraphFallbackAvailable
+    ) {
+      if (windowId !== this.pendingHeadlessPromotionWindowId) {
+        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
+      }
+      // Why: a renderer may publish after a failed promotion was restored to
+      // headless authority; accepting that late healthy graph is self-healing.
+      this.attachWindow(windowId)
+    }
     if (this.authoritativeWindowId === null) {
       this.authoritativeWindowId = windowId
     }
     if (windowId !== this.authoritativeWindowId) {
       throw new Error('Runtime graph publisher does not match the authoritative window')
+    }
+    const rendererGeneration =
+      windowId === HEADLESS_RUNTIME_WINDOW_ID
+        ? null
+        : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
+          ? graph.rendererGeneration
+          : undefined
+    if (
+      typeof rendererGeneration === 'string' &&
+      rendererGeneration === this.rendererGeneration &&
+      this.graphStatus !== 'ready'
+    ) {
+      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+    }
+    if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      this.headlessGraphFallbackAvailable = true
+      this.rendererGeneration = null
     }
 
     const graphWasReady = this.graphStatus === 'ready'
@@ -5687,14 +6679,19 @@ export class OrcaRuntimeService {
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
+        const retainedIncarnation = oldLeaf?.ptyId
+          ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
+          : undefined
         if (
           preserveLivePtysDuringReload &&
           oldLeaf?.ptyId &&
-          this.handleByPtyId.has(oldLeaf.ptyId) &&
+          (this.handleByPtyId.has(oldLeaf.ptyId) ||
+            (retainedIncarnation &&
+              retainedIncarnation.incarnationId ===
+                this.ptysById.get(oldLeaf.ptyId)?.incarnationId)) &&
           !nextPtyIds.has(oldLeaf.ptyId)
         ) {
-          // Why: a CLI-created agent keeps using its exported handle even if
-          // the reloaded renderer has not rebound the pane yet.
+          // Why: the first reload graph can precede pane rebinding; the live PTY incarnation still owns its handle.
           nextLeaves.set(oldLeafKey, oldLeaf)
           nextPtyIds.add(oldLeaf.ptyId)
         } else if (oldLeaf?.ptyId && nextPtyIds.has(oldLeaf.ptyId)) {
@@ -5707,7 +6704,11 @@ export class OrcaRuntimeService {
           // no next owner — invalidate it so in-flight CLI waiters fail fast
           // instead of hanging on a dead leaf.
           const oldHandle = this.handleByLeafKey.get(oldLeafKey)
-          if (oldHandle !== undefined && oldHandle === this.handleByPtyId.get(oldLeaf.ptyId)) {
+          const incarnationHandle = retainedIncarnation?.handle
+          if (
+            oldHandle !== undefined &&
+            (oldHandle === this.handleByPtyId.get(oldLeaf.ptyId) || oldHandle === incarnationHandle)
+          ) {
             this.handleByLeafKey.delete(oldLeafKey)
           } else {
             this.invalidateLeafHandle(oldLeafKey)
@@ -5729,6 +6730,7 @@ export class OrcaRuntimeService {
 
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
+    this.reconcilePtyIncarnationHandles()
     // Why: the emitted client payload is a function of the stored snapshot AND
     // the tab/leaf graph (handles/titles/connected resolve from leaf state), so
     // a graph-only change — e.g. a restored leaf binding its ptyId while the
@@ -5763,9 +6765,10 @@ export class OrcaRuntimeService {
         this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
       }
     }
-    this.graphStatus = 'ready'
-    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
-    this.refreshWritableFlags()
+    this.markGraphReady(windowId)
+    if (rendererGeneration !== undefined) {
+      this.rendererGeneration = rendererGeneration
+    }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
       const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
@@ -7885,6 +8888,7 @@ export class OrcaRuntimeService {
       expectedPublicationEpoch?: string
       expectedTerminalHandle?: string
       clientNavigationId?: string
+      localPtyTeardownOwnedExternally?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionTabCloseResult> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
@@ -8037,7 +9041,11 @@ export class OrcaRuntimeService {
             ? this.rendererPublicationThrottle.acquire(win.webContents)
             : () => {}
         try {
-          await this.notifier.closeTerminalTab(tab.parentTabId)
+          await (options.localPtyTeardownOwnedExternally
+            ? this.notifier.closeTerminalTab(tab.parentTabId, {
+                localPtyTeardownOwnedExternally: true
+              })
+            : this.notifier.closeTerminalTab(tab.parentTabId))
         } finally {
           releasePublicationThrottle()
         }
@@ -9235,13 +10243,17 @@ export class OrcaRuntimeService {
       }
     >()
     const resolvedWorktrees = await this.listResolvedWorktrees()
-    const visibilitySourceMatchersByRepoId =
-      this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
+    const settings = this.store?.getSettings()
+    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+      resolvedWorktrees,
+      settings?.worktreeVisibilityDefaults
+    )
     for (const worktree of resolvedWorktrees) {
       if (
         !this.isRuntimeWorktreeVisible(
           worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId)
+          visibilitySourceMatchersByRepoId.get(worktree.repoId),
+          settings
         )
       ) {
         continue
@@ -9337,6 +10349,12 @@ export class OrcaRuntimeService {
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    if (retained?.handle === handle) {
+      this.handleByPtyIncarnation.delete(ptyId)
+    } else {
+      this.invalidatePtyIncarnationHandle(ptyId)
+    }
     this.handleByPtyId.set(ptyId, handle)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
@@ -9382,15 +10400,24 @@ export class OrcaRuntimeService {
   }
 
   private invalidateAllHandlesForPty(ptyId: string): void {
+    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    const preallocatedHandle = this.handleByPtyId.get(ptyId)
+    this.invalidatePtyIncarnationHandle(ptyId)
     this.handleByPtyId.delete(ptyId)
     const invalidated = new Set<string>()
+    if (preallocatedHandle && preallocatedHandle !== incarnationHandle) {
+      invalidated.add(preallocatedHandle)
+    }
     for (const [handle, record] of this.handles) {
       if (record.ptyId === ptyId) {
         invalidated.add(handle)
         this.handles.delete(handle)
-        this.syntheticTerminalHandles.delete(handle)
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
+    }
+    for (const handle of invalidated) {
+      this.handles.delete(handle)
+      this.syntheticTerminalHandles.delete(handle)
+      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
     }
     for (const [leafKey, handle] of this.handleByLeafKey) {
       if (invalidated.has(handle)) {
@@ -10831,7 +11858,9 @@ export class OrcaRuntimeService {
       (previous.payload.agentType ?? null) !== (payload.agentType ?? null) ||
       (previous.payload.toolName ?? null) !== (payload.toolName ?? null) ||
       (previous.payload.interactivePrompt ?? null) !== (payload.interactivePrompt ?? null) ||
-      (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false)
+      (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false) ||
+      (previous.payload.turnCompletedAt ?? null) !== (payload.turnCompletedAt ?? null) ||
+      (previous.payload.lastAssistantMessage ?? null) !== (payload.lastAssistantMessage ?? null)
     )
   }
 
@@ -13827,7 +14856,7 @@ export class OrcaRuntimeService {
     // Why: a cold restore can respawn under the same session id within the
     // delayed-Enter window; the armed Enter would inject \r into the
     // replacement and stamp rows it never received.
-    this.retirePendingMessageDeliveryForPty(ptyId)
+    this.retireOrchestrationMailboxDeliveryForPty(ptyId)
 
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
@@ -15669,6 +16698,12 @@ export class OrcaRuntimeService {
 
     return {
       terminals: listedTerminals,
+      hostScope: this.buildTerminalListHostScope(
+        targetWorktreeId,
+        matchingTerminals,
+        worktreesById.values(),
+        controllerInventory?.queriedHostIds ?? new Set()
+      ),
       ...(visualLayouts.length > 0 ? { visualLayouts } : {}),
       topologyRevisions: Object.fromEntries(
         [...new Set(matchingTerminals.map((terminal) => terminal.worktreeId))].map((worktreeId) => [
@@ -15678,6 +16713,52 @@ export class OrcaRuntimeService {
       ),
       totalCount: matchingTerminals.length,
       truncated: matchingTerminals.length > limit
+    }
+  }
+
+  // A worktree-scoped request answers for one host only, so name the hosts it
+  // skipped: absence from a scoped listing is not evidence a worker exited.
+  private buildTerminalListHostScope(
+    targetWorktreeId: string | null,
+    terminals: readonly RuntimeTerminalSummary[],
+    worktrees: Iterable<ResolvedWorktree>,
+    queriedHostIds: ReadonlySet<ExecutionHostId>
+  ): RuntimeTerminalListHostScope {
+    const knownHostIds = this.listKnownExecutionHostIds(
+      queriedHostIds,
+      targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID
+    )
+    let resolvedTargetHostId: ExecutionHostId | null = null
+    for (const worktree of worktrees) {
+      if (worktree.hostId) {
+        knownHostIds.add(worktree.hostId)
+        if (worktree.id === targetWorktreeId) {
+          resolvedTargetHostId = worktree.hostId
+        }
+      }
+    }
+    for (const terminal of terminals) {
+      if (terminal.executionHostId) {
+        knownHostIds.add(terminal.executionHostId)
+      }
+    }
+    const scopedHostId = targetWorktreeId
+      ? (resolvedTargetHostId ?? this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
+      : null
+    if (scopedHostId) {
+      knownHostIds.add(scopedHostId)
+    }
+    const candidates = targetWorktreeId ? (scopedHostId ? [scopedHostId] : []) : knownHostIds
+    // Paired runtimes own a separate control plane. Mirrored rows are evidence
+    // for those rows only; this runtime cannot claim their complete inventory.
+    const coveredHostIds = new Set(
+      [...candidates].filter(
+        (hostId) => queriedHostIds.has(hostId) && parseExecutionHostId(hostId)?.kind !== 'runtime'
+      )
+    )
+    return {
+      hostIds: [...coveredHostIds].sort(),
+      omittedHostIds: [...knownHostIds].filter((hostId) => !coveredHostIds.has(hostId)).sort()
     }
   }
 
@@ -16752,10 +17833,6 @@ export class OrcaRuntimeService {
   // verdict per ptyId serves the burst instead of a probe round-trip each call.
   private readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
   private readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
-  // Why: probe dedupe shares one promise across callers, but each caller's
-  // continuation would re-deliver the same unread rows; arm one per pty.
-  private readonly probeDeferredDeliveryPtyIds = new Set<string>()
-
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
       return this.ptyController?.hasPty?.(ptyId) === true
@@ -17460,7 +18537,7 @@ export class OrcaRuntimeService {
       suffixFailureError?: string
     } = {}
   ): Promise<void> {
-    const renderGate = this.createClaudeAgentPromptRenderGate(ptyId)
+    const renderGate = this.createAgentPromptRenderGate(ptyId)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
@@ -17511,17 +18588,18 @@ export class OrcaRuntimeService {
     }
   }
 
-  private createClaudeAgentPromptRenderGate(ptyId: string): {
+  private createAgentPromptRenderGate(ptyId: string): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'claude') {
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent
+    if (!isTerminalSendSettlementAgent(agent)) {
       return null
     }
     let armed = false
-    let observedMarker = false
+    let canSettle = false
     let settled = false
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
@@ -17550,19 +18628,27 @@ export class OrcaRuntimeService {
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
-      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+      quietTimer = setTimeout(finish, AGENT_PROMPT_RENDER_QUIET_MS)
+    }
+    const armHardTimer = (): void => {
+      if (hardTimer) {
+        clearTimeout(hardTimer)
+      }
+      hardTimer = setTimeout(finish, AGENT_PROMPT_RENDER_TIMEOUT_MS)
     }
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
       if (!armed || settled) {
         return
       }
-      if (!observedMarker) {
+      if (!canSettle) {
         const combined = markerCarry + data
-        markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
-        if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
+        markerCarry = combined.slice(-(AGENT_PROMPT_RENDER_MARKER.length - 1))
+        if (!combined.includes(AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
-        observedMarker = true
+        canSettle = true
+        // Why: a slow initial redraw must still receive the full settlement window.
+        armHardTimer()
       }
       armQuietTimer()
     })
@@ -17570,12 +18656,12 @@ export class OrcaRuntimeService {
       arm: () => {
         armed = true
         markerCarry = ''
+        armHardTimer()
       },
       wait: async () => {
         if (settled) {
           return
         }
-        hardTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS)
         await rendered
       },
       dispose: () => {
@@ -17861,7 +18947,10 @@ export class OrcaRuntimeService {
     })
   }
 
-  async getWorktreePs(limit = DEFAULT_WORKTREE_PS_LIMIT): Promise<{
+  async getWorktreePs(
+    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    sourceDefaultsSupported = true
+  ): Promise<{
     worktrees: RuntimeWorktreePsSummary[]
     totalCount: number
     truncated: boolean
@@ -17870,11 +18959,25 @@ export class OrcaRuntimeService {
       throw new Error('invalid_limit')
     }
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
+    const settings = this.store?.getSettings()
+    const visibilityDefaults = sourceDefaultsSupported
+      ? settings?.worktreeVisibilityDefaults
+      : settings?.worktreeVisibilityDefaults
+        ? { external: settings.worktreeVisibilityDefaults.external }
+        : undefined
+    const visibilitySettings = settings
+      ? { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
+      : undefined
     const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolvedWorktreeSnapshot.worktrees
+      resolvedWorktreeSnapshot.worktrees,
+      visibilityDefaults
     )
     const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
-      this.isRuntimeWorktreeVisible(worktree, visibilitySourceMatchersByRepoId.get(worktree.repoId))
+      this.isRuntimeWorktreeVisible(
+        worktree,
+        visibilitySourceMatchersByRepoId.get(worktree.repoId),
+        visibilitySettings
+      )
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
@@ -18897,7 +20000,6 @@ export class OrcaRuntimeService {
           badgeColor: DEFAULT_REPO_BADGE_COLOR,
           addedAt: Date.now(),
           kind: 'git',
-          externalWorktreeVisibility: 'hide',
           externalWorktreeVisibilityLegacy: false,
           ...(group
             ? {
@@ -19034,12 +20136,7 @@ export class OrcaRuntimeService {
       ...detected,
       addedAt: Date.now(),
       kind,
-      ...(kind === 'git'
-        ? {
-            externalWorktreeVisibility: 'hide' as const,
-            externalWorktreeVisibilityLegacy: false
-          }
-        : {})
+      ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
@@ -19155,12 +20252,7 @@ export class OrcaRuntimeService {
       ...detected,
       addedAt: Date.now(),
       kind: repoKind,
-      ...(repoKind === 'git'
-        ? {
-            externalWorktreeVisibility: 'hide' as const,
-            externalWorktreeVisibilityLegacy: false
-          }
-        : {})
+      ...(repoKind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
@@ -19329,7 +20421,6 @@ export class OrcaRuntimeService {
       ...detected,
       addedAt: Date.now(),
       kind: 'git',
-      externalWorktreeVisibility: 'hide',
       externalWorktreeVisibilityLegacy: false
     }
     this.store.addRepo(repo)
@@ -19377,7 +20468,6 @@ export class OrcaRuntimeService {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
-        | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
@@ -19388,6 +20478,7 @@ export class OrcaRuntimeService {
         | 'projectGroupOrder'
       >
     > & {
+      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
     }
@@ -19399,6 +20490,9 @@ export class OrcaRuntimeService {
     const sanitizedUpdates = omitUndefinedProperties(updates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
+    }
+    if ('externalWorktreeVisibility' in updates && updates.externalWorktreeVisibility === null) {
+      sanitizedUpdates.externalWorktreeVisibility = undefined
     }
     if (
       'externalWorktreeDiscoverySuppressedAt' in updates &&
@@ -21177,22 +22271,35 @@ export class OrcaRuntimeService {
 
   async listManagedWorktrees(
     repoSelector?: string,
-    limit = DEFAULT_WORKTREE_LIST_LIMIT
+    limit = DEFAULT_WORKTREE_LIST_LIMIT,
+    sourceDefaultsSupported = true
   ): Promise<RuntimeWorktreeListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const resolved = await this.listResolvedWorktrees()
     const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const visibilitySourceMatchersByRepoId =
-      this.buildRuntimeVisibilitySourceMatchersByRepoId(resolved)
+    const settings = this.store?.getSettings()
+    const visibilityDefaults = sourceDefaultsSupported
+      ? settings?.worktreeVisibilityDefaults
+      : settings?.worktreeVisibilityDefaults
+        ? { external: settings.worktreeVisibilityDefaults.external }
+        : undefined
+    const visibilitySettings = settings
+      ? { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
+      : undefined
+    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+      resolved,
+      visibilityDefaults
+    )
     const worktrees = resolved.filter((worktree) => {
       if (repoId && worktree.repoId !== repoId) {
         return false
       }
       return this.isRuntimeWorktreeVisible(
         worktree,
-        visibilitySourceMatchersByRepoId.get(worktree.repoId)
+        visibilitySourceMatchersByRepoId.get(worktree.repoId),
+        visibilitySettings
       )
     })
     return {
@@ -21202,27 +22309,66 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Keyed by repo id on the wire even though one repo is requested: the caller asked by selector
+   *  and needs to know which repo answered.
+   *
+   *  The tier watermark rides alongside the names rather than being expanded into them — expanding
+   *  it would put 552 strings per spent tier on the wire, which is what compaction exists to
+   *  avoid. A client predating the field reads the names only and under-retires, degrading to the
+   *  pre-retirement behavior for compacted tiers instead of breaking. */
+  async listRetiredWorktreeNames(repoSelector: string): Promise<{
+    retiredNamesByRepo: Record<string, readonly string[]>
+    retiredNameTiersByRepo: Record<string, number>
+  }> {
+    const store = this.store
+    if (!store) {
+      return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
+    }
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const settings = store.getSettings()
+    const registry: RetiredNameRegistry = await getRetiredNameRegistryForRepo(
+      store,
+      repo,
+      store.getRepos(),
+      settings
+    )
+    return {
+      retiredNamesByRepo: { [repo.id]: registry.names },
+      retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
+    }
+  }
+
   async listDetectedManagedWorktrees(
     repoSelector: string,
-    connectionId?: string | null
+    connectionId?: string | null,
+    sourceDefaultsSupported = true
   ): Promise<DetectedWorktreeListResult> {
     return this.listDetectedWorktreesForResolvedRepo(
-      await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
+      await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
+      sourceDefaultsSupported
     )
   }
 
   private async listDetectedWorktreesForResolvedRepo(
-    repo: Repo
+    repo: Repo,
+    sourceDefaultsSupported = true
   ): Promise<DetectedWorktreeListResult> {
     const store = this.requireStore()
+    const settings = store.getSettings()
+    const visibilityDefaults = sourceDefaultsSupported
+      ? settings.worktreeVisibilityDefaults
+      : settings.worktreeVisibilityDefaults
+        ? { external: settings.worktreeVisibilityDefaults.external }
+        : undefined
+    const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
-        normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+        resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
       )
       const detected = worktrees.map((worktree) =>
-        this.toRuntimeDetectedWorktree(repo, worktree, matcher)
+        this.toRuntimeDetectedWorktree(repo, worktree, matcher, visibilitySettings)
       )
       return {
         repoId: repo.id,
@@ -21242,7 +22388,7 @@ export class OrcaRuntimeService {
     }
     const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
-      normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
     )
     const detected = scan.worktrees.map((gitWorktree) => {
       const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -21254,7 +22400,8 @@ export class OrcaRuntimeService {
       const detectedWorktree = this.toRuntimeDetectedWorktree(
         repo,
         worktree,
-        worktreeVisibilitySourceMatcher
+        worktreeVisibilitySourceMatcher,
+        visibilitySettings
       )
       if (scan.ok) {
         return detectedWorktree
@@ -21321,17 +22468,20 @@ export class OrcaRuntimeService {
 
   private isRuntimeWorktreeVisible(
     worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
+    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
+    settings?: ReturnType<RuntimeStore['getSettings']>
   ): boolean {
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo || !this.store) {
       return true
     }
-    return this.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher).visible
+    return this.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher, settings)
+      .visible
   }
 
   private buildRuntimeVisibilitySourceMatchersByRepoId(
-    worktrees: readonly Worktree[]
+    worktrees: readonly Worktree[],
+    visibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
   ): Map<string, WorktreeVisibilitySourceMatcher> {
     const checkoutPathsByRepoId = new Map<string, string[]>()
     for (const worktree of worktrees) {
@@ -21346,7 +22496,7 @@ export class OrcaRuntimeService {
           repo.id,
           createWorktreeVisibilitySourceMatcher(
             [repo.path, ...(checkoutPathsByRepoId.get(repo.id) ?? [])],
-            normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+            resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
           )
         ])
     )
@@ -21355,9 +22505,10 @@ export class OrcaRuntimeService {
   private toRuntimeDetectedWorktree(
     repo: Repo,
     worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
+    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>
   ): DetectedWorktree {
-    const settings = this.store?.getSettings()
+    const settings = providedSettings ?? this.store?.getSettings()
     if (!settings) {
       return {
         ...worktree,
@@ -22029,7 +23180,7 @@ export class OrcaRuntimeService {
       if (replay) {
         observeData(replay)
       }
-      hardTimer = setTimeout(() => finish(null), DRAFT_PASTE_READY_TIMEOUT_MS)
+      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
     })
   }
 
@@ -22052,6 +23203,9 @@ export class OrcaRuntimeService {
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
+    /** True only when `name` came from Orca's creature-name generator; gates retirement so a name
+     *  the user typed stays reusable. Absent for CLI and automation callers. */
+    nameWasGenerated?: boolean
     baseBranch?: string
     compareBaseRef?: string
     branchNameOverride?: string
@@ -22389,13 +23543,35 @@ export class OrcaRuntimeService {
     let branchConflictKind: 'local' | 'remote' | null = null
     let worktreePath = ''
     let worktreePathResolved = false
+    const shouldRetireGeneratedName =
+      args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+    const retiredNameRegistry = shouldRetireGeneratedName
+      ? await getRetiredNameRegistryForRepo(this.store, repo, this.store.getRepos(), settings)
+      : null
+    const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
     // Why: runtime/mobile create-from-review callers should get a new workspace
     // even when the PR branch or review branch name is already in use.
-    for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
-      effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
-      effectiveRequestedName = args.name.trim()
-        ? getWorktreeCreateCandidate(args.name, suffix)
-        : effectiveSanitizedName
+    for (
+      let suffix = 1, attempts = 0;
+      attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
+      suffix += 1
+    ) {
+      effectiveSanitizedName = shouldRetireGeneratedName
+        ? getGeneratedWorktreeCreateCandidate(
+            sanitizedName,
+            suffix,
+            retiredNameRegistry?.exhaustedTiers
+          )
+        : getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveRequestedName = shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : args.name.trim()
+          ? getWorktreeCreateCandidate(args.name, suffix)
+          : effectiveSanitizedName
+      if (isRetiredName?.(effectiveSanitizedName)) {
+        continue
+      }
+      attempts += 1
       branchName = await resolveCreateBranchName(
         repo.path,
         selectedExistingLocalBranchName ??
@@ -22597,19 +23773,11 @@ export class OrcaRuntimeService {
       ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
     }
     const defaultAddWorktreeOption = addProjectGitOptions()
-    const addResult: AddWorktreeResult =
-      (await (sparseDirectories.length > 0
-        ? checkoutExistingBranch
-          ? addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+    let addResult: AddWorktreeResult
+    try {
+      addResult =
+        (await (sparseDirectories.length > 0
+          ? checkoutExistingBranch
             ? addSparseWorktree(
                 repo.path,
                 worktreePath,
@@ -22617,9 +23785,9 @@ export class OrcaRuntimeService {
                 sparseDirectories,
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addSparseWorktree(
                   repo.path,
                   worktreePath,
@@ -22627,9 +23795,9 @@ export class OrcaRuntimeService {
                   sparseDirectories,
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addSparseWorktree(
                     repo.path,
                     worktreePath,
@@ -22637,27 +23805,27 @@ export class OrcaRuntimeService {
                     sparseDirectories,
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addSparseWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    sparseDirectories,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  )
-        : checkoutExistingBranch
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+                : defaultAddWorktreeOption
+                  ? addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      defaultAddWorktreeOption
+                    )
+                  : addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    )
+          : checkoutExistingBranch
             ? addWorktree(
                 repo.path,
                 worktreePath,
@@ -22665,9 +23833,9 @@ export class OrcaRuntimeService {
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
                 false,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addWorktree(
                   repo.path,
                   worktreePath,
@@ -22675,9 +23843,9 @@ export class OrcaRuntimeService {
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
                   false,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addWorktree(
                     repo.path,
                     worktreePath,
@@ -22685,15 +23853,36 @@ export class OrcaRuntimeService {
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
                     false,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  ))) ?? {}
+                : defaultAddWorktreeOption
+                  ? addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      false,
+                      defaultAddWorktreeOption
+                    )
+                  : addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    ))) ?? {}
+    } catch (error) {
+      if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
+        await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
+      }
+      throw error
+    }
+
+    // Why: fallible metadata work after creation must not leave a real workspace name reusable.
+    if (shouldRetireGeneratedName) {
+      await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
+    }
 
     let configuredPushTarget: GitPushTarget | undefined
     if (preparedPushTarget) {
@@ -23162,6 +24351,7 @@ export class OrcaRuntimeService {
     repo: Repo,
     args: {
       name: string
+      nameWasGenerated?: boolean
       baseBranch?: string
       compareBaseRef?: string
       branchNameOverride?: string
@@ -23213,6 +24403,7 @@ export class OrcaRuntimeService {
       {
         repoId: repo.id,
         name: args.name,
+        ...(args.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
         ...(args.displayName ? { displayName: args.displayName } : {}),
         ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
         ...(args.compareBaseRef ? { compareBaseRef: args.compareBaseRef } : {}),
@@ -27310,6 +28501,42 @@ export class OrcaRuntimeService {
     return count
   }
 
+  private getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
+    const ptyIds = new Set<string>()
+    for (const pty of this.ptysById.values()) {
+      if (pty.connected && pty.worktreeId === worktreeId && pty.tabId === tabId) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
+        ptyIds.add(leaf.ptyId)
+      }
+    }
+    return [...ptyIds]
+  }
+
+  private async stopExplicitlyClosedTabPtys(
+    ptyIds: readonly string[],
+    addressedPtyId: string
+  ): Promise<boolean> {
+    let addressedPtyStopped = false
+    const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
+    for (const ptyId of ptyIds) {
+      let verifiedStopped = false
+      try {
+        verifiedStopped = (await this.ptyController?.stopAndWait?.(ptyId, { deadlineMs })) ?? false
+      } catch {
+        // Why: verified teardown is preferred, but its transport failure must not suppress the legacy provider kill.
+      }
+      const stopped = verifiedStopped || (this.ptyController?.kill(ptyId) ?? false)
+      if (ptyId === addressedPtyId) {
+        addressedPtyStopped = stopped
+      }
+    }
+    return addressedPtyStopped
+  }
+
   private resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {
@@ -27491,6 +28718,27 @@ export class OrcaRuntimeService {
       const siblingCount = surface?.tab.parentLayout
         ? countTerminalLayoutLeaves(surface.tab.parentLayout.root)
         : this.countLeavesInTab(tabId)
+      if (siblingCount <= 1 && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        try {
+          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+            localPtyTeardownOwnedExternally: true
+          })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            throw error
+          }
+          this.notifier.closeTerminal?.(tabId)
+        }
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
+      if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return { handle, tabId, ptyKilled }
+      }
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
@@ -27511,13 +28759,23 @@ export class OrcaRuntimeService {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    let ptyKilled = false
-    if (leaf.ptyId) {
-      ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
-    }
     // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
-    if (!ptyKilled || siblingCount <= 1) {
+    const ptyIdsToKill =
+      siblingCount <= 1
+        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
+        : leaf.ptyId
+          ? [leaf.ptyId]
+          : []
+    if (siblingCount <= 1 && this.notifier?.closeTerminalTab) {
+      await this.notifier.closeTerminalTab(leaf.tabId, {
+        localPtyTeardownOwnedExternally: true
+      })
+    }
+    const ptyKilled = leaf.ptyId
+      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
+      : false
+    if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
     return { handle, tabId: leaf.tabId, ptyKilled }
@@ -27744,9 +29002,17 @@ export class OrcaRuntimeService {
         // Best-effort fallback below preserves the original split authority error.
       }
       if (!stopped) {
-        this.ptyController.kill(result.id)
+        try {
+          this.ptyController.kill(result.id)
+        } catch {
+          // Best-effort cleanup; retirement below still runs and the original error still throws.
+        }
       }
-      this.ptyController.retireRejectedPty?.(result.id)
+      try {
+        this.ptyController.retireRejectedPty?.(result.id)
+      } catch {
+        // Best-effort cleanup; preserve the original split authority error.
+      }
       throw error
     }
     const committedSourceAuthority = sourceAuthority.persisted
@@ -28571,36 +29837,124 @@ export class OrcaRuntimeService {
     return false
   }
 
-  markRendererReloading(windowId: number): void {
+  markRendererReloading(windowId: number): RuntimeRendererReloadFence | null {
+    if (
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      this.headlessGraphFallbackAvailable
+    ) {
+      this.attachWindow(windowId)
+      const revision = this.graphReloadLifecycle.getActiveRevision()
+      return this.authoritativeWindowId === windowId && revision !== null
+        ? { revision, recovery: 'headless' }
+        : null
+    }
     if (windowId !== this.authoritativeWindowId) {
-      return
+      return null
+    }
+    if (this.graphStatus === 'reloading') {
+      return {
+        revision: this.graphReloadLifecycle.begin(windowId),
+        recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
+      }
     }
     if (this.graphStatus !== 'ready') {
-      return
+      return null
     }
-    // Why: a renderer reload tears down the live graph, so live handles must go stale immediately, not be reused against the rebuild.
+    return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
+  }
+
+  private beginGraphReload(windowId: number): number {
+    // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
+    const revision = this.graphReloadLifecycle.begin(windowId)
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+    const retainedHandles = new Set([
+      ...this.handleByPtyId.values(),
+      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
+    ])
+    for (const handle of this.waitersByHandle.keys()) {
+      if (!retainedHandles.has(handle)) {
+        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
-    // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
-    this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
+    return revision
+  }
+
+  markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
+    if (
+      windowId !== this.authoritativeWindowId ||
+      this.graphStatus !== 'reloading' ||
+      !this.graphReloadLifecycle.settle(fence.revision, 'cancelled')
+    ) {
+      return false
+    }
+    if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {
+      this.restoreHeadlessGraphAuthority()
+      return false
+    }
+    if (fence.recovery === 'renderer') {
+      this.graphStatus = 'ready'
+      this.setTerminalSideEffectConsumerAvailable(true)
+      for (const leaf of this.leaves.values()) {
+        this.adoptPreAllocatedHandle(leaf)
+      }
+      this.reconcilePtyIncarnationHandles()
+      this.refreshWritableFlags()
+      return true
+    }
+    this.graphReloadLifecycle.begin(windowId)
+    return false
   }
 
   markGraphReady(windowId: number): void {
     if (windowId !== this.authoritativeWindowId) {
       return
     }
+    this.graphReloadLifecycle.settleActive('success')
+    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
+      this.headlessGraphFallbackAvailable = false
+      this.pendingHeadlessPromotionWindowId = null
+    }
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
   }
 
-  markGraphUnavailable(windowId: number): void {
+  markGraphReloadFailed(
+    windowId: number,
+    _reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
+  ): void {
     if (windowId !== this.authoritativeWindowId) {
+      return
+    }
+    if (this.graphStatus === 'ready') {
+      this.beginGraphReload(windowId)
+    }
+    this.graphReloadLifecycle.settleActive('failure')
+    this.transitionGraphReloadToTerminalState(windowId)
+  }
+
+  markGraphUnavailable(windowId: number): void {
+    if (
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      windowId === this.pendingHeadlessPromotionWindowId
+    ) {
+      this.pendingHeadlessPromotionWindowId = null
+      return
+    }
+    if (windowId !== this.authoritativeWindowId) {
+      return
+    }
+    this.graphReloadLifecycle.settleActive('cancelled')
+    if (this.shouldRestoreHeadlessGraph(windowId)) {
+      this.pendingHeadlessPromotionWindowId = null
+      this.restoreHeadlessGraphAuthority()
       return
     }
     // Why: once the authoritative renderer graph disappears, fail closed for live-terminal ops instead of guessing from old state.
@@ -28616,8 +29970,54 @@ export class OrcaRuntimeService {
     this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
     // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
     this.rejectAllWaiters('terminal_handle_stale')
+  }
+
+  private handleGraphReloadTimeout(windowId: number): void {
+    if (windowId !== this.authoritativeWindowId || this.graphStatus !== 'reloading') {
+      return
+    }
+    this.transitionGraphReloadToTerminalState(windowId)
+  }
+
+  private transitionGraphReloadToTerminalState(windowId: number): void {
+    if (this.shouldRestoreHeadlessGraph(windowId)) {
+      this.restoreHeadlessGraphAuthority()
+      return
+    }
+    this.graphStatus = 'unavailable'
+    this.setTerminalSideEffectConsumerAvailable(false)
+    this.rememberDetachedPreAllocatedLeaves()
+    this.tabs.clear()
+    this.leaves.clear()
+    this.leavesByPtyId.clear()
+    this.handles.clear()
+    this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
+    this.rejectAllWaiters('terminal_handle_stale')
+    this.refreshWritableFlags()
+  }
+
+  private shouldRestoreHeadlessGraph(windowId: number): boolean {
+    return windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.headlessGraphFallbackAvailable
+  }
+
+  private restoreHeadlessGraphAuthority(): void {
+    this.rendererGraphEpoch += 1
+    this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
+    this.graphStatus = 'ready'
+    this.rendererGeneration = null
+    this.setTerminalSideEffectConsumerAvailable(false)
+    this.tabs.clear()
+    this.leaves.clear()
+    this.leavesByPtyId.clear()
+    this.handles.clear()
+    this.handleByLeafKey.clear()
+    this.clearPtyIncarnationHandles()
+    this.rejectAllWaiters('terminal_handle_stale')
+    this.refreshWritableFlags()
   }
 
   private assertGraphReady(): void {
@@ -28829,6 +30229,15 @@ export class OrcaRuntimeService {
 
   private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    // Why only `id:`: every other selector kind is matched across the whole fleet, and their
+    // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
+    // winner where today they correctly refuse. An `id:` selector already names its repo.
+    if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
+      const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+      if (scoped) {
+        return scoped
+      }
+    }
     const worktrees = await this.listResolvedWorktrees()
     let candidates: ResolvedWorktree[]
 
@@ -29416,6 +30825,11 @@ export class OrcaRuntimeService {
     return resolved
   }
 
+  /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
+  private hasFreshResolvedWorktreeCache(): boolean {
+    return Boolean(this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > Date.now())
+  }
+
   private async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
     return (await this.listResolvedWorktreeSnapshot()).worktrees
   }
@@ -29457,71 +30871,11 @@ export class OrcaRuntimeService {
         getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
       ])
     )
+    const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
-      repos.map(async (repo) => {
-        if (isFolderRepo(repo)) {
-          return listRuntimeFolderWorkspaces(this.requireStore(), repo).map((worktree) => ({
-            ...worktree,
-            hostId: worktree.hostId ?? getRepoExecutionHostId(repo),
-            parentWorktreeId: null,
-            childWorktreeIds: [],
-            lineage: null,
-            git: {
-              path: worktree.path,
-              head: worktree.head,
-              branch: worktree.branch,
-              isBare: worktree.isBare,
-              isMainWorktree: worktree.isMainWorktree
-            },
-            displayName: worktree.displayName,
-            comment: worktree.comment
-          }))
-        }
-        // Why: mobile startup shares this path, so a slow repo scan degrades one repo's metadata instead of blocking all session loading.
-        // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed first for `null` to mean
-        // "timed out" only. A stall never reached a verdict, so restore persisted rows instead of publishing a healthy-looking empty catalog;
-        // a rejection is a real answer and keeps its shipped zero-row semantics.
-        const scan: RuntimeWorktreeScanResult =
-          (await withTimeout<RuntimeWorktreeScanResult | null>(
-            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId).catch(
-              () => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult
-            ),
-            RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
-            null
-          )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
-        const gitWorktrees = scan.worktrees
-        if (scan.ok) {
-          pruneLineageForMissingRepoWorktrees(this.requireStore(), repo, gitWorktrees)
-        }
-        return gitWorktrees.map((gitWorktree) => {
-          const worktreeId = `${repo.id}::${gitWorktree.path}`
-          // Why: lineage validation needs a durable instance ID even when the runtime sees a workspace before renderer discovery-stamp.
-          const existingMeta = metaById[worktreeId]
-          const meta =
-            existingMeta && existingMeta.instanceId
-              ? existingMeta
-              : this.store?.setWorktreeMeta(worktreeId, {})
-          const merged = {
-            ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-            hostId: existingMeta?.hostId ?? meta?.hostId ?? getRepoExecutionHostId(repo)
-          }
-          return {
-            ...merged,
-            parentWorktreeId: null,
-            childWorktreeIds: [],
-            lineage: null,
-            git: {
-              path: gitWorktree.path,
-              head: gitWorktree.head,
-              branch: gitWorktree.branch,
-              isBare: gitWorktree.isBare,
-              isMainWorktree: gitWorktree.isMainWorktree
-            },
-            displayName: merged.displayName,
-            comment: merged.comment
-          }
-        })
-      })
+      repos.map(
+        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
+      )
     )
     const worktrees = projectResolvedWorktreeLineage(
       perRepoWorktrees.flat(),
@@ -29538,6 +30892,26 @@ export class OrcaRuntimeService {
       }
     }
     return { worktrees, platformByRepoId }
+  }
+
+  /** Bind the runtime-owned scan cache and folder-workspace stamping into the row resolver. */
+  private repoWorktreeRowDeps(): RepoWorktreeRowDeps {
+    const store = this.requireStore()
+    return {
+      store,
+      scanRepo: (repo, projectRuntimeByRepoId) =>
+        this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+      listFolderWorkspaces: (repo) => listRuntimeFolderWorkspaces(store, repo)
+    }
+  }
+
+  private async resolveExplicitWorktreeIdScoped(
+    worktreeId: string
+  ): Promise<ResolvedWorktree | null> {
+    if (!this.store) {
+      return null
+    }
+    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId)
   }
 
   private async listRepoWorktreesForResolution(
@@ -29697,37 +31071,7 @@ export class OrcaRuntimeService {
   }
 
   private listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
-    const store = this.store
-    if (!store) {
-      return []
-    }
-    const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const byWorktreeId = new Map<string, GitWorktreeInfo>()
-    for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
-      const parsed = splitWorktreeId(worktreeId)
-      if (!parsed || parsed.repoId !== repo.id) {
-        continue
-      }
-      // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
-      if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
-        continue
-      }
-      // Why: keep persisted rows for any repo kind while its scan is unreachable or stalled, instead of zero rows (worktrees:list does the same for disconnected SSH).
-      byWorktreeId.set(worktreeId, {
-        path: parsed.worktreePath,
-        head: '',
-        branch: '',
-        isBare: false,
-        isMainWorktree: areWorktreePathsEqual(parsed.worktreePath, repo.path),
-        ...(meta.sparseDirectories !== undefined ||
-        meta.sparseBaseRef !== undefined ||
-        meta.sparsePresetId !== undefined
-          ? { isSparse: true }
-          : {})
-      })
-    }
-    return [...byWorktreeId.values()]
+    return this.store ? listStoredWorktreeRowsForRepo(this.requireStore(), repo) : []
   }
 
   private async getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>> {
@@ -29875,6 +31219,9 @@ export class OrcaRuntimeService {
 
     pty.worktreeId = worktreeId
     if (state.incarnationId !== undefined) {
+      if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+      }
       pty.incarnationId = state.incarnationId
     }
     if (state.connectionId !== undefined) {
@@ -29972,7 +31319,8 @@ export class OrcaRuntimeService {
         return {
           livePtyIds: targetedLiveness,
           allLivePtyIds: targetedLiveness,
-          terminalIdentityByPtyId: new Map()
+          terminalIdentityByPtyId: new Map(),
+          queriedHostIds: new Set([LOCAL_EXECUTION_HOST_ID])
         }
       }
     }
@@ -29987,8 +31335,32 @@ export class OrcaRuntimeService {
     } else {
       this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
     }
+    const processInventory =
+      connectionId === undefined && this.ptyController.listProcessesWithHostScope
+        ? this.ptyController.listProcessesWithHostScope()
+        : this.ptyController.listProcesses(connectionId).then((processes) => {
+            const hostIds = new Set<ExecutionHostId>()
+            if (connectionId === undefined || connectionId === null) {
+              hostIds.add(LOCAL_EXECUTION_HOST_ID)
+            } else {
+              hostIds.add(toSshExecutionHostId(connectionId))
+            }
+            if (connectionId === undefined) {
+              for (const process of processes) {
+                const hostId = getPtyExecutionHost(process.id)
+                if (
+                  hostId &&
+                  hostId !== 'foreign' &&
+                  parseExecutionHostId(hostId)?.kind === 'ssh'
+                ) {
+                  hostIds.add(hostId)
+                }
+              }
+            }
+            return { processes, hostIds: [...hostIds] }
+          })
     const sessionsResult = await withTimeoutResult(
-      this.ptyController.listProcesses(connectionId),
+      processInventory,
       deadline === undefined
         ? PTY_CONTROLLER_LIST_TIMEOUT_MS
         : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
@@ -30009,7 +31381,8 @@ export class OrcaRuntimeService {
     if (!isCurrentInventory) {
       return null
     }
-    const sessions = sessionsResult.value
+    const sessions = sessionsResult.value.processes
+    const queriedHostIds = new Set(sessionsResult.value.hostIds)
     const controllerIdentityByPtyId = new Map<string, PtyControllerTerminalIdentity>()
     const ptyIdByControllerHandle = new Map<string, string>()
     const ambiguousControllerPtyIds = new Set<string>()
@@ -30188,7 +31561,8 @@ export class OrcaRuntimeService {
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
-      terminalIdentityByPtyId: controllerIdentityByPtyId
+      terminalIdentityByPtyId: controllerIdentityByPtyId,
+      queriedHostIds
     }
   }
 
@@ -30323,6 +31697,7 @@ export class OrcaRuntimeService {
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
+    this.invalidatePtyIncarnationHandle(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
@@ -30436,8 +31811,24 @@ export class OrcaRuntimeService {
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview
+      preview: leaf.preview,
+      ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId)
     }
+  }
+
+  // Why: the PTY id names its own host when it has one; only a host-less id may
+  // fall back to the worktree's. A foreign id with no owner stays unset rather
+  // than inheriting a local worktree's host and reading as local.
+  private terminalExecutionHostField(
+    ptyId: string | null,
+    worktreeId: string
+  ): { executionHostId?: ExecutionHostId } {
+    const fromPtyId = getPtyExecutionHost(ptyId)
+    if (fromPtyId === 'foreign') {
+      return {}
+    }
+    const hostId = fromPtyId ?? this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    return hostId ? { executionHostId: hostId } : {}
   }
 
   // Returns the worktrees whose stored snapshot object changed during this
@@ -31186,6 +32577,31 @@ export class OrcaRuntimeService {
         : livePty
           ? this.issuePtyHandle(livePty)
           : null
+      const projectedAgentStatus =
+        agentStatus ??
+        this.buildPtyMobileAgentStatus(
+          mobileStatusPty,
+          tab,
+          terminalHandle,
+          retainedAgentStatus,
+          getHookRowsForPane
+        )
+      const projectedStatusEntry = projectedAgentStatus.agentStatus as
+        | (AgentStatusEntry & { turnCompletedAt?: number })
+        | undefined
+      const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
+        projectedStatusEntry ?? {}
+      const clientAgentStatus = projectedStatusEntry
+        ? { agentStatus: clientStatusFields as AgentStatusEntry }
+        : {}
+      const rawTurnCompletedAt =
+        hookAgentStatus?.live?.payload.turnCompletedAt ??
+        this.getHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
+        projectedTurnCompletedAt
+      const turnCompletedAt =
+        typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
+          ? rawTurnCompletedAt
+          : undefined
       tabs.push({
         type: 'terminal',
         id: tab.id,
@@ -31195,14 +32611,8 @@ export class OrcaRuntimeService {
         ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
         ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
         ...(launchAgent ? { launchAgent } : {}),
-        ...(agentStatus ??
-          this.buildPtyMobileAgentStatus(
-            mobileStatusPty,
-            tab,
-            terminalHandle,
-            retainedAgentStatus,
-            getHookRowsForPane
-          )),
+        ...clientAgentStatus,
+        ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
         ...(tab.color != null ? { color: tab.color } : {}),
@@ -31964,12 +33374,15 @@ export class OrcaRuntimeService {
   }
 
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
-  async isTerminalRunningAgent(handle: string): Promise<boolean> {
+  async isTerminalRunningAgent(
+    handle: string,
+    options: { retryForegroundWrappers?: boolean } = {}
+  ): Promise<boolean> {
     try {
       const pty = this.getLivePtyForHandle(handle)
       if (pty) {
         const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
-        return await this.isPtyRunningAgent(pty.pty, leaf)
+        return await this.isPtyRunningAgent(pty.pty, leaf, options)
       }
       const { leaf } = this.getLiveLeafForHandle(handle)
       const trackedPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : null
@@ -32020,8 +33433,33 @@ export class OrcaRuntimeService {
       }
       // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
       return await this.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
-        suppressClaude: shouldSuppressClaudeForeground
+        suppressClaude: shouldSuppressClaudeForeground,
+        retryWrappers: options.retryForegroundWrappers !== false
       })
+    } catch {
+      return false
+    }
+  }
+
+  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+    try {
+      const livePty = this.getLivePtyForHandle(handle)
+      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
+      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
+      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
+      if (!ptyId || !trackedPty || !this.ptyController) {
+        return false
+      }
+      const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
+      const recognizedAgent = recognized?.agent
+      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
+        return false
+      }
+      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
+        return false
+      }
+      trackedPty.foregroundAgent = recognizedAgent
+      return true
     } catch {
       return false
     }
@@ -32029,7 +33467,8 @@ export class OrcaRuntimeService {
 
   private async isPtyRunningAgent(
     pty: RuntimePtyWorktreeRecord,
-    leaf: RuntimeLeafRecord | null = null
+    leaf: RuntimeLeafRecord | null = null,
+    options: { retryForegroundWrappers?: boolean } = {}
   ): Promise<boolean> {
     const leafTitle = leaf
       ? getLatestAgentCandidateTitle(
@@ -32088,14 +33527,15 @@ export class OrcaRuntimeService {
     }
     // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
     return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
-      suppressClaude: shouldSuppressClaudeForeground
+      suppressClaude: shouldSuppressClaudeForeground,
+      retryWrappers: options.retryForegroundWrappers !== false
     })
   }
 
   private async isRecognizedForegroundAgentProcess(
     ptyId: string,
     foregroundProcess: string,
-    options: { suppressClaude?: boolean } = {}
+    options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
   ): Promise<boolean> {
     const initialRecognition = recognizeAgentProcess(foregroundProcess)
     if (initialRecognition !== null) {
@@ -32104,7 +33544,11 @@ export class OrcaRuntimeService {
         isExpectedAgentProcess(initialRecognition.processName, 'claude')
       )
     }
-    if (!this.isAgentWrapperForegroundProcess(foregroundProcess) || !this.ptyController) {
+    if (
+      options.retryWrappers === false ||
+      !this.isAgentWrapperForegroundProcess(foregroundProcess) ||
+      !this.ptyController
+    ) {
       return false
     }
     const startedAt = Date.now()
@@ -32137,36 +33581,60 @@ export class OrcaRuntimeService {
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    let terminalHandle = handle
-    if (!this.handles.has(terminalHandle)) {
-      const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
-      const coordinatorHandle = runId
-        ? this._orchestrationDb?.getRun(runId)?.coordinator_handle
-        : null
-      if (!coordinatorHandle || !this.handles.has(coordinatorHandle)) {
-        return
-      }
-      terminalHandle = coordinatorHandle
-    }
+    this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
+  }
+
+  private writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
     try {
-      const { leaf } = this.getLiveLeafForHandle(terminalHandle)
-      // Why lastAgentStatusObservedLive: a cold restore seeds `idle` from the
-      // title persisted at snapshot time, so an agent that went busy across the
-      // relaunch still reads idle until its first live frame. Pushing on that
-      // would type a message plus Enter into a working agent. Seeded state waits
-      // for a live observation to authorize it.
-      if (leaf.lastAgentStatus === 'idle' && leaf.lastAgentStatusObservedLive) {
-        this.deliverPendingMessages(leaf, { mailboxHandle: handle, reservedTypes })
+      if (this.ptyController?.writeWithSettlement) {
+        return this.ptyController.writeWithSettlement(ptyId, data).catch(() => false)
       }
+      return this.ptyController?.write(ptyId, data) ?? false
     } catch {
-      // Unknown/stale handles can't be pointed now; the persisted message stays available via explicit check or future idle delivery.
+      return false
+    }
+  }
+
+  private retireOrchestrationMailboxDeliveryForPty(ptyId: string): void {
+    this.orchestrationMailboxNotifications.retirePty(ptyId)
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (handle) {
+        this.mailPointerRepointScheduler.schedule(handle)
+      }
+      const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
+      if (run) {
+        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
+      }
     }
   }
 
   private scheduleRestoredMessageRepoints(): void {
-    const handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    let handles: string[]
+    try {
+      handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+    } catch (error) {
+      console.warn('[orchestration] failed to scan restored mailboxes', error)
+      return
+    }
     for (const handle of handles) {
-      if (!handle.startsWith('dispatch:')) {
+      try {
+        if (handle.startsWith('dispatch:')) {
+          continue
+        }
+        if (handle.startsWith('run:')) {
+          this.mailPointerRepointScheduler.schedule(handle)
+          continue
+        }
+        const routed = this.orchestrationMailboxOwner.routeDetachedDirectMessages(handle)
+        for (const mailbox of routed.mailboxes) {
+          this.mailPointerRepointScheduler.schedule(mailbox.mailboxHandle)
+        }
+        if (!routed.hasMore) {
+          this.mailPointerRepointScheduler.schedule(handle)
+        }
+      } catch (error) {
+        console.warn(`[orchestration] failed to restore mailbox ${handle}`, error)
         this.mailPointerRepointScheduler.schedule(handle)
       }
     }
@@ -32181,14 +33649,7 @@ export class OrcaRuntimeService {
   }
 
   private deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
-    this.deliverPendingMessages(leaf)
-    if (!this._orchestrationDb) {
-      return
-    }
-    const run = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
-    if (run) {
-      this.deliverPendingMessages(leaf, { mailboxHandle: `run:${run.id}` })
-    }
+    this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
@@ -32196,44 +33657,7 @@ export class OrcaRuntimeService {
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     }
-    // Why: push-on-idle is driven by status transitions; a message that
-    // arrives while the recipient is already idle never sees a transition, so
-    // deliver now (#12536). deliverPendingMessagesForHandle no-ops when the
-    // leaf is not idle. Main's messageDeliveryFlights serialize mid-Enter
-    // re-notifies without a separate settle barrier.
-    // Why skip when a waiter will consume this: a blocked check owns the row,
-    // so also pointing and submitting the pane would wake it twice. The pull wins.
-    // Why "will consume" and not "exists": a waiter filtered to other types
-    // never returns this row — check re-reads under the same filter on timeout
-    // — so treating it as the consumer strands the message in exactly the
-    // already-idle state #12536 is about.
-    const waiters = this.messageWaitersByHandle.get(handle)
-    // Why: don't wake a coordinator waiting for worker_done/escalation on heartbeat noise it would misread as idleness.
-    const consumers = waiters
-      ? [...waiters].filter(
-          (waiter) => !messageType || !waiter.typeFilter || waiter.typeFilter.includes(messageType)
-        )
-      : []
-    if (consumers.length === 0) {
-      // Why snapshot the reservation here: every remaining waiter filters this
-      // type out, but the push reads ALL pending rows. A waiter resolved later in
-      // this same drain is gone by the time the push runs, so reading waiters
-      // then would miss what its check is about to return. Captured now, the
-      // types those waiters claim stay out of the batch.
-      const reservedTypes = new Set(waiters ? [...waiters].flatMap((w) => w.typeFilter ?? []) : [])
-      // Why queueMicrotask: resolveMessageWaiter removes the waiter synchronously
-      // but its check handler marks the rows read a microtask later. Two sends
-      // that resumed adjacently off one shared in-flight promise (group send
-      // awaits listTerminals) put a no-waiter notify inside that window, where a
-      // synchronous push would inject rows the resolved check is about to return.
-      // Deferring one hop puts the push behind any already-queued check, and it
-      // re-reads undelivered rows when it runs so nothing strands.
-      queueMicrotask(() => this.deliverPendingMessagesForHandle(handle, reservedTypes))
-      return
-    }
-    for (const waiter of consumers) {
-      this.resolveMessageWaiter(waiter, 'notified')
-    }
+    this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }
 
   waitForMessage(
@@ -32345,7 +33769,8 @@ export class OrcaRuntimeService {
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
-      preview: pty.preview
+      preview: pty.preview,
+      ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId)
     }
   }
 
@@ -32448,13 +33873,20 @@ export class OrcaRuntimeService {
     }
 
     const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
-    const handle = preAllocatedHandle ?? `term_${randomUUID()}`
-    if (!preAllocatedHandle) {
-      this.syntheticTerminalHandles.add(handle)
+    if (preAllocatedHandle) {
+      return preAllocatedHandle
     }
-    if (this.handles.has(handle)) {
-      return handle
+    const incarnationId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.incarnationId ?? null) : null
+    const retained = leaf.ptyId ? this.handleByPtyIncarnation.get(leaf.ptyId) : undefined
+    if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
+      this.invalidatePtyIncarnationHandle(leaf.ptyId)
+    } else if (retained) {
+      this.bindPtyIncarnationHandle(retained, leaf)
+      return retained.handle
     }
+
+    const handle = `term_${randomUUID()}`
+    this.syntheticTerminalHandles.add(handle)
     this.handles.set(handle, {
       handle,
       runtimeId: this.runtimeId,
@@ -32466,7 +33898,72 @@ export class OrcaRuntimeService {
       ptyGeneration: leaf.ptyGeneration
     })
     this.handleByLeafKey.set(leafKey, handle)
+    if (leaf.ptyId && incarnationId) {
+      this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
+    }
     return handle
+  }
+
+  private bindPtyIncarnationHandle(
+    retained: PtyIncarnationHandleRecord,
+    leaf: RuntimeLeafRecord
+  ): void {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    if (retained.leafKey !== leafKey) {
+      if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+        this.handleByLeafKey.delete(retained.leafKey)
+      }
+      retained.leafKey = leafKey
+    }
+    this.handles.set(retained.handle, {
+      handle: retained.handle,
+      runtimeId: this.runtimeId,
+      rendererGraphEpoch: this.rendererGraphEpoch,
+      worktreeId: leaf.worktreeId,
+      tabId: leaf.tabId,
+      leafId: leaf.leafId,
+      ptyId: leaf.ptyId,
+      ptyGeneration: leaf.ptyGeneration
+    })
+    this.handleByLeafKey.set(leafKey, retained.handle)
+  }
+
+  private invalidatePtyIncarnationHandle(ptyId: string): void {
+    const retained = this.handleByPtyIncarnation.get(ptyId)
+    if (!retained) {
+      return
+    }
+    this.handleByPtyIncarnation.delete(ptyId)
+    if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
+      this.handleByLeafKey.delete(retained.leafKey)
+    }
+    this.handles.delete(retained.handle)
+    this.syntheticTerminalHandles.delete(retained.handle)
+    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
+  }
+
+  private clearPtyIncarnationHandles(): void {
+    for (const retained of this.handleByPtyIncarnation.values()) {
+      this.syntheticTerminalHandles.delete(retained.handle)
+    }
+    this.handleByPtyIncarnation.clear()
+  }
+
+  private reconcilePtyIncarnationHandles(): void {
+    for (const [ptyId, retained] of this.handleByPtyIncarnation) {
+      const pty = this.ptysById.get(ptyId)
+      const leaves = this.getLeavesForPty(ptyId)
+      if (
+        !pty?.incarnationId ||
+        pty.incarnationId !== retained.incarnationId ||
+        leaves.length !== 1 ||
+        this.handleByPtyId.has(ptyId)
+      ) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+        continue
+      }
+      this.bindPtyIncarnationHandle(retained, leaves[0])
+    }
   }
 
   private adoptPreAllocatedHandle(leaf: RuntimeLeafRecord): string | null {
@@ -32550,6 +34047,10 @@ export class OrcaRuntimeService {
     if (!handle) {
       return
     }
+    const record = this.handles.get(handle)
+    if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
+      this.handleByPtyIncarnation.delete(record.ptyId)
+    }
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     this.syntheticTerminalHandles.delete(handle)
@@ -32600,10 +34101,17 @@ export class OrcaRuntimeService {
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!handle) {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const candidateHandle =
+      this.handleByLeafKey.get(leafKey) ??
+      (leaf.ptyId
+        ? (this.handleByPtyId.get(leaf.ptyId) ??
+          this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
+        : undefined)
+    if (!candidateHandle || !this.waitersByHandle.has(candidateHandle)) {
       return
     }
+    const handle = this.issueHandle(leaf)
     const waiters = this.waitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return
@@ -32817,259 +34325,6 @@ export class OrcaRuntimeService {
       }
     }
     return null
-  }
-
-  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
-  // landing mid-flight park their mailbox and re-run once on settle. The
-  // flight object is the settle identity: a stale settle surviving an exit
-  // retire must not clear a newer same-id flight or flush its parked trigger.
-  private readonly messageDeliveryFlightsByPtyId = new Map<
-    string,
-    { enterTimer: ReturnType<typeof setTimeout> | null }
-  >()
-
-  private readonly parkedMessageRedeliveriesByPtyId = new Map<
-    string,
-    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
-  >()
-
-  private settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
-  }
-
-  // Why: a dead session's Enter or watermark must not affect a same-id cold restore.
-  private retirePendingMessageDeliveryForPty(ptyId: string): void {
-    const flight = this.messageDeliveryFlightsByPtyId.get(ptyId)
-    if (flight?.enterTimer != null) {
-      clearTimeout(flight.enterTimer)
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (handle) {
-        this.lastPointedMessageSequenceByHandle.delete(handle)
-        this.pointedMessageIdsByHandle.delete(handle)
-        this.mailPointerRepointScheduler.schedule(handle)
-      }
-      const run = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
-      if (run) {
-        this.lastPointedMessageSequenceByHandle.delete(`run:${run.id}`)
-        this.pointedMessageIdsByHandle.delete(`run:${run.id}`)
-        this.mailPointerRepointScheduler.schedule(`run:${run.id}`)
-      }
-    }
-  }
-
-  // Why: normal delivery stays event-driven; the bounded mailbox retry only repairs missed liveness edges.
-  private deliverPendingMessages(
-    leaf: RuntimeLeafRecord,
-    options: {
-      mailboxHandle?: string
-      reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
-    } = {}
-  ): void {
-    if (!this._orchestrationDb) {
-      return
-    }
-
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!handle) {
-      return
-    }
-    const mailboxHandle = options.mailboxHandle ?? handle
-
-    if (leaf.ptyId && this.messageDeliveryFlightsByPtyId.has(leaf.ptyId)) {
-      let parked = this.parkedMessageRedeliveriesByPtyId.get(leaf.ptyId)
-      if (!parked) {
-        parked = new Map()
-        this.parkedMessageRedeliveriesByPtyId.set(leaf.ptyId, parked)
-      }
-      const priorReservedTypes = parked.get(mailboxHandle)?.reservedTypes
-      const reservedTypes =
-        priorReservedTypes || options.reservedTypes
-          ? new Set([...(priorReservedTypes ?? []), ...(options.reservedTypes ?? [])])
-          : undefined
-      parked.set(mailboxHandle, { leaf, reservedTypes })
-      return
-    }
-
-    // Why filter here and not at the trigger: the push reads every pending row,
-    // not just the one that woke it, so a row a pull has claimed would be typed
-    // into the pane AND returned by that pull's check. Live waiters cover the
-    // still-blocked case; reservedTypes carries the notify-time snapshot for a
-    // waiter resolved later in the same drain, which is already gone from the map.
-    const waiters = this.messageWaitersByHandle.get(mailboxHandle)
-    const pending = this._orchestrationDb.getUndeliveredUnreadMessages(mailboxHandle)
-    const pendingIds = new Set(pending.map((message) => message.id))
-    const pointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
-    if (pointedIds) {
-      for (const id of pointedIds) {
-        if (!pendingIds.has(id)) {
-          pointedIds.delete(id)
-        }
-      }
-      if (pointedIds.size === 0) {
-        this.pointedMessageIdsByHandle.delete(mailboxHandle)
-      }
-    }
-    const unread = pending.filter(
-      (message) =>
-        !options.reservedTypes?.has(message.type) &&
-        !messageTypeHasLiveWaiter(waiters, message.type)
-    )
-    if (unread.length === 0) {
-      return
-    }
-
-    const watermark = this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1
-    const priorPointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
-    if (
-      !unread.some(
-        (message) => message.sequence > watermark || priorPointedIds?.has(message.id) !== true
-      )
-    ) {
-      return
-    }
-
-    if (!leaf.writable || !leaf.ptyId) {
-      return
-    }
-    const newestSequence = unread.at(-1)?.sequence
-    if (newestSequence === undefined) {
-      return
-    }
-
-    if (
-      !options.skipAbsenceProbe &&
-      this.ptyController?.probePtyLiveness &&
-      !this.controllerKnowsPtyIsLive(leaf.ptyId)
-    ) {
-      // Why: a fire-and-forget write to a prior process's ptyId reports success
-      // and would mark these delivered while losing them. Proven absence keeps
-      // them queued for a future surface; unknown liveness still delivers.
-      const probedPtyId = leaf.ptyId
-      // Why: triggers arriving mid-probe must not each arm a continuation — the
-      // Every continuation would re-read the same unread rows. The single armed
-      // continuation re-reads fresh rows when it fires, so nothing is lost.
-      if (this.probeDeferredDeliveryPtyIds.has(probedPtyId)) {
-        return
-      }
-      this.probeDeferredDeliveryPtyIds.add(probedPtyId)
-      void this.isLeafPtyProvenAbsent(probedPtyId)
-        .then((absent) => {
-          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
-          if (!absent && leaf.ptyId === probedPtyId) {
-            // Why a macrotask and not the stale reservation snapshot: a `remote:`
-            // pty answers the probe null before its first await, so this chain can
-            // settle in microtasks and overtake the resumption of a check resolved
-            // meanwhile — that check's waiter is already out of the map and its
-            // rows are not yet read, so the push would inject what it returns.
-            // Yielding the turn lets every queued check mark its rows read first;
-            // re-reading then (rather than replaying a reservation this probe may
-            // have outlived) is what keeps an orphaned row from stranding.
-            setTimeout(() => {
-              // Why current state, not the closure: the gate that authorized this
-              // push ran before the probe. A same-id cold restore inside the probe
-              // window keeps ptyId identical and makes the leaf writable again, so
-              // an id-only check would type the pointer plus Enter into a process
-              // whose idle was never observed. Re-read the live-idle gate.
-              const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-              if (
-                currentLeaf?.ptyId === probedPtyId &&
-                currentLeaf.lastAgentStatus === 'idle' &&
-                currentLeaf.lastAgentStatusObservedLive
-              ) {
-                this.deliverPendingMessages(currentLeaf, {
-                  mailboxHandle,
-                  skipAbsenceProbe: true
-                })
-              }
-            }, 0)
-          }
-        })
-        .catch(() => {
-          this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
-        })
-      return
-    }
-
-    const deliveryPtyId = leaf.ptyId
-    const flight: { enterTimer: ReturnType<typeof setTimeout> | null } = { enterTimer: null }
-    this.messageDeliveryFlightsByPtyId.set(deliveryPtyId, flight)
-    // Why: every sync outcome — failed write, Cursor branch, or a throw —
-    // must end the flight here, or a leaked flag parks this pty's deliveries
-    // forever. Only an armed Enter hands settling to its own callback.
-    let settlesInEnterCallback = false
-    try {
-      const payload = formatMessagePointer(unread.length)
-      const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
-      if (!wrote) {
-        return
-      }
-      this.lastPointedMessageSequenceByHandle.set(
-        mailboxHandle,
-        Math.max(watermark, newestSequence)
-      )
-      const pointedIdsAfterWrite =
-        this.pointedMessageIdsByHandle.get(mailboxHandle) ?? new Set<string>()
-      for (const message of unread) {
-        pointedIdsAfterWrite.add(message.id)
-      }
-      this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
-
-      const tabTitle = this.tabs.get(leaf.tabId)?.title
-      if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
-        // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
-        return
-      }
-
-      // Why: agent TUIs can swallow a \r in the same PTY write; submit separately after a delay.
-      flight.enterTimer = setTimeout(() => {
-        try {
-          // Why current state, not the closure: graph resync replaces leaf
-          // objects, so the captured record can read writable=true after the
-          // pty died, and an exit retire may have superseded this flight.
-          if (this.messageDeliveryFlightsByPtyId.get(deliveryPtyId) !== flight) {
-            return
-          }
-          const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-          if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
-            return
-          }
-          this.ptyController?.write(deliveryPtyId, '\r')
-        } catch {
-          // Terminal may have closed during the delay; mail remains queued for check.
-        } finally {
-          // Why finally: every outcome — submit, refusal, throw — ends the flight,
-          // and settle re-runs any trigger parked during it so nothing strands.
-          this.settlePendingMessageDelivery(deliveryPtyId, flight)
-        }
-      }, 500)
-      settlesInEnterCallback = true
-    } finally {
-      if (!settlesInEnterCallback) {
-        this.settlePendingMessageDelivery(deliveryPtyId, flight)
-      }
-    }
   }
 
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
@@ -36058,7 +37313,6 @@ const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 // edits are invisible to it and a tip living in packed-refs or reftable only gets an mtime + size
 // stamp, so a real scan still runs on this interval even while the probe reports "unchanged".
 export const WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000
-export const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 // Why reserved rather than spent on the probe: when the probe expires the caller still has to run
 // `git worktree list` and answer inside the same budget, so the fallback needs its own room. Sized
 // for a healthy Git on a busy host, well above the tens of milliseconds a warm list costs.
@@ -36155,21 +37409,6 @@ function getExplicitWorktreeIdSelector(selector: string | undefined): string | n
   }
   const id = selector.slice(3)
   return id.length > 0 ? id : null
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  return new Promise<T>((resolve) => {
-    timeout = setTimeout(() => resolve(fallback), timeoutMs)
-    promise.then(
-      (value) => resolve(value),
-      () => resolve(fallback)
-    )
-  }).finally(() => {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
-  })
 }
 
 function withTimeoutResult<T>(
@@ -38113,6 +39352,12 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
     return 'management'
   }
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+}
+
+function isTerminalSendSettlementAgent(
+  agent: TuiAgent | null | undefined
+): agent is 'claude' | 'codex' {
+  return agent === 'claude' || agent === 'codex'
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {

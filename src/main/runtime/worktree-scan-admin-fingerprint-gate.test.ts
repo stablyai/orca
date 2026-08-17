@@ -39,10 +39,10 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 
 import {
   OrcaRuntimeService,
-  RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './orca-runtime'
+import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -549,5 +549,78 @@ describe('worktree scan admin-fingerprint gate', () => {
 
     expect(scanCount()).toBe(1)
     expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('scoped explicit worktree-id resolution', () => {
+  beforeEach(() => {
+    getSshGitProviderMock.mockReset()
+    listWorktreesStrictMock.mockReset()
+    listWorktreesStrictMock.mockImplementation(async (repoPath: string) => [
+      { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+      {
+        path: `${repoPath}-feature`,
+        head: 'def',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    readRepoWorktreeAdminFingerprintMock.mockReset()
+    readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-1')
+  })
+
+  function scannedRepoPaths(): string[] {
+    return listWorktreesStrictMock.mock.calls.map((call) => call[0] as string)
+  }
+
+  it('scans only the owning repo for an id: selector on a cold cache', async () => {
+    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+    const resolve = (selector: string): Promise<{ id: string }> =>
+      (
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
+      ).resolveWorktreeSelector(selector)
+
+    const resolved = await resolve(`id:${MAIN_WORKTREE_ID}`)
+
+    expect(resolved.id).toBe(MAIN_WORKTREE_ID)
+    expect(scannedRepoPaths()).toEqual([REPO_PATH])
+  })
+
+  it('still finds worktrees in other repos through the fleet path', async () => {
+    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+    const resolve = (selector: string): Promise<{ id: string }> =>
+      (
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
+      ).resolveWorktreeSelector(selector)
+
+    const otherId = `${REPO_ID}-3::${REPO_PATH}-3`
+    const resolved = await resolve(`id:${otherId}`)
+
+    expect(resolved.id).toBe(otherId)
+    expect(scannedRepoPaths()).toEqual([`${REPO_PATH}-3`])
+  })
+
+  it('keeps cross-repo selectors on the fleet path so ambiguity still throws', async () => {
+    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+    const resolve = (selector: string): Promise<unknown> =>
+      (
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
+      ).resolveWorktreeSelector(selector)
+
+    // `main` is checked out in every repo, so a branch selector must refuse rather than pick one.
+    await expect(resolve('branch:main')).rejects.toThrow('selector_ambiguous')
+    expect(new Set(scannedRepoPaths()).size).toBe(10)
+  })
+
+  it('falls back to the fleet path when the id names no registered repo', async () => {
+    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+    const resolve = (selector: string): Promise<unknown> =>
+      (
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
+      ).resolveWorktreeSelector(selector)
+
+    await expect(resolve('id:missing-repo::/nowhere')).rejects.toThrow('selector_not_found')
+    expect(new Set(scannedRepoPaths()).size).toBe(10)
   })
 })

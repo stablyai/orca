@@ -1,13 +1,15 @@
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitPushTarget,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/types'
+} from '../../shared/git-status-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type {
   CommitMessageAgentCapability,

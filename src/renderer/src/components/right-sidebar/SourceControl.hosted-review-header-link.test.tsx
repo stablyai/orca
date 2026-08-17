@@ -2,7 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { HostedReviewHeaderLink } from './hosted-review-header-chrome'
+import { HostedReviewHeaderLink } from './source-control/review/hosted-review-header-chrome'
 
 const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
 

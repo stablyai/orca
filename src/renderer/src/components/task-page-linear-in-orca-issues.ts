@@ -1,4 +1,6 @@
-import type { LinearIssue, LinearWorkspace, Worktree } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { parseLinearIssueInput } from '../../../shared/linear/links'
 import {
   getTaskSourceCacheScope,

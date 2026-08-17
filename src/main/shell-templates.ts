@@ -10,6 +10,8 @@ export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if [[ "\${ORCA_SHELL_STARTUP
   printf "\\033]777;orca-shell-start:%s\\007" "$$"
 fi`
 
+// Why: daemon, local, and relay wrappers must preserve one Bash prompt-hook contract.
+export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-composition'
 export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
   const header = headerPrefix
     ? `Orca ${headerPrefix} zsh shell-ready wrapper`

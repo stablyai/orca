@@ -2,7 +2,7 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
-} from '../../../shared/types'
+} from '../../../shared/project-types'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot
@@ -32,6 +32,7 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
       runtimeId: string
       checkoutMode: 'orca-worktree' | 'provisioned-root'
       environmentId?: string
+      expectedRefHead?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
@@ -134,6 +135,11 @@ export async function prepareEphemeralVmWorkspaceTarget(
     setup,
     runtimeId: provisioned.runtime.id,
     checkoutMode,
+    ...(checkoutMode === 'provisioned-root' &&
+    provisioned.connectionType === 'ssh' &&
+    provisioned.expectedRefHead
+      ? { expectedRefHead: provisioned.expectedRefHead }
+      : {}),
     stderr: provisioned.stderr,
     warnings: provisioned.warnings
   } satisfies PrepareEphemeralVmWorkspaceTargetResult

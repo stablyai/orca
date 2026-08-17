@@ -1,9 +1,9 @@
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandAction,
-  TerminalQuickCommandScope,
-  TuiAgent
-} from '../../../src/shared/types'
+  TerminalQuickCommandScope
+} from '../../../src/shared/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   isAgentQuickCommand,
   MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,

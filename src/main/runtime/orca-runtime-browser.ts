@@ -52,15 +52,13 @@ import type {
 import type {
   BrowserCertificateProceedResult,
   BrowserSessionUserAgentMode
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/cdp-bridge'
-import {
-  startBrowserScreencast,
-  type BrowserScreencastSession
-} from '../browser/browser-screencast-stream'
+import { startBrowserScreencast } from '../browser/browser-screencast-stream'
+import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { browserActionRecorder } from '../browser/browser-action-recorder'
 import {
@@ -68,7 +66,10 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
-import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
+import {
+  waitForTabRegistration,
+  waitForWorktreeTabRegistration
+} from '../ipc/browser-tab-registration-wait'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 
 export type BrowserCommandTargetParams = {

@@ -37,6 +37,7 @@ import type { RpcSuccess } from '../../../src/transport/types'
 import { useHostClient } from '../../../src/transport/client-context'
 import {
   useLastConnectedAt,
+  usePendingConnectionPath,
   useReconnectAttempt
 } from '../../../src/transport/client-context-connection-metrics'
 import { classifyConnection } from '../../../src/transport/connection-health'
@@ -149,13 +150,13 @@ import {
   scheduleMobileTaskCopyFeedbackReset
 } from '../../../src/tasks/mobile-task-copy-feedback-timer'
 import type {
-  BaseRefSearchResult,
   GitHubOwnerRepo,
-  ProviderCheckSummary,
-  PersistedTrustedOrcaHooks,
-  SparsePreset,
-  TuiAgent
-} from '../../../../src/shared/types'
+  ProviderCheckSummary
+} from '../../../../src/shared/github/pull-request-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { TuiAgent } from '../../../../src/shared/tui-agent'
+import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { SshConnectionState } from '../../../../src/shared/ssh-types'
 import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
 import {
@@ -2073,6 +2074,7 @@ export default function MobileTasksScreen() {
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const pendingConnectionPath = usePendingConnectionPath(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
@@ -8673,7 +8675,8 @@ export default function MobileTasksScreen() {
   const headerVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
-    lastConnectedAt
+    lastConnectedAt,
+    pendingPath: pendingConnectionPath
   })
   const emptyLabel =
     connState !== 'connected'

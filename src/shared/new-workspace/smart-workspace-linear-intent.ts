@@ -1,4 +1,4 @@
-import type { LinearIssue } from '../types'
+import type { LinearIssue } from '../linear/issue-types'
 import {
   parseLinearIssueInput,
   parseLinearIssueUrlIntent,

@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
@@ -65,54 +66,59 @@ import type {
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
+import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
 import type {
-  BaseRefSearchResult,
-  BaseRefDefaultResult,
-  BrowserViewportOverride,
-  CustomPet,
-  FsChangedPayload,
+  BrowserWebAuthnAccountRequest,
+  BrowserWebAuthnAccountResponse
+} from '../shared/browser-webauthn-account'
+import type { SearchResult } from '../shared/code-search-types'
+import type {
   FilesystemPathFlavor,
-  GetRateLimitResult,
+  FsChangedPayload,
+  MarkdownDocument
+} from '../shared/filesystem-entry-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../shared/git-fork-sync'
+import type { GitStagingArea, GitUpstreamStatus } from '../shared/git-status-types'
+import type { GitHubCommentResult, GitHubReactionContent } from '../shared/github/comment-types'
+import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
-  GitHubPRRefreshReason,
-  GitHubAssignableUser,
-  GitHubCommentResult,
-  GitHubCreateIssueResult,
-  GitHubOwnerRepo,
-  GitHubReactionContent,
-  GitHubWorkItem,
-  JiraProjectStatusOrder,
-  GitPushTarget,
-  GitStagingArea,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitUpstreamStatus,
-  GhosttyImportPreview,
-  ListWorkItemsResult,
-  LinearProjectDetail,
-  MemorySnapshot,
+  GitHubPRRefreshReason
+} from '../shared/github/pull-request-refresh-types'
+import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
+import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
+import type { GhosttyImportPreview } from '../shared/global-settings-types'
+import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
+import type { JiraProjectStatusOrder } from '../shared/jira-types'
+import type { LinearProjectDetail } from '../shared/linear/project-types'
+import type {
+  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchResult,
-  NotificationDeliveryProbeResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
-  NotificationSoundResult,
-  NestedRepoScanResult,
-  OnboardingState,
-  PersistedUIState,
-  FloatingTerminalCwdRequest,
-  MarkdownDocument,
-  SearchResult,
-  TuiAgent,
-  UpdateStatus,
+  NotificationSoundResult
+} from '../shared/notification-settings-types'
+import type { OnboardingState } from '../shared/onboarding-state-types'
+import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { CustomPet } from '../shared/pet-types'
+import type { MemorySnapshot } from '../shared/process-stats-types'
+import type { NestedRepoScanResult } from '../shared/project-group-types'
+import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
+import type { TuiAgent } from '../shared/tui-agent'
+import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
+import type { UpdateStatus } from '../shared/update-status-types'
+import type {
   WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../shared/worktree/base-ref-drift-types'
+import type {
   WorktreeDefaultTabsLaunch,
-  WorktreeHeadIdentity,
-  WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch
-} from '../shared/types'
+} from '../shared/worktree/launch-types'
+import type { GitPushTarget, WorktreeHeadIdentity } from '../shared/worktree/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
@@ -134,6 +140,33 @@ import type {
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
+  SkillCloudOwnedShare,
+  SkillCloudOperation,
+  SkillCloudPackageDetails
+} from '../shared/skill-cloud-contract'
+import type {
+  SkillBundleInstallPreviewInput,
+  SkillBundleInstallPreviewOperation,
+  SkillBundlePackageVersionInstallInput,
+  SkillBundleShareInstallInput,
+  SkillBundleShareInstallOperation,
+  SkillInstallPreviewInput,
+  SkillInstallPreviewOperation,
+  ManagedSkillInstallListOperation,
+  SkillPackageVersionInstallInput,
+  SkillRemoveInput,
+  SkillRemoveOperation,
+  SkillShareInstallInput,
+  SkillShareInstallOperation,
+  SkillInstallCancelInput,
+  SkillInstallProgress,
+  SkillSharePreview,
+  SkillShareProgress,
+  SkillSharePublishInput,
+  SkillSharePublishOperation,
+  SkillShareResolvedOperation
+} from '../shared/skill-sharing-contract'
+import type {
   SkillFreshnessInventory,
   SkillUpdateRun,
   SkillUpdateStartResult
@@ -141,9 +174,9 @@ import type {
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
-  RuntimeSyncWindowGraph,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -167,33 +200,35 @@ import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace
 import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
+  GetProjectViewTableResult,
+  GitHubProjectCommentMutationResult,
+  GitHubProjectMutationResult,
+  ListAccessibleProjectsResult,
+  ListAssignableUsersBySlugResult,
+  ListIssueTypesBySlugResult,
+  ListLabelsBySlugResult,
+  ListProjectViewsResult,
+  ProjectWorkItemDetailsBySlugResult,
+  ResolveProjectRefResult
+} from '../shared/github/project-result-types'
+import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
   GetProjectViewTableArgs,
-  GetProjectViewTableResult,
-  GitHubProjectCommentMutationResult,
-  GitHubProjectMutationResult,
   ListAccessibleProjectsArgs,
-  ListAccessibleProjectsResult,
   ListAssignableUsersBySlugArgs,
-  ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugArgs,
-  ListIssueTypesBySlugResult,
   ListLabelsBySlugArgs,
-  ListLabelsBySlugResult,
   ListProjectViewsArgs,
-  ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugArgs,
-  ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefArgs,
-  ResolveProjectRefResult,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../shared/github/project-types'
+} from '../shared/github/project-request-types'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
@@ -229,6 +264,10 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import {
+  KEYBOARD_LAYOUT_CHANGED_CHANNEL,
+  type KeyboardLayoutChangeEvent
+} from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -537,6 +576,19 @@ const api = {
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
+    getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
+      ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
+    getKeyboardLayoutSnapshot: () => ipcRenderer.invoke('app:getKeyboardLayoutSnapshot'),
+    onKeyboardLayoutChanged: (
+      callback: (event: KeyboardLayoutChangeEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: KeyboardLayoutChangeEvent
+      ): void => callback(event)
+      ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+    },
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
@@ -786,6 +838,7 @@ const api = {
 
   worktrees: {
     list: (args) => ipcRenderer.invoke('worktrees:list', args),
+    listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
@@ -911,14 +964,23 @@ const api = {
         .invoke('workspaceCleanup:scan', { ...args, scanId })
         .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
     },
+    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
+    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
+      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
+    beginRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
+    recordRemovalSnapshotPrune: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
+    finishRemovalSnapshotPruneBatch: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
     analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
+    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
     cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
     onProgress: (callback) => {
       const listener = (
@@ -2530,6 +2592,73 @@ const api = {
     cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
     acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
     getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
+    prepareShare: (input: {
+      skillIds: string[]
+      bundleName: string
+      target?: SkillDiscoveryTarget
+      packageId?: string
+    }): Promise<SkillSharePreview> => ipcRenderer.invoke('skills:prepareShare', input),
+    publishShare: (input: SkillSharePublishInput): Promise<SkillSharePublishOperation> =>
+      ipcRenderer.invoke('skills:publishShare', input),
+    cancelShare: (preparationId: string): Promise<void> =>
+      ipcRenderer.invoke('skills:cancelShare', preparationId),
+    releaseShare: (preparationId: string): Promise<void> =>
+      ipcRenderer.invoke('skills:releaseShare', preparationId),
+    resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
+      ipcRenderer.invoke('skills:resolveShare', shareId),
+    installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installShare', input),
+    installBundleShare: (
+      input: SkillBundleShareInstallInput
+    ): Promise<SkillBundleShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installBundleShare', input),
+    installBundlePackageVersion: (
+      input: SkillBundlePackageVersionInstallInput
+    ): Promise<SkillBundleShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installBundlePackageVersion', input),
+    installPackageVersion: (
+      input: SkillPackageVersionInstallInput
+    ): Promise<SkillShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installPackageVersion', input),
+    cancelInstall: (input: SkillInstallCancelInput): Promise<{ cancelled: boolean }> =>
+      ipcRenderer.invoke('skills:cancelInstall', input),
+    previewInstall: (input: SkillInstallPreviewInput): Promise<SkillInstallPreviewOperation> =>
+      ipcRenderer.invoke('skills:previewInstall', input),
+    previewBundleInstall: (
+      input: SkillBundleInstallPreviewInput
+    ): Promise<SkillBundleInstallPreviewOperation> =>
+      ipcRenderer.invoke('skills:previewBundleInstall', input),
+    removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
+      ipcRenderer.invoke('skills:removeInstall', input),
+    listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
+      ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
+    getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
+      ipcRenderer.invoke('skills:getPackage', packageId),
+    listOwnedShares: (): Promise<SkillCloudOperation<SkillCloudOwnedShare[]>> =>
+      ipcRenderer.invoke('skills:listOwnedShares'),
+    revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:revokeShare', shareId),
+    deletePackageVersion: (input: {
+      packageId: string
+      versionId: string
+    }): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:deletePackageVersion', input),
+    deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:deletePackage', packageId),
+    listWslDistros: (environmentId?: string): Promise<string[]> =>
+      ipcRenderer.invoke('skills:listWslDistros', environmentId),
+    onInstallProgress: (callback: (progress: SkillInstallProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: SkillInstallProgress): void =>
+        callback(progress)
+      ipcRenderer.on('skills:installProgress', listener)
+      return () => ipcRenderer.removeListener('skills:installProgress', listener)
+    },
+    onShareProgress: (callback: (progress: SkillShareProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: SkillShareProgress): void =>
+        callback(progress)
+      ipcRenderer.on('skills:shareProgress', listener)
+      return () => ipcRenderer.removeListener('skills:shareProgress', listener)
+    },
     onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void =>
         callback(run)
@@ -2569,6 +2698,29 @@ const api = {
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
+
+    onWebAuthnAccountRequest: (
+      callback: (request: BrowserWebAuthnAccountRequest) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: BrowserWebAuthnAccountRequest
+      ): void => callback(request)
+      ipcRenderer.on('browser:webauthn-account-requested', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-requested', listener)
+    },
+
+    onWebAuthnAccountRequestClosed: (
+      callback: (event: { requestId: string }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
+        callback(data)
+      ipcRenderer.on('browser:webauthn-account-request-closed', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-request-closed', listener)
+    },
+
+    respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
+      ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),
@@ -3058,6 +3210,7 @@ const api = {
     suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
     resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
     cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
+    stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
     getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
   } satisfies PreloadApi['ephemeralVm'],
 
@@ -3560,6 +3713,14 @@ const api = {
     },
     consumePendingOpenSettings: (): Promise<boolean> =>
       ipcRenderer.invoke('ui:consumePendingOpenSettings'),
+    onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, shareId: string): void =>
+        callback(shareId)
+      ipcRenderer.on('ui:openSkillShare', listener)
+      return () => ipcRenderer.removeListener('ui:openSkillShare', listener)
+    },
+    consumePendingSkillShare: (): Promise<string | null> =>
+      ipcRenderer.invoke('ui:consumePendingSkillShare'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)
@@ -4335,7 +4496,9 @@ const api = {
   },
 
   runtime: {
-    syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
+    syncWindowGraph: (
+      graph: RuntimeRendererSyncWindowGraph
+    ): Promise<RuntimeSyncWindowGraphResult> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>

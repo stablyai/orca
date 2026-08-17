@@ -3,20 +3,22 @@
    boundary so cache invalidation stays coherent. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type {
-  LinearViewer,
-  LinearConnectionStatus,
-  LinearCollectionResult,
   LinearCustomViewModel,
   LinearCustomViewSummary,
-  LinearIssue,
   LinearProjectDetail,
-  LinearProjectSummary,
+  LinearProjectSummary
+} from '../../../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus,
   LinearTeam,
+  LinearViewer,
   LinearWorkspace,
   LinearWorkspaceError,
   LinearWorkspaceSelection
-} from '../../../../shared/types'
+} from '../../../../shared/linear/workspace-types'
 import type { CacheEntry } from './github'
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'

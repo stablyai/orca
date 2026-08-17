@@ -1,4 +1,7 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -27,8 +30,6 @@ import {
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
-
-export { isDefaultBranchWorkspace } from './default-branch-workspace'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).

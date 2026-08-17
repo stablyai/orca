@@ -11,13 +11,13 @@ import type {
   LocalNetworkConnectionTestResult
 } from '../../shared/developer-permissions-types'
 import type {
-  NotificationDispatchRequest,
-  NotificationDispatchResult,
   NotificationDeliveryProbeResult,
   NotificationDismissResult,
+  NotificationDispatchRequest,
+  NotificationDispatchResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult
-} from '../../shared/types'
+} from '../../shared/notification-settings-types'
 
 export type NotificationsApi = {
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>

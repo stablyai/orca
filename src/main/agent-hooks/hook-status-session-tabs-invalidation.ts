@@ -28,7 +28,9 @@ export function createHookStatusSessionTabsInvalidator(): {
       (previous.agentType ?? null) !== (next.agentType ?? null) ||
       (previous.toolName ?? null) !== (next.toolName ?? null) ||
       (previous.interactivePrompt ?? null) !== (next.interactivePrompt ?? null) ||
-      (previous.interrupted ?? false) !== (next.interrupted ?? false)
+      (previous.interrupted ?? false) !== (next.interrupted ?? false) ||
+      (previous.turnCompletedAt ?? null) !== (next.turnCompletedAt ?? null) ||
+      (previous.lastAssistantMessage ?? null) !== (next.lastAssistantMessage ?? null)
     )
   }
   // Why: a cleared pane must re-arm, else the memo swallows the first event of the

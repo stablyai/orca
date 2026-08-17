@@ -17,7 +17,11 @@
  * See docs/resource-usage-merge-spec.md for the full design.
  */
 
-import type { MemorySnapshot, SessionMemory, WorktreeMemory } from '../../../../shared/types'
+import type {
+  MemorySnapshot,
+  SessionMemory,
+  WorktreeMemory
+} from '../../../../shared/process-stats-types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
 import {

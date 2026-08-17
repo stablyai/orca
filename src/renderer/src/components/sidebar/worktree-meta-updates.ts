@@ -5,7 +5,8 @@ import {
 } from '../../../../shared/linear/links'
 import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
-import type { WorkspaceLinkedItem, WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 
 export type WorktreeMetaSavedPayload = {
   worktreeId: string

@@ -1,6 +1,6 @@
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
-import type { GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 export function buildProjectWorkItem(
   row: GitHubProjectRow,

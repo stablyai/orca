@@ -14,7 +14,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 
 export type PtyApi = {

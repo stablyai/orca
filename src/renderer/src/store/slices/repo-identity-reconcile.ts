@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { getRepoHostIdentity } from './repo-host-identity'
 

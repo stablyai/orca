@@ -1,4 +1,8 @@
-import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import type { SortBy } from './smart-sort'
 import { getWorkspaceStatus } from './workspace-status'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'

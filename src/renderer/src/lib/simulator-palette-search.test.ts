@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   SIMULATOR_PALETTE_QUERY_MAX_BYTES,
   buildSearchableSimulatorTabs,

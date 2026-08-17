@@ -29,7 +29,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import type { FolderWorkspace, ProjectGroup, Repo, WorktreeMeta } from '../../shared/types'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider

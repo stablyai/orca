@@ -15,7 +15,7 @@ import type {
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentMapAgentNode, AgentMapProjectRing, AgentMapLayout } from './agent-map-layout'
 import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import { AgentMapScene } from './AgentMapScene'

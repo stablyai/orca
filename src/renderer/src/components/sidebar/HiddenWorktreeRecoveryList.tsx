@@ -4,7 +4,8 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
-import type { DetectedWorktreeListResult, Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import {
   getHiddenImportableExternalWorktrees,
   getVisibleNonOrcaWorktrees

@@ -1,6 +1,7 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { Repo, WorkspaceKey } from '../../shared/types'
+import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { Repo } from '../../shared/repo-types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { LinearConnectionStatus, LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearConnectionStatus } from '../../../shared/linear/workspace-types'
 import { lookupLinearIssueUrl } from './linear-issue-url-lookup'
 
 const intent = { identifier: 'STA-4084', organizationUrlKey: 'stably' }

@@ -1,5 +1,5 @@
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 

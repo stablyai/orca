@@ -1,5 +1,5 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 
 export type GitHubPRReviewerQueryState = {
   query: string

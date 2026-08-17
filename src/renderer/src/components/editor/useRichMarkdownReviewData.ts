@@ -7,7 +7,7 @@ import {
   type MarkdownReviewNote
 } from '@/lib/markdown-review-notes'
 import type { NotesSendMenuScope } from './NotesSendMenu'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { translate } from '@/i18n/i18n'
 
 type UseRichMarkdownReviewDataOptions = {

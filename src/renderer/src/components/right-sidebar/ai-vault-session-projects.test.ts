@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Project, ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById,

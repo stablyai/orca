@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { GlobalSettings, Repo, Worktree } from '../types'
+import type { GlobalSettings } from '../global-settings-types'
+import type { Repo } from '../repo-types'
+import type { Worktree } from './types'
 import { buildKnownOrcaWorkspaceLayouts, classifyWorktreeOwnership } from './ownership'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {

@@ -9,7 +9,7 @@ vi.mock('sonner', () => ({
   toast: { success: successToastMock, warning: warningToastMock }
 }))
 
-import type { BrowserCookieImportSummary } from '../../../shared/types'
+import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
 import { emitBrowserCookieImportToast } from './browser-cookie-import-toast'
 
 const summary: BrowserCookieImportSummary = {
@@ -50,6 +50,27 @@ describe('emitBrowserCookieImportToast', () => {
 
     expect(successToastMock).toHaveBeenCalledWith('Imported 3 cookies.')
     expect(warningToastMock).not.toHaveBeenCalled()
+  })
+
+  it('offers the in-app file import without recommending an exporter', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        warning: {
+          code: 'cookies-undecryptable',
+          failedCookies: 3,
+          reason: 'app-bound-encryption'
+        }
+      },
+      'Imported 0 cookies.',
+      'Local Windows'
+    )
+
+    const message = warningToastMock.mock.calls[0]?.[0]
+    expect(message).toBe(
+      "Orca cannot decrypt 3 of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”."
+    )
+    expect(message).not.toContain('export')
   })
 
   it('shows separate host-specific Google guidance after success', () => {
