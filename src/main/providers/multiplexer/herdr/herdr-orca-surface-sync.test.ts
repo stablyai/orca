@@ -4,7 +4,7 @@ import {
   collectHerdrSurfaceActions,
   herdrLayoutToOrcaLayout,
   resolveHerdrPaneIdentities
-} from './herdr-orca-surface-sync'
+} from './herdr-orca-surface-import'
 import type { HerdrSessionSnapshot } from './herdr-runtime-contract'
 import type { Project } from '../../../../shared/project-types'
 

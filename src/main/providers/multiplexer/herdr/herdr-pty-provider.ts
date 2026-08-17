@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto'
 import { herdrSessionNameForProject } from '../../../../shared/herdr-session-identity'
 import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import { HerdrRuntimeError, unwrapHerdrResponse } from './herdr-runtime-contract'
-import { decodeHerdrPtyId, encodeHerdrPtyId } from './herdr-pty-codec'
+import { decodeHerdrPtyId, encodeHerdrPtyId } from './herdr-pty-types'
 import type {
   HerdrPtyBinding,
   HerdrPtyIdentity,
@@ -20,21 +20,21 @@ import type {
   HerdrPaneSwapOptions
 } from './herdr-pty-types'
 import { assertHerdrMigrationReady } from './herdr-pty-types'
-import { clearHerdrBindingBuffer } from './herdr-pty-binding-queries'
-import { herdrLogicalKeyForBytes } from './herdr-logical-key'
 import {
-  bufferSnapshotForBinding,
-  movePaneForBinding,
-  notifyBlockedForBinding,
-  resizePaneForBinding,
-  swapPaneForBinding,
-  zoomPaneForBinding
-} from './herdr-pty-provider-pane-methods'
-import {
-  getHerdrForegroundProcess,
-  getHerdrProcessInfo,
-  herdrHasChildProcesses
-} from './herdr-pty-provider-process'
+  clearHerdrBindingBuffer,
+  getHerdrBindingBufferSnapshot,
+  getHerdrBindingCwd,
+  getHerdrBindingForegroundProcess,
+  getHerdrBindingProcessInfo,
+  herdrBindingHasChildProcesses,
+  maybeNotifyBlocked,
+  moveHerdrBinding,
+  resizeHerdrBinding,
+  swapHerdrBinding,
+  zoomHerdrBinding
+} from './herdr-pty-binding-queries'
+import type { TerminalLogicalInput } from '../../../../shared/terminal-logical-key'
+import { terminalLogicalInputFromBytes } from '../../../../shared/terminal-logical-key'
 import {
   createBinding,
   getRuntime,
@@ -50,8 +50,8 @@ import {
 } from './herdr-pty-provider-runtime'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import type { HerdrRuntimeManager, HerdrSurfaceSync } from './herdr-runtime-manager'
-import { startHerdrAgentIfRequested } from './herdr-agent-kind'
-export { decodeHerdrPtyId } from './herdr-pty-codec'
+import { startHerdrAgentIfRequested } from './herdr-pty-provider-runtime'
+export { decodeHerdrPtyId } from './herdr-pty-types'
 export type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
 
 export type HerdrPtyTargetResolver = (
@@ -210,21 +210,24 @@ export class HerdrPtyProvider implements IPtyProvider {
   }
 
   write(id: string, data: string): void {
+    this.writeLogical(id, terminalLogicalInputFromBytes(data))
+  }
+
+  writeLogical(id: string, input: TerminalLogicalInput): void {
     const binding = this.bindings.get(id)
     if (!binding) {
       return
     }
-    const key = herdrLogicalKeyForBytes(data)
-    if (key) {
+    if (input.kind === 'key') {
       void binding.transport
         .request(binding.sessionName, 'pane.send_keys', {
           pane_id: binding.paneId,
-          keys: [key]
+          keys: [input.name]
         })
         .catch(() => undefined)
       return
     }
-    binding.controller.write(data)
+    binding.controller.write(input.data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -232,6 +235,8 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return
     }
+    binding.cols = cols
+    binding.rows = rows
     binding.controller.resize(cols, rows)
   }
 
@@ -256,7 +261,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return null
     }
-    return null
+    return { cols: binding.cols, rows: binding.rows }
   }
 
   async getCwd(id: string): Promise<string> {
@@ -265,26 +270,14 @@ export class HerdrPtyProvider implements IPtyProvider {
       return ''
     }
     try {
-      return unwrapHerdrResponse(
-        await binding.transport.request<string>(binding.sessionName, 'pane.cwd', { pane_id: id })
-      )
+      return await getHerdrBindingCwd(binding)
     } catch {
-      return ''
+      return binding.cwd
     }
   }
 
   async getInitialCwd(id: string): Promise<string> {
-    const binding = this.bindings.get(id)
-    if (!binding) {
-      return ''
-    }
-    try {
-      return unwrapHerdrResponse(
-        await binding.transport.request<string>(binding.sessionName, 'pane.cwd', { pane_id: id })
-      )
-    } catch {
-      return ''
-    }
+    return this.getCwd(id)
   }
 
   async clearBuffer(id: string): Promise<void> {
@@ -302,7 +295,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return false
     }
-    return herdrHasChildProcesses(binding)
+    return herdrBindingHasChildProcesses(binding)
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
@@ -310,12 +303,12 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return null
     }
-    return getHerdrForegroundProcess(binding)
+    return getHerdrBindingForegroundProcess(binding)
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
     const herdrResults = await Promise.allSettled(
-      [...this.bindings.values()].map(getHerdrProcessInfo)
+      [...this.bindings.values()].map(getHerdrBindingProcessInfo)
     )
     const herdr = herdrResults.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : []
@@ -331,23 +324,27 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return null
     }
-    return bufferSnapshotForBinding(this.bindings, id, opts?.scrollbackRows)
+    return getHerdrBindingBufferSnapshot(binding, opts?.scrollbackRows)
   }
 
   async zoomPane(id: string, mode: 'toggle' | 'on' | 'off' = 'toggle') {
-    return zoomPaneForBinding(this.bindings, id, mode)
+    const binding = this.bindings.get(id)
+    return binding ? zoomHerdrBinding(binding, mode) : null
   }
 
   async swapPane(id: string, params: HerdrPaneSwapOptions) {
-    return swapPaneForBinding(this.bindings, id, params)
+    const binding = this.bindings.get(id)
+    return binding ? swapHerdrBinding(binding, params) : null
   }
 
   async movePane(id: string, destination: HerdrPaneMoveDestination, focus?: boolean) {
-    return movePaneForBinding(this.bindings, id, destination, focus)
+    const binding = this.bindings.get(id)
+    return binding ? moveHerdrBinding(binding, { destination, focus }) : null
   }
 
   async resizePane(id: string, direction: 'left' | 'right' | 'up' | 'down', amount?: number) {
-    return resizePaneForBinding(this.bindings, id, direction, amount)
+    const binding = this.bindings.get(id)
+    return binding ? resizeHerdrBinding(binding, direction, amount) : null
   }
 
   async notifyBlocked(
@@ -355,7 +352,10 @@ export class HerdrPtyProvider implements IPtyProvider {
     agent: string,
     state: 'idle' | 'working' | 'blocked' | 'done' | 'unknown'
   ): Promise<void> {
-    return notifyBlockedForBinding(this.bindings, id, agent, state)
+    const binding = this.bindings.get(id)
+    if (binding) {
+      await maybeNotifyBlocked(binding, agent, state)
+    }
   }
 
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
@@ -363,7 +363,10 @@ export class HerdrPtyProvider implements IPtyProvider {
   }
 
   async getDefaultShell(): Promise<string> {
-    return 'bash'
+    if (process.platform === 'win32') {
+      return process.env.COMSPEC || 'cmd.exe'
+    }
+    return process.env.SHELL || '/bin/bash'
   }
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {

@@ -1,5 +1,11 @@
 import { firstTerminalLeafId } from '../../../../shared/herdr-session-identity'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../../shared/terminal-tab-types'
+import type { Project } from '../../../../shared/project-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { basename, normalize } from 'node:path'
 import {
   findUniqueHerdrMatch,
@@ -9,7 +15,6 @@ import {
   orcaWorkspaceBinding,
   reportOrcaWorkspaceBinding
 } from './herdr-binding-metadata'
-import { isLinkedHerdrWorktree, type HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
 import type {
   HerdrHostTransport,
   HerdrPane,
@@ -18,6 +23,28 @@ import type {
   HerdrWorkspace
 } from './herdr-runtime-contract'
 import { HerdrRuntimeError, unwrapHerdrResponse } from './herdr-runtime-contract'
+
+export type HerdrWorktreeDescriptor = Pick<
+  Worktree,
+  'id' | 'instanceId' | 'path' | 'displayName'
+> & {
+  repoPath?: string
+}
+
+export type HerdrProjectHostGraph = {
+  project: Project
+  worktrees: HerdrWorktreeDescriptor[]
+  tabsByWorktreeId: Record<string, TerminalTab[]>
+  layoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  persistedPaneIdsByLeafId?: Record<string, string>
+}
+
+export function isLinkedHerdrWorktree(worktree: HerdrWorktreeDescriptor): boolean {
+  if (!worktree.repoPath) {
+    return false
+  }
+  return normalize(worktree.path) !== normalize(worktree.repoPath)
+}
 
 type OpenedStockWorktree = {
   workspace: HerdrWorkspace

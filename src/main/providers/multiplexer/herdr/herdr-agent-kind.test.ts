@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { herdrAgentKind, herdrAgentName } from './herdr-agent-kind'
+import { herdrAgentKind, herdrAgentName } from './herdr-pty-provider-runtime'
 
 describe('herdrAgentKind', () => {
   it('maps overlapping Orca agents onto stock Herdr kinds', () => {

@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { localHerdrCommand } from './herdr-command'
+import { localHerdrCommand } from './herdr-cli-session'
 
-const spawnMock = vi.fn()
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ function createChild(): MockChild {
 
 async function loadTransport() {
   const mocks = await import('node:child_process')
-  const { HerdrCliHostTransport } = await import('./herdr-cli-host-transport')
+  const { HerdrCliHostTransport } = await import('./herdr-cli-session')
   const transport = new HerdrCliHostTransport({
     commandFor: localHerdrCommand('/mock/herdr')
   })

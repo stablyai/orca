@@ -1,4 +1,5 @@
 export const HERDR_SCHEMA_VERSION = 1
+export const HERDR_PROTOCOL_VERSION = 19
 
 export type HerdrApiSchema = {
   protocol: number

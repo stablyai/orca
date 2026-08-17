@@ -61,11 +61,6 @@ import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { Store } from '../persistence'
 import { createLocalHerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-provider-factory'
 import type { HerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-pty-provider'
-import { HerdrTransport } from '../providers/multiplexer/herdr/herdr-transport'
-import {
-  HerdrDaemonSupervisor,
-  type HerdrDaemonStatus
-} from '../providers/multiplexer/herdr/herdr-daemon-supervisor'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -131,52 +126,6 @@ function getDaemonEntryPath(): string {
     return directEntryPath
   }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
-}
-
-function getHerdrDaemonEntryPath(): string {
-  const appPath = app.getAppPath()
-  const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  const directEntryPath = join(basePath, 'herdr-daemon-entry.js')
-  if (existsSync(directEntryPath)) {
-    return directEntryPath
-  }
-  return join(basePath, 'out', 'main', 'herdr-daemon-entry.js')
-}
-
-let herdrDaemonSupervisor: HerdrDaemonSupervisor | null = null
-
-// Why: fire-and-forget by design. The supervisor probes daemon readiness via socket
-// ping in the background, so a slow or failing daemon can never block or fail boot.
-function startHerdrDaemon(runtimeDir: string): HerdrDaemonSupervisor {
-  if (herdrDaemonSupervisor) {
-    return herdrDaemonSupervisor
-  }
-  const supervisor = new HerdrDaemonSupervisor({
-    entryPath: getHerdrDaemonEntryPath(),
-    runtimeDir,
-    socketPath: HerdrTransport.getDefaultSocketPath()
-  })
-  herdrDaemonSupervisor = supervisor
-  console.error(
-    '[herdr-daemon] starting supervisor:',
-    JSON.stringify({
-      entryPath: getHerdrDaemonEntryPath(),
-      runtimeDir,
-      socketPath: HerdrTransport.getDefaultSocketPath()
-    })
-  )
-  supervisor.start()
-  return supervisor
-}
-
-export function stopHerdrDaemon(): void {
-  const supervisor = herdrDaemonSupervisor
-  herdrDaemonSupervisor = null
-  void supervisor?.stop()
-}
-
-export function getHerdrDaemonStatus(): HerdrDaemonStatus {
-  return herdrDaemonSupervisor?.getStatus() ?? 'stopped'
 }
 
 // Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
@@ -981,39 +930,25 @@ export async function initDaemonPtyProvider(
 ): Promise<void> {
   herdrStore = store ?? null
   // Why: react to backend switches without a restart, so toggling the terminal
-  // backend in settings swaps the local provider and stops/starts the stock
-  // herdr daemon in place.
+  // backend in settings swaps the local provider in place.
   store?.onSettingsChanged((updates) => {
-    if (
-      !('terminalBackendDefault' in updates) &&
-      !('herdrRuntimeSource' in updates) &&
-      !('herdrSessionName' in updates)
-    ) {
+    if (!('terminalBackendDefault' in updates) && !('herdrSessionName' in updates)) {
       return
     }
     const activeStore = herdrStore
     const herdrBackendActive = activeStore?.getSettings().terminalBackendDefault === 'herdr'
-    const runtimeSource = activeStore?.getSettings().herdrRuntimeSource ?? 'stock'
     if (herdrBackendActive) {
       // Why: the local provider caches transports and the shared session name
-      // at construction, so backend, runtime-source, and session-name switches
-      // need a fresh provider to take effect without a restart.
+      // at construction, so backend and session-name switches need a fresh
+      // provider to take effect without a restart.
       if (activeStore) {
         herdrProvider = createLocalHerdrPtyProvider(adapter ?? undefined, activeStore)
         setLocalPtyProvider(herdrProvider)
         rebindLocalProviderListeners()
       }
-      if (runtimeSource === 'daemon') {
-        startHerdrDaemon(getRuntimeDir())
-      } else {
-        stopHerdrDaemon()
-      }
-    } else {
-      stopHerdrDaemon()
-      if (adapter) {
-        setLocalPtyProvider(adapter)
-        rebindLocalProviderListeners()
-      }
+    } else if (adapter) {
+      setLocalPtyProvider(adapter)
+      rebindLocalProviderListeners()
     }
   })
   logDaemonMilestone('daemon-init-start')
@@ -1035,33 +970,6 @@ export async function initDaemonPtyProvider(
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
-
-  // Why: gate the stock herdr daemon on the configured backend. Non-blocking by
-  // design: the supervisor probes readiness in the background, so a slow or failing
-  // daemon can never delay or fail daemon init.
-  const herdrBackendActive =
-    store?.getSettings().terminalBackendDefault === 'herdr' &&
-    store?.getSettings().herdrRuntimeSource === 'daemon'
-  console.error(
-    '[herdr-daemon] boot decision:',
-    JSON.stringify({
-      storePresent: store != null,
-      terminalBackendDefault: store?.getSettings().terminalBackendDefault ?? '<no-store>',
-      herdrRuntimeSource: store?.getSettings().herdrRuntimeSource ?? '<no-store>',
-      herdrBackendActive
-    })
-  )
-  if (herdrBackendActive) {
-    startHerdrDaemon(runtimeDir)
-    logDaemonMilestone('herdr-daemon-supervisor-started', {
-      socketPath: HerdrTransport.getDefaultSocketPath()
-    })
-  } else {
-    logDaemonMilestone('herdr-daemon-supervisor-skipped', {
-      backend: store?.getSettings().terminalBackendDefault,
-      runtimeSource: store?.getSettings().herdrRuntimeSource
-    })
-  }
 
   if (signal?.aborted) {
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).

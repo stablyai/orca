@@ -78,50 +78,23 @@ describe('TerminalBackendSection', () => {
     act(() => root.unmount())
   })
 
-  it('shows the runtime source control only when the herdr backend is active', () => {
-    const updateSettings = vi.fn()
+  it('does not offer a built-in Herdr daemon', () => {
     const container = document.createElement('div')
     const root = createRoot(container)
     act(() => {
       root.render(
         <TerminalBackendSection
           settings={{ ...getDefaultSettings('/tmp'), terminalBackendDefault: 'herdr' }}
-          updateSettings={updateSettings}
+          updateSettings={vi.fn()}
         />
       )
     })
 
-    const daemon = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Built-in daemon'
-    )
-    expect(daemon).toBeTruthy()
-    const stock = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Stock from PATH'
-    )
-    expect(stock).toBeTruthy()
-    act(() => daemon?.click())
-    expect(updateSettings).toHaveBeenCalledWith({ herdrRuntimeSource: 'daemon' })
-
-    act(() => root.unmount())
-  })
-
-  it('hides the runtime source control when the orca backend is active', () => {
-    const updateSettings = vi.fn()
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    act(() => {
-      root.render(
-        <TerminalBackendSection
-          settings={getDefaultSettings('/tmp')}
-          updateSettings={updateSettings}
-        />
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent?.trim() === 'Built-in daemon'
       )
-    })
-
-    const stock = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Stock from PATH'
-    )
-    expect(stock).toBeFalsy()
+    ).toBe(false)
 
     act(() => root.unmount())
   })

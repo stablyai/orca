@@ -17,8 +17,6 @@ import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
-import { HERDR_COMMAND_SPECS } from './herdr'
-
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,
@@ -37,6 +35,5 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
-  ...SKILL_COMMAND_SPECS,
-  ...HERDR_COMMAND_SPECS
+  ...SKILL_COMMAND_SPECS
 ]

@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 /** Resolve a stock herdr binary for live tests: explicit env, then PATH. */
 export function resolveStockHerdrTestBinary(): string | null {
@@ -17,4 +19,20 @@ export function resolveStockHerdrTestBinary(): string | null {
   } catch {
     return null
   }
+}
+
+const SOCKET_PATH_LIMIT = 104
+
+export function configHomeDir(): string {
+  for (const root of [tmpdir(), '/tmp']) {
+    const candidate = mkdtempSync(join(root, 'orca-h-'))
+    if (
+      candidate.length + '/.config/herdr/sessions/ot-123456/herdr.sock'.length <=
+      SOCKET_PATH_LIMIT
+    ) {
+      return candidate
+    }
+    rmSync(candidate, { recursive: true, force: true })
+  }
+  throw new Error('No writable temp dir yields a short enough herdr socket path')
 }

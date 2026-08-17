@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeHerdrBinarySource } from '../../../../shared/terminal-backend'
-import { resolveHerdrExecutable } from './herdr-binary-source'
+import { resolveHerdrExecutable } from './herdr-provider-factory'
 
 describe('stock Herdr binary source', () => {
   it('migrates missing and experimental managed settings to PATH', () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  normalizeHerdrRuntimeSource,
   normalizeHerdrSessionName,
   planTerminalBackendChange,
   resolveDesiredTerminalBackend,
@@ -76,21 +75,5 @@ describe('normalizeHerdrSessionName', () => {
 
   it('accepts the maximum-length name', () => {
     expect(normalizeHerdrSessionName('a'.repeat(64))).toBe('a'.repeat(64))
-  })
-})
-
-describe('normalizeHerdrRuntimeSource', () => {
-  it('keeps stock from PATH as the default runtime source', () => {
-    expect(normalizeHerdrRuntimeSource(undefined)).toBe('stock')
-    expect(normalizeHerdrRuntimeSource('stock')).toBe('stock')
-  })
-
-  it('accepts the explicit built-in daemon source', () => {
-    expect(normalizeHerdrRuntimeSource('daemon')).toBe('daemon')
-  })
-
-  it('rejects unknown values as the stock runtime', () => {
-    expect(normalizeHerdrRuntimeSource('custom')).toBe('stock')
-    expect(normalizeHerdrRuntimeSource(42)).toBe('stock')
   })
 })

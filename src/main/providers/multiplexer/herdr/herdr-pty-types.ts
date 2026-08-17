@@ -1,11 +1,42 @@
+import { Buffer } from 'node:buffer'
 import type { Project } from '../../../../shared/project-types'
 import type { IPtyProvider, PtyProcessInfo } from '../../types'
-import type { HerdrProjectHostGraph } from './herdr-runtime-manager'
+import type { HerdrProjectHostGraph } from './ensure-herdr-workspace'
 import {
   HerdrRuntimeError,
   type HerdrHostTransport,
   type HerdrTerminalController
 } from './herdr-runtime-contract'
+
+const HERDR_PTY_PREFIX = 'herdr:'
+
+export function encodeHerdrPtyId(identity: HerdrPtyIdentity): string {
+  return `${HERDR_PTY_PREFIX}${Buffer.from(JSON.stringify(identity), 'utf8').toString('base64url')}`
+}
+
+export function decodeHerdrPtyId(id: string): HerdrPtyIdentity | null {
+  if (!id.startsWith(HERDR_PTY_PREFIX)) {
+    return null
+  }
+  try {
+    const value = JSON.parse(
+      Buffer.from(id.slice(HERDR_PTY_PREFIX.length), 'base64url').toString('utf8')
+    ) as Partial<HerdrPtyIdentity> | null
+    if (
+      !value ||
+      typeof value.projectId !== 'string' ||
+      typeof value.hostId !== 'string' ||
+      typeof value.worktreeId !== 'string' ||
+      typeof value.tabId !== 'string' ||
+      typeof value.leafId !== 'string'
+    ) {
+      return null
+    }
+    return value as HerdrPtyIdentity
+  } catch {
+    return null
+  }
+}
 
 export type HerdrPtyIdentity = {
   version?: 2

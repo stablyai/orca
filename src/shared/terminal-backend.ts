@@ -4,12 +4,6 @@ export type TerminalBackendPreference = 'inherit' | TerminalBackend
 
 export type HerdrBinarySource = { kind: 'system' } | { kind: 'custom'; path: string }
 
-/** How the herdr terminal backend runs on the local host. 'daemon' uses Orca's
- *  built-in in-app herdr daemon; 'stock' spawns or attaches to the stock herdr
- *  binary resolved via `herdrBinarySource`, producing a session the stock herdr
- *  client can see. */
-export type HerdrRuntimeSource = 'daemon' | 'stock'
-
 /** Shared stock herdr session name for Orca-managed terminals when no
  *  per-project override is set. Users can edit or clear it. */
 export const DEFAULT_HERDR_SESSION_NAME = 'orca'
@@ -32,10 +26,6 @@ export function normalizeHerdrSessionName(value: unknown): string | undefined {
 
 export function normalizeTerminalBackend(value: unknown): TerminalBackend {
   return value === 'herdr' ? 'herdr' : 'orca'
-}
-
-export function normalizeHerdrRuntimeSource(value: unknown): HerdrRuntimeSource {
-  return value === 'daemon' ? 'daemon' : 'stock'
 }
 
 export function normalizeHerdrBinarySource(value: unknown): HerdrBinarySource {

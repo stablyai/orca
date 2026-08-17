@@ -210,9 +210,6 @@ export const electronViteConfig: UserConfig = {
           // Why: sandboxed webview preloads cannot load Rollup helper chunks.
           'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
-          'herdr-daemon-entry': resolve(
-            'src/main/providers/multiplexer/herdr/herdr-daemon-entry.ts'
-          ),
           'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
@@ -253,14 +250,10 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
-          // Why: `orca herdr ...` connects to the in-app daemon socket from
-          // the CLI, so the socket client and its error contract must survive
-          // electron-vite's out/main clean, same as the agent-hooks module.
+          // Why: the CLI typechecks against the stock Herdr contract without
+          // going through the Electron main bundle.
           'providers/multiplexer/herdr/herdr-runtime-contract': resolve(
             'src/main/providers/multiplexer/herdr/herdr-runtime-contract.ts'
-          ),
-          'providers/multiplexer/herdr/herdr-transport': resolve(
-            'src/main/providers/multiplexer/herdr/herdr-transport.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
           'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')

@@ -11,8 +11,21 @@ import {
   HerdrRuntimeError,
   unwrapHerdrResponse
 } from './herdr-runtime-contract'
-import { parseHerdrSessionList, type HerdrListedSession } from './herdr-session-process'
-import { herdrStockCliInvocation } from './herdr-stock-cli-request'
+import {
+  herdrStockCliInvocation,
+  parseHerdrSessionList,
+  type HerdrListedSession
+} from './herdr-cli-session'
+import {
+  createHerdrSessionControlFromOpen,
+  herdrSessionControlArgs,
+  herdrSessionControlStreamFromChannel
+} from './herdr-session-control'
+import type {
+  HerdrHostTransport,
+  HerdrTerminalController,
+  HerdrTerminalControlOptions
+} from './herdr-runtime-contract'
 
 export type HerdrSshSessionOptions = {
   connection: SshConnection
@@ -80,7 +93,7 @@ export class HerdrSshSessionManager {
     const executable = await this.executable()
     if (this.hostPlatform?.commandDialect === 'powershell') {
       const script = [
-        `Start-Process -FilePath ${powerShellLiteral(executable)} -ArgumentList @(${powerShellLiteral(`--session ${sessionName} server`)}) -WindowStyle Hidden`
+        `Start-Process -FilePath ${powerShellLiteral(executable)} -ArgumentList @(${['--session', sessionName, 'server'].map(powerShellLiteral).join(', ')}) -WindowStyle Hidden`
       ].join('; ')
       const channel = await this.connection.exec(powerShellCommand(script), {
         wrapCommand: false
@@ -166,5 +179,46 @@ export class HerdrSshSessionManager {
       })
       channel.end()
     })
+  }
+}
+
+export class HerdrSshHostTransport implements HerdrHostTransport {
+  private readonly sessionManager: HerdrSshSessionManager
+
+  constructor(
+    connection: SshConnection,
+    timeoutMs = 15_000,
+    resolveExecutable: () => Promise<string> = async () => 'herdr',
+    hostPlatform?: RemoteHostPlatform,
+    sessionManager?: HerdrSshSessionManager
+  ) {
+    this.sessionManager =
+      sessionManager ??
+      new HerdrSshSessionManager(connection, timeoutMs, resolveExecutable, hostPlatform)
+  }
+
+  async ensureSession(sessionName: string): Promise<void> {
+    await this.sessionManager.ensureSession(sessionName)
+  }
+
+  async request<T>(
+    sessionName: string,
+    method: string,
+    params: unknown
+  ): Promise<HerdrResponse<T>> {
+    const invocation = herdrStockCliInvocation(sessionName, method, params)
+    return invocation.parse(await this.sessionManager.run(invocation.args)) as HerdrResponse<T>
+  }
+
+  controlTerminal(
+    sessionName: string,
+    target: string,
+    options: HerdrTerminalControlOptions
+  ): HerdrTerminalController {
+    return createHerdrSessionControlFromOpen(async () =>
+      herdrSessionControlStreamFromChannel(
+        await this.sessionManager.open(herdrSessionControlArgs(sessionName, target, options))
+      )
+    )
   }
 }

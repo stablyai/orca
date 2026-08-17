@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 import type { SshConnection } from '../../../ssh/ssh-connection'
 import type { RemoteHostPlatform } from '../../../ssh/ssh-remote-platform'
@@ -11,13 +12,18 @@ import {
   type HerdrTransportEvent
 } from './herdr-runtime-contract'
 import { HerdrSshSessionManager } from './herdr-ssh-session'
-import { HerdrTransport } from './herdr-transport'
-import { createHerdrSocketTerminalController } from './herdr-socket-terminal-control'
+
+import {
+  createHerdrSessionControlFromOpen,
+  herdrSessionControlArgs,
+  herdrSessionControlStreamFromChannel
+} from './herdr-session-control'
 import { DEFAULT_HERDR_EVENT_SUBSCRIPTIONS } from './herdr-socket-events'
 import type { HerdrSocketEvent } from './herdr-socket-types'
 
 export class HerdrSshRelayTransport implements HerdrHostTransport {
   private readonly sessionManager: HerdrSshSessionManager
+  private readonly timeoutMs: number
   private client: HerdrTransport | null = null
   private readonly eventListeners = new Set<(event: HerdrTransportEvent) => void>()
   private remoteHome: string | null = null
@@ -29,6 +35,7 @@ export class HerdrSshRelayTransport implements HerdrHostTransport {
     hostPlatform?: RemoteHostPlatform,
     sessionManager?: HerdrSshSessionManager
   ) {
+    this.timeoutMs = timeoutMs
     this.sessionManager =
       sessionManager ??
       new HerdrSshSessionManager(connection, timeoutMs, resolveExecutable, hostPlatform)
@@ -109,21 +116,15 @@ export class HerdrSshRelayTransport implements HerdrHostTransport {
   }
 
   controlTerminal(
-    _sessionName: string,
+    sessionName: string,
     target: string,
     options: HerdrTerminalControlOptions
   ): HerdrTerminalController {
-    if (!this.client?.isConnected()) {
-      throw new HerdrRuntimeError(
-        'not_connected',
-        'Relay transport not connected for terminal control'
+    return createHerdrSessionControlFromOpen(async () =>
+      herdrSessionControlStreamFromChannel(
+        await this.sessionManager.open(herdrSessionControlArgs(sessionName, target, options))
       )
-    }
-    return createHerdrSocketTerminalController(target, options, {
-      request: <T>(method: string, params: unknown) =>
-        this.client!.request(method, params) as Promise<T>,
-      subscribeEvents: (listener) => this.onEvent(listener)
-    })
+    )
   }
 
   onEvent(listener: (event: HerdrTransportEvent) => void): () => void {
@@ -140,7 +141,148 @@ export class HerdrSshRelayTransport implements HerdrHostTransport {
   }
 
   private async getRemoteHome(): Promise<string> {
-    const result = await this.sessionManager.run(['sh', '-c', 'echo "$HOME"'])
-    return result.trim() || '/home/unknown'
+    const channel = await this.connection.exec('printf %s "$HOME"')
+    return await new Promise((resolve, reject) => {
+      let stdout = ''
+      const timeout = setTimeout(() => {
+        channel.close()
+        reject(new Error(`Remote HOME lookup timed out after ${this.timeoutMs}ms`))
+      }, this.timeoutMs)
+      channel.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf8')
+      })
+      channel.once('error', (error: Error) => {
+        clearTimeout(timeout)
+        reject(error)
+      })
+      channel.once('close', () => {
+        clearTimeout(timeout)
+        resolve(stdout.trim() || '/home/unknown')
+      })
+      channel.end()
+    })
+  }
+}
+
+type PendingRequest = {
+  resolve: (value: unknown) => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
+const REQUEST_TIMEOUT_MS = 30_000
+
+class HerdrTransport extends EventEmitter {
+  private socket: Duplex | null = null
+  private buffer = ''
+  private pendingRequests = new Map<string, PendingRequest>()
+  private messageId = 0
+
+  async connectWithStream(stream: Duplex): Promise<void> {
+    if (this.socket) {
+      throw new HerdrRuntimeError('already_connected', 'Transport already connected')
+    }
+    this.socket = stream
+    this.setupSocket(stream)
+    if ('readyState' in stream && stream.readyState === 'opening') {
+      await new Promise<void>((resolve, reject) => {
+        stream.once('connect', () => resolve())
+        stream.once('error', reject)
+      })
+    }
+  }
+
+  private setupSocket(socket: Duplex): void {
+    socket.on('data', (data) => {
+      this.buffer += data.toString('utf8')
+      this.processBuffer()
+    })
+    socket.on('close', () => {
+      this.socket = null
+      this.emit('disconnect')
+    })
+    socket.on('error', (err) => {
+      this.emit('error', err)
+    })
+  }
+
+  private processBuffer(): void {
+    const lines = this.buffer.split('\n')
+    this.buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue
+      }
+      try {
+        const message = JSON.parse(line) as Record<string, unknown>
+        if ('id' in message && ('result' in message || 'error' in message)) {
+          this.handleResponse(
+            message as { id: string; result?: unknown; error?: { code: string; message: string } }
+          )
+        } else if ('method' in message) {
+          this.emit('notification', message)
+        } else if ('event' in message) {
+          this.emit('event', message)
+        }
+      } catch {
+        // Ignore malformed messages
+      }
+    }
+  }
+
+  private handleResponse(response: {
+    id: string
+    result?: unknown
+    error?: { code: string; message: string } | null
+  }): void {
+    const pending = this.pendingRequests.get(response.id)
+    if (!pending) {
+      return
+    }
+    this.pendingRequests.delete(response.id)
+    clearTimeout(pending.timeout)
+    if (response.error) {
+      pending.reject(new HerdrRuntimeError(response.error.code, response.error.message))
+    } else {
+      pending.resolve(response.result)
+    }
+  }
+
+  async request(method: string, params: unknown): Promise<unknown> {
+    if (!this.isConnected() || !this.socket) {
+      throw new HerdrRuntimeError('not_connected', 'Transport not connected')
+    }
+    const id = String(++this.messageId)
+    const socket = this.socket
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(id)
+        reject(new HerdrRuntimeError('request_timeout', `Request ${method} timed out`))
+      }, REQUEST_TIMEOUT_MS)
+      this.pendingRequests.set(id, { resolve, reject, timeout })
+      socket.write(`${JSON.stringify({ id, method, params })}\n`)
+    })
+  }
+
+  async close(): Promise<void> {
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timeout)
+      pending.reject(new HerdrRuntimeError('transport_closed', 'Transport closed'))
+    }
+    this.pendingRequests.clear()
+    if (this.socket) {
+      this.socket.destroy()
+      this.socket = null
+    }
+  }
+
+  isConnected(): boolean {
+    if (!this.socket) {
+      return false
+    }
+    if ('readyState' in this.socket) {
+      return this.socket.readyState === 'open'
+    }
+    return !this.socket.destroyed
   }
 }

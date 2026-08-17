@@ -9,11 +9,11 @@ import type {
   HerdrTerminalFrame
 } from './herdr-runtime-contract'
 import { decodeHerdrPtyId, HerdrPtyProvider } from './herdr-pty-provider'
-import { encodeHerdrPtyId } from './herdr-pty-codec'
+import { encodeHerdrPtyId } from './herdr-pty-types'
 import { findLegacyMigrationBlockers } from './herdr-pty-types'
 import type { Project } from '../../../../shared/project-types'
 import { orcaPaneBinding } from './herdr-binding-metadata'
-import type { HerdrProjectHostGraph } from './herdr-runtime-graph'
+import type { HerdrProjectHostGraph } from './ensure-herdr-workspace'
 
 function transport(closeBeforeFrame = false) {
   const frameListeners = new Set<(frame: HerdrTerminalFrame) => void>()
@@ -262,7 +262,7 @@ describe('HerdrPtyProvider', () => {
     const write = spawnedController.write as ReturnType<typeof vi.fn>
     host.requestMock.mockClear()
 
-    provider.write(spawned.id, '\x03')
+    provider.writeLogical(spawned.id, { kind: 'key', name: 'ctrl+c' })
     provider.write(spawned.id, '\x1b')
     provider.write(spawned.id, '\x1b\x7f')
     await Promise.resolve()
@@ -280,6 +280,76 @@ describe('HerdrPtyProvider', () => {
     expect(write).toHaveBeenCalledWith('\x1b\x7f')
     expect(write).not.toHaveBeenCalledWith('\x03')
     expect(write).not.toHaveBeenCalledWith('\x1b')
+  })
+
+  it('reads cwd from pane.get with the Herdr pane id', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    host.requestMock.mockClear()
+    await expect(provider.getCwd(spawned.id)).resolves.toBe('/repo')
+    expect(host.requestMock).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'pane.get',
+      { pane_id: 'p1' }
+    )
+    expect(
+      host.requestMock.mock.calls.some((call) => {
+        const params = call[2] as { pane_id?: string } | undefined
+        return params?.pane_id === spawned.id
+      })
+    ).toBe(false)
+  })
+
+  it('returns the last applied size from the binding', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 120, rows: 40 })
+    provider.resize(spawned.id, 100, 30)
+    await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 100, rows: 30 })
+  })
+
+  it('clears the local snapshot without sending keys', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    host.requestMock.mockClear()
+    await provider.clearBuffer(spawned.id)
+    expect(host.requestMock).not.toHaveBeenCalled()
   })
 
   it('sends SIGINT to the Herdr pane id, not the Orca pty id', async () => {

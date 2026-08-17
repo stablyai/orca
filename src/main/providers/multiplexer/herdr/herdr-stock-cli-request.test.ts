@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { herdrStockCliInvocation } from './herdr-stock-cli-request'
+import { herdrStockCliInvocation } from './herdr-cli-session'
 
 describe('stock Herdr CLI request adapter', () => {
   it('uses public snapshot and metadata commands', () => {

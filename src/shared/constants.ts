@@ -238,7 +238,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     localWindowsRuntimeDefault: { kind: 'windows-host' },
     terminalBackendDefault: 'orca',
     herdrBinarySource: { kind: 'system' },
-    herdrRuntimeSource: 'stock',
     herdrSessionName: DEFAULT_HERDR_SESSION_NAME,
     terminalBackendActivationDefaultedToOrca: true,
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.

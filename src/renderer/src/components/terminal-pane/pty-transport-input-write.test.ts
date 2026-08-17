@@ -66,7 +66,7 @@ describe('createIpcPtyTransport', () => {
 
     await localTransport.connect({ url: '', callbacks: {} })
     await expect(localTransport.sendInputAccepted?.('\x03')).resolves.toBe(true)
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03')
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03', ['ctrl+c'])
 
     const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
     await sshTransport.connect({ url: '', callbacks: {} })

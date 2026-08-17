@@ -11,10 +11,7 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
-import {
-  normalizeHerdrRuntimeSource,
-  normalizeHerdrSessionName
-} from '../../../shared/terminal-backend'
+import { normalizeHerdrSessionName } from '../../../shared/terminal-backend'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
@@ -162,9 +159,6 @@ export function updateSettings(
   if ('herdrSessionName' in updates) {
     // Empty/whitespace clears the shared name, reverting to per-project derived sessions.
     sanitizedUpdates.herdrSessionName = normalizeHerdrSessionName(updates.herdrSessionName)
-  }
-  if ('herdrRuntimeSource' in updates) {
-    sanitizedUpdates.herdrRuntimeSource = normalizeHerdrRuntimeSource(updates.herdrRuntimeSource)
   }
   if ('appIcon' in updates) {
     sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)

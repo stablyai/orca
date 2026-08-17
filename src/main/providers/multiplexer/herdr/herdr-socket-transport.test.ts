@@ -2,16 +2,17 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { Socket } from 'node:net'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { HerdrSocketConnection, defaultHerdrSocketPath } from './herdr-socket-connection'
 import {
+  HerdrSocketConnection,
   HerdrSocketMessageParser,
   createRequest,
   decodeSocketMessage,
+  defaultHerdrSocketPath,
   encodeSocketMessage,
   isSocketEvent,
   isSocketResponse
-} from './herdr-socket-message'
-import { HerdrSocketReconnection } from './herdr-socket-reconnection'
+} from './herdr-socket-connection'
+import { HerdrSocketReconnection } from './herdr-socket-events'
 import { HerdrSocketTransport } from './herdr-socket-transport'
 import type { HerdrSocketSessionManager } from './herdr-socket-session'
 

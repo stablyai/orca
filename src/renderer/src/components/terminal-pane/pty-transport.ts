@@ -12,6 +12,7 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
+import { terminalLogicalInputFromBytes } from '../../../../shared/terminal-logical-key'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   ptyDataHandlers,
@@ -553,6 +554,27 @@ export function createPtyOutputProcessor({
   }
 }
 
+function logicalKeysForPtyWrite(data: string): string[] | undefined {
+  const classified = terminalLogicalInputFromBytes(data)
+  return classified.kind === 'key' ? [classified.name] : undefined
+}
+
+function writePtyLogicalInput(id: string, data: string): void {
+  const keys = logicalKeysForPtyWrite(data)
+  if (keys) {
+    window.api.pty.write(id, data, keys)
+    return
+  }
+  window.api.pty.write(id, data)
+}
+
+function writeAcceptedPtyLogicalInput(id: string, data: string): Promise<boolean> {
+  const keys = logicalKeysForPtyWrite(data)
+  return keys
+    ? window.api.pty.writeAccepted(id, data, keys)
+    : window.api.pty.writeAccepted(id, data)
+}
+
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     cwd,
@@ -592,7 +614,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data),
+    write: (id, data) => writePtyLogicalInput(id, data),
     // Guard like the registered writeUnavailable handler: a rebind during the async drain
     // must not tell the new pane that its write failed.
     onDrainFailure: (id) => {
@@ -728,7 +750,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (!connected || ptyId !== id) {
           return false
         }
-        const accepted = await window.api.pty.writeAccepted(id, chunk.value)
+        const accepted = await writeAcceptedPtyLogicalInput(id, chunk.value)
         if (!accepted) {
           return false
         }

@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HERDR_PROTOCOL_VERSION } from './herdr-daemon-schema'
-import { HERDR_SCHEMA_VERSION } from './herdr-runtime-contract'
+import { HERDR_PROTOCOL_VERSION, HERDR_SCHEMA_VERSION } from './herdr-runtime-contract'
 
 // Why: the stock herdr release the e2e downloads (see
 // config/scripts/download-herdr-release.mjs) must speak the protocol and schema

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { herdrSessionControlArgs } from './herdr-session-control'
+import { herdrSessionControlArgs, type HerdrSessionControlStream } from './herdr-session-control'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
@@ -75,31 +75,33 @@ describe('createHerdrSessionControlController', () => {
   })
 })
 
-describe('createStockHerdrTerminalController', () => {
-  it('attaches with terminal session control when commandFor is set', async () => {
-    const child = createChild()
-    spawnMock.mockReturnValue(child)
-    const { createStockHerdrTerminalController } = await import('./herdr-terminal-observe')
-    const commandFor = vi.fn((args: string[]) => ({ file: '/mock/herdr', args }))
-    const controller = createStockHerdrTerminalController(
-      'orca',
-      'w1:p1',
-      { cols: 100, rows: 30 },
-      {
-        commandFor,
-        request: vi.fn(),
-        onEvent: vi.fn(() => () => undefined)
-      }
+describe('createHerdrSessionControlFromOpen', () => {
+  it('queues writes until the stream opens', async () => {
+    const { createHerdrSessionControlFromOpen } = await import('./herdr-session-control')
+    let resolveOpen: ((stream: HerdrSessionControlStream) => void) | undefined
+    const write = vi.fn<(data: string) => void>()
+    const controller = createHerdrSessionControlFromOpen(
+      () =>
+        new Promise((resolve) => {
+          resolveOpen = resolve
+        })
     )
-    expect(commandFor).toHaveBeenCalledWith(
-      herdrSessionControlArgs('orca', 'w1:p1', { cols: 100, rows: 30 })
-    )
-    expect(commandFor.mock.calls[0][0]).not.toContain('observe')
-    controller.write('x')
-    controller.resize(132, 43)
-    expect(child.stdin.write.mock.calls.map((call) => call[0])).toEqual([
-      '{"type":"terminal.input","text":"x"}\n',
-      '{"type":"terminal.resize","cols":132,"rows":43}\n'
+    controller.write('hello')
+    controller.resize(80, 24)
+    expect(write).not.toHaveBeenCalled()
+    resolveOpen?.({
+      writable: true,
+      write,
+      end: vi.fn(),
+      close: vi.fn(),
+      onData: vi.fn(),
+      onError: vi.fn(),
+      onClose: vi.fn()
+    })
+    await Promise.resolve()
+    expect(write.mock.calls.map((call) => call[0])).toEqual([
+      `${JSON.stringify({ type: 'terminal.input', text: 'hello' })}\n`,
+      `${JSON.stringify({ type: 'terminal.resize', cols: 80, rows: 24 })}\n`
     ])
     controller.release()
   })

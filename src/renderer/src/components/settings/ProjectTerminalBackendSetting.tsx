@@ -5,6 +5,7 @@ import { resolveTerminalBackend } from '../../../../shared/terminal-backend'
 import { useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import { SearchableSetting } from './SearchableSetting'
 import {
   SettingsRow,
   SettingsSegmentedControl,
@@ -20,6 +21,8 @@ type ProjectTerminalBackendSettingProps = {
     projectId: string,
     updates: ProjectUpdateArgs['updates']
   ) => void | Promise<unknown>
+  repoDisplayName?: string
+  forceVisible?: boolean
 }
 
 export function ProjectTerminalBackendSetting({
@@ -27,8 +30,10 @@ export function ProjectTerminalBackendSetting({
   hostId,
   settings,
   runtimeSessionSummary,
-  updateProject
-}: ProjectTerminalBackendSettingProps): React.JSX.Element {
+  updateProject,
+  repoDisplayName,
+  forceVisible
+}: ProjectTerminalBackendSettingProps): React.JSX.Element | null {
   const [migrationBlocked, setMigrationBlocked] = useState(false)
   const preference = project.terminalBackendPreference ?? 'inherit'
   const activeBackend = resolveTerminalBackend({
@@ -50,7 +55,7 @@ export function ProjectTerminalBackendSetting({
     void updateProject(project.id, { terminalBackendPreference: value })
   }
 
-  return (
+  const body = (
     <section className="space-y-3">
       <SettingsSubsectionHeader
         title={translate(
@@ -125,5 +130,27 @@ export function ProjectTerminalBackendSetting({
         </p>
       ) : null}
     </section>
+  )
+
+  if (repoDisplayName === undefined) {
+    return body
+  }
+
+  return (
+    <SearchableSetting
+      title={translate(
+        'auto.components.settings.RepositoryPane.terminalBackend',
+        'Terminal backend'
+      )}
+      description={translate(
+        'auto.components.settings.RepositoryPane.terminalBackendDescription',
+        'Choose Orca or Herdr for this project.'
+      )}
+      keywords={[repoDisplayName, 'terminal', 'backend', 'runtime', 'herdr', 'multiplexer']}
+      className="space-y-3"
+      forceVisible={forceVisible}
+    >
+      {body}
+    </SearchableSetting>
   )
 }

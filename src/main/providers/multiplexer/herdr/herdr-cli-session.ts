@@ -1,14 +1,55 @@
+import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import type { HerdrApiSchema, HerdrResponse } from './herdr-runtime-contract'
-import type { HerdrCommand } from './herdr-command'
+import type {
+  HerdrApiSchema,
+  HerdrHostTransport,
+  HerdrResponse,
+  HerdrTerminalController,
+  HerdrTerminalControlOptions
+} from './herdr-runtime-contract'
 import {
   assertHerdrSchemaCompatible,
   assertHerdrServerCompatible,
   HerdrRuntimeError,
   unwrapHerdrResponse
 } from './herdr-runtime-contract'
-import { herdrServerEnvironment, parseHerdrSessionList } from './herdr-session-process'
-import { herdrStockCliInvocation } from './herdr-stock-cli-request'
+import { herdrStockCliArgs } from './herdr-stock-cli-args'
+import {
+  createHerdrSessionControlController,
+  herdrSessionControlArgs
+} from './herdr-session-control'
+
+export type HerdrCommand = { file: string; args: string[]; env?: NodeJS.ProcessEnv }
+
+export type HerdrListedSession = { name: string; running: boolean }
+
+export function localHerdrCommand(
+  executable = 'herdr',
+  env?: NodeJS.ProcessEnv
+): (args: string[]) => HerdrCommand {
+  return (args) => ({ file: executable, args, ...(env ? { env } : {}) })
+}
+
+export function parseHerdrSessionList(stdout: string): HerdrListedSession[] {
+  const result = JSON.parse(stdout) as {
+    sessions?: { name?: unknown; running?: unknown }[]
+  }
+  return (result.sessions ?? []).flatMap((session) =>
+    typeof session.name === 'string'
+      ? [{ name: session.name, running: session.running === true }]
+      : []
+  )
+}
+
+export function herdrServerEnvironment(base: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const env = { ...process.env, ...base }
+  for (const name of Object.keys(env)) {
+    if (name.startsWith('HERDR_')) {
+      delete env[name]
+    }
+  }
+  return env
+}
 
 export type HerdrCliSessionOptions = {
   commandFor: (herdrArgs: string[]) => HerdrCommand
@@ -159,5 +200,126 @@ export class HerdrCliSessionManager {
 
   async run(args: string[]): Promise<string> {
     return await this.runCli(args)
+  }
+}
+
+export type HerdrStockCliInvocation = {
+  args: string[]
+  parse: (stdout: string) => HerdrResponse<unknown>
+}
+
+export function herdrStockCliInvocation(
+  sessionName: string,
+  method: string,
+  rawParams: unknown
+): HerdrStockCliInvocation {
+  const args = ['--session', sessionName, ...herdrStockCliArgs(method, rawParams)]
+
+  switch (method) {
+    case 'pane.read':
+    case 'agent.read':
+      return {
+        args,
+        parse: (stdout) => ({
+          id: randomUUID(),
+          result: { read: { text: stdout, revision: 0 } }
+        })
+      }
+    case 'workspace.report_metadata':
+    case 'pane.send_keys':
+    case 'pane.send_text':
+    case 'pane.report_metadata':
+    case 'pane.report_agent':
+    case 'pane.report_agent_session':
+    case 'pane.release_agent':
+    case 'pane.close':
+    case 'pane.rename':
+    case 'pane.focus':
+    case 'agent.rename':
+    case 'agent.focus':
+    case 'agent.start':
+    case 'agent.prompt':
+    case 'agent.send_keys':
+    case 'workspace.close':
+    case 'workspace.focus':
+    case 'tab.close':
+    case 'tab.focus':
+    case 'worktree.remove':
+    case 'server.live_handoff':
+      return okInvocation(args)
+    default:
+      return jsonInvocation(args)
+  }
+}
+
+function jsonInvocation(args: string[]): HerdrStockCliInvocation {
+  return {
+    args,
+    parse: (stdout) => JSON.parse(stdout.trim()) as HerdrResponse<unknown>
+  }
+}
+
+function okInvocation(args: string[]): HerdrStockCliInvocation {
+  return {
+    args,
+    parse: (stdout) =>
+      stdout.trim()
+        ? (JSON.parse(stdout.trim()) as HerdrResponse<unknown>)
+        : { id: randomUUID(), result: { type: 'ok' } }
+  }
+}
+
+export type HerdrCliHostTransportOptions = {
+  commandFor: (herdrArgs: string[]) => { file: string; args: string[]; env?: NodeJS.ProcessEnv }
+  serverCommandFor?: (sessionName: string) => {
+    file: string
+    args: string[]
+    env?: NodeJS.ProcessEnv
+  }
+  timeoutMs?: number
+}
+
+export class HerdrCliHostTransport implements HerdrHostTransport {
+  private readonly sessionManager: HerdrCliSessionManager
+
+  constructor(private readonly options: HerdrCliHostTransportOptions) {
+    this.sessionManager = new HerdrCliSessionManager({
+      commandFor: options.commandFor,
+      serverCommandFor: options.serverCommandFor,
+      timeoutMs: options.timeoutMs
+    })
+  }
+
+  async ensureSession(sessionName: string): Promise<void> {
+    await this.sessionManager.ensureSession(sessionName)
+  }
+
+  async request<T>(
+    sessionName: string,
+    method: string,
+    params: unknown
+  ): Promise<HerdrResponse<T>> {
+    const invocation = herdrStockCliInvocation(sessionName, method, params)
+    const stdout = await this.sessionManager.run(invocation.args)
+    try {
+      return invocation.parse(stdout) as HerdrResponse<T>
+    } catch (error) {
+      throw new HerdrRuntimeError(
+        'herdr_invalid_response',
+        `Stock Herdr returned an invalid response for ${method}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
+
+  controlTerminal(
+    sessionName: string,
+    target: string,
+    options: HerdrTerminalControlOptions
+  ): HerdrTerminalController {
+    return createHerdrSessionControlController(
+      this.options.commandFor(herdrSessionControlArgs(sessionName, target, options))
+    )
   }
 }

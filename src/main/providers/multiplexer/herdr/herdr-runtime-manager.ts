@@ -7,10 +7,12 @@ import type {
   HerdrTerminalControlOptions
 } from './herdr-runtime-contract'
 import { HerdrRuntimeError, unwrapHerdrResponse } from './herdr-runtime-contract'
-import type { HerdrProjectHostGraph } from './herdr-runtime-graph'
-export type { HerdrProjectHostGraph } from './herdr-runtime-graph'
-import { enrichHerdrWorkspaceCheckouts, ensureStockHerdrWorkspace } from './ensure-herdr-workspace'
-export type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
+import {
+  enrichHerdrWorkspaceCheckouts,
+  ensureStockHerdrWorkspace,
+  type HerdrProjectHostGraph
+} from './ensure-herdr-workspace'
+export type { HerdrProjectHostGraph, HerdrWorktreeDescriptor } from './ensure-herdr-workspace'
 import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
 import {
   paneBindingMapKey,
@@ -21,21 +23,18 @@ import {
   ORCA_BINDING_TOKEN,
   ORCA_METADATA_SOURCE
 } from './herdr-binding-metadata'
-import { ensureTabLayout } from './herdr-tab-layout'
-import { collectHerdrPaneIds } from './herdr-layout-reconcile'
+import { collectHerdrPaneIds, ensureTabLayout } from './herdr-tab-layout'
 import type { LayoutNode } from './herdr-socket-types'
 import type { HerdrBindingAgentState } from './herdr-pty-binding-queries'
 import {
   claimAndPresentHerdrSurfaces,
+  collectHerdrSurfaceActions,
   collectUnboundHerdrSurfaces,
+  resolveHerdrPaneIdentities,
   type HerdrImportedSurface,
+  type HerdrOrcaSurfaceAction,
   type HerdrSurfacePresenter
 } from './herdr-orca-surface-import'
-import {
-  collectHerdrSurfaceActions,
-  resolveHerdrPaneIdentities,
-  type HerdrOrcaSurfaceAction
-} from './herdr-orca-surface-sync'
 
 export type HerdrAgentRollup = {
   agents: HerdrBindingAgentState[]

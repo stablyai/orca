@@ -12,7 +12,7 @@ import type { HerdrPtyTargetResolver } from './herdr-pty-provider'
 import type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import type { PtySpawnOptions } from '../../pty-provider-contract'
-import type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
+import type { HerdrWorktreeDescriptor } from './ensure-herdr-workspace'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 function repoPathForWorktree(

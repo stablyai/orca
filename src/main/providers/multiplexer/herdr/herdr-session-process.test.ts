@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { herdrServerEnvironment, parseHerdrSessionList } from './herdr-session-process'
+import { herdrServerEnvironment, parseHerdrSessionList } from './herdr-cli-session'
 
 describe('stock Herdr session process', () => {
   it('does not inherit a caller pane or socket when starting a server', () => {

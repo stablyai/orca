@@ -1,13 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { configHomeDir } from './herdr-test-config-home'
+import { configHomeDir } from './herdr-stock-binary'
 import { afterAll, describe, expect, it } from 'vitest'
-import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-host-transport'
+import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-session'
 import type { HerdrHostTransport, HerdrSessionSnapshot } from './herdr-runtime-contract'
 import { unwrapHerdrResponse } from './herdr-runtime-contract'
 import { resolveStockHerdrTestBinary } from './herdr-stock-binary'
-import { herdrLogicalKeyForBytes } from './herdr-logical-key'
+import { terminalLogicalInputFromBytes } from '../../../../shared/terminal-logical-key'
 
 const binary = resolveStockHerdrTestBinary()
 const describeRealHerdr = binary ? describe : describe.skip
@@ -262,14 +262,14 @@ async function writeProductInput(
   paneId: string,
   data: string
 ): Promise<void> {
-  const key = herdrLogicalKeyForBytes(data)
-  if (!key) {
+  const input = terminalLogicalInputFromBytes(data)
+  if (input.kind !== 'key') {
     throw new Error(`expected a logical Herdr key for ${JSON.stringify(data)}`)
   }
   unwrapHerdrResponse(
     await transport.request(sessionName, 'pane.send_keys', {
       pane_id: paneId,
-      keys: [key]
+      keys: [input.name]
     })
   )
 }

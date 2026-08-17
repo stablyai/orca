@@ -4,10 +4,8 @@ import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
-import { connect } from 'node:net'
+import { connect, createServer, type Server } from 'node:net'
 import { HerdrSshRelayTransport } from './herdr-ssh-relay-transport'
-import { HerdrTransport, type HerdrServerRequest } from './herdr-transport'
-import { HerdrRuntimeError } from './herdr-runtime-contract'
 import type { SshConnection } from '../../../ssh/ssh-connection'
 
 type SshClient = NonNullable<ReturnType<SshConnection['getClient']>>
@@ -17,6 +15,19 @@ function mockSessionManager() {
     ensureSession: vi.fn(async () => {}),
     run: vi.fn(async () => '/home/testuser\n')
   }
+}
+
+function mockHomeExec(home = '/home/testuser') {
+  const homeChannel = Object.assign(new EventEmitter(), {
+    close: vi.fn(),
+    end: vi.fn(() => {
+      queueMicrotask(() => {
+        homeChannel.emit('data', Buffer.from(home))
+        homeChannel.emit('close')
+      })
+    })
+  })
+  return vi.fn(async () => homeChannel)
 }
 
 describe('HerdrSshRelayTransport', () => {
@@ -35,7 +46,8 @@ describe('HerdrSshRelayTransport', () => {
     })
 
     const connection = {
-      getClient: () => sshClient as unknown as SshClient
+      getClient: () => sshClient as unknown as SshClient,
+      exec: mockHomeExec()
     } as unknown as SshConnection
 
     sm = mockSessionManager()
@@ -61,7 +73,6 @@ describe('HerdrSshRelayTransport', () => {
       })
 
       expect(sm.ensureSession).toHaveBeenCalledWith('orca')
-      expect(sm.run).toHaveBeenCalledWith(['sh', '-c', 'echo "$HOME"'])
       promise.catch(() => {})
     })
   })
@@ -83,9 +94,30 @@ describe('HerdrSshRelayTransport', () => {
     }
   })
 
-  it('controlTerminal throws when not connected', () => {
+  it('opens session control even when the relay socket is not connected', async () => {
     const r = makeRelay()
-    expect(() => r.controlTerminal('orca', 'p1', { cols: 80, rows: 24 })).toThrow(HerdrRuntimeError)
+    const open = vi.fn(async () => {
+      throw new Error('ssh exec failed')
+    })
+    ;(r as unknown as { sessionManager: { open: typeof open } }).sessionManager.open = open
+    const closed = new Promise<string>((resolve) => {
+      r.controlTerminal('orca', 'p1', { cols: 80, rows: 24 }).onClosed((event) =>
+        resolve(event.reason ?? '')
+      )
+    })
+    await expect(closed).resolves.toContain('ssh exec failed')
+    expect(open).toHaveBeenCalledWith([
+      '--session',
+      'orca',
+      'terminal',
+      'session',
+      'control',
+      'p1',
+      '--cols',
+      '80',
+      '--rows',
+      '24'
+    ])
   })
 
   it('disconnects cleanly', async () => {
@@ -95,7 +127,7 @@ describe('HerdrSshRelayTransport', () => {
 })
 
 describe('HerdrSshRelayTransport with a real transport server (full handshake)', () => {
-  let server: HerdrTransport | null = null
+  let server: Server | null = null
   let relay: HerdrSshRelayTransport | null = null
 
   function makeSshToSocket(socketPath: string) {
@@ -114,7 +146,8 @@ describe('HerdrSshRelayTransport with a real transport server (full handshake)',
       )
     })
     const connection = {
-      getClient: () => sshClient as unknown as NonNullable<ReturnType<SshConnection['getClient']>>
+      getClient: () => sshClient as unknown as NonNullable<ReturnType<SshConnection['getClient']>>,
+      exec: mockHomeExec('/home/remoteuser')
     } as unknown as SshConnection
 
     return { sm, connection }
@@ -123,40 +156,81 @@ describe('HerdrSshRelayTransport with a real transport server (full handshake)',
   async function setupServer(): Promise<string> {
     const dir = mkdtempSync(join(tmpdir(), 'herdr-relay-test-'))
     const socketPath = join(dir, 'herdr.sock')
-    server = new HerdrTransport(socketPath)
-    server.on('error', () => {})
-    server.on('request', (request: HerdrServerRequest) => {
-      if (request.method === 'ping') {
-        request.respond({ type: 'ok' })
-        return
-      }
-      if (request.method === 'events.subscribe') {
-        const raw = (request.params as { subscriptions?: { type: string }[] }).subscriptions ?? []
-        const kinds = raw.map((sub) => sub.type)
-        request.subscribe(kinds)
-        request.respond({ type: 'subscription_started' })
-        setTimeout(() => {
-          server?.notifyEvent('workspace.created', {
-            type: 'workspace.created',
-            workspace_id: 'w1'
-          })
-        }, 10)
-        return
-      }
-      if (request.method === 'session.snapshot') {
-        request.respond({ snapshot: { protocol: 19, workspaces: [], tabs: [], panes: [] } })
-        return
-      }
-      request.respondError(new Error('unhandled method'))
+    server = createServer((socket) => {
+      let buffer = ''
+      socket.on('data', (chunk) => {
+        buffer += chunk.toString('utf8')
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.trim()) {
+            continue
+          }
+          let request: { id?: string; method?: string; params?: unknown }
+          try {
+            request = JSON.parse(line) as { id?: string; method?: string; params?: unknown }
+          } catch {
+            continue
+          }
+          if (typeof request.id !== 'string' || typeof request.method !== 'string') {
+            continue
+          }
+          if (request.method === 'ping') {
+            socket.write(`${JSON.stringify({ id: request.id, result: { type: 'ok' } })}\n`)
+            continue
+          }
+          if (request.method === 'events.subscribe') {
+            socket.write(
+              `${JSON.stringify({ id: request.id, result: { type: 'subscription_started' } })}\n`
+            )
+            setTimeout(() => {
+              if (!socket.writable) {
+                return
+              }
+              socket.write(
+                `${JSON.stringify({
+                  event: 'workspace.created',
+                  data: { type: 'workspace.created', workspace_id: 'w1' }
+                })}\n`
+              )
+            }, 10)
+            continue
+          }
+          if (request.method === 'session.snapshot') {
+            socket.write(
+              `${JSON.stringify({
+                id: request.id,
+                result: { snapshot: { protocol: 19, workspaces: [], tabs: [], panes: [] } }
+              })}\n`
+            )
+            continue
+          }
+          socket.write(
+            `${JSON.stringify({
+              id: request.id,
+              error: { code: 'internal_error', message: 'unhandled method' }
+            })}\n`
+          )
+        }
+      })
     })
-    await server.startServer()
+    await new Promise<void>((resolve, reject) => {
+      server?.once('error', reject)
+      server?.listen(socketPath, () => resolve())
+    })
     return socketPath
   }
 
   afterEach(async () => {
     await relay?.disconnect()
     relay = null
-    await server?.close()
+    await new Promise<void>((resolve) => {
+      if (!server) {
+        resolve()
+        return
+      }
+      server.close(() => resolve())
+    })
     server = null
   })
 
@@ -174,7 +248,6 @@ describe('HerdrSshRelayTransport with a real transport server (full handshake)',
     await relay.ensureSession('orca')
 
     expect(sm.ensureSession).toHaveBeenCalledWith('orca')
-    expect(sm.run).toHaveBeenCalledWith(['sh', '-c', 'echo "$HOME"'])
 
     const response = await relay.request<{ snapshot: { protocol: number } }>(
       'orca',

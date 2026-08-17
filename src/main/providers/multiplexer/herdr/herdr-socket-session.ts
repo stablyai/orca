@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { HerdrSocketConnectionOptions } from './herdr-socket-connection'
-import { herdrServerEnvironment } from './herdr-session-process'
+import { herdrServerEnvironment } from './herdr-cli-session'
 
 export type HerdrSocketSessionOptions = HerdrSocketConnectionOptions & {
   commandFor?: (args: string[]) => { file: string; args: string[]; env?: NodeJS.ProcessEnv }

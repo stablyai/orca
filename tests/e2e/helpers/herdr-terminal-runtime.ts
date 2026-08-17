@@ -17,10 +17,7 @@ import {
 } from './terminal'
 import { SORTABLE_TAB } from './terminal-tab-menu'
 import { splitMarkerEchoCommand } from '../terminal-marker-echo-command'
-import type { HerdrRuntimeSource } from '../../../src/shared/terminal-backend'
-
 export type HerdrRuntimeSelection = {
-  source: HerdrRuntimeSource
   binaryPath?: string
 }
 
@@ -98,12 +95,6 @@ export async function expectHerdrRuntimeSelection(
     'aria-checked',
     'true'
   )
-  const runtime = page.getByRole('radiogroup', { name: 'Herdr runtime source' })
-  await expect(
-    runtime.getByRole('radio', {
-      name: selection.source === 'daemon' ? 'Built-in daemon' : 'Stock from PATH'
-    })
-  ).toHaveAttribute('aria-checked', 'true')
   if (selection.binaryPath) {
     await expect(page.getByRole('textbox', { name: 'Custom Herdr executable path' })).toHaveValue(
       selection.binaryPath
@@ -119,13 +110,6 @@ export async function selectHerdrInSettings(
   await page
     .getByRole('radiogroup', { name: 'Default terminal backend' })
     .getByRole('radio', { name: 'Herdr' })
-    .click()
-  const runtime = page.getByRole('radiogroup', { name: 'Herdr runtime source' })
-  await expect(runtime).toBeVisible()
-  await runtime
-    .getByRole('radio', {
-      name: selection.source === 'daemon' ? 'Built-in daemon' : 'Stock from PATH'
-    })
     .click()
   if (selection.binaryPath) {
     await page

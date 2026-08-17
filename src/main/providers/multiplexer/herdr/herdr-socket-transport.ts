@@ -8,7 +8,10 @@ import type {
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import { HerdrSocketConnection, type HerdrSocketConnectionOptions } from './herdr-socket-connection'
 import { HerdrSocketEventConnection } from './herdr-socket-events'
-import { createStockHerdrTerminalController } from './herdr-terminal-observe'
+import {
+  createHerdrSessionControlController,
+  herdrSessionControlArgs
+} from './herdr-session-control'
 import type {
   EventMatch,
   HerdrSocketEvent,
@@ -23,7 +26,6 @@ import type {
   Subscription
 } from './herdr-socket-types'
 import { HerdrSocketSessionManager } from './herdr-socket-session'
-import { isHerdrProcessGone, recoverHerdrSocketSession } from './herdr-socket-recover'
 
 export class HerdrSocketTransport implements HerdrHostTransport {
   private readonly options: HerdrSocketConnectionOptions
@@ -78,13 +80,7 @@ export class HerdrSocketTransport implements HerdrHostTransport {
       if (!isHerdrProcessGone(error)) {
         throw error
       }
-      await recoverHerdrSocketSession({
-        sessionName,
-        connectionsBySession: this.connectionsBySession,
-        eventConnectionsBySession: this.eventConnectionsBySession,
-        recoveries: this.recoveries,
-        ensureSession: (name) => this.ensureSession(name)
-      })
+      await this.recoverSession(sessionName)
       return await this.connectionFor(sessionName).request<T>(method, params)
     }
   }
@@ -119,11 +115,12 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     target: string,
     options: HerdrTerminalControlOptions
   ): HerdrTerminalController {
-    return createStockHerdrTerminalController(sessionName, target, options, {
-      commandFor: this.options.commandFor,
-      request: (method, params) => this.raw(sessionName, method, params),
-      onEvent: (listener) => this.onEvent(listener)
-    })
+    if (!this.options.commandFor) {
+      throw new Error('Stock Herdr terminal control requires a herdr command')
+    }
+    return createHerdrSessionControlController(
+      this.options.commandFor(herdrSessionControlArgs(sessionName, target, options))
+    )
   }
 
   onEvent(listener: (event: HerdrSocketEvent) => void): () => void {
@@ -215,4 +212,38 @@ export class HerdrSocketTransport implements HerdrHostTransport {
   async workspaceList(): Promise<unknown> {
     return await this.sockRaw('workspace.list', {})
   }
+
+  private async recoverSession(sessionName: string): Promise<void> {
+    const existing = this.recoveries.get(sessionName)
+    if (existing) {
+      return await existing
+    }
+    const pending = (async () => {
+      const events = this.eventConnectionsBySession.get(sessionName)
+      this.eventConnectionsBySession.delete(sessionName)
+      this.connectionsBySession.delete(sessionName)
+      await events?.disconnect()
+      await this.ensureSession(sessionName)
+    })()
+    this.recoveries.set(sessionName, pending)
+    try {
+      await pending
+    } finally {
+      if (this.recoveries.get(sessionName) === pending) {
+        this.recoveries.delete(sessionName)
+      }
+    }
+  }
+}
+
+export function isHerdrProcessGone(error: unknown): boolean {
+  if (error instanceof HerdrRuntimeError) {
+    return error.code === 'herdr_unavailable'
+  }
+  const code = (error as NodeJS.ErrnoException).code
+  if (code === 'ENOENT' || code === 'ECONNREFUSED' || code === 'EPIPE' || code === 'ECONNRESET') {
+    return true
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return /timed out|closed before response|not initialized|ECONNREFUSED|ENOENT/i.test(message)
 }

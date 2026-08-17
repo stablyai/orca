@@ -23,7 +23,7 @@ import type {
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
-import type { HerdrBinarySource, HerdrRuntimeSource, TerminalBackend } from './terminal-backend'
+import type { HerdrBinarySource, TerminalBackend } from './terminal-backend'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
 import type {
@@ -62,9 +62,6 @@ export type GlobalSettings = {
   /** Default for newly activated project hosts. Existing activations remain durable. */
   terminalBackendDefault: TerminalBackend
   herdrBinarySource: HerdrBinarySource
-  /** Herdr backend runtime on the local host: built-in in-app daemon or stock
-   *  binary from PATH/custom path. Remote hosts keep their own transports. */
-  herdrRuntimeSource: HerdrRuntimeSource
   /** Shared stock herdr session name used when a project has no per-project
    *  override. Empty/undefined falls back to a per-project derived name. */
   herdrSessionName?: string

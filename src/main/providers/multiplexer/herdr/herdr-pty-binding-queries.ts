@@ -1,13 +1,41 @@
 import type { PtyProcessInfo, PtyProviderBufferSnapshot } from '../../types'
+import type { HerdrAgentStatus, HerdrHostTransport, HerdrPane } from './herdr-runtime-contract'
 import { unwrapHerdrResponse } from './herdr-runtime-contract'
-import type { HerdrAgentStatus } from './herdr-runtime-contract'
-import { getHerdrPane, getHerdrProcessInfo } from './herdr-pty-queries'
 import type {
   HerdrPaneMoveDestination,
   HerdrPaneMoveResult,
+  HerdrPaneProcessInfo,
   HerdrPaneSwapOptions,
   HerdrPtyBinding
 } from './herdr-pty-types'
+
+export type HerdrPaneDetails = HerdrPane & {
+  cwd?: string
+  foreground_cwd?: string
+  label?: string
+  title?: string
+  terminal_title?: string
+}
+
+async function getHerdrPane(
+  transport: HerdrHostTransport,
+  binding: HerdrPtyBinding
+): Promise<HerdrPaneDetails> {
+  return unwrapHerdrResponse<{ pane: HerdrPaneDetails }>(
+    await transport.request(binding.sessionName, 'pane.get', { pane_id: binding.paneId })
+  ).pane
+}
+
+async function getHerdrProcessInfo(
+  transport: HerdrHostTransport,
+  binding: HerdrPtyBinding
+): Promise<HerdrPaneProcessInfo> {
+  return unwrapHerdrResponse<{ process_info: HerdrPaneProcessInfo }>(
+    await transport.request(binding.sessionName, 'pane.process_info', {
+      pane_id: binding.paneId
+    })
+  ).process_info
+}
 
 export async function getHerdrBindingCwd(binding: HerdrPtyBinding): Promise<string> {
   const pane = await getHerdrPane(binding.transport, binding)
@@ -15,12 +43,7 @@ export async function getHerdrBindingCwd(binding: HerdrPtyBinding): Promise<stri
 }
 
 export async function clearHerdrBindingBuffer(binding: HerdrPtyBinding): Promise<void> {
-  unwrapHerdrResponse(
-    await binding.transport.request(binding.sessionName, 'pane.send_keys', {
-      pane_id: binding.paneId,
-      keys: ['clear', 'Enter']
-    })
-  )
+  binding.snapshot = ''
 }
 
 export async function herdrBindingHasChildProcesses(binding: HerdrPtyBinding): Promise<boolean> {

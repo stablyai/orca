@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveStockHerdrTestBinary } from './herdr-stock-binary'
-import { isHerdrProcessGone } from './herdr-socket-recover'
+import { isHerdrProcessGone } from './herdr-socket-transport'
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 
 describe('resolveStockHerdrTestBinary', () => {

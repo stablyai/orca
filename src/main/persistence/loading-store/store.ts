@@ -61,7 +61,6 @@ import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../sh
 import {
   DEFAULT_HERDR_SESSION_NAME,
   normalizeHerdrBinarySource,
-  normalizeHerdrRuntimeSource,
   normalizeHerdrSessionName,
   normalizeTerminalBackend
 } from '../../../shared/terminal-backend'
@@ -1301,7 +1300,6 @@ export class Store {
               parsed.settings?.terminalBackendDefault
             ),
             herdrBinarySource: normalizeHerdrBinarySource(parsed.settings?.herdrBinarySource),
-            herdrRuntimeSource: normalizeHerdrRuntimeSource(parsed.settings?.herdrRuntimeSource),
             herdrSessionName:
               normalizeHerdrSessionName(parsed.settings?.herdrSessionName) ??
               DEFAULT_HERDR_SESSION_NAME,

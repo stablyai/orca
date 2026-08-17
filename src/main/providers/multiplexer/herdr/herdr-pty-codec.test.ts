@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HerdrTerminalFrame } from './herdr-runtime-contract'
-import { waitForFirstHerdrFrame } from './herdr-pty-codec'
+import { waitForFirstHerdrFrame } from './herdr-pty-provider-runtime'
 import type { HerdrPtyBinding } from './herdr-pty-types'
 
 function frame(bytes: string, opts: { full?: boolean; seq?: number } = {}): HerdrTerminalFrame {

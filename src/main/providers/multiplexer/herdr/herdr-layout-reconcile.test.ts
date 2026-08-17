@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 import type { HerdrHostTransport, HerdrSessionSnapshot } from './herdr-runtime-contract'
-import { terminalLayoutToHerdrLayout, applyTabLayout } from './herdr-layout-reconcile'
+import { terminalLayoutToHerdrLayout, applyTabLayout } from './herdr-tab-layout'
 import { ORCA_BINDING_TOKEN, orcaPaneBinding } from './herdr-binding-metadata'
 
 const PROJECT = 'proj'

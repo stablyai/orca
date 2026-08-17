@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import type {
   HerdrTerminalClosed,
   HerdrTerminalController,
@@ -10,6 +11,27 @@ export type HerdrSessionControlCommand = {
   file: string
   args: string[]
   env?: NodeJS.ProcessEnv
+}
+
+export type HerdrSessionControlStream = {
+  writable: boolean
+  write(data: string): void
+  end(): void
+  close(): void
+  onData(listener: (chunk: string) => void): void
+  onError(listener: (error: Error) => void): void
+  onClose(listener: (code: number | null) => void): void
+}
+
+export type HerdrSessionControlChannel = {
+  writable: boolean
+  write(data: string): void
+  end(): void
+  close(): void
+  on(event: 'data', listener: (chunk: Buffer) => void): void
+  once(event: 'error', listener: (error: Error) => void): void
+  once(event: 'close', listener: (code?: number) => void): void
+  stderr?: { on(event: 'data', listener: (chunk: Buffer) => void): void }
 }
 
 export function herdrSessionControlArgs(
@@ -35,7 +57,206 @@ export function herdrSessionControlArgs(
   return args
 }
 
+export function herdrSessionControlStreamFromChannel(
+  channel: HerdrSessionControlChannel
+): HerdrSessionControlStream {
+  const decoder = new StringDecoder('utf8')
+  channel.stderr?.on('data', () => undefined)
+  return {
+    get writable() {
+      return channel.writable
+    },
+    write: (data) => {
+      if (channel.writable) {
+        channel.write(data)
+      }
+    },
+    end: () => channel.end(),
+    close: () => channel.close(),
+    onData: (listener) => {
+      channel.on('data', (chunk) => listener(decoder.write(chunk)))
+    },
+    onError: (listener) => {
+      channel.once('error', listener)
+    },
+    onClose: (listener) => {
+      channel.once('close', (code) => listener(code ?? null))
+    }
+  }
+}
+
+type SessionControlState = {
+  frameListeners: Set<(frame: HerdrTerminalFrame) => void>
+  closedListeners: Set<(event: HerdrTerminalClosed) => void>
+  pendingFrames: HerdrTerminalFrame[]
+  pendingMessages: string[]
+  pendingClosed: HerdrTerminalClosed | null
+  stream: HerdrSessionControlStream | null
+  stdout: string
+  released: boolean
+  closedEmitted: boolean
+}
+
+function createSessionControlState(): SessionControlState {
+  return {
+    frameListeners: new Set(),
+    closedListeners: new Set(),
+    pendingFrames: [],
+    pendingMessages: [],
+    pendingClosed: null,
+    stream: null,
+    stdout: '',
+    released: false,
+    closedEmitted: false
+  }
+}
+
+function emitClosed(state: SessionControlState, event: HerdrTerminalClosed): void {
+  if (state.closedEmitted) {
+    return
+  }
+  state.closedEmitted = true
+  if (state.closedListeners.size === 0) {
+    state.pendingClosed = event
+    return
+  }
+  for (const listener of state.closedListeners) {
+    listener(event)
+  }
+}
+
+function consumeLine(state: SessionControlState, line: string, onInvalid: () => void): void {
+  if (!line) {
+    return
+  }
+  try {
+    const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
+    if (event.type === 'terminal.frame') {
+      if (state.frameListeners.size === 0) {
+        state.pendingFrames.push(event)
+        if (state.pendingFrames.length > 512) {
+          state.pendingFrames.shift()
+        }
+      } else {
+        for (const listener of state.frameListeners) {
+          listener(event)
+        }
+      }
+      return
+    }
+    emitClosed(state, event)
+  } catch (error) {
+    state.released = true
+    emitClosed(state, {
+      type: 'terminal.closed',
+      reason: `Invalid Herdr terminal event: ${error instanceof Error ? error.message : String(error)}`
+    })
+    onInvalid()
+  }
+}
+
+function attachSessionControlStream(
+  state: SessionControlState,
+  stream: HerdrSessionControlStream
+): void {
+  if (state.released) {
+    stream.close()
+    return
+  }
+  state.stream = stream
+  for (const message of state.pendingMessages.splice(0)) {
+    stream.write(message)
+  }
+  stream.onData((chunk) => {
+    state.stdout += chunk
+    for (;;) {
+      const newline = state.stdout.indexOf('\n')
+      if (newline === -1) {
+        break
+      }
+      const line = state.stdout.slice(0, newline).trim()
+      state.stdout = state.stdout.slice(newline + 1)
+      consumeLine(state, line, () => stream.close())
+      if (state.released) {
+        return
+      }
+    }
+  })
+  stream.onError((error) => {
+    if (!state.released) {
+      emitClosed(state, { type: 'terminal.closed', reason: error.message })
+    }
+  })
+  stream.onClose((code) => {
+    if (!state.released) {
+      emitClosed(state, {
+        type: 'terminal.closed',
+        reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
+      })
+    }
+  })
+}
+
+function sessionControlController(state: SessionControlState): HerdrTerminalController {
+  const send = (message: unknown): void => {
+    if (state.released) {
+      return
+    }
+    const encoded = `${JSON.stringify(message)}\n`
+    if (!state.stream) {
+      state.pendingMessages.push(encoded)
+      return
+    }
+    state.stream.write(encoded)
+  }
+
+  return {
+    write: (data) => send({ type: 'terminal.input', text: data }),
+    resize: (cols, rows) => send({ type: 'terminal.resize', cols, rows }),
+    release: () => {
+      if (state.released) {
+        return
+      }
+      send({ type: 'terminal.release' })
+      state.released = true
+      state.stream?.end()
+      const killTimer = setTimeout(() => state.stream?.close(), 2_000)
+      state.stream?.onClose(() => clearTimeout(killTimer))
+    },
+    onFrame: (listener) => {
+      state.frameListeners.add(listener)
+      for (const frame of state.pendingFrames.splice(0)) {
+        listener(frame)
+      }
+      return () => state.frameListeners.delete(listener)
+    },
+    onClosed: (listener) => {
+      state.closedListeners.add(listener)
+      if (state.pendingClosed) {
+        listener(state.pendingClosed)
+        state.pendingClosed = null
+      }
+      return () => state.closedListeners.delete(listener)
+    }
+  }
+}
+
 /** Exclusive stdin JSON: terminal.input, terminal.resize, terminal.release. */
+export function createHerdrSessionControlFromOpen(
+  open: () => Promise<HerdrSessionControlStream>
+): HerdrTerminalController {
+  const state = createSessionControlState()
+  void open()
+    .then((opened) => attachSessionControlStream(state, opened))
+    .catch((error: unknown) => {
+      emitClosed(state, {
+        type: 'terminal.closed',
+        reason: error instanceof Error ? error.message : String(error)
+      })
+    })
+  return sessionControlController(state)
+}
+
 export function createHerdrSessionControlController(
   command: HerdrSessionControlCommand
 ): HerdrTerminalController {
@@ -44,110 +265,29 @@ export function createHerdrSessionControlController(
     windowsHide: true,
     ...(command.env ? { env: command.env } : {})
   })
-  const frameListeners = new Set<(frame: HerdrTerminalFrame) => void>()
-  const closedListeners = new Set<(event: HerdrTerminalClosed) => void>()
-  const pendingFrames: HerdrTerminalFrame[] = []
-  let pendingClosed: HerdrTerminalClosed | null = null
-  let stdout = ''
-  let released = false
-
-  const emitClosed = (event: HerdrTerminalClosed): void => {
-    if (closedListeners.size === 0) {
-      pendingClosed = event
-      return
-    }
-    for (const listener of closedListeners) {
-      listener(event)
-    }
-  }
-
   child.stdout.setEncoding('utf8')
   child.stderr.on('data', () => undefined)
-  child.stdout.on('data', (chunk: string) => {
-    stdout += chunk
-    for (;;) {
-      const newline = stdout.indexOf('\n')
-      if (newline === -1) {
-        break
-      }
-      const line = stdout.slice(0, newline).trim()
-      stdout = stdout.slice(newline + 1)
-      if (!line) {
-        continue
-      }
-      try {
-        const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
-        if (event.type === 'terminal.frame') {
-          if (frameListeners.size === 0) {
-            pendingFrames.push(event)
-            if (pendingFrames.length > 512) {
-              pendingFrames.shift()
-            }
-          } else {
-            for (const listener of frameListeners) {
-              listener(event)
-            }
-          }
-        } else {
-          emitClosed(event)
-        }
-      } catch (error) {
-        released = true
-        emitClosed({
-          type: 'terminal.closed',
-          reason: `Invalid Herdr terminal event: ${error instanceof Error ? error.message : String(error)}`
-        })
-        child.kill()
-        return
-      }
-    }
-  })
-  child.once('error', (error) => {
-    if (!released) {
-      emitClosed({ type: 'terminal.closed', reason: error.message })
-    }
-  })
-  child.once('close', (code) => {
-    if (!released) {
-      emitClosed({
-        type: 'terminal.closed',
-        reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
-      })
-    }
-  })
-
-  const send = (message: unknown): void => {
-    if (!released && child.stdin.writable) {
-      child.stdin.write(`${JSON.stringify(message)}\n`)
-    }
-  }
-  return {
-    write: (data) => send({ type: 'terminal.input', text: data }),
-    resize: (cols, rows) => send({ type: 'terminal.resize', cols, rows }),
-    release: () => {
-      if (released) {
-        return
-      }
-      send({ type: 'terminal.release' })
-      released = true
-      child.stdin.end()
-      const killTimer = setTimeout(() => child.kill(), 2_000)
-      child.once('close', () => clearTimeout(killTimer))
+  const state = createSessionControlState()
+  attachSessionControlStream(state, {
+    get writable() {
+      return child.stdin.writable
     },
-    onFrame: (listener) => {
-      frameListeners.add(listener)
-      for (const frame of pendingFrames.splice(0)) {
-        listener(frame)
+    write: (data) => {
+      if (child.stdin.writable) {
+        child.stdin.write(data)
       }
-      return () => frameListeners.delete(listener)
     },
-    onClosed: (listener) => {
-      closedListeners.add(listener)
-      if (pendingClosed) {
-        listener(pendingClosed)
-        pendingClosed = null
-      }
-      return () => closedListeners.delete(listener)
+    end: () => child.stdin.end(),
+    close: () => child.kill(),
+    onData: (listener) => {
+      child.stdout.on('data', listener)
+    },
+    onError: (listener) => {
+      child.once('error', listener)
+    },
+    onClose: (listener) => {
+      child.once('close', (code) => listener(code ?? null))
     }
-  }
+  })
+  return sessionControlController(state)
 }

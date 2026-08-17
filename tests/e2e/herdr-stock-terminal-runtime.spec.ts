@@ -59,7 +59,6 @@ test('settings selects stock Herdr and opens a bound herdr terminal', async ({
 }) => {
   await waitForSessionReady(orcaPage)
   await selectHerdrInSettings(orcaPage, {
-    source: 'stock',
     binaryPath: stockBinary ?? undefined
   })
   await openHerdrProjectTerminal(orcaPage, testRepoPath)

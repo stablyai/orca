@@ -1,6 +1,11 @@
+import { BrowserWindow } from 'electron'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../types'
-import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-host-transport'
+import {
+  HerdrCliHostTransport,
+  herdrServerEnvironment,
+  localHerdrCommand
+} from './herdr-cli-session'
 import { HerdrPtyProvider } from './herdr-pty-provider'
 import {
   createHerdrPtyTargetResolver,
@@ -8,30 +13,19 @@ import {
 } from './herdr-project-pty-target'
 import type { SshConnection } from '../../../ssh/ssh-connection'
 import type { RemoteHostPlatform } from '../../../ssh/ssh-remote-platform'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import { HerdrSshHostTransport } from './herdr-ssh-host-transport'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  DEFAULT_HERDR_SESSION_NAME,
+  normalizeHerdrBinarySource,
+  type HerdrBinarySource
+} from '../../../../shared/terminal-backend'
+import { HerdrSshHostTransport } from './herdr-ssh-session'
 import { HerdrSshRelayTransport } from './herdr-ssh-relay-transport'
 import { HerdrSocketTransport } from './herdr-socket-transport'
-import { HerdrDaemonHostTransport } from './herdr-daemon-host-transport'
-import { herdrServerEnvironment } from './herdr-session-process'
-import { resolveHerdrBinarySource, resolveHerdrExecutable } from './herdr-binary-source'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
-import { DEFAULT_HERDR_SESSION_NAME } from './herdr-transport-factory'
-import {
-  presentHerdrImportedSurface,
-  presentHerdrSurfaceAction
-} from './herdr-orca-surface-present'
-import type { HerdrImportedSurface } from './herdr-orca-surface-import'
-
-export type HerdrLocalTransportKind = 'socket' | 'cli'
-
-// Socket is the default local transport: it is the only path that exposes the
-// full protocol-19 surface (events, layout apply, live handoff, screen
-// history). HERDR_LOCAL_TRANSPORT=cli forces the legacy CLI transport; WSL and
-// SSH hosts keep their existing transports.
-function resolveLocalTransportKind(): HerdrLocalTransportKind {
-  return process.env.HERDR_LOCAL_TRANSPORT === 'cli' ? 'cli' : 'socket'
-}
+import { HerdrRuntimeError } from './herdr-runtime-contract'
+import type { HerdrImportedSurface, HerdrOrcaSurfaceAction } from './herdr-orca-surface-import'
 
 export function createLocalHerdrPtyProvider(
   _fallback: IPtyProvider | undefined,
@@ -72,9 +66,7 @@ export function createLocalHerdrPtyProvider(
             }
           }
         })
-      } else if (store.getSettings().herdrRuntimeSource === 'daemon') {
-        transport = new HerdrDaemonHostTransport()
-      } else if (resolveLocalTransportKind() === 'socket') {
+      } else {
         const executable = resolveHerdrExecutable(source)
         transport = new HerdrSocketTransport({
           sessionName: store.getSettings().herdrSessionName ?? DEFAULT_HERDR_SESSION_NAME,
@@ -86,11 +78,6 @@ export function createLocalHerdrPtyProvider(
             // session binds the named session, not the parent session's socket.
             env: herdrServerEnvironment(undefined)
           })
-        })
-      } else {
-        const executable = resolveHerdrExecutable(source)
-        transport = new HerdrCliHostTransport({
-          commandFor: localHerdrCommand(executable)
         })
       }
       transports.set(hostId, transport)
@@ -127,10 +114,9 @@ export function createSshHerdrPtyProvider(
   // Why: when the herdr backend is active, use the daemon-to-daemon relay
   // (full protocol-19 over SSH tunnel) instead of CLI exec (one-shot commands).
   // Fallback to CLI transport for legacy or incompatible SSH servers.
-  const transport =
-    store.getSettings().terminalBackendDefault === 'herdr' && isUnixHost(hostPlatform)
-      ? new HerdrSshRelayTransport(connection, 15_000, executable, hostPlatform)
-      : new HerdrSshHostTransport(connection, 15_000, executable, hostPlatform)
+  const transport = isUnixHost(hostPlatform)
+    ? new HerdrSshRelayTransport(connection, 15_000, executable, hostPlatform)
+    : new HerdrSshHostTransport(connection, 15_000, executable, hostPlatform)
 
   return new HerdrPtyProvider(
     () => transport,
@@ -157,6 +143,31 @@ function isUnixHost(platform?: RemoteHostPlatform): boolean {
   return platform.os !== 'win32'
 }
 
+type HerdrSettings = Pick<GlobalSettings, 'herdrBinarySource' | 'hostSettingOverrides'>
+
+export function resolveHerdrBinarySource(
+  settings: HerdrSettings,
+  hostId: ExecutionHostId
+): HerdrBinarySource {
+  return normalizeHerdrBinarySource(
+    settings.hostSettingOverrides?.[hostId]?.herdrBinarySource ?? settings.herdrBinarySource
+  )
+}
+
+export function resolveHerdrExecutable(
+  source: HerdrBinarySource,
+  platform: NodeJS.Platform = process.platform
+): string {
+  if (source.kind === 'custom') {
+    const customPath = source.path.trim()
+    if (!customPath) {
+      throw new HerdrRuntimeError('herdr_unavailable', 'Custom Herdr path is empty')
+    }
+    return customPath
+  }
+  return platform === 'win32' ? 'herdr.exe' : 'herdr'
+}
+
 function parseWslHostId(hostId: string): string | null {
   if (!hostId.startsWith('wsl:')) {
     return null
@@ -167,4 +178,56 @@ function parseWslHostId(hostId: string): string | null {
   } catch {
     return null
   }
+}
+
+function eachWindow(send: (contents: Electron.WebContents) => void): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      send(win.webContents)
+    }
+  }
+}
+
+export function presentHerdrImportedSurface(surface: HerdrImportedSurface): void {
+  eachWindow((contents) => {
+    contents.send('ui:createTerminal', {
+      worktreeId: surface.worktreeId,
+      ptyId: surface.ptyId,
+      tabId: surface.tabId,
+      leafId: surface.leafId,
+      title: surface.title,
+      ...(surface.cwd ? { cwd: surface.cwd } : {}),
+      activate: false,
+      focus: false,
+      presentation: 'background',
+      ...(surface.splitFromLeafId
+        ? {
+            splitFromLeafId: surface.splitFromLeafId,
+            splitDirection: surface.splitDirection ?? 'vertical'
+          }
+        : {})
+    })
+  })
+}
+
+export function presentHerdrSurfaceAction(action: HerdrOrcaSurfaceAction): void {
+  eachWindow((contents) => {
+    if (action.kind === 'rename') {
+      contents.send('ui:renameTerminal', { tabId: action.tabId, title: action.title })
+      return
+    }
+    if (action.kind === 'focus') {
+      contents.send('ui:focusTerminal', {
+        tabId: action.tabId,
+        worktreeId: action.worktreeId,
+        leafId: action.leafId
+      })
+      return
+    }
+    if (action.kind === 'close') {
+      contents.send('ui:closeTerminal', { tabId: action.tabId })
+      return
+    }
+    contents.send('ui:applyTerminalLayout', { tabId: action.tabId, layout: action.layout })
+  })
 }

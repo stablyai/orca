@@ -140,6 +140,10 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../shared/terminal-input'
+import {
+  bytesFromTerminalLogicalKey,
+  terminalLogicalInputFromBytes
+} from '../../shared/terminal-logical-key'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
@@ -7302,6 +7306,25 @@ export function registerPtyHandlers(
     return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
   }
 
+  const writePtyProviderLogicalInput = (
+    provider: IPtyProvider,
+    args: PtyWritePayload
+  ): boolean | Promise<boolean> => {
+    const namedKey = args.keys?.[0]
+    const classified = namedKey
+      ? ({ kind: 'key', name: namedKey } as const)
+      : terminalLogicalInputFromBytes(args.data)
+    if (classified.kind === 'key') {
+      if (provider.writeLogical) {
+        provider.writeLogical(args.id, classified)
+        return true
+      }
+      const bytes = bytesFromTerminalLogicalKey(classified.name) ?? args.data
+      return writePtyProviderInput(provider, args.id, bytes)
+    }
+    return writePtyProviderInput(provider, args.id, classified.data)
+  }
+
   const writePtyProviderInput = (
     provider: IPtyProvider,
     id: string,
@@ -7349,15 +7372,24 @@ export function registerPtyHandlers(
     }
   }
 
-  type PtyWritePayload = { id: string; data: string }
+  type PtyWritePayload = { id: string; data: string; keys?: string[] }
   type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
-  const isPtyWritePayload = (value: unknown): value is PtyWritePayload =>
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { id?: unknown }).id === 'string' &&
-    (value as { id: string }).id.length > 0 &&
-    typeof (value as { data?: unknown }).data === 'string'
+  const isPtyWritePayload = (value: unknown): value is PtyWritePayload => {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      typeof (value as { id?: unknown }).id !== 'string' ||
+      (value as { id: string }).id.length === 0 ||
+      typeof (value as { data?: unknown }).data !== 'string'
+    ) {
+      return false
+    }
+    const keys = (value as { keys?: unknown }).keys
+    return (
+      keys === undefined || (Array.isArray(keys) && keys.every((key) => typeof key === 'string'))
+    )
+  }
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&
@@ -7395,7 +7427,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderLogicalInput(provider, args)
     } catch {
       return false
     }
@@ -7420,7 +7452,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderLogicalInput(provider, args)
     } catch {
       return false
     }

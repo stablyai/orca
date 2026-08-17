@@ -154,7 +154,6 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     terminalBackendDefault: overrides.terminalBackendDefault ?? 'orca',
     herdrBinarySource: overrides.herdrBinarySource ?? { kind: 'system' },
-    herdrRuntimeSource: overrides.herdrRuntimeSource ?? 'stock',
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
