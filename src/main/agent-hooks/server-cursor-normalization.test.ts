@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, agentHookServer, _internals } from './server'
 import { createHookListenerState, normalizeHookPayload } from '../../shared/agent-hook-listener'
-import { buildBody, PANE } from './server.test-fixtures'
+import { buildBody, GOOD_PANE, PANE, postHookEvent } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -154,6 +154,57 @@ describe('Cursor hook normalization', () => {
       }
     }
   )
+
+  it('keeps identical cross-route Cursor payloads isolated per pane', async () => {
+    const server = new AgentHookServer()
+    const statusListener = vi.fn()
+    server.subscribeEnrichedStatus(statusListener)
+    await server.start({ env: 'production' })
+    try {
+      const payload = {
+        hook_event_name: 'beforeSubmitPrompt',
+        cursor_version: '2026.08.11-e8db854',
+        conversation_id: 'conversation-1',
+        generation_id: 'generation-1',
+        prompt: 'add a README'
+      }
+      const deliveries = [
+        { paneKey: PANE, tabId: 'tab-1', path: '/hook/claude' },
+        { paneKey: GOOD_PANE, tabId: 'tab-good', path: '/hook/cursor' }
+      ] as const
+
+      for (const delivery of deliveries) {
+        const response = await postHookEvent(
+          server,
+          buildBody(payload, { paneKey: delivery.paneKey, tabId: delivery.tabId }),
+          delivery.path
+        )
+        expect(response.status).toBe(204)
+      }
+
+      expect(statusListener).toHaveBeenCalledTimes(2)
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot).toHaveLength(2)
+      expect(snapshot).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            paneKey: PANE,
+            state: 'working',
+            agentType: 'cursor',
+            prompt: 'add a README'
+          }),
+          expect.objectContaining({
+            paneKey: GOOD_PANE,
+            state: 'working',
+            agentType: 'cursor',
+            prompt: 'add a README'
+          })
+        ])
+      )
+    } finally {
+      server.stop()
+    }
+  })
 
   it('dedupes cross-route Cursor payloads whose object keys arrive in different orders', () => {
     const state = createHookListenerState()
