@@ -1105,8 +1105,10 @@ function buildWorkItemListRequest(args: {
   limit: number
   query: ParsedTaskQuery
   page: number
+  /** Why: forced Tasks refresh must skip gh's 120s search cache (empty + is:open queried paths). */
+  noCache?: boolean
 }): WorkItemListRequest {
-  const { kind, ownerRepo, limit, query, page } = args
+  const { kind, ownerRepo, limit, query, page, noCache } = args
   const searchParts: string[] = []
 
   if (kind === 'issue') {
@@ -1151,11 +1153,12 @@ function buildWorkItemListRequest(args: {
   }
 
   if (kind === 'issue') {
+    // Why: only Search API uses gh --cache; PR list goes through gh pr list (no CLI cache).
+    const cacheArgs = noCache ? [] : ['--cache', '120s']
     return {
       args: [
         'api',
-        '--cache',
-        '120s',
+        ...cacheArgs,
         `search/issues?q=${encodeURIComponent(searchParts.join(' '))}&sort=created&order=desc&per_page=${limit}&page=${page}`,
         '--jq',
         '.items'
@@ -1242,7 +1245,8 @@ async function listRecentWorkItems(
         ownerRepo: issueOwnerRepo,
         limit,
         query: recentQuery,
-        page
+        page,
+        noCache
       })
     : null
   const prRequest = prOwnerRepo
@@ -1254,9 +1258,6 @@ async function listRecentWorkItems(
         page
       })
     : null
-  if (noCache && issueRequest) {
-    issueRequest.args.splice(1, 2)
-  }
   // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
   // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
   const [issuesSettled, prsSettled] = await Promise.allSettled([
@@ -1325,6 +1326,7 @@ async function listQueriedWorkItems(
   limit: number,
   page?: number,
   connectionId?: string | null,
+  noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
@@ -1354,7 +1356,8 @@ async function listQueriedWorkItems(
       ownerRepo: issueOwnerRepo,
       limit,
       query,
-      page: page ?? 1
+      page: page ?? 1,
+      noCache
     })
     try {
       const { stdout } = await ghExecFileAsync(request.args, {
@@ -1484,6 +1487,7 @@ export async function listWorkItems(
           limit,
           requestedPage,
           connectionId,
+          noCache,
           localGitOptions
         )
 

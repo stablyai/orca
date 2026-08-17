@@ -759,6 +759,30 @@ describe('listWorkItems', () => {
     ])
   })
 
+  it('omits gh api --cache on no-cache is:open queried issue search', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: '[]'
+    })
+
+    await listWorkItems('/repo-root', 10, 'is:open', undefined, undefined, undefined, true)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=1`,
+        '--jq',
+        '.items'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
+      expect.arrayContaining(['--cache', '120s']),
+      expect.anything()
+    )
+  })
+
   it('marks fork PRs as cross-repository when REST payload only includes head.label', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })

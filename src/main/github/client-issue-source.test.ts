@@ -243,6 +243,37 @@ describe('GitHub issue source split', () => {
     })
   })
 
+  // Why: Tasks presets always send is:issue is:open (queried path). #3018 only
+  // busted cache on empty-query listRecentWorkItems; forced reload stayed stale.
+  it('omits gh api cache args for no-cache is:open queried issue lists', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open', undefined, undefined, undefined, true)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      issueSearchArgs('stablyai/orca', { noCache: true, query: 'is:issue is:open' }),
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('keeps gh api cache args for cached is:open queried issue lists', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      issueSearchArgs('stablyai/orca', { query: 'is:issue is:open' }),
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({
       source: { owner: 'stablyai', repo: 'orca' },
