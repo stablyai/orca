@@ -26,4 +26,22 @@ describe('skill install lock', () => {
     await release()
     await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
+
+  it('reclaims a same-process lock after its release deletion fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    const release = await acquireSkillInstallLock({
+      path: lockPath,
+      timeoutMs: 100,
+      removeLock: async () => {
+        throw new Error('injected-delete-failure')
+      }
+    })
+
+    await expect(release()).rejects.toThrow('injected-delete-failure')
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    await secondRelease()
+    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
 })

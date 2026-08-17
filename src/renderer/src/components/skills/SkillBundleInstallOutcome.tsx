@@ -1,6 +1,7 @@
 import { AlertTriangle, Check } from 'lucide-react'
 import type { SkillBundleInstallResult } from '../../../../shared/skill-bundle-install-contract'
 import { translate } from '@/i18n/i18n'
+import { skillBundleSkillNeedsRetry } from './skill-bundle-retry-selection'
 
 const RESULT_GROUPS = [
   'installed',
@@ -70,8 +71,27 @@ export function SkillBundleInstallOutcome({
         </div>
       </div>
       <div className="space-y-2">
+        {result.skills.some(skillBundleSkillNeedsRetry) ? (
+          <section className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              {translate(
+                'auto.components.skills.SkillBundleInstallOutcome.01c5a12e10',
+                'Needs retry'
+              )}{' '}
+              · {result.skills.filter(skillBundleSkillNeedsRetry).length}
+            </p>
+            {result.skills.filter(skillBundleSkillNeedsRetry).map((skill) => (
+              <p key={skill.skillId} className="text-xs">
+                {skill.name}
+                {skill.errorCategory ? ` · ${skill.errorCategory}` : ''}
+              </p>
+            ))}
+          </section>
+        ) : null}
         {RESULT_GROUPS.map((status) => {
-          const skills = result.skills.filter((skill) => skill.status === status)
+          const skills = result.skills.filter(
+            (skill) => skill.status === status && !skillBundleSkillNeedsRetry(skill)
+          )
           return skills.length ? (
             <section key={status} className="space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

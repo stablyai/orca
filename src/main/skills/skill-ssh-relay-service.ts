@@ -23,7 +23,6 @@ import {
   SKILL_SSH_RELAY_REMOVE_METHOD,
   type SkillSshWorkspaceAuthority
 } from '../../shared/skill-ssh-relay-contract'
-import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { recordSkillCapabilityAbsence } from './skill-operation-observability'
 import { retrySkillTransferRpc } from './skill-transfer-rpc-retry'
 import { transferSkillPackageToSshHost } from './skill-ssh-package-transfer'
@@ -34,15 +33,18 @@ import {
   shouldUseSkillSshClientTransfer,
   skillSshRelayCapabilities
 } from './skill-ssh-relay-client'
+import type { SkillSshProviderSource } from './skill-ssh-relay-client'
 
-export async function supportsSkillManagementOnSsh(provider: IPtyProvider): Promise<boolean> {
+export async function supportsSkillManagementOnSsh(
+  provider: SkillSshProviderSource
+): Promise<boolean> {
   return (await skillSshRelayCapabilities(requireSkillSshRelayClient(provider))).includes(
     SKILL_MANAGEMENT_CAPABILITY
   )
 }
 
 export async function installSkillOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   userDataPath: string
   request: SkillInstallRequest
   workspace?: SkillSshWorkspaceAuthority
@@ -118,7 +120,7 @@ export async function installSkillOnSshHost(input: {
 }
 
 export async function previewSkillInstallOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   request: SkillInstallPreviewRequest
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallPreview> {
@@ -136,7 +138,7 @@ export async function previewSkillInstallOnSshHost(input: {
 }
 
 export async function removeSkillInstallOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   request: SkillRemoveRequest
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallResult> {
@@ -154,7 +156,7 @@ export async function removeSkillInstallOnSshHost(input: {
 }
 
 export async function listSkillInstallsOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   connectionId: string
   workspaces: SkillSshWorkspaceAuthority[]
 }): Promise<ManagedSkillInstall[]> {

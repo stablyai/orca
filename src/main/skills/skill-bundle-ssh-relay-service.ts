@@ -1,12 +1,16 @@
 import {
   SkillBundleInstallProgressSchema,
+  SkillBundleInstallPreviewSchema,
   SkillBundleInstallResultSchema,
   type SkillBundleInstallProgress,
+  type SkillBundleInstallPreview,
+  type SkillBundleInstallPreviewRequest,
   type SkillBundleInstallRequest,
   type SkillBundleInstallResult
 } from '../../shared/skill-bundle-install-contract'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
+  SKILL_BUNDLE_PREVIEW_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
@@ -15,9 +19,9 @@ import {
   SKILL_SSH_RELAY_CANCEL_UPLOAD_METHOD,
   SKILL_SSH_RELAY_GET_INSTALL_PROGRESS_METHOD,
   SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD,
+  SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
   type SkillSshWorkspaceAuthority
 } from '../../shared/skill-ssh-relay-contract'
-import type { IPtyProvider } from '../providers/pty-provider-contract'
 import {
   SKILL_SSH_REQUEST_TIMEOUT_MS,
   requireSkillSshRelayClient,
@@ -25,13 +29,14 @@ import {
   shouldUseSkillSshClientTransfer,
   skillSshRelayCapabilities
 } from './skill-ssh-relay-client'
+import type { SkillSshProviderSource } from './skill-ssh-relay-client'
 import { transferSkillPackageToSshHost } from './skill-ssh-package-transfer'
 import { retrySkillTransferRpc } from './skill-transfer-rpc-retry'
 import { startSkillInstallProgressPolling } from './skill-install-progress-polling'
 import { recordSkillCapabilityAbsence } from './skill-operation-observability'
 
 export async function installSkillBundleOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   userDataPath: string
   request: SkillBundleInstallRequest
   workspace?: SkillSshWorkspaceAuthority
@@ -127,4 +132,27 @@ export async function installSkillBundleOnSshHost(input: {
   } finally {
     stopProgress?.()
   }
+}
+
+export async function previewSkillBundleInstallOnSshHost(input: {
+  provider: SkillSshProviderSource
+  request: SkillBundleInstallPreviewRequest
+  workspace?: SkillSshWorkspaceAuthority
+}): Promise<SkillBundleInstallPreview> {
+  const client = requireSkillSshRelayClient(input.provider)
+  const supported = await skillSshRelayCapabilities(client)
+  if (!supported.includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
+    recordSkillCapabilityAbsence({
+      capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
+      destination: 'global-ssh'
+    })
+    throw new Error('skill-bundle-ssh-update-required')
+  }
+  return SkillBundleInstallPreviewSchema.parse(
+    await client(
+      SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
+      { request: input.request, workspace: input.workspace },
+      { timeoutMs: 30_000 }
+    )
+  )
 }

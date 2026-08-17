@@ -67,6 +67,17 @@ describe('skill package identity', () => {
     expect(binary.classification).toBe('binary')
   })
 
+  it('infers shebang scripts as executable on Windows filesystems', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'skill\n')
+    await writeFile(join(root, 'run.sh'), '#!/bin/sh\necho ok\n')
+
+    const observed = await observeSkillPackage(root, undefined, undefined, undefined, 'win32', true)
+
+    expect(observed.files.find((file) => file.path === 'run.sh')?.executable).toBe(true)
+    expect(observed.files.find((file) => file.path === 'SKILL.md')?.executable).toBe(false)
+  })
+
   it('orders package files by locale-independent code units', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'apple.md'), 'apple')

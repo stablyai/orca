@@ -151,7 +151,11 @@ export function startSkillPhaseOperation(input: SkillPhaseStart): SkillPhaseOper
 }
 
 export function recordSkillCapabilityAbsence(input: {
-  capability: 'skills.install.v1' | 'skills.install.bundle.v1' | 'skills.upload.v1'
+  capability:
+    | 'skills.install.v1'
+    | 'skills.install.bundle.v1'
+    | 'skills.preview.bundle.v1'
+    | 'skills.upload.v1'
   destination: 'remote-runtime' | 'global-ssh'
 }): void {
   const span = startSpan('skill.capability', {

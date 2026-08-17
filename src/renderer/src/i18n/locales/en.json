@@ -4391,7 +4391,8 @@
           "01c5a12e06": "Cancelled",
           "01c5a12e07": "Bundle installation needs attention.",
           "01c5a12e08": "Skills installed and verified.",
-          "01c5a12e09": "{{value0}} selected skills checked."
+          "01c5a12e09": "{{value0}} selected skills checked.",
+          "01c5a12e10": "Needs retry"
         },
         "SkillBundleInstallReview": {
           "01c5a11e01": "Immutable version",

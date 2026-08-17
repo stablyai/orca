@@ -3,10 +3,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SkillBundleInstallRequest } from '../../shared/skill-bundle-install-contract'
+import type {
+  SkillBundleInstallPreviewRequest,
+  SkillBundleInstallRequest
+} from '../../shared/skill-bundle-install-contract'
 import { SKILL_PACKAGE_CONTENT_TYPE } from '../../shared/skill-package-manifest'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
-import { installSkillBundleOnSshHost } from './skill-bundle-ssh-relay-service'
+import {
+  installSkillBundleOnSshHost,
+  previewSkillBundleInstallOnSshHost
+} from './skill-bundle-ssh-relay-service'
 
 const roots: string[] = []
 
@@ -52,7 +58,54 @@ function result() {
   }
 }
 
+function previewRequest(count = 30): SkillBundleInstallPreviewRequest {
+  return {
+    package: {
+      packageId: 'package_1',
+      versionId: 'version_1',
+      bundleDigest: 'a'.repeat(64),
+      archiveSha256: 'b'.repeat(64),
+      compressedBytes: 100
+    },
+    selectedSkills: Array.from({ length: count }, (_, index) => ({
+      id: `skill-${index}`,
+      name: `skill-${index}`,
+      digest: String(index).padStart(64, '0')
+    })),
+    destination: { scope: 'global', executionTarget: { kind: 'host' } }
+  }
+}
+
 describe('installSkillBundleOnSshHost', () => {
+  it('adopts the current provider generation when an RPC retry follows reconnect', async () => {
+    const secondRpc = vi.fn(async () => result())
+    const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
+    let currentProvider: IPtyProvider
+    const firstRpc = vi.fn(async (method: string) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.install.bundle.v1'] }
+      }
+      currentProvider = secondProvider
+      throw new Error('disconnected-provider-generation')
+    })
+    currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
+
+    await expect(
+      installSkillBundleOnSshHost({
+        provider: () => currentProvider,
+        userDataPath: await userDataPath(),
+        request: request(Buffer.from('archive')),
+        requireHttps: true
+      })
+    ).resolves.toEqual(result())
+
+    expect(firstRpc.mock.calls.map(([method]) => method)).toEqual([
+      'relay.status',
+      'skills.installBundle'
+    ])
+    expect(secondRpc).toHaveBeenCalledOnce()
+  })
+
   it('uses the additive method only when advertised by the SSH host', async () => {
     const bytes = Buffer.from('private bundle archive')
     const requestHostRpc = vi.fn(async (method: string) => {
@@ -177,5 +230,44 @@ describe('installSkillBundleOnSshHost', () => {
       'skills.installBundle',
       'skills.cancelUpload'
     ])
+  })
+})
+
+describe('previewSkillBundleInstallOnSshHost', () => {
+  it('previews the complete bundle with one capability check and one RPC', async () => {
+    const request = previewRequest()
+    const response = {
+      packageId: request.package.packageId,
+      versionId: request.package.versionId,
+      bundleDigest: request.package.bundleDigest,
+      destinationIdentity: 'global:ssh-host',
+      skills: request.selectedSkills.map((skill) => ({ ...skill, currentState: 'missing' }))
+    }
+    const requestHostRpc = vi.fn(async (method: string) =>
+      method === 'relay.status' ? { capabilities: ['skills.preview.bundle.v1'] } : response
+    )
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request
+      })
+    ).resolves.toEqual(response)
+    expect(requestHostRpc.mock.calls.map(([method]) => method)).toEqual([
+      'relay.status',
+      'skills.previewBundleInstall'
+    ])
+  })
+
+  it('does not send an unknown preview method to an older SSH host', async () => {
+    const requestHostRpc = vi.fn(async () => ({ capabilities: ['skills.manage.v1'] }))
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request: previewRequest()
+      })
+    ).rejects.toThrow('skill-bundle-ssh-update-required')
+    expect(requestHostRpc).toHaveBeenCalledOnce()
   })
 })

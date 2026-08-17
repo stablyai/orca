@@ -9,6 +9,7 @@ const LOCK_RETRY_MS = 50
 const LOCK_STALE_MS = 30 * 60 * 1000
 const MAX_STARTUP_LOCKS = 128
 const LOCK_NAME = /^[a-f0-9]{64}\.lock$/
+const activeLockTokens = new Set<string>()
 
 type SkillInstallLockOwner = {
   token: string
@@ -37,6 +38,10 @@ async function removeStaleLock(path: string): Promise<void> {
     owner = null
   }
   if (owner && Number.isInteger(owner.pid)) {
+    if (owner.pid === process.pid && !activeLockTokens.has(owner.token)) {
+      await rm(path, { force: true })
+      return
+    }
     if (processIsAlive(owner.pid)) {
       return
     }
@@ -85,6 +90,7 @@ export function skillInstallLockPath(stateDirectory: string, canonicalPath: stri
 export async function acquireSkillInstallLock(input: {
   path: string
   timeoutMs?: number
+  removeLock?: (path: string) => Promise<void>
 }): Promise<() => Promise<void>> {
   await mkdir(dirname(input.path), { recursive: true, mode: 0o700 })
   const deadline = Date.now() + (input.timeoutMs ?? 5_000)
@@ -102,7 +108,9 @@ export async function acquireSkillInstallLock(input: {
       } finally {
         await handle.close()
       }
+      activeLockTokens.add(owner.token)
       return async () => {
+        activeLockTokens.delete(owner.token)
         let current: SkillInstallLockOwner | null = null
         try {
           current = JSON.parse(await readFile(input.path, 'utf8')) as SkillInstallLockOwner
@@ -110,7 +118,7 @@ export async function acquireSkillInstallLock(input: {
           current = null
         }
         if (current?.token === owner.token) {
-          await rm(input.path, { force: true })
+          await (input.removeLock ?? ((path) => rm(path, { force: true })))(input.path)
         }
       }
     } catch (error) {

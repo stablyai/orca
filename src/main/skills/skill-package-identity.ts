@@ -172,7 +172,9 @@ export async function observeSkillPackage(
   packageRoot: string,
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
   executablePaths?: ReadonlySet<string>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  platform: NodeJS.Platform = process.platform,
+  inferShebangExecutables = false
 ): Promise<ObservedSkillPackage> {
   const files: ObservedSkillFile[] = []
   const treeEntries: SkillGitTreeFileEntry[] = []
@@ -260,7 +262,9 @@ export async function observeSkillPackage(
         totalBytes += bytes.length
         const executable = executablePaths
           ? executablePaths.has(manifestPath)
-          : (fileStat.mode & 0o111) !== 0
+          : platform === 'win32' && inferShebangExecutables
+            ? bytes.subarray(0, 2).equals(Buffer.from('#!'))
+            : (fileStat.mode & 0o111) !== 0
         files.push(describeObservedSkillFile(manifestPath, bytes, executable))
         treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {

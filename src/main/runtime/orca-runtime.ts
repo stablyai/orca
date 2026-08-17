@@ -186,7 +186,6 @@ import type {
   SkillBundleInstallRequest,
   SkillBundleInstallResult
 } from '../../shared/skill-bundle-install-contract'
-import { SkillBundleInstallPreviewSchema } from '../../shared/skill-bundle-install-contract'
 import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
 import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
@@ -211,7 +210,10 @@ import type {
 } from '../../shared/skill-upload-session-contract'
 import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
 import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
-import { installSkillBundleOnSshHost } from '../skills/skill-bundle-ssh-relay-service'
+import {
+  installSkillBundleOnSshHost,
+  previewSkillBundleInstallOnSshHost
+} from '../skills/skill-bundle-ssh-relay-service'
 import {
   installSkillOnSshHost,
   listSkillInstallsOnSshHost,
@@ -3567,7 +3569,11 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
-    this.skillTransactionRecovery = deps?.skillTransactionRecovery ?? Promise.resolve()
+    this.skillTransactionRecovery = (deps?.skillTransactionRecovery ?? Promise.resolve()).catch(
+      (error) => {
+        console.warn('[skills] startup transaction recovery failed:', error)
+      }
+    )
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -4832,10 +4838,16 @@ export class OrcaRuntimeService {
     const selectedSkills = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
     const operationRoot = join(app.getPath('userData'), 'agent-skill-share-operations')
     const cloud = this.requireSkillCloudService()
-    const preparations = new SkillSharePreparationService(operationRoot, {
-      publishVersion: (input) => cloud.publishVersion(input),
-      createShare: (packageId, input) => cloud.createShare(packageId, input)
-    })
+    const preparations = new SkillSharePreparationService(
+      operationRoot,
+      {
+        publishVersion: (input) => cloud.publishVersion(input),
+        createShare: (packageId, input) => cloud.createShare(packageId, input)
+      },
+      {
+        installStateDirectory: join(app.getPath('userData'), 'skill-installs')
+      }
+    )
     let preparationId: string | null = null
     const cancel = (): void => {
       if (preparationId) {
@@ -5171,37 +5183,18 @@ export class OrcaRuntimeService {
   async previewSharedSkillBundleInstallRequest(
     request: SkillBundleInstallPreviewRequest
   ): Promise<SkillBundleInstallPreview> {
-    if (await this.resolveSkillSshTarget(request.destination)) {
-      const previews: SkillInstallPreview[] = []
-      for (let offset = 0; offset < request.selectedSkills.length; offset += 8) {
-        const batch = request.selectedSkills.slice(offset, offset + 8)
-        previews.push(
-          ...(await Promise.all(
-            batch.map((skill) =>
-              this.previewSharedSkillInstallRequest({
-                package: {
-                  packageId: request.package.packageId,
-                  versionId: request.package.versionId,
-                  packageDigest: skill.digest,
-                  archiveSha256: request.package.archiveSha256,
-                  compressedBytes: request.package.compressedBytes
-                },
-                name: skill.name,
-                destination: request.destination
-              })
-            )
-          ))
-        )
-      }
-      return SkillBundleInstallPreviewSchema.parse({
-        packageId: request.package.packageId,
-        versionId: request.package.versionId,
-        bundleDigest: request.package.bundleDigest,
-        destinationIdentity: previews[0]?.destinationIdentity ?? '',
-        skills: request.selectedSkills.map((skill, index) => ({
-          ...skill,
-          currentState: previews[index].currentState
-        }))
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return previewSkillBundleInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
       })
     }
     await this.skillTransactionRecovery
@@ -5399,13 +5392,15 @@ export class OrcaRuntimeService {
   }
 
   private async resolveSkillSshTarget(destination: SkillInstallRequest['destination']): Promise<{
-    provider: IPtyProvider
+    provider: () => IPtyProvider
     workspace?: SkillSshWorkspaceAuthority
   } | null> {
     if (destination.scope === 'global') {
-      return destination.executionTarget?.kind === 'ssh'
-        ? { provider: this.requireSkillSshProvider(destination.executionTarget.connectionId) }
-        : null
+      if (destination.executionTarget?.kind !== 'ssh') {
+        return null
+      }
+      const connectionId = destination.executionTarget.connectionId
+      return { provider: () => this.requireSkillSshProvider(connectionId) }
     }
     if (destination.worktreeId) {
       const repo = this.listRepos().find(
@@ -5419,7 +5414,7 @@ export class OrcaRuntimeService {
         throw new Error('skill-install-workspace-not-found')
       }
       return {
-        provider: this.requireSkillSshProvider(repo.connectionId),
+        provider: () => this.requireSkillSshProvider(repo.connectionId!),
         workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
       }
     }
@@ -5430,7 +5425,7 @@ export class OrcaRuntimeService {
       return null
     }
     return {
-      provider: this.requireSkillSshProvider(folder.connectionId),
+      provider: () => this.requireSkillSshProvider(folder.connectionId!),
       workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
     }
   }
