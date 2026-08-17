@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerTerminalListState } from '../../orchestration/worker-terminal-ownership'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
@@ -99,12 +98,6 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      if (!db.getWorkerDispatch(params.dispatch)) {
-        throw new OrchestrationError(
-          'dispatch_not_found',
-          `Worker Dispatch ${params.dispatch} was not found.`
-        )
-      }
       const retained = db.retainWorkerTerminalResource(params.dispatch)
       if (retained.disposition === 'already_released') {
         return {

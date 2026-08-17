@@ -150,6 +150,9 @@ export function retainWorkerTerminalResource(
   | { disposition: 'no_owned_resource'; resource: null } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    if (!this.getDispatchContextById(dispatchId)) {
+      throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+    }
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
     if (!resource) {
       this.db.exec('COMMIT')
