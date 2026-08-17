@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import {
+  isAmbiguousHostRemovalError,
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
   type WorktreeForceDeleteReason
@@ -16,6 +17,24 @@ export function getDeleteWorktreeToastCopy(
   error: string,
   lockReason: string | null = null
 ): DeleteWorktreeToastCopy {
+  // Why: the raw refusal names execution-host routing, which is Orca's problem, not the
+  // user's. Say what it means for their workspace and that nothing was lost; there is no
+  // action they can take, so offer none rather than a remedy that does not work.
+  if (isAmbiguousHostRemovalError(error)) {
+    return {
+      title: translate(
+        'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+        'Failed to delete workspace {{value0}}',
+        { value0: worktreeName }
+      ),
+      description: translate(
+        'auto.components.sidebar.delete.worktree.toast.ambiguousHost',
+        "This workspace exists on more than one machine at the same path, so Orca can't tell which one to remove. Nothing was deleted. We're improving this — for now, delete it directly on the machine you want it gone from."
+      ),
+      isDestructive: false
+    }
+  }
+
   if (isLockedWorktreeRemovalError(error)) {
     return {
       title: translate(

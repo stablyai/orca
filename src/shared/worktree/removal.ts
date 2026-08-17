@@ -45,6 +45,20 @@ export function isProvenLivePtyRemovalError(error: string): boolean {
   )
 }
 
+/**
+ * True when the removal was refused because the same workspace path exists on
+ * more than one execution host, so routing cannot say which one the row is.
+ *
+ * Matched on the message because the refusal is raised as a plain Error from
+ * the store slice; keep this in step with WORKTREE_REMOVAL_AMBIGUOUS_ERROR.
+ */
+export function isAmbiguousHostRemovalError(error: string): boolean {
+  return error.includes(AMBIGUOUS_HOST_REMOVAL_MARKER)
+}
+
+/** The stable fragment of WORKTREE_REMOVAL_AMBIGUOUS_ERROR that identifies the refusal. */
+export const AMBIGUOUS_HOST_REMOVAL_MARKER = 'ambiguous across hosts'
+
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   const reason = lockReason?.trim()
   return new Error(

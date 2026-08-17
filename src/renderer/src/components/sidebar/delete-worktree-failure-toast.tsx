@@ -3,6 +3,7 @@ import { Button } from '../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { translate } from '@/i18n/i18n'
 import {
+  isAmbiguousHostRemovalError,
   isLockedWorktreeRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
@@ -96,7 +97,13 @@ export function showDeleteWorktreeFailureToast({
       <DeleteWorktreeFailureToastBody
         description={toastCopy.description}
         canForceDelete={canForceDelete}
-        showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
+        // Why: View opens the workspace diff by id, and an id that two hosts share cannot
+        // pick one — the button would either do nothing useful or open the other machine's
+        // changes. Hide it for the collision refusal.
+        showViewChanges={
+          !isAmbiguousHostRemovalError(error) &&
+          (!isLockedWorktreeRemovalError(error) || hasKnownChanges === true)
+        }
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
         toastId={id}
