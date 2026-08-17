@@ -136,6 +136,7 @@ describe('sanitizeWorktreeBranchName', () => {
   it('strips a trailing .lock suffix, which git reserves for ref lock files', () => {
     expect(sanitizeWorktreeBranchName('feature/tti.lock')).toBe('feature/tti')
     expect(sanitizeWorktreeBranchName('feature/tti.LOCK')).toBe('feature/tti')
+    expect(sanitizeWorktreeBranchName('feature/tti.lock.lock')).toBe('feature/tti')
   })
 
   it('preserves non-ASCII letters and numbers per segment', () => {

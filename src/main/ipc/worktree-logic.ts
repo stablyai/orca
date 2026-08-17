@@ -83,8 +83,9 @@ function sanitizeBranchNameSegment(input: string): string {
       .replace(/\.{2,}/g, '.')
       .replace(/^[.-]+|[.-]+$/g, '')
       // Why: git check-ref-format rejects ref components ending in `.lock`,
-      // case-insensitively on Windows/macOS filesystems.
-      .replace(/\.lock$/i, '')
+      // case-insensitively on Windows/macOS filesystems. Strip repeated
+      // suffixes so `foo.lock.lock` cannot survive as `foo.lock`.
+      .replace(/(?:\.lock)+$/i, '')
   )
 }
 

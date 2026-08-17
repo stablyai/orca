@@ -10,6 +10,8 @@ const ADVERSARIAL_INPUTS = [
   'feature/.hidden',
   'feature/tti.lock',
   'feature/tti.LOCK',
+  'feature/tti.lock.lock',
+  'feature/tti.Lock.lock',
   'a..b/c...d',
   'feature/中文',
   'feature/🚀',
