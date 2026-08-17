@@ -4585,18 +4585,51 @@ export class OrchestrationDb {
     // Why: SAVEPOINT is atomic standalone and nests without committing a caller-owned transaction.
     this.db.exec('SAVEPOINT update_task_status')
     try {
-      const completedAt =
-        status === 'completed' || status === 'failed' ? new Date().toISOString() : null
-      this.db
+      const terminalStatus = status === 'completed' || status === 'failed'
+      const completedAt = terminalStatus ? new Date().toISOString() : null
+      const update = this.db
         .prepare(
-          'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
+          `UPDATE tasks
+           SET status = ?, result = COALESCE(?, result),
+               completed_at = COALESCE(?, completed_at)
+           WHERE id = ?
+             AND (
+               ? = 0 OR NOT EXISTS (
+                 SELECT 1
+                 FROM dispatch_contexts active
+                 JOIN worker_dispatches worker ON worker.dispatch_id = active.id
+                 WHERE active.task_id = tasks.id
+                   AND active.status IN ('pending', 'dispatched')
+                   AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
+               )
+             )`
         )
-        .run(status, result ?? null, completedAt, id)
+        .run(status, result ?? null, completedAt, id, terminalStatus ? 1 : 0)
+
+      if (update.changes !== 1 && terminalStatus) {
+        const activeWorker = this.db
+          .prepare(
+            `SELECT active.id
+             FROM dispatch_contexts active
+             JOIN worker_dispatches worker ON worker.dispatch_id = active.id
+             WHERE active.task_id = ? AND active.status IN ('pending', 'dispatched')
+               AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
+             ORDER BY active.rowid DESC LIMIT 1`
+          )
+          .get(id) as Pick<DispatchContextRow, 'id'> | undefined
+        if (activeWorker) {
+          throw new OrchestrationError(
+            'task_not_startable',
+            `Task ${id} cannot move to ${status} while supervised Dispatch ${activeWorker.id} is active; stop or settle its worker first.`,
+            { taskId: id, dispatchId: activeWorker.id }
+          )
+        }
+      }
 
       if (status === 'completed') {
         this.promoteReadyTasks(id)
       }
-      if (status === 'completed' || status === 'failed') {
+      if (terminalStatus) {
         this.settleActiveDispatchForTask(id, status)
       }
 
