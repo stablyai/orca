@@ -64,7 +64,8 @@ describe('orchestration worker recovery', () => {
       processIncarnation: 'runtime:pty:1',
       worktreeId: 'repo::worktree',
       setupState: 'not_applicable',
-      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
+      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }],
+      terminalOwnership: 'created'
     })
     if (ready) {
       db.markWorkerDispatchReady(started.dispatch.id)
