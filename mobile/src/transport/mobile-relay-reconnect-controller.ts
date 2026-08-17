@@ -7,8 +7,12 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
+import { RelayCredentialEligibility } from './relay-credential-eligibility'
+import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, ForegroundNudgeReason } from './types'
+
+type RelayCredentialLease = { expiresAt: number; version: number }
 
 export type RelayReconnectDependencies = {
   now: () => number
@@ -20,7 +24,7 @@ export type RelayReconnectDependencies = {
 type RecoveryGate = 'external-signal' | 'fresh-credential'
 
 export class RelayReconnectController {
-  private consecutiveFailures = 0
+  private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -28,7 +32,7 @@ export class RelayReconnectController {
   private recoveryGate: RecoveryGate | null = null
   private gateReprobePending = false
   private gateReprobeStreak = 0
-  private readonly rejectedCredentialVersions = new Set<number>()
+  private readonly credentials: RelayCredentialEligibility
   private readonly delays: RelayRetryDelays
 
   constructor(
@@ -36,6 +40,15 @@ export class RelayReconnectController {
     private readonly onRetry: (forceReplacement?: boolean) => void
   ) {
     this.delays = new RelayRetryDelays(dependencies.randomBytes)
+    this.credentials = new RelayCredentialEligibility(dependencies.now)
+  }
+
+  getFailureCount(): number {
+    return this.failureCount.current()
+  }
+
+  reportFailureCountTo(reporter: (count: number) => void): void {
+    this.failureCount.reportTo(reporter)
   }
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
@@ -105,14 +118,14 @@ export class RelayReconnectController {
 
   resetForDirectConnection(): boolean {
     const needsCredentialRefresh =
-      this.recoveryGate === 'fresh-credential' || this.rejectedCredentialVersions.size > 0
+      this.recoveryGate === 'fresh-credential' || this.credentials.hasRejected()
     this.activeSession = null
     this.activeRelayConnectedAt = null
     if (needsCredentialRefresh) {
       // Why: the rejected credential stays unusable until its replacement is
       // durable. No reprobe timer here — direct is live, rotation over it
       // clears the gate, and any later state failure re-arms via shouldDefer.
-      this.consecutiveFailures = 0
+      this.failureCount.reset()
       this.nextAttemptAt = 0
       this.recoveryGate = 'fresh-credential'
       this.gateReprobePending = false
@@ -126,22 +139,22 @@ export class RelayReconnectController {
 
   completeCredentialRefresh(): void {
     if (this.recoveryGate === 'fresh-credential') {
-      this.rejectedCredentialVersions.clear()
+      this.credentials.clearRejected()
       this.reset()
     }
   }
 
-  eligibleCredentials<T extends { expiresAt: number; version: number }>(
+  blocksUntilFreshCredential = (): boolean => this.recoveryGate === 'fresh-credential'
+
+  hasDialableCredential(...credentials: (RelayCredentialLease | null | undefined)[]): boolean {
+    return this.credentials.hasDialable(...credentials)
+  }
+
+  eligibleCredentials<T extends RelayCredentialLease>(
     ...credentials: Array<T | null | undefined>
   ): T[] {
-    const eligible = credentials.filter((credential): credential is T =>
-      Boolean(
-        credential &&
-        credential.expiresAt > this.dependencies.now() &&
-        !this.rejectedCredentialVersions.has(credential.version)
-      )
-    )
-    if (eligible.length === 0 && this.rejectedCredentialVersions.size > 0) {
+    const eligible = this.credentials.eligible(...credentials)
+    if (eligible.length === 0 && this.credentials.hasRejected()) {
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
       this.scheduleGateReprobe()
@@ -152,7 +165,7 @@ export class RelayReconnectController {
   // For callers that found no dialable credential at all: keep a slow retry
   // alive so a later durable write can recover.
   armCredentialReprobe(): void {
-    if (this.rejectedCredentialVersions.size > 0) {
+    if (this.credentials.hasRejected()) {
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
       this.scheduleGateReprobe()
@@ -176,14 +189,12 @@ export class RelayReconnectController {
 
   // A durable bundle whose current version is not rejected reopens the gate.
   acceptFreshCredential(version: number): void {
-    if (this.recoveryGate === 'fresh-credential' && !this.rejectedCredentialVersions.has(version)) {
+    if (this.recoveryGate === 'fresh-credential' && !this.credentials.isRejected(version)) {
       this.liftGate()
     }
   }
 
-  recordRejectedCredential(version: number): void {
-    this.rejectedCredentialVersions.add(version)
-  }
+  recordRejectedCredential = (version: number): void => this.credentials.recordRejected(version)
 
   registerActiveFailure(logical: StableLogicalRpcClient): void {
     if (logical.getActivePath() !== 'relay') {
@@ -237,20 +248,13 @@ export class RelayReconnectController {
       return
     }
     const now = this.dependencies.now()
-    if (
-      this.activeRelayConnectedAt != null &&
-      now - this.activeRelayConnectedAt >= RELAY_STABLE_CONNECTION_MS
-    ) {
-      this.consecutiveFailures = 0
-    }
-    // Why: elapsed time inside a slow failed dial is not evidence of recovery;
-    // only an authenticated relay that survived the stability window resets the streak.
+    const failureCount = this.failureCount.recordAfterConnection(this.activeRelayConnectedAt, now)
+    // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
-    this.consecutiveFailures += 1
     const delay =
       recovery?.kind === 'retry-after-host-offline'
         ? this.delays.hostOfflineDelayMs()
-        : this.delays.transportDelayMs(this.consecutiveFailures)
+        : this.delays.transportDelayMs(failureCount)
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // Why: an E2EE rejection is usually pairing revocation, but it also fires
@@ -302,7 +306,7 @@ export class RelayReconnectController {
   }
 
   reset(): void {
-    this.consecutiveFailures = 0
+    this.failureCount.reset()
     this.activeRelayConnectedAt = null
     this.nextAttemptAt = 0
     this.liftGate()

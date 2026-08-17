@@ -17,6 +17,12 @@ import {
 import { isQuickOpenReaddirBudgetError } from '../../shared/quick-open-readdir-walk'
 import { buildInstallRgMessage } from '../../shared/quick-open-install-rg'
 import { listFilesWithGit } from './filesystem-list-files-git-fallback'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess,
+  RipgrepUnavailableError
+} from '../../shared/ripgrep-process-availability'
 
 export async function listQuickOpenFiles(
   rootPath: string,
@@ -37,13 +43,9 @@ export async function listQuickOpenFiles(
   // every worktree instead of just the active one. The shared helper
   // normalizes, validates, and root-relativizes every input.
   const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, excludePaths)
+  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
-  // Why: checking rg availability upfront avoids a race condition where
-  // spawn('rg') emits 'close' before 'error' on some platforms, causing
-  // the handler to resolve with empty results before the git fallback
-  // can run.
-  const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
-  if (!rgAvailable) {
+  const listWithoutRipgrep = async (): Promise<string[]> => {
     try {
       return await listFilesWithGit(
         authorizedRootPath,
@@ -59,6 +61,12 @@ export async function listQuickOpenFiles(
       throw new Error(await buildInstallRgMessage(err))
     }
   }
+  if (
+    wslDistroForOutput &&
+    !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
+  ) {
+    return listWithoutRipgrep()
+  }
 
   const files = new Set<string>()
   const children: {
@@ -68,8 +76,6 @@ export async function listQuickOpenFiles(
   }[] = []
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
-  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
-
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
     // search target is cwd-relative. With an absolute target, `!packages/app`
@@ -86,6 +92,8 @@ export async function listQuickOpenFiles(
       let buf = ''
       let done = false
       let parseablePathCount = 0
+      let processErrorObserved = false
+      let unavailableExitObserved = false
 
       const processLine = (rawLine: string): boolean => {
         const translated =
@@ -138,12 +146,27 @@ export async function listQuickOpenFiles(
         /* drain */
       }
       const handleError = (): void => {
+        processErrorObserved = true
         // Why: treat spawn errors like an abnormal exit — discard residual
         // buffer so a truncated final byte sequence cannot leak as a path.
         buf = ''
+        if (isRipgrepUnavailableExit(child, null, null)) {
+          finish(new RipgrepUnavailableError())
+          return
+        }
         finish(new Error('rg failed to start'))
       }
       const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+        if (
+          isRipgrepUnavailableExit(child, code, signal, {
+            classifyNativeLauncherExit: !wslDistroForOutput
+          })
+        ) {
+          unavailableExitObserved = true
+          buf = ''
+          finish(new RipgrepUnavailableError())
+          return
+        }
         if (signal) {
           // Why: a signal exit means timeout/OOM/external kill. Returning the
           // already-streamed prefix would recreate the false-empty bug this
@@ -179,6 +202,10 @@ export async function listQuickOpenFiles(
         child.stderr!.off('data', handleStderrData)
         child.off('error', handleError)
         child.off('close', handleClose)
+        absorbPendingRipgrepSpawnError(child, {
+          errorObserved: processErrorObserved,
+          unavailableExitObserved
+        })
         if (err) {
           reject(err)
         } else {
@@ -197,7 +224,7 @@ export async function listQuickOpenFiles(
         // Why: on timeout, the buffer is likely truncated mid-path. Discard
         // it so Quick Open never displays a malformed entry.
         buf = ''
-        child.kill()
+        killSpawnedRipgrepProcess(child)
         finish(new Error('rg list timed out'))
       }, 10000)
     })
@@ -213,7 +240,7 @@ export async function listQuickOpenFiles(
       }
       entry.finish()
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
-        entry.child.kill()
+        killSpawnedRipgrepProcess(entry.child)
       }
     }
   }
@@ -225,24 +252,30 @@ export async function listQuickOpenFiles(
       }
       entry.finish()
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
-        entry.child.kill()
+        killSpawnedRipgrepProcess(entry.child)
       }
     }
   }
-
   try {
+    const primaryRun = runRg(primary)
     if (maxResults === undefined) {
-      await Promise.all([runRg(primary), runRg(ignoredPass)])
+      // Why: a pid-less primary proves launch failure; avoid doubling the failed spawn.
+      await (children[0]?.child.pid === undefined
+        ? primaryRun
+        : Promise.all([primaryRun, runRg(ignoredPass)]))
     } else {
       // Why: ignored-file output can be much larger and faster than the primary
       // pass; let source files claim the bounded autocomplete budget first.
-      await runRg(primary)
+      await primaryRun
       if (files.size < maxResults) {
         await runRg(ignoredPass)
       }
     }
   } catch (err) {
     killSurvivors()
+    if (err instanceof RipgrepUnavailableError) {
+      return listWithoutRipgrep()
+    }
     throw err
   }
   return Array.from(files).slice(0, maxResults)

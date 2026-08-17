@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -263,6 +263,44 @@ describe('worktree base directory poller', () => {
     expect(
       events.filter((event) => event.type === 'create' && event.path === markerPath)
     ).toHaveLength(2)
+  })
+
+  it('rescans on the next tick when a write races an in-flight full scan', async () => {
+    const root = await makeRoot()
+    const worktree = join(root, 'raced')
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    const snapshotTicks: number[] = []
+    let raced = false
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        onSnapshotTaken: (tick) => {
+          snapshotTicks.push(tick)
+          if (raced) {
+            return
+          }
+          raced = true
+          mkdirSync(worktree)
+          writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere')
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+
+    // A write landing after a scan's listings must leave the gate stale, so the
+    // next tick rescans instead of deferring the create to the backstop.
+    expect(snapshotTicks.slice(0, 2)).toEqual([
+      WORKTREE_BASE_BACKSTOP_TICKS,
+      WORKTREE_BASE_BACKSTOP_TICKS + 1
+    ])
   })
 
   it('parks base scans while hidden and losslessly detects changes on resume', async () => {

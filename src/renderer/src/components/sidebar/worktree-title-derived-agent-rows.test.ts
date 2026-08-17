@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
@@ -329,6 +330,22 @@ describe('buildTitleDerivedAgentRows', () => {
         ['opencode', state, 'OpenCode']
       ])
     }
+  })
+
+  // Why: the native marker is the only signal a hookless OpenCode pane emits, so
+  // without it the sidebar showed no row for a running session.
+  it('rows an OpenCode pane from its undecorated native session title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'OC | Ad hoc build' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-opencode'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['opencode', 'idle']])
   })
 
   it('still resolves Claude from a title that presents Claude, owner or not', () => {

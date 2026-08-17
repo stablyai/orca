@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { ArrowDown, ArrowUp } from 'lucide-react-native'
-import type { DiffComment } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { MOBILE_GIT_STATUS_LABELS } from '../source-control/mobile-git-status'

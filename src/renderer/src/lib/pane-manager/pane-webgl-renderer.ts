@@ -23,6 +23,11 @@ let suggestedRendererType: 'dom' | undefined
 
 type ReleasableWebglContext = {
   getExtension(name: 'WEBGL_lose_context'): WEBGL_lose_context | null
+  isContextLost?: () => boolean
+  blendFuncSeparate?: (srcRgb: number, dstRgb: number, srcAlpha: number, dstAlpha: number) => void
+  readonly SRC_ALPHA: number
+  readonly ONE_MINUS_SRC_ALPHA: number
+  readonly ONE: number
 }
 
 type XtermWebglAddonInternals = {
@@ -31,6 +36,11 @@ type XtermWebglAddonInternals = {
     _canvas?: HTMLCanvasElement
   }
 }
+
+const webglContextRestoreHandlers = new WeakMap<
+  WebglAddon,
+  { canvas: HTMLCanvasElement; handler: EventListener }
+>()
 
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
@@ -113,11 +123,21 @@ export function cancelPendingWebglRefresh(pane: ManagedPaneInternal): void {
   pane.pendingWebglRefreshRafId = null
 }
 
+export function isPaneWebglContextLost(pane: ManagedPaneInternal): boolean {
+  try {
+    const renderer = (pane.webglAddon as unknown as XtermWebglAddonInternals | null)?._renderer
+    return renderer?._gl?.isContextLost?.() === true
+  } catch {
+    return true
+  }
+}
+
 export function disposeWebgl(
   pane: ManagedPaneInternal,
   options?: { refreshDimensions?: boolean }
 ): void {
   cancelPendingWebglRefresh(pane)
+  markPaneTerminalRenderer(pane, 'dom')
   if (!pane.webglAddon) {
     return
   }
@@ -147,6 +167,7 @@ export function disposeWebgl(
 }
 
 function releaseXtermWebglContext(webglAddon: ManagedPaneInternal['webglAddon']): void {
+  removeWebglContextRestoreHandler(webglAddon)
   try {
     // Why: xterm removes the canvas on dispose, but Windows/ANGLE can keep the
     // driver context alive long enough for rapid terminal activation to hit
@@ -291,7 +312,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(addon)
+    normalizeWebglAlphaBlending(addon)
+    installWebglContextRestoreHandler(addon)
     pane.webglAddon = addon
+    markPaneTerminalRenderer(pane, 'webgl')
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {
@@ -308,5 +332,39 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       /* ignore — a half-constructed addon may throw on dispose */
     }
     pane.webglAddon = null
+  }
+}
+
+function normalizeWebglAlphaBlending(webglAddon: WebglAddon): void {
+  const gl = (webglAddon as unknown as XtermWebglAddonInternals)._renderer?._gl
+  // xterm's shared blendFunc squares destination alpha. Standard source-over keeps colored translucent backgrounds pixel-identical to CSS.
+  gl?.blendFuncSeparate?.(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+}
+
+function installWebglContextRestoreHandler(webglAddon: WebglAddon): void {
+  const canvas = (webglAddon as unknown as XtermWebglAddonInternals)._renderer?._canvas
+  if (!canvas) {
+    return
+  }
+  const handler = () => normalizeWebglAlphaBlending(webglAddon)
+  canvas.addEventListener('webglcontextrestored', handler)
+  webglContextRestoreHandlers.set(webglAddon, { canvas, handler })
+}
+
+function removeWebglContextRestoreHandler(webglAddon: ManagedPaneInternal['webglAddon']): void {
+  if (!webglAddon) {
+    return
+  }
+  const registered = webglContextRestoreHandlers.get(webglAddon)
+  if (!registered) {
+    return
+  }
+  registered.canvas.removeEventListener('webglcontextrestored', registered.handler)
+  webglContextRestoreHandlers.delete(webglAddon)
+}
+
+function markPaneTerminalRenderer(pane: ManagedPaneInternal, renderer: 'dom' | 'webgl'): void {
+  if (pane.xtermContainer.dataset) {
+    pane.xtermContainer.dataset.terminalRenderer = renderer
   }
 }

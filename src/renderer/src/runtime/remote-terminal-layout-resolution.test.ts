@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { layoutCoversLeaves, resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 
 const verticalSplit: TerminalPaneLayoutNode = {

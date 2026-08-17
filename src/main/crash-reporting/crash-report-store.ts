@@ -105,6 +105,31 @@ export class CrashReportStore {
     })
   }
 
+  /**
+   * Merges late-arriving details into an existing report. Crashpad finishes
+   * writing the minidump after the process-gone event that created the record,
+   * so the signature can only be folded in afterwards.
+   */
+  async attachDetails(
+    id: string,
+    extraDetails: Record<string, unknown>
+  ): Promise<CrashReportRecord | null> {
+    return this.withWrite(async (reports) => {
+      let result: CrashReportRecord | null = null
+      const nextReports = reports.map((report) => {
+        if (report.id !== id) {
+          return report
+        }
+        result = {
+          ...report,
+          details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
+        }
+        return result
+      })
+      return { reports: nextReports, result }
+    })
+  }
+
   async getLatestPending(): Promise<CrashReportRecord | null> {
     const reports = await this.readReports()
     return reports.find((report) => report.status === 'pending') ?? null

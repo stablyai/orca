@@ -2,7 +2,7 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
@@ -25,23 +25,29 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree-id'
+import { splitWorktreeId } from '../shared/worktree/id'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
+import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
-  createShellReadyScanState,
-  drainShellReadyHeldBytes,
-  scanForShellReady,
-  type ShellReadyScanState
-} from '../main/shell-ready-marker-scanner'
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput,
+  type ShellStartupOutputScanState
+} from '../main/shell-startup-output-scanner'
+import {
+  createShellPromptReadinessProbe,
+  type ShellPromptReadinessProbe
+} from '../main/shell-prompt-readiness-probe'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
-import type { TuiAgent } from '../shared/types'
+import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -73,6 +79,12 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import {
+  deleteRelayFishHistory,
+  deleteRelayHistory,
+  injectRelayFishHistoryEnv,
+  injectRelayHistoryEnv
+} from './terminal-history'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -147,8 +159,12 @@ type ManagedPty = {
   worktreeId?: string
   terminalHandle?: string
   explicitTerm?: string
+  shellPath?: string
+  shellCwd?: string
+  shellPathEnv?: string
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
+  historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
@@ -178,10 +194,13 @@ type PendingPtyOutput = RelayPtySourceOutput & {
 }
 
 type ManagedStartupCommand = {
-  command: string
+  command: string | null
+  providerDelivery: boolean
   delivered: boolean
   waitForShellReady: boolean
-  scanState: ShellReadyScanState | null
+  outputScanState: ShellStartupOutputScanState | null
+  shellPid: number | null
+  promptProbe: ShellPromptReadinessProbe | null
   timer: ReturnType<typeof setTimeout> | null
 }
 
@@ -245,6 +264,7 @@ const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
 const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
+const RENDERER_SHELL_READY_RETENTION_MS = 15_000
 const PTY_FORCE_KILL_RETRY_DELAY_MS = 250
 const PTY_FORCE_KILL_MAX_ATTEMPTS = 2
 const ALLOWED_SIGNALS = new Set([
@@ -314,6 +334,8 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  /** Optional for state serialized by relays predating scoped history. */
+  historyIsolationEnabled?: boolean
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -557,7 +579,7 @@ export class PtyHandler {
   }
 
   /** Register an env augmenter merged into every spawn env *after* process.env and renderer env.
-   *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords. See docs/design/agent-status-over-ssh.md §3. */
+   *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords: evaluated per spawn (not captured once), so a late or restarted hook-server bind still reaches the next PTY. */
   addEnvAugmenter(augmenter: PtyEnvAugmenter): () => void {
     this.envAugmenters.push(augmenter)
     return () => {
@@ -603,15 +625,13 @@ export class PtyHandler {
       }
     }
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
+    // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
+    stripLegacyTerminalShimEnv(result, process.platform)
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
     }
-    if (
-      !envToDelete.includes('TERM') &&
-      rendererEnv &&
-      Object.prototype.hasOwnProperty.call(rendererEnv, 'TERM')
-    ) {
+    if (!envToDelete.includes('TERM') && rendererEnv && Object.hasOwn(rendererEnv, 'TERM')) {
       result.TERM = rendererEnv.TERM
     }
     // Why: node-pty defaults missing/empty TERM per-platform; normalize so POSIX and Windows children agree.
@@ -638,10 +658,20 @@ export class PtyHandler {
 
   private releaseStartupCommand(managed: ManagedPty): void {
     this.clearStartupCommandTimer(managed)
+    managed.startupCommand?.promptProbe?.dispose()
     managed.startupCommand = undefined
   }
 
-  private scheduleStartupCommandDelivery(managed: ManagedPty, delayMs: number): void {
+  private drainStartupScanBytes(startup: ManagedStartupCommand): string {
+    if (!startup.outputScanState) {
+      return ''
+    }
+    const heldBytes = drainShellStartupOutputScanState(startup.outputScanState)
+    startup.outputScanState = null
+    return heldBytes
+  }
+
+  private scheduleStartupCommandResolution(managed: ManagedPty, delayMs: number): void {
     const startup = managed.startupCommand
     if (!startup || startup.delivered || managed.disposed) {
       return
@@ -649,22 +679,25 @@ export class PtyHandler {
     this.clearStartupCommandTimer(managed)
     startup.timer = setTimeout(() => {
       startup.timer = null
-      this.deliverStartupCommand(managed)
+      if (startup.providerDelivery) {
+        this.deliverStartupCommand(managed)
+      } else {
+        this.signalRendererShellReady(managed)
+      }
     }, delayMs)
   }
 
   private deliverStartupCommand(managed: ManagedPty): void {
     const startup = managed.startupCommand
-    if (!startup || startup.delivered || managed.disposed) {
+    if (!startup?.providerDelivery || !startup.command || startup.delivered || managed.disposed) {
       return
     }
     startup.delivered = true
     this.clearStartupCommandTimer(managed)
-    if (startup.scanState) {
-      const heldBytes = drainShellReadyHeldBytes(startup.scanState)
-      if (heldBytes) {
-        managed.startupIngress?.accept(heldBytes)
-      }
+    startup.promptProbe?.dispose()
+    const heldBytes = this.drainStartupScanBytes(startup)
+    if (heldBytes) {
+      managed.startupIngress?.accept(heldBytes)
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
@@ -674,6 +707,19 @@ export class PtyHandler {
     })
     managed.startupCommand = undefined
     managed.pty.write(payload)
+  }
+
+  private signalRendererShellReady(managed: ManagedPty): void {
+    const startup = managed.startupCommand
+    if (!startup || startup.providerDelivery || startup.delivered || managed.disposed) {
+      return
+    }
+    startup.delivered = true
+    this.clearStartupCommandTimer(managed)
+    startup.promptProbe?.dispose()
+    managed.startupIngress?.accept(this.drainStartupScanBytes(startup))
+    managed.startupIngress?.accept(`${SHELL_READY_MARKER_PREFIX}\x07`)
+    managed.startupCommand = undefined
   }
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
@@ -701,16 +747,43 @@ export class PtyHandler {
       onEmission: emitIngressData,
       ...(echoProbe ? { echoProbe } : {})
     })
+    const startup = managed.startupCommand
+    if (startup?.waitForShellReady) {
+      startup.promptProbe = createShellPromptReadinessProbe({
+        slavePath: readPtySlavePath(managed.pty),
+        shellPath: managed.shellPath,
+        shellCwd: managed.shellCwd,
+        shellPathEnv: managed.shellPathEnv,
+        getShellPid: () => startup.shellPid,
+        onPromptReady: () => {
+          if (startup.providerDelivery) {
+            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+          } else {
+            this.signalRendererShellReady(managed)
+          }
+        }
+      })
+    }
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand
-      if (startup?.waitForShellReady && startup.scanState && !startup.delivered) {
-        const scanned = scanForShellReady(startup.scanState, data)
+      if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
+        const scanned = scanShellStartupOutput(startup.outputScanState, data)
         data = scanned.output
-        if (scanned.matched) {
-          this.scheduleStartupCommandDelivery(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+        if (scanned.shellPid) {
+          startup.shellPid = scanned.shellPid
+        }
+        if (scanned.ready) {
+          if (startup.providerDelivery) {
+            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+          } else {
+            this.signalRendererShellReady(managed)
+          }
         }
       }
       managed.startupIngress?.accept(data)
+      if (startup && !startup.delivered && data.length > 0) {
+        startup.promptProbe?.notifyOutput(data)
+      }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       managed.physicalExit?.markExited()
@@ -748,11 +821,11 @@ export class PtyHandler {
 
   private releaseRelayIngress(managed: ManagedPty): void {
     const startupCommand = managed.startupCommand
-    const scanState = startupCommand?.scanState
-    if (scanState) {
-      const held = drainShellReadyHeldBytes(scanState)
-      startupCommand.scanState = null
-      managed.startupIngress?.accept(held)
+    if (startupCommand) {
+      this.clearStartupCommandTimer(managed)
+      startupCommand.promptProbe?.dispose()
+      managed.startupIngress?.accept(this.drainStartupScanBytes(startupCommand))
+      managed.startupCommand = undefined
     }
     managed.startupIngress?.drainAndClose()
   }
@@ -796,6 +869,13 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
+    this.dispatcher.onRequest('pty.deleteWorktreeHistory', async (p) => {
+      if (typeof p.worktreeId === 'string') {
+        deleteRelayFishHistory(p.worktreeId)
+        deleteRelayHistory(p.worktreeId)
+      }
+      return { ok: true }
+    })
     this.dispatcher.onRequest('pty.closeStartupQueryAuthority', (p) =>
       this.closeStartupQueryAuthority(p)
     )
@@ -1323,7 +1403,8 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
-    const worktreeId = env?.ORCA_WORKTREE_ID
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
@@ -1431,7 +1512,7 @@ export class PtyHandler {
     const explicitTerm =
       !envToDelete.includes('TERM') &&
       env &&
-      Object.prototype.hasOwnProperty.call(env, 'TERM') &&
+      Object.hasOwn(env, 'TERM') &&
       typeof env.TERM === 'string' &&
       env.TERM.length > 0
         ? env.TERM
@@ -1439,7 +1520,9 @@ export class PtyHandler {
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
-    const shell = resolvedShellOverride || resolveDefaultShell()
+    const requestedEnvShell =
+      process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
+    const shell = resolvedShellOverride || requestedEnvShell || resolveDefaultShell()
     let id: string
     do {
       id = `pty-${this.nextId++}`
@@ -1461,6 +1544,15 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+    const historyIsolationEnabled = params.historyIsolationEnabled === true
+    if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
+      injectRelayFishHistoryEnv(spawnEnv, worktreeId)
+    }
+    if (historyIsolationEnabled && worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, worktreeId, shell)
+    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -1475,11 +1567,15 @@ export class PtyHandler {
         startupCommandDelivery:
           params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
       })
+    const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro,
-      emitReadyMarker: shouldEmitShellReadyMarker
+      emitReadyMarker: shouldEmitShellReadyMarker,
+      emitStartupIdentity: shouldEmitShellReadyMarker
     })
+    const rendererShellReadySupported =
+      !shouldProviderDeliverCommand && shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
 
     if (context?.signal?.aborted || context?.isStale()) {
       // Why: cancellation remains side-effect-free until the exact native spawn seam.
@@ -1500,7 +1596,12 @@ export class PtyHandler {
         rows,
         cwd,
         // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
-        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+        env: {
+          ...spawnEnv,
+          ORCA_SHELL_READY_MARKER: '0',
+          ORCA_SHELL_STARTUP_IDENTITY: '0',
+          ...shellLaunch.env
+        }
       })
     } catch (error) {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
@@ -1518,7 +1619,6 @@ export class PtyHandler {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
     }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
@@ -1539,6 +1639,10 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+      shellPath: shell,
+      shellCwd: cwd,
+      shellPathEnv: spawnEnv.PATH,
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,
@@ -1546,16 +1650,19 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
-      ...(shouldProviderDeliverCommand
+      ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
-              command,
+              command: shouldProviderDeliverCommand ? managedStartupCommand : null,
+              providerDelivery: shouldProviderDeliverCommand,
               delivered: false,
               waitForShellReady: shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
-              scanState:
+              outputScanState:
                 shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
-                  ? createShellReadyScanState()
+                  ? createShellStartupOutputScanState()
                   : null,
+              shellPid: null,
+              promptProbe: null,
               timer: null
             }
           }
@@ -1572,11 +1679,13 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'terminate stale')
     } else if (managed.startupCommand) {
-      this.scheduleStartupCommandDelivery(
+      this.scheduleStartupCommandResolution(
         managed,
-        managed.startupCommand.waitForShellReady
-          ? STARTUP_COMMAND_SHELL_READY_FALLBACK_MS
-          : STARTUP_COMMAND_WRITE_DELAY_MS
+        managed.startupCommand.providerDelivery
+          ? managed.startupCommand.waitForShellReady
+            ? STARTUP_COMMAND_SHELL_READY_FALLBACK_MS
+            : STARTUP_COMMAND_WRITE_DELAY_MS
+          : RENDERER_SHELL_READY_RETENTION_MS
       )
     }
     return {
@@ -1953,6 +2062,7 @@ export class PtyHandler {
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
+        ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -2016,11 +2126,22 @@ export class PtyHandler {
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
     const shell = resolveDefaultShell()
+    const historyIsolationEnabled = entry.historyIsolationEnabled === true
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    if (
+      historyIsolationEnabled &&
+      entry.worktreeId &&
+      basename(shell).toLowerCase().startsWith('fish')
+    ) {
+      injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
+    }
+    if (historyIsolationEnabled && entry.worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell)
+    }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
     if (gitCredentialPromptGuarded) {
@@ -2033,7 +2154,12 @@ export class PtyHandler {
       rows: entry.rows,
       cwd: entry.cwd,
       // Why: no provider-delivered command is waiting for a ready marker.
-      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+      env: {
+        ...spawnEnv,
+        ORCA_SHELL_READY_MARKER: '0',
+        ORCA_SHELL_STARTUP_IDENTITY: '0',
+        ...shellLaunch.env
+      }
     })
     this.wireAndStore({
       id: entry.id,
@@ -2051,6 +2177,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell
@@ -2210,6 +2337,14 @@ export class PtyHandler {
       }
     }
     return count
+  }
+
+  get retainedStartupCommandBytes(): number {
+    let bytes = 0
+    for (const managed of this.ptys.values()) {
+      bytes += managed.startupCommand?.command?.length ?? 0
+    }
+    return bytes
   }
 
   get graceTimerActive(): boolean {

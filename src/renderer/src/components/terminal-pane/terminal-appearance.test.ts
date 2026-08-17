@@ -150,6 +150,7 @@ describe('applyTerminalAppearance theme assignment', () => {
         getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
       },
       fitAddon: {
+        fit: vi.fn(),
         proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
       }
     } as unknown as ManagedPane
@@ -191,6 +192,16 @@ describe('applyTerminalAppearance theme assignment', () => {
     // Identity-stable theme means xterm never re-runs _setTheme, so a TUI's modifyColors mutation survives the font tweak.
     expect(pane.terminal.options.theme).toBe(firstTheme)
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
+  })
+
+  it('applies regular and bold font weights independently', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontWeight: 400, terminalFontWeightBold: 800 })
+
+    expect(pane.terminal.options.fontWeight).toBe(400)
+    expect(pane.terminal.options.fontWeightBold).toBe(800)
   })
 
   it('still assigns a fresh theme when composed values actually change', () => {
@@ -349,6 +360,74 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
+  })
+
+  it('stamps settings-UI padding defaults when padding is unset', () => {
+    const pane = makePane(1)
+    const manager = makeManager([pane])
+    applyTerminalAppearance(
+      manager,
+      getDefaultSettings('/tmp'),
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ paddingX: 4, paddingY: 4 })
+    )
+  })
+
+  it('rounds imported half-pixel padding before fitting', () => {
+    const pane = makePane(1)
+    const manager = makeManager([pane])
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      terminalPaddingX: 1.5,
+      terminalPaddingY: 2.5
+    }
+
+    applyTerminalAppearance(
+      manager,
+      settings,
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ paddingX: 2, paddingY: 3 })
+    )
+  })
+
+  it('stamps padding before fitting the pane', () => {
+    const pane = makePane(1)
+    pane.fitAddon.proposeDimensions = () => ({ cols: 79, rows: 23 })
+    const manager = makeManager([pane])
+
+    applyTerminalAppearance(
+      manager,
+      getDefaultSettings('/tmp'),
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    const setPaneStyleOptions = vi.mocked(manager.setPaneStyleOptions)
+    const fit = vi.mocked(pane.fitAddon.fit)
+    expect(setPaneStyleOptions).toHaveBeenCalledOnce()
+    expect(fit).toHaveBeenCalledOnce()
+    expect(setPaneStyleOptions.mock.invocationCallOrder[0]!).toBeLessThan(
+      fit.mock.invocationCallOrder[0]!
+    )
   })
 })
 

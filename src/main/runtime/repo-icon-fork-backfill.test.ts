@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import * as client from '../github/client'
 import { OrcaRuntimeService } from './orca-runtime'
 

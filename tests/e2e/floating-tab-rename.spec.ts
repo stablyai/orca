@@ -80,7 +80,15 @@ async function openFloatingPanel(page: Page): Promise<void> {
     PANEL_SELECTOR,
     { timeout: 30_000 }
   )
-  await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
+  // Why: the panel's open flag is persisted (floating-terminal-panel-view-state), so
+  // after a restart it reopens on its own and a blind toggle would close it again.
+  const alreadyOpen = await page.evaluate(
+    (selector) => Boolean(document.querySelector(selector)),
+    OPEN_PANEL_SELECTOR
+  )
+  if (!alreadyOpen) {
+    await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
+  }
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 

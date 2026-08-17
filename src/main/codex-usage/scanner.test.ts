@@ -10,7 +10,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
+import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
+import { parseCodexUsageRecord } from './codex-usage-record-parser'
 
 describe('parseCodexUsageRecord', () => {
   it('uses token totals only as a duplicate baseline', () => {

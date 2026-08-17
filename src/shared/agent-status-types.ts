@@ -7,7 +7,8 @@ import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
   normalizeOptionalMultilineField,
-  normalizePromptField
+  normalizePromptField,
+  normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
@@ -44,7 +45,9 @@ export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
  *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
- *  per-turn, not meaningful on a historical snapshot, and would bloat memory. */
+ *  per-turn, not meaningful on a historical snapshot, and would bloat memory.
+ *  Coalesced-turn output lives in AgentStatusEntry.lastCompletedAssistantMessage,
+ *  one copy per pane, so it can't multiply by AGENT_STATE_HISTORY_MAX. */
 export type AgentStateHistoryEntry = {
   state: AgentStatusState
   prompt: string
@@ -124,6 +127,10 @@ export type AgentStatusEntry = {
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  /** Output of the newest completed (non-boundary) turn, kept across the next `working`.
+   *  Why: batched publications can fold a whole done→working turn into one notification,
+   *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
+  lastCompletedAssistantMessage?: string
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
@@ -178,6 +185,10 @@ export type AgentStatusPayload = {
    *  completions (notifications, automation runs, unread badges, finished timestamps)
    *  must ignore it. Only meaningful on `done`. */
   sessionBoundary?: boolean
+  /** Wall-clock ms when the lead turn ended while Claude background inventory kept the pane `working`.
+   *  `stateStartedAt` stays pinned for that whole working run, so this is the per-turn identity.
+   *  Present on the gated `working` row and that turn's later all-clear `done`. Event-only — not stored on AgentStatusEntry. */
+  turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -211,6 +222,7 @@ export function pickParsedAgentStatusPayload(
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
   }
 }
@@ -226,7 +238,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Only the remote-ingest path (`ingestRemote`) can stamp it; the HTTP path always sets null. See docs/design/agent-status-over-ssh.md §5. */
+   *  Only the remote-ingest path (`ingestRemote`) can stamp it from mux identity; the HTTP path has no mux and always sets null. */
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
@@ -411,6 +423,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

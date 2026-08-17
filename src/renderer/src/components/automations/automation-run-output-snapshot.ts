@@ -3,6 +3,7 @@ import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../../../shared/ansi-escape-sequences'
+import { copyUtf16SuffixToOwnedString } from '../../../../shared/owned-utf16-suffix'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 const OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD = 64
@@ -68,7 +69,10 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
           truncated = true
           continue
         }
-        chunks[firstChunkIndex] = firstChunk.slice(overflowChars)
+        chunks[firstChunkIndex] =
+          firstChunk.length > MAX_OUTPUT_SNAPSHOT_CHARS
+            ? copyUtf16SuffixToOwnedString(firstChunk, firstChunk.length - overflowChars)
+            : firstChunk.slice(overflowChars)
         totalChars -= overflowChars
         truncated = true
         overflowChars = 0

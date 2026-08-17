@@ -3,7 +3,7 @@ import {
   recognizeAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 // Why: settle after exec, then place the final generic retry beyond sequential

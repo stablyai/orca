@@ -11,7 +11,7 @@ describe('getAgentModelProbeSpec', () => {
       binary: 'grok',
       modelSource: 'dynamic',
       models: [],
-      defaultModelId: 'grok-4.5'
+      defaultModelId: 'grok-4.6'
     })
     expect(spec?.modelDiscovery).toMatchObject({ binary: 'grok', args: ['models'] })
   })

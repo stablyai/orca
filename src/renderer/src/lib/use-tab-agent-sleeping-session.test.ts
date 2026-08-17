@@ -9,7 +9,8 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()

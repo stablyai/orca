@@ -1,11 +1,10 @@
-import { stat } from 'node:fs/promises'
 import type {
   AiVaultAgent,
-  AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
@@ -21,22 +20,6 @@ export type ReadAiVaultFirstUserPromptArgs = {
 }
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
-
-/** IPC-safe entry: validates untyped payload then reads the full first prompt. */
-export async function handleAiVaultGetFirstUserPrompt(
-  args?: AiVaultFirstUserPromptArgs
-): Promise<AiVaultFirstUserPromptResult> {
-  if (!args || typeof args.filePath !== 'string' || typeof args.agent !== 'string') {
-    return { prompt: null }
-  }
-  return readAiVaultFirstUserPrompt({
-    agent: args.agent,
-    filePath: args.filePath,
-    sessionId: typeof args.sessionId === 'string' ? args.sessionId : undefined,
-    executionHostId: args.executionHostId,
-    codexHome: args.codexHome
-  })
-}
 
 /**
  * Re-parse one session transcript under full first-prompt capture and return
@@ -135,7 +118,9 @@ async function fileWithMtimeForPath(
   }
 
   try {
-    const info = await stat(filePath)
+    // 'scan' matches the parser this feeds, so the two halves of one re-parse
+    // share a lane instead of the stat jumping the live-transcript queue.
+    const info = await wslGatedStat(filePath, 'scan')
     return {
       path: filePath,
       mtimeMs: info.mtimeMs,

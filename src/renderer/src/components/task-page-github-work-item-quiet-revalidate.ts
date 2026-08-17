@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   adoptQuietSearchFieldsForItem,
@@ -99,7 +99,7 @@ export function settleQuietSearchRevalidate(args: {
     }
     const separator = itemKey.indexOf('\0')
     if (
-      separator >= 0 &&
+      separator !== -1 &&
       !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
     ) {
       clearConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
@@ -111,7 +111,7 @@ export function settleQuietSearchRevalidate(args: {
       continue
     }
     const sep = itemKey.indexOf('\0')
-    if (sep < 0) {
+    if (sep === -1) {
       continue
     }
     const repoId = itemKey.slice(0, sep)
@@ -134,7 +134,7 @@ export function settleQuietSearchRevalidate(args: {
       continue
     }
     const sep = itemKey.indexOf('\0')
-    if (sep < 0) {
+    if (sep === -1) {
       continue
     }
     if (

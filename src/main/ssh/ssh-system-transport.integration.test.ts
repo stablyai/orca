@@ -55,6 +55,7 @@ exec /bin/sh -c "$cmd"
 
 function writeFakeRelay(dir: string): void {
   writeFileSync(join(dir, 'relay-watcher.js'), '')
+  writeFileSync(join(dir, 'relay-ai-vault-service.js'), '')
   writeFileSync(join(dir, 'managed-hook-runtime.js'), '')
   writeFileSync(
     join(dir, 'relay.js'),

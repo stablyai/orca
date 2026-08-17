@@ -1,4 +1,6 @@
-import type { GlobalSettings, Repo, Worktree } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
@@ -111,6 +113,12 @@ export function normalizeExecutionHostScope(value: string | null | undefined): E
     return ALL_EXECUTION_HOSTS_SCOPE
   }
   return normalizeExecutionHostId(normalized) ?? ALL_EXECUTION_HOSTS_SCOPE
+}
+
+// An omitted scope on a request means this host, not a fan-out. Callers and the
+// renderer share this so both agree on which requests answer with a merge.
+export function requestedExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
+  return normalizeExecutionHostScope(value ?? LOCAL_EXECUTION_HOST_ID)
 }
 
 export function normalizeVisibleExecutionHostIds(

@@ -1,14 +1,14 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
-  isSnapshotBackedTerminalPty,
   selectIdsBeyondHotRetain,
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
@@ -52,13 +52,70 @@ export function isEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): boolean {
+  return classifyEvictionExemptTerminalPty(ptyId, worktreeId) !== null
+}
+
+export type EvictionExemptTerminalPtyRoute = 'fail-open' | 'foreign-worktree' | 'capability-unknown'
+
+// Why routes: an all-exempt force-park frees nothing, and only per-route
+// counts in the field can say whether daemon fail-open ids or unresolved
+// snapshot capability dominates that degenerate case.
+export function classifyEvictionExemptTerminalPty(
+  ptyId: string | null | undefined,
+  worktreeId: string
+): EvictionExemptTerminalPtyRoute | null {
   if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
-    return false
+    return null
   }
-  return (
-    !isSnapshotBackedTerminalPty(ptyId, worktreeId) ||
-    !terminalProviderHasAuthoritativeSnapshot(ptyId)
-  )
+  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  if (separatorIdx === -1) {
+    return 'fail-open'
+  }
+  if (ptyId.slice(0, separatorIdx) !== worktreeId) {
+    return 'foreign-worktree'
+  }
+  return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'
+}
+
+export type EvictionExemptRouteCounts = {
+  failOpen: number
+  foreignWorktree: number
+  capabilityUnknown: number
+  /** Tab-level pty classifies clean, so the exemption came from a split pane's pty. */
+  splitPane: number
+}
+
+export function countEvictionExemptTabRoutes(
+  tabs: readonly Pick<TerminalTab, 'ptyId'>[],
+  worktreeId: string
+): EvictionExemptRouteCounts {
+  const counts: EvictionExemptRouteCounts = {
+    failOpen: 0,
+    foreignWorktree: 0,
+    capabilityUnknown: 0,
+    splitPane: 0
+  }
+  for (const tab of tabs) {
+    switch (classifyEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
+      case 'fail-open':
+        counts.failOpen += 1
+        break
+      case 'foreign-worktree':
+        counts.foreignWorktree += 1
+        break
+      case 'capability-unknown':
+        counts.capabilityUnknown += 1
+        break
+      case null:
+        counts.splitPane += 1
+        break
+    }
+  }
+  return counts
+}
+
+export function formatEvictionExemptRouteCounts(counts: EvictionExemptRouteCounts): string {
+  return `routes=fail-open:${counts.failOpen},foreign:${counts.foreignWorktree},capability:${counts.capabilityUnknown},split-pane:${counts.splitPane}`
 }
 
 export type TerminalWorktreeRetentionCandidate = {

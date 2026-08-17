@@ -43,6 +43,22 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     expect(changed(working({}, payload))).toBe(true)
   })
 
+  it('invalidates when the completion stamp is added, changed, or removed', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working())
+
+    expect(changed(working({}, { turnCompletedAt: 100 }))).toBe(true)
+    expect(changed(working({}, { turnCompletedAt: 200 }))).toBe(true)
+    expect(changed(working())).toBe(true)
+  })
+
+  it('invalidates when the assistant body changes', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working({}, { lastAssistantMessage: 'First answer' }))
+
+    expect(changed(working({}, { lastAssistantMessage: 'Corrected answer' }))).toBe(true)
+  })
+
   it('ignores resume-identity rows, which the provider-session path owns', () => {
     const changed = createHookStatusSessionTabsInvalidator()
 

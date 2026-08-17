@@ -273,11 +273,12 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
+  // Held for any unsettled read, not just an in-flight one: a stream error or a
+  // dropped client would otherwise trade the conversation for an error card.
   const visibleMessages = transcriptRetentionRef.current.visible({
     identity,
     messages,
-    settled: settledReady,
-    loading: status === 'loading'
+    settled: settledReady
   })
 
   return {

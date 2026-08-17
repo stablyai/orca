@@ -83,7 +83,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       const queuedIndex = queuedRequests.findIndex(
         (queued) => queued.terminalTabId === request.terminalTabId
       )
-      if (queuedIndex >= 0) {
+      if (queuedIndex !== -1) {
         queuedRequests[queuedIndex] = mergeRequests(queuedRequests[queuedIndex]!, request)
         return
       }

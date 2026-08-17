@@ -2,21 +2,20 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   isUnstoppedPtyRemovalError,
   WORKTREE_TEARDOWN_FORCE_HINT,
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
-} from '../../shared/worktree-removal'
+} from '../../shared/worktree/removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
 import { createWorktreeSweepTracker, settleSweepsForForcedRemoval } from './forced-sweep-settlement'
 import {
   describeError,
   describeFailedPtySweep,
   describeUnstoppedPtys,
-  verifyUnstoppedPtys,
-  type UnstoppedPtyVerdict
+  resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
 
 // Why: normal inventories still coalesce into one process scan, while a stale
@@ -231,10 +230,15 @@ export async function killAllProcessesForWorktree(
       [...stopAttempts].map(async ([ptyId, stopped]) => [ptyId, await stopped] as const)
     )
     const failedPtyIds = stopResults.filter(([, stopped]) => !stopped).map(([ptyId]) => ptyId)
-    const verdict: UnstoppedPtyVerdict =
-      failedPtyIds.length === 0
-        ? { status: 'exited' }
-        : await verifyUnstoppedPtys(failedPtyIds, deps.localProvider, sweepBudgetMs)
+    const verdict = await resolveUnstoppedPtyVerdict(
+      failedPtyIds,
+      deps.localProvider,
+      sweepBudgetMs,
+      deps.includeProviderInventory !== false ||
+        (deps.resolvedConnectionId === undefined &&
+          deps.resolvedRuntimeEnvironmentId === undefined),
+      deps.runtime
+    )
     if (verdict.status === 'exited') {
       for (const ptyId of failedPtyIds) {
         clearStoppedPtyState(ptyId, deps.onPtyStopped)
@@ -363,13 +367,10 @@ async function sweepRegistryForWorktree(
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {
-  if (!onPtyStopped) {
-    return
-  }
   try {
     // Why: daemon shutdown does not always fan a local pty:exit event back
     // through pty.ts, but removed worktrees must immediately drop memory rows.
-    onPtyStopped(ptyId)
+    onPtyStopped?.(ptyId)
   } catch {
     /* cleanup is best-effort and must not block git-level removal */
   }

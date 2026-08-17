@@ -8,7 +8,8 @@ import {
 } from '@/components/sidebar/smart-attention'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
-import type { TabGroup, TerminalTab } from '../../../shared/types'
+import type { TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 /**
  * Row model for Cmd+J's empty-query "Recent chats & terminals" section.

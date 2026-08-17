@@ -8,9 +8,14 @@ const dependencyAction = parse(
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 const shellContractFiles = [
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
-  'src/main/providers/local-pty-shell-ready.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
@@ -75,6 +80,7 @@ describe('PR workflow parallelism', () => {
 
     expect(shellStep).toBeDefined()
     expect(shellInstall).toBeDefined()
+    expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.
     expect(jobsInstallingPackages).toEqual(['shell_contracts'])

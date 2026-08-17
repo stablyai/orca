@@ -7,7 +7,7 @@ import { DaemonServer } from './daemon-server'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { DaemonRequest } from './types'
 
 type MockSubprocess = SubprocessHandle & {

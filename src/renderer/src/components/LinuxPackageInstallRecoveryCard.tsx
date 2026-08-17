@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   LinuxPackageInstallInstructions,
   LinuxPackageInstallRecovery
-} from '../../../shared/types'
+} from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
 

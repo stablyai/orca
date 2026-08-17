@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000

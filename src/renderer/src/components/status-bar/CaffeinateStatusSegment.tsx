@@ -31,7 +31,7 @@ function modeLabel(mode: ComputerAwakeMode): string {
     return translate('auto.components.status.bar.CaffeinateStatusSegment.on', 'On')
   }
   if (mode === 'auto') {
-    return translate('auto.components.status.bar.CaffeinateStatusSegment.auto', 'Auto')
+    return translate('auto.components.status.bar.CaffeinateStatusSegment.auto', 'Agent')
   }
   return translate('auto.components.status.bar.CaffeinateStatusSegment.off', 'Off')
 }
@@ -137,7 +137,7 @@ export function CaffeinateStatusSegment({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={mode} onValueChange={setMode}>
-          <DropdownMenuRadioItem value="on" className="items-start py-1.5">
+          <DropdownMenuRadioItem value="on" className="py-1.5">
             <span className="flex flex-col">
               <span>{modeLabel('on')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
@@ -148,7 +148,7 @@ export function CaffeinateStatusSegment({
               </span>
             </span>
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="auto" className="items-start py-1.5">
+          <DropdownMenuRadioItem value="auto" className="py-1.5">
             <span className="flex flex-col">
               <span>{modeLabel('auto')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
@@ -159,7 +159,7 @@ export function CaffeinateStatusSegment({
               </span>
             </span>
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="off" className="items-start py-1.5">
+          <DropdownMenuRadioItem value="off" className="py-1.5">
             <span className="flex flex-col">
               <span>{modeLabel('off')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
