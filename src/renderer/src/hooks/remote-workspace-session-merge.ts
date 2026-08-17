@@ -1,11 +1,15 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '../store/types'
-import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
+import {
+  hasAmbiguousResultTabIds,
+  isTargetPtyId,
+  retainedLocalPtyId,
+  targetLayout
+} from './remote-workspace-session-merge-guards'
 
 function preserveNewerLocalTerminalFields(
   remote: TerminalTab,
@@ -24,81 +28,6 @@ function preserveNewerLocalTerminalFields(
 
 export function directSshTerminalTabKey(worktreeId: string, tabId: string): string {
   return JSON.stringify([worktreeId, tabId])
-}
-
-function isTargetPtyId(ptyId: string | null | undefined, targetId: string): ptyId is string {
-  return Boolean(ptyId && parseAppSshPtyId(ptyId)?.connectionId === targetId)
-}
-
-function hasAmbiguousResultTabIds(
-  current: WorkspaceSessionState,
-  remote: WorkspaceSessionState,
-  replaceWorktreeIds: ReadonlySet<string>
-): boolean {
-  const ownerByTabId = new Map<string, string>()
-  const addOwner = (worktreeId: string, tab: TerminalTab): boolean => {
-    const tabId = tab.id
-    const owner = ownerByTabId.get(tabId)
-    if (owner && owner !== worktreeId) {
-      return false
-    }
-    ownerByTabId.set(tabId, worktreeId)
-    return true
-  }
-  for (const [worktreeId, tabs] of Object.entries(current.tabsByWorktree)) {
-    if (!replaceWorktreeIds.has(worktreeId)) {
-      for (const tab of tabs) {
-        if (!addOwner(worktreeId, tab)) {
-          return true
-        }
-      }
-    }
-  }
-  for (const [worktreeId, tabs] of Object.entries(remote.tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (!addOwner(worktreeId, tab)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-function targetLayout(
-  session: WorkspaceSessionState,
-  tabId: string,
-  targetId: string
-): WorkspaceSessionState['terminalLayoutsByTabId'][string] | undefined {
-  const layout = session.terminalLayoutsByTabId[tabId]
-  if (
-    !layout ||
-    Object.values(layout.ptyIdsByLeafId ?? {}).some((ptyId) => !isTargetPtyId(ptyId, targetId))
-  ) {
-    return undefined
-  }
-  return layout
-}
-
-function retainedLocalPtyId(
-  current: WorkspaceSessionState,
-  reconnectPtyIdByTabId: Readonly<Record<string, string>>,
-  tabId: string,
-  targetId: string,
-  allowTabKeyedRecovery: boolean
-): string | undefined {
-  const layout = targetLayout(current, tabId, targetId)
-  const mountedLeafIds = collectLeafIdsInOrder(layout?.root)
-  const primaryLeafId =
-    layout?.activeLeafId && mountedLeafIds.includes(layout.activeLeafId)
-      ? layout.activeLeafId
-      : mountedLeafIds[0]
-  const layoutPtyId = primaryLeafId ? layout?.ptyIdsByLeafId?.[primaryLeafId] : undefined
-  const reconnectPtyId = allowTabKeyedRecovery ? reconnectPtyIdByTabId[tabId] : undefined
-  return isTargetPtyId(reconnectPtyId, targetId)
-    ? reconnectPtyId
-    : isTargetPtyId(layoutPtyId, targetId)
-      ? layoutPtyId
-      : undefined
 }
 
 export function mergeDirectSshRemoteWorkspaceSession(
@@ -162,16 +91,13 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const remoteTabIds = new Set(
     Object.values(tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
-  // Graft pass: a local tab bound to a live pane on this connection survives an
-  // apply whose remote list does not contain its id. The remote snapshot is the
-  // last state some client exported, not a close ledger — a tab created or
-  // adopted locally between exports is absent from that list without anyone
-  // having closed it, and dropping the row would detach a running terminal that
-  // cold restore then relaunches as a duplicate. Ids the snapshot does know
-  // (under any worktree) follow the snapshot's placement, and unbound local
-  // rows stay droppable so dormant duplicates cannot resurrect through the
-  // graft.
+  // Graft pass: the snapshot's tab list is the last exported state, not a close
+  // ledger, so a local row the snapshot does not know is appended rather than
+  // dropped when it is pty-bound to this connection, holds recovery authority,
+  // or carries a pending activation spawn. Snapshot-known ids follow the
+  // snapshot's placement.
   const graftedTabIds = new Set<string>()
+  const graftOnlyWorktreeIds = new Set<string>()
   const nonReplaceOwnedTabIds = new Set(
     Object.entries(liveTabsByWorktree)
       .filter(([worktreeId]) => !replaceWorktreeIds.has(worktreeId))
@@ -182,7 +108,6 @@ export function mergeDirectSshRemoteWorkspaceSession(
       (tab) =>
         !remoteTabIds.has(tab.id) &&
         !nonReplaceOwnedTabIds.has(tab.id) &&
-        !graftedTabIds.has(tab.id) &&
         (isTargetPtyId(tab.ptyId, targetId) ||
           Object.values(targetLayout(current, tab.id, targetId)?.ptyIdsByLeafId ?? {}).some(
             Boolean
@@ -194,7 +119,15 @@ export function mergeDirectSshRemoteWorkspaceSession(
       continue
     }
     for (const tab of grafts) {
+      // The same graft-eligible id under two replace-scope worktrees is the
+      // ambiguity hasAmbiguousResultTabIds fails closed on for snapshot rows.
+      if (graftedTabIds.has(tab.id)) {
+        return null
+      }
       graftedTabIds.add(tab.id)
+    }
+    if (remote.tabsByWorktree[worktreeId] === undefined) {
+      graftOnlyWorktreeIds.add(worktreeId)
     }
     locallyPreservedWorktreeIds.add(worktreeId)
     tabsByWorktree[worktreeId] = [
@@ -223,22 +156,51 @@ export function mergeDirectSshRemoteWorkspaceSession(
     ),
     ...Object.fromEntries(
       Object.entries(remote.terminalLayoutsByTabId).filter(
-        ([tabId]) => !locallyPreservedTabIds.has(tabId) && targetLayout(remote, tabId, targetId)
+        ([tabId]) =>
+          !locallyPreservedTabIds.has(tabId) &&
+          !graftedTabIds.has(tabId) &&
+          targetLayout(remote, tabId, targetId)
       )
     )
   }
+  // A worktree reconstituted only by grafting has no snapshot entry to supply
+  // its active-tab bookkeeping, so the local entries survive for it.
+  const graftOnlyActiveTabByWorktree: Record<string, string | null> = {}
+  for (const worktreeId of graftOnlyWorktreeIds) {
+    const tabs = tabsByWorktree[worktreeId] ?? []
+    const currentActive = current.activeTabIdByWorktree?.[worktreeId]
+    graftOnlyActiveTabByWorktree[worktreeId] =
+      currentActive && tabs.some((tab) => tab.id === currentActive)
+        ? currentActive
+        : (tabs[0]?.id ?? null)
+  }
   const activeOutsideTarget =
     current.activeWorktreeId != null && !replaceWorktreeIds.has(current.activeWorktreeId)
+  const activeWorktreeGraftOnly =
+    current.activeWorktreeId != null && graftOnlyWorktreeIds.has(current.activeWorktreeId)
+  const keepCurrentActive = activeOutsideTarget || activeWorktreeGraftOnly
+  let graftOnlyActiveTabId: string | null = null
+  if (activeWorktreeGraftOnly && current.activeWorktreeId) {
+    const tabs = tabsByWorktree[current.activeWorktreeId] ?? []
+    graftOnlyActiveTabId =
+      current.activeTabId && tabs.some((tab) => tab.id === current.activeTabId)
+        ? current.activeTabId
+        : (graftOnlyActiveTabByWorktree[current.activeWorktreeId] ?? null)
+  }
   return {
     ...current,
-    activeRepoId: activeOutsideTarget ? current.activeRepoId : remote.activeRepoId,
-    activeWorktreeId: activeOutsideTarget ? current.activeWorktreeId : remote.activeWorktreeId,
-    activeWorkspaceKey: activeOutsideTarget
+    activeRepoId: keepCurrentActive ? current.activeRepoId : remote.activeRepoId,
+    activeWorktreeId: keepCurrentActive ? current.activeWorktreeId : remote.activeWorktreeId,
+    activeWorkspaceKey: keepCurrentActive
       ? current.activeWorkspaceKey
       : remote.activeWorktreeId
         ? worktreeWorkspaceKey(remote.activeWorktreeId)
         : null,
-    activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
+    activeTabId: activeOutsideTarget
+      ? current.activeTabId
+      : activeWorktreeGraftOnly
+        ? graftOnlyActiveTabId
+        : remote.activeTabId,
     tabsByWorktree: {
       ...omitTargetWorktrees(current.tabsByWorktree),
       ...tabsByWorktree
@@ -255,7 +217,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
     ],
     activeTabIdByWorktree: {
       ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...remote.activeTabIdByWorktree
+      ...remote.activeTabIdByWorktree,
+      ...graftOnlyActiveTabByWorktree
     },
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
@@ -268,7 +231,10 @@ export function mergeDirectSshRemoteWorkspaceSession(
       ),
       ...Object.fromEntries(
         Object.entries(remote.remoteSessionIdsByTabId ?? {}).filter(
-          ([tabId, ptyId]) => !locallyPreservedTabIds.has(tabId) && isTargetPtyId(ptyId, targetId)
+          ([tabId, ptyId]) =>
+            !locallyPreservedTabIds.has(tabId) &&
+            !graftedTabIds.has(tabId) &&
+            isTargetPtyId(ptyId, targetId)
         )
       ),
       ...Object.fromEntries(
