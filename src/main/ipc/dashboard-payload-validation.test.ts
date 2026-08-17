@@ -537,7 +537,8 @@ describe('dashboard payload validation', () => {
         worktreeId: 'worktree-1',
         executionHostId: 'runtime:env-1',
         tabId: 'tab-1',
-        leafId: null
+        leafId: null,
+        paneKey: 'tab-1:leaf-1'
       })
     ).toBe(true)
     expect(
@@ -551,6 +552,15 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
     expect(
       isDashboardRevealAgentArgs({ repoId: 'repo-1', worktreeId: 'worktree-1', tabId: '' })
+    ).toBe(false)
+    expect(
+      isDashboardRevealAgentArgs({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: null,
+        paneKey: ''
+      })
     ).toBe(false)
   })
 })

@@ -14,10 +14,19 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
+  /** Exact completed pane the user explicitly asked to reopen. Generic
+   *  workspace activation keeps completed hibernation evidence passive. */
+  resumeCompletedPaneKey?: string
+  /** Folder panes do not cold-restore on activation; replace only the selected
+   *  completion before its preserved pane can claim the provider session. */
+  forceFreshSelectedCompletion?: boolean
+  /** Pins resume launch resolution when workspace ids collide across hosts. */
+  executionHostId?: ExecutionHostId
   /** Provider-session claim keys already woken in place by mounted panes
    *  (WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT). Their sleeping records are
    *  cleared only after the in-place spawn succeeds, so the generic resume
@@ -26,17 +35,33 @@ export type ResumeSleepingAgentSessionsOptions = {
   /** Called with the tab id of each freshly launched resume tab, so
    *  navigation-suppressed callers can background-mount exactly those tabs. */
   onSessionLaunched?: (tabId: string) => void
+  /** Reports only the explicitly selected completed record's replacement. */
+  onSelectedCompletedSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
+function getResumeLaunchTarget(
+  record: SleepingAgentSessionRecord,
+  executionHostId?: ExecutionHostId
+): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
-  const worktree = state.getKnownWorktreeById(worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  const worktreeId = record.worktreeId
+  const worktree = state.getKnownWorktreeById(worktreeId, executionHostId)
+  const resolvedExecutionHostId =
+    executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
+  const repo = worktree
+    ? (state.repos.find(
+        (entry) =>
+          entry.id === worktree.repoId && getRepoExecutionHostId(entry) === resolvedExecutionHostId
+      ) ?? null)
+    : null
   // The resume tab is created without a shell override, so the global Windows shell wins.
   return resolveAgentResumeLaunchTarget({
-    projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
-    connectionId: repo?.connectionId,
-    executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
+    projectRuntime:
+      resolvedExecutionHostId === 'local'
+        ? getLocalProjectExecutionRuntimeContext(state, worktreeId)
+        : undefined,
+    connectionId: repo?.connectionId ?? record.connectionId,
+    executionHostId: resolvedExecutionHostId,
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
   })
@@ -68,7 +93,7 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
-  const resumeTarget = getResumeLaunchTarget(record.worktreeId)
+  const resumeTarget = getResumeLaunchTarget(record, options?.executionHostId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -130,5 +155,8 @@ export function launchSleepingAgentSession(
   }
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   options?.onSessionLaunched?.(tab.id)
+  if (options?.resumeCompletedPaneKey === record.paneKey) {
+    options.onSelectedCompletedSessionLaunched?.(tab.id)
+  }
   return true
 }

@@ -30,9 +30,11 @@ import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getRepoExecutionHostId,
-  getWorktreeExecutionHostId
+  getWorktreeExecutionHostId,
+  toSshExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -598,6 +600,9 @@ function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+  const executionHostId = args.entry.connectionId?.trim()
+    ? toSshExecutionHostId(args.entry.connectionId)
+    : getExecutionHostIdForWorktree(args.state, args.worktreeId)
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
@@ -608,6 +613,8 @@ function sleepingRecordFromEntry(args: {
     state: args.entry.state,
     capturedAt: args.capturedAt,
     updatedAt: args.entry.updatedAt,
+    ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
+    executionHostId,
     ...((args.entry.terminalTitle ?? tab?.title)
       ? { terminalTitle: (args.entry.terminalTitle ?? tab?.title)! }
       : {}),
@@ -878,6 +885,8 @@ function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.terminalTitle === next.terminalTitle &&
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     existing.interrupted === next.interrupted &&
+    existing.connectionId === next.connectionId &&
+    existing.executionHostId === next.executionHostId &&
     existing.origin === next.origin &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
@@ -895,6 +904,8 @@ function recoveryRecordMatches(
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
+    existing.connectionId === next.connectionId &&
+    existing.executionHostId === next.executionHostId &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
@@ -907,6 +918,20 @@ function recoveryRecordTargetsSameSession(
   if (!existing) {
     return false
   }
+  return (
+    existing.agent === next.agent &&
+    existing.worktreeId === next.worktreeId &&
+    existing.tabId === next.tabId &&
+    existing.connectionId === next.connectionId &&
+    existing.executionHostId === next.executionHostId &&
+    agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession)
+  )
+}
+
+function recoveryRecordHasSameProviderSession(
+  existing: SleepingAgentSessionRecord,
+  next: SleepingAgentSessionRecord
+): boolean {
   return (
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
@@ -1827,6 +1852,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
           (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
+        const connectionId =
+          routing?.connectionId !== undefined ? routing.connectionId : existingRecord?.connectionId
+        const executionHostId = connectionId?.trim()
+          ? toSshExecutionHostId(connectionId)
+          : routing?.connectionId === undefined && existingRecord?.executionHostId
+            ? existingRecord.executionHostId
+            : getExecutionHostIdForWorktree(s, worktreeId)
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -1838,16 +1870,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           state: 'working',
           capturedAt: updatedAt,
           updatedAt,
+          executionHostId,
           ...(existingStatus?.terminalTitle
             ? { terminalTitle: existingStatus.terminalTitle }
             : existingRecord?.terminalTitle
               ? { terminalTitle: existingRecord.terminalTitle }
               : {}),
-          ...(routing?.connectionId !== undefined
-            ? { connectionId: routing.connectionId }
-            : existingRecord?.connectionId !== undefined
-              ? { connectionId: existingRecord.connectionId }
-              : {}),
+          ...(connectionId !== undefined ? { connectionId } : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
           ...(existingRecordMatchesProviderSession &&
           existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
@@ -2129,7 +2158,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? { connectionId: routing.connectionId }
             : existing?.connectionId !== undefined
               ? { connectionId: existing.connectionId }
-              : {}),
+              : existingSleepingRecord?.connectionId !== undefined
+                ? { connectionId: existingSleepingRecord.connectionId }
+                : {}),
           tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,
@@ -3104,8 +3135,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             mode === 'periodic' &&
             existing?.origin === 'quit' &&
             record &&
-            recoveryRecordTargetsSameSession(existing, record)
+            recoveryRecordHasSameProviderSession(existing, record)
           ) {
+            if (!recoveryRecordTargetsSameSession(existing, record)) {
+              next[entry.paneKey] = {
+                ...existing,
+                ...(record.connectionId !== undefined
+                  ? { connectionId: record.connectionId }
+                  : { connectionId: undefined }),
+                executionHostId: record.executionHostId
+              }
+              changed = true
+            }
             continue
           }
           if (record && !sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {

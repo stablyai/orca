@@ -359,6 +359,37 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves sleeping agent execution host provenance across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 10,
+          executionHostId: 'runtime:env-1'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.executionHostId).toBe(
+        'runtime:env-1'
+      )
+    }
+  })
+
   it('preserves interrupted sleeping agent records across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

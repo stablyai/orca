@@ -45,7 +45,8 @@ function AgentTerminalFrame({
       worktreeId: card.worktreeId,
       executionHostId: card.executionHostId,
       tabId: card.tabId,
-      leafId: card.leafId
+      leafId: card.leafId,
+      paneKey: card.paneKey
     })
     onOpenChange(false)
   }

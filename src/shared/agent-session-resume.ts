@@ -1,5 +1,6 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
+import type { ExecutionHostId } from './execution-host'
 import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
@@ -54,6 +55,7 @@ export type SleepingAgentSessionRecord = {
   lastAssistantMessage?: string
   interrupted?: boolean
   connectionId?: string | null
+  executionHostId?: ExecutionHostId
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.

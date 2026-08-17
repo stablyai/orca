@@ -8,11 +8,16 @@ const mocks = vi.hoisted(() => ({
   useLiveDashboardSnapshot: vi.fn(() => ({ generatedAt: 1, cards: [] })),
   blockingOverlay: false,
   boardProps: null as Record<string, unknown> | null,
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: vi.fn(),
+  activateAndRevealWorkspace: vi.fn(() => ({ primaryTabId: 'tab-1' }))
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 vi.mock('./useLiveDashboardSnapshot', () => ({
@@ -104,10 +109,17 @@ describe('AgentDashboardDrawer', () => {
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
-  it('reveals a colliding worktree on the card execution host', () => {
+  // Why: a raw setActiveWorktree skips resumeSleepingAgentSessionsForWorktree, so
+  // revealing a slept agent from the board landed on a dead pane.
+  it('reveals a colliding worktree through workspace activation on the card execution host', () => {
     const setActiveWorktree = vi.spyOn(useAppStore.getState(), 'setActiveWorktree')
     render(<AgentDashboardDrawer statusBarVisible />)
-    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    act(() =>
+      useAppStore.setState({
+        agentDashboardDrawerOpen: true,
+        tabsByWorktree: { 'shared-worktree': [{ id: 'tab-1' }] } as never
+      })
+    )
     const onRevealAgent = mocks.boardProps?.onRevealAgent
     expect(onRevealAgent).toBeTypeOf('function')
 
@@ -129,7 +141,10 @@ describe('AgentDashboardDrawer', () => {
       })
     })
 
-    expect(setActiveWorktree).toHaveBeenCalledWith('shared-worktree', 'runtime:env-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
       flashFocusedPane: true
     })

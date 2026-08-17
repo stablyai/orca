@@ -216,6 +216,8 @@ export type DashboardRevealAgentArgs = {
   executionHostId?: ExecutionHostId
   tabId: string
   leafId: string | null
+  /** Optional for mixed-version pop-outs; identifies retained resume evidence. */
+  paneKey?: string
 }
 
 export type DashboardSpawnAgentArgs = {

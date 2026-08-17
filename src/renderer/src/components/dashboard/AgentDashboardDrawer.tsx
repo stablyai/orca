@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealAgentPane } from '@/lib/reveal-agent-pane'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
@@ -48,8 +48,7 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
-      activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+      revealAgentPane(args, { flashFocusedPane: true })
       onClose()
     },
     [onClose]

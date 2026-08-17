@@ -16,6 +16,61 @@ function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
 }
 
 describe('recordAgentProviderSession', () => {
+  it('refreshes host provenance without downgrading a confirmed quit capture', () => {
+    const store = createTestStore()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'continue', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-1' },
+        { providerSession }
+      )
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.executionHostId).toBe(
+      'ssh:ssh-1'
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'continue', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 20, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null },
+        { providerSession }
+      )
+    const localRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']!
+    expect(localRecord.executionHostId).toBe('local')
+
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': {
+          ...localRecord,
+          connectionId: undefined,
+          executionHostId: undefined,
+          origin: 'quit'
+        }
+      }
+    } as Partial<AppState>)
+    store.getState().captureAllSleepingAgentSessions('periodic')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      connectionId: null,
+      executionHostId: 'local',
+      origin: 'quit'
+    })
+  })
+
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'root-session' }
@@ -207,6 +262,7 @@ describe('recordAgentProviderSession', () => {
       agent: 'pi',
       providerSession,
       launchConfig,
+      executionHostId: 'local',
       origin: 'live'
     })
 

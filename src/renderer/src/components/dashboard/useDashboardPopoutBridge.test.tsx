@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
   setActiveWorktree: vi.fn(),
+  activateAndRevealWorkspace: vi.fn(() => ({ primaryTabId: 'tab-1' })),
+  activateTabAndFocusPane: vi.fn(),
+  tabsByWorktree: { 'shared-worktree': [{ id: 'tab-1' }] } as Record<string, { id: string }[]>,
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
   onAckAgent: vi.fn(),
@@ -27,14 +30,19 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       acknowledgeAgents: mocks.acknowledgeAgents,
-      setActiveWorktree: mocks.setActiveWorktree
+      setActiveWorktree: mocks.setActiveWorktree,
+      tabsByWorktree: mocks.tabsByWorktree
     }),
     subscribe: mocks.subscribeStore
   }
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -157,7 +165,9 @@ describe('useDashboardPopoutBridge', () => {
     expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
   })
 
-  it('reveals the agent on its exact execution host', async () => {
+  // Why: a raw setActiveWorktree skips resumeSleepingAgentSessionsForWorktree, so
+  // revealing a slept agent from the pop-out board/map landed on a dead pane.
+  it('reveals the agent through workspace activation on its exact execution host', async () => {
     await act(async () => root.render(<Harness enabled />))
 
     await act(async () =>
@@ -170,7 +180,13 @@ describe('useDashboardPopoutBridge', () => {
       })
     )
 
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith('shared-worktree', 'runtime:env-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
+      flashFocusedPane: true
+    })
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {

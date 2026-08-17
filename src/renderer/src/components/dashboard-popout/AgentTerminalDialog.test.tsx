@@ -134,7 +134,8 @@ describe('AgentTerminalDialog', () => {
       worktreeId: 'w1',
       executionHostId: 'runtime:env-1',
       tabId: 'tab1',
-      leafId: 'leaf1'
+      leafId: 'leaf1',
+      paneKey: 'tab1:leaf1'
     })
   })
 

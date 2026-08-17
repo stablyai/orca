@@ -1,8 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealAgentPane } from '@/lib/reveal-agent-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
@@ -164,23 +163,24 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         dismissStaleAgentRowByKey(paneKey)
         return
       }
-      // Why: design-doc rule — every user-initiated worktree switch must route through activateAndRevealWorktree (cross-repo activation + nav history).
-      activateAndRevealWorktree(worktreeId)
-      const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-      if (tabs.some((t) => t.id === tabId)) {
-        activateTabAndFocusPane(tabId, parsed.leafId, {
+      // Why: design-doc rule — every user-initiated worktree switch must route through
+      // worktree-activation (cross-repo activation + nav history + slept-agent wake).
+      revealAgentPane(
+        { worktreeId, tabId, leafId: parsed.leafId },
+        {
           ackPaneKeyOnSuccess: paneKey,
           flashFocusedPane: true,
-          scrollToBottomIfOutputSinceLastView: true
-        })
-      } else {
-        const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-        if (liveEntry?.worktreeId === worktreeId) {
-          // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.
-          return
+          scrollToBottomIfOutputSinceLastView: true,
+          onTargetUnavailable: () => {
+            const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+            if (liveEntry?.worktreeId === worktreeId) {
+              // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.
+              return
+            }
+            dismissStaleAgentRowByKey(paneKey)
+          }
         }
-        dismissStaleAgentRowByKey(paneKey)
-      }
+      )
     },
     [worktreeId]
   )

@@ -5,6 +5,8 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { normalizeExecutionHostId } from './execution-host'
+import type { ExecutionHostId } from './execution-host'
 import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
@@ -77,6 +79,15 @@ const sleepingAgentLaunchConfigBaseSchema = z.object({
     .optional()
 })
 
+const executionHostIdSchema = z.preprocess(
+  (raw) => (typeof raw === 'string' ? (normalizeExecutionHostId(raw) ?? undefined) : undefined),
+  z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && normalizeExecutionHostId(value) === value
+    )
+    .optional()
+)
+
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   const parsed = sleepingAgentLaunchConfigBaseSchema.safeParse(raw)
   return parsed.success ? parsed.data : undefined
@@ -97,6 +108,7 @@ const sleepingAgentSessionRecordSchema = z
     lastAssistantMessage: z.string().optional(),
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
+    executionHostId: executionHostIdSchema,
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),
