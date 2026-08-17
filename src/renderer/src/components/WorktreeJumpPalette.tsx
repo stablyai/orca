@@ -1608,12 +1608,18 @@ function WorktreeJumpPaletteContent({
   }, [openModal, prefetchCreateWorkspaceBaseForComposer])
 
   const deleteActiveWorkspaceAction = useCallback(() => {
-    const { activeView, activeWorktreeId } = useAppStore.getState()
+    const { activeView, activeWorktreeId, activeWorkspaceExecutionHostId } = useAppStore.getState()
     if (activeView !== 'terminal' || !activeWorktreeId) {
       return
     }
     // Why: let the palette close before mounting the delete-confirm modal so Radix focus teardown can't fight it.
-    queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
+    // Why (STA-4343): name the active workspace's host, or a colliding id deletes whichever row wins first-wins.
+    queueMicrotask(() =>
+      runWorktreeDelete(
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId ? { expectedHostId: activeWorkspaceExecutionHostId } : {}
+      )
+    )
   }, [])
 
   const openAddQuickCommandAction = useCallback(() => {

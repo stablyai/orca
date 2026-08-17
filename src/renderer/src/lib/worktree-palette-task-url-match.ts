@@ -284,6 +284,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
       labelKind: intent.link.type === 'pr' ? 'pr' : 'issue',
       text: `${intent.link.type === 'pr' ? 'PR' : 'Issue'} #${intent.link.number}`
     })
@@ -294,6 +295,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
       labelKind: 'issue',
       text: intent.intent.identifier
     })
@@ -304,6 +306,7 @@ export function matchWorktreePaletteTaskUrl(args: {
     }
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
       labelKind: intent.link.type === 'mr' ? 'mr' : 'issue',
       text: `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
     })

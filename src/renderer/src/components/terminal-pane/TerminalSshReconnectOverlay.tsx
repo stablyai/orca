@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import {
@@ -85,6 +86,9 @@ export function TerminalSshReconnectOverlay({
   const isConnecting = connecting || isConnectingSshStatus(status)
   // Why: a removed target can never reconnect, so never offer Connect for it.
   const showConnect = !targetRemoved && canConnectSshStatus(status)
+  const executionHostId = sshOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
+    : toSshExecutionHostId(targetId)
 
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
@@ -188,7 +192,11 @@ export function TerminalSshReconnectOverlay({
             className="shrink-0"
             size="sm"
             variant="outline"
-            onClick={worktreeId ? () => runWorktreeDelete(worktreeId) : undefined}
+            onClick={
+              worktreeId
+                ? () => runWorktreeDelete(worktreeId, { expectedHostId: executionHostId })
+                : undefined
+            }
             disabled={!worktreeId}
           >
             {translate(

@@ -16174,6 +16174,11 @@
           "minutesAgo": "{{value0}}m ago",
           "hoursAgo": "{{value0}}h ago",
           "daysAgo": "{{value0}}d ago"
+        },
+        "host": {
+          "label": "Host: {{value0}}",
+          "unknown": "Unknown host",
+          "candidateName": "{{value0}} on {{value1}}"
         }
       }
     },

@@ -2,12 +2,18 @@ import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bou
 import { searchWorktrees } from '@/lib/worktree-palette-search'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 export type WorkspaceKanbanLaneView = {
   items: readonly Worktree[]
   totalCount: number
 }
 
+// Why: the board is a drag surface for named workspaces, so a card may only be
+// hidden by fields the user can read on it. PR/issue/port matches are palette-only.
 /**
  * Returns `null` when no filtering is active — distinct from an empty set, which
  * means a real query matched nothing.
@@ -27,13 +33,15 @@ export function matchWorkspaceBoardWorktrees(args: {
   }
 
   const matched = new Set<string>()
-  // Why the board policy: a card may only be hidden by text printed on it, so
-  // palette-only evidence such as ports, reviews, and automation runs is excluded.
+  // Why the board policy (#15170): a card may only be hidden by text printed on it, so
+  // palette-only evidence such as ports, reviews and automation runs is excluded.
   for (const result of searchWorktrees(args.worktrees, args.query, args.repoMap, {
     evidencePolicy: 'board'
   })) {
     if (result.matchedFields.length) {
-      matched.add(result.worktreeId)
+      // Why (STA-4343): two hosts can publish the same id, and a board filter keyed on the
+      // bare id would show or hide both hosts' cards together.
+      matched.add(composeWorktreeHostIdentity(result.worktreeHostId, result.worktreeId))
     }
   }
   return matched
@@ -49,7 +57,7 @@ export function buildWorkspaceKanbanLaneViews(args: {
     views.set(status, {
       // Why: the no-query path must not reallocate a lane array per keystroke.
       items: matchingWorktreeIds
-        ? items.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? items.filter((worktree) => matchingWorktreeIds.has(getWorktreeHostIdentity(worktree)))
         : items,
       totalCount: items.length
     })

@@ -1,4 +1,5 @@
 import type { PaletteSearchResult, PaletteSupportingText } from './worktree-palette-search'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const ACCESSIBILITY_LABELS: Record<PaletteSupportingText['labelKind'], string> = {
   comment: 'Workspace comment',
@@ -16,11 +17,13 @@ const ACCESSIBILITY_LABELS: Record<PaletteSupportingText['labelKind'], string> =
  */
 export function buildWorktreePaletteTaskUrlResult(args: {
   worktreeId: string
+  worktreeHostId?: Worktree['hostId']
   labelKind: PaletteSupportingText['labelKind']
   text: string
 }): PaletteSearchResult {
   return {
     worktreeId: args.worktreeId,
+    ...(args.worktreeHostId ? { worktreeHostId: args.worktreeHostId } : {}),
     matchedFields: [args.labelKind],
     displayNameRanges: [],
     branchRanges: [],

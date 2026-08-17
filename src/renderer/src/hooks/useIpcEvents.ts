@@ -21,7 +21,7 @@ import {
   focusRuntimeTerminalSurface
 } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
-import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -1396,7 +1396,12 @@ export function useIpcEvents(): void {
           ) {
             return
           }
-          runWorktreeDelete(store.activeWorktreeId)
+          runWorktreeDelete(
+            store.activeWorktreeId,
+            store.activeWorkspaceExecutionHostId
+              ? { expectedHostId: store.activeWorkspaceExecutionHostId }
+              : {}
+          )
         })
       )
     }
@@ -1436,9 +1441,14 @@ export function useIpcEvents(): void {
         if (store.activeView !== 'terminal') {
           return
         }
-        const visibleIds = getVisibleWorktreeIds()
-        if (index < visibleIds.length) {
-          activateAndRevealWorkspace(visibleIds[index])
+        const visibleTargets = getVisibleWorktreeShortcutTargets()
+        const target = visibleTargets[index]
+        if (target) {
+          if (target.executionHostId) {
+            activateAndRevealWorkspace(target.id, { executionHostId: target.executionHostId })
+          } else {
+            activateAndRevealWorkspace(target.id)
+          }
         }
       })
     )

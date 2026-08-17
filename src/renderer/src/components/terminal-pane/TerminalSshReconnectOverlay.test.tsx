@@ -201,7 +201,9 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
-    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt')
+    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt', {
+      expectedHostId: 'ssh:ssh-dead'
+    })
     expect(connect).not.toHaveBeenCalled()
   })
 

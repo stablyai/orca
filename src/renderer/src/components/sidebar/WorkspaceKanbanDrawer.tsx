@@ -56,6 +56,10 @@ import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './worksp
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { registerWorkspaceKanbanSidebarDropGroups } from './workspace-kanban-sidebar-drop'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -175,6 +179,7 @@ function WorkspaceKanbanDrawerContent({
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
@@ -195,6 +200,9 @@ function WorkspaceKanbanDrawerContent({
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const [renderCards, setRenderCards] = useState(false)
+  const activeWorktreeIdentity = activeWorktreeId
+    ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId ?? undefined, activeWorktreeId)
+    : null
   const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
@@ -249,7 +257,9 @@ function WorkspaceKanbanDrawerContent({
   const renderedBoardWorktrees = useMemo(
     () =>
       matchingWorktreeIds
-        ? boardWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? boardWorktrees.filter((worktree) =>
+            matchingWorktreeIds.has(getWorktreeHostIdentity(worktree))
+          )
         : boardWorktrees,
     [boardWorktrees, matchingWorktreeIds]
   )
@@ -527,7 +537,9 @@ function WorkspaceKanbanDrawerContent({
   const renderedSelectedWorktrees = useMemo(
     () =>
       matchingWorktreeIds
-        ? selectedWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? selectedWorktrees.filter((worktree) =>
+            matchingWorktreeIds.has(getWorktreeHostIdentity(worktree))
+          )
         : selectedWorktrees,
     [matchingWorktreeIds, selectedWorktrees]
   )
@@ -537,7 +549,7 @@ function WorkspaceKanbanDrawerContent({
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const selection = selectForContextMenu(event, worktree)
       return matchingWorktreeIds
-        ? selection.filter((item) => matchingWorktreeIds.has(item.id))
+        ? selection.filter((item) => matchingWorktreeIds.has(getWorktreeHostIdentity(item)))
         : selection
     },
     [matchingWorktreeIds, selectForContextMenu]
@@ -928,7 +940,7 @@ function WorkspaceKanbanDrawerContent({
               laneFullWorktreeIds={laneFullWorktreeIds}
               hasQuery={hasQuery}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               columnWidth={columnWidth}
               isResizingColumn={isResizingColumn}
               dragOverStatus={dragOverStatus}

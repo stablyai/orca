@@ -14,6 +14,7 @@ import {
 } from './workspace-cleanup-presentation'
 import {
   getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from './workspace-cleanup-host-identity'
 
@@ -109,7 +110,9 @@ export function computeWorkspaceCleanupFacetList(args: {
     const review =
       sources.reviewInfoByWorktreeId.get(hostIdentity) ??
       sources.reviewInfoByWorktreeId.get(candidate.worktreeId)
-    const isDismissed = sources.dismissedWorktreeIds.has(candidate.worktreeId)
+    const isDismissed = sources.dismissedIdentities.has(
+      getWorkspaceCleanupCandidateIdentity(candidate)
+    )
     const cached = cache.byCandidate.get(candidate)
     if (
       cached &&

@@ -1821,6 +1821,17 @@ function extractAmpToolFields(
   return {}
 }
 
+/**
+ * Retires any cached tool fields. PermissionRequest is the only OpenCode-family event that
+ * carries them, and isNewTurnEvent is false for this family, so nothing else ever resets the
+ * cache — without an explicit retire, resolveToolState inherits one answered permission onto
+ * every later frame in the pane and the row reads a resolved command as the live tool.
+ */
+const OPENCODE_TOOL_FIELDS_RETIRED: ToolSnapshot = {
+  hasToolUpdate: true,
+  hasToolInputField: true
+}
+
 function extractOpenCodeToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
@@ -1828,7 +1839,7 @@ function extractOpenCodeToolFields(
   if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
     const text = readString(hookPayload, 'text')
     if (text) {
-      return { lastAssistantMessage: capOpenCodeHookText(text) }
+      return { ...OPENCODE_TOOL_FIELDS_RETIRED, lastAssistantMessage: capOpenCodeHookText(text) }
     }
   }
   if (eventName === 'AskUserQuestion') {
@@ -1837,11 +1848,43 @@ function extractOpenCodeToolFields(
       ? hookPayload.tool_input
       : stripHookEnvelopeKeys(hookPayload)
     return {
-      hasToolUpdate: true,
+      ...OPENCODE_TOOL_FIELDS_RETIRED,
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
-  return {}
+  if (eventName === 'PermissionRequest') {
+    // Why: the payload is permission.asked's event.properties — `permission` names what is
+    // being requested and `metadata`/`patterns` say which command or path it covers. Without
+    // them the row is a bare 'waiting' that cannot tell the user what to approve.
+    // The SDK types `metadata` as Record<string, unknown>, so these keys come from the tools
+    // themselves: bash sends `command`, edit sends `filepath`, webfetch sends `url` (verified
+    // against opencode 1.18.18). `file_path`/`path` cover tools that spell it the common way.
+    // `diff` is deliberately absent — edit ships the whole patch and it would swamp the row.
+    const metadata = hookPayload.metadata
+    const metadataInput =
+      metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? readFirstString(metadata as Record<string, unknown>, [
+            'command',
+            'filepath',
+            'file_path',
+            'path',
+            'url'
+          ])
+        : undefined
+    const patterns = Array.isArray(hookPayload.patterns)
+      ? hookPayload.patterns.filter(
+          (pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0
+        )
+      : []
+    return toolUpdate(
+      {
+        toolName: readString(hookPayload, 'permission'),
+        toolInput: metadataInput ?? (patterns.length > 0 ? patterns.join(', ') : undefined)
+      },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['metadata', 'patterns']) }
+    )
+  }
+  return OPENCODE_TOOL_FIELDS_RETIRED
 }
 
 function extractCursorToolFields(
@@ -4338,6 +4381,44 @@ function readStringField(record: Record<string, unknown>, key: string): string |
   }
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
+}
+
+/**
+ * The provider session id a raw hook body reports, read exactly as
+ * `normalizeHookPayload` reads it (same JSON guard, same per-source extractor,
+ * same Codex child carve-out).
+ *
+ * Why it is exposed: pane attribution has to run BEFORE normalization.
+ * `normalizeHookPayload` keys its prompt/compaction state machine on the posted
+ * pane key, so correcting the key afterwards would leave that state on the
+ * wrong pane. Callers that re-derive the session id themselves drift from this
+ * parser the moment a source changes shape.
+ */
+export function readHookBodyProviderSessionId(
+  source: AgentHookSource,
+  body: unknown
+): string | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const rawPayload = (body as Record<string, unknown>).payload
+  let hookPayload: unknown = rawPayload
+  if (typeof rawPayload === 'string') {
+    try {
+      hookPayload = parseAgentHookJson(rawPayload)
+    } catch {
+      return null
+    }
+  }
+  if (typeof hookPayload !== 'object' || hookPayload === null) {
+    return null
+  }
+  const record = hookPayload as Record<string, unknown>
+  // Why: Codex child hooks expose the child's session_id on the parent's pane.
+  if (source === 'codex' && readString(record, 'agent_id')) {
+    return null
+  }
+  return extractAgentProviderSession(source, record)?.id ?? null
 }
 
 function isCursorHookEventName(eventName: unknown): eventName is string {

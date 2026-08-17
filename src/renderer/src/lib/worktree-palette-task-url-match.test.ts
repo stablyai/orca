@@ -117,6 +117,27 @@ describe('parseCmdJTaskSourceUrl', () => {
 })
 
 describe('matchWorktreePaletteTaskUrl', () => {
+  it('retains the matched workspace host for host-qualified consumers', () => {
+    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/123')
+    expect(intent).not.toBeNull()
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          hostId: 'ssh:box',
+          linkedWorkItem: {
+            provider: 'github',
+            type: 'issue',
+            number: 123,
+            title: 'Host-qualified match',
+            url: 'https://github.com/stablyai/orca/issues/123'
+          }
+        }),
+        intent: intent!
+      })
+    ).toMatchObject({ worktreeId: 'wt-1', worktreeHostId: 'ssh:box' })
+  })
+
   it('matches a GitHub issue URL to the linked worktree in the same repo', () => {
     const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')
     expect(intent).not.toBeNull()

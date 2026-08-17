@@ -42,6 +42,9 @@ export type PaletteSupportingText = {
 
 export type PaletteSearchResult = {
   worktreeId: string
+  /** Why (STA-4343): `repoId::path` repeats across hosts, so consumers that key on a
+   *  result — board filters, item ids — need the host to tell two rows apart. */
+  worktreeHostId?: Worktree['hostId']
   matchedFields: readonly PaletteMatchedField[]
   displayNameRanges: readonly MatchRange[]
   branchRanges: readonly MatchRange[]
@@ -69,9 +72,13 @@ export function getWorktreePaletteSearchScope(args: {
   return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 
-export function makeEmptyPaletteSearchResult(worktreeId: string): PaletteSearchResult {
+export function makeEmptyPaletteSearchResult(
+  worktreeId: string,
+  worktreeHostId?: Worktree['hostId']
+): PaletteSearchResult {
   return {
     worktreeId,
+    ...(worktreeHostId ? { worktreeHostId } : {}),
     matchedFields: [],
     displayNameRanges: NO_RANGES,
     branchRanges: NO_RANGES,
@@ -115,7 +122,8 @@ function toSupportingText(match: PaletteDocumentMatch): PaletteSupportingText | 
 
 export function toWorktreePaletteSearchResult(
   worktreeId: string,
-  match: PaletteDocumentMatch
+  match: PaletteDocumentMatch,
+  worktreeHostId?: Worktree['hostId']
 ): PaletteSearchResult {
   const supportingText = toSupportingText(match)
   const matchedFields: PaletteMatchedField[] = []
@@ -131,6 +139,7 @@ export function toWorktreePaletteSearchResult(
 
   return {
     worktreeId,
+    ...(worktreeHostId ? { worktreeHostId } : {}),
     matchedFields,
     displayNameRanges: match.rangesByField.get(WORKTREE_PALETTE_NAME_FIELD_ID) ?? NO_RANGES,
     branchRanges: match.rangesByField.get(WORKTREE_PALETTE_BRANCH_FIELD_ID) ?? NO_RANGES,
@@ -157,7 +166,9 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
     return []
   }
   if (prepared.state === 'empty') {
-    return args.worktrees.map((worktree) => makeEmptyPaletteSearchResult(worktree.id))
+    return args.worktrees.map((worktree) =>
+      makeEmptyPaletteSearchResult(worktree.id, worktree.hostId)
+    )
   }
 
   const taskSourceUrl = parseCmdJTaskSourceUrl(args.query.trim())
@@ -186,7 +197,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
       normalizedQuery: prepared.normalized
     })
     if (match) {
-      results.push(toWorktreePaletteSearchResult(worktree.id, match))
+      results.push(toWorktreePaletteSearchResult(worktree.id, match, worktree.hostId))
     }
   }
   return results
