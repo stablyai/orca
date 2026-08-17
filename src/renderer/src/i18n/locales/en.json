@@ -993,7 +993,7 @@
         "3ea91b5c07": "This Codex session is using an outdated configuration",
         "e6b7139d2a": "Restart this session to load your current Codex configuration.",
         "7b1d20f4c8": "Keep current session",
-        "5c1f8ab470": "Restarting this terminal switches it to {{value0}}. Your work carries over, and usage is counted against the account you switch to.",
+        "5c1f8ab470": "Restarting this terminal switches it to {{value0}}. Your work carries over, and new usage is counted against the account you switch to.",
         "b7d31e05a9": "Restarting this terminal switches it to {{value0}}, and this conversation will not come along — the terminal starts a new one. To carry a conversation across a switch, add a separate Codex account and switch to that instead."
       },
       "FirstLaunchBanner": {

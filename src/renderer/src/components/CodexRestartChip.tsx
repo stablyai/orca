@@ -162,7 +162,7 @@ function LoudRestartOverlay({
                 )
               : translate(
                   'auto.components.CodexRestartChip.5c1f8ab470',
-                  'Restarting this terminal switches it to {{value0}}. Your work carries over, and usage is counted against the account you switch to.',
+                  'Restarting this terminal switches it to {{value0}}. Your work carries over, and new usage is counted against the account you switch to.',
                   { value0: restartNotice.nextAccountLabel }
                 )}
         </div>
