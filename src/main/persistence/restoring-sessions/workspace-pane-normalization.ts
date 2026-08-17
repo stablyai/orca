@@ -2,6 +2,11 @@ import type { LegacyPaneKeyAliasEntry, PersistedState } from '../../../shared/pe
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { registerLegacyPaneKeyAliasesForTab } from './pane-identity-migration'
@@ -77,27 +82,46 @@ export function normalizeWorkspaceSessionPaneIdentities(
   }
 }
 
+export type WorkspaceSessionPaneIdentityRemap = {
+  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
+  leafIdByPtyIdByTabId: Map<string, Map<string, string>>
+}
+
 export function remapSshRemotePtyLeaseLeafIds(
   leases: SshRemotePtyLease[],
-  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>,
-  leafIdByPtyIdByTabId: Map<string, Map<string, string>>
+  remapsByHostId: ReadonlyMap<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>,
+  hostIdsWithWorkspaceSessions: ReadonlySet<ExecutionHostId> = new Set(remapsByHostId.keys())
 ): { leases: SshRemotePtyLease[]; changed: boolean } {
   let changed = false
   const nextLeases = leases.map((lease) => {
-    if (lease.leafId === undefined || isTerminalLeafId(lease.leafId)) {
+    if (lease.leafId === undefined) {
       return lease
     }
+    const hostId = toSshExecutionHostId(lease.targetId)
+    // Legacy unpartitioned state kept SSH panes in local; only fall back when this host has no partition.
+    const remap =
+      remapsByHostId.get(hostId) ??
+      (hostIdsWithWorkspaceSessions.has(hostId)
+        ? undefined
+        : remapsByHostId.get(LOCAL_EXECUTION_HOST_ID))
     const remappedLeafId = lease.tabId
-      ? leafIdByInputLeafIdByTabId.get(lease.tabId)?.get(lease.leafId)
+      ? remap?.leafIdByInputLeafIdByTabId.get(lease.tabId)?.get(lease.leafId)
       : undefined
     const leafIdForPty = lease.tabId
-      ? leafIdByPtyIdByTabId.get(lease.tabId)?.get(lease.ptyId)
+      ? remap?.leafIdByPtyIdByTabId.get(lease.tabId)?.get(lease.ptyId)
       : undefined
-    changed = true
     const nextLeafId = remappedLeafId ?? leafIdForPty
     if (nextLeafId) {
+      if (nextLeafId === lease.leafId) {
+        return lease
+      }
+      changed = true
       return { ...lease, leafId: nextLeafId }
     }
+    if (isTerminalLeafId(lease.leafId)) {
+      return lease
+    }
+    changed = true
     const next = { ...lease }
     // Why: unmatched legacy leaf ids are ambiguous after migration; don't re-persist them as durable pane identity.
     delete next.leafId
@@ -106,8 +130,8 @@ export function remapSshRemotePtyLeaseLeafIds(
   return { leases: nextLeases, changed }
 }
 
-/** Combines per-tab leaf maps from separate host partitions; an already-mapped tab keeps its mapping. */
-function mergeLeafIdMapsByTabId(
+/** Acknowledgement keys lack host metadata, so an already-mapped tab keeps its mapping. */
+function mergeAcknowledgementLeafIdMapsByTabId(
   target: Map<string, Map<string, string>>,
   source: Map<string, Map<string, string>>
 ): Map<string, Map<string, string>> {
@@ -126,8 +150,10 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
 } {
   const normalizedSession = normalizeWorkspaceSessionPaneIdentities(state.workspaceSession, {})
-  let leafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
-  let leafIdByPtyIdByTabId = normalizedSession.leafIdByPtyIdByTabId
+  let acknowledgementLeafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
+  const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
+    [LOCAL_EXECUTION_HOST_ID, normalizedSession]
+  ])
   const hostSessionLegacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   // Why: SSH/runtime hosts keep their own session blob, and their legacy leaves need the same UUID
   // rewrite — otherwise their leases and read markers still point at `pane:1` after migration.
@@ -145,13 +171,10 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       }
       const normalizedHostSession = normalizeWorkspaceSessionPaneIdentities(hostSession, {})
       normalizedHostSessions[hostId] = normalizedHostSession.session
-      leafIdByInputLeafIdByTabId = mergeLeafIdMapsByTabId(
-        leafIdByInputLeafIdByTabId,
+      remapsByHostId.set(hostId, normalizedHostSession)
+      acknowledgementLeafIdByInputLeafIdByTabId = mergeAcknowledgementLeafIdMapsByTabId(
+        acknowledgementLeafIdByInputLeafIdByTabId,
         normalizedHostSession.leafIdByInputLeafIdByTabId
-      )
-      leafIdByPtyIdByTabId = mergeLeafIdMapsByTabId(
-        leafIdByPtyIdByTabId,
-        normalizedHostSession.leafIdByPtyIdByTabId
       )
       for (const entry of normalizedHostSession.legacyPaneKeyAliasEntries) {
         hostSessionLegacyPaneKeyAliasEntries.push(entry)
@@ -161,8 +184,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
   }
   const remappedLeases = remapSshRemotePtyLeaseLeafIds(
     state.sshRemotePtyLeases ?? [],
-    leafIdByInputLeafIdByTabId,
-    leafIdByPtyIdByTabId
+    remapsByHostId
   )
   const mergedMigrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
   const mergedLegacyPaneKeyAliasEntries = mergeLegacyPaneKeyAliasEntries([
@@ -173,7 +195,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
   ])
   const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
     state.ui?.acknowledgedAgentsByPaneKey,
-    leafIdByInputLeafIdByTabId
+    acknowledgementLeafIdByInputLeafIdByTabId
   )
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -185,13 +186,15 @@ export function TerminalWindowSection({
               'Horizontal Padding'
             )}
             description=""
-            value={settings.terminalPaddingX ?? 4}
+            value={normalizeTerminalPadding(settings.terminalPaddingX ?? 4)}
             defaultValue={4}
             min={0}
             max={512}
             step={1}
             suffix="px"
-            onChange={(value) => updateSettings({ terminalPaddingX: Math.max(0, value) })}
+            onChange={(value) =>
+              updateSettings({ terminalPaddingX: normalizeTerminalPadding(value) })
+            }
           />
         </SearchableSetting>
 
@@ -212,13 +215,15 @@ export function TerminalWindowSection({
               'Vertical Padding'
             )}
             description=""
-            value={settings.terminalPaddingY ?? 4}
+            value={normalizeTerminalPadding(settings.terminalPaddingY ?? 4)}
             defaultValue={4}
             min={0}
             max={512}
             step={1}
             suffix="px"
-            onChange={(value) => updateSettings({ terminalPaddingY: Math.max(0, value) })}
+            onChange={(value) =>
+              updateSettings({ terminalPaddingY: normalizeTerminalPadding(value) })
+            }
           />
         </SearchableSetting>
 

@@ -94,7 +94,8 @@ async function spawnAndPublishSession(
     shellOverride: opts.shellOverride,
     terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
     terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-    isCanceled: opts.isCanceled
+    isCanceled: opts.isCanceled,
+    ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
   // Why: a fallback shell does not emit the preferred shell's ready marker;

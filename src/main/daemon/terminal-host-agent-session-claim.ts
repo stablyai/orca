@@ -5,6 +5,7 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   agentSessionGeneration?: string
   isCanceled?: () => boolean
+  cancelSignal?: AbortSignal
 }
 
 export async function createOrAttachClaimedAgentSession(args: {

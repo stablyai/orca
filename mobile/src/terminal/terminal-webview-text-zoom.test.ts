@@ -144,7 +144,7 @@ describe('TerminalWebView text zoom', () => {
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
     const open = terminalHtmlSource.indexOf('term.open(surface)')
     const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
-    const replay = terminalHtmlSource.indexOf('enqueueWrite(replayData)')
+    const replay = terminalHtmlSource.indexOf("enqueueWrite(ESC + '[0m' + replayData)")
     expect(open).toBeGreaterThanOrEqual(0)
     expect(unicode).toBeGreaterThan(open)
     expect(replay).toBeGreaterThan(unicode)

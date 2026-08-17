@@ -73,6 +73,9 @@ describe('ClaudeRuntimeAuthService', () => {
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
     const service = new ClaudeRuntimeAuthService(store as never)
+    expect(service.getRuntimeConfigDir({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
+      ubuntuAuthPath
+    )
     const preparation = await service.prepareForClaudeLaunch()
 
     expect(preparation).toMatchObject({

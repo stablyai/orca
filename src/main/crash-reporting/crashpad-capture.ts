@@ -27,6 +27,9 @@ const MAX_DUMP_BYTES = 64 * 1024 * 1024
 // Match Crashpad's default budget, but enforce it after crashes instead of
 // waiting for its first 10-minute and later daily pruning passes.
 const MAX_STORED_DUMP_BYTES = 128 * 1024 * 1024
+// A burst of small dumps stays under the byte budget while still growing the
+// directory walk, so cap the file count too.
+const MAX_STORED_DUMPS = 64
 const DUMP_PRUNE_DELAY_MS = 2_000
 
 type DumpCandidate = {
@@ -74,6 +77,14 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
     return false
   }
   crashpadDumpDirectory = options.dumpDirectory ?? resolveDumpDirectory()
+  // Why: a dying main process never delivers process-gone, so a crash loop
+  // never reaches the post-crash prune, and Crashpad's own pass runs in the
+  // handler child after a delayed first sweep. Pruning here is the only thing
+  // that bounds disk across repeatedly crashed launches, so it must not be
+  // deferred behind the coalescing timer a crash loop outruns.
+  void pruneCrashpadDumps().catch((error) => {
+    console.error('[crash-reporting] Crashpad startup dump pruning failed:', error)
+  })
   return true
 }
 
@@ -131,7 +142,10 @@ async function collectDumpCandidates(directory: string): Promise<DumpCandidate[]
   return candidates
 }
 
-async function pruneCrashpadDumps(maxBytes = MAX_STORED_DUMP_BYTES): Promise<void> {
+async function pruneCrashpadDumps(
+  maxBytes = MAX_STORED_DUMP_BYTES,
+  maxDumps = MAX_STORED_DUMPS
+): Promise<void> {
   const directory = crashpadDumpDirectory
   if (!directory) {
     return
@@ -140,11 +154,18 @@ async function pruneCrashpadDumps(maxBytes = MAX_STORED_DUMP_BYTES): Promise<voi
     (left, right) => right.mtimeMs - left.mtimeMs
   )
   let retainedBytes = 0
+  let retainedCount = 0
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]
-    const mustKeep = index === 0 || reservedDumpPaths.has(candidate.filePath)
-    if (mustKeep || retainedBytes + candidate.size <= maxBytes) {
+    // claimed dumps are referenced by a persisted report; pruning one leaves a
+    // dangling minidumpPath behind.
+    const mustKeep =
+      index === 0 ||
+      reservedDumpPaths.has(candidate.filePath) ||
+      claimedDumpPaths.has(candidate.filePath)
+    if (mustKeep || (retainedBytes + candidate.size <= maxBytes && retainedCount < maxDumps)) {
       retainedBytes += candidate.size
+      retainedCount += 1
       continue
     }
     try {
@@ -172,9 +193,12 @@ export function scheduleCrashpadDumpPrune(): void {
   dumpPruneTimer.unref()
 }
 
-/** Test seam for byte-budget behavior without a real Crashpad database. */
-export async function _pruneCrashpadDumpsForTest(maxBytes: number): Promise<void> {
-  await pruneCrashpadDumps(maxBytes)
+/** Test seam for byte/count-budget behavior without a real Crashpad database. */
+export async function _pruneCrashpadDumpsForTest(
+  maxBytes: number,
+  maxDumps = MAX_STORED_DUMPS
+): Promise<void> {
+  await pruneCrashpadDumps(maxBytes, maxDumps)
 }
 
 type DumpPollingOptions = {
@@ -267,7 +291,9 @@ export async function captureMinidumpSignature(
       }
       reservedDumpPaths.add(dump.filePath)
       try {
-        const signature = parseMinidumpCrashSignature(await readFile(dump.filePath))
+        const signature = parseMinidumpCrashSignature(await readFile(dump.filePath), {
+          expectedProcessType: options.expectedProcessType
+        })
         if (
           !signature ||
           (options.expectedProcessType !== undefined &&

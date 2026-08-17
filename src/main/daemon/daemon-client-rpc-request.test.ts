@@ -23,6 +23,7 @@ describe('requestDaemonRpc', () => {
       payload: { sessionId: 'completed-spawn' },
       timeoutMs: 30_000,
       signal: abort.signal,
+      unmatchedCancelGraceMs: 5_000,
       onCreateCancellationFailure: vi.fn(),
       settleCreateCancellation: () => cancellation
     })
@@ -45,6 +46,7 @@ describe('requestDaemonRpc', () => {
       type: 'createOrAttach',
       payload: { sessionId: 'completed-spawn' },
       timeoutMs: 10,
+      unmatchedCancelGraceMs: 5_000,
       onCreateCancellationFailure: vi.fn(),
       settleCreateCancellation
     })
@@ -66,12 +68,39 @@ describe('requestDaemonRpc', () => {
       type: 'createOrAttach',
       payload: { sessionId: 'pending-spawn' },
       timeoutMs: 10,
+      unmatchedCancelGraceMs: 5_000,
       onCreateCancellationFailure: vi.fn(),
       settleCreateCancellation: vi.fn(async () => ({ canceled: true }))
     })
     const rejected = expect(request).rejects.toThrow('Request createOrAttach timed out after 10ms')
 
     await vi.advanceTimersByTimeAsync(10)
+
+    await rejected
+    expect(pendingRequests.size).toBe(0)
+  })
+
+  it('rejects an unmatched cancellation once the grace window elapses', async () => {
+    vi.useFakeTimers()
+    const pendingRequests = new DaemonPendingRequests()
+    // attach-only: the daemon registers no cancellable spawn, so it can never
+    // match the cancel and no response is coming either.
+    const request = requestDaemonRpc({
+      socket: { write: vi.fn() } as unknown as Socket,
+      pendingRequests,
+      id: 'req-1',
+      type: 'createOrAttach',
+      payload: { sessionId: 'attach-only-spawn', attachOnly: true },
+      timeoutMs: 10,
+      unmatchedCancelGraceMs: 5_000,
+      onCreateCancellationFailure: vi.fn(),
+      settleCreateCancellation: vi.fn(async () => ({ canceled: false }))
+    })
+    const rejected = expect(request).rejects.toThrow('Request createOrAttach timed out after 10ms')
+
+    await vi.advanceTimersByTimeAsync(10)
+    expect(pendingRequests.size).toBe(1)
+    await vi.advanceTimersByTimeAsync(5_000)
 
     await rejected
     expect(pendingRequests.size).toBe(0)
@@ -91,6 +120,7 @@ describe('requestDaemonRpc', () => {
       payload: { sessionId: 'unconfirmed-spawn' },
       timeoutMs: 30_000,
       signal: abort.signal,
+      unmatchedCancelGraceMs: 5_000,
       onCreateCancellationFailure,
       settleCreateCancellation: vi.fn(async () => {
         throw new Error('settlement failed')

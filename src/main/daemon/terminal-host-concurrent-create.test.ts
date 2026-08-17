@@ -94,6 +94,35 @@ describe('concurrent createOrAttach across the async spawn', () => {
     await host.dispose()
   })
 
+  it('lets a canceled caller stop waiting on a create stuck on a dead share', async () => {
+    let releaseSpawn: () => void = () => {}
+    const spawnGate = new Promise<void>((resolve) => {
+      releaseSpawn = resolve
+    })
+    const host = new TerminalHost({
+      spawnSubprocess: async () => {
+        await spawnGate
+        return mockSubprocess()
+      }
+    })
+
+    const stuck = host.createOrAttach(createOptions('dead-share-session'))
+    const abort = new AbortController()
+    const queued = host.createOrAttach({
+      ...createOptions('dead-share-session'),
+      cancelSignal: abort.signal
+    })
+    abort.abort()
+
+    // Without this the queued caller waits out the hung probe, holding a create
+    // in flight and blocking shutdown/idle behind it.
+    await expect(queued).rejects.toThrow('Attach canceled')
+
+    releaseSpawn()
+    await stuck
+    await host.dispose()
+  })
+
   it('waits for an in-flight spawn before disposing its session', async () => {
     let releaseSpawn: () => void = () => {}
     const spawnGate = new Promise<void>((resolve) => {

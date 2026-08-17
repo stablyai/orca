@@ -65,7 +65,6 @@ inline src/main/runtime/orca-runtime-files.ts
 inline src/main/runtime/orca-runtime-git.ts
 inline src/main/runtime/orca-runtime.test.ts
 inline src/main/runtime/orca-runtime.ts
-inline src/main/runtime/orchestration/db.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/runtime/rpc/methods/terminal.ts
 inline src/main/runtime/runtime-rpc.ts
@@ -88,13 +87,11 @@ inline src/relay/git-handler.ts
 inline src/relay/pty-handler.ts
 inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/components/GitHubItemDialog.tsx
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
 inline src/renderer/src/components/LinearIssueWorkspace.tsx
 inline src/renderer/src/components/LinearItemDrawer.tsx
 inline src/renderer/src/components/NewWorkspaceComposerCard.tsx
-inline src/renderer/src/components/PullRequestPage.tsx
 inline src/renderer/src/components/TaskPage.tsx
 inline src/renderer/src/components/Terminal.tsx
 inline src/renderer/src/components/UpdateCard.tsx

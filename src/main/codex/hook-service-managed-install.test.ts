@@ -30,7 +30,7 @@ vi.mock('os', async (importOriginal) => {
 import { CodexHookService } from './hook-service'
 
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
@@ -235,24 +235,31 @@ describe('CodexHookService', () => {
       // would block the event loop and starve this handler, so the child is
       // spawned asynchronously while the server drains the request concurrently.
       let resolveReceived: (value: { headers: Record<string, unknown>; body: string }) => void
-      const receivedPromise = new Promise<{ headers: Record<string, unknown>; body: string }>(
-        (resolve) => {
-          resolveReceived = resolve
-        }
-      )
+      const receivedPromise = new Promise<{
+        headers: Record<string, unknown>
+        body: string
+      }>((resolve) => {
+        resolveReceived = resolve
+      })
       const server = createServer((req, res) => {
         const chunks: Buffer[] = []
         req.on('data', (c: Buffer) => chunks.push(c))
         req.on('end', () => {
           res.end('ok')
-          resolveReceived({ headers: req.headers, body: Buffer.concat(chunks).toString('utf-8') })
+          resolveReceived({
+            headers: req.headers,
+            body: Buffer.concat(chunks).toString('utf-8')
+          })
         })
       })
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
       const port = (server.address() as AddressInfo).port
 
       try {
-        const payload = JSON.stringify({ prompt: '你好世界', hook_event_name: 'UserPromptSubmit' })
+        const payload = JSON.stringify({
+          prompt: '你好世界',
+          hook_event_name: 'UserPromptSubmit'
+        })
         // Why: this suite may run inside an Orca-launched terminal whose env
         // already carries ORCA_AGENT_HOOK_ENDPOINT/PORT/TOKEN. The managed
         // script sources that endpoint file, so leave it out or the hook posts

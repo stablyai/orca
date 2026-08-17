@@ -214,6 +214,7 @@ export class DaemonClient {
       payload,
       timeoutMs,
       ...(signal ? { signal } : {}),
+      unmatchedCancelGraceMs: NOTIFY_SETTLEMENT_TIMEOUT_MS,
       onCreateCancellationFailure: () => this.handleDisconnect(generation),
       settleCreateCancellation: (sessionId, requestId) =>
         this.request<{ canceled: boolean }>(

@@ -3,6 +3,7 @@ import {
   type CrashReportDiagnosticBundle
 } from './crash-reporting-diagnostic-bundle'
 import { appendMinidumpSignatureLines } from './crash-report-signature-lines'
+import { formatCrashReportExitCode } from './crash-report-exit-code'
 
 export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-bundle'
 
@@ -245,7 +246,7 @@ export function formatCrashReportText(
     `Source: ${report.source}`,
     `Process: ${report.processType}`,
     `Reason: ${report.reason}`,
-    `Exit code: ${report.exitCode ?? 'unknown'}`,
+    `Exit code: ${formatCrashReportExitCode(report)}`,
     `App version: ${report.appVersion}`,
     `Platform: ${report.platform} ${report.osRelease} ${report.arch}`,
     `Electron: ${report.electronVersion}`,

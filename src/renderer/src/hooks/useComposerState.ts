@@ -128,7 +128,8 @@ import {
 } from '@/lib/project-host-workspace-target'
 import {
   buildProjectHostSetupOptions,
-  type ProjectHostSetupOption
+  type ProjectHostSetupOption,
+  type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import {
   buildNewWorkspaceCreateTargetOptions,
@@ -2796,17 +2797,34 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
       const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
-      if (!option || option.kind !== 'ready') {
+      // Why: a just-created setup lands in the store before the memoized picker
+      // options refresh. Rebuild through the same builder rather than reading the
+      // raw record — repo eligibility, ephemeral-VM/runtime-owned host exclusion,
+      // and one-setup-per-host dedupe all decide which setup creation resolves to.
+      // Skipping them can retarget to a location other than the one just chosen.
+      const target =
+        option?.kind === 'ready'
+          ? option
+          : buildProjectHostSetupOptions({
+              projectId: selectedRepoProjectId,
+              projectHostSetups: useAppStore.getState().projectHostSetups,
+              eligibleRepos: getComposerEligibleRepos(useAppStore.getState().repos),
+              hosts: hostOptions
+            }).find(
+              (candidate): candidate is ReadyProjectHostSetupOption =>
+                candidate.id === setupId && candidate.kind === 'ready'
+            )
+      if (!target) {
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
-      setSelectedProjectHostSetupOverrideId(option.id)
-      handleRepoChange(option.repoId, {
+      setSelectedProjectHostSetupOverrideId(target.id)
+      handleRepoChange(target.repoId, {
         preserveStartFrom: true,
         forceResetStartFrom: true
       })
     },
-    [handleRepoChange, projectHostSetupOptions]
+    [handleRepoChange, hostOptions, projectHostSetupOptions, selectedRepoProjectId]
   )
   const handleProjectChange = useCallback(
     (projectId: string): void => {

@@ -66,6 +66,9 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
+import { addWslEnvKeys } from '../wsl-env'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { ColdRestorePayloadCache, type ColdRestorePayload } from './cold-restore-payload-cache'
 import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
@@ -425,7 +428,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
+    const spawnOpts = this.withHistoryIsolation(opts)
+    const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation = {
       exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
       ignoredExitIncarnationIds: new Set<string>(),
@@ -444,7 +448,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     try {
       return await this.withHistorySpawnLock(sessionId, () =>
-        this.withDaemonRetry(() => this.doSpawn({ ...opts, sessionId }, operation, historyRecovery))
+        this.withDaemonRetry(() =>
+          this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
+        )
       )
     } finally {
       if (historyRecovery.freeze) {
@@ -456,6 +462,44 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.pendingSpawnOperationsBySessionId.delete(sessionId)
       }
     }
+  }
+
+  private withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
+    const wslContext = resolveWslSessionContext({
+      cwd: opts.cwd,
+      sessionId: opts.sessionId,
+      shellOverride: opts.shellOverride,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+    })
+    if (
+      opts.attachOnly === true ||
+      (opts.sessionId !== undefined && opts.isNewSession !== true) ||
+      !opts.worktreeId ||
+      opts.historyIsolationEnabled !== true ||
+      (process.platform === 'win32' && !wslContext)
+    ) {
+      return opts
+    }
+    const env = { ...opts.env }
+    const preferredShell = wslContext
+      ? 'bash'
+      : opts.shellOverride || env.SHELL || process.env.SHELL || '/bin/zsh'
+    const shellPath = resolveUnixShellPath(preferredShell)
+    const historyArgs = [
+      env,
+      opts.worktreeId,
+      shellPath,
+      opts.cwd ?? resolveSafePtyDefaultCwd()
+    ] as const
+    const result = wslContext
+      ? injectHistoryEnv(...historyArgs, { wslDistro: wslContext.distro })
+      : injectHistoryEnv(...historyArgs)
+    if (wslContext) {
+      injectWslFishHistoryEnv(env, opts.worktreeId, wslContext.distro)
+      addWslEnvKeys(env, ['HISTFILE', 'fish_history'])
+    }
+    logHistoryInjection(opts.worktreeId, result)
+    return { ...opts, env }
   }
 
   private async doSpawn(

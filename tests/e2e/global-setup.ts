@@ -80,7 +80,8 @@ export default function globalSetup(): void {
   if (
     process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
     process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-    process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1'
+    process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1' ||
+    (process.env.ORCA_E2E_SKILL_STAGING === '1' && Boolean(process.env.ORCA_E2E_SKILL_SSH_HOST))
   ) {
     // Why: the SSH specs deploy Orca's relay from out/relay. The
     // normal Electron E2E build does not produce that bundle, so build it only

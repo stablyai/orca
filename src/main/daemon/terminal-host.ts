@@ -23,6 +23,22 @@ import { isShellProcess } from '../../shared/agent-detection'
 import { TerminalAttachCanceledError } from './daemon-errors'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+
+/** Never resolves; only rejects, so it can bound a wait without settling it. */
+function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string): Promise<never> {
+  if (!signal) {
+    return new Promise<never>(() => {})
+  }
+  return new Promise<never>((_resolve, reject) => {
+    if (signal.aborted) {
+      reject(new TerminalAttachCanceledError(sessionId))
+      return
+    }
+    signal.addEventListener('abort', () => reject(new TerminalAttachCanceledError(sessionId)), {
+      once: true
+    })
+  })
+}
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -57,7 +73,11 @@ export class TerminalHost {
       inFlight !== undefined;
       inFlight = this.pendingCreations.get(opts.sessionId)
     ) {
-      await inFlight
+      // Why: the create ahead of us can be stuck on an unreachable share for
+      // minutes. Waiting unconditionally is what let one dead path strand every
+      // later create and attach for the session, so a canceled caller leaves.
+      await Promise.race([inFlight, rejectOnAbort(opts.cancelSignal, opts.sessionId)])
+      this.assertCreateOrAttachAllowed(opts)
     }
     this.assertCreateOrAttachAllowed(opts)
 

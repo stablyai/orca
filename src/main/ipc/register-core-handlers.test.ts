@@ -527,7 +527,7 @@ describe('registerCoreHandlers', () => {
     expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerTerminalPreviewHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
-    expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspacePortHandlersMock).toHaveBeenCalledWith(store)
     expect(registerLocalhostWorktreeLabelHandlersMock).toHaveBeenCalledWith(store)

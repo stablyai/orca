@@ -1226,7 +1226,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId }) => {
+    handler: async (params, { runtime, clientId, signal }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
@@ -1374,7 +1374,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let result
       try {
         result = useSettledAgentPrompt
-          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, { beforeWrite })
+          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              beforeWrite,
+              signal
+            })
           : await runtime.sendTerminal(
               params.terminal,
               {

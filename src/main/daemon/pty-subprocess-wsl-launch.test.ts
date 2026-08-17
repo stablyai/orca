@@ -465,7 +465,8 @@ describe('createPtySubprocess', () => {
       }
 
       expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
-        `\\\\wsl.localhost\\Ubuntu${cwd.replaceAll('/', '\\')}`
+        `\\\\wsl.localhost\\Ubuntu${cwd.replaceAll('/', '\\')}`,
+        expect.anything()
       )
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
