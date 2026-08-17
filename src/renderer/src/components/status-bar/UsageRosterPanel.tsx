@@ -13,7 +13,11 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
-import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
+import {
+  formatPlanLabel,
+  formatWindowAmounts,
+  usageTextColorClass
+} from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
@@ -93,6 +97,10 @@ function UsageMetric({
 }): React.JSX.Element {
   const used = clampUsedPercent(section.window.usedPercent)
   const shown = getDisplayedUsagePercentage(section.window.usedPercent, display)
+  // Why: Nous-style providers report raw credit amounts; show the labeled
+  // "left | used" balance next to the bar while the colored % keeps the
+  // consumption meter readable.
+  const amounts = formatWindowAmounts(section.window)
 
   return (
     <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
@@ -106,6 +114,9 @@ function UsageMetric({
         </span>
       ) : null}
       <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
+      {amounts ? (
+        <span className="tabular-nums text-[10px] text-muted-foreground">{amounts}</span>
+      ) : null}
     </span>
   )
 }

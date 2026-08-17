@@ -19,7 +19,9 @@ export function getUsageProviderAccountsSectionId(
     case 'grok':
       return 'accounts-grok'
     case 'kimi':
-      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+    case 'nous':
+      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle; the
+      // Hermes portal session is owned by the `hermes` CLI the same way.
       return null
   }
 }

@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatWindowAmounts } from './usage-roster-formatting'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -95,6 +96,10 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'nous') {
+    // Why: the Hermes agent is the Nous Portal client — reuse its bundled favicon.
+    return <AgentIcon agent="hermes" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -218,6 +223,7 @@ function ProviderRateLimitWindowSection({
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
   const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - Date.now()) : null
+  const amounts = formatWindowAmounts(window)
 
   return (
     <div className="space-y-1">
@@ -230,7 +236,11 @@ function ProviderRateLimitWindowSection({
         />
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
-        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
+        <span>
+          {amounts
+            ? `${displayedPct}% · ${amounts}`
+            : formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}
+        </span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
     </div>

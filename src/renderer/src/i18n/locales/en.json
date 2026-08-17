@@ -60,7 +60,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "nousToggleDescription": "Show Nous Portal subscription credit usage when signed in via Hermes."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -8708,6 +8709,23 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+          },
+          "status": {
+            "bar": {
+              "nous": {
+                "toggle": {
+                  "search": {
+                    "e1f3cf3042": "Nous Usage",
+                    "06772dccab": "Show Nous Portal subscription usage in the status bar.",
+                    "cd4ad1de8a": "nous",
+                    "803915a64d": "hermes",
+                    "da8fcec43f": "credits",
+                    "f2ad6c2b3d": "balance",
+                    "6beb71128d": "portal"
+                  }
+                }
+              }
+            }
           }
         },
         "auto": {

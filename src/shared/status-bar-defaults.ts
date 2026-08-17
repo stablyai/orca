@@ -9,6 +9,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'kimi',
   'minimax',
   'grok',
+  'nous',
   'ssh',
   'resource-usage',
   'ports'

@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    nousAuthConfigured: false,
     ...overrides
   }
 }
@@ -128,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ nousAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -202,6 +204,14 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats nousAuthConfigured as the durable signal for Nous', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('nous', usageSettings({ nousAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('nous', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('nous', null)).toBe(false)
   })
 })
 
@@ -299,6 +309,20 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
+  it('keeps Nous visible while the snapshot is pending when Hermes auth is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'nous',
+      null,
+      usageSettings({ nousAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'nous',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
   it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
     const unavailable = provider('unavailable', {
       provider: 'minimax',
@@ -373,7 +397,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          nous: null
         },
         usageSettings()
       )
@@ -391,7 +416,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          nous: undefined
         },
         usageSettings()
       )
@@ -409,7 +435,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          nous: provider('unavailable', { provider: 'nous' })
         },
         usageSettings()
       )
@@ -427,7 +454,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          nous: provider('unavailable', { provider: 'nous' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,7 +484,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          nous: null
         },
         null
       )
@@ -474,7 +503,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          nous: provider('unavailable', { provider: 'nous' })
         },
         usageSettings()
       )
@@ -492,6 +522,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          nous: provider('unavailable', { provider: 'nous' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
@@ -512,6 +543,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          nous: provider('unavailable', { provider: 'nous' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({ antigravityUsageConfigured: true })
