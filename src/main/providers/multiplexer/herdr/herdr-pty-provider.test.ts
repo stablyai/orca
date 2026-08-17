@@ -305,7 +305,12 @@ describe('HerdrPtyProvider', () => {
       'pane.send_keys',
       { pane_id: 'p1', keys: ['ctrl+c'] }
     )
-    expect(host.requestMock.mock.calls.some((call) => call[2]?.pane_id === spawned.id)).toBe(false)
+    expect(
+      host.requestMock.mock.calls.some((call) => {
+        const params = call[2] as { pane_id?: string } | undefined
+        return params?.pane_id === spawned.id
+      })
+    ).toBe(false)
   })
 
   it('starts a stock Herdr agent instead of writing a shell command', async () => {

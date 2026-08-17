@@ -124,6 +124,7 @@
     "../src/main/providers/multiplexer/herdr/herdr-pty-provider-runtime.ts",
     "../src/main/providers/multiplexer/herdr/herdr-socket-types.ts",
     "../src/main/providers/multiplexer/herdr/herdr-session-control.ts",
+    "../src/main/providers/multiplexer/herdr/herdr-logical-key.ts",
     "../src/main/providers/multiplexer/herdr/herdr-tab-layout.ts",
     "../src/main/cli/keyed-promise-queue.ts",
     "../src/main/providers/pty-provider-contract.ts",
