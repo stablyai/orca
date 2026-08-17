@@ -323,6 +323,7 @@ describe('RoomService lifecycle', () => {
   it('returns the room snapshot without waiting for harness activation', async () => {
     const snapshotMethod = ROOM_METHODS.find((method) => method.name === 'rooms.snapshot')
     const service = {
+      prepareSnapshot: vi.fn(async () => undefined),
       snapshot: vi.fn(() => ({ room: { id: 'room-1' } })),
       activateRoom: vi.fn(() => new Promise(() => {}))
     }

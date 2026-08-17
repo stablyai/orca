@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { completeLaunchOptions } from './structured-agent-session-launch-options'
+import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -39,11 +42,7 @@ export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
   callers: StructuredLaunchCallerGroup
-}
-
-type StructuredLaunchStateResult = {
-  state: StructuredLaunchState
-  caller: StructuredLaunchCaller
+  sessionOptions?: StructuredAgentLaunchOptions['sessionOptions']
 }
 
 export type StructuredAgentLaunchResult = {
@@ -57,7 +56,7 @@ export type StructuredAgentLaunchResult = {
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
 
-function structuredAgentLabel(agent: AgentSessionHandleProvider): string {
+function structuredAgentLabel(agent: StructuredMachineAgent): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
@@ -77,9 +76,10 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 
 export function getStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): StructuredAgentLaunchStatus {
-  const state = pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent))
+  const state = pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent, target))
   if (!state) {
     return 'idle'
   }
@@ -88,19 +88,24 @@ export function getStructuredAgentLaunchStatus(
 
 export function useStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): StructuredAgentLaunchStatus {
   return useSyncExternalStore(
     subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentLaunchStatus(worktreeId, agent),
+    () => getStructuredAgentLaunchStatus(worktreeId, agent, target),
     () => 'idle'
   )
 }
 
 // Why keyed by agent too: one worktree can hold a Claude and a Codex launch at once, and a shared
 // key would hand the second caller the first agent's intent.
-function launchIdentity(worktreeId: string, agent: AgentSessionHandleProvider): string {
-  return `${agent}:${worktreeId}`
+function launchIdentity(
+  worktreeId: string,
+  agent: StructuredMachineAgent,
+  target: RuntimeClientTarget
+): string {
+  return `${target.kind === 'local' ? 'local' : target.environmentId}:${agent}:${worktreeId}`
 }
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
@@ -204,20 +209,21 @@ function trackLaunchFailureToast(state: StructuredLaunchState): void {
 
 function structuredAgentLaunchState(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions
-): StructuredLaunchStateResult {
-  const identity = launchIdentity(worktreeId, agent)
+): { state: StructuredLaunchState; caller: StructuredLaunchCaller } {
+  const target = options.target ?? { kind: 'local' }
+  const identity = launchIdentity(worktreeId, agent, target)
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
     if (existing.visibilityUnknown) {
       existing.callers.outcome = 'pending'
-      existing.promise = reconcileUnknownLaunch(existing)
+      existing.promise = completeLaunchOptions(existing, reconcileUnknownLaunch(existing))
       trackLaunchSettlement(existing, existing.promise)
       trackLaunchFailureToast(existing)
       notifyStructuredLaunchListeners()
     }
-    const text = options.prompt?.trim() ?? ''
+    const text = options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
     const stagedPrompt =
       text && existing.callers.outcome !== 'refused'
         ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
@@ -233,8 +239,16 @@ function structuredAgentLaunchState(
     }
   }
 
-  const intent = createStructuredAgentSessionLaunchIntent(worktreeId, agent)
-  const text = options.prompt?.trim() ?? ''
+  const intent = createStructuredAgentSessionLaunchIntent(
+    worktreeId,
+    agent,
+    target,
+    options.groupId
+  )
+  if (options.promptDelivery === 'draft' && options.prompt?.trim()) {
+    writeNativeChatDraftCache(intent.sessionId, options.prompt.trim())
+  }
+  const text = options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
     : null
@@ -246,7 +260,8 @@ function structuredAgentLaunchState(
     visibilityUnknown: false,
     cancelled: false,
     onVisibilityChanged: notifyStructuredLaunchListeners,
-    callers
+    callers,
+    sessionOptions: options.sessionOptions
   }
   callers.onSettled = () => maybeCleanupLaunchState(state)
   state.promise =
@@ -256,7 +271,7 @@ function structuredAgentLaunchState(
             `Could not durably stage the ${structuredAgentLabel(agent)} launch prompt.`
           )
         )
-      : launchAndReconcile(state)
+      : completeLaunchOptions(state, launchAndReconcile(state))
   const caller = addStructuredLaunchCaller({
     group: state.callers,
     launchResult: state.promise,
@@ -292,7 +307,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
 
 export function startStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions = {}
 ): StructuredAgentLaunchResult {
   const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)

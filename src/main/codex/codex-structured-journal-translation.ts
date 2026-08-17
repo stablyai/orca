@@ -19,7 +19,7 @@ import {
   readCodexJournalRecord,
   readCodexJournalString
 } from './codex-structured-journal-translation-values'
-import { readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexTurnId, readCodexTurnOutcome } from './codex-structured-thread-facts'
 
 export type {
   CodexJournalTranslationAdmission,
@@ -50,8 +50,10 @@ export function createCodexJournalTranslator(
     (threadId) => activeTurns.current(threadId),
     (threadId, turnId) => genericFrames.suppress(threadId, turnId)
   )
-  const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
-    items.detailFor(threadId, itemId)
+  const prompts = new CodexJournalPrompts(
+    deps,
+    (threadId, itemId) => items.detailFor(threadId, itemId),
+    (threadId) => activeTurns.current(threadId)
   )
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
@@ -228,6 +230,8 @@ export function createCodexJournalTranslator(
       sessionId: event.sessionId,
       threadId: event.threadId,
       turnId,
+      primaryThreadId: deps.primaryThreadId?.() ?? null,
+      outcome: readCodexTurnOutcome(event.params),
       streams: items.streams,
       activeItems: items.activeItems
     })

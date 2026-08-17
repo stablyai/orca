@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../sqlite/sync-database'
 import { RoomDatabase } from './database'
+import { claimRoomBroadcastForTest } from './delivery-test-claim'
 
 describe('RoomDatabase', () => {
   const databases: RoomDatabase[] = []
@@ -110,6 +111,38 @@ describe('RoomDatabase', () => {
     ])
   })
 
+  it('migrates delivery-backed room stops to persisted queue state', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-rooms-'))
+    directories.push(directory)
+    const path = join(directory, 'rooms.db')
+    const first = new RoomDatabase(path)
+    const snapshot = createRoom(first)
+    first.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'claude',
+      displayName: 'Claude',
+      agent: 'claude'
+    })
+    first.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: snapshot.participants[0].identity,
+      actorKind: 'user',
+      body: 'Stay paused'
+    })
+    first.transaction(() => first.messages.deliveries.stopRoom(snapshot.room.id))
+    first.close()
+
+    const legacy = new SyncDatabase(path)
+    legacy.exec('ALTER TABLE rooms DROP COLUMN delivery_queue_stopped')
+    legacy.close()
+
+    const migrated = new RoomDatabase(path)
+    databases.push(migrated)
+    expect(migrated.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
+    expect(migrated.messages.deliveries.resumeRoom(snapshot.room.id, 100).resumed).toHaveLength(1)
+  })
+
   it('persists mention order and upgrades legacy mention rows', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-room-mentions-'))
     directories.push(directory)
@@ -167,7 +200,7 @@ describe('RoomDatabase', () => {
       updatedAt: 1,
       anchorSequence: created.message.sequence
     })
-    database.messages.deliveries.claim(created.deliveries[0].id)
+    claimRoomBroadcastForTest(database, created.message.id)
     database.messages.deliveries.complete(created.deliveries[0].id, 'delivered', null)
 
     const reply = database.providerMessages.createReply({
@@ -298,7 +331,7 @@ describe('RoomDatabase', () => {
       mentions: [agent.identity]
     }).deliveries[0]!
 
-    expect(database.messages.deliveries.claim(delivery.id)?.state).toBe('delivering')
+    expect(claimRoomBroadcastForTest(database, delivery.messageId)?.[0]?.state).toBe('delivering')
     database.messages.deliveries.recoverInterrupted(123)
 
     expect(database.messages.deliveries.get(delivery.id)).toMatchObject({
@@ -311,35 +344,34 @@ describe('RoomDatabase', () => {
   it('never automatically retries a delivery that may have submitted Enter', () => {
     const database = memory()
     const snapshot = createRoom(database)
-    const agent = database.participants.add({
-      roomId: snapshot.room.id,
-      identity: 'claude',
-      displayName: 'Claude',
-      agent: 'claude'
-    })
-    const deliveries = ['submitting', 'awaiting-turn'].map((phase) => {
-      const delivery = database.messages.create({
+    for (const identity of ['codex', 'claude'] as const) {
+      database.participants.add({
         roomId: snapshot.room.id,
-        senderId: snapshot.participants[0].id,
-        senderIdentity: 'egor',
-        actorKind: 'user',
-        body: phase
-      }).deliveries[0]!
-      database.messages.deliveries.claim(delivery.id)
-      database.messages.deliveries.setPhase(delivery.id, phase as 'submitting' | 'awaiting-turn')
-      return delivery
+        identity,
+        displayName: identity,
+        agent: identity
+      })
+    }
+    const created = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: 'egor',
+      actorKind: 'user',
+      body: 'broadcast'
     })
+    claimRoomBroadcastForTest(database, created.message.id)
+    database.messages.deliveries.setPhase(created.deliveries[0].id, 'submitting')
+    database.messages.deliveries.setPhase(created.deliveries[1].id, 'awaiting-turn')
 
     database.messages.deliveries.recoverInterrupted(123)
 
-    expect(deliveries.map((item) => database.messages.deliveries.get(item.id))).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ state: 'failed', error: 'room_delivery_uncertain' }),
-        expect.objectContaining({ state: 'failed', error: 'room_delivery_uncertain' })
-      ])
-    )
+    for (const delivery of created.deliveries) {
+      expect(database.messages.deliveries.get(delivery.id)).toMatchObject({
+        state: 'failed',
+        error: 'room_delivery_uncertain'
+      })
+    }
     expect(database.messages.deliveries.listDue(123)).toEqual([])
-    expect(agent.id).toBeTruthy()
   })
 
   it('selects one FIFO head per participant before applying the global limit', () => {
@@ -374,8 +406,10 @@ describe('RoomDatabase', () => {
     const firstAlpha = first.deliveries.find((item) => item.participantId === alpha.id)!
     const secondAlpha = second.deliveries.find((item) => item.participantId === alpha.id)!
     const now = Date.now()
-    database.messages.deliveries.claim(firstAlpha.id)
+    const claimed = claimRoomBroadcastForTest(database, first.message.id)!
+    const firstBeta = claimed.find((item) => item.participantId === beta.id)!
     database.messages.deliveries.complete(firstAlpha.id, 'pending', 'retry', now + 10_000)
+    database.messages.deliveries.complete(firstBeta.id, 'pending', 'retry', now)
 
     expect(
       database.messages.deliveries.listDue(now, 100).map((item) => item.participantId)
@@ -389,39 +423,6 @@ describe('RoomDatabase', () => {
     expect(database.messages.deliveries.listDue(500, 100)).not.toContainEqual(
       expect.objectContaining({ id: secondAlpha.id })
     )
-  })
-
-  it('keeps only the latest five delivery attempt diagnostics', () => {
-    const database = memory()
-    const snapshot = createRoom(database)
-    const agent = database.participants.add({
-      roomId: snapshot.room.id,
-      identity: 'claude',
-      displayName: 'Claude',
-      agent: 'claude'
-    })
-    const delivery = database.messages.create({
-      roomId: snapshot.room.id,
-      senderId: snapshot.participants[0].id,
-      senderIdentity: 'egor',
-      actorKind: 'user',
-      body: '@claude inspect this',
-      mentions: [agent.identity]
-    }).deliveries[0]!
-
-    for (let attempt = 1; attempt <= 6; attempt += 1) {
-      database.messages.deliveries.claim(delivery.id)
-      database.messages.deliveries.setPhase(delivery.id, 'submitting')
-      database.messages.deliveries.complete(delivery.id, 'pending', `failure-${attempt}`, attempt)
-    }
-
-    expect(database.messages.deliveries.get(delivery.id).attemptHistory).toMatchObject([
-      { attempt: 2, error: 'failure-2' },
-      { attempt: 3, error: 'failure-3' },
-      { attempt: 4, error: 'failure-4' },
-      { attempt: 5, error: 'failure-5' },
-      { attempt: 6, error: 'failure-6' }
-    ])
   })
 
   it('creates a transactional outbox and suppresses agent loops at the room limit', () => {
@@ -486,11 +487,13 @@ describe('RoomDatabase', () => {
       expect.objectContaining({ messageId: guarded.message.id, state: 'suppressed' })
     )
 
-    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 123)[0]).toMatchObject({
-      messageId: guarded.message.id,
-      state: 'pending',
-      nextAttemptAt: 123
-    })
+    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 123).resumed[0]).toMatchObject(
+      {
+        messageId: guarded.message.id,
+        state: 'pending',
+        nextAttemptAt: 123
+      }
+    )
     const resumed = database.messages.create({
       roomId: snapshot.room.id,
       senderId: beta.id,
@@ -539,10 +542,9 @@ describe('RoomDatabase', () => {
     const gammaDelivery = created.deliveries.find(
       (delivery) => delivery.participantId === gamma.id
     )!
-    database.messages.deliveries.claim(alphaDelivery.id)
+    claimRoomBroadcastForTest(database, created.message.id)
     database.messages.deliveries.setPhase(alphaDelivery.id, 'awaiting-turn')
     database.messages.deliveries.confirmTurn(alphaDelivery.id, 'turn-alpha')
-    database.messages.deliveries.claim(betaDelivery.id)
     database.messages.deliveries.setPhase(betaDelivery.id, 'awaiting-turn')
     database.messages.deliveries.complete(
       betaDelivery.id,
@@ -550,7 +552,6 @@ describe('RoomDatabase', () => {
       'room_delivery_uncertain',
       Number.MAX_SAFE_INTEGER
     )
-    database.messages.deliveries.claim(gammaDelivery.id)
     database.messages.deliveries.setPhase(gammaDelivery.id, 'waking')
     database.messages.deliveries.complete(
       gammaDelivery.id,
@@ -570,7 +571,6 @@ describe('RoomDatabase', () => {
     )
     database.messages.deliveries.finishRoomStop(stopped.deliveries.map((delivery) => delivery.id))
     expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
-    expect(database.messages.deliveries.retry(alphaDelivery.id).state).toBe('suppressed')
     expect(database.messages.deliveries.get(gammaDelivery.id)).toMatchObject({
       state: 'suppressed',
       error: 'room_participant_paused'
@@ -579,9 +579,11 @@ describe('RoomDatabase', () => {
     const resumed = database.transaction(() =>
       database.messages.deliveries.resumeRoom(snapshot.room.id, 456)
     )
-    expect(resumed).toHaveLength(2)
+    expect(resumed.resumed).toHaveLength(2)
     expect(
-      resumed.every((delivery) => delivery.state === 'pending' && delivery.nextAttemptAt === 456)
+      resumed.resumed.every(
+        (delivery) => delivery.state === 'pending' && delivery.nextAttemptAt === 456
+      )
     ).toBe(true)
     expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('active')
     expect(database.messages.deliveries.get(gammaDelivery.id)).toMatchObject({

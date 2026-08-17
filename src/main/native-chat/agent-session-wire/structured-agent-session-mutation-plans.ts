@@ -19,6 +19,7 @@ import {
   performCancel,
   performPrompt,
   performSend,
+  performSteer,
   performSetOption,
   type AgentSessionTurnContext,
   type TurnOutcome
@@ -31,6 +32,40 @@ export type MutationPlan<TValue> = {
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
+}
+
+export function steerPlan(params: {
+  envelope: AgentSessionMutationEnvelope
+  body: AgentJournalMessageItem
+  retryUnknown?: true
+}): MutationPlan<AgentSessionSendResult> {
+  const clientMessageId = params.envelope.clientOperationId
+  return {
+    method: 'agentSession.steer',
+    fields: { body: params.body },
+    rerunWhenReplayMissing: (ctx) =>
+      params.retryUnknown === true &&
+      ctx.journal
+        .submissions()
+        .some(
+          (entry) => entry.clientMessageId === clientMessageId && entry.dispatchState === 'unknown'
+        ),
+    run: (ctx) =>
+      performSteer(ctx, {
+        clientMessageId,
+        payloadFingerprint: params.envelope.payloadFingerprint,
+        body: params.body,
+        retryUnknown: params.retryUnknown
+      }),
+    replay: (ctx) => {
+      const submission = ctx.journal
+        .submissions()
+        .find((entry) => entry.clientMessageId === clientMessageId)
+      return submission && !(params.retryUnknown && submission.dispatchState === 'unknown')
+        ? { clientMessageId, submission }
+        : null
+    }
+  }
 }
 
 export function sendPlan(params: {

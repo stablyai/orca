@@ -16,4 +16,5 @@ export type CreateRoomMessage = {
   editedAt?: number | null
   deletedAt?: number | null
   enqueueDeliveries?: boolean
+  targetParticipantIds?: string[]
 }

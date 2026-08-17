@@ -52,6 +52,7 @@ describe('RoomComposerAttachments image viewer', () => {
       <RoomComposerAttachments
         attachments={[
           {
+            source: 'upload',
             uploadId: 'one',
             fileName: 'one.png',
             byteSize: 10,
@@ -59,6 +60,7 @@ describe('RoomComposerAttachments image viewer', () => {
             previewUrl: 'blob:one'
           },
           {
+            source: 'upload',
             uploadId: 'two',
             fileName: 'two.png',
             byteSize: 20,

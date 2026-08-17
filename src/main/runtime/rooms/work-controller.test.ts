@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { RoomDatabase } from './database'
 import type { RoomHarnessRuntime } from './harness-adapter'
 import { RoomService } from './service'
+import { RoomWorkController } from './work-controller'
+import type { RoomDeliveryWorker } from './delivery-worker'
+import type { RoomTranscriptBridge } from './transcript-bridge'
+import { claimRoomBroadcastForTest } from './delivery-test-claim'
 
 describe('room work control', () => {
   it('resumes a manual room stop before the latest loop-limit wave', () => {
@@ -24,13 +28,19 @@ describe('room work control', () => {
       actorKind: 'user',
       body: 'Stopped manually'
     })
-    database.transaction(() => database.messages.deliveries.stopRoom(snapshot.room.id))
+    const beta = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'beta',
+      displayName: 'Beta',
+      agent: 'claude'
+    })
     const second = database.messages.create({
       roomId: snapshot.room.id,
       senderId: snapshot.participants[0].id,
       senderIdentity: 'egor',
       actorKind: 'user',
-      body: 'Stopped by the loop limit'
+      body: 'Stopped by the loop limit',
+      targetParticipantIds: [beta.id]
     })
     const loopDelivery = second.deliveries[0]
     database.messages.deliveries.claim(loopDelivery.id)
@@ -40,8 +50,9 @@ describe('room work control', () => {
       null,
       Number.MAX_SAFE_INTEGER
     )
+    database.transaction(() => database.messages.deliveries.stopRoom(snapshot.room.id))
 
-    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 100)).toMatchObject([
+    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 100).resumed).toMatchObject([
       { id: first.deliveries[0].id, state: 'pending' }
     ])
     expect(database.messages.deliveries.get(loopDelivery.id)).toMatchObject({
@@ -53,10 +64,197 @@ describe('room work control', () => {
     database.messages.deliveries.claim(manualDelivery.id)
     database.messages.deliveries.confirmTurn(manualDelivery.id, 'turn-alpha', 101)
     database.messages.deliveries.markResponded(manualDelivery.id, null, 102)
-    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 103)).toMatchObject([
+    expect(database.messages.deliveries.resumeRoom(snapshot.room.id, 103).resumed).toMatchObject([
       { id: loopDelivery.id, state: 'pending' }
     ])
     database.close()
+  })
+
+  it('keeps a paused room stopped when an earlier failed delivery is retried', () => {
+    const database = new RoomDatabase(':memory:')
+    const snapshot = database.createRoom({ projectId: 'project-1', name: 'Research' })
+    database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'alpha',
+      displayName: 'Alpha',
+      agent: 'codex'
+    })
+    const failed = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: snapshot.participants[0].identity,
+      actorKind: 'user',
+      body: 'Retry later'
+    }).deliveries[0]!
+    claimRoomBroadcastForTest(database, failed.messageId)
+    database.messages.deliveries.complete(
+      failed.id,
+      'failed',
+      'temporary_failure',
+      Number.MAX_SAFE_INTEGER
+    )
+    const queued = database.messages.create({
+      roomId: snapshot.room.id,
+      senderId: snapshot.participants[0].id,
+      senderIdentity: snapshot.participants[0].identity,
+      actorKind: 'user',
+      body: 'Stay paused'
+    }).deliveries[0]!
+
+    database.messages.deliveries.stopRoom(snapshot.room.id)
+    database.messages.deliveries.retry(failed.id)
+
+    expect(database.messages.deliveries.get(failed.id).state).toBe('pending')
+    expect(database.messages.deliveries.get(queued.id).error).toBe('room_stopped')
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
+    database.close()
+  })
+
+  it('keeps retries fenced until an unfinished Stop completes and resumes', () => {
+    const database = new RoomDatabase(':memory:')
+    const snapshot = database.createRoom({ projectId: 'project-1', name: 'Research' })
+    const alpha = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'alpha',
+      displayName: 'Alpha',
+      agent: 'codex'
+    })
+    const beta = database.participants.add({
+      roomId: snapshot.room.id,
+      identity: 'beta',
+      displayName: 'Beta',
+      agent: 'claude'
+    })
+    const create = (body: string, participantId: string) =>
+      database.messages.create({
+        roomId: snapshot.room.id,
+        senderId: snapshot.participants[0].id,
+        senderIdentity: snapshot.participants[0].identity,
+        actorKind: 'user',
+        body,
+        targetParticipantIds: [participantId]
+      }).deliveries[0]!
+    const failed = create('Retry later', beta.id)
+    database.messages.deliveries.claim(failed.id)
+    database.messages.deliveries.complete(
+      failed.id,
+      'failed',
+      'temporary_failure',
+      Number.MAX_SAFE_INTEGER
+    )
+    const stopping = create('Stop this', alpha.id)
+    database.messages.deliveries.claim(stopping.id)
+
+    database.messages.deliveries.stopRoom(snapshot.room.id)
+    database.messages.deliveries.retry(failed.id, 100)
+
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('active')
+    expect(database.messages.deliveries.listDue(100)).toEqual([])
+    expect(database.messages.deliveries.nextDueAt()).toBeNull()
+    expect(database.messages.deliveries.claim(failed.id)).toBeNull()
+    expect(database.messages.deliveries.claimSteer(failed.id)).toBeNull()
+
+    database.messages.deliveries.finishRoomStop([stopping.id])
+    expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
+    expect(database.messages.deliveries.listDue(100)).toEqual([])
+
+    database.messages.deliveries.resumeRoom(snapshot.room.id, 100)
+    expect(database.messages.deliveries.listDue(100).map(({ id }) => id)).toEqual(
+      expect.arrayContaining([failed.id, stopping.id])
+    )
+    database.close()
+  })
+
+  it('resumes only active participants and seals paused stopped deliveries', async () => {
+    const database = new RoomDatabase(':memory:')
+    const emit = vi.fn()
+    const wake = vi.fn()
+    const controller = new RoomWorkController(
+      database,
+      { wake } as unknown as RoomDeliveryWorker,
+      {} as RoomTranscriptBridge,
+      {},
+      emit
+    )
+    const createStoppedRoom = (name: string, identities: string[]) => {
+      const snapshot = database.createRoom({ projectId: `project-${name}`, name })
+      const participants = identities.map((identity) =>
+        database.participants.add({
+          roomId: snapshot.room.id,
+          identity,
+          displayName: identity,
+          agent: 'codex'
+        })
+      )
+      const created = database.messages.create({
+        roomId: snapshot.room.id,
+        senderId: snapshot.participants[0].id,
+        senderIdentity: snapshot.participants[0].identity,
+        actorKind: 'user',
+        body: 'queued'
+      })
+      database.transaction(() => database.messages.deliveries.stopRoom(snapshot.room.id))
+      return { snapshot, participants, created }
+    }
+
+    try {
+      const mixed = createStoppedRoom('mixed', ['alpha', 'beta'])
+      database.participants.update(mixed.participants[1]!.id, { participation: 'paused' })
+
+      await expect(controller.resume(mixed.snapshot.room.id)).resolves.toBe(1)
+      const deliveries = mixed.created.deliveries.map((delivery) =>
+        database.messages.deliveries.get(delivery.id)
+      )
+      expect(deliveries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            participantId: mixed.participants[0]!.id,
+            state: 'pending',
+            attempts: 0
+          }),
+          expect.objectContaining({
+            participantId: mixed.participants[1]!.id,
+            state: 'suppressed',
+            error: 'room_participant_paused',
+            attempts: 0
+          })
+        ])
+      )
+      expect(emit).toHaveBeenCalledTimes(3)
+      expect(wake).toHaveBeenCalledOnce()
+      expect(() =>
+        database.messages.deliveries.assertMessageMutable(mixed.created.message.id)
+      ).not.toThrow()
+
+      const pausedDelivery = deliveries.find(
+        (delivery) => delivery.participantId === mixed.participants[1]!.id
+      )!
+      database.participants.update(mixed.participants[1]!.id, { participation: 'active' })
+      expect(database.messages.deliveries.get(pausedDelivery.id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_participant_paused'
+      })
+      database.messages.deliveries.retarget(
+        mixed.created.message.id,
+        mixed.participants.map((participant) => participant.id)
+      )
+      expect(database.messages.deliveries.get(pausedDelivery.id).state).toBe('pending')
+
+      emit.mockClear()
+      wake.mockClear()
+      const paused = createStoppedRoom('paused', ['gamma'])
+      database.participants.update(paused.participants[0]!.id, { participation: 'paused' })
+      await expect(controller.resume(paused.snapshot.room.id)).resolves.toBe(0)
+      expect(database.messages.deliveries.get(paused.created.deliveries[0]!.id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_participant_paused'
+      })
+      expect(database.messages.deliveries.workState(paused.snapshot.room.id)).toBe('idle')
+      expect(emit).toHaveBeenCalledTimes(2)
+      expect(wake).toHaveBeenCalledOnce()
+    } finally {
+      database.close()
+    }
   })
 
   it('stops an already-idle agent without waiting for new PTY output', async () => {
@@ -108,7 +306,7 @@ describe('room work control', () => {
       actorKind: 'user',
       body: 'Review this'
     }).deliveries[0]!
-    service.db.messages.deliveries.claim(delivery.id)
+    claimRoomBroadcastForTest(service.db, delivery.messageId)
     service.db.messages.deliveries.confirmTurn(delivery.id, 'turn-codex')
     try {
       await service.stopRoom(snapshot.room.id)
@@ -164,7 +362,7 @@ describe('room work control', () => {
       actorKind: 'user',
       body: 'Review this'
     }).deliveries[0]!
-    service.db.messages.deliveries.claim(delivery.id)
+    claimRoomBroadcastForTest(service.db, delivery.messageId)
     service.db.messages.deliveries.confirmTurn(delivery.id, 'turn-codex')
 
     try {
@@ -236,7 +434,7 @@ describe('room work control', () => {
     }
   })
 
-  it('finishes an in-flight prompt cleanup before writing ESC', async () => {
+  it('interrupts an in-flight prompt before waiting for its cleanup', async () => {
     let release!: () => void
     const gate = new Promise<void>((resolve) => (release = resolve))
     const order: string[] = []
@@ -305,7 +503,7 @@ describe('room work control', () => {
       release()
       await stopping
 
-      expect(order).toEqual(['send', 'cleanup', 'esc'])
+      expect(order).toEqual(['send', 'esc', 'cleanup'])
       expect(service.snapshot(snapshot.room.id).workState).toBe('stopped')
     } finally {
       service.close()
@@ -371,10 +569,20 @@ describe('room work control', () => {
           participants.find((participant) => participant.identity === identity)!.id
       )!
     const submitted = delivery('alpha')
-    service.db.messages.deliveries.claim(submitted.id)
+    claimRoomBroadcastForTest(service.db, created.message.id)
     service.db.messages.deliveries.setPhase(submitted.id, 'awaiting-turn')
+    service.db.activities.upsert({
+      participantId: participants[0]!.id,
+      identity: 'alpha',
+      state: 'working',
+      kind: 'command',
+      messages: [],
+      startedAt: 100,
+      updatedAt: 110,
+      anchorSequence: created.message.sequence
+    })
+    service.db.messages.deliveries.complete(delivery('beta').id, 'pending', 'retry')
     const uncertain = delivery('gamma')
-    service.db.messages.deliveries.claim(uncertain.id)
     service.db.messages.deliveries.setPhase(uncertain.id, 'awaiting-turn')
     service.db.messages.deliveries.complete(
       uncertain.id,
@@ -385,14 +593,26 @@ describe('room work control', () => {
 
     try {
       await expect(service.stopRoom(snapshot.room.id)).resolves.toBe(3)
-      expect(created.deliveries.map((item) => service.db.messages.deliveries.get(item.id))).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ state: 'suppressed', error: 'room_stopped' }),
-          expect.objectContaining({ state: 'suppressed', error: 'room_stopped' }),
-          expect.objectContaining({ state: 'suppressed', error: 'room_stopped' })
-        ])
-      )
+      expect(service.db.messages.deliveries.get(submitted.id)).toMatchObject({
+        state: 'delivered',
+        error: null,
+        respondedAt: expect.any(Number)
+      })
+      expect(service.db.messages.deliveries.get(delivery('beta').id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_stopped'
+      })
+      expect(service.db.messages.deliveries.get(uncertain.id)).toMatchObject({
+        state: 'suppressed',
+        error: 'room_stopped'
+      })
       expect(service.snapshot(snapshot.room.id).workState).toBe('stopped')
+      expect(service.snapshot(snapshot.room.id).activities).toEqual([])
+      expect(
+        service
+          .listMessages(snapshot.room.id, null)
+          .messages.find((message) => message.senderIdentity === 'alpha')?.metadata.activity
+      ).toMatchObject({ state: 'interrupted', startedAt: 100 })
       expect(sendTerminal).toHaveBeenCalledTimes(2)
       expect(sendTerminal).toHaveBeenCalledWith('term-alpha', { text: '\x1b' })
       expect(sendTerminal).toHaveBeenCalledWith('term-gamma', { text: '\x1b' })
@@ -458,8 +678,8 @@ describe('room work control', () => {
       actorKind: 'user',
       body: 'Review this'
     })
+    claimRoomBroadcastForTest(service.db, created.message.id)
     for (const delivery of created.deliveries) {
-      service.db.messages.deliveries.claim(delivery.id)
       service.db.messages.deliveries.setPhase(delivery.id, 'awaiting-turn')
     }
     const deliveryFor = (identity: string) =>
@@ -473,6 +693,8 @@ describe('room work control', () => {
       await expect(service.stopRoom(snapshot.room.id)).rejects.toThrow('room_agent_not_ready')
       expect(service.db.messages.deliveries.get(deliveryFor('alpha').id).error).toBe('room_stopped')
       expect(service.db.messages.deliveries.get(deliveryFor('beta').id).error).toBe('room_stopping')
+      expect(service.snapshot(snapshot.room.id).workState).toBe('active')
+      await expect(service.resumeRoom(snapshot.room.id)).rejects.toThrow('room_stop_in_progress')
 
       betaReady = true
       await expect(service.stopRoom(snapshot.room.id)).resolves.toBe(1)

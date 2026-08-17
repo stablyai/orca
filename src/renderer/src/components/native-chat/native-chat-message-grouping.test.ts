@@ -165,7 +165,7 @@ describe('buildNativeChatRenderItems', () => {
 })
 
 describe('buildNativeChatConversationItems', () => {
-  it('closes activity when an explicit final starts while the turn is still working', () => {
+  it('keeps an explicit final in activity until terminal completion', () => {
     const turn = buildNativeChatConversationItems(
       [
         msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
@@ -191,9 +191,9 @@ describe('buildNativeChatConversationItems', () => {
     expect(turn).toMatchObject({
       kind: 'assistant-turn',
       working: true,
-      completedAt: 5,
-      finalMessage: { id: 'final' },
-      activityMessages: [{ id: 'commentary' }]
+      completedAt: null,
+      finalMessage: null,
+      activityMessages: [{ id: 'commentary' }, { id: 'final' }]
     })
   })
 
@@ -235,7 +235,7 @@ describe('buildNativeChatConversationItems', () => {
     expect(turn.completedAt).toBe(5)
   })
 
-  it('keeps a live streaming preview separate from current activity', () => {
+  it('keeps an unclassified live stream in activity until completion', () => {
     const items = buildNativeChatConversationItems(
       [
         msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
@@ -260,11 +260,14 @@ describe('buildNativeChatConversationItems', () => {
     }
     expect(turn.working).toBe(true)
     expect(turn.startedAt).toBe(10)
-    expect(turn.activityMessages.map((message) => message.id)).toEqual(['r'])
-    expect(turn.finalMessage?.id).toBe(NATIVE_CHAT_STREAMING_ID)
+    expect(turn.activityMessages.map((message) => message.id)).toEqual([
+      'r',
+      NATIVE_CHAT_STREAMING_ID
+    ])
+    expect(turn.finalMessage).toBeNull()
   })
 
-  it('uses a provider stream item as the live final answer', () => {
+  it('does not guess that an unclassified provider stream is final while working', () => {
     const turn = buildNativeChatConversationItems(
       [
         msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
@@ -281,8 +284,8 @@ describe('buildNativeChatConversationItems', () => {
 
     expect(turn).toMatchObject({
       kind: 'assistant-turn',
-      finalMessage: { id: 'provider-message' },
-      activityMessages: []
+      finalMessage: null,
+      activityMessages: [{ id: 'provider-message' }]
     })
   })
 
@@ -306,6 +309,179 @@ describe('buildNativeChatConversationItems', () => {
       startedAt: 4,
       activityMessages: [],
       finalMessage: null
+    })
+  })
+
+  it('keeps an active steer in the same turn without completing the preceding activity', () => {
+    const items = buildNativeChatConversationItems(
+      [
+        msg({
+          id: 'u1',
+          role: 'user',
+          turnId: 'turn-1',
+          timestamp: 1,
+          blocks: [{ type: 'text', text: 'start' }]
+        }),
+        msg({
+          id: 'tool',
+          turnId: 'turn-1',
+          timestamp: 2,
+          blocks: [
+            { type: 'tool-call', toolCallId: 'call-1', name: 'Bash', input: { cmd: 'sleep 10' } }
+          ]
+        }),
+        msg({
+          id: 'steer',
+          role: 'user',
+          turnId: 'turn-1',
+          timestamp: 3,
+          blocks: [{ type: 'text', text: 'change direction' }]
+        }),
+        msg({
+          id: 'result',
+          role: 'tool',
+          turnId: 'turn-1',
+          timestamp: 4,
+          blocks: [{ type: 'tool-result', toolCallId: 'call-1', output: 'done' }]
+        })
+      ],
+      true,
+      1,
+      'turn-1'
+    )
+
+    expect(items).toHaveLength(2)
+    expect(items[1]).toMatchObject({
+      kind: 'assistant-turn',
+      turnId: 'turn-1',
+      completedAt: null,
+      working: true,
+      activityMessages: [{ id: 'tool' }, { id: 'result' }],
+      segments: [
+        { kind: 'activity', messages: [{ id: 'tool' }] },
+        { kind: 'message', message: { id: 'steer' } },
+        { kind: 'activity', messages: [{ id: 'result' }] }
+      ]
+    })
+  })
+
+  it('shows completion only after the matching turn.completed event', () => {
+    const messages = [
+      msg({
+        id: 'u',
+        role: 'user',
+        turnId: 'turn-1',
+        timestamp: 1,
+        blocks: [{ type: 'text', text: 'go' }]
+      }),
+      msg({
+        id: 'a',
+        turnId: 'turn-1',
+        timestamp: 2,
+        blocks: [{ type: 'text', text: 'done' }]
+      })
+    ]
+
+    expect(buildNativeChatConversationItems(messages, false, null, null, {})[1]).toMatchObject({
+      kind: 'assistant-turn',
+      completedAt: null
+    })
+    expect(
+      buildNativeChatConversationItems(messages, false, null, null, {
+        'turn-1': { outcome: 'completed', completedAt: 3 }
+      })[1]
+    ).toMatchObject({ kind: 'assistant-turn', completedAt: 3 })
+  })
+
+  it('does not promote an answer from before the last steer', () => {
+    const turn = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', turnId: 'turn-1', timestamp: 1 }),
+        msg({
+          id: 'early-final',
+          turnId: 'turn-1',
+          timestamp: 2,
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: 'Before steer' }]
+        }),
+        msg({ id: 'steer', role: 'user', turnId: 'turn-1', timestamp: 3 }),
+        msg({
+          id: 'commentary',
+          turnId: 'turn-1',
+          timestamp: 4,
+          assistantPhase: 'commentary',
+          blocks: [{ type: 'text', text: 'After steer' }]
+        })
+      ],
+      false,
+      null,
+      null,
+      { 'turn-1': { outcome: 'completed', completedAt: 5 } }
+    )[1]
+
+    expect(turn).toMatchObject({
+      kind: 'assistant-turn',
+      finalMessage: null,
+      outcome: 'completed'
+    })
+  })
+
+  it('does not promote an explicit final after interruption', () => {
+    const turn = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', turnId: 'turn-1', timestamp: 1 }),
+        msg({
+          id: 'partial',
+          turnId: 'turn-1',
+          timestamp: 2,
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: 'Partial' }]
+        })
+      ],
+      false,
+      null,
+      null,
+      { 'turn-1': { outcome: 'interrupted', completedAt: 3 } }
+    )[1]
+
+    expect(turn).toMatchObject({
+      kind: 'assistant-turn',
+      finalMessage: null,
+      completedAt: null,
+      outcome: 'interrupted'
+    })
+  })
+
+  it('preserves receive order when timestamps tie', () => {
+    const turn = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', timestamp: 1 }),
+        msg({
+          id: 'z',
+          timestamp: 2,
+          assistantPhase: 'commentary',
+          blocks: [{ type: 'text', text: 'first' }]
+        }),
+        msg({
+          id: 'a',
+          timestamp: 2,
+          assistantPhase: 'commentary',
+          blocks: [{ type: 'text', text: 'second' }]
+        }),
+        msg({
+          id: 'final',
+          timestamp: 3,
+          assistantPhase: 'final',
+          blocks: [{ type: 'text', text: 'done' }]
+        })
+      ],
+      false
+    )[1]
+
+    expect(turn).toMatchObject({
+      kind: 'assistant-turn',
+      activityMessages: [{ id: 'z' }, { id: 'a' }],
+      finalMessage: { id: 'final' }
     })
   })
 })

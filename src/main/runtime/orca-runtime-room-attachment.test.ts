@@ -3,12 +3,9 @@ import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  execFile: execFileMock
-}))
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import {
   registerSshFilesystemProvider,
@@ -98,17 +95,13 @@ describe('room attachment delivery path', () => {
         unregisterSshFilesystemProvider('ssh-1')
       }
 
-      execFileMock.mockImplementation(
-        (
-          _file: string,
-          args: string[],
-          _options: unknown,
-          callback: (error: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          callback(null, `/wsl${String(args.at(-1))}`, '')
-          return {} as never
-        }
-      )
+      runWslProcessMock.mockResolvedValue({
+        environmentResolved: true,
+        code: 0,
+        stdout: `/wsl${localPath}\n`,
+        stderr: '',
+        timedOut: false
+      })
       const wsl = runtimeForHost({ connectionId: null, wslDistro: 'Ubuntu' })
       await expect(wsl.stageRoomAttachment('worktree-1', 'term-1', attachment)).resolves.toBe(
         `/wsl${localPath}`

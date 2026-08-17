@@ -12,6 +12,8 @@
 // here, yet attach still recovers it, so the tab is worth publishing either way.
 
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
+import { isStructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
 import type {
@@ -30,7 +32,8 @@ export async function revealStructuredAgentSession(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  if (!adapterSupportsRecord(deps.adapter, record)) {
+  const agent = agentSessionRecordAgent(record)
+  if (!isStructuredMachineAgent(agent) || !adapterSupportsRecord(deps.adapter, record)) {
     throw new Error('structured_agent_session_unsupported')
   }
   // Lease state is not consulted on purpose: this neither claims the lease nor spawns a child, so a
@@ -42,7 +45,7 @@ export async function revealStructuredAgentSession(
     // From the record, never from a caller: a client that knows only a session id must not be able
     // to aim the tab publication at another workspace.
     workspaceId: record.location.workspaceId,
-    agent: record.provider,
+    agent,
     readable
   }
 }

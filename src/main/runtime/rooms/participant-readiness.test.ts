@@ -91,7 +91,7 @@ it('accepts a fresh composer while restored status still reports working', async
   }
 })
 
-it('accepts composer proof when a live participant has no fresh hook status', async () => {
+it('does not let stale composer readiness authorize a live delivery with unknown status', async () => {
   const unused = async (): Promise<never> => {
     throw new Error('unused')
   }
@@ -100,29 +100,44 @@ it('accepts composer proof when a live participant has no fresh hook status', as
     accepted: true,
     bytesWritten: Buffer.byteLength(prompt)
   }))
+  const waitForTerminal = vi.fn(async (handle: string) => ({
+    handle,
+    condition: 'tui-idle' as const,
+    satisfied: true,
+    status: 'running' as const,
+    exitCode: null
+  }))
+  let service: RoomService
+  let participantId = ''
+  let statusCalls = 0
   const runtime: RoomHarnessRuntime = {
     createAgentSession: unused,
     ensureAgentSession: unused,
     sendTerminalAgentPrompt,
-    waitForTerminalAgentInputReady: vi.fn().mockResolvedValue(true),
+    waitForTerminalAgentInputReady: unused,
     compactTerminalAgentSession: unused,
-    getTerminalAgentStatus: vi.fn(async (handle: string) => ({
-      handle,
-      isRunningAgent: true,
-      status: null
-    })),
-    getTerminalProcessIncarnation: () => null,
+    getTerminalAgentStatus: vi.fn(async (handle: string) => {
+      statusCalls += 1
+      if (statusCalls === 1) {
+        return { handle, isRunningAgent: true, status: 'idle' as const }
+      }
+      if (statusCalls === 2) {
+        service.db.participants.update(participantId, { state: 'busy' })
+      }
+      return { handle, isRunningAgent: true, status: null }
+    }),
+    getTerminalProcessIncarnation: () => 'incarnation-2',
     closeTerminal: unused,
-    waitForTerminal: unused,
+    waitForTerminal,
     listRoomRunningAgents: async () => [],
     listRoomExistingAgents: async () => [],
     resolveRoomHistoricalSession: unused,
     stageRoomAttachment: unused
   }
-  const service = new RoomService(':memory:', runtime)
+  service = new RoomService(':memory:', runtime)
   try {
     const snapshot = service.createRoom({ projectId: 'project-1', name: 'Research' })
-    service.db.participants.add({
+    const participant = service.db.participants.add({
       roomId: snapshot.room.id,
       identity: 'codex',
       displayName: 'Codex',
@@ -131,15 +146,25 @@ it('accepts composer proof when a live participant has no fresh hook status', as
       paneKey: 'tab:codex',
       terminalHandle: 'term-codex'
     })
+    participantId = participant.id
 
-    await service.sendMessage({
+    const message = await service.sendMessage({
       roomId: snapshot.room.id,
       senderIdentity: snapshot.participants[0].identity,
       body: '@codex ping',
       mentions: ['codex']
     })
 
-    await vi.waitFor(() => expect(sendTerminalAgentPrompt).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(waitForTerminal).toHaveBeenCalledTimes(1))
+    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(service.db.participants.get(participant.id)).toMatchObject({
+      state: 'busy',
+      processIncarnation: 'incarnation-2'
+    })
+    expect(service.db.messages.deliveries.listForMessage(message.id)[0]).toMatchObject({
+      state: 'pending',
+      attempts: 1
+    })
   } finally {
     service.close()
   }

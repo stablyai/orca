@@ -1,15 +1,4 @@
-// Pure grouping logic for the native chat message list. Kept out of the .tsx so
-// the pairing/ordering rules are unit-testable without rendering. Two jobs:
-//   1. Order messages stably (timestamp then id; null timestamps sort first as
-//      the shared model documents) — the assembler already sorts, but the list
-//      re-sorts defensively so a caller passing unordered fixtures still reads
-//      correctly.
-//   2. Within an assistant turn, pair each tool-call block with the tool-result
-//      that answers it so the view can render one collapsible step instead of
-//      two disconnected rows.
-
 import {
-  isTextBlock,
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
@@ -17,7 +6,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { findNativeChatFinalMessageIndex } from '../../../../shared/native-chat-final-message'
 import { compareMessages } from './native-chat-session-assembler'
 
 /** A tool-call block paired with the result that answered it, when one exists.
@@ -52,12 +41,24 @@ export type NativeChatConversationItem =
   | {
       kind: 'assistant-turn'
       id: string
+      segments: NativeChatTurnSegment[]
       activityMessages: NativeChatMessage[]
       finalMessage: NativeChatMessage | null
       startedAt: number | null
       completedAt: number | null
+      outcome: NativeChatTurnCompletion['outcome'] | null
       working: boolean
+      turnId: string | null
     }
+
+export type NativeChatTurnSegment =
+  | { kind: 'activity'; id: string; messages: NativeChatMessage[] }
+  | { kind: 'message'; id: string; message: NativeChatMessage }
+
+export type NativeChatTurnCompletion = {
+  outcome: 'completed' | 'interrupted' | 'failed'
+  completedAt: number
+}
 
 /** Order messages stably: null timestamps first (model rule), then ascending
  *  timestamp, ties broken by id. Shares the assembler's comparator so both
@@ -72,59 +73,86 @@ export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeCh
 export function buildNativeChatConversationItems(
   messages: NativeChatMessage[],
   working: boolean,
-  workingStartedAt: number | null = null
+  workingStartedAt: number | null = null,
+  activeTurnId: string | null = null,
+  turnCompletions?: Readonly<Record<string, NativeChatTurnCompletion>>
 ): NativeChatConversationItem[] {
   const items: NativeChatConversationItem[] = []
-  let pending: NativeChatMessage[] = []
-  let anchorTimestamp: number | null = null
-  let anchorId: string | null = null
+  let turn:
+    | {
+        id: string
+        turnId: string | null
+        startedAt: number | null
+        messages: NativeChatMessage[]
+      }
+    | undefined
 
-  const flush = (): void => {
-    if (pending.length === 0) {
+  const flush = (last = false): void => {
+    if (!turn) {
       return
     }
+    const isActive = working && (activeTurnId ? turn.turnId === activeTurnId : last)
+    const completion = turn.turnId ? turnCompletions?.[turn.turnId] : undefined
     items.push(
       buildAssistantTurn(
-        pending,
-        anchorTimestamp,
-        false,
-        `assistant-turn:${anchorId ?? pending[0]?.id ?? 'empty'}`
+        turn.messages,
+        isActive ? (workingStartedAt ?? turn.startedAt) : turn.startedAt,
+        isActive,
+        `assistant-turn:${turn.id}`,
+        turn.turnId,
+        completion,
+        turnCompletions === undefined
       )
     )
-    pending = []
+    turn = undefined
   }
 
-  for (const message of orderNativeChatMessages(messages)) {
+  for (const message of messages) {
     if (message.role === 'user' || message.role === 'system') {
+      if (message.role === 'user' && turn?.turnId && message.turnId === turn.turnId) {
+        turn.messages.push(message)
+        continue
+      }
       flush()
       items.push({ kind: 'message', id: message.id, message })
-      anchorTimestamp = message.role === 'user' ? message.timestamp : null
-      anchorId = message.role === 'user' ? message.id : null
-    } else {
-      pending.push(message)
+      if (message.role === 'user') {
+        turn = {
+          id: message.id,
+          turnId: message.turnId ?? null,
+          startedAt: message.timestamp,
+          messages: []
+        }
+      }
+      continue
+    }
+    if (turn && (!message.turnId || !turn.turnId || message.turnId === turn.turnId)) {
+      turn.messages.push(message)
+      turn.turnId ??= message.turnId ?? null
+      continue
+    }
+    flush()
+    turn = {
+      id: message.id,
+      turnId: message.turnId ?? null,
+      startedAt: message.timestamp,
+      messages: [message]
     }
   }
-  flush()
+  flush(true)
 
-  if (working) {
+  if (working && !items.some((item) => item.kind === 'assistant-turn' && item.working)) {
     const current = items.at(-1)
-    if (current?.kind === 'assistant-turn') {
-      items[items.length - 1] = buildAssistantTurn(
-        [...current.activityMessages, ...(current.finalMessage ? [current.finalMessage] : [])],
-        workingStartedAt ?? current.startedAt,
+    items.push(
+      buildAssistantTurn(
+        [],
+        workingStartedAt ?? (current?.kind === 'message' ? current.message.timestamp : null),
         true,
-        current.id
+        `assistant-turn:${current?.id ?? 'live'}`,
+        activeTurnId,
+        undefined,
+        turnCompletions === undefined
       )
-    } else {
-      items.push(
-        buildAssistantTurn(
-          [],
-          workingStartedAt ?? current?.message.timestamp ?? null,
-          true,
-          `assistant-turn:${current?.id ?? 'live'}`
-        )
-      )
-    }
+    )
   }
   return items
 }
@@ -133,44 +161,67 @@ function buildAssistantTurn(
   messages: NativeChatMessage[],
   anchorTimestamp: number | null,
   working = false,
-  id = `assistant-turn:${messages[0]?.id ?? 'empty'}`
+  id = `assistant-turn:${messages[0]?.id ?? 'empty'}`,
+  turnId: string | null = null,
+  completion?: NativeChatTurnCompletion,
+  inferCompletion = true
 ): Extract<NativeChatConversationItem, { kind: 'assistant-turn' }> {
-  const hasExplicitPhase = messages.some(
-    (message) => message.role === 'assistant' && message.assistantPhase !== undefined
-  )
-  const finalIndex = messages.findLastIndex((message) =>
-    hasExplicitPhase ? message.assistantPhase === 'final' : isFinalCandidate(message, working)
-  )
+  const successful = completion?.outcome === 'completed' || (inferCompletion && !completion)
+  const finalIndex = working || !successful ? -1 : findNativeChatFinalMessageIndex(messages, true)
   const finalMessage = finalIndex !== -1 ? messages[finalIndex]! : null
-  const activityMessages = messages.filter((_, index) => index !== finalIndex)
+  const activityMessages = messages.filter(
+    (message, index) => index !== finalIndex && message.role !== 'user' && message.role !== 'system'
+  )
   const timestamps = messages.flatMap((message) =>
     message.timestamp == null ? [] : [message.timestamp]
   )
   return {
     kind: 'assistant-turn',
     id,
+    segments: buildTurnSegments(messages, finalIndex),
     activityMessages,
     finalMessage,
     startedAt: anchorTimestamp ?? timestamps[0] ?? null,
     completedAt:
-      working && finalMessage?.assistantPhase !== 'final'
-        ? null
-        : (finalMessage?.timestamp ?? timestamps.at(-1) ?? anchorTimestamp),
-    working
+      !working && (completion?.outcome === 'completed' || (inferCompletion && !completion))
+        ? (completion?.completedAt ??
+          finalMessage?.timestamp ??
+          timestamps.at(-1) ??
+          anchorTimestamp)
+        : null,
+    outcome: working
+      ? null
+      : (completion?.outcome ?? (inferCompletion && !completion ? 'completed' : null)),
+    working,
+    turnId
   }
 }
 
-function isFinalCandidate(message: NativeChatMessage, working: boolean): boolean {
-  if (message.role !== 'assistant') {
-    return false
+function buildTurnSegments(
+  messages: NativeChatMessage[],
+  finalIndex: number
+): NativeChatTurnSegment[] {
+  const segments: NativeChatTurnSegment[] = []
+  let activity: NativeChatMessage[] = []
+  const flushActivity = (): void => {
+    if (activity.length) {
+      segments.push({ kind: 'activity', id: `activity:${activity[0]!.id}`, messages: activity })
+      activity = []
+    }
   }
-  if (working && message.id !== NATIVE_CHAT_STREAMING_ID && message.source !== 'stream') {
-    return false
-  }
-  return (
-    message.blocks.some((block) => isTextBlock(block) || block.type === 'image-ref') &&
-    !message.blocks.some(isToolCallBlock)
-  )
+  messages.forEach((message, index) => {
+    if (index === finalIndex) {
+      return
+    }
+    if (message.role === 'user' || message.role === 'system') {
+      flushActivity()
+      segments.push({ kind: 'message', id: message.id, message })
+    } else {
+      activity.push(message)
+    }
+  })
+  flushActivity()
+  return segments
 }
 
 /** Collect results across messages; provider IDs match exact calls and legacy results stay FIFO. */

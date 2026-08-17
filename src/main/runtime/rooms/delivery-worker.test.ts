@@ -6,6 +6,7 @@ import type { RoomAttachmentManager } from './attachments'
 import { RoomDeliveryWorker } from './delivery-worker'
 import { deliveryFailureState } from './delivery-selection'
 import { roomDeliveryAttemptsFromTurn } from './delivery-prompt'
+import { roomHarnessAdapterTestRecord } from './room-harness-adapter-test-record'
 
 describe('room delivery retry state', () => {
   it('only exposes a terminal failure after retries are exhausted', () => {
@@ -56,13 +57,11 @@ describe('room delivery confirmation deadline', () => {
         bytesWritten: Buffer.byteLength(prompt)
       })
     )
-    const status = vi.fn(
-      async (handle: string): Promise<RuntimeTerminalAgentStatus> => ({
-        handle,
-        isRunningAgent: true,
-        status: 'idle'
-      })
-    )
+    const status = vi.fn(async (handle: string): Promise<RuntimeTerminalAgentStatus> => ({
+      handle,
+      isRunningAgent: true,
+      status: 'idle'
+    }))
     const stage = vi.fn(
       async (
         _worktreeId: string,
@@ -201,14 +200,17 @@ describe('room delivery confirmation deadline', () => {
     }
   })
 
-  it('suppresses a queued delivery when its participant is paused before send', async () => {
+  it('leaves a queued delivery fenced while its participant is paused', () => {
     const harness = worker(10_000, true)
     try {
+      const deliveries = harness.db.messages.deliveries
+      const roomId = harness.db.messages.get(deliveries.get(harness.deliveryId).messageId).roomId
       harness.db.participants.update(harness.participantId, { participation: 'paused' })
       harness.worker.start()
-      await vi.waitFor(() => {
-        expect(harness.db.messages.deliveries.get(harness.deliveryId).state).toBe('suppressed')
-      })
+      expect(deliveries.listDue()).toEqual([])
+      expect(deliveries.nextDueAt()).toBeNull()
+      expect(deliveries.workState(roomId)).toBe('idle')
+      expect(deliveries.get(harness.deliveryId).state).toBe('pending')
       expect(harness.send).not.toHaveBeenCalled()
     } finally {
       harness.dispose()
@@ -283,11 +285,17 @@ describe('room delivery confirmation deadline', () => {
   it('keeps waiting while the agent is working instead of resending into its turn', async () => {
     const harness = worker(30)
     try {
-      harness.status.mockImplementation(async (handle: string) => ({
-        handle,
-        isRunningAgent: true,
-        status: 'working' as const
-      }))
+      harness.status
+        .mockResolvedValueOnce({
+          handle: 'term-codex',
+          isRunningAgent: true,
+          status: 'idle' as const
+        })
+        .mockImplementation(async (handle: string) => ({
+          handle,
+          isRunningAgent: true,
+          status: 'working' as const
+        }))
       harness.worker.start()
       await vi.waitFor(() => {
         expect(harness.send).toHaveBeenCalledTimes(1)
@@ -318,11 +326,17 @@ describe('room delivery confirmation deadline', () => {
   it('never blindly resends when the accepted turn state is unknown', async () => {
     const harness = worker(30)
     try {
-      harness.status.mockImplementation(async (handle: string) => ({
-        handle,
-        isRunningAgent: true,
-        status: null
-      }))
+      harness.status
+        .mockResolvedValueOnce({
+          handle: 'term-codex',
+          isRunningAgent: true,
+          status: 'idle' as const
+        })
+        .mockImplementation(async (handle: string) => ({
+          handle,
+          isRunningAgent: true,
+          status: null
+        }))
       harness.worker.start()
       await vi.waitFor(() => {
         expect(harness.db.messages.deliveries.get(harness.deliveryId)).toMatchObject({
@@ -343,3 +357,454 @@ describe('room delivery confirmation deadline', () => {
     }
   })
 })
+
+describe('room machine steer', () => {
+  it('leaves a next delivery pending without attempts while the machine turn is busy', async () => {
+    const snapshot = {
+      id: 'conversation-1',
+      agent: 'codex' as const,
+      cwd: '/repo',
+      providerSessionId: 'session-1',
+      messages: [],
+      queuedMessages: [],
+      queueRevision: 0,
+      status: 'working' as const,
+      updatedAt: 1
+    }
+    const status = vi.fn(async () => ({
+      handle: snapshot.id,
+      isRunningAgent: true,
+      status: 'working' as const
+    }))
+    const send = vi.fn()
+    const adapters = roomHarnessAdapterTestRecord({ status, send })
+    const db = new RoomDatabase(':memory:')
+    const room = db.createRoom({ projectId: 'project-1', name: 'Research' })
+    const participant = db.participants.add({
+      roomId: room.room.id,
+      identity: 'codex',
+      displayName: 'Codex',
+      agent: 'codex',
+      worktreeId: 'worktree-1',
+      providerSession: { key: 'session_id', id: snapshot.id, transport: 'machine' }
+    })
+    const delivery = db.messages.create({
+      roomId: room.room.id,
+      senderId: room.participants[0].id,
+      senderIdentity: room.participants[0].identity,
+      actorKind: 'user',
+      body: 'next',
+      targetParticipantIds: [participant.id]
+    }).deliveries[0]
+    const worker = new RoomDeliveryWorker(
+      db,
+      adapters,
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async (id) => db.participants.get(id)
+    )
+    try {
+      worker.start()
+      await vi.waitFor(() => expect(status).toHaveBeenCalled())
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(db.messages.deliveries.get(delivery.id)).toMatchObject({
+        state: 'pending',
+        intent: 'next',
+        attempts: 0
+      })
+      expect(send).not.toHaveBeenCalled()
+    } finally {
+      worker.dispose()
+      db.close()
+    }
+  })
+
+  it('steers busy machines and sends to idle machines in one shared operation', async () => {
+    const snapshots = new Map([
+      ['conversation-busy', { status: 'working' as const }],
+      ['conversation-idle', { status: 'idle' as const }]
+    ])
+    const send = vi.fn(async (binding) => ({
+      handle: binding.conversationId,
+      accepted: true,
+      bytesWritten: 1
+    }))
+    const steer = vi.fn(async (binding) => ({
+      handle: binding.conversationId,
+      accepted: true,
+      bytesWritten: 1
+    }))
+    const adapters = roomHarnessAdapterTestRecord({
+      status: async (binding) => ({
+        handle: binding.transport === 'machine' ? binding.conversationId : binding.terminalHandle,
+        isRunningAgent: true,
+        status:
+          binding.transport === 'machine' &&
+          snapshots.get(binding.conversationId)?.status === 'working'
+            ? 'working'
+            : 'idle'
+      }),
+      send,
+      steer
+    })
+    const db = new RoomDatabase(':memory:')
+    const room = db.createRoom({ projectId: 'project-1', name: 'Research' })
+    const busy = db.participants.add({
+      roomId: room.room.id,
+      identity: 'busy',
+      displayName: 'Busy',
+      agent: 'codex',
+      worktreeId: 'worktree-busy',
+      providerSession: { key: 'session_id', id: 'conversation-busy', transport: 'machine' }
+    })
+    const idle = db.participants.add({
+      roomId: room.room.id,
+      identity: 'idle',
+      displayName: 'Idle',
+      agent: 'codex',
+      worktreeId: 'worktree-idle',
+      providerSession: { key: 'session_id', id: 'conversation-idle', transport: 'machine' }
+    })
+    const created = db.messages.create({
+      roomId: room.room.id,
+      senderId: room.participants[0].id,
+      senderIdentity: room.participants[0].identity,
+      actorKind: 'user',
+      body: 'shared steer'
+    })
+    const worker = new RoomDeliveryWorker(
+      db,
+      adapters,
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async (id) => db.participants.get(id)
+    )
+    try {
+      await worker.steer(created.deliveries[0].id, true)
+      expect(
+        db.messages.deliveries.get(
+          created.deliveries.find((item) => item.participantId === busy.id)!.id
+        )
+      ).toMatchObject({
+        state: 'delivering',
+        intent: 'steer',
+        attempts: 1
+      })
+      expect(
+        db.messages.deliveries.get(
+          created.deliveries.find((item) => item.participantId === idle.id)!.id
+        )
+      ).toMatchObject({
+        state: 'delivering',
+        intent: 'next',
+        attempts: 1
+      })
+      expect(steer).toHaveBeenCalledOnce()
+      expect(send).toHaveBeenCalledOnce()
+    } finally {
+      worker.dispose()
+      db.close()
+    }
+  })
+
+  it('uses the machine queue and remains fenced by room deletion', async () => {
+    let release = (): void => undefined
+    const blocked = new Promise<void>((resolve) => (release = resolve))
+    const steer = vi.fn(async () => {
+      await blocked
+      return { handle: snapshot.id, accepted: true, bytesWritten: 1 }
+    })
+    const snapshot = {
+      id: 'conversation-1',
+      agent: 'codex' as const,
+      cwd: '/repo',
+      providerSessionId: 'session-1',
+      messages: [],
+      queuedMessages: [],
+      queueRevision: 0,
+      status: 'working' as const,
+      updatedAt: 1
+    }
+    const adapters = roomHarnessAdapterTestRecord({
+      status: async () => ({ handle: snapshot.id, isRunningAgent: true, status: 'working' }),
+      steer
+    })
+    const db = new RoomDatabase(':memory:')
+    const room = db.createRoom({ projectId: 'project-1', name: 'Research' })
+    const participant = db.participants.add({
+      roomId: room.room.id,
+      identity: 'codex',
+      displayName: 'Codex',
+      agent: 'codex',
+      worktreeId: 'worktree-1',
+      providerSession: { key: 'session_id', id: snapshot.id, transport: 'machine' }
+    })
+    const delivery = db.messages.create({
+      roomId: room.room.id,
+      senderId: room.participants[0].id,
+      senderIdentity: room.participants[0].identity,
+      actorKind: 'user',
+      body: 'change course',
+      targetParticipantIds: [participant.id]
+    }).deliveries[0]
+    const deliveryWorker = new RoomDeliveryWorker(
+      db,
+      adapters,
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async () => {
+        throw new Error('room_agent_not_ready')
+      }
+    )
+    try {
+      const steering = deliveryWorker.steer(delivery.id, true)
+      await vi.waitFor(() => expect(steer).toHaveBeenCalledOnce())
+      let roomBlocked = false
+      const fence = deliveryWorker.requestRoomFence(room.room.id, {
+        discardConfirmations: false
+      })
+      void fence.ready.then(() => (roomBlocked = true))
+      await Promise.resolve()
+      expect(roomBlocked).toBe(false)
+
+      release()
+      await steering
+      await fence.ready
+      fence.release()
+
+      expect(steer).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: snapshot.id }),
+        expect.stringContaining('change course'),
+        undefined
+      )
+    } finally {
+      deliveryWorker.dispose()
+      db.close()
+    }
+  })
+
+  it('returns a definitively rejected steer as an immutable next attempt', async () => {
+    const snapshot = {
+      id: 'conversation-1',
+      agent: 'codex' as const,
+      cwd: '/repo',
+      providerSessionId: 'session-1',
+      messages: [],
+      queuedMessages: [] as {
+        id: string
+        text: string
+        imagePaths: string[]
+        createdAt: number
+        state: 'pending'
+      }[],
+      queueRevision: 0,
+      status: 'working' as const,
+      updatedAt: 1
+    }
+    const steer = vi.fn(async () => {
+      throw new Error('codex_steer_rejected')
+    })
+    const adapters = roomHarnessAdapterTestRecord({
+      status: async () => ({ handle: snapshot.id, isRunningAgent: true, status: 'working' }),
+      steer
+    })
+    const db = new RoomDatabase(':memory:')
+    const room = db.createRoom({ projectId: 'project-1', name: 'Research' })
+    const participant = db.participants.add({
+      roomId: room.room.id,
+      identity: 'codex',
+      displayName: 'Codex',
+      agent: 'codex',
+      worktreeId: 'worktree-1',
+      providerSession: { key: 'session_id', id: snapshot.id, transport: 'machine' }
+    })
+    const delivery = db.messages.create({
+      roomId: room.room.id,
+      senderId: room.participants[0].id,
+      senderIdentity: room.participants[0].identity,
+      actorKind: 'user',
+      body: 'change course',
+      targetParticipantIds: [participant.id]
+    }).deliveries[0]
+    const worker = new RoomDeliveryWorker(
+      db,
+      adapters,
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async (id) => db.participants.get(id)
+    )
+    try {
+      await expect(worker.steer(delivery.id, true)).rejects.toThrow('codex_steer_rejected')
+      expect(db.messages.deliveries.get(delivery.id)).toMatchObject({
+        state: 'pending',
+        intent: 'next',
+        attempts: 1,
+        error: 'codex_steer_rejected'
+      })
+      expect(() => db.messages.deliveries.assertMessageMutable(delivery.messageId)).toThrow(
+        'room_delivery_queue_stale'
+      )
+      expect(steer).toHaveBeenCalledOnce()
+    } finally {
+      worker.dispose()
+      db.close()
+    }
+  })
+})
+
+describe('room broadcast retries', () => {
+  it('retries one failed participant after the initial group reservation', async () => {
+    const sendAttempts = new Map<string, number>()
+    const send = vi.fn(async (handle: string, prompt: string) => {
+      const attempt = (sendAttempts.get(handle) ?? 0) + 1
+      sendAttempts.set(handle, attempt)
+      if (handle === 'term-claude' && attempt === 1) {
+        throw new Error('temporary_write_failure')
+      }
+      return { handle, accepted: true, bytesWritten: Buffer.byteLength(prompt) }
+    })
+    const runtime = {
+      ...workerRuntimeStub(),
+      sendTerminalAgentPrompt: send,
+      getTerminalAgentStatus: vi.fn(async (handle: string) => ({
+        handle,
+        isRunningAgent: true,
+        status: 'idle' as const
+      }))
+    }
+    const db = new RoomDatabase(':memory:')
+    const room = db.createRoom({ projectId: 'project-1', name: 'Research' })
+    const participants = (['codex', 'claude'] as const).map((identity) =>
+      db.participants.add({
+        roomId: room.room.id,
+        identity,
+        displayName: identity,
+        agent: identity,
+        worktreeId: `worktree-${identity}`,
+        paneKey: `tab:${identity}`,
+        terminalHandle: `term-${identity}`,
+        providerSession: { key: 'session_id', id: `session-${identity}` }
+      })
+    )
+    const created = db.messages.create({
+      roomId: room.room.id,
+      senderId: room.participants[0].id,
+      senderIdentity: room.participants[0].identity,
+      actorKind: 'user',
+      body: 'broadcast'
+    })
+    const worker = new RoomDeliveryWorker(
+      db,
+      createRoomHarnessAdapters(runtime),
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async (id) => db.participants.get(id)
+    )
+    try {
+      worker.start()
+      await vi.waitFor(
+        () => {
+          expect(sendAttempts.get('term-codex')).toBe(1)
+          expect(sendAttempts.get('term-claude')).toBe(2)
+        },
+        { timeout: 3_000 }
+      )
+      expect(
+        db.messages.deliveries
+          .listForMessage(created.message.id)
+          .find((delivery) => delivery.participantId === participants[1]!.id)?.attempts
+      ).toBe(2)
+    } finally {
+      worker.dispose()
+      db.close()
+    }
+  })
+
+  it('does not let unknown terminal readiness block another room', async () => {
+    const ready = new Set<string>()
+    const send = vi.fn(async (handle: string, prompt: string) => ({
+      handle,
+      accepted: true,
+      bytesWritten: Buffer.byteLength(prompt)
+    }))
+    const waitForInput = vi.fn(() => new Promise<boolean>(() => undefined))
+    const runtime = {
+      ...workerRuntimeStub(),
+      sendTerminalAgentPrompt: send,
+      waitForTerminalAgentInputReady: waitForInput,
+      getTerminalAgentStatus: vi.fn(async (handle: string) => ({
+        handle,
+        isRunningAgent: true,
+        status: handle === 'term-ready' || ready.has(handle) ? ('idle' as const) : null
+      }))
+    }
+    const db = new RoomDatabase(':memory:')
+    const createQueuedRoom = (suffix: string): void => {
+      const room = db.createRoom({ projectId: `project-${suffix}`, name: suffix })
+      db.participants.add({
+        roomId: room.room.id,
+        identity: 'codex',
+        displayName: 'Codex',
+        agent: 'codex',
+        worktreeId: `worktree-${suffix}`,
+        paneKey: `tab:${suffix}`,
+        terminalHandle: `term-${suffix}`,
+        providerSession: { key: 'session_id', id: `session-${suffix}` }
+      })
+      db.messages.create({
+        roomId: room.room.id,
+        senderId: room.participants[0].id,
+        senderIdentity: room.participants[0].identity,
+        actorKind: 'user',
+        body: suffix
+      })
+    }
+    createQueuedRoom('blocked')
+    createQueuedRoom('ready')
+    const worker = new RoomDeliveryWorker(
+      db,
+      createRoomHarnessAdapters(runtime),
+      { size: async () => 0 } as unknown as RoomAttachmentManager,
+      () => {},
+      async (id) => db.participants.get(id)
+    )
+    try {
+      worker.start()
+      await vi.waitFor(() =>
+        expect(send.mock.calls.some(([handle]) => handle === 'term-ready')).toBe(true)
+      )
+      expect(send.mock.calls.some(([handle]) => handle === 'term-blocked')).toBe(false)
+      expect(waitForInput).not.toHaveBeenCalled()
+
+      ready.add('term-blocked')
+      worker.wake()
+      await vi.waitFor(() =>
+        expect(send.mock.calls.some(([handle]) => handle === 'term-blocked')).toBe(true)
+      )
+    } finally {
+      worker.dispose()
+      db.close()
+    }
+  })
+})
+
+function workerRuntimeStub(): RoomHarnessRuntime {
+  const unused = async (): Promise<never> => {
+    throw new Error('unused')
+  }
+  return {
+    createAgentSession: unused,
+    ensureAgentSession: unused,
+    sendTerminalAgentPrompt: unused,
+    waitForTerminalAgentInputReady: unused,
+    compactTerminalAgentSession: unused,
+    getTerminalAgentStatus: unused,
+    getTerminalProcessIncarnation: () => null,
+    closeTerminal: unused,
+    waitForTerminal: unused,
+    listRoomRunningAgents: async () => [],
+    listRoomExistingAgents: async () => [],
+    resolveRoomHistoricalSession: unused,
+    stageRoomAttachment: async (_worktreeId, _handle, attachment) => attachment.localPath
+  }
+}

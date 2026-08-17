@@ -223,6 +223,59 @@ describe('useStructuredAgentSessionOutbox', () => {
     })
   })
 
+  it('holds normal work while busy and dispatches an explicit steer', async () => {
+    mocks.call.mockResolvedValue(acceptedResult(1))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: [],
+        isWorking: true
+      })
+    )
+
+    act(() => expect(result.current.send('change course')).toBe(true))
+    expect(mocks.call).not.toHaveBeenCalled()
+
+    act(() => expect(result.current.steer(result.current.outbox[0]!.clientMessageId)).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    expect(mocks.call.mock.calls[0]?.[1]).toBe('agentSession.steer')
+  })
+
+  it('edits, reorders, and removes only queued entries', () => {
+    vi.mocked(globalThis.crypto.randomUUID)
+      .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: null,
+        submissions: []
+      })
+    )
+
+    act(() => {
+      expect(result.current.send('first')).toBe(true)
+      expect(result.current.send('second')).toBe(true)
+    })
+    const [first, second] = result.current.outbox
+    act(() => expect(result.current.edit(first!.clientMessageId, 'edited')).toBe(true))
+    expect(result.current.outbox[0]?.body.blocks).toEqual([{ type: 'text', text: 'edited' }])
+    act(() =>
+      expect(result.current.reorder([second!.clientMessageId, first!.clientMessageId])).toBe(true)
+    )
+    expect(result.current.outbox.map((entry) => entry.clientMessageId)).toEqual([
+      second!.clientMessageId,
+      first!.clientMessageId
+    ])
+    act(() => expect(result.current.remove(second!.clientMessageId)).toBe(true))
+    expect(result.current.outbox.map((entry) => entry.clientMessageId)).toEqual([
+      first!.clientMessageId
+    ])
+  })
+
   it('retries an unknown head and advances a queued tail', async () => {
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')

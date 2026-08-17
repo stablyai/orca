@@ -10,6 +10,7 @@ export type SendRoomMessageInput = {
   replyToId?: string | null
   mentions?: string[]
   attachmentUploadIds?: string[]
+  targetParticipantIds?: string[]
 }
 
 export class RoomMessageController {
@@ -60,7 +61,8 @@ export class RoomMessageController {
           body: input.body,
           replyToId: input.replyToId,
           mentions,
-          attachments
+          attachments,
+          targetParticipantIds: input.targetParticipantIds
         })
       }))
     } catch (error) {
@@ -75,6 +77,9 @@ export class RoomMessageController {
     for (const delivery of created.deliveries) {
       this.emit(input.roomId, { type: 'delivery.updated', delivery })
     }
+    if (superseded.length === 0 && created.deliveries.length === 0) {
+      this.emit(input.roomId, { type: 'room.updated', room: this.db.core.get(input.roomId) })
+    }
     this.wakeDeliveries()
     return created.message
   }
@@ -82,9 +87,103 @@ export class RoomMessageController {
   update(id: string, senderIdentity: string, body: string): RoomMessage {
     const current = this.db.messages.get(id)
     this.assertUserOwner(current, senderIdentity)
+    this.db.messages.deliveries.assertMessageMutable(id)
     const message = this.db.messages.update(id, body)
     this.emit(message.roomId, { type: 'message.updated', message })
     return message
+  }
+
+  retarget(id: string, senderIdentity: string, participantIds: readonly string[]): void {
+    const current = this.db.messages.get(id)
+    this.assertUserOwner(current, senderIdentity)
+    const deliveries = this.db.transaction(() =>
+      this.db.messages.deliveries.retarget(id, participantIds)
+    )
+    for (const delivery of deliveries) {
+      this.emit(current.roomId, { type: 'delivery.updated', delivery })
+    }
+    this.wakeDeliveries()
+  }
+
+  removeTarget(id: string, senderIdentity: string, participantId: string): boolean {
+    const current = this.db.messages.get(id)
+    this.assertUserOwner(current, senderIdentity)
+    const dormant = this.db.transaction(() =>
+      this.db.messages.deliveries.removeDormantTarget(id, participantId)
+    )
+    if (dormant) {
+      dormant.deliveries.forEach((delivery) =>
+        this.emit(current.roomId, { type: 'delivery.updated', delivery })
+      )
+      return dormant.deleteMessage
+    }
+    this.db.messages.deliveries.assertMessageMutable(id)
+    const active = new Set(
+      this.db.participants
+        .list(current.roomId)
+        .filter(
+          (participant) =>
+            participant.actorKind === 'agent' && participant.participation === 'active'
+        )
+        .map((participant) => participant.id)
+    )
+    const targets = this.db.messages.deliveries
+      .listForMessage(id)
+      .filter(
+        (delivery) =>
+          active.has(delivery.participantId) &&
+          !(
+            delivery.state === 'suppressed' &&
+            (delivery.error === 'room_delivery_retargeted' ||
+              delivery.error === 'room_participant_paused')
+          )
+      )
+      .map((delivery) => delivery.participantId)
+    if (!targets.includes(participantId)) {
+      throw new Error('room_delivery_queue_stale')
+    }
+    const remaining = targets.filter((targetId) => targetId !== participantId)
+    if (remaining.length === 0) {
+      return true
+    }
+    this.retarget(id, senderIdentity, remaining)
+    return false
+  }
+
+  reorder(
+    participantId: string,
+    deliveryIds: readonly string[],
+    movedDeliveryId?: string,
+    retargetMessageId?: string
+  ): void {
+    const participant = this.db.participants.get(participantId)
+    const deliveries = this.db.transaction(() =>
+      this.db.messages.deliveries.reorder(
+        participantId,
+        deliveryIds,
+        movedDeliveryId,
+        retargetMessageId
+      )
+    )
+    for (const delivery of deliveries) {
+      this.emit(participant.roomId, { type: 'delivery.updated', delivery })
+    }
+    this.wakeDeliveries()
+  }
+
+  reorderAll(
+    roomId: string,
+    messageIds: readonly string[],
+    movedMessageId?: string,
+    retargetMessageId?: string
+  ): void {
+    const deliveries = this.db.transaction(() =>
+      this.db.messages.deliveries.reorderAll(roomId, messageIds, movedMessageId, retargetMessageId)
+    )
+    for (const delivery of deliveries) {
+      this.emit(roomId, { type: 'delivery.updated', delivery })
+    }
+    this.wakeDeliveries()
   }
 
   async delete(id: string, senderIdentity: string): Promise<void> {
@@ -100,6 +199,7 @@ export class RoomMessageController {
 
   assertDeletable(id: string, senderIdentity: string): void {
     this.assertUserOwner(this.db.messages.get(id), senderIdentity)
+    this.db.messages.deliveries.assertMessageMutable(id)
   }
 
   markRead(roomId: string, readerKey: string, sequence: number): RoomUnread {

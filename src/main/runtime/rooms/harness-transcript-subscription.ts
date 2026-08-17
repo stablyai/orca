@@ -48,10 +48,33 @@ export function subscribeRoomHarnessTranscript(
       }
     },
     onAppend: (messages, lifecycle) => {
-      const event = transcriptLifecycleEvent(messages, lifecycle)
-      if (event) {
-        callbacks.onEvent(event)
+      const userMessage = turnUserMessage(messages)
+      if (!userMessage) {
+        const event = transcriptLifecycleEvent(messages, lifecycle)
+        if (event) {
+          callbacks.onEvent(event)
+        }
+        return
       }
+      const rootIndex = messages.findLastIndex(
+        (message) => turnUserMessage([message])?.id === userMessage.id
+      )
+      const activityMessages = messages
+        .slice(rootIndex + 1)
+        .filter((message) => message.role !== 'user')
+      const event = transcriptLifecycleEvent(
+        [messages[rootIndex]!, ...activityMessages],
+        lifecycle,
+        false,
+        userMessage
+      )
+      if (!event) {
+        return
+      }
+      callbacks.onEvent({
+        ...event,
+        messages: activityMessages
+      })
     },
     onOpaqueAppend: callbacks.onOpaqueAppend
   })

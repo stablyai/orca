@@ -93,7 +93,10 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     return Object.keys(options).length > 0 ? options : undefined
   }
 
-  protected appendExtraAgentLaunchArgs(base: string | null, extra: string | undefined): string | null {
+  protected appendExtraAgentLaunchArgs(
+    base: string | null,
+    extra: string | undefined
+  ): string | null {
     return extra?.trim() ? (base?.trim() ? `${base} ${extra}` : extra) : base
   }
 

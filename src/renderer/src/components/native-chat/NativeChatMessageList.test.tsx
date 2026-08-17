@@ -1,38 +1,43 @@
-// @vitest-environment happy-dom
+/* @vitest-environment happy-dom */
 
-import '@testing-library/jest-dom/vitest'
-
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
-afterEach(cleanup)
-
-const session: NativeChatLiveSession = {
-  messages: [
-    {
-      id: 'assistant-1',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'Selectable agent response.' }],
-      timestamp: 1,
-      source: 'transcript'
+describe('NativeChatMessageList', () => {
+  it('shows a non-expandable duration for a completed final-only turn', () => {
+    const session: NativeChatLiveSession = {
+      agent: 'codex',
+      sessionId: 'session-1',
+      status: 'ready',
+      context: EMPTY_AGENT_SESSION_CONTEXT,
+      markCompactionRequested: () => undefined,
+      hasMore: false,
+      loadingEarlier: false,
+      loadEarlier: () => undefined,
+      readPhase: 'ready',
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          source: 'stream',
+          timestamp: 1_000,
+          blocks: [{ type: 'text', text: 'Hello' }]
+        },
+        {
+          id: 'final-1',
+          role: 'assistant',
+          source: 'stream',
+          assistantPhase: 'final',
+          timestamp: 5_000,
+          blocks: [{ type: 'text', text: 'Hi' }]
+        }
+      ]
     }
-  ],
-  status: 'ready',
-  sessionId: 'session-1',
-  agent: 'codex',
-  hasMore: false,
-  loadingEarlier: false,
-  loadEarlier: vi.fn(),
-  readPhase: 'ready',
-  context: EMPTY_AGENT_SESSION_CONTEXT,
-  markCompactionRequested: vi.fn()
-}
 
-describe('NativeChatMessageList assistant messages', () => {
-  it('keeps prose selectable and places non-selectable controls after it', () => {
     render(
       <NativeChatMessageList
         session={session}
@@ -42,346 +47,89 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    const prose = screen.getByText('Selectable agent response.')
-    const row = prose.closest('.group')
-    const copyButton = screen.getByRole('button', { name: 'Copy message' })
-    const controls = copyButton.parentElement
-
-    expect(row).toHaveClass('select-text')
-    expect(controls).toHaveClass('select-none', 'pointer-events-none', 'mt-1')
-    expect(controls).not.toHaveClass('absolute')
-    expect(prose.compareDocumentPosition(controls!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-  })
-
-  it('keeps a running tool live when transcript lifecycle metadata is absent', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'assistant-tool-1',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'sleep 5' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-        fontScale={1}
-      />
+    expect(screen.getByRole('button', { name: 'Worked for 4s' }).hasAttribute('disabled')).toBe(
+      true
     )
-
-    expect(screen.getByText('Running sleep 5')).toBeInTheDocument()
-    expect(screen.queryByText('1×')).toBeNull()
-    expect(document.querySelector('.text-destructive')).toBeNull()
   })
 
-  it('keeps bridge chats on the legacy activity chrome', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'bridge-tool',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'sleep 5' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-        fontScale={1}
-        showTurnStatus={false}
-      />
-    )
-
-    expect(screen.queryByText('Thinking')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
-    expect(screen.queryByText('Running sleep 5')).toBeNull()
-    expect(document.querySelectorAll('.animate-bounce')).toHaveLength(3)
-  })
-
-  it('keeps the current tool live when a stale completed lifecycle meets active hook state', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          transcriptLifecycle: { state: 'completed', turnId: 'old-turn', timestamp: 1 },
-          messages: [
-            {
-              id: 'current-tool',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'sleep 5' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 2,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    expect(screen.getByText('Running sleep 5')).toBeInTheDocument()
-  })
-
-  it('shows a stable thinking status directly below the user message', () => {
+  it('keeps one turn header above chronological activity and steer', () => {
+    const messages: NativeChatMessage[] = [
+      message('user-1', 'user', 'Start', 1),
+      message('before', 'assistant', 'Before steer', 2, 'commentary'),
+      message('steer', 'user', 'Change course', 3),
+      message('after', 'assistant', 'Course changed', 4, 'commentary')
+    ].map((entry) => ({ ...entry, turnId: 'turn-1' }))
     const { container } = render(
       <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-thinking',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start the task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
+        session={session(messages, 'working')}
         isWorking
+        activeTurnId="turn-1"
+        workingStartedAt={1}
         expandSignal={false}
         fontScale={1}
       />
     )
 
-    const user = screen.getByText('Start the task')
-    const thinking = screen.getByText('Thinking')
-    expect(user.compareDocumentPosition(thinking)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(thinking.parentElement).not.toHaveClass('border-b')
-    expect(thinking.parentElement).toHaveClass('text-sm')
-    expect(container.querySelector('.animate-bounce')).toBeNull()
-    expect(thinking).toHaveClass('animate-pulse')
-    expect(container.querySelectorAll('.size-1.5.animate-pulse')).toHaveLength(0)
+    expect(within(container).getAllByText('@codex')).toHaveLength(1)
+    expect(within(container).getAllByText('Thinking')).toHaveLength(2)
+    const content = container.textContent ?? ''
+    expect(content.indexOf('Thinking')).toBeLessThan(content.indexOf('Before steer'))
+    expect(content.indexOf('Before steer')).toBeLessThan(content.indexOf('Change course'))
+    expect(content.indexOf('Change course')).toBeLessThan(content.indexOf('Course changed'))
   })
 
-  it('places the thinking status directly after the latest user message', () => {
-    render(
+  it('does not show Worked for an interrupted partial response', () => {
+    const { container } = render(
       <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-1',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Run the checks' }],
-              timestamp: 1,
-              source: 'transcript'
-            },
-            {
-              id: 'assistant-1',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: 'I am checking now.' }],
-              timestamp: 2,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    const user = screen.getByText('Run the checks')
-    const status = screen.getByText('Working for 0s')
-    const assistant = screen.getByText('I am checking now.')
-    expect(user.compareDocumentPosition(status)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(status.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(status.parentElement).toHaveClass('border-b')
-  })
-
-  it('shows elapsed working time once tool activity starts', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'tool-1',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'sleep 5' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        workingStartedAt={Date.now() - 3000}
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    expect(screen.getByText('Working for 3s')).toBeInTheDocument()
-  })
-
-  it('keeps the completed duration below the user message', () => {
-    const startedAt = Date.now() - 3000
-    const turnSession: NativeChatLiveSession = {
-      ...session,
-      status: 'working',
-      messages: [
-        {
-          id: 'user-complete',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'Complete this task' }],
-          timestamp: startedAt,
-          source: 'transcript'
-        },
-        {
-          id: 'assistant-complete',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'Task complete.' }],
-          timestamp: Date.now(),
-          source: 'transcript'
-        }
-      ]
-    }
-    const { rerender } = render(
-      <NativeChatMessageList
-        session={turnSession}
-        isWorking
-        workingStartedAt={startedAt}
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    rerender(
-      <NativeChatMessageList
-        session={{ ...turnSession, status: 'ready' }}
+        session={session([
+          { ...message('user-1', 'user', 'Start', 1), turnId: 'turn-1' },
+          { ...message('partial', 'assistant', 'Partial', 2), turnId: 'turn-1' }
+        ])}
         isWorking={false}
-        workingStartedAt={null}
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    const user = screen.getByText('Complete this task')
-    const status = screen.getByText('Worked for 3s')
-    const assistant = screen.getByText('Task complete.')
-    expect(user.compareDocumentPosition(status)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(status.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-
-    rerender(
-      <NativeChatMessageList
-        session={{
-          ...turnSession,
-          status: 'working',
-          messages: [
-            ...turnSession.messages,
-            {
-              id: 'user-next',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start another task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
+        turnCompletions={{
+          'turn-1': { outcome: 'interrupted', completedAt: 3 }
         }}
-        isWorking
-        workingStartedAt={Date.now()}
         expandSignal={false}
         fontScale={1}
       />
     )
 
-    expect(screen.getByText('Worked for 3s')).toBeInTheDocument()
-    expect(screen.getByText('Thinking')).toBeInTheDocument()
-  })
-
-  it("uses the completed caret to expand that turn's tool details", () => {
-    const startedAt = Date.now() - 3000
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'ready',
-          messages: [
-            {
-              id: 'user-details',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Inspect the repo' }],
-              timestamp: startedAt,
-              source: 'transcript'
-            },
-            {
-              id: 'assistant-details',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'pwd' },
-                  state: 'completed'
-                },
-                { type: 'tool-result', output: '/repo' }
-              ],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking={false}
-        workingStartedAt={startedAt}
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    const status = screen.getByRole('button', { name: 'Toggle turn details' })
-    expect(status).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /1× Run command/ })).toBeNull()
-    fireEvent.click(status)
-    expect(status).toHaveAttribute('aria-expanded', 'true')
-    const tool = screen.getByRole('button', { name: /1× Run command/ })
-    expect(tool).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getAllByRole('button', { name: /Run command pwd/ })[1]).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    )
+    expect(within(container).getByText('Interrupted')).toBeTruthy()
+    expect(within(container).queryByText(/Worked for/)).toBeNull()
   })
 })
+
+function session(
+  messages: NativeChatMessage[],
+  status: NativeChatLiveSession['status'] = 'ready'
+): NativeChatLiveSession {
+  return {
+    agent: 'codex',
+    sessionId: 'session-1',
+    status,
+    context: EMPTY_AGENT_SESSION_CONTEXT,
+    markCompactionRequested: () => undefined,
+    hasMore: false,
+    loadingEarlier: false,
+    loadEarlier: () => undefined,
+    readPhase: 'ready',
+    messages
+  }
+}
+
+function message(
+  id: string,
+  role: NativeChatMessage['role'],
+  text: string,
+  timestamp: number,
+  assistantPhase?: NativeChatMessage['assistantPhase']
+): NativeChatMessage {
+  return {
+    id,
+    role,
+    blocks: [{ type: 'text', text }],
+    timestamp,
+    source: 'stream',
+    ...(assistantPhase ? { assistantPhase } : {})
+  }
+}

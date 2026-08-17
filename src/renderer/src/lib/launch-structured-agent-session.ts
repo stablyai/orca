@@ -1,4 +1,5 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
@@ -23,13 +24,14 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-sessi
 type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent
 }
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent
+  target: RuntimeClientTarget
   params: StructuredAgentSessionCreateParams
 }
 
@@ -94,22 +96,28 @@ export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): b
 
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent,
+  target: RuntimeClientTarget = { kind: 'local' },
+  groupId?: string
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = `${agent}_${crypto.randomUUID().replaceAll('-', '_')}`
   const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent }
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    {
+      environmentId:
+        target.kind === 'environment' ? target.environmentId : LOCAL_STRUCTURED_SESSION_OWNER
+    },
     worktreeId,
     `agent-session:${sessionId}`,
-    undefined,
+    groupId,
     resolveWebSessionVisibleTabId(state, worktreeId)
   )
   return {
     sessionId,
     worktreeId,
     agent,
+    target,
     params: {
       envelope: {
         sessionId,
@@ -130,7 +138,12 @@ export function abandonStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): void {
   clearWebSessionFocusIntentIfMatches(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    {
+      environmentId:
+        intent.target.kind === 'environment'
+          ? intent.target.environmentId
+          : LOCAL_STRUCTURED_SESSION_OWNER
+    },
     intent.worktreeId,
     `agent-session:${intent.sessionId}`
   )
@@ -163,7 +176,7 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
   for (let attempt = 0; ; attempt += 1) {
     try {
       const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
-        { kind: 'local' },
+        intent.target,
         'agentSession.createSupport',
         { worktree: intent.params.worktree, agent: intent.agent }
       )
@@ -193,7 +206,7 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
  * identical for Codex, nothing asks. Whoever gives Codex a probe inherits it.
  */
 async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (intent.agent !== 'claude') {
+  if (intent.agent === 'codex' && intent.target.kind === 'local') {
     return
   }
   if (!(await hostSupportsCreate(intent))) {
@@ -212,7 +225,7 @@ export async function launchStructuredAgentSession(
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
-      { kind: 'local' },
+      intent.target,
       'agentSession.create',
       intent.params
     )

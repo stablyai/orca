@@ -308,7 +308,7 @@ describe('NativeChatToolRun', () => {
     )
 
     expect(screen.queryByText('Running sleep 1')).toBeNull()
-    expect(screen.getByText('shell sleep 1')).toBeInTheDocument()
+    expect(screen.getByText('Run command sleep 1')).toBeInTheDocument()
   })
 
   it('keeps failed tool runs visually neutral while collapsed', () => {
@@ -351,7 +351,7 @@ describe('NativeChatToolRun', () => {
       />
     )
 
-    expect(screen.getByText('shell git log -1')).toBeInTheDocument()
+    expect(screen.getByText('Run command git log -1')).toBeInTheDocument()
   })
 
   it('settles an orphaned running call when its turn lifecycle has ended', () => {

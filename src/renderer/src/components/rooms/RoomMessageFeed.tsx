@@ -11,37 +11,33 @@ import type {
   RoomParticipant
 } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
-import { RoomActivityStack } from './RoomActivityStack'
 import { RoomMessageRow } from './RoomMessageRow'
 import { showRoomActionError } from './room-action-error'
 import { isRoomDeliveryActive } from './room-delivery-state'
 
-type RoomFeedItem =
-  | { kind: 'message'; key: string; message: RoomMessage }
-  | { kind: 'activities'; key: string; activities: RoomAgentActivity[] }
+type RoomFeedItem = { kind: 'message'; key: string; message: RoomMessage }
 
 export function buildRoomFeedItems(
-  messages: RoomMessage[],
-  activities: RoomAgentActivity[]
+  messages: readonly RoomMessage[],
+  deliveries: readonly RoomDelivery[] = []
 ): RoomFeedItem[] {
-  const items: RoomFeedItem[] = messages.map((message) => ({
-    kind: 'message',
-    key: `message:${message.id}`,
-    message
-  }))
-  // Live activities always pin below the whole feed: an agent may be answering
-  // a message far above the tail (its queue lags), and mid-feed pills detach
-  // from view. startedAt is fixed at turn start, so the block order is stable
-  // for the whole turn regardless of which agent acted last.
-  const pending = orderRoomActivities(messages, activities)
-  if (pending.length > 0) {
-    items.push({
-      kind: 'activities',
-      key: 'activities',
-      activities: pending
-    })
-  }
-  return items
+  const targeted = new Set(deliveries.map((delivery) => delivery.messageId))
+  const attempted = new Set(
+    deliveries.filter((delivery) => delivery.attempts > 0).map((delivery) => delivery.messageId)
+  )
+  return messages
+    .filter(
+      (message) =>
+        message.actorKind !== 'user' ||
+        !targeted.has(message.id) ||
+        message.deliveryAttempted === true ||
+        attempted.has(message.id)
+    )
+    .map((message) => ({
+      kind: 'message',
+      key: `message:${message.id}`,
+      message
+    }))
 }
 
 export function orderRoomActivities(
@@ -124,23 +120,10 @@ export function RoomMessageFeed({
   const atBottomRef = useRef(atBottom)
   atBottomRef.current = atBottom
   const messages = data.messages
-  const participants = useMemo(
-    () => data.snapshot?.participants ?? [],
-    [data.snapshot?.participants]
+  const feedItems = useMemo(
+    () => buildRoomFeedItems(messages, Object.values(data.deliveries ?? {})),
+    [data.deliveries, messages]
   )
-  const activities = useMemo(() => {
-    const live = Object.values(data.activities)
-    return [
-      ...live,
-      ...pendingDeliveryActivities(
-        Object.values(data.deliveries ?? {}),
-        messages,
-        participants,
-        live
-      )
-    ]
-  }, [data.activities, data.deliveries, messages, participants])
-  const feedItems = useMemo(() => buildRoomFeedItems(messages, activities), [activities, messages])
   const getItemKey = useCallback((index: number) => feedItems[index]?.key ?? index, [feedItems])
   const latest = messages.at(-1)
   const unreadCount = data.snapshot?.unread.unreadCount ?? 0
@@ -201,6 +184,7 @@ export function RoomMessageFeed({
         element.scrollTop = element.scrollHeight
       }
     })
+    observer.observe(element)
     observer.observe(content)
     return () => observer.disconnect()
   }, [])
@@ -248,16 +232,7 @@ export function RoomMessageFeed({
                 className="absolute left-0 top-0 w-full px-4 py-2"
                 style={{ transform: `translateY(${row.start}px)` }}
               >
-                {item.kind === 'message' ? (
-                  <RoomMessageRow data={data} message={item.message} onReply={onReply} />
-                ) : (
-                  <RoomActivityStack
-                    key={item.activities.length > 1 ? 'stack' : 'single'}
-                    activities={item.activities}
-                    participants={participants}
-                    target={data.target}
-                  />
-                )}
+                <RoomMessageRow data={data} message={item.message} onReply={onReply} />
               </div>
             )
           })}

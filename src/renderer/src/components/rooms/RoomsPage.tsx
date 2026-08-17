@@ -1,4 +1,4 @@
-import { useContext, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, MessagesSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -13,10 +13,13 @@ import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import { selectRepoByIdForActiveWorkspace, useWorktreesForRepo } from '@/store/selectors'
 import { useRoomData } from './use-room-data'
 import { RoomParticipantBar } from './RoomParticipantBar'
-import { RoomMessageFeed } from './RoomMessageFeed'
+import { orderRoomActivities, pendingDeliveryActivities, RoomMessageFeed } from './RoomMessageFeed'
+import { RoomActivityStack } from './RoomActivityStack'
+import { RoomDeliveryQueues } from './RoomDeliveryQueues'
 import { RoomComposer } from './RoomComposer'
 import { RoomInspector } from './RoomInspector'
 import { RoomAddAgentDialog } from './RoomAddAgentDialog'
+import type { RoomQueueComposerEdit } from './room-queue-composer-edit'
 import { RoomSettingsDialog } from './RoomSettingsDialog'
 import { exportRoomArchive, importRoomArchive } from './room-archive-transfer'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -75,6 +78,19 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
     () => data.snapshot?.participants ?? [],
     [data.snapshot?.participants]
   )
+  const activities = useMemo(
+    () =>
+      orderRoomActivities(data.messages, [
+        ...Object.values(data.activities),
+        ...pendingDeliveryActivities(
+          Object.values(data.deliveries ?? {}),
+          data.messages,
+          participants,
+          Object.values(data.activities)
+        )
+      ]),
+    [data.activities, data.deliveries, data.messages, participants]
+  )
   const liveSubagentsByPaneKey = useAppStore(
     useShallow((state) =>
       Object.fromEntries(
@@ -121,6 +137,8 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
   const [transferring, setTransferring] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [reply, setReply] = useState<RoomMessage | null>(null)
+  const [queueEdit, setQueueEdit] = useState<RoomQueueComposerEdit | null>(null)
+  useEffect(() => setQueueEdit(null), [data.roomId])
   const archiveInputRef = useRef<HTMLInputElement>(null)
 
   const exportArchive = async (): Promise<void> => {
@@ -238,7 +256,22 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
               {translate('rooms.delete.deleting', 'Deleting room…')}
             </div>
           ) : (
-            <RoomComposer data={data} reply={reply} onReplyChange={setReply} />
+            <>
+              <RoomActivityStack
+                activities={activities}
+                lastSteeredParticipantId={data.lastSteeredParticipantId}
+                participants={participants}
+                target={data.target}
+              />
+              <RoomDeliveryQueues data={data} editing={queueEdit} onEdit={setQueueEdit} />
+              <RoomComposer
+                data={data}
+                reply={reply}
+                onReplyChange={setReply}
+                editing={queueEdit}
+                onEditComplete={() => setQueueEdit(null)}
+              />
+            </>
           )}
         </section>
         {inspectorTarget

@@ -1,5 +1,5 @@
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
 import {
   boundInlineText,
   boundToolInput,
@@ -223,11 +223,18 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
 export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const blocks = codexMessageBlocks(item)
+    const assistantPhase =
+      item.type === 'agentMessage' ? codexAssistantPhase(item.phase) : undefined
     return {
       body:
         blocks.length === 0
           ? null
-          : { kind: 'message', role: item.type === 'userMessage' ? 'user' : 'assistant', blocks },
+          : {
+              kind: 'message',
+              role: item.type === 'userMessage' ? 'user' : 'assistant',
+              blocks,
+              ...(assistantPhase ? { assistantPhase } : {})
+            },
       handled: true
     }
   }
@@ -252,7 +259,16 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       body:
         text === null
           ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+          : {
+              kind: 'message',
+              role: 'reasoning',
+              blocks: [
+                {
+                  type: 'text',
+                  text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+                }
+              ]
+            },
       handled: true
     }
   }
@@ -265,18 +281,24 @@ export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | nul
 }
 
 /** Snapshot body for text still streaming, before its item completes. */
-export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
+export function codexStreamingMessageBody(text: string, phase?: unknown): AgentJournalItemBody {
+  const assistantPhase = codexAssistantPhase(phase)
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }],
+    ...(assistantPhase ? { assistantPhase } : {})
   }
+}
+
+function codexAssistantPhase(phase: unknown): NativeChatMessage['assistantPhase'] {
+  return phase === 'commentary' ? 'commentary' : phase === 'final_answer' ? 'final' : undefined
 }
 
 /** Snapshot body for any item-level stream, keyed onto its parent item. */
 export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
   if (item.type === 'agentMessage') {
-    return { body: codexStreamingMessageBody(text), handled: true }
+    return { body: codexStreamingMessageBody(text, item.phase), handled: true }
   }
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
@@ -292,5 +314,11 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     }
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, handled: true }
+  return {
+    body:
+      item.type === 'reasoning' || item.type === 'plan'
+        ? { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text: bounded.text }] }
+        : { kind: 'status', text: bounded.text },
+    handled: true
+  }
 }

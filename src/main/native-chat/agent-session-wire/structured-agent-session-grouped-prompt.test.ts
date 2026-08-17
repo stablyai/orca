@@ -144,6 +144,30 @@ afterEach(async () => {
 })
 
 describe('grouped question admission', () => {
+  it('accepts legacy Rooms answers while retaining the original mutation receipt', async () => {
+    const prompt = await seedGroupedQuestion()
+    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    const optionId = 'answers:{"q1":["Web","Mobile"],"q2":["SSH host"]}'
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId }
+    const result = await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { resolution: { selectedOptionId: optionId } }
+    })
+    expect(answerPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        optionId: encodeAgentSessionQuestionAnswers([
+          { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
+          { questionId: 'q2', optionIds: [], other: 'SSH host' }
+        ])
+      })
+    )
+  })
+
   it('admits renderer question-group payloads with child ids and multi-select answers', async () => {
     const prompt = await seedGroupedQuestion()
     const attached = await host.attach(CALLER, attachParams())

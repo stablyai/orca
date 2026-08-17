@@ -47,6 +47,22 @@ export type NativeChatPendingSendScope = {
   agent: string
 }
 
+export function createNativeChatPendingSend(
+  text: string,
+  imagePaths: string[] | undefined,
+  boundary: NativeChatMessage | undefined,
+  sentAt: number
+): NativeChatPendingSend {
+  return {
+    id: nextNativeChatPendingSendId(sentAt),
+    text,
+    sentAt,
+    afterMessageId: boundary?.id ?? null,
+    afterMessageTimestamp: boundary?.timestamp ?? null,
+    ...(imagePaths ? { imagePaths } : {})
+  }
+}
+
 const PENDING_SEND_LIMIT = 8
 const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
 let pendingSendCounter = 0

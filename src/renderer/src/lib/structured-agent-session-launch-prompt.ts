@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type {
   AgentSessionMutationResult,
   AgentSessionSendResult
@@ -20,6 +21,8 @@ export type StructuredPromptDeliveryResult = {
 }
 
 export type StructuredLaunchPromptOptions = {
+  target?: RuntimeClientTarget
+  promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   prompt?: string
   onPromptDelivered?: () => void
 }
@@ -35,7 +38,8 @@ function mutateEntry(
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
-  receipt: LaunchReceipt
+  receipt: LaunchReceipt,
+  target: RuntimeClientTarget
 ): Promise<boolean> {
   if (
     !mutateEntry(entry, (current) => ({
@@ -49,11 +53,7 @@ async function dispatchStructuredLaunchPrompt(
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionSendResult>
-    >(
-      { kind: 'local' },
-      'agentSession.send',
-      structuredAgentSessionSendRequest(entry, receipt.fence)
-    )
+    >(target, 'agentSession.send', structuredAgentSessionSendRequest(entry, receipt.fence))
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
@@ -83,14 +83,18 @@ export function settleStructuredAgentLaunchPrompt(args: {
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
 }): Promise<StructuredPromptDeliveryResult> | undefined {
-  if (!args.options.prompt?.trim()) {
+  if (!args.options.prompt?.trim() || args.options.promptDelivery === 'draft') {
     return undefined
   }
   return args.launchResult.then(async (receipt) => {
     if (!args.stagedEntry) {
       return { delivered: false, failureNotified: true }
     }
-    const delivered = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt)
+    const delivered = await dispatchStructuredLaunchPrompt(
+      args.stagedEntry,
+      receipt,
+      args.options.target ?? { kind: 'local' }
+    )
     if (delivered) {
       args.options.onPromptDelivered?.()
     }

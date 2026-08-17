@@ -1,7 +1,7 @@
 import { Image as ImageIcon, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { useLocalImageSrc, releaseLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import { ImagePreviewDialog, type ImagePreview } from '../image-preview/ImagePreviewDialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -22,20 +22,54 @@ export type NativeChatImageLoadContext = {
   }
 }
 
+type VisibilityListener = (isVisible: boolean) => void
+
+const visibilityListeners = new Map<Element, VisibilityListener>()
+let visibilityObserver: IntersectionObserver | null = null
+
+function observeTranscriptVisibility(element: Element, listener: VisibilityListener): () => void {
+  if (typeof IntersectionObserver === 'undefined') {
+    listener(true)
+    return () => {}
+  }
+
+  visibilityObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        visibilityListeners.get(entry.target)?.(entry.isIntersecting)
+      }
+    },
+    { rootMargin: '128px' }
+  )
+  visibilityListeners.set(element, listener)
+  visibilityObserver.observe(element)
+
+  return () => {
+    visibilityListeners.delete(element)
+    visibilityObserver?.unobserve(element)
+    if (visibilityListeners.size === 0) {
+      visibilityObserver?.disconnect()
+      visibilityObserver = null
+    }
+  }
+}
+
 type ResolvedImage = NativeChatImageAttachment & { src: string }
 
 export function NativeChatImageAttachments({
   images,
   loadContext,
-  onRemove
+  onRemove,
+  compact = false
 }: {
   images: readonly NativeChatImageAttachment[]
   loadContext?: NativeChatImageLoadContext
   onRemove?: (id: string) => void
+  compact?: boolean
 }): React.JSX.Element | null {
-  const [sources, setSources] = useState<Record<string, string>>({})
+  const [sources, setSources] = useState<Record<string, string | undefined>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const registerSource = useCallback((id: string, src: string) => {
+  const registerSource = useCallback((id: string, src: string | undefined) => {
     setSources((current) => (current[id] === src ? current : { ...current, [id]: src }))
   }, [])
   const resolved = useMemo(
@@ -67,15 +101,17 @@ export function NativeChatImageAttachments({
   }
   return (
     <>
-      <div className="mb-2 flex flex-wrap gap-1.5">
+      <div className={compact ? 'flex flex-wrap gap-1' : 'mb-2 flex flex-wrap gap-1.5'}>
         {images.map((image) => (
           <NativeChatImageThumbnail
             key={image.id}
             image={image}
             loadContext={loadContext}
+            previewOpen={selectedId !== null}
             onResolved={registerSource}
             onOpen={() => setSelectedId(image.id)}
             onRemove={onRemove ? () => onRemove(image.id) : undefined}
+            compact={compact}
           />
         ))}
       </div>
@@ -89,49 +125,88 @@ function NativeChatImageThumbnail({
   loadContext,
   onResolved,
   onOpen,
-  onRemove
+  onRemove,
+  compact,
+  previewOpen
 }: {
   image: NativeChatImageAttachment
   loadContext?: NativeChatImageLoadContext
-  onResolved: (id: string, src: string) => void
+  onResolved: (id: string, src: string | undefined) => void
   onOpen: () => void
   onRemove?: () => void
+  compact: boolean
+  previewOpen: boolean
 }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [near, setNear] = useState(false)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const leaseActive = near || previewOpen
+  useEffect(() => {
+    const element = ref.current
+    return element ? observeTranscriptVisibility(element, setNear) : undefined
+  }, [])
   const runtimeContext = loadContext?.runtimeContext
   const runtimeEnvironmentId = runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim()
   const connectionId = useAppStore((state) =>
     loadContext?.connectionId !== undefined
       ? loadContext.connectionId
-      : image.path && runtimeContext?.worktreeId && !runtimeEnvironmentId
-        ? getConnectionIdForFileFromState(state, runtimeContext.worktreeId, image.path)
-        : loadContext?.connectionId
+      : runtimeContext?.connectionId !== undefined
+        ? runtimeContext.connectionId
+        : image.path && runtimeContext?.worktreeId && !runtimeEnvironmentId
+          ? getConnectionIdForFileFromState(state, runtimeContext.worktreeId, image.path)
+          : loadContext?.connectionId
   )
   const ownerUnresolved =
     Boolean(image.path && runtimeContext?.worktreeId && !runtimeEnvironmentId) &&
-    connectionId === undefined
+    connectionId === undefined &&
+    !runtimeContext?.expectedExecutionHostId
   const rawSrc = image.url ?? (loadContext?.disabled || ownerUnresolved ? undefined : image.path)
-  const src = useLocalImageSrc(rawSrc, image.path ?? '', connectionId, runtimeContext)
+  const src = useLocalImageSrc(
+    leaseActive ? rawSrc : undefined,
+    image.path ?? '',
+    connectionId,
+    runtimeContext
+  )
   useEffect(() => {
-    if (src) {
-      onResolved(image.id, src)
+    if (!rawSrc) {
+      return
     }
-  }, [image.id, onResolved, src])
+    if (!leaseActive) {
+      releaseLocalImageSrc(rawSrc, image.path ?? '', connectionId, runtimeContext)
+    }
+    return () => releaseLocalImageSrc(rawSrc, image.path ?? '', connectionId, runtimeContext)
+  }, [rawSrc, image.path, connectionId, runtimeContext, leaseActive])
+  const displaySrc = leaseActive && src !== failedSrc ? src : undefined
+  useEffect(() => {
+    onResolved(image.id, displaySrc)
+    return () => onResolved(image.id, undefined)
+  }, [image.id, onResolved, displaySrc])
   return (
-    <div className="relative size-20 shrink-0" title={image.path ?? image.url ?? image.fileName}>
+    <div
+      ref={ref}
+      className={compact ? 'relative size-6 shrink-0' : 'relative size-20 shrink-0'}
+      title={image.path ?? image.url ?? image.fileName}
+    >
       <button
         type="button"
         className="size-full overflow-hidden rounded-lg border border-border bg-muted/30 text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default"
         onClick={onOpen}
-        disabled={!src}
+        disabled={!displaySrc}
         aria-label={image.fileName}
       >
-        {src ? (
-          <img src={src} alt={image.fileName} className="size-full object-cover" />
+        {displaySrc ? (
+          <img
+            src={displaySrc}
+            alt={image.fileName}
+            loading="lazy"
+            onError={() => setFailedSrc(displaySrc ?? null)}
+            className="size-full object-cover"
+          />
         ) : (
-          <ImageIcon className="mx-auto size-6" />
+          <ImageIcon className={compact ? 'mx-auto size-3.5' : 'mx-auto size-6'} />
         )}
       </button>
-      {onRemove ? (
+      {onRemove && !compact ? (
         <button
           type="button"
           className="absolute top-1 right-1 z-10 flex size-4 items-center justify-center rounded-full bg-foreground text-background shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

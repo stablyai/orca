@@ -14,7 +14,11 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { RoomDeliveryWorker } from './delivery-worker'
-import { createRoomHarnessAdapters, type RoomHarnessRuntime } from './harness-adapter'
+import {
+  createRoomHarnessAdapters,
+  type RoomHarnessAdapter,
+  type RoomHarnessRuntime
+} from './harness-adapter'
 import { RoomTranscriptBridge } from './transcript-bridge'
 import { RoomParticipantController } from './participant-controller'
 import { RoomArchive } from './archive'
@@ -26,8 +30,13 @@ import { RoomAttachmentTransferStore } from './attachment-transfers'
 import { RoomDeletionCoordinator } from './room-deletion'
 import { RoomWorkController } from './work-controller'
 import { addRoomMessageNotificationContext } from './room-event-notification'
+import { RoomQueueController } from './queue-controller'
+import { activateRoomParticipants } from './room-activation'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { RoomQueueEditController } from './queue-edit-controller'
+import { RoomParticipantSurface } from './participant-surface'
 
-export type { RoomParticipantConnection } from './participant-controller'
+export type { RoomParticipantConnection } from './participant-membership'
 
 export class RoomService {
   readonly db: RoomDatabase
@@ -37,20 +46,28 @@ export class RoomService {
   private readonly deliveryWorker: RoomDeliveryWorker
   readonly transcriptBridge: RoomTranscriptBridge
   readonly participantController: RoomParticipantController
+  readonly queue: RoomQueueController
   private readonly events: RoomEventBus
   private readonly messageController: RoomMessageController
-  private readonly focusTerminal: RoomHarnessRuntime['focusTerminal']
-  private readonly hideRendererStatus: RoomHarnessRuntime['hideRoomAgentStatusFromRenderer']
-  private readonly publishAgentSession: RoomHarnessRuntime['publishRoomAgentProviderSession']
+  readonly queueEdits: RoomQueueEditController
+  private readonly participantSurface: RoomParticipantSurface
   private readonly deletion: RoomDeletionCoordinator
   private readonly work: RoomWorkController
 
-  constructor(path: string, runtime: RoomHarnessRuntime) {
+  constructor(
+    path: string,
+    private readonly runtime: RoomHarnessRuntime,
+    adapters: Record<string, RoomHarnessAdapter> = createRoomHarnessAdapters(runtime)
+  ) {
     this.events = new RoomEventBus(runtime.emitRoomEvent?.bind(runtime))
-    this.focusTerminal = runtime.focusTerminal?.bind(runtime)
-    this.hideRendererStatus = runtime.hideRoomAgentStatusFromRenderer?.bind(runtime)
-    this.publishAgentSession = runtime.publishRoomAgentProviderSession?.bind(runtime)
-    this.db = new RoomDatabase(path)
+    const focusTerminal = runtime.focusTerminal?.bind(runtime)
+    const hideRendererStatus = runtime.hideRoomAgentStatusFromRenderer?.bind(runtime)
+    const publishAgentSession = runtime.publishRoomAgentProviderSession?.bind(runtime)
+    const publishStructuredSession = runtime.publishStructuredAgentSessionTab?.bind(runtime)
+    this.db = new RoomDatabase(
+      path,
+      (sessionId) => getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.options
+    )
     this.archiveTransfers = new RoomArchiveTransferStore(new RoomArchive(this.db))
     const attachmentRoot =
       path === ':memory:'
@@ -58,7 +75,7 @@ export class RoomService {
         : join(dirname(path), 'room-attachments')
     const attachments = new RoomAttachmentManager(attachmentRoot)
     this.attachmentTransfers = new RoomAttachmentTransferStore(this.db, attachments)
-    this.adapters = createRoomHarnessAdapters(runtime)
+    this.adapters = adapters
     this.transcriptBridge = new RoomTranscriptBridge(
       this.db,
       this.adapters,
@@ -71,20 +88,36 @@ export class RoomService {
       this.adapters,
       this.transcriptBridge,
       (roomId, event) => this.emitEvent(roomId, event),
-      this.hideRendererStatus
+      hideRendererStatus
+    )
+    this.participantSurface = new RoomParticipantSurface(
+      this.db,
+      this.participantController,
+      focusTerminal,
+      hideRendererStatus,
+      publishAgentSession,
+      publishStructuredSession
     )
     this.deliveryWorker = new RoomDeliveryWorker(
       this.db,
       this.adapters,
       attachments,
       (roomId, event) => this.emitEvent(roomId, event),
-      (participantId) => this.participantController.ensureReady(participantId)
+      (participantId) => this.participantController.ensureReady(participantId),
+      undefined,
+      () => runtime.roomLiveSteeringEnabled?.() === true
     )
     this.messageController = new RoomMessageController(
       this.db,
       attachments,
       (roomId, event) => this.emitEvent(roomId, event),
       () => this.deliveryWorker.wake()
+    )
+    this.queue = new RoomQueueController(
+      this.db,
+      this.messageController,
+      this.deliveryWorker,
+      this.assertWritable
     )
     this.work = new RoomWorkController(
       this.db,
@@ -102,6 +135,14 @@ export class RoomService {
       this.events,
       runtime.cleanupDeletedRoomResources?.bind(runtime) ?? (async () => undefined)
     )
+    this.queueEdits = new RoomQueueEditController(
+      this.db,
+      attachments,
+      (roomId, event) => this.emitEvent(roomId, event),
+      () => this.deliveryWorker.wake(),
+      this.assertWritable,
+      (roomId, action) => this.deletion.run(roomId, action)
+    )
     this.deliveryWorker.start()
     this.participantController.startHibernationSweep()
     this.deletion.start()
@@ -118,38 +159,34 @@ export class RoomService {
     this.db.close()
   }
 
-  createRoom(input: Parameters<RoomDatabase['createRoom']>[0]): RoomSnapshot {
-    return this.db.createRoom(input)
+  wakeDeliveries = (): void => this.deliveryWorker.wake()
+
+  createRoom = (input: Parameters<RoomDatabase['createRoom']>[0]): RoomSnapshot =>
+    this.db.createRoom(input)
+
+  listRooms = (projectId: string): Room[] => this.db.core.list(projectId)
+
+  snapshot = (roomId: string, readerKey = 'user'): RoomSnapshot =>
+    this.db.snapshot(roomId, readerKey)
+
+  async prepareSnapshot(roomId: string): Promise<void> {
+    const participants = this.db.participants.list(roomId)
+    if (participants.some((participant) => participant.providerSession?.transport === 'machine')) {
+      // Load durable metadata, not provider children or their live options.
+      await this.runtime.ensureStructuredAgentSessionHost?.().catch(() => {})
+    }
   }
 
-  listRooms(projectId: string): Room[] {
-    return this.db.core.list(projectId)
-  }
-
-  snapshot(roomId: string, readerKey = 'user'): RoomSnapshot {
-    return this.db.snapshot(roomId, readerKey)
-  }
-
-  async activateRoom(roomId: string, readerKey = 'user'): Promise<RoomSnapshot> {
-    return this.deletion.run(roomId, () => this.activateRoomNow(roomId, readerKey))
-  }
+  activateRoom = async (roomId: string, readerKey = 'user'): Promise<RoomSnapshot> =>
+    this.deletion.run(roomId, () => this.activateRoomNow(roomId, readerKey))
 
   private async activateRoomNow(roomId: string, readerKey: string): Promise<RoomSnapshot> {
     const snapshot = this.db.snapshot(roomId, readerKey)
-    await Promise.all(
-      snapshot.participants
-        .filter((participant) => participant.actorKind === 'agent')
-        .map(async (participant) => {
-          // One unrecoverable agent must not block activating the rest of the room.
-          try {
-            const reconciled = await this.participantController.reconcile(participant)
-            if (reconciled.state !== 'sleeping' && reconciled.state !== 'offline') {
-              this.publishParticipantSession(reconciled)
-              await this.transcriptBridge.ensure(reconciled)
-              await this.transcriptBridge.refreshContext(reconciled)
-            }
-          } catch {}
-        })
+    await activateRoomParticipants(
+      snapshot.participants,
+      this.participantController,
+      this.transcriptBridge,
+      (participant) => this.participantSurface.publish(participant)
     )
     return this.db.snapshot(roomId, readerKey)
   }
@@ -163,21 +200,12 @@ export class RoomService {
     )
   }
 
-  listMessages(roomId: string, beforeSequence: number | null, limit = 100): RoomMessagePage {
-    return this.db.messages.list(roomId, beforeSequence, limit)
-  }
+  listMessages = (roomId: string, beforeSequence: number | null, limit = 100): RoomMessagePage =>
+    this.db.messages.list(roomId, beforeSequence, limit)
 
-  assertWritable(roomId: string): void {
-    this.deletion.assertAvailable(roomId)
-  }
+  assertWritable = (roomId: string): void => this.deletion.assertAvailable(roomId)
 
-  getUserParticipant(roomId: string): RoomParticipant {
-    const participant = this.db.participants.list(roomId).find((item) => item.actorKind === 'user')
-    if (!participant) {
-      throw new Error('room_user_participant_required')
-    }
-    return participant
-  }
+  getUserParticipant = (roomId: string): RoomParticipant => this.db.participants.getUser(roomId)
 
   sendMessage(input: SendRoomMessageInput): Promise<RoomMessage> {
     return this.deletion.run(input.roomId, () => this.messageController.send(input))
@@ -192,6 +220,7 @@ export class RoomService {
     const roomId = this.db.messages.get(id).roomId
     this.messageController.assertDeletable(id, senderIdentity)
     await this.deletion.run(roomId, async () => {
+      this.messageController.assertDeletable(id, senderIdentity)
       await this.work.stopMessage(id)
       await this.messageController.delete(id, senderIdentity)
     })
@@ -208,13 +237,11 @@ export class RoomService {
     return this.deletion.run(input.roomId, () => this.participantController.add(input))
   }
 
-  participantForTerminal(handle: string): RoomParticipant | null {
-    return this.db.participants.findByTerminalHandle(handle)
-  }
+  participantForTerminal = (handle: string): RoomParticipant | null =>
+    this.db.participants.findByTerminalHandle(handle)
 
-  participantForPane(paneKey: string): RoomParticipant | null {
-    return this.db.participants.findByPaneKey(paneKey)
-  }
+  participantForPane = (paneKey: string): RoomParticipant | null =>
+    this.db.participants.findByPaneKey(paneKey)
 
   currentTurnDeliveryIdForPane(paneKey: string): string | null {
     const participant = this.participantForPane(paneKey)
@@ -223,47 +250,17 @@ export class RoomService {
 
   async revealParticipant(id: string, viewMode: 'terminal' | 'chat'): Promise<void> {
     const roomId = this.db.participants.get(id).roomId
-    return this.deletion.run(roomId, () => this.revealParticipantNow(id, viewMode))
+    return this.deletion.run(roomId, () => this.participantSurface.reveal(id, viewMode))
   }
 
-  private async revealParticipantNow(id: string, viewMode: 'terminal' | 'chat'): Promise<void> {
-    if (!this.focusTerminal) {
-      throw new Error('room_participant_not_ready')
-    }
-    const participant = await this.participantController.ensureReady(id)
-    if (!participant.terminalHandle) {
-      throw new Error('room_participant_not_ready')
-    }
-    await this.focusTerminal(participant.terminalHandle, { viewMode })
-    const revealed = this.db.participants.update(participant.id, {
-      terminalHandle: participant.terminalHandle,
-      paneKey: participant.paneKey,
-      providerSession: participant.providerSession,
-      terminalSurfaceVisible: true
-    })
-    this.publishParticipantSession(revealed, true)
-  }
+  wakeParticipant = (id: string): Promise<RoomParticipant> =>
+    this.deletion.run(this.db.participants.get(id).roomId, () =>
+      this.participantController.ensureReady(id)
+    )
 
-  hideParticipantTerminal(handle: string): void {
-    const participant = this.db.participants.findByTerminalHandle(handle)
-    if (participant?.terminalSurfaceVisible) {
-      const hidden = this.db.participants.update(participant.id, { terminalSurfaceVisible: false })
-      if (hidden.paneKey) {
-        this.hideRendererStatus?.(hidden.paneKey)
-      }
-  }
-  }
+  hideParticipantTerminal = (handle: string): void => this.participantSurface.hide(handle)
 
-  private publishParticipantSession(
-    { terminalHandle, agent, providerSession }: RoomParticipant,
-    force = false
-  ): void {
-    if (terminalHandle && agent && providerSession) {
-      this.publishAgentSession?.(terminalHandle, agent, providerSession, force)
-    }
-  }
-
-  async removeParticipant(id: string): Promise<void> {
+  removeParticipant(id: string): Promise<void> {
     const roomId = this.db.participants.get(id).roomId
     return this.deletion.run(roomId, () => this.participantController.remove(id))
   }
@@ -304,13 +301,12 @@ export class RoomService {
     this.db.recordAttachmentDrop(attachmentId, connectionId, remotePath)
   }
 
-  deleteRoom(roomId: string): Promise<void> {
-    return this.deletion.delete(roomId)
-  }
+  deleteRoom = (roomId: string): Promise<void> => this.deletion.delete(roomId)
 
   finishArchiveImport(transferId: string) {
-    const roomId = this.archiveTransfers.importRoomId(transferId)
-    return this.deletion.run(roomId, () => this.archiveTransfers.finishImport(transferId))
+    return this.deletion.run(this.archiveTransfers.importRoomId(transferId), () =>
+      this.archiveTransfers.finishImport(transferId)
+    )
   }
 
   startArchiveExport(roomId: string, fileName: string) {
@@ -329,18 +325,19 @@ export class RoomService {
     )
   }
 
-  ingestAgentStatus(event: AgentHookEventPayload & { receivedAt: number }): void {
+  ingestAgentStatus = (event: AgentHookEventPayload & { receivedAt: number }): void =>
     this.participantController.ingestStatus(event)
-  }
 
-  ingestClaudeStatusLine(event: ClaudeStatusLineRateLimits): void {
+  ingestClaudeStatusLine = (event: ClaudeStatusLineRateLimits): void =>
     this.participantController.ingestClaudeStatusLine(event)
-  }
 
   emitEvent(roomId: string, event: RoomEvent): void {
-    if (event.type === 'delivery.updated') {
+    if (event.type === 'delivery.updated' || event.type === 'room.updated') {
       event = { ...event, workState: this.db.messages.deliveries.workState(roomId) }
     }
     this.events.emit(roomId, addRoomMessageNotificationContext(this.db, roomId, event))
+    if (event.type === 'participant.removed') {
+      this.queue.wake()
+    }
   }
 }

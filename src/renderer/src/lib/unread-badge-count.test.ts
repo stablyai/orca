@@ -41,5 +41,4 @@ describe('getUnreadBadgeCount', () => {
       })
     ).toBe(2)
   })
-
 })

@@ -1,43 +1,41 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { expect, it, vi } from 'vitest'
+import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
+import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
+import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 
-const { restoreOnRestart } = vi.hoisted(() => ({ restoreOnRestart: vi.fn() }))
-
-vi.mock('./structured-agent-session-restart-restore', () => ({
-  restoreStructuredAgentSessionsOnRestart: restoreOnRestart
+vi.mock('./structured-agent-session-read-restore', () => ({
+  restoreStructuredAgentSessionRead: vi.fn(async () => ({ hasProviderChild: false }))
 }))
 
-import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
-
-describe('StructuredAgentSessionReadableRestorer', () => {
-  beforeEach(() => {
-    restoreOnRestart.mockReset().mockResolvedValue(undefined)
+it('restores later room IDs after empty startup, deduplicates opens, and permits reopen/retry', async () => {
+  const sessions = new Map<string, unknown>()
+  const tasks = new StructuredAgentSessionTaskQueue()
+  const gate = new StructuredAgentSessionRestartRestoreGate()
+  const restorer = new StructuredAgentSessionReadableRestorer({
+    store: { listRecords: () => ['one', 'two'].map((sessionId) => ({ sessionId })) } as never,
+    journalRoot: 'unused',
+    supportsRecord: () => true,
+    reconcile: async () => null,
+    resolveRecovery: async () => undefined,
+    serialize: (id, task) => tasks.serialize(id, task),
+    hasSession: (id) => sessions.has(id),
+    onReadable: (id, value) => {
+      sessions.set(id, value)
+    },
+    restoreHandoff: async () => undefined
   })
-
-  it('passes targeted records to the restore pool in visible-first order', async () => {
-    const records = ['background-a', 'visible-b', 'visible-a', 'background-b'].map(
-      (sessionId) => ({ sessionId }) as AgentSessionRecord
-    )
-    const restorer = new StructuredAgentSessionReadableRestorer({
-      store: { listRecords: () => records } as never,
-      journalRoot: '/tmp/journals',
-      supportsRecord: () => true,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
-      serialize: async (_sessionId, task) => task(),
-      hasSession: () => false,
-      onReadable: () => undefined,
-      restoreHandoff: async () => undefined
-    })
-
-    await restorer.restore(['visible-a', 'visible-b', 'background-a', 'background-b'])
-
-    expect(restoreOnRestart).toHaveBeenCalledOnce()
-    expect(restoreOnRestart.mock.calls[0][0].records.map((record) => record.sessionId)).toEqual([
-      'visible-a',
-      'visible-b',
-      'background-a',
-      'background-b'
-    ])
-  })
+  const restore = (ids: string[]) => gate.run(() => restorer.restore(ids))
+  await restore([])
+  await Promise.all([restore(['one']), restore(['two']), restore(['one'])])
+  expect(restoreStructuredAgentSessionRead).toHaveBeenCalledTimes(2)
+  const retained = sessions.get('one')
+  await restore(['one'])
+  expect(sessions.get('one')).toBe(retained)
+  sessions.delete('one')
+  vi.mocked(restoreStructuredAgentSessionRead).mockRejectedValueOnce(new Error('temporary'))
+  await expect(restore(['one'])).rejects.toThrow('temporary')
+  await restore(['one'])
+  expect(sessions.has('one')).toBe(true)
+  expect(restoreStructuredAgentSessionRead).toHaveBeenCalledTimes(4)
 })

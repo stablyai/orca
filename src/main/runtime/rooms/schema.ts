@@ -7,6 +7,8 @@ import {
   ensureRoomParticipantSleepingStateSchema,
   roomParticipantsTableSql
 } from './participant-schema'
+import { ensureRoomDeliveryWorkSchema } from './delivery-work-schema'
+import { ensureRoomMessageDeliveryAttemptSchema } from './message-delivery-attempt-schema'
 
 export function initializeRoomSchema(db: SyncDatabase.Database): void {
   db.pragma('foreign_keys = ON')
@@ -17,6 +19,9 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomWorktreeSchema(db)
     ensureRoomDeliveryTurnSchema(db)
     ensureRoomDeliveryReliabilitySchema(db)
+    ensureRoomDeliveryQueueSchema(db)
+    ensureRoomMessageDeliveryAttemptSchema(db)
+    ensureRoomDeliveryWorkSchema(db)
     ensureRoomParticipantIncarnationSchema(db)
     ensureRoomParticipantParticipationSchema(db)
     ensureRoomParticipantTerminalSurfaceSchema(db)
@@ -25,6 +30,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomActivitySchema(db)
     ensureRoomDeliveryConfigurationSchema(db)
     ensureRoomMessageMentionOrderSchema(db)
+    ensureRoomMessageQueueEditSchema(db)
     ensureRoomDeletionSchema(db)
     return
   }
@@ -39,6 +45,8 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 120),
         description TEXT NOT NULL DEFAULT '',
         loop_limit INTEGER NOT NULL DEFAULT 0 CHECK(loop_limit BETWEEN 0 AND 20),
+        delivery_queue_stopped INTEGER NOT NULL DEFAULT 0
+          CHECK(delivery_queue_stopped IN (0, 1)),
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -73,6 +81,9 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         root_message_id TEXT,
         hop_count INTEGER NOT NULL DEFAULT 0 CHECK(hop_count >= 0),
         metadata_json TEXT NOT NULL DEFAULT '{}',
+        delivery_attempted INTEGER NOT NULL DEFAULT 0
+          CHECK(delivery_attempted IN (0, 1)),
+        queue_edit_token TEXT,
         created_at INTEGER NOT NULL,
         edited_at INTEGER,
         deleted_at INTEGER
@@ -120,6 +131,8 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
         responded_at INTEGER,
         phase TEXT CHECK(phase IN ('waking', 'submitting', 'awaiting-turn')),
         attempt_history_json TEXT NOT NULL DEFAULT '[]',
+        intent TEXT NOT NULL DEFAULT 'next' CHECK(intent IN ('next', 'steer')),
+        queue_position INTEGER NOT NULL DEFAULT 0,
         UNIQUE(message_id, participant_id)
       );
       CREATE INDEX idx_room_deliveries_due
@@ -179,7 +192,16 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     db.exec('ROLLBACK')
     throw error
   }
+  ensureRoomMessageDeliveryAttemptSchema(db)
   ensureRoomDeliveryConfigurationSchema(db)
+}
+
+function ensureRoomMessageQueueEditSchema(db: SyncDatabase.Database): void {
+  const columns = db.pragma('table_info(room_messages)') as { name: string }[]
+  if (!columns.some((column) => column.name === 'queue_edit_token')) {
+    db.exec('ALTER TABLE room_messages ADD COLUMN queue_edit_token TEXT')
+  }
+  db.exec('UPDATE room_messages SET queue_edit_token = NULL WHERE queue_edit_token IS NOT NULL')
 }
 
 function ensureRoomMessageMentionOrderSchema(db: SyncDatabase.Database): void {
@@ -224,6 +246,24 @@ function ensureRoomDeliveryReliabilitySchema(db: SyncDatabase.Database): void {
     db.exec(
       "ALTER TABLE room_deliveries ADD COLUMN attempt_history_json TEXT NOT NULL DEFAULT '[]'"
     )
+  }
+}
+
+function ensureRoomDeliveryQueueSchema(db: SyncDatabase.Database): void {
+  const columns = db.pragma('table_info(room_deliveries)') as { name: string }[]
+  if (!columns.some((column) => column.name === 'intent')) {
+    db.exec(
+      "ALTER TABLE room_deliveries ADD COLUMN intent TEXT NOT NULL DEFAULT 'next' CHECK(intent IN ('next', 'steer'))"
+    )
+  }
+  if (!columns.some((column) => column.name === 'queue_position')) {
+    db.exec('ALTER TABLE room_deliveries ADD COLUMN queue_position INTEGER NOT NULL DEFAULT 0')
+    db.exec(`
+      UPDATE room_deliveries SET queue_position = COALESCE(
+        (SELECT sequence FROM room_messages WHERE id = room_deliveries.message_id),
+        0
+      )
+    `)
   }
 }
 

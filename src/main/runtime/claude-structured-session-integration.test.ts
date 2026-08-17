@@ -436,6 +436,29 @@ afterEach(async () => {
 })
 
 describe('a structured Claude session over agentSession.*', () => {
+  it('reopens a never-used conversation with the same id and commits its resumed ownership', async () => {
+    resolveSessionFilePath.mockResolvedValue(null)
+    await ok('agentSession.create', createIntentParams())
+    const host = getStructuredAgentSessionHost()!
+    await host.close(SESSION)
+    await host.hold(SESSION, 'empty-session-check')
+    expect(claude.live().launch.options.sessionId).toBe(PROVIDER_SESSION)
+    expect(claude.live().launch.options.resume).toBeUndefined()
+    const record = host.deps.store.getRecord(SESSION)!
+    expect(record.providerHandleChain.at(-1)).toMatchObject({
+      origin: 'resumed',
+      handle: { provider: 'claude', sessionId: PROVIDER_SESSION }
+    })
+    expect(record.lease.claimStatus).toBe('live')
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'OK' }] }
+    await expect(
+      ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, record.lease.runtimeFence),
+        body
+      })
+    ).resolves.toMatchObject({ submission: { dispatchState: 'accepted' } })
+  })
+
   it('strips ambient Anthropic auth from the child once a managed account is pinned', async () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     claudeLaunchEnv = { ANTHROPIC_BASE_URL: 'https://gateway.example.test' }

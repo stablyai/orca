@@ -222,14 +222,15 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('shows the structured-native-chat child setting only when Chat UI is the default view', async () => {
+  it('shows live agent streaming independently of the Chat UI default view', async () => {
     const updateSettings = vi.fn()
     const disabledSettings = getDefaultSettings('/tmp')
     const disabledMarkup = renderToStaticMarkup(
       <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
     )
     expect(disabledMarkup).toContain('Chat UI')
-    expect(disabledMarkup).not.toContain('Use updated structured native chat')
+    expect(disabledMarkup).toContain('Live agent streaming')
+    expect(disabledMarkup).not.toContain('Live steering in rooms')
     expect(disabledMarkup).not.toContain('Default view')
 
     const terminalDefault = {
@@ -248,8 +249,8 @@ describe('ExperimentalPane', () => {
     expect(
       terminalRender.container.querySelector('[data-slot="native-chat-default-view-select"]')
     ).not.toBeNull()
-    // Structured chat has no entry path under Terminal chat, so its opt-in is not offered.
-    expect(terminalRender.container.textContent).not.toContain('Use updated structured native chat')
+    expect(terminalRender.container.textContent).toContain('Live agent streaming')
+    expect(terminalRender.container.textContent).not.toContain('Live steering in rooms')
     terminalRender.root.unmount()
 
     const { root, container } = await renderExperimentalPane({
@@ -257,19 +258,40 @@ describe('ExperimentalPane', () => {
       settings: { ...terminalDefault, openAgentTabsInChatByDefault: true }
     })
 
-    expect(container.textContent).toContain('Use updated structured native chat')
-    // The one opt-in gates both providers, so its copy must not name only Codex.
-    expect(container.textContent).toContain(
-      'Opt in to the host-owned structured chat runtime for Codex and Claude.'
-    )
-    expect(container.textContent).toContain(
-      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
-    )
+    expect(container.textContent).toContain('Live agent streaming')
+    expect(container.textContent).not.toContain('Live steering in rooms')
     expect(container.textContent).toContain('Default view')
     root.unmount()
   })
 
-  it('hides a stale structured opt-in under Terminal chat without clearing it', async () => {
+  it('shows and updates room live steering only with structured native chat enabled', async () => {
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: true,
+      experimentalRoomLiveSteering: false,
+      openAgentTabsInChatByDefault: true
+    }
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
+
+    expect(container.textContent).toContain('Live steering in rooms')
+    const liveSteeringSwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Live steering in rooms"]'
+    )
+    if (!liveSteeringSwitch) {
+      throw new Error('Room live steering switch was not rendered')
+    }
+
+    await act(async () => {
+      liveSteeringSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalRoomLiveSteering: true })
+    root.unmount()
+  })
+
+  it('keeps live agent streaming visible when the Chat UI default changes', async () => {
     const updateSettings = vi.fn()
     const settings = {
       ...getDefaultSettings('/tmp'),
@@ -279,7 +301,7 @@ describe('ExperimentalPane', () => {
     }
     const { root, container } = await renderExperimentalPane({ updateSettings, settings })
 
-    expect(container.textContent).toContain('Use updated structured native chat')
+    expect(container.textContent).toContain('Live agent streaming')
 
     const terminalChatOption = Array.from(
       container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
@@ -302,13 +324,12 @@ describe('ExperimentalPane', () => {
       settings: { ...settings, openAgentTabsInChatByDefault: false }
     })
 
-    expect(hidden.container.textContent).not.toContain('Use updated structured native chat')
+    expect(hidden.container.textContent).toContain('Live agent streaming')
     hidden.root.unmount()
 
-    // Returning to Chat UI restores the control still switched on.
     const restored = await renderExperimentalPane({ updateSettings, settings })
     const structuredSwitch = restored.container.querySelector<HTMLButtonElement>(
-      '#experimental-native-chat button[role="switch"][aria-label="Toggle updated structured native chat"]'
+      '#experimental-harness-streaming button[role="switch"][aria-label="Toggle live agent streaming"]'
     )
     expect(structuredSwitch?.getAttribute('aria-checked')).toBe('true')
     restored.root.unmount()
@@ -385,8 +406,7 @@ describe('ExperimentalPane', () => {
     secondRender.root.unmount()
   })
 
-  // The two controls are nested, but each still writes only its own key.
-  it('never writes one Chat UI child setting while changing the other', async () => {
+  it('keeps the Chat UI and live-streaming settings independent', async () => {
     const updateSettings = vi.fn()
     const settings = {
       ...getDefaultSettings('/tmp'),
@@ -397,7 +417,7 @@ describe('ExperimentalPane', () => {
     const { root, container } = await renderExperimentalPane({ updateSettings, settings })
 
     const structuredSwitch = container.querySelector<HTMLButtonElement>(
-      '#experimental-native-chat button[role="switch"][aria-label="Toggle updated structured native chat"]'
+      '#experimental-harness-streaming button[role="switch"][aria-label="Toggle live agent streaming"]'
     )
     if (!structuredSwitch) {
       throw new Error('Structured native chat switch was not rendered')

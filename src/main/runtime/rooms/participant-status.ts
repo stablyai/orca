@@ -95,15 +95,20 @@ export function updateRoomParticipantStatus(
   isRunningAgent: boolean,
   status: Awaited<ReturnType<RoomHarnessAdapter['status']>>['status']
 ): RoomParticipant {
-  const adapter = participant.agent ? adapters[participant.agent] : null
-  const binding = roomParticipantHarnessBinding(participant)
+  const current = db.participants.get(participant.id)
+  const adapter = current.agent ? adapters[current.agent] : null
+  const binding = roomParticipantHarnessBinding(current)
   const incarnation = isRunningAgent && adapter && binding ? adapter.incarnation(binding) : null
-  const nextState = isRunningAgent ? (status === 'working' ? 'busy' : 'online') : 'offline'
-  const incarnationChanged = incarnation !== null && incarnation !== participant.processIncarnation
-  if (nextState === participant.state && !incarnationChanged) {
-    return participant
+  const nextState = isRunningAgent
+    ? status === 'working' || (status === null && current.state === 'busy')
+      ? 'busy'
+      : 'online'
+    : 'offline'
+  const incarnationChanged = incarnation !== null && incarnation !== current.processIncarnation
+  if (nextState === current.state && !incarnationChanged) {
+    return current
   }
-  const updated = db.participants.update(participant.id, {
+  const updated = db.participants.update(current.id, {
     state: nextState,
     ...(incarnationChanged ? { processIncarnation: incarnation } : {})
   })

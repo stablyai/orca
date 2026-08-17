@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type { RoomData } from './use-room-data'
 import { roomComposerRunMode } from './room-composer-run-mode'
+import { showRoomActionError } from './room-action-error'
 
 export function useRoomComposerWorkControl(input: {
   data: RoomData
@@ -25,7 +25,7 @@ export function useRoomComposerWorkControl(input: {
     try {
       await roomRpc(input.data.target, `rooms.work.${mode}`, { roomId: input.data.roomId })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      showRoomActionError(error)
     } finally {
       setAction(null)
     }
@@ -33,6 +33,7 @@ export function useRoomComposerWorkControl(input: {
   return {
     mode,
     run,
+    loading: action !== null,
     disabled: action !== null || input.sending || (mode === 'send' && input.sendDisabled),
     label:
       mode === 'stop'

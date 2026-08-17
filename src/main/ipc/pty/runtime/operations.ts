@@ -94,13 +94,23 @@ export async function attachPtyFromRuntimeController(
   }
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+    const recentOutputMark = deps.runtime?.markRecentPtyOutput?.(ptyId)
     const attachResult = await provider.attach(ptyId)
     if (attachResult?.providerSequence) {
-      deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
-        ptyId,
-        attachResult.providerSequence,
-        sequenceBeforeProviderAttach
-      )
+      if (recentOutputMark) {
+        deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
+          ptyId,
+          attachResult.providerSequence,
+          sequenceBeforeProviderAttach,
+          recentOutputMark
+        )
+      } else {
+        deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
+          ptyId,
+          attachResult.providerSequence,
+          sequenceBeforeProviderAttach
+        )
+      }
     }
     return true
   } catch {

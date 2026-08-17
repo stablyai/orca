@@ -143,7 +143,9 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   if (!record.origin && record.state === 'done') {
     return true
   }
-  return record.state !== 'done' && Date.now() - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  return (
+    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  )
 }
 
 function parkWorktreeResumeSweepUntilHostMirrorHydrates(

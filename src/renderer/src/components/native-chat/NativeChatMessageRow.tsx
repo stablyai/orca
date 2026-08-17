@@ -23,7 +23,7 @@ import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
  *  lifted card, assistant prose as body copy, reasoning de-emphasized.
  *  Memoized: a stream frame republishes the whole transcript, but settled rows
  *  keep their block identity, so only the changed row re-renders. */
-export const MessageRow = memo(function MessageRow({
+export const NativeChatMessageRow = memo(function NativeChatMessageRow({
   message,
   expandSignal,
   activeTurnIsWorking,
@@ -65,8 +65,8 @@ export const MessageRow = memo(function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
-  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
   const isSubagentTask = message.subagentEvent?.kind === 'task'
+  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
   const literalTransport = literalRoomTransportText(markdown)
   const renderedText = literalTransport ?? markdown
 
@@ -102,8 +102,8 @@ export const MessageRow = memo(function MessageRow({
               <NativeChatImageAttachments
                 blocks={prose}
                 runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-               loadContext={imageLoadContext} />
+                loadContext={imageLoadContext}
+              />
               {literalTransport !== null ? (
                 <div className="whitespace-pre-wrap break-words">{renderedText}</div>
               ) : (
@@ -120,8 +120,8 @@ export const MessageRow = memo(function MessageRow({
             <NativeChatImageAttachments
               blocks={prose}
               runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-             loadContext={imageLoadContext} />
+              loadContext={imageLoadContext}
+            />
           )}
         </div>
         {deliveryFailed ? (
@@ -162,8 +162,8 @@ export const MessageRow = memo(function MessageRow({
       <NativeChatImageAttachments
         blocks={prose}
         runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
-       loadContext={imageLoadContext} />
+        loadContext={imageLoadContext}
+      />
       {renderedText ? (
         literalTransport !== null ? (
           <div className="whitespace-pre-wrap break-words">{renderedText}</div>

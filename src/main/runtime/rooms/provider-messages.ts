@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../../sqlite/sync-database'
 import type {
-  RoomCompletedActivity,
   RoomDelivery,
   RoomMessage,
-  RoomParticipant
+  RoomParticipant,
+  RoomSettledActivity
 } from '../../../shared/rooms'
 import type { RoomMessageStore } from './messages'
 import type { RoomRow } from './rows'
@@ -92,27 +92,43 @@ export class RoomProviderMessageStore {
     body: string
     mentions: string[]
     createdAt: number
-    activity?: RoomCompletedActivity
+    activity?: RoomSettledActivity
+    settleDelivery?: boolean
+    enqueueDeliveries?: boolean
+    replyToId?: string
+    retainObserved?: boolean
   }): RoomMessage | null {
     this.db.exec('SAVEPOINT room_provider_reply')
     try {
       const observed = this.db
         .prepare(
-          `INSERT OR IGNORE INTO room_provider_messages
+          `INSERT INTO room_provider_messages
            (participant_id, provider_session_id, provider_message_id, observed_at)
-           VALUES (?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(participant_id, provider_session_id, provider_message_id)
+           DO UPDATE SET observed_at = room_provider_messages.observed_at
+           WHERE ? = 1 AND room_provider_messages.room_message_id IS NULL`
         )
         .run(
           input.participant.id,
           input.providerSessionId,
           input.providerMessageId,
-          input.createdAt
+          input.createdAt,
+          input.retainObserved ? 1 : 0
         )
       if (observed.changes === 0) {
         this.db.exec('RELEASE room_provider_reply')
         return null
       }
-      const parent = this.messages.get(input.delivery.messageId)
+      const group = input.delivery.providerTurnId
+        ? this.messages.deliveries.awaitingResponseGroup(
+            input.participant.id,
+            input.delivery.providerTurnId
+          )
+        : []
+      const parent = this.messages.get(
+        input.replyToId ?? group[0]?.messageId ?? input.delivery.messageId
+      )
       const message = this.messages.create({
         id: randomUUID(),
         roomId: input.participant.roomId,
@@ -127,9 +143,21 @@ export class RoomProviderMessageStore {
           providerMessageId: input.providerMessageId,
           ...(input.activity ? { activity: input.activity } : {})
         },
-        createdAt: input.createdAt
+        createdAt: input.createdAt,
+        enqueueDeliveries: input.enqueueDeliveries
       }).message
-      this.messages.deliveries.markResponded(input.delivery.id, message.id, input.createdAt)
+      if (input.settleDelivery !== false) {
+        if (input.delivery.providerTurnId) {
+          this.messages.deliveries.markRespondedGroup(
+            input.participant.id,
+            input.delivery.providerTurnId,
+            message.id,
+            input.createdAt
+          )
+        } else {
+          this.messages.deliveries.markResponded(input.delivery.id, message.id, input.createdAt)
+        }
+      }
       this.db
         .prepare(
           `UPDATE room_provider_messages SET room_message_id = ?

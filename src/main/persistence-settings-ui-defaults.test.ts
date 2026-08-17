@@ -100,11 +100,36 @@ describe('Store', () => {
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.experimentalTerminalAttention).toBe(false)
     expect(settings.experimentalNewWorktreeCardStyle).toBe(false)
+    expect(settings.enabledHarnessStreamingAgents).toEqual(['codex'])
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
     expect(settings.notifications.customSoundVolume).toBe(100)
     expect(settings.notifications.suppressWhenFocused).toBe(true)
+  })
+
+  it('migrates the legacy live-streaming opt-in and harness selection once', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      settings: {
+        ...persisted.settings,
+        experimentalStructuredNativeChat: false,
+        experimentalHarnessStreaming: true,
+        enabledHarnessStreamingAgents: ['omp', 'codex', 'invalid']
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings()).toMatchObject({
+      experimentalStructuredNativeChat: true,
+      enabledHarnessStreamingAgents: ['codex', 'omp']
+    })
+    store.flush()
+    expect((readDataFile() as PersistedState).settings).not.toHaveProperty(
+      'experimentalHarnessStreaming'
+    )
   })
 
   it('repairs a persisted terminal line height outside xterm bounds', async () => {

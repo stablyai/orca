@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isStructuredMachineAgent } from '../../../../shared/structured-agent-provider'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
@@ -107,7 +107,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         unifiedTabs.filter(
           (tab): tab is StructuredAgentSessionTab =>
             tab.contentType === 'agent-session' &&
-            isAgentSessionHandleProvider(tab.agentSessionAgent)
+            isStructuredMachineAgent(tab.agentSessionAgent ?? '')
         ),
       [unifiedTabs]
     )

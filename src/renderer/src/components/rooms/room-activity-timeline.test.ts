@@ -2,11 +2,24 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   buildRoomActivitySections,
-  completedRoomActivity,
+  settledRoomActivity,
   formatRoomActivityDuration
 } from './room-activity-timeline'
 
 describe('room activity timeline', () => {
+  it('hides room recipient transport from persisted activity details', () => {
+    const sections = buildRoomActivitySections([
+      message('reply', 'assistant', 1, [
+        {
+          type: 'text',
+          text: 'Done.\n<orca-room-recipients>["codex2"]</orca-room-recipients>'
+        }
+      ])
+    ])
+
+    expect(sections).toEqual([{ kind: 'commentary', id: 'reply:text:0', text: 'Done.' }])
+  })
+
   it('keeps commentary order and pairs Claude-style tool results', () => {
     const messages: NativeChatMessage[] = [
       message('thinking', 'assistant', 10, [{ type: 'text', text: 'Inspecting the files.' }]),
@@ -64,9 +77,53 @@ describe('room activity timeline', () => {
       startedAt: 1_000,
       completedAt: 129_000
     }
-    expect(completedRoomActivity({ activity })).toEqual(activity)
-    expect(completedRoomActivity({ activity: { state: 'completed' } })).toBeNull()
+    expect(settledRoomActivity({ activity })).toEqual(activity)
+    expect(settledRoomActivity({ activity: { state: 'completed' } })).toBeNull()
     expect(formatRoomActivityDuration(activity.startedAt, activity.completedAt)).toBe('2m 8s')
+  })
+
+  it('keeps settled activity inside its recorded turn boundaries', () => {
+    const activity = settledRoomActivity({
+      activity: {
+        state: 'completed',
+        messages: [
+          message('history', 'assistant', 999, [{ type: 'text', text: 'Old turn' }]),
+          message('start', 'assistant', 1_000, [{ type: 'text', text: 'Started' }]),
+          message('end', 'assistant', 2_000, [{ type: 'text', text: 'Finished' }]),
+          message('future', 'assistant', 2_001, [{ type: 'text', text: 'Future turn' }])
+        ],
+        startedAt: 1_000,
+        completedAt: 2_000
+      }
+    })
+
+    expect(activity?.messages.map(({ id }) => id)).toEqual(['start', 'end'])
+  })
+
+  it('preserves receive order when timestamps tie', () => {
+    const sections = buildRoomActivitySections([
+      message('z', 'assistant', 1, [{ type: 'text', text: 'First' }]),
+      message('a', 'assistant', 1, [{ type: 'text', text: 'Second' }])
+    ])
+
+    expect(sections).toMatchObject([
+      { kind: 'commentary', text: 'First' },
+      { kind: 'commentary', text: 'Second' }
+    ])
+  })
+
+  it('keeps user and system prompts out of agent activity', () => {
+    const sections = buildRoomActivitySections([
+      message('before', 'assistant', 1, [{ type: 'text', text: 'Before' }]),
+      message('steer', 'user', 2, [{ type: 'text', text: 'Change course' }]),
+      message('system', 'system', 3, [{ type: 'text', text: 'Internal prompt' }]),
+      message('after', 'assistant', 4, [{ type: 'text', text: 'After' }])
+    ])
+
+    expect(sections).toMatchObject([
+      { kind: 'commentary', text: 'Before' },
+      { kind: 'commentary', text: 'After' }
+    ])
   })
 })
 

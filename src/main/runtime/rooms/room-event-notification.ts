@@ -6,7 +6,11 @@ export function addRoomMessageNotificationContext(
   roomId: string,
   event: RoomEvent
 ): RoomEvent {
-  if (event.type !== 'message.created' || event.message.actorKind !== 'agent') {
+  if (
+    event.type !== 'message.created' ||
+    event.message.actorKind !== 'agent' ||
+    (event.message.metadata.activity as { state?: unknown } | undefined)?.state === 'interrupted'
+  ) {
     return event
   }
   const room = db.core.get(roomId)

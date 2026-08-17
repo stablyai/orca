@@ -1,21 +1,24 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown, LoaderCircle } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { StreamingMarkdownFadeRoot } from '@/components/sidebar/streaming-markdown-fade'
+import { AgentIcon } from '@/lib/agent-catalog'
+import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { orderNativeChatMessages } from './native-chat-message-grouping'
+import {
+  buildNativeChatConversationItems,
+  type NativeChatConversationItem
+} from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
-import { MessageRow } from './NativeChatMessageRow'
-import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
-import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
-import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
-import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { RoomActivityDetails } from '../rooms/RoomActivityTimeline'
+import { NativeChatMessageRow } from './NativeChatMessageRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
+import { NativeChatActivityHeader } from './NativeChatActivityHeader'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
@@ -23,21 +26,140 @@ function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
 }
 
-const MAX_EXPANDED_TURNS = 128
+function TypingIndicatorRow(): React.JSX.Element {
+  return (
+    <div
+      className="flex items-center justify-start"
+      aria-label={translate('components.native-chat.status.responding', 'Agent is responding')}
+      aria-live="polite"
+    >
+      <div className="flex h-8 items-center gap-1.5 text-xs text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" />
+        <span>{translate('components.native-chat.status.thinking', 'Thinking')}</span>
+      </div>
+    </div>
+  )
+}
+
+function AssistantTurnRow({
+  item,
+  agent,
+  assistantLabel,
+  expandSignal,
+  onScrollMessageToTop,
+  onLinkClick,
+  allowFileUriLinks,
+  subagentSourceKey,
+  imageLoadContext,
+  runtimeContext
+}: {
+  item: Extract<NativeChatConversationItem, { kind: 'assistant-turn' }>
+  agent: NativeChatLiveSession['agent']
+  assistantLabel?: string
+  expandSignal: boolean
+  onScrollMessageToTop: (el: HTMLElement) => void
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks: boolean
+  subagentSourceKey?: string
+  imageLoadContext?: NativeChatImageLoadContext
+  runtimeContext?: RuntimeFileOperationArgs | null
+}): React.JSX.Element {
+  const iconAgent = agentTypeToIconAgent(agent)
+  const completion =
+    item.startedAt != null && item.completedAt != null
+      ? { startedAt: item.startedAt, completedAt: item.completedAt }
+      : null
+  const [activityExpanded, setActivityExpanded] = useState(item.working)
+  const latestSteerId = item.segments.findLast((segment) => segment.kind === 'message')?.id
+  const previousSteerId = useRef(latestSteerId)
+  const previousWorking = useRef(item.working)
+
+  useEffect(() => {
+    if (previousWorking.current && !item.working) {
+      setActivityExpanded(false)
+    } else if (item.working && latestSteerId !== previousSteerId.current) {
+      setActivityExpanded(true)
+    }
+    previousWorking.current = item.working
+    previousSteerId.current = latestSteerId
+  }, [item.working, latestSteerId])
+
+  return (
+    <article className="flex min-w-0 items-start gap-3">
+      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card">
+        <AgentIcon agent={iconAgent} size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 text-xs font-semibold text-foreground">
+          {assistantLabel ?? `@${agent}`}
+        </div>
+        {item.working || item.outcome ? (
+          <NativeChatActivityHeader
+            messages={item.activityMessages}
+            startedAt={item.startedAt}
+            completedAt={completion?.completedAt ?? null}
+            outcome={item.outcome}
+            expanded={activityExpanded}
+            onExpandedChange={setActivityExpanded}
+          />
+        ) : null}
+        {item.segments.map((segment) =>
+          segment.kind === 'message' ? (
+            <div key={segment.id} className="my-3">
+              <NativeChatMessageRow
+                message={segment.message}
+                expandSignal={expandSignal}
+                onScrollMessageToTop={onScrollMessageToTop}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+                imageLoadContext={imageLoadContext}
+                runtimeContext={runtimeContext}
+              />
+            </div>
+          ) : activityExpanded ? (
+            <RoomActivityDetails key={segment.id} messages={segment.messages} />
+          ) : null
+        )}
+        {item.working ? <TypingIndicatorRow /> : null}
+        {subagentSourceKey ? (
+          <AgentSubagentTurnLink
+            sourceKey={subagentSourceKey}
+            startedAt={item.startedAt}
+            completedAt={item.completedAt}
+          />
+        ) : null}
+        {item.finalMessage ? (
+          <NativeChatMessageRow
+            message={item.finalMessage}
+            expandSignal={expandSignal}
+            onScrollMessageToTop={onScrollMessageToTop}
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+            imageLoadContext={imageLoadContext}
+                runtimeContext={runtimeContext}
+            streamingFade={{ id: `native-chat:${item.id}`, start: item.working }}
+          />
+        ) : null}
+      </div>
+    </article>
+  )
+}
 
 export function NativeChatMessageList({
   session,
   isWorking,
   expandSignal,
   fontScale,
+  workingStartedAt = null,
+  activeTurnId = null,
   onLinkClick,
   allowFileUriLinks = false,
-  workingStartedAt,
   failedDeliveryMessageIds,
   subagentSourceKey,
-  showTurnStatus = true,
   runtimeContext,
-  imageLoadContext
+  assistantLabel,
+  imageLoadContext,
+  turnCompletions
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -45,86 +167,53 @@ export function NativeChatMessageList({
   expandSignal: boolean
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
+  /** Authoritative hook epoch for the current turn, when available. */
   workingStartedAt?: number | null
+  activeTurnId?: string | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
   subagentSourceKey?: string
-  /** Turn timing and disclosure are available on structured agent sessions. */
-  showTurnStatus?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  assistantLabel?: string
   imageLoadContext?: NativeChatImageLoadContext
+  turnCompletions?: Readonly<
+    Record<string, { outcome: 'completed' | 'interrupted' | 'failed'; completedAt: number }>
+  >
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
   const [showJump, setShowJump] = useState(false)
-  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
-  const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => {
-      const next = new Set(current)
-      if (next.has(turnKey)) {
-        next.delete(turnKey)
-      } else {
-        if (next.size >= MAX_EXPANDED_TURNS) {
-          const oldest = next.values().next().value
-          if (oldest) {
-            next.delete(oldest)
-          }
-        }
-        next.add(turnKey)
-      }
-      return next
-    })
-  }, [])
 
+  // Why: mirror stuck state into a ref so the auto-scroll layout effect can read
+  // it without depending on it — depending on stuckToBottom (which scrollToBottom
+  // sets) would re-fire the effect in a self-loop.
   const stuckToBottomRef = useRef(stuckToBottom)
   stuckToBottomRef.current = stuckToBottom
   const { hasMore, loadingEarlier, loadEarlier } = session
 
-  // Keep hidden harness turns as fold boundaries, then strip them before render.
-  const messages = useMemo(
-    () => stripNoiseMessages(foldToolMessages(orderNativeChatMessages(session.messages))),
-    [session.messages]
+  // Strip harness noise before grouping every assistant generation into one
+  // chronological activity + final-answer turn.
+  const conversationItems = useMemo(
+    () =>
+      buildNativeChatConversationItems(
+        stripNoiseMessages(session.messages),
+        isWorking,
+        workingStartedAt,
+        activeTurnId,
+        turnCompletions
+      ),
+    [session.messages, isWorking, workingStartedAt, activeTurnId, turnCompletions]
   )
-  const showTypingIndicator = showTurnStatus
-    ? isWorking
-    : shouldShowNativeChatTypingIndicator({ messages, isWorking })
-  const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
-  const currentTurnKey =
-    latestUserIndex === -1 ? undefined : (messages[latestUserIndex]?.id ?? undefined)
-  // Resolve each row's turn boundary once. Prefix slice/findLast in the render
-  // loop becomes quadratic for long transcripts.
-  const turnKeys = useMemo(() => {
-    let currentTurnKey: string | undefined
-    return messages.map((message) => {
-      if (message.role === 'user') {
-        currentTurnKey = message.id
-      }
-      return currentTurnKey
-    })
-  }, [messages])
-  const turnMessagesByKey = useMemo(() => {
-    const byKey = new Map<string, NativeChatMessage[]>()
-    let key: string | undefined
-    for (const message of messages) {
-      if (message.role === 'user') {
-        key = message.id
-        byKey.set(key, [])
-      }
-      if (key) {
-        byKey.get(key)?.push(message)
-      }
-    }
-    return byKey
-  }, [messages])
-  const turnStatuses = useNativeChatTurnStatus({
-    messages,
-    latestUserIndex,
-    isWorking: showTurnStatus && isWorking,
-    workingStartedAt: showTurnStatus ? workingStartedAt : null
-  })
+  const showTypingIndicator =
+    isWorking &&
+    !session.messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID) &&
+    !conversationItems.some((item) => item.kind === 'assistant-turn' && item.working)
 
+  // When an older page prepends, the scroll content grows above the viewport.
+  // Capture the pre-render scroll height so the layout effect can restore the
+  // user's position (no jump) instead of letting the browser keep scrollTop.
   const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
 
   const handleScroll = useCallback(() => {
@@ -160,12 +249,18 @@ export function NativeChatMessageList({
     if (!container) {
       return
     }
+    // Detach synchronously (not just via the pending onScroll) so an in-place
+    // streaming growth can't re-pin to the bottom mid-flight and fight this
+    // deliberate scroll. The ref is what the resize observer reads.
     stuckToBottomRef.current = false
     setStuckToBottom(false)
     const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top
     container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' })
   }, [])
 
+  // Re-pin to the bottom when new content arrives, but only if the user hasn't
+  // scrolled up. Layout effect so the jump happens before paint (no flicker).
+  // When an older page just prepended, restore the prior position instead.
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (el && prependAnchorRef.current) {
@@ -179,8 +274,13 @@ export function NativeChatMessageList({
     if (stuckToBottomRef.current) {
       scrollToBottom()
     }
-  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
+  }, [conversationItems.length, isWorking, showTypingIndicator, scrollToBottom])
 
+  // Content growing without a message-count change (a streaming assistant turn
+  // extends its own message in place) never re-fires the layout effect above.
+  // Observe the container so those in-place growths still re-pin: stay glued to
+  // the bottom while stuck, otherwise just refresh the jump affordance. This is
+  // what removes most "Jump to latest" clicks during a live response.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || typeof ResizeObserver === 'undefined') {
@@ -203,7 +303,7 @@ export function NativeChatMessageList({
   }, [handleScroll, scrollToBottom])
 
   return (
-    <div className="relative min-h-0 flex-1">
+    <StreamingMarkdownFadeRoot className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -233,82 +333,36 @@ export function NativeChatMessageList({
               </button>
             </div>
           ) : null}
-          {messages.map((message, index) => {
-            const turnKey = turnKeys[index]
-            const isCurrentTurn = currentTurnKey
-              ? turnKey === currentTurnKey
-              : turnKey === undefined
-            const status =
-              index === latestUserIndex
-                ? turnStatuses.active
-                : message.role === 'user' && turnKey
-                  ? turnStatuses.completedByTurn[turnKey]
-                  : undefined
-            return (
-              <Fragment key={message.id}>
-                <MessageRow
-                  message={message}
-                  expandSignal={expandSignal}
-                  // A missing transcript lifecycle is not evidence that the turn
-                  // ended. Structured sessions and legacy live hooks still expose
-                  // the authoritative session-level working state.
-                  activeTurnIsWorking={
-                    showTurnStatus &&
-                    isCurrentTurn &&
-                    (isWorking || session.transcriptLifecycle?.state === 'working')
-                  }
-                  onScrollMessageToTop={scrollMessageToTop}
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={allowFileUriLinks}
-                  deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
-                  structuredActivityUi={showTurnStatus}
-                  activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
-                  runtimeContext={runtimeContext}
-                  imageLoadContext={imageLoadContext}
-                />
-                {showTurnStatus &&
-                status &&
-                (index !== latestUserIndex || showTypingIndicator || !isWorking) ? (
-                  <>
-                    <NativeChatWorkingStatus
-                      startedAt={status.startedAt}
-                      thinking={status.thinking}
-                      workedSeconds={status.workedSeconds}
-                      expanded={turnKey ? expandedTurnIds.has(turnKey) : false}
-                      onToggleExpanded={
-                        status.workedSeconds != null && turnKey
-                          ? () => toggleExpandedTurn(turnKey)
-                          : undefined
-                      }
-                    />
-                    {subagentSourceKey ? (
-                      <AgentSubagentTurnLink
-                        sourceKey={subagentSourceKey}
-                        startedAt={status.startedAt}
-                        completedAt={
-                          status.startedAt == null || status.workedSeconds == null
-                            ? null
-                            : status.startedAt + status.workedSeconds * 1_000
-                        }
-                        messages={turnKey ? turnMessagesByKey.get(turnKey) : undefined}
-                      />
-                    ) : null}
-                  </>
-                ) : null}
-              </Fragment>
+          {conversationItems.map((item) =>
+            item.kind === 'assistant-turn' ? (
+              <AssistantTurnRow
+                key={item.id}
+                item={item}
+                agent={session.agent}
+                assistantLabel={assistantLabel}
+                expandSignal={expandSignal}
+                onScrollMessageToTop={scrollMessageToTop}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+                subagentSourceKey={subagentSourceKey}
+                imageLoadContext={imageLoadContext}
+                runtimeContext={runtimeContext}
+              />
+            ) : (
+              <NativeChatMessageRow
+                key={item.id}
+                message={item.message}
+                expandSignal={expandSignal}
+                onScrollMessageToTop={scrollMessageToTop}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+                deliveryFailed={failedDeliveryMessageIds?.has(item.message.id) === true}
+                imageLoadContext={imageLoadContext}
+                runtimeContext={runtimeContext}
+              />
             )
-          })}
-          {showTurnStatus &&
-          latestUserIndex === -1 &&
-          turnStatuses.active &&
-          showTypingIndicator ? (
-            <NativeChatWorkingStatus
-              startedAt={turnStatuses.active.startedAt}
-              thinking={turnStatuses.active.thinking}
-              workedSeconds={turnStatuses.active.workedSeconds}
-            />
-          ) : null}
-          {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
+          )}
+          {showTypingIndicator ? <TypingIndicatorRow /> : null}
         </div>
       </div>
       {showJump ? (
@@ -322,6 +376,6 @@ export function NativeChatMessageList({
           <span>{translate('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
         </button>
       ) : null}
-    </div>
+    </StreamingMarkdownFadeRoot>
   )
 }

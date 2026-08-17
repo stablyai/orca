@@ -3,6 +3,10 @@ import type { AgentSessionContextSnapshot } from '../../shared/agent-session-con
 import type { HarnessConversationDriverSink } from './driver'
 
 export type AcpTextState = Map<string, { role: 'assistant' | 'reasoning'; text: string }>
+export type AcpToolState = Map<
+  string,
+  { name: string; input: unknown; output?: unknown; failed?: boolean }
+>
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
 
 export function acpTextMessage(
@@ -53,6 +57,17 @@ export function acpToolMessage(
   }
 }
 
+export function emitAcpTool(
+  sink: HarnessConversationDriverSink,
+  tools: AcpToolState,
+  toolCallId: string
+): void {
+  const tool = tools.get(toolCallId)
+  if (tool) {
+    sink.emit({ type: 'message.completed', message: acpToolMessage(toolCallId, tool) })
+  }
+}
+
 export function acpPlanMessage(
   update: Extract<SessionUpdate, { sessionUpdate: 'plan' }>,
   fallbackMessageId: string
@@ -90,20 +105,18 @@ export function emitAcpTextChunk(
   const role = update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
   const id = acpTextMessageId(role, update.messageId, fallbackMessageId)
   const current = texts.get(id)?.text ?? ''
-  if (!texts.has(id) && role === 'reasoning') {
+  if (!texts.has(id)) {
     texts.set(id, { role, text: '' })
     sink.emit({ type: 'message.started', message: acpTextMessage(id, role, '') })
   }
   texts.set(id, { role, text: current + update.content.text })
-  if (role === 'reasoning') {
-    sink.emit({
-      type: 'message.delta',
-      messageId: id,
-      blockIndex: 0,
-      offset: current.length,
-      text: update.content.text
-    })
-  }
+  sink.emit({
+    type: 'message.delta',
+    messageId: id,
+    blockIndex: 0,
+    offset: current.length,
+    text: update.content.text
+  })
 }
 
 export function completeAcpReasoning(
@@ -133,20 +146,25 @@ export function flushAcpAssistantCommentary(
   }
 }
 
-export function emitAcpFinal(sink: HarnessConversationDriverSink, texts: AcpTextState): void {
-  const candidates = [...texts].filter(([, value]) => value.role === 'assistant')
-  if (candidates.length === 0) {
-    return
+export function completeAcpResponse(
+  sink: HarnessConversationDriverSink,
+  texts: AcpTextState,
+  fallbackMessageId: string,
+  assistantPhase?: NativeChatMessage['assistantPhase']
+): void {
+  for (const [id, value] of texts) {
+    if (!id.endsWith(`:${fallbackMessageId}`)) {
+      continue
+    }
+    sink.emit({
+      type: 'message.completed',
+      message: acpTextMessage(
+        id,
+        value.role,
+        value.text,
+        value.role === 'assistant' ? assistantPhase : undefined
+      )
+    })
+    texts.delete(id)
   }
-  const id = candidates.at(-1)![0]
-  const text = candidates.map(([, value]) => value.text).join('\n\n')
-  const message = acpTextMessage(id, 'assistant', '', 'final')
-  sink.emit({ type: 'message.started', message })
-  if (text) {
-    sink.emit({ type: 'message.delta', messageId: id, blockIndex: 0, offset: 0, text })
-  }
-  sink.emit({
-    type: 'message.completed',
-    message: { ...message, blocks: [{ type: 'text', text }] }
-  })
 }

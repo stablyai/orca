@@ -2,12 +2,7 @@ import { createContext, useContext } from 'react'
 import { Bot } from 'lucide-react'
 import type { AgentSubagentSnapshot } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import {
-  isToolCallBlock,
-  type AgentType,
-  type NativeChatMessage
-} from '../../../../shared/native-chat-types'
-import { isSubagentToolName } from '../../../../shared/native-chat-tool-name'
+import type { AgentType } from '../../../../shared/native-chat-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
@@ -37,18 +32,14 @@ type AgentSubagentContextValue = {
 
 export const AgentSubagentContext = createContext<AgentSubagentContextValue | null>(null)
 
-const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
-
 export function AgentSubagentTurnLink({
   sourceKey,
   startedAt,
-  completedAt,
-  messages = EMPTY_MESSAGES
+  completedAt
 }: {
   sourceKey: string
   startedAt: number | null
   completedAt: number | null
-  messages?: readonly NativeChatMessage[]
 }): React.JSX.Element | null {
   const context = useContext(AgentSubagentContext)
   const data = context?.dataBySource[sourceKey]
@@ -56,10 +47,7 @@ export function AgentSubagentTurnLink({
     return null
   }
   const rows = subagentsInTurn(data, startedAt, completedAt)
-  const coordinated = messages.some((message) =>
-    message.blocks.some((block) => isToolCallBlock(block) && isSubagentToolName(block.name))
-  )
-  if (rows.length === 0 && !coordinated) {
+  if (rows.length === 0) {
     return null
   }
   const names = rows
@@ -75,9 +63,7 @@ export function AgentSubagentTurnLink({
     >
       <Bot className="size-3.5 shrink-0" />
       <span className="shrink-0 font-medium">
-        {rows.length > 0
-          ? translate('agentSubagents.turn.count', '{{count}} subagents', { count: rows.length })
-          : translate('agentSubagents.label', 'Subagents')}
+        {translate('agentSubagents.turn.count', '{{count}} subagents', { count: rows.length })}
       </span>
       {names ? <span className="truncate">· {names}</span> : null}
       {rows.some((row) => row.active) ? (

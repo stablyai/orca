@@ -11,9 +11,10 @@ import type { RoomData } from './use-room-data'
 import { showRoomActionError } from './room-action-error'
 import { RoomMessageAttachments } from './RoomAttachments'
 import { RoomAuthorAvatar } from './RoomAuthorAvatar'
-import { RoomCompletedActivityTimeline } from './RoomActivityTimeline'
-import { completedRoomActivity, roomFinalFadeId } from './room-activity-timeline'
+import { RoomSettledActivityTimeline } from './RoomActivityTimeline'
+import { roomFinalFadeId, settledRoomActivity } from './room-activity-timeline'
 import { isRoomLoopLimitSuppression } from './room-delivery-state'
+import { activeMessageDeliveries, isMessageMutable, roomMessageAudience } from './room-queue-state'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 
 export function RoomMessageRow({
@@ -33,8 +34,10 @@ export function RoomMessageRow({
     }
   }, [editing, message.body])
   const isUser = message.actorKind === 'user'
-  const failedDelivery = Object.values(data.deliveries).find(
-    (item) => item.messageId === message.id && item.state === 'failed'
+  const mutable = isMessageMutable(data, message.id)
+  const audience = isUser ? roomMessageAudience(data, message.id) : null
+  const failedDelivery = activeMessageDeliveries(data, message.id).find(
+    (item) => item.state === 'failed'
   )
   const loopSuppressed = Object.values(data.deliveries).some(
     (item) => item.messageId === message.id && isRoomLoopLimitSuppression(item)
@@ -43,7 +46,7 @@ export function RoomMessageRow({
   const participant = data.snapshot?.participants.find(
     (item) => item.id === message.senderId || item.identity === message.senderIdentity
   )
-  const activity = completedRoomActivity(message.metadata)
+  const activity = settledRoomActivity(message.metadata)
   const [copied, setCopied] = useState(false)
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(message.body).then(() => {
@@ -67,7 +70,7 @@ export function RoomMessageRow({
             >
               <CornerUpLeft className="size-3.5" />
             </MessageAction>
-            {!message.deletedAt ? (
+            {!message.deletedAt && mutable ? (
               <>
                 <MessageAction
                   type="button"
@@ -159,10 +162,11 @@ export function RoomMessageRow({
               {translate('rooms.message.retryDelivery', 'Delivery failed — retry')}
             </button>
           ) : null}
-          {message.editedAt ? (
-            <span className="text-[10px] text-muted-foreground">
-              {translate('rooms.message.edited', 'edited')}
-            </span>
+          {audience || message.editedAt ? (
+            <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
+              {audience ? <span>{roomMessageAudienceLabel(audience)}</span> : null}
+              {message.editedAt ? <span>{translate('rooms.message.edited', 'edited')}</span> : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -235,13 +239,12 @@ export function RoomMessageRow({
           </MessageAction>
         </div>
       </div>
-      {activity ? <RoomCompletedActivityTimeline activity={activity} /> : null}
+      {activity ? <RoomSettledActivityTimeline activity={activity} /> : null}
       {activity && participant ? (
         <AgentSubagentTurnLink
           sourceKey={participant.id}
           startedAt={activity.startedAt}
           completedAt={activity.completedAt}
-          messages={activity.messages}
         />
       ) : null}
       {message.deletedAt ? (
@@ -289,6 +292,30 @@ export function RoomMessageRow({
       ) : null}
     </article>
   )
+}
+
+function roomMessageAudienceLabel(
+  audience: NonNullable<ReturnType<typeof roomMessageAudience>>
+): string {
+  const targets = audience.identities.map((identity) => `@${identity}`).join(', ')
+  switch (audience.state) {
+    case 'queued':
+      return translate('rooms.message.queuedFor', 'Queued for {{targets}}', { targets })
+    case 'steering':
+      return translate('rooms.message.steeringTo', 'Steering to {{targets}}…', { targets })
+    case 'steered':
+      return translate('rooms.message.steeredTo', 'Steered to {{targets}}', { targets })
+    case 'paused':
+      return translate('rooms.message.pausedFor', 'Paused for {{targets}}', { targets })
+    case 'uncertain':
+      return translate('rooms.message.uncertainFor', 'Delivery to {{targets}} is uncertain', {
+        targets
+      })
+    case 'failed':
+      return translate('rooms.message.failedFor', 'Delivery to {{targets}} failed', { targets })
+    default:
+      return translate('rooms.message.to', 'To {{targets}}', { targets })
+  }
 }
 
 function MessageAction({

@@ -29,10 +29,11 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isStructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import {
   hasExplicitTuiLaunchCustomization,
   hasExplicitTuiAgentArgs,
@@ -61,6 +62,7 @@ export type LaunchAgentInNewTabArgs = {
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
+  disableStructuredStreaming?: boolean
 }
 
 export type LaunchAgentInNewTabResult = {
@@ -88,10 +90,7 @@ export function shouldQueueTerminalFocusAfterMenuClose(
  *
  * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
  */
-function launchAgentInNewTabInternal(
-  args: LaunchAgentInNewTabArgs,
-  forceLegacy = false
-): LaunchAgentInNewTabResult {
+export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
     agent,
     worktreeId,
@@ -103,7 +102,8 @@ function launchAgentInNewTabInternal(
     launchSource,
     quickCommandLabel,
     launchPlatform,
-    onPromptDelivered
+    onPromptDelivered,
+    disableStructuredStreaming
   } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
@@ -173,6 +173,63 @@ function launchAgentInNewTabInternal(
   }
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+
+  const workspaceKind =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      ? 'floating'
+      : worktreeId.startsWith('folder:')
+        ? 'folder'
+        : 'git-worktree'
+  const launchRoute = disableStructuredStreaming
+    ? 'legacy-native-chat'
+    : resolveAgentLaunchRoute({
+        agent,
+        settings: store.settings,
+        executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
+        platform: resolvedLaunchPlatform,
+        hostCapabilities: readLocalRuntimeCapabilities(),
+        workspaceKind,
+        projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
+        promptDelivery: viewModePromptDelivery,
+        launchText: trimmedPrompt,
+        nativeChatTranscriptIsLocalReadable:
+          initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
+        requiresTuiLaunchCustomization:
+          Boolean(initialCwd?.trim()) ||
+          hasExplicitTuiAgentArgs(agent, agentArgs) ||
+          hasExplicitTuiLaunchCustomization(store.settings, agent),
+        initialSessionOptions: startupPlan.sessionOptions
+      })
+  if (launchRoute === 'structured-native-chat' && isStructuredMachineAgent(agent)) {
+    const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
+      target: getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId }),
+      groupId,
+      sessionOptions: startupPlan.sessionOptions,
+      prompt: trimmedPrompt,
+      promptDelivery: viewModePromptDelivery,
+      onPromptDelivered
+    })
+    void structuredLaunch
+      .claimDefinitiveRefusalFallback(() => {
+        const fallback = launchAgentInNewTab({ ...args, disableStructuredStreaming: true })
+        return (
+          fallback?.promptDeliveryResult ??
+          (hasPrompt
+            ? { delivered: Boolean(fallback), failureNotified: fallback === null }
+            : undefined)
+        )
+      })
+      .catch((error) => console.error('Structured agent fallback failed', error))
+    return {
+      tabId: null,
+      startupPlan,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session',
+      ...(structuredLaunch.promptDeliveryResult
+        ? { promptDeliveryResult: structuredLaunch.promptDeliveryResult }
+        : {})
+    }
+  }
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const webHostDelivery = launchAgentInWebHostTab({
       agent,
@@ -197,60 +254,6 @@ function launchAgentInNewTabInternal(
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
-        : {})
-    }
-  }
-
-  const workspaceKind =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? 'floating'
-      : worktreeId.startsWith('folder:')
-        ? 'folder'
-        : 'git-worktree'
-  const launchRoute = forceLegacy
-    ? 'legacy-native-chat'
-    : resolveAgentLaunchRoute({
-        agent,
-        settings: store.settings,
-        executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-        platform: CLIENT_PLATFORM,
-        hostCapabilities: readLocalRuntimeCapabilities(),
-        workspaceKind,
-        projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
-        promptDelivery: viewModePromptDelivery,
-        launchText: trimmedPrompt,
-        nativeChatTranscriptIsLocalReadable:
-          initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
-        requiresTuiLaunchCustomization:
-          Boolean(initialCwd?.trim()) ||
-          hasExplicitTuiAgentArgs(agent, agentArgs) ||
-          hasExplicitTuiLaunchCustomization(store.settings, agent),
-        initialSessionOptions: startupPlan.sessionOptions
-      })
-  if (launchRoute === 'structured-native-chat' && isAgentSessionHandleProvider(agent)) {
-    const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
-      prompt: trimmedPrompt,
-      ...(promptDelivery === 'submit-after-ready' ? { promptDelivery } : {}),
-      onPromptDelivered
-    })
-    void structuredLaunch
-      .claimDefinitiveRefusalFallback(() => {
-        const fallback = launchAgentInNewTabInternal(args, true)
-        return (
-          fallback?.promptDeliveryResult ??
-          (hasPrompt
-            ? { delivered: Boolean(fallback), failureNotified: fallback === null }
-            : undefined)
-        )
-      })
-      .catch((error) => console.error('Structured Codex fallback failed', error))
-    return {
-      tabId: null,
-      startupPlan,
-      pasteDraftAfterLaunch: false,
-      focusAfterMenuClose: 'structured-session',
-      ...(structuredLaunch.promptDeliveryResult
-        ? { promptDeliveryResult: structuredLaunch.promptDeliveryResult }
         : {})
     }
   }
@@ -340,8 +343,4 @@ function launchAgentInNewTabInternal(
     pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
     ...(promptDeliveryResult ? { promptDeliveryResult } : {})
   }
-}
-
-export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
-  return launchAgentInNewTabInternal(args)
 }

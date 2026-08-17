@@ -20,7 +20,7 @@ import type {
   NativeChatMessage,
   NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
-import type { RoomActivityKind, RoomCompletedActivity } from '../../../../shared/rooms'
+import type { RoomActivityKind, RoomSettledActivity } from '../../../../shared/rooms'
 import {
   buildRoomActivitySections,
   formatRoomActivityDuration,
@@ -29,10 +29,10 @@ import {
 
 const MAX_DETAIL_CHARS = 8_000
 
-export function RoomCompletedActivityTimeline({
+export function RoomSettledActivityTimeline({
   activity
 }: {
-  activity: RoomCompletedActivity
+  activity: RoomSettledActivity
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const hasDetails = activity.messages.length > 0
@@ -109,7 +109,7 @@ export function hasRoomActivityDetails(
   messages: NativeChatMessage[],
   fallbackDetail?: string
 ): boolean {
-  return messages.length > 0 || Boolean(fallbackDetail)
+  return buildRoomActivitySections(messages).length > 0 || Boolean(fallbackDetail)
 }
 
 function RoomActivityToolGroup({ tools }: { tools: RoomActivityToolStep[] }): React.JSX.Element {

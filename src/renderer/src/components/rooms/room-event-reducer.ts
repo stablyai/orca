@@ -11,13 +11,15 @@ export type ActiveRoomState = {
   messages: RoomMessage[]
   deliveries: Record<string, RoomDelivery>
   activities: Record<string, RoomAgentActivity>
+  lastSteeredParticipantId: string | null
 }
 
 export const EMPTY_ACTIVE_ROOM: ActiveRoomState = {
   snapshot: null,
   messages: [],
   deliveries: {},
-  activities: {}
+  activities: {},
+  lastSteeredParticipantId: null
 }
 
 export type RoomStateAction =
@@ -34,15 +36,18 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
     return { ...state, messages: [], deliveries: {} }
   }
   if (event.type === 'local.messages.loaded') {
+    const deliveries = Object.fromEntries(
+      [...event.deliveries, ...Object.values(state.deliveries)].map((delivery) => [
+        delivery.id,
+        delivery
+      ])
+    )
     return {
       ...state,
       messages: mergeMessages(event.messages, state.messages),
-      deliveries: Object.fromEntries(
-        [...Object.values(state.deliveries), ...event.deliveries].map((delivery) => [
-          delivery.id,
-          delivery
-        ])
-      )
+      deliveries,
+      lastSteeredParticipantId:
+        state.lastSteeredParticipantId ?? latestUnsettledSteer(deliveries, state.snapshot)
     }
   }
   if (event.type === 'snapshot') {
@@ -51,7 +56,8 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
       snapshot: event.snapshot,
       activities: Object.fromEntries(
         event.snapshot.activities.map((activity) => [activity.participantId, activity])
-      )
+      ),
+      lastSteeredParticipantId: latestUnsettledSteer(state.deliveries, event.snapshot)
     }
   }
   if (event.type === 'message.created' || event.type === 'message.updated') {
@@ -62,7 +68,13 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
       activities:
         event.type === 'message.created' && event.message.actorKind === 'agent'
           ? withoutKey(state.activities, event.message.senderId ?? '')
-          : state.activities
+          : state.activities,
+      lastSteeredParticipantId:
+        event.type === 'message.created' &&
+        event.message.actorKind === 'agent' &&
+        event.message.senderId === state.lastSteeredParticipantId
+          ? null
+          : state.lastSteeredParticipantId
     }
     if (event.type === 'message.updated' || exists || !state.snapshot) {
       return next
@@ -86,7 +98,19 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
   if (event.type === 'delivery.updated') {
     return {
       ...state,
+      messages:
+        event.delivery.attempts > 0
+          ? state.messages.map((message) =>
+              message.id === event.delivery.messageId && !message.deliveryAttempted
+                ? { ...message, deliveryAttempted: true }
+                : message
+            )
+          : state.messages,
       deliveries: { ...state.deliveries, [event.delivery.id]: event.delivery },
+      lastSteeredParticipantId:
+        event.delivery.state === 'delivered' && event.delivery.intent === 'steer'
+          ? event.delivery.participantId
+          : state.lastSteeredParticipantId,
       snapshot:
         state.snapshot && event.workState
           ? { ...state.snapshot, workState: event.workState }
@@ -100,7 +124,14 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
     }
   }
   if (event.type === 'activity.cleared') {
-    return { ...state, activities: withoutKey(state.activities, event.participantId) }
+    return {
+      ...state,
+      activities: withoutKey(state.activities, event.participantId),
+      lastSteeredParticipantId:
+        event.participantId === state.lastSteeredParticipantId
+          ? null
+          : state.lastSteeredParticipantId
+    }
   }
   if (!state.snapshot) {
     return state
@@ -108,7 +139,14 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
   const snapshot = state.snapshot
   switch (event.type) {
     case 'room.updated':
-      return { ...state, snapshot: { ...snapshot, room: event.room } }
+      return {
+        ...state,
+        snapshot: {
+          ...snapshot,
+          room: event.room,
+          workState: event.workState ?? snapshot.workState
+        }
+      }
     case 'role.updated':
       return { ...state, snapshot: { ...snapshot, roles: upsert(snapshot.roles, event.role) } }
     case 'role.removed':
@@ -121,7 +159,16 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
     case 'participant.removed':
       return {
         ...removeFromSnapshot(state, 'participants', event.participantId),
-        activities: withoutKey(state.activities, event.participantId)
+        deliveries: Object.fromEntries(
+          Object.entries(state.deliveries).filter(
+            ([, delivery]) => delivery.participantId !== event.participantId
+          )
+        ),
+        activities: withoutKey(state.activities, event.participantId),
+        lastSteeredParticipantId:
+          event.participantId === state.lastSteeredParticipantId
+            ? null
+            : state.lastSteeredParticipantId
       }
     case 'pin.updated': {
       const pins = snapshot.pins.filter((pin) => pin.messageId !== event.messageId)
@@ -134,6 +181,27 @@ export function reduceRoomEvent(state: ActiveRoomState, event: RoomStateAction):
   }
 }
 
+function latestUnsettledSteer(
+  deliveries: Record<string, RoomDelivery>,
+  snapshot: RoomSnapshot | null
+): string | null {
+  const participantIds = new Set(snapshot?.participants.map(({ id }) => id) ?? [])
+  return (
+    Object.values(deliveries)
+      .filter(
+        (delivery) =>
+          delivery.state === 'delivered' &&
+          delivery.intent === 'steer' &&
+          delivery.respondedAt === null &&
+          participantIds.has(delivery.participantId)
+      )
+      .sort(
+        (left, right) =>
+          (right.deliveredAt ?? 0) - (left.deliveredAt ?? 0) || right.id.localeCompare(left.id)
+      )[0]?.participantId ?? null
+  )
+}
+
 function withoutKey<T>(values: Record<string, T>, key: string): Record<string, T> {
   return Object.fromEntries(Object.entries(values).filter(([candidate]) => candidate !== key))
 }
@@ -141,7 +209,8 @@ function withoutKey<T>(values: Record<string, T>, key: string): Record<string, T
 function mergeMessages(first: RoomMessage[], second: RoomMessage[]): RoomMessage[] {
   const merged = new Map(first.map((message) => [message.id, message]))
   for (const message of second) {
-    merged.set(message.id, message)
+    const deliveryAttempted = merged.get(message.id)?.deliveryAttempted || message.deliveryAttempted
+    merged.set(message.id, deliveryAttempted ? { ...message, deliveryAttempted: true } : message)
   }
   return [...merged.values()].sort((left, right) => left.sequence - right.sequence)
 }

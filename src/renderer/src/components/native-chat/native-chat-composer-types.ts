@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatQueuedMessage } from '../../../../shared/native-chat-queue'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -45,8 +46,16 @@ export type NativeChatComposerProps = {
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
+  /** Keep new prompts behind an existing paused/uncertain PTY queue. */
+  queueOnly?: boolean
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
+  /** Queue a prompt while a PTY-backed agent is working. */
+  onQueue?: (
+    text: string,
+    imagePaths: readonly string[],
+    kind: NativeChatQueuedMessage['kind']
+  ) => Promise<void>
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   /** Remove an optimistic echo when its delayed submit is canceled. */
@@ -76,6 +85,7 @@ export type NativeChatLaunchSeed = {
 export type NativeChatComposerHandle = {
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  replaceDraft: (text: string, imagePaths: readonly string[]) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {
     clipboardData: DataTransfer | null

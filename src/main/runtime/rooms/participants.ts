@@ -10,7 +10,30 @@ import { participantFromRow, type RoomRow } from './rows'
 import { findRoomAgentOwner, type RoomAgentOwnershipIdentity } from './participant-ownership'
 
 export class RoomParticipantStore {
-  constructor(private readonly db: SyncDatabase.Database) {}
+  constructor(
+    private readonly db: SyncDatabase.Database,
+    private readonly readSessionOptions?: (
+      sessionId: string
+    ) => Readonly<Record<string, string>> | undefined
+  ) {}
+
+  private fromRow = (row: RoomRow): RoomParticipant => {
+    const participant = participantFromRow(row)
+    const session = participant.providerSession
+    const options =
+      session?.transport === 'machine' ? this.readSessionOptions?.(session.id) : undefined
+    if (!options) {
+      return participant
+    }
+    return {
+      ...participant,
+      context: {
+        ...participant.context,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort ? { effort: options.effort } : {})
+      }
+    }
+  }
 
   list(roomId: string): RoomParticipant[] {
     return (
@@ -19,7 +42,7 @@ export class RoomParticipantStore {
           "SELECT * FROM room_participants WHERE room_id = ? ORDER BY actor_kind = 'user' DESC, created_at"
         )
         .all(roomId) as RoomRow[]
-    ).map(participantFromRow)
+    ).map(this.fromRow)
   }
 
   add(input: {
@@ -108,7 +131,7 @@ export class RoomParticipantStore {
       }
     }
     const now = Date.now()
-    this.db.exec('BEGIN IMMEDIATE')
+    this.db.exec('SAVEPOINT room_participant_update')
     try {
       this.db
         .prepare(
@@ -148,9 +171,10 @@ export class RoomParticipantStore {
       if (identity && identity !== current.identity) {
         this.renameReferences(current, identity)
       }
-      this.db.exec('COMMIT')
+      this.db.exec('RELEASE room_participant_update')
     } catch (error) {
-      this.db.exec('ROLLBACK')
+      this.db.exec('ROLLBACK TO room_participant_update')
+      this.db.exec('RELEASE room_participant_update')
       throw error
     }
     return this.get(id)
@@ -171,14 +195,22 @@ export class RoomParticipantStore {
     if (!row) {
       throw new Error('room_participant_not_found')
     }
-    return participantFromRow(row)
+    return this.fromRow(row)
   }
 
   find(roomId: string, identity: string): RoomParticipant | null {
     const row = this.db
       .prepare('SELECT * FROM room_participants WHERE room_id = ? AND identity = ? COLLATE NOCASE')
       .get(roomId, identity) as RoomRow | undefined
-    return row ? participantFromRow(row) : null
+    return row ? this.fromRow(row) : null
+  }
+
+  getUser(roomId: string): RoomParticipant {
+    const user = this.list(roomId).find((participant) => participant.actorKind === 'user')
+    if (!user) {
+      throw new Error('room_user_participant_required')
+    }
+    return user
   }
 
   findByPaneKey(paneKey: string): RoomParticipant | null {
@@ -218,7 +250,7 @@ export class RoomParticipantStore {
            )`
         )
         .all(idleBefore) as RoomRow[]
-    ).map(participantFromRow)
+    ).map(this.fromRow)
   }
 
   listBound(roomId: string): RoomParticipant[] {
@@ -229,7 +261,7 @@ export class RoomParticipantStore {
          AND terminal_handle IS NOT NULL ORDER BY created_at`
         )
         .all(roomId) as RoomRow[]
-    ).map(participantFromRow)
+    ).map(this.fromRow)
   }
 
   private renameReferences(participant: RoomParticipant, identity: string): void {

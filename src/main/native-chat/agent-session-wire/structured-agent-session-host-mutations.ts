@@ -21,6 +21,7 @@ import {
   promptPlan,
   sendPlan,
   setOptionPlan,
+  steerPlan,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type {
@@ -36,6 +37,18 @@ export type StructuredAgentSessionMutationContext = {
   requireSession: (sessionId: string) => StructuredAgentSessionHostSession
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
+}
+
+export function steerStructuredAgentSessionTurn(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: {
+    envelope: AgentSessionMutationEnvelope
+    body: AgentJournalMessageItem
+    retryUnknown?: true
+  }
+): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
+  return mutate(context, caller, params.envelope, steerPlan(params))
 }
 
 function mutate<TValue>(

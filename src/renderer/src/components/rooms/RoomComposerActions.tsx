@@ -14,7 +14,13 @@ export function RoomComposerActions({
   attachDisabled: boolean
   onAttach: () => void
   textareaRef: RefObject<HTMLTextAreaElement | null>
-  run: { mode: ComposerRunMode; label: string; disabled: boolean; invoke: () => void }
+  run: {
+    mode: ComposerRunMode
+    label: string
+    disabled: boolean
+    loading?: boolean
+    invoke: () => void
+  }
 }): React.JSX.Element {
   return (
     <div className="flex items-center gap-1">
@@ -33,6 +39,7 @@ export function RoomComposerActions({
         mode={run.mode}
         label={run.label}
         disabled={run.disabled}
+        loading={run.loading}
         onClick={run.invoke}
         sendIcon={<Send className="size-4" />}
       />
