@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
   setActiveWorktree: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
+  activateAndRevealWorkspace: vi.fn(),
   onRevealAgent: vi.fn(),
+  onRevealWorktree: vi.fn(),
   onAckAgent: vi.fn(),
   onPopoutOpenChanged: vi.fn(),
   onSnapshotRequested: vi.fn(),
@@ -18,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     (_state: unknown, now: number): DashboardSnapshot => ({ generatedAt: now, cards: [] })
   ),
   offRevealAgent: vi.fn(),
+  offRevealWorktree: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
   offSnapshotRequested: vi.fn()
@@ -35,6 +38,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -92,12 +99,14 @@ function Harness({ enabled }: { enabled: boolean }): null {
 
 function installDashboardApi(): void {
   mocks.onRevealAgent.mockReturnValue(mocks.offRevealAgent)
+  mocks.onRevealWorktree.mockReturnValue(mocks.offRevealWorktree)
   mocks.onAckAgent.mockReturnValue(mocks.offAckAgent)
   mocks.onPopoutOpenChanged.mockReturnValue(mocks.offPopoutOpenChanged)
   mocks.onSnapshotRequested.mockReturnValue(mocks.offSnapshotRequested)
   ;(window as unknown as { api: unknown }).api = {
     dashboard: {
       onRevealAgent: mocks.onRevealAgent,
+      onRevealWorktree: mocks.onRevealWorktree,
       onAckAgent: mocks.onAckAgent,
       onPopoutOpenChanged: mocks.onPopoutOpenChanged,
       onSnapshotRequested: mocks.onSnapshotRequested,
@@ -171,6 +180,27 @@ describe('useDashboardPopoutBridge', () => {
     )
 
     expect(mocks.setActiveWorktree).toHaveBeenCalledWith('shared-worktree', 'runtime:env-1')
+  })
+
+  // Why: the shared activation is what switches activeRepoId on a cross-repo
+  // jump and reveals the sidebar row; a raw setActiveWorktree does neither.
+  it('opens the worktree through the shared activation, on its exact host', async () => {
+    const { activateTabAndFocusPane } = await import('@/lib/activate-tab-and-focus-pane')
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealWorktree.mock.calls[0][0]({
+        worktreeId: 'shared-worktree',
+        executionHostId: 'runtime:env-1'
+      })
+    )
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(
+      'shared-worktree',
+      'runtime:env-1'
+    )
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {

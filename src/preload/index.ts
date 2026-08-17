@@ -8,6 +8,7 @@ import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
   DashboardSpawnAgentArgs
@@ -2438,6 +2439,14 @@ const api = {
       ipcRenderer.on('ui:revealDashboardAgent', listener)
       return () => ipcRenderer.removeListener('ui:revealDashboardAgent', listener)
     },
+    onRevealWorktree: (callback: (args: DashboardRevealWorktreeArgs) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        args: DashboardRevealWorktreeArgs
+      ): void => callback(args)
+      ipcRenderer.on('ui:revealDashboardWorktree', listener)
+      return () => ipcRenderer.removeListener('ui:revealDashboardWorktree', listener)
+    },
     onAckAgent: (callback: (paneKey: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void =>
         callback(paneKey)
@@ -2475,6 +2484,8 @@ const api = {
     },
     revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
+    revealWorktree: (args: DashboardRevealWorktreeArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:revealWorktree', args),
     ackAgent: (paneKey: string): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
     spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>

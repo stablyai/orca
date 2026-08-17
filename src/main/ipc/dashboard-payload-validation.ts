@@ -1,6 +1,7 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardRevealAgentArgs,
+  type DashboardRevealWorktreeArgs,
   type DashboardSleepWorkspaceArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
@@ -67,6 +68,13 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isOptionalExecutionHostId(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isBoundedString(value, MAX_ID_LENGTH) && normalizeExecutionHostId(value) !== null)
+  )
+}
+
 export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRevealAgentArgs {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
@@ -75,11 +83,22 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
   return (
     isBoundedString(args.repoId, MAX_ID_LENGTH) &&
     isBoundedString(args.worktreeId, MAX_ID_LENGTH) &&
-    (args.executionHostId === undefined ||
-      (isBoundedString(args.executionHostId, MAX_ID_LENGTH) &&
-        normalizeExecutionHostId(args.executionHostId) !== null)) &&
+    isOptionalExecutionHostId(args.executionHostId) &&
     isBoundedString(args.tabId, MAX_ID_LENGTH) &&
     (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH))
+  )
+}
+
+export function isDashboardRevealWorktreeArgs(
+  value: unknown
+): value is DashboardRevealWorktreeArgs {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const args = value as Record<string, unknown>
+  return (
+    isBoundedString(args.worktreeId, MAX_ID_LENGTH) &&
+    isOptionalExecutionHostId(args.executionHostId)
   )
 }
 

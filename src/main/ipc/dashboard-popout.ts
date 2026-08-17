@@ -15,6 +15,7 @@ import {
   admitDashboardSnapshot,
   isDashboardPaneKey,
   isDashboardRevealAgentArgs,
+  isDashboardRevealWorktreeArgs,
   isDashboardSleepWorkspaceArgs,
   isDashboardSpawnAgentArgs
 } from './dashboard-payload-validation'
@@ -28,6 +29,22 @@ function isDashboardEnabled(store: Store): boolean {
   return store.getSettings().experimentalAgentDashboardPopout === true
 }
 
+/** Click-to-focus from the pop-out: bring the main window forward, then hand it
+ *  the routing payload. */
+function raiseMainWindowAndSend(channel: string, args: unknown): void {
+  const mainWindow = getTrustedUIRendererWindow()
+  if (!mainWindow) {
+    return
+  }
+  safelyRevealWindow(mainWindow)
+  mainWindow.webContents.send(channel, args)
+  try {
+    app.focus({ steal: true })
+  } catch {
+    // Best-effort; the per-window focus above may still bring it forward.
+  }
+}
+
 export function registerDashboardPopoutHandlers(
   store: Store,
   keybindings?: KeybindingService
@@ -37,6 +54,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:requestSnapshot')
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
+  ipcMain.removeHandler('dashboardPopout:revealWorktree')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
   ipcMain.removeHandler('dashboardPopout:spawnAgent')
   ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
@@ -136,17 +154,19 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
-    const mainWindow = getTrustedUIRendererWindow()
-    if (!mainWindow) {
+    raiseMainWindowAndSend('ui:revealDashboardAgent', args)
+  })
+
+  // "Open worktree": same raise, but the payload names only the workspace.
+  ipcMain.handle('dashboardPopout:revealWorktree', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardRevealWorktreeArgs(args)
+    ) {
       return
     }
-    safelyRevealWindow(mainWindow)
-    mainWindow.webContents.send('ui:revealDashboardAgent', args)
-    try {
-      app.focus({ steal: true })
-    } catch {
-      // Best-effort; the per-window focus above may still bring it forward.
-    }
+    raiseMainWindowAndSend('ui:revealDashboardWorktree', args)
   })
 
   ipcMain.handle('dashboardPopout:spawnAgent', (event, args: unknown): void => {

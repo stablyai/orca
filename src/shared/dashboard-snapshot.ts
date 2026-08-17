@@ -218,6 +218,14 @@ export type DashboardRevealAgentArgs = {
   leafId: string | null
 }
 
+/** Routing payload for "Open worktree": activate the workspace in the main
+ *  window without targeting any one pane. executionHostId disambiguates
+ *  worktree ids that collide across hosts. */
+export type DashboardRevealWorktreeArgs = {
+  worktreeId: string
+  executionHostId?: ExecutionHostId
+}
+
 export type DashboardSpawnAgentArgs = {
   worktreeId: string
   agent: TuiAgent

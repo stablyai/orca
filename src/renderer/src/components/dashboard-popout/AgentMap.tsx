@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import type {
   DashboardCard,
   DashboardCardHostKind,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs,
   DashboardWorkspace
@@ -32,6 +33,7 @@ type AgentMapProps = {
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
   onOpenTerminal: (card: DashboardCard) => void
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
 }
@@ -59,6 +61,7 @@ export function AgentMap({
   workspaceContextMenusEnabled = false,
   onWorkspaceContextMenuOpenChange,
   onOpenTerminal,
+  onRevealWorktree,
   onSpawnAgent,
   onSleepWorkspace
 }: AgentMapProps): React.JSX.Element {
@@ -105,6 +108,7 @@ export function AgentMap({
           workspaceContextMenusEnabled={workspaceContextMenusEnabled}
           onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}
           onSelectAgent={onOpenTerminal}
+          onRevealWorktree={onRevealWorktree}
           onSpawnAgent={onSpawnAgent}
           onSleepWorkspace={onSleepWorkspace}
         />

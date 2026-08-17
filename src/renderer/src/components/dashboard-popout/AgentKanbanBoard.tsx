@@ -4,6 +4,7 @@ import {
   DASHBOARD_BUCKET_ORDER,
   type DashboardBucket,
   type DashboardCard,
+  type DashboardRevealWorktreeArgs,
   type DashboardSleepWorkspaceArgs,
   type DashboardSnapshot,
   type DashboardSpawnAgentArgs
@@ -45,6 +46,12 @@ function ackAgentViaPopoutRelay(paneKey: string): void {
  *  both channels ship together, so a stale preload lacks both. */
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
+}
+
+/** Open a workspace from the pop-out window: raise the main window and activate
+ *  the worktree, without targeting a pane. Same `?.` HMR-skew guard. */
+function revealWorktreeViaPopoutRelay(args: DashboardRevealWorktreeArgs): void {
+  void window.api.dashboard.revealWorktree?.(args)
 }
 
 /** Start an agent from the pop-out window: the main renderer owns the store and
@@ -148,6 +155,9 @@ type AgentKanbanBoardProps = {
   /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
    *  host activates the worktree/pane locally and closes the overlay. */
   onRevealAgent?: (args: AgentRevealArgs) => void
+  /** Focuses a workspace without picking a pane. Defaults to the pop-out IPC
+   *  relay; the in-window host activates the worktree locally and closes. */
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
   /** Starts a new agent in a workspace. Defaults to the pop-out IPC relay; the
    *  in-window host launches through its own store. */
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
@@ -177,6 +187,7 @@ export function AgentKanbanBoard({
   containerClassName = 'h-screen w-screen',
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
+  onRevealWorktree = revealWorktreeViaPopoutRelay,
   onSpawnAgent = spawnAgentViaPopoutRelay,
   onSleepWorkspace = sleepWorkspaceViaPopoutRelay,
   onClose,
@@ -372,6 +383,7 @@ export function AgentKanbanBoard({
               onDialogOpenChange={handleDialogOpenChange}
               onRevealAgent={onRevealAgent}
               onOpenTerminal={handleOpenTerminal}
+              onRevealWorktree={onRevealWorktree}
               onSpawnAgent={onSpawnAgent}
               onSleepWorkspace={onSleepWorkspace}
               workspaceContextMenusEnabled={workspaceContextMenusEnabled}

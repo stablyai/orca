@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
@@ -133,6 +134,19 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     return window.api.dashboard.onRevealAgent((args) => {
       useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+    })
+  }, [enabled])
+
+  // "Open worktree" names no pane, so it activates the workspace and leaves
+  // whichever tab it last had focused. Routed through the shared activation so
+  // a cross-repo jump also switches activeRepoId and the sidebar reveals the
+  // row — the dashboard spans every repo, unlike the sidebar it is opened from.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onRevealWorktree?.((args) => {
+      activateAndRevealWorkspace(args.worktreeId, args.executionHostId)
     })
   }, [enabled])
 

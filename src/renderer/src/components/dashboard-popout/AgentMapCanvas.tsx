@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import type {
   DashboardCard,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
@@ -23,6 +24,7 @@ import { agentFocusZoom, clamp, MAX_ZOOM, MIN_ZOOM } from './agent-map-canvas-zo
 import { AgentMapViewportControls } from './AgentMapViewportControls'
 import {
   agentMapAgents,
+  agentMapArrowDirection,
   navigableAgentMapAgents,
   nextDirectionalAgent
 } from './agent-map-navigation'
@@ -52,6 +54,7 @@ type AgentMapCanvasProps = {
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
   onSelectAgent: (card: DashboardCard) => void
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
 }
@@ -69,6 +72,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       workspaceContextMenusEnabled = false,
       onWorkspaceContextMenuOpenChange,
       onSelectAgent,
+      onRevealWorktree,
       onSpawnAgent,
       onSleepWorkspace
     },
@@ -221,16 +225,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
           onSelectAgent(agent.card)
           return
         }
-        const direction =
-          event.key === 'ArrowLeft'
-            ? { x: -1, y: 0 }
-            : event.key === 'ArrowRight'
-              ? { x: 1, y: 0 }
-              : event.key === 'ArrowUp'
-                ? { x: 0, y: -1 }
-                : event.key === 'ArrowDown'
-                  ? { x: 0, y: 1 }
-                  : null
+        const direction = agentMapArrowDirection(event.key)
         if (!direction) {
           return
         }
@@ -391,6 +386,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
               nodeRefs={nodeRefs}
               onSelectAgent={onSelectAgent}
+              onRevealWorktree={onRevealWorktree}
               onSpawnAgent={onSpawnAgent}
               onOpenProjectContextMenu={onOpenProjectContextMenu}
               onOpenWorkspaceContextMenu={onOpenWorkspaceContextMenu}

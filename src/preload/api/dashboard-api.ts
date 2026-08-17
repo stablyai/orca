@@ -1,5 +1,6 @@
 import type {
   DashboardRevealAgentArgs,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
   DashboardSpawnAgentArgs
@@ -16,6 +17,7 @@ export type DashboardApi = {
   onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
   onSnapshotRequested: (callback: () => void) => () => void
   onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
+  onRevealWorktree: (callback: (args: DashboardRevealWorktreeArgs) => void) => () => void
   onAckAgent: (callback: (paneKey: string) => void) => () => void
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
@@ -23,6 +25,7 @@ export type DashboardApi = {
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
+  revealWorktree: (args: DashboardRevealWorktreeArgs) => Promise<void>
   ackAgent: (paneKey: string) => Promise<void>
   spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>

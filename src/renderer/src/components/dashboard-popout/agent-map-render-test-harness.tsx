@@ -3,6 +3,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import type {
   DashboardCard,
   DashboardCardHostKind,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
@@ -47,6 +48,7 @@ export type RenderMapOptions = {
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
 }
 
 export function renderMap(
@@ -60,7 +62,8 @@ export function renderMap(
     showOrchestrationLinks,
     launchableAgentsByWorktreeId,
     onSpawnAgent,
-    onSleepWorkspace
+    onSleepWorkspace,
+    onRevealWorktree
   }: RenderMapOptions = {}
 ): ReturnType<typeof render> {
   return render(
@@ -76,6 +79,7 @@ export function renderMap(
       launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
       onSpawnAgent={onSpawnAgent}
       onSleepWorkspace={onSleepWorkspace}
+      onRevealWorktree={onRevealWorktree}
     />
   )
 }

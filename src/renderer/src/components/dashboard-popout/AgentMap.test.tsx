@@ -193,6 +193,62 @@ describe('AgentMap', () => {
     expect(onSpawnAgent).toHaveBeenCalledWith({ worktreeId: 'worktree-1', agent: 'codex' })
   })
 
+  it('opens the worktree from the details card', () => {
+    const onRevealWorktree = vi.fn()
+    renderMap([card()], { onRevealWorktree })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agent map worktree details' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
+
+    // The raw worktree id, not the host-qualified map identity.
+    expect(onRevealWorktree).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      executionHostId: undefined
+    })
+  })
+
+  it('carries the execution host so colliding worktree ids route to the right one', () => {
+    const onRevealWorktree = vi.fn()
+    // Rendered directly: a remote host draws a tooltipped badge, and the shared
+    // harness has no TooltipProvider (adding one remounts the rerender tests).
+    render(
+      <TooltipProvider>
+        <AgentMap
+          cards={[card({ executionHostId: 'ssh:build-box', hostKind: 'ssh' })]}
+          now={NOW}
+          onOpenTerminal={vi.fn()}
+          onRevealWorktree={onRevealWorktree}
+        />
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agent map worktree details' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
+
+    expect(onRevealWorktree).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      executionHostId: 'ssh:build-box'
+    })
+  })
+
+  it('names the open control for folder workspaces', () => {
+    renderMap([card({ workspaceKind: 'folder', worktreeName: 'Documentation' })], {
+      onRevealWorktree: vi.fn()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Documentation folder workspace details' })
+    )
+
+    expect(screen.getByRole('button', { name: 'Open folder' })).toBeInTheDocument()
+  })
+
+  it('omits the open control on hosts that cannot route to a workspace', () => {
+    renderMap([card()])
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agent map worktree details' }))
+
+    expect(screen.queryByRole('button', { name: 'Open worktree' })).not.toBeInTheDocument()
+  })
+
   it('explains an empty picker rather than offering nothing', () => {
     renderMap([card()], { onSpawnAgent: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: 'Open Agent map worktree details' }))

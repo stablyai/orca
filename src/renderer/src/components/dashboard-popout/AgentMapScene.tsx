@@ -1,7 +1,11 @@
 import { memo, useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { translate } from '@/i18n/i18n'
-import type { DashboardCard, DashboardSpawnAgentArgs } from '../../../../shared/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardRevealWorktreeArgs,
+  DashboardSpawnAgentArgs
+} from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
@@ -34,6 +38,7 @@ type AgentMapSceneProps = {
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onOpenProjectContextMenu?: (
     event: React.MouseEvent<SVGCircleElement>,
@@ -78,6 +83,7 @@ export const AgentMapScene = memo(function AgentMapScene({
   launchableAgentsByWorktreeId,
   nodeRefs,
   onSelectAgent,
+  onRevealWorktree,
   onSpawnAgent,
   onOpenProjectContextMenu,
   onOpenWorkspaceContextMenu,
@@ -225,6 +231,7 @@ export const AgentMapScene = memo(function AgentMapScene({
                 launchableAgents={launchableAgentsByWorktreeId?.[worktree.worktreeId]}
                 nodeRefs={nodeRefs}
                 onSelectAgent={onSelectAgent}
+                onRevealWorktree={onRevealWorktree}
                 onSpawnAgent={onSpawnAgent}
                 onOpenWorkspaceContextMenu={onOpenWorkspaceContextMenu}
                 onLabelHoverChange={handleLabelHoverChange}

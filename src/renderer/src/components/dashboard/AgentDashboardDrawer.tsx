@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import type { DashboardRevealWorktreeArgs } from '../../../../shared/dashboard-snapshot'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
@@ -55,6 +57,17 @@ function AgentDashboardDrawerBody({
     [onClose]
   )
 
+  // Shared activation, not a raw setActiveWorktree: the board lists every repo,
+  // so opening a workspace may also have to switch the active repo, reveal the
+  // sidebar row, and run the folder-workspace path gate.
+  const handleRevealWorktree = useCallback(
+    (args: DashboardRevealWorktreeArgs) => {
+      activateAndRevealWorkspace(args.worktreeId, args.executionHostId)
+      onClose()
+    },
+    [onClose]
+  )
+
   // Switching to pop-out from the board hands the surface over rather than
   // leaving an in-window board that the setting says should be a window.
   const handleSwitchToPopout = useCallback(() => {
@@ -76,6 +89,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onRevealWorktree={handleRevealWorktree}
       onSpawnAgent={launchDashboardAgent}
       onClose={onClose}
       onOpenMap={handleOpenMap}

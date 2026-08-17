@@ -16265,6 +16265,8 @@
       "spawnAgent": "Start a new agent",
       "noLaunchableAgents": "No enabled agents detected.",
       "sleepWorkspace": "Sleep",
+      "openWorktreeAction": "Open worktree",
+      "openFolderWorkspaceAction": "Open folder",
       "projectCount": "{{agents}} agents · {{workspaces}} workspaces",
       "agentCount": "{{count}} agents",
       "agentCount_one": "{{count}} agent",

@@ -291,4 +291,25 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(mainSender.send).toHaveBeenCalledWith('ui:revealDashboardAgent', args)
     expect(appMock.focus).toHaveBeenCalledOnce()
   })
+
+  it('reveals a worktree in only the trusted main window', () => {
+    const main = makeWindow(mainSender)
+    getTrustedWindowMock.mockReturnValue(main)
+    const args = { worktreeId: 'w1', executionHostId: 'ssh:box' }
+
+    handlers.get('dashboardPopout:revealWorktree')!({ sender: untrustedSender } as never, args)
+    handlers.get('dashboardPopout:revealWorktree')!({ sender: popoutSender } as never, {
+      worktreeId: ''
+    })
+    handlers.get('dashboardPopout:revealWorktree')!({ sender: popoutSender } as never, {
+      ...args,
+      executionHostId: 'not-a-host'
+    })
+    expect(safelyRevealMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:revealWorktree')!({ sender: popoutSender } as never, args)
+    expect(safelyRevealMock).toHaveBeenCalledWith(main)
+    expect(mainSender.send).toHaveBeenCalledWith('ui:revealDashboardWorktree', args)
+    expect(appMock.focus).toHaveBeenCalledOnce()
+  })
 })

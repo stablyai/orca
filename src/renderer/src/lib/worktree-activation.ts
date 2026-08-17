@@ -246,13 +246,20 @@ export function activateAndRevealWorktree(
  * plain worktree ids with `folder:` keys, so every caller that navigates by that
  * order must dispatch here — the folder branch is what enforces the path-status
  * gate that blocks a missing/unmounted/disconnected-SSH folder (#10716).
+ *
+ * executionHostId disambiguates ids that collide across hosts; omit it when the
+ * caller only knows the id (nav history replays this way).
  */
-export function activateAndRevealWorkspace(workspaceId: string): ActivateAndRevealResult | false {
+export function activateAndRevealWorkspace(
+  workspaceId: string,
+  executionHostId?: ExecutionHostId
+): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
+  const opts = executionHostId ? { executionHostId } : undefined
   if (workspaceScope?.type === 'folder') {
-    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
   }
-  return activateAndRevealWorktree(workspaceId)
+  return activateAndRevealWorktree(workspaceId, opts)
 }
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.

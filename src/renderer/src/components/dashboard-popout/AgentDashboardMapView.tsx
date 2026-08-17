@@ -1,6 +1,7 @@
 import { Suspense, useMemo, useState, type RefObject } from 'react'
 import type {
   DashboardCard,
+  DashboardRevealWorktreeArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
   DashboardSpawnAgentArgs
@@ -38,6 +39,7 @@ type AgentDashboardMapViewProps = {
   onDialogOpenChange: (open: boolean) => void
   onRevealAgent: (args: AgentRevealArgs) => void
   onOpenTerminal: (card: DashboardCard) => void
+  onRevealWorktree?: (args: DashboardRevealWorktreeArgs) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
   workspaceContextMenusEnabled: boolean
@@ -58,6 +60,7 @@ export function AgentDashboardMapView({
   onDialogOpenChange,
   onRevealAgent,
   onOpenTerminal,
+  onRevealWorktree,
   onSpawnAgent,
   onSleepWorkspace,
   workspaceContextMenusEnabled,
@@ -170,6 +173,7 @@ export function AgentDashboardMapView({
             workspaceContextMenusEnabled={workspaceContextMenusEnabled}
             onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}
             onOpenTerminal={onOpenTerminal}
+            onRevealWorktree={onRevealWorktree}
             onSpawnAgent={onSpawnAgent}
             onSleepWorkspace={onSleepWorkspace}
           />
