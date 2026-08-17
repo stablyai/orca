@@ -21,6 +21,7 @@ import type {
 } from './herdr-pty-types'
 import { assertHerdrMigrationReady } from './herdr-pty-types'
 import { clearHerdrBindingBuffer } from './herdr-pty-binding-queries'
+import { herdrLogicalKeyForBytes } from './herdr-logical-key'
 import {
   bufferSnapshotForBinding,
   movePaneForBinding,
@@ -213,6 +214,16 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return
     }
+    const key = herdrLogicalKeyForBytes(data)
+    if (key) {
+      void binding.transport
+        .request(binding.sessionName, 'pane.send_keys', {
+          pane_id: binding.paneId,
+          keys: [key]
+        })
+        .catch(() => undefined)
+      return
+    }
     binding.controller.write(data)
   }
 
@@ -378,7 +389,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     }
     unwrapHerdrResponse(
       await binding.transport.request(binding.sessionName, 'pane.send_keys', {
-        pane_id: id,
+        pane_id: binding.paneId,
         keys: [key]
       })
     )

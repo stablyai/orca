@@ -237,6 +237,77 @@ describe('HerdrPtyProvider', () => {
     expect(host.value.controlTerminal).toHaveBeenCalled()
   })
 
+  it('routes single logical keys through pane.send_keys on the Herdr pane id', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    const controller = host.value.controlTerminal as unknown as ReturnType<typeof vi.fn>
+    const spawnedController = controller.mock.results[0]?.value as
+      | HerdrTerminalController
+      | undefined
+    if (!spawnedController) {
+      throw new Error('expected a stock Herdr terminal controller')
+    }
+    const write = spawnedController.write as ReturnType<typeof vi.fn>
+    host.requestMock.mockClear()
+
+    provider.write(spawned.id, '\x03')
+    provider.write(spawned.id, '\x1b')
+    provider.write(spawned.id, '\x1b\x7f')
+    await Promise.resolve()
+
+    expect(host.requestMock).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'pane.send_keys',
+      { pane_id: 'p1', keys: ['ctrl+c'] }
+    )
+    expect(host.requestMock).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'pane.send_keys',
+      { pane_id: 'p1', keys: ['esc'] }
+    )
+    expect(write).toHaveBeenCalledWith('\x1b\x7f')
+    expect(write).not.toHaveBeenCalledWith('\x03')
+    expect(write).not.toHaveBeenCalledWith('\x1b')
+  })
+
+  it('sends SIGINT to the Herdr pane id, not the Orca pty id', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    host.requestMock.mockClear()
+    await provider.sendSignal(spawned.id, 'SIGINT')
+
+    expect(host.requestMock).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'pane.send_keys',
+      { pane_id: 'p1', keys: ['ctrl+c'] }
+    )
+    expect(host.requestMock.mock.calls.some((call) => call[2]?.pane_id === spawned.id)).toBe(false)
+  })
+
   it('starts a stock Herdr agent instead of writing a shell command', async () => {
     const host = transport()
     const provider = new HerdrPtyProvider(
