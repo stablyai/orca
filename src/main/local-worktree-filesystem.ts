@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { lstat, readFile } from 'node:fs/promises'
 import {
+  buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
-  buildWslLoginShellCommand,
   quotePosixShell
 } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
@@ -55,12 +55,20 @@ function execFileText(
   })
 }
 
-function runWslLoginShellCommand(distro: string, command: string): Promise<ExecFileTextResult> {
-  return execFileText(
+async function runWslLoginShellCommand(
+  distro: string,
+  command: string
+): Promise<ExecFileTextResult> {
+  // Why: file contents and the stat marker are read straight out of stdout, so the
+  // distro's rc banner would otherwise be prepended to every file Orca reads.
+  const captured = buildWslCapturedLoginShellCommand(command)
+  const result = await execFileText(
     'wsl.exe',
-    buildWslExecArgs(distro, ['sh', '-lc', buildWslLoginShellCommand(command)]),
+    buildWslExecArgs(distro, ['sh', '-lc', captured.command]),
     { timeout: WSL_FILE_OPERATION_TIMEOUT_MS }
   )
+  const payload = captured.readStdout(result.stdout)
+  return payload === null ? result : { ...result, stdout: payload }
 }
 
 function isWslMissingPathError(error: unknown): boolean {
