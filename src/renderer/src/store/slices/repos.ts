@@ -902,6 +902,9 @@ function restrictReposToProjectPair(
   return restricted
 }
 
+/**
+ * Merges one catalog host's fetched project/setup rows into the slice, preserving rows other catalogs own.
+ */
 function mergeFetchedProjectCompatibilityForHost({
   previous,
   fetched,
@@ -953,14 +956,18 @@ function mergeFetchedProjectCompatibilityForHost({
     return false
   }
   const fetchedProjects = fetched.projects
+    /**
+     * Why: a one-host refresh should only reconcile or prune that host's ownership. The local catalog also
+     * owns direct-SSH rows, so a cold start must not drop a project whose only host is ssh:* — nothing re-adds it.
+     */
     .filter((project) => {
       const previousProject = previousProjectById.get(project.id)
-      // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
-        fetchedProjectHostIds(project).has(hostId) ||
+        catalogOwnsAnyHost(hostId, fetchedProjectHostIds(project)) ||
         (previousProject ? previousProjectHostIds(previousProject).has(hostId) : false)
       )
     })
+    /** Merges fetched metadata into the previous row when one exists, else derives source repos from the current catalog. */
     .map((project) => {
       const previousProject = previousProjectById.get(project.id)
       return previousProject
@@ -1141,6 +1148,16 @@ function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
     return catalogHostId === rowHostId
   }
   return parseExecutionHostId(rowHostId)?.kind !== 'runtime'
+}
+
+/** Why: iterating the host set directly keeps the per-project admission check allocation-free. */
+function catalogOwnsAnyHost(catalogHostId: string, rowHostIds: ReadonlySet<string>): boolean {
+  for (const rowHostId of rowHostIds) {
+    if (catalogOwnsHost(catalogHostId, rowHostId)) {
+      return true
+    }
+  }
+  return false
 }
 
 function mergeFetchedProjectGroupsForHost(
