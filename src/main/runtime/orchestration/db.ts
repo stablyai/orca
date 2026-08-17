@@ -3712,18 +3712,104 @@ export class OrchestrationDb {
       return message
     }
 
-    const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
-    const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
-    const payload = addLifecycleRejectionMarker(message.payload, code, reason)
-    // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
-    this.db
-      .prepare(
-        `UPDATE messages
-         SET priority = 'high', subject = ?, body = ?, payload = ?
-         WHERE id = ?`
+    let alreadyRejected = false
+    try {
+      const parsed = message.payload ? (JSON.parse(message.payload) as Record<string, unknown>) : {}
+      const marker = parsed._orcaLifecycleRejection
+      alreadyRejected = Boolean(
+        marker &&
+        typeof marker === 'object' &&
+        typeof (marker as { code?: unknown }).code === 'string' &&
+        typeof (marker as { reason?: unknown }).reason === 'string'
       )
-      .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+    } catch {
+      // Invalid lifecycle payloads still need their first rejection conversion.
+    }
+
+    const rejectionSubject = alreadyRejected
+      ? message.subject
+      : `Rejected ${message.type}: ${message.subject}`
+    const bounceId = `msg_lifecycle_rejection_${messageId}`
+    this.db.exec('SAVEPOINT convert_lifecycle_rejection')
+    try {
+      if (!alreadyRejected) {
+        const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
+        const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
+        const payload = addLifecycleRejectionMarker(message.payload, code, reason)
+        // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
+        this.db
+          .prepare(
+            `UPDATE messages
+             SET priority = 'high', subject = ?, body = ?, payload = ?
+             WHERE id = ?`
+          )
+          .run(rejectionSubject, body, payload, messageId)
+      }
+      // Why: the deterministic ID makes replay idempotent; the savepoint keeps the
+      // source rewrite and sender-visible bounce all-or-nothing.
+      if (
+        message.from_handle &&
+        message.from_handle !== message.to_handle &&
+        !this.getMessageById(bounceId)
+      ) {
+        this.insertMessage({
+          id: bounceId,
+          from: 'orca',
+          to: this.resolveLifecycleRejectionBounceTo(message),
+          subject: rejectionSubject,
+          body: `Orca rejected your ${message.type}: ${reason}`,
+          type: 'status',
+          priority: 'high',
+          payload: JSON.stringify({
+            lifecycleRejection: true,
+            rejectedMessageId: messageId,
+            rejectedType: message.type,
+            code,
+            reason
+          }),
+          runId: message.run_id,
+          deliveryContract: message.delivery_contract ?? 'current_delivery'
+        })
+      }
+      this.db.exec('RELEASE convert_lifecycle_rejection')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO convert_lifecycle_rejection')
+      this.db.exec('RELEASE convert_lifecycle_rejection')
+      throw error
+    }
     return this.getMessageById(messageId)
+  }
+
+  /** Prefer dispatch:<id> so supervised workers see bounces on check/check --wait. */
+  private resolveLifecycleRejectionBounceTo(message: MessageRow): string {
+    try {
+      const parsed = message.payload
+        ? (JSON.parse(message.payload) as { dispatchId?: unknown })
+        : null
+      const dispatchId =
+        parsed && typeof parsed.dispatchId === 'string' ? parsed.dispatchId.trim() : ''
+      if (dispatchId) {
+        const dispatch = this.getDispatchContextById(dispatchId)
+        const sameIdentity =
+          dispatch?.assignee_handle === message.from_handle ||
+          Boolean(
+            dispatch?.assignee_pane_key &&
+            message.sender_pane_key &&
+            isEquivalentPaneKey(dispatch.assignee_pane_key, message.sender_pane_key)
+          )
+        if (dispatch?.run_id === message.run_id && sameIdentity) {
+          return `dispatch:${dispatchId}`
+        }
+        return message.from_handle
+      }
+    } catch {
+      // invalid JSON payload — fall through
+    }
+    const active = this.getActiveDispatchForIdentity(message.from_handle)
+    if (active?.id) {
+      return `dispatch:${active.id}`
+    }
+    return message.from_handle
   }
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
