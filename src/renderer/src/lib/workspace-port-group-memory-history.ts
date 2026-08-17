@@ -53,13 +53,17 @@ export function recordWorkspacePortMemorySamples(
   externalPorts: readonly { memory?: number }[]
 ): void {
   const now = Date.now()
+  // Why: sweep before pushing — otherwise a group untouched for 10+ minutes
+  // (e.g. the popover was closed) gets its touchedAt revived by the push
+  // below before staleness is ever checked, and its old samples survive to
+  // render as a misleading gap-free sparkline.
+  sweepStale(now)
   for (const group of groups) {
     pushSample(group.worktreeId, sumMemory(group.ports), now)
   }
   if (externalPorts.length > 0) {
     pushSample(EXTERNAL_PORTS_HISTORY_KEY, sumMemory(externalPorts), now)
   }
-  sweepStale(now)
 }
 
 export function readWorkspacePortMemoryHistory(key: string): number[] {

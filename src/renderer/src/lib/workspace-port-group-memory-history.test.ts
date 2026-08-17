@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   EXTERNAL_PORTS_HISTORY_KEY,
   readWorkspacePortMemoryHistory,
@@ -60,5 +60,19 @@ describe('workspace port group memory history', () => {
 
   it('returns an empty array for a key with no recorded samples', () => {
     expect(readWorkspacePortMemoryHistory('unknown')).toEqual([])
+  })
+
+  it('drops a stale ring instead of reviving it when the same group reappears', () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValue(0)
+    recordWorkspacePortMemorySamples([group('wt-1', [1000])], [])
+
+    // Why: the popover was closed for over ten minutes — the ring must not
+    // survive with its old sample once a fresh one arrives for the same key.
+    nowSpy.mockReturnValue(11 * 60 * 1000)
+    recordWorkspacePortMemorySamples([group('wt-1', [2000])], [])
+
+    expect(readWorkspacePortMemoryHistory('wt-1')).toEqual([2000])
+    nowSpy.mockRestore()
   })
 })

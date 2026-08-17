@@ -32,7 +32,7 @@ export function MetricPair({
   size?: 'base' | 'small'
 }): React.JSX.Element {
   const textCls = size === 'small' ? 'text-[11px]' : 'text-xs'
-  const muted = cpu == null && memory == null
+  const muted = cpu == null && memory == null && (!showUptime || uptimeSeconds == null)
   return (
     <div
       className={cn(

@@ -1,8 +1,4 @@
-/**
- * Parses `ps -o etime=` / `ps -o etimes=` output. macOS and Linux (procps)
- * both format elapsed time as `[[DD-]HH:]MM:SS`; this is the one parser both
- * the memory collector and the port scanner use.
- */
+/** Parses `ps` elapsed time in `[[DD-]HH:]MM:SS` format. */
 export function parsePsElapsedTimeToSeconds(etime: string): number | undefined {
   const match = etime.trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/)
   if (!match) {
