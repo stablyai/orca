@@ -3,6 +3,8 @@ import type { AgentStatusState, AgentType } from './agent-status-types'
 export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
+  /** Off keeps orchestration-dispatched workers silent; only the coordinator alerts. In-app unread state is unaffected. */
+  dispatchedWorkerTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:

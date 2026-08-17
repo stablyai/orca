@@ -7215,7 +7215,9 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "49a7af1d43": "Dispatched Worker Complete",
+          "19cbfde300": "A worker dispatched by an orchestration coordinator finishes."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",

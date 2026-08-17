@@ -11,6 +11,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+import { shouldSuppressDispatchedWorkerNotification } from './dispatched-worker-notification-policy'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
@@ -177,6 +178,15 @@ export function dispatchTerminalNotification(
   }
 
   if (event.suppressOsNotification) {
+    return
+  }
+
+  // Why: a wave of dispatched workers reports to its coordinator, not to the user;
+  // only the coordinator's own completion is worth a banner or a phone push.
+  if (
+    event.source === 'agent-task-complete' &&
+    shouldSuppressDispatchedWorkerNotification(state, event.paneKey)
+  ) {
     return
   }
 
