@@ -1,3 +1,4 @@
+import type { TabFolderGroup } from '../../../../shared/tab-folder-types'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -10,12 +11,14 @@ import {
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
+import { hydrateTabFolderGroups } from './tabs-folder-hydration'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
+  tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]>
 }
 
 export function pruneTabGroupLayoutForGroups(
@@ -183,7 +186,8 @@ function hydrateUnifiedFormat(
     unifiedTabsByWorktree: tabsByWorktree,
     groupsByWorktree,
     activeGroupIdByWorktree,
-    layoutByWorktree
+    layoutByWorktree,
+    tabFolderGroupsByWorktree: hydrateTabFolderGroups(session, tabsByWorktree, validWorktreeIds)
   }
 }
 
@@ -289,7 +293,8 @@ function hydrateLegacyFormat(
     unifiedTabsByWorktree: tabsByWorktree,
     groupsByWorktree,
     activeGroupIdByWorktree,
-    layoutByWorktree
+    layoutByWorktree,
+    tabFolderGroupsByWorktree: {}
   }
 }
 

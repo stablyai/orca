@@ -1,10 +1,11 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import { sanitizeFolderGroupsForWorktree } from '../../../shared/tab-folder-group-state'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
-  'activeGroupIdByWorktree' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
+  'activeGroupIdByWorktree' | 'tabFolderGroups' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
 >
 
 function dedupePersistedTabIds(tabIds: string[]): string[] {
@@ -62,17 +63,23 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
 export function buildPersistedUnifiedTabSessionData(
   snapshot: Pick<
     WorkspaceSessionSnapshot,
-    'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
+    | 'activeGroupIdByWorktree'
+    | 'groupsByWorktree'
+    | 'layoutByWorktree'
+    | 'tabFolderGroupsByWorktree'
+    | 'unifiedTabsByWorktree'
   >
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
+  const tabFolderGroups: WorkspaceSessionState['tabFolderGroups'] = {}
   const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
   const sourceTabs = snapshot.unifiedTabsByWorktree ?? {}
   const sourceGroups = snapshot.groupsByWorktree ?? {}
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
+  const sourceFolderGroups = snapshot.tabFolderGroupsByWorktree ?? {}
   const worktreeIds = new Set([
     ...Object.keys(sourceTabs),
     ...Object.keys(sourceGroups),
@@ -98,6 +105,13 @@ export function buildPersistedUnifiedTabSessionData(
 
     unifiedTabs[worktreeId] = persistedTabs
     tabGroups[worktreeId] = groups
+    const folders = sanitizeFolderGroupsForWorktree(
+      persistedTabs,
+      sourceFolderGroups[worktreeId] ?? []
+    )
+    if (folders.length > 0) {
+      tabFolderGroups[worktreeId] = folders
+    }
     const activeGroupId = sourceActiveGroups[worktreeId]
     activeGroupIdByWorktree[worktreeId] =
       activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
@@ -111,6 +125,7 @@ export function buildPersistedUnifiedTabSessionData(
     unifiedTabs,
     tabGroups,
     tabGroupLayouts,
+    tabFolderGroups,
     activeGroupIdByWorktree
   }
 }

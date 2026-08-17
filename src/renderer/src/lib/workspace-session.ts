@@ -15,12 +15,7 @@ import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnec
 
 export { buildActiveConnectionIdsAtShutdown }
 
-/** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
-export function shouldPersistWorkspaceSession(
-  state: Pick<AppState, 'workspaceSessionReady' | 'hydrationSucceeded'>
-): boolean {
-  return state.workspaceSessionReady && state.hydrationSucceeded
-}
+export { shouldPersistWorkspaceSession } from './workspace-session-persist-gate'
 
 export type WorkspaceSessionSnapshot = Pick<
   AppState,
@@ -45,6 +40,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'tabFolderGroupsByWorktree'
   | 'sshConnectionStates'
   | 'repos'
   | 'worktreesByRepo'
@@ -80,6 +76,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'groupsByWorktree',
   'layoutByWorktree',
   'activeGroupIdByWorktree',
+  'tabFolderGroupsByWorktree',
   'sshConnectionStates',
   'repos',
   'worktreesByRepo',

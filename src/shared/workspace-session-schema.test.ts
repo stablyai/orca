@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWorkspaceSession } from './workspace-session-schema'
+import { parseWorkspaceSession } from './workspace-session-parse'
 import { MAX_BROWSER_HISTORY_ENTRIES } from './workspace-session-browser-history'
 
 describe('parseWorkspaceSession', () => {

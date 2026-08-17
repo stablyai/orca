@@ -60,6 +60,15 @@ vi.mock('lucide-react', () => ({
   Eye: function Eye(props: Record<string, unknown>) {
     return { type: 'Eye', props }
   },
+  FolderMinus: function FolderMinus(props: Record<string, unknown>) {
+    return { type: 'FolderMinus', props }
+  },
+  FolderPlus: function FolderPlus(props: Record<string, unknown>) {
+    return { type: 'FolderPlus', props }
+  },
+  FolderSymlink: function FolderSymlink(props: Record<string, unknown>) {
+    return { type: 'FolderSymlink', props }
+  },
   ListX: function ListX(props: Record<string, unknown>) {
     return { type: 'ListX', props }
   },
@@ -101,11 +110,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 
 const useAppStoreMock = Object.assign(
   (
-    selector: (state: {
-      settings: Record<string, unknown>
-      unifiedTabsByWorktree: Record<string, unknown[]>
-      groupsByWorktree: Record<string, unknown[]>
-    }) => unknown
+    selector: (state: Record<string, unknown>) => unknown
   ) =>
     selector({
       settings: {},
@@ -114,7 +119,12 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      tabFolderGroupsByWorktree: {},
+      createTabFolderGroup: vi.fn(),
+      addTabsToFolderGroup: vi.fn(),
+      moveTabOutOfFolderGroup: vi.fn(),
+      setRenamingFolderGroupId: vi.fn()
     }),
   {
     getState: () => ({
@@ -124,7 +134,12 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      tabFolderGroupsByWorktree: {},
+      createTabFolderGroup: vi.fn(),
+      addTabsToFolderGroup: vi.fn(),
+      moveTabOutOfFolderGroup: vi.fn(),
+      setRenamingFolderGroupId: vi.fn()
     })
   }
 )

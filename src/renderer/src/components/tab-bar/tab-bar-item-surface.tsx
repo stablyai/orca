@@ -11,9 +11,12 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
+import { TabFolderChip } from './TabFolderChip'
+import type { TabStripEntry } from './tab-folder-strip-entries'
 
 export function renderTabBarItems({
   items,
+  stripEntries,
   props,
   runtime,
   dropIndicatorByVisibleId,
@@ -21,6 +24,7 @@ export function renderTabBarItems({
   togglePinned
 }: {
   items: TabBarItem[]
+  stripEntries: TabStripEntry[]
   props: TabBarProps
   runtime: TabBarRuntimeModel
   dropIndicatorByVisibleId: Map<string, DropIndicator>
@@ -63,7 +67,7 @@ export function renderTabBarItems({
     statusByRelativePath
   } = runtime
 
-  return items.map((item, index) => {
+  const renderItem = (item: TabBarItem, index: number): React.ReactNode => {
     const dragData: TabDragItemData = {
       kind: 'tab',
       worktreeId,
@@ -222,6 +226,24 @@ export function renderTabBarItems({
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
         includeTopTabBorder={includeTopTabBorder}
       />
+    )
+  }
+
+  return stripEntries.map((entry) => {
+    if (entry.type === 'folder') {
+      return (
+        <TabFolderChip
+          key={`folder:${entry.folder.id}`}
+          folder={entry.folder}
+          memberCount={entry.members.length}
+        />
+      )
+    }
+    const index = items.findIndex((item) => item.id === entry.item.id)
+    return (
+      <React.Fragment key={entry.item.id}>
+        {renderItem(entry.item, index === -1 ? 0 : index)}
+      </React.Fragment>
     )
   })
 }

@@ -154,4 +154,44 @@ describe('profile project session state', () => {
       'retained-tab:retained-leaf': 'retained-incarnation'
     })
   })
+
+  it('prunes tab folder groups with a removed repo', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabFolderGroups: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            id: 'removed-folder',
+            worktreeId: REMOVED_WORKTREE_ID,
+            splitGroupId: 'removed-split',
+            name: 'Removed',
+            color: '#3b82f6',
+            collapsed: false,
+            tabOrder: ['removed-tab'],
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ],
+        [RETAINED_WORKTREE_ID]: [
+          {
+            id: 'retained-folder',
+            worktreeId: RETAINED_WORKTREE_ID,
+            splitGroupId: 'retained-split',
+            name: 'Retained',
+            color: '#22c55e',
+            collapsed: false,
+            tabOrder: ['retained-tab'],
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+
+    const result = removeRepoFromWorkspaceSession(session, REMOVED_REPO_ID)
+
+    expect(result.tabFolderGroups).toEqual({
+      [RETAINED_WORKTREE_ID]: session.tabFolderGroups![RETAINED_WORKTREE_ID]
+    })
+  })
 })

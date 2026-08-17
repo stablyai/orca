@@ -69,6 +69,7 @@ function collectSessionWorktreeIds(
   addOwnerKeys(session.unifiedTabs)
   addOwnerKeys(session.tabGroups)
   addOwnerKeys(session.tabGroupLayouts)
+  addOwnerKeys(session.tabFolderGroups)
   addOwnerKeys(session.activeGroupIdByWorktree)
   addOwnerKeys(session.lastVisitedAtByWorktreeId)
   addOwnerKeys(session.defaultTerminalTabsAppliedByWorktreeId)

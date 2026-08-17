@@ -3,6 +3,7 @@ import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
 import type { TerminalSlice } from './slices/terminals'
 import type { TabsSlice } from './slices/tabs'
+import type { TabFolderGroupsSlice } from './slices/tab-folder-groups'
 import type { UISlice } from './slices/ui'
 import type { SettingsSlice } from './slices/settings'
 import type { KeybindingsSlice } from './slices/keybindings'
@@ -49,6 +50,7 @@ export type AppState = RepoSlice &
   WorktreeSlice &
   TerminalSlice &
   TabsSlice &
+  TabFolderGroupsSlice &
   UISlice &
   SettingsSlice &
   KeybindingsSlice &

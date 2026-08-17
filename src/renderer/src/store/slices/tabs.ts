@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: split-tab group state updates layout, focus, and tab membership atomically in one slice to avoid split-brain. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { TabFolderGroup } from '../../../../shared/tab-folder-types'
 import type {
   Tab,
   TabContentType,
@@ -12,6 +13,10 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
+import {
+  applyFolderMembershipAfterTabChange,
+  syncFolderTabOrdersFromGroupOrder
+} from '../../../../shared/tab-folder-group-state'
 import {
   dedupeTabOrder,
   ensureGroup,
@@ -46,6 +51,44 @@ import {
 } from './degraded-repo-worktree-validity'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
+
+function syncWorktreeFolderTabOrders(
+  tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]> | undefined,
+  worktreeId: string,
+  splitGroupId: string,
+  tabOrder: readonly string[]
+): Pick<AppState, 'tabFolderGroupsByWorktree'> {
+  return {
+    tabFolderGroupsByWorktree: {
+      ...tabFolderGroupsByWorktree,
+      [worktreeId]: syncFolderTabOrdersFromGroupOrder(
+        tabFolderGroupsByWorktree?.[worktreeId] ?? [],
+        tabOrder,
+        splitGroupId
+      )
+    }
+  }
+}
+
+function expandFolderGroupIfCollapsed(
+  tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]> | undefined,
+  worktreeId: string,
+  folderGroupId: string
+): Pick<AppState, 'tabFolderGroupsByWorktree'> | Record<string, never> {
+  const folders = tabFolderGroupsByWorktree?.[worktreeId]
+  const folder = folders?.find((candidate) => candidate.id === folderGroupId)
+  if (!folder?.collapsed || !folders) {
+    return {}
+  }
+  return {
+    tabFolderGroupsByWorktree: {
+      ...tabFolderGroupsByWorktree,
+      [worktreeId]: folders.map((candidate) =>
+        candidate.id === folderGroupId ? { ...candidate, collapsed: false } : candidate
+      )
+    }
+  }
+}
 
 function replaceWorkspaceRecordKeys<T>(
   current: Record<string, T>,
@@ -1096,6 +1139,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
+        ...(tab.folderGroupId
+          ? expandFolderGroupIfCollapsed(
+              state.tabFolderGroupsByWorktree,
+              worktreeId,
+              tab.folderGroupId
+            )
           : {})
       }
     })
@@ -1177,8 +1227,16 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
         (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
         !current.openFiles.some((file) => file.worktreeId === worktreeId)
+      const folderState = applyFolderMembershipAfterTabChange(
+        nextTabs,
+        current.tabFolderGroupsByWorktree?.[worktreeId] ?? []
+      )
       return {
-        unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
+        unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: folderState.tabs },
+        tabFolderGroupsByWorktree: {
+          ...current.tabFolderGroupsByWorktree,
+          [worktreeId]: folderState.folders
+        },
         groupsByWorktree: {
           ...current.groupsByWorktree,
           [worktreeId]: nextGroups
@@ -1223,7 +1281,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
                 ...current,
                 unifiedTabsByWorktree: {
                   ...current.unifiedTabsByWorktree,
-                  [worktreeId]: nextTabs
+                  [worktreeId]: folderState.tabs
                 },
                 groupsByWorktree: {
                   ...current.groupsByWorktree,
@@ -1268,7 +1326,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               const sortOrder = orderMap.get(tab.id)
               return sortOrder === undefined ? tab : { ...tab, sortOrder }
             })
-          }
+          },
+          ...syncWorktreeFolderTabOrders(
+            state.tabFolderGroupsByWorktree,
+            worktreeId,
+            groupId,
+            nextTabOrder
+          )
         }
       }
       return {}
@@ -1370,7 +1434,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-        }
+        },
+        ...syncWorktreeFolderTabOrders(
+          state.tabFolderGroupsByWorktree,
+          worktreeId,
+          group.id,
+          tabOrder
+        )
       }
     })
     mirrorTabPinnedToHost(get(), tabId, true)
@@ -1407,7 +1477,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-        }
+        },
+        ...syncWorktreeFolderTabOrders(
+          state.tabFolderGroupsByWorktree,
+          worktreeId,
+          group.id,
+          tabOrder
+        )
       }
     })
     mirrorTabPinnedToHost(get(), tabId, false)
@@ -1744,14 +1820,23 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...state.groupsByWorktree,
         [worktreeId]: filteredGroups
       }
+      const movedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+      )
+      const folderState = applyFolderMembershipAfterTabChange(
+        movedTabs,
+        state.tabFolderGroupsByWorktree?.[worktreeId] ?? []
+      )
       const nextUnifiedTabsByWorktree = {
         ...state.unifiedTabsByWorktree,
-        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-        )
+        [worktreeId]: folderState.tabs
       }
       return {
         unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: folderState.folders
+        },
         groupsByWorktree: nextGroupsByWorktree,
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
@@ -1910,11 +1995,16 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
       }
 
+      const movedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
+      )
+      const folderState = applyFolderMembershipAfterTabChange(
+        movedTabs,
+        state.tabFolderGroupsByWorktree?.[worktreeId] ?? []
+      )
       const nextUnifiedTabsByWorktree = {
         ...state.unifiedTabsByWorktree,
-        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
-        )
+        [worktreeId]: folderState.tabs
       }
       const nextGroupsByWorktree = {
         ...state.groupsByWorktree,
@@ -1923,6 +2013,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
       return {
         unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: folderState.folders
+        },
         groupsByWorktree: nextGroupsByWorktree,
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
@@ -2073,6 +2167,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       layoutByWorktree: replaceWorkspaceRecordKeys(
         current.layoutByWorktree,
         hydrated.layoutByWorktree,
+        replaceWorkspaceKeys
+      ),
+      tabFolderGroupsByWorktree: replaceWorkspaceRecordKeys(
+        current.tabFolderGroupsByWorktree,
+        hydrated.tabFolderGroupsByWorktree,
         replaceWorkspaceKeys
       )
     }))

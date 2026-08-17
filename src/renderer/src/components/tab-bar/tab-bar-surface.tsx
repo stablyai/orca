@@ -80,11 +80,12 @@ export function renderTabBarSurface({
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
-  const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
+  const { orderedItems, stripEntries, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
+    stripEntries,
     props,
     runtime,
     dropIndicatorByVisibleId,

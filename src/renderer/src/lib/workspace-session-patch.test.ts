@@ -297,7 +297,13 @@ describe('buildWorkspaceSessionPatch', () => {
     )
 
     expect(Object.keys(patch).sort()).toEqual(
-      ['activeGroupIdByWorktree', 'tabGroupLayouts', 'tabGroups', 'unifiedTabs'].sort()
+      [
+        'activeGroupIdByWorktree',
+        'tabFolderGroups',
+        'tabGroupLayouts',
+        'tabGroups',
+        'unifiedTabs'
+      ].sort()
     )
     expect(patch.tabGroups?.['wt-1']).toEqual([
       expect.objectContaining({ id: 'group-left', tabOrder: ['term-unified-1'] })

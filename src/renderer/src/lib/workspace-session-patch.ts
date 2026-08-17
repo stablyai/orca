@@ -132,6 +132,7 @@ export function buildWorkspaceSessionPatch(
       'activeGroupIdByWorktree',
       'groupsByWorktree',
       'layoutByWorktree',
+      'tabFolderGroupsByWorktree',
       'unifiedTabsByWorktree'
     ] as const)
   ) {

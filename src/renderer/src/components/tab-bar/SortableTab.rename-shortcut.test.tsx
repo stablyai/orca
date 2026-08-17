@@ -65,6 +65,10 @@ vi.mock('react', async () => {
   }
 })
 
+vi.mock('./TabFolderMenuItems', () => ({
+  TabFolderMenuItems: () => null
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},
@@ -88,6 +92,15 @@ vi.mock('lucide-react', () => ({
   },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
+  },
+  FolderMinus: function FolderMinus(props: Record<string, unknown>) {
+    return { type: 'FolderMinus', props }
+  },
+  FolderPlus: function FolderPlus(props: Record<string, unknown>) {
+    return { type: 'FolderPlus', props }
+  },
+  FolderSymlink: function FolderSymlink(props: Record<string, unknown>) {
+    return { type: 'FolderSymlink', props }
   },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }

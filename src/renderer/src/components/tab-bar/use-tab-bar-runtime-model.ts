@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TabFolderGroup } from '../../../../shared/tab-folder-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
@@ -39,6 +40,7 @@ type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+const EMPTY_FOLDER_GROUPS: readonly TabFolderGroup[] = []
 
 export function getProjectRuntimeShellMenuMode(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -66,6 +68,7 @@ export type TabBarRuntimeModel = {
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
   unifiedTabs: readonly Tab[]
+  folderGroups: readonly TabFolderGroup[]
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
   defaultWindowsShell: string
@@ -112,6 +115,9 @@ export function useTabBarRuntimeModel({
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
   const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const folderGroups = useAppStore(
+    (s) => s.tabFolderGroupsByWorktree?.[worktreeId] ?? EMPTY_FOLDER_GROUPS
+  )
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
@@ -259,6 +265,7 @@ export function useTabBarRuntimeModel({
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,
     unifiedTabs,
+    folderGroups,
     pinTab,
     unpinTab,
     defaultWindowsShell,
