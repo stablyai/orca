@@ -37,6 +37,7 @@ export function useWorktreeCardFoundation({
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const sidebarViewMode = useAppStore((s) => s.sidebarViewMode)
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
@@ -204,6 +205,7 @@ export function useWorktreeCardFoundation({
     fetchIssue,
     fetchLinearIssue,
     cardProps,
+    sidebarViewMode,
     agentActivityDisplayMode,
     projectGroups,
     newCardStyle,

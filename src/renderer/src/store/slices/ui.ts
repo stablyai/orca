@@ -882,6 +882,8 @@ export type UISlice = {
   dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
+  sidebarViewMode: 'project' | 'current'
+  setSidebarViewMode: (m: UISlice['sidebarViewMode']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
   projectOrderBy: ProjectOrderBy
@@ -2065,6 +2067,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
+  sidebarViewMode: 'project',
+  setSidebarViewMode: (m) => {
+    window.api.ui.set({ sidebarViewMode: m }).catch(console.error)
+    set({ sidebarViewMode: m })
+  },
+
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
@@ -2513,6 +2521,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+        sidebarViewMode: (ui.sidebarViewMode === 'current'
+          ? 'current'
+          : 'project') as UISlice['sidebarViewMode'],
         sortBy,
         // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
         projectOrderBy: ui.projectOrderBy,

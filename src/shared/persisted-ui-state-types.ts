@@ -36,6 +36,8 @@ export type PersistedUIState = {
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  /** Sidebar view mode: 'project' = grouped workspace list (default), 'current' = active workspace with its conversations. */
+  sidebarViewMode?: 'project' | 'current'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project header ordering in `groupBy: 'repo'`, independent of `sortBy`: 'manual' uses persisted order + header drag, 'recent' by latest visible activity. */
   projectOrderBy: ProjectOrderBy

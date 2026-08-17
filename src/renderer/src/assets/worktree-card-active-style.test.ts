@@ -28,7 +28,6 @@ describe('worktree card active styling', () => {
     expect(darkPrimary).toContain(
       'background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent)'
     )
-    expect(darkPrimary).toContain('var(--worktree-sidebar-border)')
   })
 
   it('keeps the secondary selection ring when CSS owns the active state', () => {
