@@ -15,6 +15,7 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
+import { clampBrowserAnnotationReferences } from '@/components/browser-pane/browser-annotation-references'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
@@ -105,12 +106,16 @@ type ClosedBrowserWorkspaceSnapshot = {
 }
 
 function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
+  const { references: rawReferences, ...rest } = annotation
+  const references = clampBrowserAnnotationReferences(rawReferences)
   return {
-    ...annotation,
+    ...rest,
     comment:
       annotation.comment.length > GRAB_BUDGET.annotationCommentMaxLength
         ? annotation.comment.slice(0, GRAB_BUDGET.annotationCommentMaxLength)
         : annotation.comment,
+    // Why: omit when empty so pre-reference annotations keep their exact shape.
+    ...(references ? { references } : {}),
     payload: {
       ...annotation.payload,
       // Why: annotations persist to disk; null the transient screenshot to avoid retaining megabytes per note.

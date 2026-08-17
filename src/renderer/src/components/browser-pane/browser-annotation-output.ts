@@ -1,8 +1,14 @@
 import type {
+  BrowserAnnotationReference,
   BrowserGrabComputedStyles,
   BrowserGrabPayload,
   BrowserPageAnnotation
 } from '../../../../shared/browser-grab-types'
+import {
+  browserAnnotationReferencePercent,
+  browserAnnotationReferenceToken,
+  isBrowserAnnotationPointReference
+} from './browser-annotation-references'
 
 function formatPageHeading(payload: BrowserGrabPayload): string {
   try {
@@ -152,6 +158,34 @@ function inlineCode(content: string): string {
   return `${marker}${padding}${content}${padding}${marker}`
 }
 
+// Why: token first on each line — that is what lets the agent resolve "@ref1" to a selector.
+function formatReferenceLines(references: BrowserAnnotationReference[]): string[] {
+  const lines: string[] = ['**References:**']
+  for (const reference of references) {
+    const token = browserAnnotationReferenceToken(reference.index)
+    // Why: a point pick is empty space, so naming its container as the target
+    // would be wrong — but the position is only actionable relative to that
+    // container, so give the agent both plus the offsets to place against.
+    if (isBrowserAnnotationPointReference(reference)) {
+      const point = reference.point
+      const host = reference.selector ? inlineCode(reference.selector) : reference.tagName
+      const across = browserAnnotationReferencePercent(point.ratioX)
+      const down = browserAnnotationReferencePercent(point.ratioY)
+      lines.push(
+        `- ${token} — empty space inside ${host}, not an element: ${across}% across and ${down}% down that container, at offset x=${Math.round(point.offsetX)}, y=${Math.round(point.offsetY)} within its ${Math.round(point.hostWidth)}x${Math.round(point.hostHeight)} box (page x=${Math.round(point.pageX)}, y=${Math.round(point.pageY)})`
+      )
+      continue
+    }
+    const rect = reference.rectViewport
+    const location = `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`
+    const path = reference.elementPath ? ` — ${inlineCode(reference.elementPath)}` : ''
+    lines.push(
+      `- ${token} — ${inlineText(reference.label)} — ${inlineCode(reference.selector)}${path} (at ${location})`
+    )
+  }
+  return lines
+}
+
 export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnotation[]): string {
   if (annotations.length === 0) {
     return ''
@@ -219,6 +253,9 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
     if (target.htmlSnippet) {
       lines.push('**HTML:**')
       lines.push(...fence('html', target.htmlSnippet))
+    }
+    if (annotation.references?.length) {
+      lines.push(...formatReferenceLines(annotation.references))
     }
     lines.push(`**Feedback:** ${inlineText(annotation.comment)}`)
     lines.push('')

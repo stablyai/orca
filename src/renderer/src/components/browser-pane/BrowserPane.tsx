@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: BrowserPane synchronizes Electron webviews, remote browser drivers, streams, downloads, and annotation overlays; those external lifecycles cannot be derived during render. */
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -117,11 +118,22 @@ import {
   type BrowserAnnotationIntent,
   type BrowserAnnotationPayload,
   type BrowserAnnotationPriority,
+  type BrowserAnnotationReference,
   type BrowserGrabPayload,
+  type BrowserGrabPoint,
   type BrowserGrabRect,
   type BrowserGrabScreenshot,
   type BrowserPageAnnotation
 } from '../../../../shared/browser-grab-types'
+import {
+  appendBrowserAnnotationReference,
+  browserAnnotationReferenceToken,
+  insertBrowserAnnotationReferenceToken,
+  isBrowserAnnotationPointReference,
+  removeBrowserAnnotationReference,
+  removeReferenceTokenFromComment,
+  stripUnresolvedReferenceTokens
+} from './browser-annotation-references'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../shared/browser-annotation-viewport-bridge'
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
@@ -391,16 +403,128 @@ function getLiveBrowserAnnotationRect(
   }
 }
 
+// Why: rendered in the renderer overlay, not the guest badge bridge — references never outlive the open composer.
+function BrowserAnnotationReferenceHighlights({
+  references,
+  container,
+  webview,
+  viewport
+}: {
+  references: BrowserAnnotationReference[]
+  container: HTMLElement | null
+  webview: Electron.WebviewTag | null
+  viewport: BrowserOverlayViewport
+}): React.JSX.Element | null {
+  if (references.length === 0) {
+    return null
+  }
+  const containerRect = container?.getBoundingClientRect()
+  const webviewRect = webview?.getBoundingClientRect()
+  const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
+  const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+      {references.map((reference) => {
+        const token = browserAnnotationReferenceToken(reference.index)
+        // Why: a point pick has no box to outline, so mark the spot itself.
+        if (isBrowserAnnotationPointReference(reference)) {
+          const spot = getLiveBrowserReferencePoint(reference.point, viewport)
+          const host = getLiveBrowserReferenceRect(reference, viewport)
+          return (
+            <Fragment key={reference.index}>
+              {/* Why: the spot is only meaningful inside its container, so show which one. */}
+              <div
+                className="absolute rounded-sm border border-dashed border-primary/40"
+                style={{
+                  left: offsetX + host.x,
+                  top: offsetY + host.y,
+                  width: host.width,
+                  height: host.height
+                }}
+              />
+              <div
+                className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/30"
+                style={{ left: offsetX + spot.x, top: offsetY + spot.y }}
+              >
+                <span className="absolute bottom-3 left-2 rounded-sm bg-primary px-1 font-mono text-[10px] leading-4 whitespace-nowrap text-primary-foreground">
+                  {token}
+                </span>
+              </div>
+            </Fragment>
+          )
+        }
+        const rect = getLiveBrowserReferenceRect(reference, viewport)
+        return (
+          <div
+            key={reference.index}
+            className="absolute rounded-sm border-2 border-dashed border-primary/70 bg-primary/10"
+            style={{
+              left: offsetX + rect.x,
+              top: offsetY + rect.y,
+              width: rect.width,
+              height: rect.height
+            }}
+          >
+            <span className="absolute -top-2 -left-1 rounded-sm bg-primary px-1 font-mono text-[10px] leading-4 text-primary-foreground">
+              {token}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Why: page coords are scroll-independent, so the spot tracks scroll for free.
+function getLiveBrowserReferencePoint(
+  point: BrowserGrabPoint,
+  viewport: BrowserOverlayViewport
+): { x: number; y: number } {
+  const capturedScrollX = point.pageX - point.viewportX
+  const capturedScrollY = point.pageY - point.viewportY
+  const scrollX = viewport.version === 0 ? capturedScrollX : viewport.scrollX
+  const scrollY = viewport.version === 0 ? capturedScrollY : viewport.scrollY
+  return { x: point.pageX - scrollX, y: point.pageY - scrollY }
+}
+
+function getLiveBrowserReferenceRect(
+  reference: BrowserAnnotationReference,
+  viewport: BrowserOverlayViewport
+): BrowserGrabRect {
+  if (reference.isFixed) {
+    return reference.rectViewport
+  }
+  // Why: capture-time scroll is recoverable from the two rects, so no extra persisted field is needed before the bridge reports scroll.
+  const capturedScrollX = reference.rectPage.x - reference.rectViewport.x
+  const capturedScrollY = reference.rectPage.y - reference.rectViewport.y
+  const scrollX = viewport.version === 0 ? capturedScrollX : viewport.scrollX
+  const scrollY = viewport.version === 0 ? capturedScrollY : viewport.scrollY
+  return {
+    ...reference.rectViewport,
+    x: reference.rectPage.x - scrollX,
+    y: reference.rectPage.y - scrollY
+  }
+}
+
 function PendingBrowserAnnotationCard({
   payload,
   anchor,
   portalContainer,
+  references,
+  isPickingReference,
+  onPickReference,
+  onRemoveReference,
   onAdd,
   onCancel
 }: {
   payload: BrowserGrabPayload
   anchor: BrowserOverlayAnchor
   portalContainer: HTMLElement | null
+  references: BrowserAnnotationReference[]
+  isPickingReference: boolean
+  onPickReference: () => void
+  onRemoveReference: (index: number) => void
   onAdd: (comment: string, intent: BrowserAnnotationIntent) => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -408,6 +532,51 @@ function PendingBrowserAnnotationCard({
   const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
   const trimmed = comment.trim()
   const submitModifierLabel = getScreenSubmitModifierLabel()
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const caretRef = useRef(0)
+  const caretEndRef = useRef(0)
+  const restoreCaretRef = useRef<number | null>(null)
+  const referenceCountRef = useRef(references.length)
+  const commentRef = useRef(comment)
+  commentRef.current = comment
+  const referencesFull = references.length >= GRAB_BUDGET.annotationReferencesMax
+
+  // Why: insert at the caret so the sentence can point at the reference.
+  useEffect(() => {
+    const previousCount = referenceCountRef.current
+    referenceCountRef.current = references.length
+    if (references.length <= previousCount) {
+      return
+    }
+    const added = references.at(-1)
+    if (!added) {
+      return
+    }
+    // Why: computed outside setComment — React may run an updater twice, and these refs must move once.
+    const insertion = insertBrowserAnnotationReferenceToken(
+      commentRef.current,
+      caretRef.current,
+      caretEndRef.current,
+      browserAnnotationReferenceToken(added.index)
+    )
+    caretRef.current = insertion.caret
+    caretEndRef.current = insertion.caret
+    restoreCaretRef.current = insertion.caret
+    setComment(insertion.comment)
+  }, [references])
+
+  // Why: keyed on comment, not every render — the caret can only be placed once
+  // the inserted token has rendered, and picking left focus in the guest page.
+  useEffect(() => {
+    const caret = restoreCaretRef.current
+    const textarea = textareaRef.current
+    if (caret === null || !textarea) {
+      return
+    }
+    restoreCaretRef.current = null
+    textarea.focus()
+    textarea.setSelectionRange(caret, caret)
+  }, [comment])
 
   return (
     <Popover
@@ -438,6 +607,10 @@ function PendingBrowserAnnotationCard({
         )}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
+          // Why: while picking, Esc cancels the pick (grab hook), not the whole note.
+          if (isPickingReference) {
+            return
+          }
           onCancel()
         }}
       >
@@ -454,16 +627,38 @@ function PendingBrowserAnnotationCard({
         <Label htmlFor="browser-annotation-comment" className="sr-only">
           {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
         </Label>
+        {isPickingReference ? (
+          <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <Crosshair className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {translate(
+                'auto.components.browser.pane.BrowserPane.6b1e0a5c74',
+                'Scroll and click a spot on the page. Esc to go back.'
+              )}
+            </span>
+          </div>
+        ) : null}
         <textarea
           id="browser-annotation-comment"
+          ref={textareaRef}
           value={comment}
-          onChange={(event) => setComment(event.target.value)}
+          onChange={(event) => {
+            caretRef.current = event.target.selectionStart
+            caretEndRef.current = event.target.selectionEnd
+            setComment(event.target.value)
+          }}
+          onSelect={(event) => {
+            caretRef.current = event.currentTarget.selectionStart
+            caretEndRef.current = event.currentTarget.selectionEnd
+          }}
           placeholder={translate(
             'auto.components.browser.pane.BrowserPane.532bac48c5',
             'Describe what the agent should change here...'
           )}
           maxLength={GRAB_BUDGET.annotationCommentMaxLength}
-          className="h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            'h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring'
+          )}
           autoFocus
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
@@ -481,6 +676,69 @@ function PendingBrowserAnnotationCard({
             }
           }}
         />
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {references.map((reference) => (
+            <span
+              key={reference.index}
+              className="flex min-w-0 max-w-full items-center gap-1 rounded-md border border-border/60 bg-muted/40 py-0.5 pr-0.5 pl-1.5 text-[11px] text-muted-foreground"
+              title={reference.selector}
+            >
+              <span className="font-mono text-foreground/80">
+                {browserAnnotationReferenceToken(reference.index)}
+              </span>
+              <span className="truncate">{reference.label}</span>
+              <button
+                type="button"
+                className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                onClick={() => {
+                  setComment((current) => removeReferenceTokenFromComment(current, reference.index))
+                  onRemoveReference(reference.index)
+                }}
+                aria-label={translate(
+                  'auto.components.browser.pane.BrowserPane.5c0a2f6b41',
+                  'Remove reference {{value0}}',
+                  { value0: browserAnnotationReferenceToken(reference.index) }
+                )}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+          {isPickingReference ? null : (
+            <Tooltip>
+              {/* Why: disabled buttons swallow pointer events; the span keeps the tooltip reachable. */}
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="size-6"
+                    disabled={referencesFull}
+                    onClick={onPickReference}
+                    aria-label={translate(
+                      'auto.components.browser.pane.BrowserPane.9a7c3d1e05',
+                      'Pick a spot on the page'
+                    )}
+                  >
+                    <Crosshair className="size-3" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {referencesFull
+                  ? translate(
+                      'auto.components.browser.pane.BrowserPane.2f4b8ce713',
+                      'Up to {{value0}} references per annotation.',
+                      { value0: GRAB_BUDGET.annotationReferencesMax }
+                    )
+                  : translate(
+                      'auto.components.browser.pane.BrowserPane.c81d5a90f2',
+                      'Pick a spot on the page — an element, or empty space.'
+                    )}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         <div className="mt-2 min-w-0">
           <Label className="mb-1 block text-xs text-muted-foreground">
             {translate('auto.components.browser.pane.BrowserPane.8f87e6c2e5', 'Intent')}
@@ -2614,6 +2872,12 @@ function BrowserPagePane({
     useState<BrowserGrabPayload | null>(null)
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
   pendingAnnotationPayloadRef.current = pendingAnnotationPayload
+  const [pendingAnnotationReferences, setPendingAnnotationReferences] = useState<
+    BrowserAnnotationReference[]
+  >([])
+  const [isPickingAnnotationReference, setIsPickingAnnotationReference] = useState(false)
+  // Why: the grab-result effect can't read picking state without re-subscribing.
+  const referencePickActiveRef = useRef(false)
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
     scrollX: 0,
     scrollY: 0,
@@ -2782,7 +3046,18 @@ function BrowserPagePane({
       return
     }
     if (grabIntent === 'annotate') {
+      // Why: a pick from the composer references the note's target instead of replacing it.
+      if (referencePickActiveRef.current) {
+        referencePickActiveRef.current = false
+        setIsPickingAnnotationReference(false)
+        const referencePayload = grab.payload
+        setPendingAnnotationReferences((current) =>
+          appendBrowserAnnotationReference(current, referencePayload)
+        )
+        return
+      }
       setPendingAnnotationPayload(grab.payload)
+      setPendingAnnotationReferences([])
       return
     }
     if (!grab.contextMenu) {
@@ -2802,7 +3077,14 @@ function BrowserPagePane({
 
   useEffect(() => {
     if (grab.state === 'idle' || grab.state === 'error') {
+      // Why: a cancelled reference pick keeps the composer and its draft.
+      if (referencePickActiveRef.current) {
+        referencePickActiveRef.current = false
+        setIsPickingAnnotationReference(false)
+        return
+      }
       setPendingAnnotationPayload(null)
+      setPendingAnnotationReferences([])
     }
   }, [grab.state])
 
@@ -4260,23 +4542,34 @@ function BrowserPagePane({
     grab.rearm()
   }, [grab, recordFeatureInteraction, showGrabToast])
 
+  // Why: a pick still in flight must end with the composer, or its result is
+  // routed into references belonging to a composer that no longer exists.
+  const closePendingAnnotationComposer = useCallback((): void => {
+    referencePickActiveRef.current = false
+    setIsPickingAnnotationReference(false)
+    setPendingAnnotationPayload(null)
+    setPendingAnnotationReferences([])
+  }, [])
+
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
       const payload = pendingAnnotationPayload
       if (!payload) {
         return
       }
+      const references = pendingAnnotationReferences
       addBrowserPageAnnotation({
         id: createBrowserAnnotationId(),
         browserPageId: browserTab.id,
-        comment,
+        comment: stripUnresolvedReferenceTokens(comment, references),
         intent,
         priority: DEFAULT_BROWSER_ANNOTATION_PRIORITY,
         createdAt: new Date().toISOString(),
-        payload: createBrowserAnnotationPayload(payload)
+        payload: createBrowserAnnotationPayload(payload),
+        ...(references.length > 0 ? { references } : {})
       })
       recordFeatureInteraction('browser-annotations')
-      setPendingAnnotationPayload(null)
+      closePendingAnnotationComposer()
       setBrowserAnnotationTrayOpen(true)
       recordFeatureInteraction('browser-annotations')
       showGrabToast('Annotation added', 'success', payload)
@@ -4285,19 +4578,35 @@ function BrowserPagePane({
     [
       addBrowserPageAnnotation,
       browserTab.id,
+      closePendingAnnotationComposer,
       grab,
       pendingAnnotationPayload,
+      pendingAnnotationReferences,
       recordFeatureInteraction,
       showGrabToast
     ]
   )
 
   const handleCancelPendingBrowserAnnotation = useCallback((): void => {
-    setPendingAnnotationPayload(null)
+    closePendingAnnotationComposer()
     if (grabIntent === 'annotate' && grab.state === 'confirming') {
       grab.rearm()
     }
-  }, [grab, grabIntent])
+  }, [closePendingAnnotationComposer, grab, grabIntent])
+
+  // Why: reuses the guest picker; `referencePickActiveRef` routes the result to a reference.
+  const handlePickAnnotationReference = useCallback((): void => {
+    if (pendingAnnotationReferences.length >= GRAB_BUDGET.annotationReferencesMax) {
+      return
+    }
+    referencePickActiveRef.current = true
+    setIsPickingAnnotationReference(true)
+    grab.rearm()
+  }, [grab, pendingAnnotationReferences.length])
+
+  const handleRemoveAnnotationReference = useCallback((index: number): void => {
+    setPendingAnnotationReferences((current) => removeBrowserAnnotationReference(current, index))
+  }, [])
 
   const handleCopyBrowserAnnotations = useCallback((): void => {
     if (!browserAnnotationsPrompt) {
@@ -5222,27 +5531,32 @@ function BrowserPagePane({
                     { value0: grab.error ?? 'Unknown error' }
                   )
                 : grabIntent === 'annotate'
-                  ? pendingAnnotationPayload
+                  ? isPickingAnnotationReference
                     ? translate(
-                        'auto.components.browser.pane.BrowserPane.b733a91bd9',
-                        'Add feedback for the selected element.'
+                        'auto.components.browser.pane.BrowserPane.3ad9f7c210',
+                        'Click the spot this note should point at.'
                       )
-                    : browserAnnotations.length === 1
+                    : pendingAnnotationPayload
                       ? translate(
-                          'auto.components.browser.pane.BrowserPane.074f0ed10b',
-                          '{{value0}} annotation ready. Select another element or copy all feedback.',
-                          { value0: browserAnnotations.length }
+                          'auto.components.browser.pane.BrowserPane.b733a91bd9',
+                          'Add feedback for the selected element.'
                         )
-                      : browserAnnotations.length > 0
+                      : browserAnnotations.length === 1
                         ? translate(
-                            'auto.components.browser.pane.BrowserPane.a2164a6e5a',
-                            '{{value0}} annotations ready. Select another element or copy all feedback.',
+                            'auto.components.browser.pane.BrowserPane.074f0ed10b',
+                            '{{value0}} annotation ready. Select another element or copy all feedback.',
                             { value0: browserAnnotations.length }
                           )
-                        : translate(
-                            'auto.components.browser.pane.BrowserPane.777b5bc4ec',
-                            'Click an element to add feedback for the agent.'
-                          )
+                        : browserAnnotations.length > 0
+                          ? translate(
+                              'auto.components.browser.pane.BrowserPane.a2164a6e5a',
+                              '{{value0}} annotations ready. Select another element or copy all feedback.',
+                              { value0: browserAnnotations.length }
+                            )
+                          : translate(
+                              'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+                              'Click an element to add feedback for the agent.'
+                            )
                   : grab.state === 'confirming'
                     ? translate(
                         'auto.components.browser.pane.BrowserPane.e852e20cea',
@@ -5431,18 +5745,30 @@ function BrowserPagePane({
                 </div>
               ) : null}
               {pendingAnnotationPayload ? (
-                <PendingBrowserAnnotationCard
-                  payload={pendingAnnotationPayload}
-                  anchor={getBrowserOverlayAnchor(
-                    pendingAnnotationPayload,
-                    containerRef.current,
-                    webviewRef.current,
-                    browserOverlayViewport
-                  )}
-                  portalContainer={containerRef.current}
-                  onAdd={handleAddBrowserAnnotation}
-                  onCancel={handleCancelPendingBrowserAnnotation}
-                />
+                <>
+                  <BrowserAnnotationReferenceHighlights
+                    references={pendingAnnotationReferences}
+                    container={containerRef.current}
+                    webview={webviewRef.current}
+                    viewport={browserOverlayViewport}
+                  />
+                  <PendingBrowserAnnotationCard
+                    payload={pendingAnnotationPayload}
+                    anchor={getBrowserOverlayAnchor(
+                      pendingAnnotationPayload,
+                      containerRef.current,
+                      webviewRef.current,
+                      browserOverlayViewport
+                    )}
+                    portalContainer={containerRef.current}
+                    references={pendingAnnotationReferences}
+                    isPickingReference={isPickingAnnotationReference}
+                    onPickReference={handlePickAnnotationReference}
+                    onRemoveReference={handleRemoveAnnotationReference}
+                    onAdd={handleAddBrowserAnnotation}
+                    onCancel={handleCancelPendingBrowserAnnotation}
+                  />
+                </>
               ) : null}
               {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
                 <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">

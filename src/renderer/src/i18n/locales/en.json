@@ -14860,7 +14860,13 @@
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
-            "2a4c4b8e1f": "Copy"
+            "2a4c4b8e1f": "Copy",
+            "6b1e0a5c74": "Scroll and click a spot on the page. Esc to go back.",
+            "5c0a2f6b41": "Remove reference {{value0}}",
+            "9a7c3d1e05": "Pick a spot on the page",
+            "2f4b8ce713": "Up to {{value0}} references per annotation.",
+            "c81d5a90f2": "Pick a spot on the page — an element, or empty space.",
+            "3ad9f7c210": "Click the spot this note should point at."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
