@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type * as plantUmlNamespace from '@plantuml/core'
 import DOMPurify from 'dompurify'
 import { detectPlantUmlErrorDiagram } from './plantuml-error-diagram'
+import { enqueuePlantUmlRender } from './plantuml-render-queue'
 import { translate } from '@/i18n/i18n'
 
 type PlantUmlApi = typeof plantUmlNamespace
@@ -28,7 +29,13 @@ function loadPlantUml(): Promise<PlantUmlApi> {
             : vizModule
       }
       return import('@plantuml/core')
-    })()
+    })().catch((err) => {
+      // Why: without this the cache holds a rejected promise, so one failed chunk
+      // fetch (offline, or a web build served over a flaky network) disables every
+      // diagram until the app restarts. Drop it so the next block retries.
+      enginePromise = null
+      throw err
+    })
   }
   return enginePromise
 }
@@ -36,18 +43,6 @@ function loadPlantUml(): Promise<PlantUmlApi> {
 type PlantUmlBlockProps = {
   content: string
   isDark: boolean
-}
-
-// Why: the engine keeps parse/layout state in module-level globals (TeaVM statics
-// plus the shared Viz instance), so concurrent renders interleave and can emit one
-// diagram's SVG for another's source. Serialize every render through one chain,
-// collapsing it afterwards so old closures stay collectable.
-let renderQueue: Promise<void> = Promise.resolve()
-
-function enqueueRender(fn: () => Promise<void>): void {
-  renderQueue = renderQueue.then(fn, fn).then(() => {
-    renderQueue = Promise.resolve()
-  })
 }
 
 function renderDiagram(api: PlantUmlApi, content: string, isDark: boolean): Promise<string> {
@@ -106,7 +101,7 @@ export default function PlantUmlBlock({ content, isDark }: PlantUmlBlockProps): 
       }
     }
 
-    enqueueRender(render)
+    enqueuePlantUmlRender(render)
     return () => {
       cancelled = true
     }
