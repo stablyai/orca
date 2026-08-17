@@ -69,5 +69,6 @@ describe('parseProjectsHomeViewSettings', () => {
     await expect(
       saveProjectsHomeViewSettings(DEFAULT_PROJECTS_HOME_VIEW_SETTINGS)
     ).resolves.toBeUndefined()
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
   })
 })
