@@ -6,11 +6,8 @@ import { isEquivalentPaneKey } from '../pane-key-match'
 import { exposeUtcTimestamp } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// Why: "capability is revoked" describes the mechanism, not the cause, and an
-// agent worker reads it as its authorization dying — the reported failure is a
-// worker that quits with finished work uncommitted rather than one that reports
-// again. State only what the row proves: whether this dispatch was settled or
-// released, when, and the one channel that still works. Never guess why.
+// Why: state only what the row proves — what settled the dispatch and when —
+// and name escalation as the one channel this capability does not gate.
 function describeRevokedDispatch(dispatch: DispatchContextRow): string {
   return [
     describeRevocationCause(dispatch),
@@ -22,11 +19,8 @@ function describeRevokedDispatch(dispatch: DispatchContextRow): string {
   ].join('\n')
 }
 
-// Why every branch reads a stored column: a revoked row does not record who
-// revoked it, so any sentence about stopping, releasing, or reporting early
-// would be inference. `status` distinguishes the terminal cases, `last_failure`
-// carries the real cause behind a `failed` row ('stopped', 'abandoned'), and a
-// still-open status means the capability went before the dispatch settled.
+// Why: a revoked row does not record who revoked it, so every branch states
+// only stored columns and never infers the actor.
 function describeRevocationCause(dispatch: DispatchContextRow): string {
   const at = exposeUtcTimestamp(dispatch.completed_at ?? dispatch.capability_revoked_at)
   const when = at ? ` at ${at}` : ''
@@ -110,10 +104,7 @@ export function verifyDispatchCapability(
   ) {
     return { valid: false, reason: 'The Dispatch process incarnation changed.' }
   }
-  // Why revocation is checked last: only a caller that has proven it is this
-  // dispatch's own worker gets told what happened to it. A caller that failed
-  // identity now learns nothing about the dispatch's state, and the recovery
-  // advice below is only ever addressed to someone who can act on it.
+  // Why last: a caller must pass identity before it learns any dispatch state.
   if (dispatch.capability_revoked_at) {
     return { valid: false, reason: describeRevokedDispatch(dispatch) }
   }

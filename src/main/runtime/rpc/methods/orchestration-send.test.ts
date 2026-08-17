@@ -451,10 +451,7 @@ describe('orchestration RPC methods', () => {
         payload
       })) as { lifecycle: { code: string; reason: string } }
       expect(revoked.lifecycle.code).toBe('dispatch_capability_invalid')
-      // Why: the worker that hits this has proven it owns the dispatch, so the
-      // reason must say what happened and what still works. A bare "capability
-      // is revoked" reads to an agent as its authorization dying, and the
-      // reported failure is a worker that exits with work uncommitted.
+      // Why: the proven dispatch owner is told what settled it and what still works.
       expect(revoked.lifecycle.reason).toContain('was settled as completed')
       expect(revoked.lifecycle.reason).toContain('--type escalation')
       expect(revoked.lifecycle.reason).toContain('Do not exit with uncommitted work')
@@ -487,9 +484,7 @@ describe('orchestration RPC methods', () => {
       })
       expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).toBeTruthy()
 
-      // Why: revocation is verified after identity, so a caller holding the
-      // wrong token learns that its token is wrong and nothing about whether
-      // the dispatch settled, when, or with what outcome.
+      // Why: an invalid token must not disclose whether or how the dispatch settled.
       ctx = { runtime, orchestrationCapability: 'dcap_wrong' }
       const foreign = (await call('orchestration.send', {
         from: 'term_worker',
@@ -502,10 +497,7 @@ describe('orchestration RPC methods', () => {
       expect(foreign.lifecycle.reason).not.toContain('settled')
       expect(foreign.lifecycle.reason).not.toContain('escalation')
 
-      // Why: identity has three legs — token, pane, process incarnation — and
-      // revocation must stay behind all of them. A caller holding the real
-      // token from the wrong pane or a restarted process learns which check it
-      // failed and still nothing about settlement.
+      // Why: pane and process identity failures must equally disclose nothing about settlement.
       ctx = { runtime, orchestrationCapability: capability }
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_other:leaf_other' : coordinatorPaneKey
