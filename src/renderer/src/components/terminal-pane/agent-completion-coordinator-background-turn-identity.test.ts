@@ -227,4 +227,54 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
+
+  it('recognizes a gated row replayed after the all-clear that announced its turn', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the build',
+      agentType: 'claude',
+      stateStartedAt: 1_700_000_000_000
+    })
+    // Why: this coordinator never saw the turn's gated Stop, so the turn is still unannounced and
+    // its all-clear raises the banner itself.
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the build',
+      agentType: 'claude',
+      stateStartedAt: 1_700_000_050_000,
+      turnCompletedAt: 1_700_000_005_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'now lint',
+      agentType: 'claude',
+      stateStartedAt: 1_700_000_060_000
+    })
+
+    // Why: activation replays that turn's gated row. What the pane recorded for the completion is
+    // the turn's end time, not the `done` row's stateStartedAt, so the replay reads as the banner
+    // already shown rather than a second one (#13245).
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the build',
+      agentType: 'claude',
+      stateStartedAt: 1_700_000_000_000,
+      turnCompletedAt: 1_700_000_005_000
+    })
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
 })

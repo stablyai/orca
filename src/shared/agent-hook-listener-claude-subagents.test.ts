@@ -11,7 +11,12 @@ import {
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
-import { PANE_KEY } from './agent-hook-listener-test-harness'
+import {
+  CLAUDE_PREVIOUS_PROMPT_ID,
+  CLAUDE_PROMPT_ID,
+  normalizeAndAccept,
+  PANE_KEY
+} from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -147,12 +152,44 @@ describe('shared agent-hook-listener', () => {
       expect(gated?.payload.turnCompletedAt).toEqual(expect.any(Number))
 
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'now lint' })
+      // Why: the emitted payload computes its stamp fresh, so only the lead record proves the
+      // previous turn's end time was dropped rather than carried into the new turn.
+      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)?.turnCompletedAt).toBeUndefined()
+
       const nextStop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [{ id: 'shell-1', type: 'shell', status: 'completed' }]
       })
       expect(nextStop?.payload.state).toBe('done')
       expect(nextStop?.payload.turnCompletedAt).toBeUndefined()
+    })
+
+    it('does not stamp a turn end time on a manual PostCompact', () => {
+      normalizeAndAccept(state, 'claude', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'compact then keep going',
+        prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
+        session_id: 'session-a'
+      })
+      normalizeAndAccept(state, 'claude', {
+        hook_event_name: 'PreCompact',
+        trigger: 'manual',
+        prompt_id: CLAUDE_PROMPT_ID,
+        session_id: 'session-a'
+      })
+
+      // Why: a manual PostCompact reports 'done' without being a turn boundary, and the running
+      // shell gates it up to 'working' — every other conjunct of the stamp holds. No turn ended
+      // here, so it must carry no turn end time.
+      const compacted = normalizeAndAccept(state, 'claude', {
+        hook_event_name: 'PostCompact',
+        trigger: 'manual',
+        prompt_id: CLAUDE_PROMPT_ID,
+        session_id: 'session-a',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+      })
+      expect(compacted?.payload.state).toBe('working')
+      expect(compacted?.payload.turnCompletedAt).toBeUndefined()
     })
 
     it('emits a status refresh with the lead state on subagent lifecycle events', () => {
@@ -425,10 +462,11 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
-      claudeEvent({
+      const gated = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
       })
+      expect(gated?.payload.turnCompletedAt).toEqual(expect.any(Number))
 
       const blocked = claudeEvent({
         hook_event_name: 'PermissionRequest',
@@ -445,6 +483,9 @@ describe('shared agent-hook-listener', () => {
         tool_input: { command: 'rm -rf build' }
       })
       expect(approved?.payload.state).toBe('working')
+      // Why: this row restores the stashed lead, so it re-emits the same turn's end time — a
+      // consumer must read it as that announced turn, not as a fresh one.
+      expect(approved?.payload.turnCompletedAt).toBe(gated?.payload.turnCompletedAt)
 
       // Why: the lead already stopped before the wait; draining the child
       // must resolve to done, not pin the pane on an invented 'working'.

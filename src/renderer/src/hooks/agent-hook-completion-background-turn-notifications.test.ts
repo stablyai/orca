@@ -38,7 +38,6 @@ const WORKTREE_ID = 'wt-1'
 const HOOK_DONE_QUIET_MS = 1_500
 
 const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
-const FINISHED_SHELL = { id: 'shell-1', type: 'shell', status: 'completed' }
 
 /** Replays Claude hook events through the real listener and the real completion coordinator,
  *  stamping `stateStartedAt` the way the hook server does: pinned for as long as the reported
@@ -171,13 +170,14 @@ describe('claude turn completions while background work keeps the pane working',
     await replay.emit({
       hook_event_name: 'Stop',
       last_assistant_message: 'Lint is queued.',
-      background_tasks: [FINISHED_SHELL]
+      background_tasks: [RUNNING_SHELL]
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     // Why: a turn that ended while a background shell ran must not silence the next one (#13245).
     expect(completionBodies()).toEqual(['Build started in the background.', 'Lint is queued.'])
-    // Why: two bodies are only two banners if they also build two notification ids.
+    // Why: the pane never left `working`, so both ids come from the turns' own end times; equal
+    // ids would make main close the first banner as a repaint of the second.
     expect(new Set(completionStateStartedAts()).size).toBe(2)
   })
 

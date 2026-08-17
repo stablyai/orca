@@ -222,6 +222,36 @@ describe('dispatchTerminalNotification', () => {
     )
   })
 
+  it('keeps the stored row for the notification id when the snapshot is not a completion', () => {
+    // Why: only a `done` snapshot names a finished turn, so a mid-turn one must not outrank the
+    // stored row's timing.
+    const storedStartedAt = Date.now() - 60_000
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      stateStartedAt: storedStartedAt
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'working',
+        prompt: 'codex-hook-notify',
+        agentType: 'codex',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    expect(getLastNotificationDispatchArg()?.notificationId).toBe(
+      buildAgentNotificationId({
+        worktreeId: 'wt-primary',
+        paneKey,
+        stateStartedAt: storedStartedAt
+      })
+    )
+  })
+
   it('uses a live pane key when inactive worktree tab membership is not hydrated', () => {
     mockState.tabsByWorktree = {}
 
