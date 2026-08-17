@@ -12,10 +12,7 @@ import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import { normalizeClaudePromptId } from './agent-hook-listener/listener-limits'
-import type {
-  CursorHookDelivery,
-  HookListenerState
-} from './agent-hook-listener/listener-state'
+import type { CursorHookDelivery, HookListenerState } from './agent-hook-listener/listener-state'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
