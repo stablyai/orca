@@ -110,6 +110,57 @@ function sanitizeMacAppBundleName(value) {
   )
 }
 
+function pruneRemovedWorktreeElectronApps(cacheRoot, currentDistDir) {
+  if (!existsSync(cacheRoot)) {
+    return
+  }
+
+  let runningExecutables = []
+  try {
+    runningExecutables = execFileSync('/bin/ps', ['-axo', 'comm='], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+  } catch {
+    // Keep stale bundles when process inspection is unavailable rather than
+    // deleting a helper executable that another dev instance may still need.
+    return
+  }
+
+  for (const entry of readdirSync(cacheRoot, { withFileTypes: true })) {
+    const distDir = path.join(cacheRoot, entry.name)
+    if (!entry.isDirectory() || distDir === currentDistDir) {
+      continue
+    }
+
+    try {
+      const marker = JSON.parse(
+        readFileSync(path.join(distDir, 'orca-dev-electron-app.json'), 'utf8')
+      )
+      if (
+        typeof marker.sourceAppPath !== 'string' ||
+        typeof marker.appBundleName !== 'string' ||
+        existsSync(marker.sourceAppPath)
+      ) {
+        continue
+      }
+      const appPath = path.join(distDir, marker.appBundleName)
+      // Why: Chromium helpers run executables elsewhere in the app bundle and
+      // can outlive the browser briefly, so any live bundle executable protects it.
+      if (
+        runningExecutables.some(
+          (executablePath) =>
+            executablePath === appPath || executablePath.startsWith(`${appPath}${path.sep}`)
+        )
+      ) {
+        continue
+      }
+      rmSync(distDir, { recursive: true, force: true })
+    } catch {
+      // Only prune cache entries carrying a valid Orca-owned marker.
+    }
+  }
+}
+
 function prepareMacDevElectronApp() {
   if (process.platform !== 'darwin') {
     return
@@ -137,12 +188,17 @@ function prepareMacDevElectronApp() {
     )
     .digest('hex')
     .slice(0, 12)
-  const distDir = path.join(repoRoot, 'out', 'electron-dev', hash)
+  // Why: Orca can delete a worktree while its dev app is still shutting down.
+  // Keep Electron's helper executables outside that worktree so Chromium can
+  // finish teardown without tripping its missing/unexpected-helper CHECK.
+  const cacheRoot = path.join(getDevUserDataPath(), 'electron-dev-apps')
+  const distDir = path.join(cacheRoot, hash)
   // Why: macOS Dock hover uses the bundle's filesystem display name for
   // electron-vite's direct binary launch path, even when Info.plist is patched.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
+  pruneRemovedWorktreeElectronApps(cacheRoot, distDir)
   // Why: one stable id for every dev instance. Per-instance ids registered a
   // new macOS Notification Settings entry for each branch × Electron version,
   // piling up "Orca: <branch>" rows forever and breaking the notification

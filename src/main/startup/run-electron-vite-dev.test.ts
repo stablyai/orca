@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -335,12 +344,53 @@ describe('run-electron-vite-dev', () => {
   })
 
   it.skipIf(process.platform !== 'darwin')(
-    'rebuilds the copied Electron app when Chromium resources are missing',
+    'stages Electron outside the worktree, prunes stale copies, and rebuilds missing resources',
     async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
       const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
+      const userDataPath = join(tempDir, 'userData')
+      const staleDistDir = join(userDataPath, 'electron-dev-apps', 'removed-worktree')
+      const liveDistDir = join(userDataPath, 'electron-dev-apps', 'live-helper')
+      const liveAppBundleName = 'Orca live.app'
+      const liveHelperPath = join(
+        liveDistDir,
+        liveAppBundleName,
+        'Contents',
+        'Frameworks',
+        'Orca Helper.app',
+        'Contents',
+        'MacOS',
+        'Orca Helper'
+      )
+      mkdirSync(staleDistDir, { recursive: true })
+      writeFileSync(
+        join(staleDistDir, 'orca-dev-electron-app.json'),
+        JSON.stringify({
+          sourceAppPath: join(tempDir, 'deleted-worktree', 'node_modules', 'electron', 'dist'),
+          appBundleName: 'Orca stale.app'
+        })
+      )
+      mkdirSync(dirname(liveHelperPath), { recursive: true })
+      symlinkSync(process.execPath, liveHelperPath)
+      writeFileSync(
+        join(liveDistDir, 'orca-dev-electron-app.json'),
+        JSON.stringify({
+          sourceAppPath: join(tempDir, 'deleted-live-worktree', 'node_modules', 'electron', 'dist'),
+          appBundleName: liveAppBundleName
+        })
+      )
+      const liveHelper = spawn(liveHelperPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        stdio: 'ignore'
+      })
+      expect(liveHelper.pid).toBeTypeOf('number')
+      processesToCleanUp.add(liveHelper.pid!)
+      await new Promise<void>((resolveSpawn, rejectSpawn) => {
+        liveHelper.once('spawn', resolveSpawn)
+        liveHelper.once('error', rejectSpawn)
+      })
       const baseEnv = devWrapperTestEnv({
+        ORCA_DEV_USER_DATA_PATH: userDataPath,
         ORCA_ELECTRON_VITE_CLI: fakeCliPath,
         ORCA_SKIP_DEV_CLI_PREPARE: '1',
         ORCA_SKIP_DEV_WEB_PREPARE: '1',
@@ -382,11 +432,12 @@ describe('run-electron-vite-dev', () => {
         return { electronExecPath: envSnapshot.electronExecPath! }
       }
 
-      let distDir: string | null = null
       try {
         const firstRun = await runWrapper('first')
+        expect(firstRun.electronExecPath).toContain(join(userDataPath, 'electron-dev-apps'))
+        expect(existsSync(staleDistDir)).toBe(false)
+        expect(existsSync(liveDistDir)).toBe(true)
         const appPath = dirname(dirname(dirname(firstRun.electronExecPath)))
-        distDir = dirname(appPath)
         const icuDataPath = join(
           appPath,
           'Contents',
@@ -400,13 +451,20 @@ describe('run-electron-vite-dev', () => {
         rmSync(icuDataPath, { force: true })
         expect(existsSync(icuDataPath)).toBe(false)
 
+        liveHelper.kill('SIGKILL')
+        await waitFor(() => !processExists(liveHelper.pid!))
+        processesToCleanUp.delete(liveHelper.pid!)
+
         const secondRun = await runWrapper('second')
         expect(secondRun.electronExecPath).toBe(firstRun.electronExecPath)
+        expect(existsSync(liveDistDir)).toBe(false)
         expect(existsSync(icuDataPath)).toBe(true)
       } finally {
-        if (distDir) {
-          rmSync(distDir, { recursive: true, force: true })
+        if (liveHelper.pid && processExists(liveHelper.pid)) {
+          liveHelper.kill('SIGKILL')
+          processesToCleanUp.delete(liveHelper.pid)
         }
+        rmSync(tempDir, { recursive: true, force: true })
       }
     },
     30000
@@ -420,10 +478,12 @@ describe('run-electron-vite-dev', () => {
       const envFile = join(tempDir, 'env.json')
       const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
+      const userDataPath = join(tempDir, 'userData')
 
       const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9448'], {
         cwd: resolve('.'),
         env: devWrapperTestEnv({
+          ORCA_DEV_USER_DATA_PATH: userDataPath,
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_SKIP_DEV_WEB_PREPARE: '1',
