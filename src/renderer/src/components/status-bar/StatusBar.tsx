@@ -1220,7 +1220,14 @@ function VerboseProviderUsage({
       ? {
           key: 'fableWeekly',
           window: p.fableWeekly,
-          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+          // Why: every neighbouring chip is a live reset countdown, so a bare "Fable" reads as a
+          // missing value (#13041). Keep the name — it is all that separates this chip from the
+          // plain weekly one — and append the countdown the others already show.
+          label: translate(
+            'auto.components.status.bar.StatusBar.fableResetCountdown',
+            'Fable {{resetCountdown}}',
+            { resetCountdown: formatRateLimitWindowChipLabel(p.fableWeekly) }
+          )
         }
       : null,
     // Why: monthly stays inline for monthly-only providers; otherwise the detail panel carries it.

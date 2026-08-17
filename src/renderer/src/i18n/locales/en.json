@@ -3482,7 +3482,8 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
-            "floatingTerminalNewActivity": "{{label}}, new activity"
+            "floatingTerminalNewActivity": "{{label}}, new activity",
+            "fableResetCountdown": "Fable {{resetCountdown}}"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
