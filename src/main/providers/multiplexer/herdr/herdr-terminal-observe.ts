@@ -150,7 +150,7 @@ export function createStockHerdrTerminalController(
   options: HerdrTerminalControlOptions,
   deps: {
     commandFor?: (args: string[]) => HerdrObserveCommand
-    request: (method: string, params: unknown) => Promise<unknown>
+    request<T>(method: string, params: unknown): Promise<T>
     onEvent: (listener: (event: HerdrSocketEvent) => void) => () => void
   }
 ): HerdrTerminalController {

@@ -1,4 +1,5 @@
 import { createConnection, type Socket } from 'node:net'
+import { join } from 'node:path'
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import type {
   HerdrSocketResponse,
@@ -162,6 +163,8 @@ export class HerdrSocketConnection {
 }
 
 export function defaultHerdrSocketPath(sessionName: string): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? '/tmp'
-  return `${home}/.config/herdr/sessions/${sessionName}/herdr.sock`
+  const xdgConfig = process.env.XDG_CONFIG_HOME?.trim()
+  const configRoot =
+    xdgConfig || join(process.env.HOME ?? process.env.USERPROFILE ?? '/tmp', '.config')
+  return join(configRoot, 'herdr', 'sessions', sessionName, 'herdr.sock')
 }

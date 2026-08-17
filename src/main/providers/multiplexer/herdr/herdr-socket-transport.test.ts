@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { Socket } from 'node:net'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,14 @@ describe('defaultHerdrSocketPath', () => {
     expect(defaultHerdrSocketPath('test-session')).toContain(
       '.config/herdr/sessions/test-session/herdr.sock'
     )
+  })
+
+  it('follows XDG_CONFIG_HOME when stock herdr would', () => {
+    vi.stubEnv('XDG_CONFIG_HOME', '/tmp/orca-h-xdg')
+    expect(defaultHerdrSocketPath('orca')).toBe(
+      join('/tmp/orca-h-xdg', 'herdr', 'sessions', 'orca', 'herdr.sock')
+    )
+    vi.unstubAllEnvs()
   })
 })
 
