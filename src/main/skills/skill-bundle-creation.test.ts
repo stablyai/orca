@@ -49,6 +49,9 @@ describe('skill bundle creation and extraction', () => {
       versionId: 'version_windows',
       bundleName: 'windows-bundle'
     })
+    expect(created.manifest.skills[0].files).toContainEqual(
+      expect.objectContaining({ path: 'run.sh', executable: true })
+    )
 
     await expect(
       extractSkillBundleArchive({

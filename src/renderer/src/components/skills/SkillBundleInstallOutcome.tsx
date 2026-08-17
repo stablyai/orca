@@ -3,14 +3,7 @@ import type { SkillBundleInstallResult } from '../../../../shared/skill-bundle-i
 import { translate } from '@/i18n/i18n'
 import { skillBundleSkillNeedsRetry } from './skill-bundle-retry-selection'
 
-const RESULT_GROUPS = [
-  'installed',
-  'updated',
-  'unchanged',
-  'kept-local',
-  'failed',
-  'cancelled'
-] as const
+const RESULT_GROUPS = ['installed', 'updated', 'unchanged', 'kept-local'] as const
 
 function resultGroupLabel(status: (typeof RESULT_GROUPS)[number]): string {
   const labels = {
@@ -26,9 +19,7 @@ function resultGroupLabel(status: (typeof RESULT_GROUPS)[number]): string {
     'kept-local': translate(
       'auto.components.skills.SkillBundleInstallOutcome.01c5a12e04',
       'Kept local'
-    ),
-    failed: translate('auto.components.skills.SkillBundleInstallOutcome.01c5a12e05', 'Failed'),
-    cancelled: translate('auto.components.skills.SkillBundleInstallOutcome.01c5a12e06', 'Cancelled')
+    )
   }
   return labels[status]
 }
@@ -39,6 +30,7 @@ export function SkillBundleInstallOutcome({
   result: SkillBundleInstallResult
 }): React.JSX.Element {
   const incomplete = result.status !== 'complete'
+  const retrySkills = result.skills.filter(skillBundleSkillNeedsRetry)
   return (
     <div className="space-y-3">
       <div
@@ -71,16 +63,16 @@ export function SkillBundleInstallOutcome({
         </div>
       </div>
       <div className="space-y-2">
-        {result.skills.some(skillBundleSkillNeedsRetry) ? (
+        {retrySkills.length ? (
           <section className="space-y-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               {translate(
                 'auto.components.skills.SkillBundleInstallOutcome.01c5a12e10',
                 'Needs retry'
               )}{' '}
-              · {result.skills.filter(skillBundleSkillNeedsRetry).length}
+              · {retrySkills.length}
             </p>
-            {result.skills.filter(skillBundleSkillNeedsRetry).map((skill) => (
+            {retrySkills.map((skill) => (
               <p key={skill.skillId} className="text-xs">
                 {skill.name}
                 {skill.errorCategory ? ` · ${skill.errorCategory}` : ''}

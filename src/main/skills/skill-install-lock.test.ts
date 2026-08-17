@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -95,7 +95,51 @@ describe('skill install lock', () => {
       })
     ).rejects.toThrow('injected-write-failure')
 
+    await expect(readdir(dirname(lockPath))).resolves.toEqual([])
+
     const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    await release()
+  })
+
+  it('falls back when the state filesystem does not support hard links', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    const release = await acquireSkillInstallLock({
+      path: lockPath,
+      createLink: async () => {
+        const error = new Error('hard-links-unsupported') as NodeJS.ErrnoException
+        error.code = 'ENOTSUP'
+        throw error
+      }
+    })
+
+    await expect(readFile(lockPath, 'utf8')).resolves.toContain(`"pid":${process.pid}`)
+    await release()
+    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('uses a fresh owner file for each contention retry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    const ownerPaths: string[] = []
+    const release = await acquireSkillInstallLock({
+      path: lockPath,
+      timeoutMs: 100,
+      createLink: async (ownerPath, targetPath) => {
+        ownerPaths.push(ownerPath)
+        if (ownerPaths.length === 1) {
+          const error = new Error('injected-contention') as NodeJS.ErrnoException
+          error.code = 'EEXIST'
+          throw error
+        }
+        await link(ownerPath, targetPath)
+      }
+    })
+
+    expect(ownerPaths).toHaveLength(2)
+    expect(ownerPaths[0]).not.toBe(ownerPaths[1])
     await release()
   })
 

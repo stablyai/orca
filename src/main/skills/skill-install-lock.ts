@@ -11,6 +11,14 @@ const MAX_STARTUP_LOCKS = 128
 const LOCK_NAME = /^[a-f0-9]{64}\.lock$/
 const LOCK_OWNER_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.owner$/
 const activeLockTokens = new Set<string>()
+const UNSUPPORTED_HARD_LINK_ERRORS = new Set([
+  'EACCES',
+  'ENOSYS',
+  'ENOTSUP',
+  'EOPNOTSUPP',
+  'EPERM',
+  'EXDEV'
+])
 
 type SkillInstallLockOwner = {
   token: string
@@ -90,11 +98,57 @@ export function skillInstallLockPath(stateDirectory: string, canonicalPath: stri
   return join(stateDirectory, 'locks', `${skillInstallStateKey(canonicalPath)}.lock`)
 }
 
+async function publishExclusiveLockRecord(path: string, value: string): Promise<boolean> {
+  let handle: FileHandle
+  try {
+    handle = await open(path, 'wx', 0o600)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false
+    }
+    throw error
+  }
+  try {
+    try {
+      await handle.writeFile(value, 'utf8')
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+  } catch (error) {
+    await rm(path, { force: true }).catch(() => undefined)
+    throw error
+  }
+  return true
+}
+
+async function publishSkillInstallLock(input: {
+  ownerPath: string
+  lockPath: string
+  ownerRecord: string
+  createLink: (ownerPath: string, lockPath: string) => Promise<void>
+}): Promise<boolean> {
+  try {
+    await input.createLink(input.ownerPath, input.lockPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      return false
+    }
+    if (!code || !UNSUPPORTED_HARD_LINK_ERRORS.has(code)) {
+      throw error
+    }
+    return publishExclusiveLockRecord(input.lockPath, input.ownerRecord)
+  }
+}
+
 export async function acquireSkillInstallLock(input: {
   path: string
   timeoutMs?: number
   removeLock?: (path: string) => Promise<void>
   writeOwner?: (handle: FileHandle, value: string) => Promise<void>
+  createLink?: (ownerPath: string, lockPath: string) => Promise<void>
 }): Promise<() => Promise<void>> {
   await mkdir(dirname(input.path), { recursive: true, mode: 0o700 })
   const deadline = Date.now() + (input.timeoutMs ?? 5_000)
@@ -103,8 +157,9 @@ export async function acquireSkillInstallLock(input: {
     pid: process.pid,
     createdAt: Date.now()
   }
+  const ownerRecord = JSON.stringify(owner)
   for (;;) {
-    const ownerPath = `${input.path}.${owner.token}.owner`
+    const ownerPath = `${input.path}.${randomUUID()}.owner`
     const handle = await open(ownerPath, 'wx', 0o600)
     try {
       try {
@@ -114,7 +169,7 @@ export async function acquireSkillInstallLock(input: {
             await lockHandle.writeFile(value, 'utf8')
             await lockHandle.sync()
           })
-        )(handle, JSON.stringify(owner))
+        )(handle, ownerRecord)
       } finally {
         await handle.close()
       }
@@ -124,12 +179,13 @@ export async function acquireSkillInstallLock(input: {
     }
     activeLockTokens.add(owner.token)
     try {
-      try {
-        await link(ownerPath, input.path)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-          throw error
-        }
+      const published = await publishSkillInstallLock({
+        ownerPath,
+        lockPath: input.path,
+        ownerRecord,
+        createLink: input.createLink ?? link
+      })
+      if (!published) {
         await removeStaleLock(input.path)
         if (Date.now() >= deadline) {
           throw new SkillInstallOperationError(SKILL_INSTALL_BUSY_FAILURE)

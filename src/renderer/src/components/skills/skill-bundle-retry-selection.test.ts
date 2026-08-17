@@ -39,4 +39,19 @@ describe('bundle retry selection', () => {
   it('includes skills whose provider placement is incomplete', () => {
     expect([...retryableSkillIds(result())]).toEqual(['partial-placement'])
   })
+
+  it('includes a skill whose top-level result failed', () => {
+    const failedResult = result()
+    failedResult.skills = [
+      {
+        skillId: 'failed-skill',
+        name: 'failed-skill',
+        digest: 'd'.repeat(64),
+        status: 'failed',
+        placements: []
+      }
+    ]
+
+    expect([...retryableSkillIds(failedResult)]).toEqual(['failed-skill'])
+  })
 })
