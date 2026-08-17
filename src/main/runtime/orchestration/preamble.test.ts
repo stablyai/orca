@@ -96,6 +96,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
+    expect(result).not.toContain('--type decision_gate')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
     // accident. BEHAVIOR RULE #1 is the only place AskUserQuestion appears.
     expect(result).toContain('BEHAVIOR RULE #1')
@@ -112,6 +113,7 @@ describe('buildDispatchPreamble', () => {
 
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toMatch(/orchestration send --from term_worker \\\n    --type escalation/)
+    expect(result).toContain('--task-id task_abc123 --dispatch-id ctx_def456')
     expect(result).toContain('orchestration check --terminal term_worker')
   })
 
@@ -125,7 +127,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toContain('"dispatchCapability"')
   })
 
-  it('tells prompt-returning workers to idle without post-done polling', () => {
+  it('idles prompt-returning workers while preserving direct user authority', () => {
     const result = buildDispatchPreamble(baseParams())
     const section = afterWorkerDoneSection(result)
 
@@ -135,6 +137,12 @@ describe('buildDispatchPreamble', () => {
     expect(section).toContain('Do not exit the shell')
     expect(section).toContain('do NOT run a sleep/poll loop')
     expect(section).toContain('do NOT keep calling')
+    expect(section).toContain('A direct instruction from the user takes precedence')
+    expect(section).toMatch(/follow it without coordinator approval or a\s+fresh Dispatch/)
+    expect(section).toMatch(
+      /do not send lifecycle messages using the settled task or\s+Dispatch IDs/
+    )
+    expect(section).toContain('Never refuse a direct user request because you were a worker')
     expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
     expect(section).not.toMatch(/2 minutes/)
     expect(section).not.toMatch(/10 minutes/)

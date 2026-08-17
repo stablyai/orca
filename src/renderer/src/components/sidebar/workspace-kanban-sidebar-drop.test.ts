@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import {
   buildWorkspaceKanbanSidebarDropUpdates,

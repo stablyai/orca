@@ -19,7 +19,6 @@ describe('useMobileFileTapHandlers', () => {
   let handlers: Handlers | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     push.mockClear()
   })
 
@@ -35,12 +34,13 @@ describe('useMobileFileTapHandlers', () => {
       hostId: 'host-1',
       worktreeId: 'wt-1',
       worktreeName: 'Orca',
+      nativeChatSessionId: 'session-1',
       activeHandleRef: { current: 'terminal-1' as string | null },
       terminalCwdRef: { current: new Map([['terminal-1', '/repo/sub']]) },
       openBrowser: vi.fn(),
       fetchSessionTabs: vi.fn(async () => {}),
       getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
+      getActiveSessionTabId: () => 'terminal-tab',
       getActiveSessionTabType: () => 'terminal',
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn(),
@@ -132,7 +132,12 @@ describe('useMobileFileTapHandlers', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: 'mobile/src/x.ts', crossWorkspace: true },
+      {
+        worktree: 'id:wt-1',
+        pathText: 'mobile/src/x.ts',
+        crossWorkspace: true,
+        nativeChatContext: { tabId: 'terminal-tab', sessionId: 'session-1' }
+      },
       { timeoutMs: 10_000 }
     )
     expect(options.reportChatTapFailure).toHaveBeenCalledWith("Couldn't open mobile/src/x.ts:12")

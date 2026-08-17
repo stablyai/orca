@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())

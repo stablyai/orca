@@ -18,6 +18,8 @@ test.describe('Settings sidebar search on the Shortcuts pane', () => {
 
     const searchInput = orcaPage.getByPlaceholder('Search settings')
     await expect(searchInput).toBeVisible()
+    // Why: plain Settings open should land focus in search so typing starts immediately.
+    await expect(searchInput).toBeFocused()
     await searchInput.fill('shortcuts')
 
     // The query matches the pane title, so the Shortcuts pane auto-activates.

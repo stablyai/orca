@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
 const repoPath = path.join('tmp', 'orca')

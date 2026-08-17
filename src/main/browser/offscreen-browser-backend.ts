@@ -23,7 +23,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   constructor(private readonly browserManager: BrowserManager) {}
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
-    const browserPageId = randomUUID()
+    const browserPageId = params.browserPageId ?? randomUUID()
+    if (this.windowsByPageId.has(browserPageId)) {
+      throw new Error(`Browser page ${browserPageId} already exists`)
+    }
     // Why: profiles map to Electron partitions; using the profile's partition
     // makes cookies/storage persist in the same SQLite DB the desktop path uses.
     const profile = params.profileId

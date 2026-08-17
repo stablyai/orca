@@ -14,10 +14,6 @@ export function getExternalAutomationKey(
   return `${manager.id}:${job.id}`
 }
 
-export function getExternalAutomationSourceKey(manager: ExternalAutomationManager): string {
-  return `${manager.id}:source`
-}
-
 export function formatExternalDate(value: string | null, now: number): string {
   if (!value) {
     return 'Never'

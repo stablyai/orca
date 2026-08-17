@@ -28,6 +28,7 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
+import { REMOTE_ARTIFACT_INPUT_ENV } from '../../shared/artifact-cli-bridge'
 
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
@@ -108,6 +109,35 @@ describe('buildHostCliEnv', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()
     expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
+  })
+
+  it('namespaces identical remote artifact paths by stable SSH target', () => {
+    const artifactInput = {
+      sourceKey: '/srv/repo/report.html',
+      fileName: 'report.html',
+      contentType: 'text/html' as const
+    }
+    const build = (targetId: string) =>
+      buildHostCliEnv({
+        hostEnv: {},
+        remoteEnv: {},
+        userDataPath: '/host/user-data',
+        remoteCwd: '/srv/repo',
+        runtimeAuthority: {
+          kind: 'ssh',
+          targetId,
+          connectionIncarnation: 'ephemeral-connection',
+          attachmentId: 'ephemeral-attachment'
+        },
+        artifactInput
+      })[REMOTE_ARTIFACT_INPUT_ENV]
+
+    const first = JSON.parse(String(build('host-a')))
+    const second = JSON.parse(String(build('host-b')))
+    expect(first.sourceKey).not.toBe(second.sourceKey)
+    expect(JSON.parse(first.sourceKey)).toEqual(['ssh', 'host-a', '/srv/repo/report.html'])
+    expect(JSON.parse(second.sourceKey)).toEqual(['ssh', 'host-b', '/srv/repo/report.html'])
+    expect(first.fileName).toBe('report.html')
   })
 })
 

@@ -184,6 +184,9 @@ describe('filesystem-search-git', () => {
 
       const promise = searchWithGitGrep('/mock/root', { query: 'ok', rootPath: '/mock/root' }, 100)
 
+      await vi.waitFor(() =>
+        expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBeGreaterThan(0)
+      )
       ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x001\x00ok\npartial')
 
       await vi.runOnlyPendingTimersAsync()

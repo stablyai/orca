@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type React from 'react'
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import { hasWorkspaceDragData, readWorkspaceDragDataIds } from './workspace-status'
 
 const WORKSPACE_STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'

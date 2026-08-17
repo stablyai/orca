@@ -6,7 +6,7 @@ import {
   findLinearIssueWorkspaceAttachmentInIndex,
   getLinearIssueWorkspaceAttachmentLabel
 } from './linear-issue-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {

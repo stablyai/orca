@@ -21,6 +21,7 @@ export function isolatedScanRoots(root: string) {
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
     piSessionsDir: join(root, 'pi-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
+    primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions')
@@ -48,6 +49,72 @@ export async function writeAntigravityTranscript(
 
 export function writeAntigravityHistory(brainDir: string, records: unknown[]): Promise<void> {
   return writeJsonlFile(join(dirname(brainDir), 'history.jsonl'), records)
+}
+
+// Message-graph fixtures for the Pi forks: each writes one session transcript
+// and returns its path, since both agents resume by absolute transcript path.
+export async function writeOmpScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, 'omp-session.jsonl')
+  await writeJsonlFile(sessionFile, [
+    {
+      type: 'session',
+      version: 3,
+      id: 'omp-session',
+      title: 'OMP session title',
+      timestamp: '2026-05-01T10:08:30.000Z',
+      cwd: '/tmp/omp'
+    },
+    {
+      type: 'model_change',
+      model: 'gpt-5.4-mini',
+      timestamp: '2026-05-01T10:08:30.500Z'
+    },
+    {
+      type: 'message',
+      timestamp: '2026-05-01T10:08:31.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'OMP title' }] }
+    },
+    {
+      type: 'message',
+      timestamp: '2026-05-01T10:08:32.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'OMP answer' }],
+        model: 'gpt-5.4-mini',
+        // totalTokens deliberately != input+output so the assertion proves
+        // the explicit-total field is read, not an input/output sum.
+        usage: { input: 10, output: 5, totalTokens: 160 }
+      }
+    }
+  ])
+  return sessionFile
+}
+
+// Prime Agent shares Pi's message-graph format (and its `modelId` key) but
+// reads its own ~/.prime/agent/sessions root.
+export async function writePrimeAgentScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, 'prime-agent-session.jsonl')
+  await writeJsonlFile(sessionFile, [
+    {
+      type: 'session',
+      version: 3,
+      id: 'prime-agent-session',
+      timestamp: '2026-05-01T10:08:40.000Z',
+      cwd: '/tmp/prime-agent'
+    },
+    {
+      type: 'model_change',
+      provider: 'prime-intellect',
+      modelId: 'inference/big-model',
+      timestamp: '2026-05-01T10:08:40.500Z'
+    },
+    {
+      type: 'message',
+      timestamp: '2026-05-01T10:08:41.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: 'Prime Agent title' }] }
+    }
+  ])
+  return sessionFile
 }
 
 export function writeAntigravityScannerFixture(

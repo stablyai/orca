@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
+import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 type MockMuxInstance = {
@@ -376,11 +377,32 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
 
     const winningCliHandler = muxInstances[2]?.requestHandlers.get('orca.cli')
     expect(winningCliHandler).toBeDefined()
-    await winningCliHandler?.({ argv: ['status'], cwd: '/', env: {} })
+    await winningCliHandler?.({
+      argv: ['artifacts', 'share', 'report.html'],
+      cwd: '/srv/repo',
+      env: {},
+      stdin: '<h1>Remote</h1>',
+      artifactInput: {
+        sourceKey: '/srv/repo/report.html',
+        fileName: 'report.html',
+        contentType: 'text/html'
+      }
+    })
 
     expect(runtime.registerOrchestrationCompatibilitySshAttachment).toHaveBeenCalledWith(
       'target-1',
       winningIncarnation
+    )
+    expect(vi.mocked(runRemoteOrcaCli)).toHaveBeenCalledWith(
+      runtime,
+      expect.objectContaining({
+        stdin: '<h1>Remote</h1>',
+        artifactInput: {
+          sourceKey: '/srv/repo/report.html',
+          fileName: 'report.html',
+          contentType: 'text/html'
+        }
+      })
     )
     expect(randomUUID).toHaveBeenCalledTimes(3)
   })

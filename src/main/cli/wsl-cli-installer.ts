@@ -379,7 +379,7 @@ export class WslCliInstaller {
   private async readCommandFile(
     distro: string,
     commandPath: string
-  ): Promise<string | 'not_file' | null> {
+  ): Promise<(string & {}) | 'not_file' | null> {
     const output = await this.run(
       distro,
       [

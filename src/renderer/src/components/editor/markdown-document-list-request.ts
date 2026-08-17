@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   listRuntimeMarkdownDocuments,
   type RuntimeFileOperationArgs

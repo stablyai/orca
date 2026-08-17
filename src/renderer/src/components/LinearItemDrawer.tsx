@@ -57,7 +57,7 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
-import type { LinearIssue, LinearComment } from '../../../shared/types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   linearAddIssueComment,

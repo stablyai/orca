@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
@@ -119,24 +121,14 @@ export function TerminalWindowSection({
                 )}
               </p>
             </div>
-            <button
-              role="switch"
-              aria-checked={settings.windowBackgroundBlur ?? false}
-              onClick={() =>
-                updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })
-              }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                (settings.windowBackgroundBlur ?? false)
-                  ? 'bg-foreground'
-                  : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.TerminalWindowSection.2b82242f43',
+                'Window Blur'
+              )}
+              checked={settings.windowBackgroundBlur ?? false}
+              onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
+            />
           </div>
 
           {blurPendingRestart ? (
@@ -194,13 +186,15 @@ export function TerminalWindowSection({
               'Horizontal Padding'
             )}
             description=""
-            value={settings.terminalPaddingX ?? 4}
+            value={normalizeTerminalPadding(settings.terminalPaddingX ?? 4)}
             defaultValue={4}
             min={0}
             max={512}
             step={1}
             suffix="px"
-            onChange={(value) => updateSettings({ terminalPaddingX: Math.max(0, value) })}
+            onChange={(value) =>
+              updateSettings({ terminalPaddingX: normalizeTerminalPadding(value) })
+            }
           />
         </SearchableSetting>
 
@@ -221,13 +215,15 @@ export function TerminalWindowSection({
               'Vertical Padding'
             )}
             description=""
-            value={settings.terminalPaddingY ?? 4}
+            value={normalizeTerminalPadding(settings.terminalPaddingY ?? 4)}
             defaultValue={4}
             min={0}
             max={512}
             step={1}
             suffix="px"
-            onChange={(value) => updateSettings({ terminalPaddingY: Math.max(0, value) })}
+            onChange={(value) =>
+              updateSettings({ terminalPaddingY: normalizeTerminalPadding(value) })
+            }
           />
         </SearchableSetting>
 
@@ -253,28 +249,18 @@ export function TerminalWindowSection({
               )}
             </Label>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.terminalMouseHideWhileTyping ?? false}
-            onClick={() =>
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.TerminalWindowSection.3530908ef9',
+              'Hide Mouse While Typing'
+            )}
+            checked={settings.terminalMouseHideWhileTyping ?? false}
+            onCheckedChange={(checked) =>
               updateSettings({
-                terminalMouseHideWhileTyping: !settings.terminalMouseHideWhileTyping
+                terminalMouseHideWhileTyping: checked
               })
             }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              (settings.terminalMouseHideWhileTyping ?? false)
-                ? 'bg-foreground'
-                : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                (settings.terminalMouseHideWhileTyping ?? false)
-                  ? 'translate-x-4'
-                  : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </SearchableSetting>
 
         <SearchableSetting

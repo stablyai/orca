@@ -1,5 +1,5 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
-import type { DirEntry } from '../../../../shared/types'
+import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
 import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
 import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'

@@ -2,8 +2,15 @@ import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { PersistedState, Repo, SparsePreset, WorkspaceKey } from '../../shared/types'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Repo } from '../../shared/repo-types'
+import type { SparsePreset } from '../../shared/worktree/create-types'
+import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
+import {
+  extractRetiredNameRegistriesByNamespace,
+  mergeRetiredNameRegistryMaps
+} from './profile-project-retired-name-transfer'
 import type { TransferProfileState } from './profile-project-state-file'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
 import { mergeHostWorkspaceSessions, mergeWorkspaceSessions } from './profile-project-session-state'
@@ -11,15 +18,16 @@ import {
   extractHostSessionsForTransfer,
   extractSessionForTransfer
 } from './profile-project-session-transfer'
-import {
-  isRepoWorktreeId,
-  rekeyWorktreeId,
-  rekeyWorkspaceKey
-} from './profile-project-worktree-identity'
+import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
+import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-identity'
 
 export type TransferPayload = {
   repo: Repo
   sparsePresets: SparsePreset[]
+  /** Generated names already spent for this repo, compacted. Carried so the destination profile
+   *  does not reissue a name whose old directory still holds agent state. */
+  retiredNameRegistry: RetiredNameRegistry | undefined
+  retiredNameRegistriesByNamespace: Record<string, RetiredNameRegistry>
   worktreeMeta: PersistedState['worktreeMeta']
   worktreeLineageById: PersistedState['worktreeLineageById']
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
@@ -55,86 +63,6 @@ function createUniqueRepoId(state: TransferProfileState): string {
     candidate = randomUUID()
   }
   return candidate
-}
-
-function collectTransferWorktreeIds(state: TransferProfileState, repoId: string): Set<string> {
-  const ids = new Set<string>()
-  const add = (value: string | null | undefined): void => {
-    if (value && isRepoWorktreeId(repoId, value)) {
-      ids.add(value)
-    }
-  }
-  Object.keys(state.worktreeMeta).forEach(add)
-  for (const lineage of Object.values(state.worktreeLineageById)) {
-    add(lineage.worktreeId)
-    add(lineage.parentWorktreeId)
-  }
-  for (const [key, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
-    const child = parseWorkspaceKey(key)
-    const parent = parseWorkspaceKey(lineage.parentWorkspaceKey)
-    if (child?.type === 'worktree') {
-      add(child.worktreeId)
-    }
-    if (parent?.type === 'worktree') {
-      add(parent.worktreeId)
-    }
-  }
-  collectSessionWorktreeIds(state.workspaceSession, repoId, ids)
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    collectSessionWorktreeIds(session, repoId, ids)
-  }
-  Object.keys(state.ui?.showDotfilesByWorktree ?? {}).forEach(add)
-  return ids
-}
-
-function collectSessionWorktreeIds(
-  session: PersistedState['workspaceSession'] | undefined,
-  repoId: string,
-  ids: Set<string>
-): void {
-  if (!session) {
-    return
-  }
-  const add = (value: string | null | undefined): void => {
-    if (value && isRepoWorktreeId(repoId, value)) {
-      ids.add(value)
-    }
-  }
-  const addOwnerKeys = (record: Record<string, unknown> | undefined): void => {
-    for (const key of Object.keys(record ?? {})) {
-      if (isRepoWorktreeId(repoId, key)) {
-        ids.add(key)
-      }
-      const parsed = parseWorkspaceKey(key)
-      if (parsed?.type === 'worktree' && isRepoWorktreeId(repoId, parsed.worktreeId)) {
-        ids.add(parsed.worktreeId)
-      }
-    }
-  }
-  addOwnerKeys(session.tabsByWorktree)
-  addOwnerKeys(session.openFilesByWorktree)
-  addOwnerKeys(session.browserTabsByWorktree)
-  addOwnerKeys(session.activeBrowserTabIdByWorktree)
-  addOwnerKeys(session.activeTabTypeByWorktree)
-  addOwnerKeys(session.activeTabIdByWorktree)
-  addOwnerKeys(session.unifiedTabs)
-  addOwnerKeys(session.tabGroups)
-  addOwnerKeys(session.tabGroupLayouts)
-  addOwnerKeys(session.activeGroupIdByWorktree)
-  addOwnerKeys(session.lastVisitedAtByWorktreeId)
-  addOwnerKeys(session.defaultTerminalTabsAppliedByWorktreeId)
-  addOwnerKeys(session.terminalTopologyRevisionByRepoId)
-  addOwnerKeys(session.activeFileIdByWorktree)
-  for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
-    add(tombstone.worktreeId)
-  }
-  add(session.activeWorktreeId)
-  const activeScope = session.activeWorkspaceKey
-    ? parseWorkspaceKey(session.activeWorkspaceKey)
-    : null
-  if (activeScope?.type === 'worktree') {
-    add(activeScope.worktreeId)
-  }
 }
 
 function rekeyWorktreeIdRecord<T>(
@@ -214,6 +142,11 @@ export function createTransferPayload(args: {
       ...structuredClone(preset),
       repoId: newRepoId
     })),
+    retiredNameRegistry: sourceState.retiredWorktreeNamesByRepo?.[oldRepoId],
+    retiredNameRegistriesByNamespace: extractRetiredNameRegistriesByNamespace(
+      sourceState,
+      sourceRepo
+    ),
     worktreeMeta: rekeyWorktreeIdRecord(
       sourceState.worktreeMeta,
       worktreeIds,
@@ -269,6 +202,15 @@ export function applyPayloadToTarget(
       ...targetState.sparsePresetsByRepo,
       ...(payload.sparsePresets.length > 0 ? { [payload.repo.id]: payload.sparsePresets } : {})
     },
+    retiredWorktreeNamesByRepo: {
+      ...targetState.retiredWorktreeNamesByRepo,
+      ...(payload.retiredNameRegistry ? { [payload.repo.id]: payload.retiredNameRegistry } : {})
+    },
+    retiredWorktreeNamesByNamespace: mergeRetiredNameRegistryMaps(
+      targetState.retiredWorktreeNamesByNamespace ?? {},
+      payload.retiredNameRegistriesByNamespace
+    ),
+
     worktreeMeta: { ...targetState.worktreeMeta, ...payload.worktreeMeta },
     worktreeLineageById: { ...targetState.worktreeLineageById, ...payload.worktreeLineageById },
     workspaceLineageByChildKey: {

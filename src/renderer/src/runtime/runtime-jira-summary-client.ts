@@ -1,4 +1,4 @@
-import type { JiraConnectionStatus, JiraIssue } from '../../../shared/types'
+import type { JiraConnectionStatus, JiraIssue } from '../../../shared/jira-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'

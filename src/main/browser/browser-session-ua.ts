@@ -1,6 +1,7 @@
 import type { Session } from 'electron'
 
 import {
+  currentUserAgent,
   googleAuthUserAgent,
   isGoogleAuthUrl,
   setUserAgentHeader,
@@ -21,11 +22,11 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
-// Why: Electron's actual Chromium version (e.g. 134) differs from the source
-// browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
-// reveal the real version, creating a mismatch that Google's anti-fraud
-// detection flags as CookieMismatch on accounts.google.com. Override Client
-// Hints on outgoing requests to match the source browser's UA.
+// Why: Electron emits sec-ch-ua brands like "Not A(Brand" without a
+// "Google Chrome" entry, which disagrees with the Chrome-shaped UA the session
+// presents. Rewrite the hint headers to the brand set Chrome ships for the same
+// engine version so the two surfaces tell one story. Also owns the Google
+// auth-host Firefox switch, which must install even for a non-Chrome-shaped UA.
 export function setupClientHintsOverride(
   sess: Session,
   ua: string,
@@ -44,6 +45,18 @@ export function setupClientHintsOverride(
       // in inside the app and Google issues self-refreshing bound cookies. Strip
       // sec-ch-ua* because real Firefox sends none.
       setUserAgentHeader(headers, firefoxUa)
+      stripClientHints(headers)
+      callback({ requestHeaders: headers })
+      return
+    }
+    if (options.googleAuthOverride !== false && currentUserAgent(headers) === firefoxUa) {
+      // Why: while the auth document is on screen the WebContents UA is Firefox,
+      // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
+      // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
+      // bearing Chromium client hints. Rewriting those to Chrome pairs a Firefox
+      // UA with Chrome hints — a sharper cross-host identity tell than either
+      // alone, which can stall Google's password-submit challenge. Real Firefox
+      // sends no client hints, so strip them to keep one identity for the flow.
       stripClientHints(headers)
       callback({ requestHeaders: headers })
       return

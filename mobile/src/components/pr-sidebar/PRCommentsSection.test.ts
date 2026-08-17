@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItemDetails, PRComment } from '../../../../src/shared/types'
+import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { PRCommentsSection } from './PRCommentsSection'
 
 vi.mock('react-native', () => ({
@@ -32,18 +33,6 @@ vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
 vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
 vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 function comment(id: number): PRComment {
   return {
     id,
@@ -65,14 +54,9 @@ function detailsWithComments(count: number): GitHubWorkItemDetails {
 
 async function renderComments(details: GitHubWorkItemDetails): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(PRCommentsSection, { details, prState: 'open' }))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(PRCommentsSection, { details, prState: 'open' }))
+  })
   if (!renderer) {
     throw new Error('PRCommentsSection did not render')
   }
@@ -107,7 +91,6 @@ describe('PRCommentsSection', () => {
   afterEach(() => {
     renderer?.unmount()
     renderer = null
-    vi.restoreAllMocks()
   })
 
   it('resets pagination only when the user chooses a different audience filter', async () => {

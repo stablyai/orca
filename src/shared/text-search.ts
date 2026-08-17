@@ -14,7 +14,12 @@ import { posix, win32 } from 'node:path'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
-import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
+import type {
+  SearchFileResult,
+  SearchMatch,
+  SearchOptions,
+  SearchResult
+} from './code-search-types'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -393,7 +398,7 @@ export function ingestGitGrepLine(
   const secondNullIdx = rest.indexOf('\0')
   let lineNumberText: string
   let lineContent: string
-  if (secondNullIdx >= 0) {
+  if (secondNullIdx !== -1) {
     lineNumberText = rest.substring(0, secondNullIdx)
     lineContent = rest.substring(secondNullIdx + 1).replace(/\n$/, '')
   } else {

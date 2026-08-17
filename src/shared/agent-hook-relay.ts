@@ -8,7 +8,7 @@
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
-// Per the design doc:
+// Invariants both ends rely on:
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
 //   already been through `normalizeHookPayload` (which calls
 //   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
@@ -45,6 +45,7 @@ const AGENT_HOOK_SOURCES = [
   'cursor',
   'pi',
   'omp',
+  'prime-agent',
   'droid',
   'command-code',
   'grok',
@@ -193,8 +194,9 @@ export function restoreShedStatusFields(
 }
 
 /** JSON-RPC request method Orca issues after `--connect` reattach to ask the
- *  relay to replay its per-paneKey last-payload cache. See §5 Path 3 of the
- *  design doc for the race that ruled out push-on-`setWrite`. */
+ *  relay to replay its per-paneKey last-payload cache. Pull, not push: a relay
+ *  that pushed on `setWrite` can emit before Orca has wired its `agent.hook`
+ *  handler, and those notifications are dropped silently. */
 export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as const
 
 /** JSON-RPC request method Orca issues at session-ready to ship the

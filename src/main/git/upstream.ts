@@ -1,13 +1,19 @@
-import type { GitPushTarget, GitUpstreamStatus } from '../../shared/types'
+import type { GitUpstreamStatus } from '../../shared/git-status-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../../shared/git-upstream-status'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { getEffectiveGitUpstreamStatus } from '../../shared/git-effective-upstream'
 import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 import { gitExecFileAsync } from './runner'
 import { validateGitPushTarget } from './push-target-validation'
+import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'
 
 type GitExecOptions = {
   wslDistro?: string
+}
+
+export function invalidateGitUpstreamStatusReads(): void {
+  nativeAndWslGitUpstreamStatusReadOwner.invalidate()
 }
 
 function gitExecOptions(
@@ -35,7 +41,7 @@ async function getBehindCommitsArePatchEquivalent(
   }
 }
 
-export async function getUpstreamStatus(
+async function readUpstreamStatus(
   worktreePath: string,
   pushTarget?: GitPushTarget,
   options: GitExecOptions = {}
@@ -70,4 +76,20 @@ export async function getUpstreamStatus(
     // the IPC boundary so renderers don't see execFile stderr preambles or local paths.
     throw new Error(normalizeGitErrorMessage(error, 'upstream'))
   }
+}
+
+export function getUpstreamStatus(
+  worktreePath: string,
+  pushTarget?: GitPushTarget,
+  options: GitExecOptions = {}
+): Promise<GitUpstreamStatus> {
+  const executionIdentity = options.wslDistro
+    ? ({ kind: 'wsl', distro: options.wslDistro } as const)
+    : ({ kind: 'native' } as const)
+  return nativeAndWslGitUpstreamStatusReadOwner.read(
+    executionIdentity,
+    worktreePath,
+    pushTarget,
+    () => readUpstreamStatus(worktreePath, pushTarget, options)
+  )
 }

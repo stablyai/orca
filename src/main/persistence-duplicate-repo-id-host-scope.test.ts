@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Project, ProjectHostSetup, Repo } from '../shared/types'
+import type { Project, ProjectHostSetup } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
 
 const testState = { dir: '' }

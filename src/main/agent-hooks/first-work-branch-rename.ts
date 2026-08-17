@@ -1,6 +1,7 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
-import type { GlobalSettings, Repo } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import {

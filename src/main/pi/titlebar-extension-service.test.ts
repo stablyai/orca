@@ -164,6 +164,23 @@ describe('PiTitlebarExtensionService', () => {
     expectPiHomeIntact()
   })
 
+  it('installs only Prime status into the selected Prime agent dir', () => {
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-prime', piHome, 'prime-agent')
+
+    expect(env).toEqual({ ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: piHome })
+    expect(readdirSync(join(piHome, 'extensions')).sort()).toEqual([
+      'orca-agent-status.ts',
+      'user-ext'
+    ])
+    const source = readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')
+    expect(source).toContain('/hook/prime-agent')
+    expect(source).not.toContain("return '/hook/omp'")
+    expect(existsSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(false)
+    expect(existsSync(join(piHome, 'extensions', 'orca-prefill.ts'))).toBe(false)
+    expectPiHomeIntact()
+  })
+
   it('uses the same source dir for multiple PTYs with the same Pi dir', () => {
     const svc = new PiTitlebarExtensionService()
     const firstEnv = svc.buildPtyEnv('pty-shared-1', piHome, 'pi')

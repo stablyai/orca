@@ -20,6 +20,7 @@ import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -59,6 +60,7 @@ import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
+import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -206,6 +208,8 @@ type CreateMainWindowOptions = {
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
+  /** Reveal after load instead of first paint when startup must show the shell before slower renderer work. */
+  revealOnDidFinishLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
@@ -302,12 +306,22 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
-    mainWindow.on('session-end', markSystemSessionEnding)
+    mainWindow.on('session-end', (event) => {
+      markSystemSessionEnding()
+      // Why: killed/exit-1 tree kills look identical from a user task-kill and an
+      // OS shutdown; this is the only positive OS-shutdown signal bundles get.
+      recordDurableCrashBreadcrumb('system_session_end', {
+        reasons: Array.isArray(event?.reasons)
+          ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
+          : ''
+      })
+    })
   }
 
   if (process.platform === 'darwin') {
@@ -332,7 +346,7 @@ export function createMainWindow(
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
+      syncTrafficLightPosition(mainWindow, 1.2 ** level)
     }
   })
 
@@ -377,6 +391,9 @@ export function createMainWindow(
     mainWindow.show()
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
+  if (opts?.revealOnDidFinishLoad === true) {
+    mainWindow.webContents.on('did-finish-load', revealInitialWindow)
+  }
 
   // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null

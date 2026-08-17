@@ -32,7 +32,11 @@ describe('resource manager terminal copy', () => {
         text: 'Resource Manager - 512 MB · Σ RSS - 2 terminal sessions',
         emphasized: false
       },
-      { id: 'sessions-hint', text: 'Terminal sessions are grouped by workspace.', emphasized: false }
+      {
+        id: 'sessions-hint',
+        text: 'Terminal sessions are grouped by workspace.',
+        emphasized: false
+      }
     ])
   })
 

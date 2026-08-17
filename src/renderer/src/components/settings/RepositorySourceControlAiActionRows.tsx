@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Terminal } from 'lucide-react'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,

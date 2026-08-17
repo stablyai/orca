@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   accumulateWorkItemPages,
   applyEmptyPageClamp,

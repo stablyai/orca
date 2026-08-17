@@ -32,7 +32,7 @@ export function extractJpegFrames(
 
   while (cursor.length > 0) {
     const frameStart = cursor.indexOf(JPEG_START)
-    if (frameStart < 0) {
+    if (frameStart === -1) {
       const keepLastByte = cursor.at(-1) === 0xff
       return { frames, pending: keepLastByte ? Buffer.from([0xff]) : Buffer.alloc(0) }
     }
@@ -41,7 +41,7 @@ export function extractJpegFrames(
     }
 
     const frameEnd = cursor.indexOf(JPEG_END, JPEG_START.length)
-    if (frameEnd < 0) {
+    if (frameEnd === -1) {
       return { frames, pending: trimPendingBuffer(cursor, maxPendingBytes) }
     }
 

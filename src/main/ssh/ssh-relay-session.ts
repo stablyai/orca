@@ -76,6 +76,7 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
 } from '../../shared/ssh-types'
+import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
@@ -97,7 +98,10 @@ import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import {
   SSH_AI_VAULT_LIST_SESSIONS_METHOD,
   SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
-  type SshAiVaultRelayListParams
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS,
+  type SshAiVaultRelayListParams,
+  type SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -311,6 +315,7 @@ export class SshRelaySession {
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private aiVaultListMethodSupported: boolean | null = null
+  private aiVaultTitleMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -433,7 +438,7 @@ export class SshRelaySession {
   async requestAiVaultSessionList(
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (this.aiVaultListMethodSupported === false) {
       return null
     }
@@ -451,6 +456,33 @@ export class SshRelaySession {
     } catch (error) {
       if (isMethodNotFoundError(error)) {
         this.aiVaultListMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
+  async requestAiVaultSessionTitles(
+    params: SshAiVaultRelayTitleParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown> {
+    if (this.aiVaultTitleMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+      })
+      this.aiVaultTitleMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.aiVaultTitleMethodSupported = false
         return null
       }
       throw error
@@ -476,6 +508,7 @@ export class SshRelaySession {
     }
     this._state = 'deploying'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -607,6 +640,7 @@ export class SshRelaySession {
       return
     }
 
+    this.releaseRelayLossWatcher()
     // Cancel any in-flight reconnect
     this.abortController?.abort()
     const abortController = new AbortController()
@@ -614,6 +648,7 @@ export class SshRelaySession {
 
     this._state = 'reconnecting'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -801,6 +836,7 @@ export class SshRelaySession {
   private runDisposal(pendingDetach: Promise<void> | null): Promise<void> {
     // Why: the whole in-memory half runs before any await so a concurrent connect can never observe
     // a half-torn session; only the durability barriers below are deferred onto the returned promise.
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -874,6 +910,7 @@ export class SshRelaySession {
       return
     }
     detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -893,6 +930,7 @@ export class SshRelaySession {
       // step — a fast reconnect must reclaim this identity instead of minting one, even if a
       // teardown call below throws unexpectedly.
       detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+      this.releaseRelayLossWatcher()
       this.abortController?.abort()
       this.stopPortScanning()
       this.broadcastEmptyLists()
@@ -913,9 +951,21 @@ export class SshRelaySession {
 
   // ── Private ───────────────────────────────────────────────────────
 
+  // Why: teardown itself can kill the mux — an aborted request emits rpc.cancel, and a saturated
+  // control lane turns that admission failure into mux.dispose('connection_lost'). Every teardown
+  // path must release the watcher before its first mux write, or our own shutdown re-enters
+  // recovery as a spurious relay loss. teardownProviders is not early enough: stopPortScanning
+  // runs ahead of it and is what emits that frame. Call this ahead of abortController.abort()
+  // too — that signal reaches no mux request today, but plumbing it into one would otherwise
+  // reopen the same hole silently.
+  private releaseRelayLossWatcher(): void {
+    this.muxDisposeCleanup?.()
+    this.muxDisposeCleanup = null
+  }
+
   // Why: onStateChange only fires on SSH-level reconnects, so watch for relay-channel loss while SSH stays up and fire onRelayLost.
   private watchMuxForRelayLoss(mux: SshChannelMultiplexer): void {
-    this.muxDisposeCleanup?.()
+    this.releaseRelayLossWatcher()
     this.muxDisposeCleanup = mux.onDispose((reason) => {
       if (reason === 'connection_lost' && this.mux === mux && !this.isDisposed()) {
         console.warn(
@@ -1333,6 +1383,7 @@ export class SshRelaySession {
             )
           : {}
       const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
+      const artifactInput = normalizeRemoteArtifactInput(params.artifactInput)
       const runtimeAuthority = this.runtime.registerOrchestrationCompatibilitySshAttachment(
         this.targetId,
         connectionIncarnation
@@ -1344,6 +1395,7 @@ export class SshRelaySession {
           cwd,
           env,
           ...(stdin !== undefined ? { stdin } : {}),
+          ...(artifactInput ? { artifactInput } : {}),
           runtimeAuthority
         })
       } finally {
@@ -1384,7 +1436,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy (agent-status-over-ssh.md §4/§8). Best-effort.
+  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -1393,7 +1445,8 @@ export class SshRelaySession {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
@@ -1460,7 +1513,7 @@ export class SshRelaySession {
       if (typeof envelope.paneKey !== 'string') {
         return
       }
-      // Why: forward env/version verbatim so cross-build warn-once diagnostics fire on remote events too (agent-status-over-ssh.md §3).
+      // Why: forward the agent CLI's env/version verbatim (not the relay's) so warn-once protocol-mismatch diagnostics fire for remote events too.
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
@@ -1523,8 +1576,7 @@ export class SshRelaySession {
     reason: 'shutdown' | 'connection_lost',
     outputGenerationReason: string = reason
   ): void {
-    this.muxDisposeCleanup?.()
-    this.muxDisposeCleanup = null
+    this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {

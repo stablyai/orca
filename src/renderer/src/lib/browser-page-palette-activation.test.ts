@@ -1,14 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  FolderWorkspace,
-  Tab,
-  TabGroup,
-  Worktree
-} from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
@@ -215,7 +211,7 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
-  it('reports a missing page, workspace or worktree as a stale target', () => {
+  it('reports a missing page or workspace as a stale target', () => {
     seedStore({ browserPagesByWorkspace: {} })
     expect(activateBrowserPagePaletteResult(target)).toEqual({
       status: 'failed',
@@ -228,12 +224,33 @@ describe('activateBrowserPagePaletteResult', () => {
       reason: 'missing-page'
     })
 
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  // A live page in a dead workspace is a different story than a dead page.
+  it('reports an absent worktree as a missing workspace', () => {
     seedStore({ worktreesByRepo: {} })
+
     expect(activateBrowserPagePaletteResult(target)).toEqual({
       status: 'failed',
-      reason: 'missing-page'
+      reason: 'missing-worktree'
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  // Deleting a worktree purges its browser workspaces and pages too, so the
+  // worktree check must win or a dead workspace reads as a stale page.
+  it('reports a deleted worktree as a missing workspace once its pages are purged', () => {
+    seedStore({
+      worktreesByRepo: {},
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {}
     })
 
+    expect(activateBrowserPagePaletteResult(target)).toEqual({
+      status: 'failed',
+      reason: 'missing-worktree'
+    })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
