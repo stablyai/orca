@@ -152,28 +152,63 @@ export function resolveCliCommand(
   commandName: string,
   options: ResolveCommandOptions = {}
 ): string {
+  return resolveCliCommandCandidates(commandName, options)[0] ?? commandName
+}
+
+/**
+ * All runnable candidates for a command, in PATH order then version-manager
+ * install dirs. Used by the skill-update runner to retry past a dead
+ * version-manager shim (asdf/mise shims pass the X_OK probe but exit 126
+ * when their declared node version is not installed — issue #13807).
+ */
+export function resolveCliCommandCandidates(
+  commandName: string,
+  options: ResolveCommandOptions = {}
+): string[] {
   const platform = options.platform ?? process.platform
   const executableNames = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
-  const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
-  if (pathCandidate) {
-    return pathCandidate
+  const homePath = options.homePath ?? homedir()
+
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  const pushUnique = (candidate: string | null): void => {
+    if (candidate && !seen.has(candidate)) {
+      seen.add(candidate)
+      candidates.push(candidate)
+    }
   }
 
-  const homePath = options.homePath ?? homedir()
-  const nvmCandidate = findFirstExecutable(
-    platform,
-    getNvmVersionDirectories(homePath),
-    executableNames
-  )
-  const versionManagerCandidate =
-    nvmCandidate ??
-    findFirstExecutable(
-      platform,
-      getBaseVersionManagerDirectories(platform, homePath),
-      executableNames
-    )
-  return versionManagerCandidate ?? commandName
+  // PATH order first — the user's own ordering is the primary intent.
+  for (const directory of splitPath(pathEnv)) {
+    for (const executableName of executableNames) {
+      const candidate = join(directory, executableName)
+      if (isRunnableCommand(platform, candidate)) {
+        pushUnique(candidate)
+      }
+    }
+  }
+
+  // Then the version-manager install dirs (nvm, volta, fnm, asdf, mise, ...),
+  // deduplicated against PATH hits.
+  for (const directory of getNvmVersionDirectories(homePath)) {
+    for (const executableName of executableNames) {
+      const candidate = join(directory, executableName)
+      if (isRunnableCommand(platform, candidate)) {
+        pushUnique(candidate)
+      }
+    }
+  }
+  for (const directory of getBaseVersionManagerDirectories(platform, homePath)) {
+    for (const executableName of executableNames) {
+      const candidate = join(directory, executableName)
+      if (isRunnableCommand(platform, candidate)) {
+        pushUnique(candidate)
+      }
+    }
+  }
+
+  return candidates
 }
 
 export function resolveCliCommands(

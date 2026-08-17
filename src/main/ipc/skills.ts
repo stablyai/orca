@@ -13,6 +13,7 @@ import type {
 } from '../../shared/skill-freshness'
 import { inventorySkillFreshness } from '../skills/skill-freshness-inventory'
 import { SkillUpdateRunner } from '../skills/skill-update-run'
+import { resolveCliCommandCandidates } from '../codex-cli/command'
 import { skillUpdateFailedNames } from '../skills/skill-update-outcome'
 import { readGloballyUpdatableSkillLocks } from '../skills/skill-update-registration'
 import {
@@ -55,6 +56,10 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
       ])
       return skillUpdateFailedNames(names, inventory.installations, globalSkillLocks)
     },
+    // Why: asdf/mise shims pass the X_OK probe but exit 126 when their declared
+    // node version is missing; the runner retries the next candidate (issue
+    // #13807).
+    resolveCommandCandidates: (name) => resolveCliCommandCandidates(name),
     onState: (run: SkillUpdateRun) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {
