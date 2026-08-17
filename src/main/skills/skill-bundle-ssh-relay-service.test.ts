@@ -291,8 +291,146 @@ describe('previewSkillBundleInstallOnSshHost', () => {
     ])
   })
 
-  it('does not send an unknown preview method to an older SSH host', async () => {
-    const requestHostRpc = vi.fn(async () => ({ capabilities: ['skills.manage.v1'] }))
+  it('falls back to bounded per-skill previews on an older SSH host', async () => {
+    const request = previewRequest()
+    let active = 0
+    let maximumActive = 0
+    const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.manage.v1'] }
+      }
+      if (method !== 'skills.previewInstall') {
+        throw new Error(`unexpected method ${method}`)
+      }
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await Promise.resolve()
+      active -= 1
+      const input = params as { request: { name: string; package: { packageDigest: string } } }
+      return {
+        packageDigest: input.request.package.packageDigest,
+        name: input.request.name,
+        destinationIdentity: 'global:ssh-host',
+        currentState: 'missing',
+        providers: []
+      }
+    })
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request
+      })
+    ).resolves.toEqual({
+      packageId: request.package.packageId,
+      versionId: request.package.versionId,
+      bundleDigest: request.package.bundleDigest,
+      destinationIdentity: 'global:ssh-host',
+      skills: request.selectedSkills.map((skill) => ({ ...skill, currentState: 'missing' }))
+    })
+    expect(requestHostRpc.mock.calls.map(([method]) => method)).not.toContain(
+      'skills.previewBundleInstall'
+    )
+    expect(requestHostRpc).toHaveBeenCalledTimes(request.selectedSkills.length + 1)
+    expect(maximumActive).toBeLessThanOrEqual(8)
+  })
+
+  it('settles a failed legacy batch before retrying it', async () => {
+    let active = 0
+    let cancelled = 0
+    let maximumActive = 0
+    const requestHostRpc = vi.fn(
+      async (method: string, params: unknown, options?: { signal?: AbortSignal }) => {
+        if (method === 'relay.status') {
+          return { capabilities: ['skills.manage.v1'] }
+        }
+        const input = params as { request: { name: string; package: { packageDigest: string } } }
+        active += 1
+        maximumActive = Math.max(maximumActive, active)
+        try {
+          if (input.request.name === 'skill-0') {
+            throw new Error('preview transport failed')
+          }
+          await new Promise<void>((_resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('preview cancellation timeout')), 250)
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                clearTimeout(timeout)
+                cancelled += 1
+                const error = new Error('preview aborted')
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+          return {
+            packageDigest: input.request.package.packageDigest,
+            name: input.request.name,
+            destinationIdentity: 'global:ssh-host',
+            currentState: 'missing',
+            providers: []
+          }
+        } finally {
+          active -= 1
+        }
+      }
+    )
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request: previewRequest()
+      })
+    ).rejects.toThrow('preview transport failed')
+
+    expect(maximumActive).toBeLessThanOrEqual(8)
+    expect(active).toBe(0)
+    expect(cancelled).toBe(21)
+  })
+
+  it('does not retry malformed legacy preview responses', async () => {
+    const requestHostRpc = vi.fn(async (method: string) =>
+      method === 'relay.status' ? { capabilities: ['skills.manage.v1'] } : { malformed: true }
+    )
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request: previewRequest(8)
+      })
+    ).rejects.toThrow()
+
+    expect(requestHostRpc).toHaveBeenCalledTimes(9)
+  })
+
+  it('preserves first-rejection retry semantics while settling a legacy batch', async () => {
+    const nonRetryable = Object.assign(new Error('preview rejected'), { code: 400 })
+    const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.manage.v1'] }
+      }
+      const input = params as { request: { name: string } }
+      if (input.request.name === 'skill-0') {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        throw new Error('later transport failure')
+      }
+      throw nonRetryable
+    })
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({
+        provider: { requestHostRpc } as unknown as IPtyProvider,
+        request: previewRequest(2)
+      })
+    ).rejects.toThrow('preview rejected')
+
+    expect(requestHostRpc).toHaveBeenCalledTimes(3)
+  })
+
+  it('requires an update when the SSH host lacks both preview capabilities', async () => {
+    const requestHostRpc = vi.fn(async () => ({ capabilities: [] }))
 
     await expect(
       previewSkillBundleInstallOnSshHost({

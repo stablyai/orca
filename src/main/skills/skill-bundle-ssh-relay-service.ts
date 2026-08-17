@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import {
   SkillBundleInstallProgressSchema,
   SkillBundleInstallPreviewSchema,
@@ -11,6 +12,7 @@ import {
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_BUNDLE_PREVIEW_CAPABILITY,
+  SKILL_MANAGEMENT_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
@@ -20,8 +22,13 @@ import {
   SKILL_SSH_RELAY_GET_INSTALL_PROGRESS_METHOD,
   SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD,
   SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
+  SKILL_SSH_RELAY_PREVIEW_METHOD,
   type SkillSshWorkspaceAuthority
 } from '../../shared/skill-ssh-relay-contract'
+import {
+  SkillInstallPreviewSchema,
+  type SkillInstallPreview
+} from '../../shared/skill-install-contract'
 import {
   SKILL_SSH_REQUEST_TIMEOUT_MS,
   requireSkillSshRelayClient,
@@ -39,6 +46,81 @@ const NON_RETRYABLE_BUNDLE_TRANSFER_ERRORS = new Set([
   'skill-bundle-ssh-update-required',
   'skill-bundle-ssh-download-unavailable'
 ])
+const LEGACY_BUNDLE_PREVIEW_CONCURRENCY = 8
+
+async function previewBundleWithLegacyRpc(
+  client: SkillSshRelayClient,
+  input: {
+    request: SkillBundleInstallPreviewRequest
+    workspace?: SkillSshWorkspaceAuthority
+  }
+): Promise<SkillBundleInstallPreview> {
+  const previews: SkillInstallPreview[] = []
+  for (
+    let offset = 0;
+    offset < input.request.selectedSkills.length;
+    offset += LEGACY_BUNDLE_PREVIEW_CONCURRENCY
+  ) {
+    const batch = input.request.selectedSkills.slice(
+      offset,
+      offset + LEGACY_BUNDLE_PREVIEW_CONCURRENCY
+    )
+    const batchAbort = new AbortController()
+    const failures: { reason: unknown }[] = []
+    const results = await Promise.allSettled(
+      batch.map(async (skill) => {
+        try {
+          return SkillInstallPreviewSchema.parse(
+            await client(
+              SKILL_SSH_RELAY_PREVIEW_METHOD,
+              {
+                request: {
+                  package: {
+                    packageId: input.request.package.packageId,
+                    versionId: input.request.package.versionId,
+                    packageDigest: skill.digest,
+                    archiveSha256: input.request.package.archiveSha256,
+                    compressedBytes: input.request.package.compressedBytes
+                  },
+                  name: skill.name,
+                  destination: input.request.destination
+                },
+                workspace: input.workspace
+              },
+              { timeoutMs: 30_000, signal: batchAbort.signal }
+            )
+          )
+        } catch (error) {
+          failures.push({ reason: error })
+          if (failures.length === 1) {
+            batchAbort.abort()
+          }
+          throw error
+        }
+      })
+    )
+    const [firstFailure] = failures
+    if (firstFailure) {
+      throw firstFailure.reason
+    }
+    for (const result of results) {
+      if (result.status !== 'fulfilled') {
+        continue
+      }
+      previews.push(result.value)
+    }
+  }
+  return SkillBundleInstallPreviewSchema.parse({
+    packageId: input.request.package.packageId,
+    versionId: input.request.package.versionId,
+    bundleDigest: input.request.package.bundleDigest,
+    destinationIdentity: previews[0]?.destinationIdentity ?? '',
+    skills: input.request.selectedSkills.map((skill, index) => ({
+      ...skill,
+      currentState: previews[index]?.currentState
+    }))
+  })
+}
 
 export async function installSkillBundleOnSshHost(input: {
   provider: SkillSshProviderSource
@@ -170,22 +252,27 @@ export async function previewSkillBundleInstallOnSshHost(input: {
   return SkillBundleInstallPreviewSchema.parse(
     await retrySkillTransferRpc({
       retryable: (error) =>
+        !(error instanceof ZodError) &&
         (error as Error)?.message !== 'skill-bundle-ssh-update-required' &&
         retryableSkillSshTransportError(error),
       call: async () => {
         const client = requireSkillSshRelayClient(input.provider)
-        if (!(await skillSshRelayCapabilities(client)).includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
-          recordSkillCapabilityAbsence({
-            capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
-            destination: 'global-ssh'
-          })
+        const supported = await skillSshRelayCapabilities(client)
+        if (supported.includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
+          return client(
+            SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
+            { request: input.request, workspace: input.workspace },
+            { timeoutMs: 30_000 }
+          )
+        }
+        recordSkillCapabilityAbsence({
+          capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
+          destination: 'global-ssh'
+        })
+        if (!supported.includes(SKILL_MANAGEMENT_CAPABILITY)) {
           throw new Error('skill-bundle-ssh-update-required')
         }
-        return client(
-          SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
-          { request: input.request, workspace: input.workspace },
-          { timeoutMs: 30_000 }
-        )
+        return previewBundleWithLegacyRpc(client, input)
       }
     })
   )
