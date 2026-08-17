@@ -1,4 +1,5 @@
 import { basename, dirname, join } from 'node:path'
+import { isCodexHistoryDirName } from './session-scanner-codex-paths'
 import { createInterface } from 'node:readline'
 import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
@@ -65,7 +66,7 @@ export async function readCodexSessionIndexTitle(
 function codexHomeFromSessionFilePath(sessionFilePath: string): string | null {
   let currentDir = dirname(sessionFilePath)
   while (currentDir && dirname(currentDir) !== currentDir) {
-    if (basename(currentDir) === 'sessions') {
+    if (isCodexHistoryDirName(basename(currentDir))) {
       return dirname(currentDir)
     }
     currentDir = dirname(currentDir)

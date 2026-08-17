@@ -3,7 +3,10 @@ import { basename, dirname, extname, join, relative } from 'node:path'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
-import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import {
+  siblingCodexArchivedSessionsDir,
+  uniqueCodexSessionsDirs
+} from './session-scanner-codex-paths'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -83,16 +86,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   codex: {
     rootDirs: (options, wslHomeDirs) =>
-      uniqueCodexSessionsDirs([
-        options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
-        // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
-        // not the user's default ~/.codex history root.
-        ...wslHomeDirs.map((homeDir) =>
-          join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
-        ),
-        ...(options.additionalCodexSessionsDirs ?? [])
-      ]),
+      uniqueCodexSessionsDirs(
+        [
+          options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
+          ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
+          // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
+          // not the user's default ~/.codex history root.
+          ...wslHomeDirs.map((homeDir) =>
+            join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
+          ),
+          ...(options.additionalCodexSessionsDirs ?? [])
+        ].flatMap((sessionsDir) => [sessionsDir, siblingCodexArchivedSessionsDir(sessionsDir)])
+      ),
     extensions: ['.jsonl']
   },
   gemini: {
