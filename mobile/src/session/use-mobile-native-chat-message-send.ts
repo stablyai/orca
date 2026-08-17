@@ -53,7 +53,7 @@ export function useMobileNativeChatMessageSend(args: {
   /** Captured when a control send starts so a later tab switch cannot record its
    *  session-option effects against the newly active tab. */
   commandSendRef: MutableRefObject<(command: string) => void>
-  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string, images?: readonly string[]) => MobileNativeChatSendOrigin | null
   /** Launch-context text Orca parked on the agent's TUI input line, or null. Read
    *  at send time so the pre-clear can be sized to every line it occupies. */
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
@@ -97,7 +97,7 @@ export function useMobileNativeChatMessageSend(args: {
       // rejected send has to put back exactly that (#14819).
       const text = draftText.trimEnd()
       const handle = handleRef.current
-      const origin = captureSendOrigin(text)
+      const origin = captureSendOrigin(text, images)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       // Why: the lease collapses one render after `connState`, so a question-card

@@ -161,4 +161,16 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
     expect(rebased[0]?.baselineTailMessageId).toBe(null)
     expect(rebased[0]?.baselineResolved).toBe(true)
   })
+
+  // A send that carried no image owns its `[Image #n]` run as literal text, so it
+  // is a text send like any other and needs the boundary. Keying it through the
+  // marker-stripping rule would empty it, read it as an image echo, and strand it
+  // as a permanent glue barrier for its neighbours (STA-4363).
+  it('gives a marker-only send with no attachment a real boundary', () => {
+    const rebased = rebaseMobileNativeChatPendingBaselines(history, [
+      unresolved('p1', '[Image #1]')
+    ])
+    expect(rebased[0]?.baselineTailMessageId).toBe('m2')
+    expect(rebased[0]?.baselineResolved).toBe(true)
+  })
 })

@@ -148,6 +148,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
+                      // Why: the line above folds an inference into `hasMore`. Keep the
+                      // host's own answer separately for callers that change what a
+                      // message says rather than just a scroll affordance.
+                      ...(typeof frame.hasMore === 'boolean'
+                        ? { hasMoreReported: frame.hasMore }
+                        : {}),
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {})
                     })
@@ -156,6 +162,9 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? false,
+                      ...(typeof frame.hasMore === 'boolean'
+                        ? { hasMoreReported: frame.hasMore }
+                        : {}),
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {})
                     })
@@ -166,6 +175,9 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                             type: 'replacement',
                             messages: frame.messages,
                             hasMore: frame.hasMore ?? false,
+                            ...(typeof frame.hasMore === 'boolean'
+                              ? { hasMoreReported: frame.hasMore }
+                              : {}),
                             ...(lifecycle ? { lifecycle } : {})
                           }
                         : {

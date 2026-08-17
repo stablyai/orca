@@ -6,7 +6,6 @@ import {
   findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
-  normalizeReconcileText,
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
@@ -20,6 +19,7 @@ import {
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { nativeChatUserTextMatchText } from './mobile-native-chat-image-transcript-markers'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 
@@ -58,7 +58,7 @@ export function useMobileNativeChatDrafts(args: {
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
-  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string, images?: readonly string[]) => MobileNativeChatSendOrigin | null
   /** Launch-context text still believed to be parked on the agent's TUI input
    *  line, or null once it has been declined or retired. Send paths size their
    *  pre-clear from it, since one Ctrl+U clears only one logical line. */
@@ -133,16 +133,24 @@ export function useMobileNativeChatDrafts(args: {
   )
 
   const captureSendOrigin = useCallback(
-    (text: string) => {
+    (text: string, images?: readonly string[]) => {
       if (!draftKey) {
         return null
       }
-      const normalizedText = normalizeReconcileText(text)
+      // Without an attached image an `[Image #n]` run is the user's own text, so
+      // it has to stay in the key the transcript echo will be matched against.
+      const imageCount = images?.length ?? 0
+      const normalizedText = nativeChatUserTextMatchText(text, imageCount > 0)
       return {
         draftKey,
         pendingKey,
         normalizedText,
-        baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
+        imageCount,
+        baselineOccurrences: countUserTextOccurrences(
+          messagesRef.current,
+          normalizedText,
+          imageCount
+        ),
         baselineTailMessageId: messagesRef.current.at(-1)?.id ?? null,
         // Only a settled read makes this a boundary. Anything else — hydrating,
         // or a read that failed — hands back an empty list that reads as "the
@@ -211,6 +219,7 @@ export function useMobileNativeChatDrafts(args: {
         pendingKey: origin.pendingKey,
         text,
         normalizedText: origin.normalizedText,
+        imageCount: origin.imageCount,
         baselineTailMessageId: origin.baselineTailMessageId,
         deadline: null
       }

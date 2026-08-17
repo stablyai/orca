@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  reportedHasMore,
   useMobileNativeChatSession,
   type MobileNativeChatSession
 } from './use-mobile-native-chat-session'
@@ -381,6 +382,32 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages.map((entry) => entry.id)).toEqual(['early-b', 'base-c'])
   })
 
+  // The window head is what licenses stripping a row's `[Image #n]` markers, so
+  // it has to name the row the HOST answered about. Live appends trim the front
+  // locally (the window is 40), and the row that slides up was already on screen
+  // rendered literally — naming it would rewrite a message the user had read,
+  // which is this ticket's own defect.
+  it('stops naming a window head once a live append trims the one the host answered about', async () => {
+    const sendRequest = vi.fn()
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    const base = Array.from({ length: 40 }, (_unused, n) => message(`base-${n}`))
+    await act(async () =>
+      emit({ type: 'snapshot', messages: base, hasMore: true, beforeOffset: 1 })
+    )
+
+    expect(state?.windowHeadMessageId).toBe('base-0')
+
+    // One ordinary append past the window drops `base-0` off the front.
+    await act(async () => emit({ type: 'appended', messages: [message('live-0')] }))
+
+    expect(state?.messages.some((entry) => entry.id === 'base-0')).toBe(false)
+    expect(state?.windowHeadMessageId).toBeUndefined()
+  })
+
   it('rejects a cursor page invalidated by live trim and retries with a growing tail', async () => {
     let resolveCursorPage: (response: unknown) => void = () => {}
     const sendRequest = vi
@@ -632,5 +659,25 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       transcriptLoading: true,
       ids: []
     })
+  })
+})
+
+// Both mobile hops cast the wire payload without validating per-field types, so
+// the host's paging answer has to be type-checked here or a non-boolean decides
+// it. That matters beyond the scroll affordance: the marker fold reads this to
+// decide whether a window-head `[Image #n]` is the user's text or a placeholder.
+describe('reportedHasMore', () => {
+  it('takes the host answer only when it is a real boolean', () => {
+    expect(reportedHasMore(true)).toBe(true)
+    expect(reportedHasMore(false)).toBe(false)
+  })
+
+  it('reads anything else as unanswered rather than a paging verdict', () => {
+    // 'no' and 0 are the dangerous ones: truthiness would invert or force them.
+    expect(reportedHasMore('no')).toBeUndefined()
+    expect(reportedHasMore(0)).toBeUndefined()
+    expect(reportedHasMore(1)).toBeUndefined()
+    expect(reportedHasMore(null)).toBeUndefined()
+    expect(reportedHasMore(undefined)).toBeUndefined()
   })
 })

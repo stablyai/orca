@@ -38,7 +38,12 @@ describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
   const acceptSend = vi.fn()
-  const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  // Declares the real parameters so `mock.calls[0][0]` is typed; a no-arg mock
+  // gives `calls` an empty tuple, which mobile `tsc` never surfaces (it excludes
+  // test files) but a full type pass does.
+  const captureSendOrigin = vi.fn(
+    (_text: string, _images?: readonly string[]) => ({ draftKey: 'k', pendingKey: 'p' }) as never
+  )
   const clearDraftForSend = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
@@ -198,6 +203,16 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(clearInputWrite).not.toHaveBeenCalled()
     expect(sentArgs().clearInputFirst).toBe(false)
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
+  })
+
+  // Without the image list the origin keys as a markerless text send, so an
+  // `[Image #n]` caption stays literal and the echo can never match its own turn.
+  it('hands the attached images to the send origin', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('[Image #1] look', ['file:///a.png'])
+    })
+    expect(captureSendOrigin.mock.calls[0]![1]).toEqual(['file:///a.png'])
   })
 
   it('does not resolve a composer seed from a question-card answer', async () => {
@@ -400,7 +415,8 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('  run the tests \n')
     })
     expect(sentArgs().text).toBe('  run the tests')
-    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests')
+    // First arg only: a text-only send also passes an undefined image list.
+    expect(captureSendOrigin.mock.calls[0]![0]).toBe('  run the tests')
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
   })
 

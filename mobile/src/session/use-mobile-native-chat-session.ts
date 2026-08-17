@@ -26,6 +26,22 @@ export type MobileNativeChatSession = {
   error?: string
   /** True when an older page may exist (the last read filled the window). */
   hasMore: boolean
+  /** True when older history is KNOWN to exist, rather than guessed from a full
+   *  window. `hasMore` falls back to a count inference that reports true for a
+   *  window filled to exactly the limit; that is fine for the "load earlier"
+   *  affordance but not for the marker fold, which changes what a message says —
+   *  a false positive there erases an `[Image #n]` the user typed, and the limit
+   *  here is 40, so an exact fill is far likelier than on desktop.
+   *
+   *  Usually that knowledge is the host's own answer. It is not always: a replay
+   *  that invalidates the cursor synthesizes it, because a bounded window that
+   *  dropped its oldest row really does have history behind it. Both are facts
+   *  about the transcript; neither is a count standing in for one. */
+  earlierHistoryConfirmed: boolean
+  /** The oldest row of the window the host answered about, while it is still on
+   *  screen. Only that row may have lost the `[Image: source: …]` turns that
+   *  vouch for its markers; undefined means no row may lose any. */
+  windowHeadMessageId: string | undefined
   /** Whether an older-history page is currently loading. */
   loadingEarlier: boolean
   /** Grow the window to page in older history. */
@@ -34,6 +50,14 @@ export type MobileNativeChatSession = {
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
+
+/** The host's paging answer, or undefined when it did not give one. Both mobile
+ *  hops cast the wire payload without validating per-field types, so a
+ *  non-boolean must read as "unanswered" rather than force a paging verdict —
+ *  the same guard the desktop runtime parser enforces. */
+export function reportedHasMore(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
 const PAGE = 60
 const MAX_MESSAGES = 2000
 
@@ -88,6 +112,12 @@ export function useMobileNativeChatSession(args: {
   const status = settled ? settled.status : initialStatus
   const [error, setError] = useState<string | undefined>(undefined)
   const [hasMore, setHasMore] = useState(false)
+  const [earlierHistoryConfirmed, setEarlierHistoryConfirmed] = useState(false)
+  // The oldest row of the window the host answered about. Recorded from reads
+  // only: a live append trims the front locally, and the row that slides up was
+  // already on screen rendered literally, so re-reading it as a window head
+  // would rewrite a message the user had already seen.
+  const [windowHeadMessageId, setWindowHeadMessageId] = useState<string | undefined>(undefined)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const loadingEarlierRef = useRef(false)
   const beforeOffsetRef = useRef<number | null>(null)
@@ -130,6 +160,8 @@ export function useMobileNativeChatSession(args: {
     setList([])
     setError(undefined)
     setHasMore(false)
+    setEarlierHistoryConfirmed(false)
+    setWindowHeadMessageId(undefined)
     beforeOffsetRef.current = null
     if (!client || !agent) {
       return
@@ -181,11 +213,15 @@ export function useMobileNativeChatSession(args: {
           // overlapping reconnect replay keeps the paged-in history and limit.
           limitRef.current = INITIAL_LIMIT
           beforeOffsetRef.current = applied.beforeOffset ?? null
-          setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
+          setHasMore(reportedHasMore(applied.hasMore) ?? applied.messages.length >= INITIAL_LIMIT)
+          setEarlierHistoryConfirmed(reportedHasMore(applied.hasMore) === true)
+          setWindowHeadMessageId(applied.messages[0]?.id)
         }
         setMessages(applied.messages)
-        if (!applied.windowReplaced && applied.hasMore != null) {
-          setHasMore(applied.hasMore)
+        const appliedHasMore = reportedHasMore(applied.hasMore)
+        if (!applied.windowReplaced && appliedHasMore !== undefined) {
+          setHasMore(appliedHasMore)
+          setEarlierHistoryConfirmed(appliedHasMore)
         }
         if (!applied.windowReplaced && applied.beforeOffset != null) {
           beforeOffsetRef.current = applied.beforeOffset
@@ -220,6 +256,8 @@ export function useMobileNativeChatSession(args: {
     const pageLimit = nextLimit - limitRef.current
     if (pageLimit <= 0) {
       setHasMore(false)
+      setEarlierHistoryConfirmed(false)
+      setWindowHeadMessageId(undefined)
       return
     }
     const beforeOffset = beforeOffsetRef.current
@@ -253,12 +291,17 @@ export function useMobileNativeChatSession(args: {
           beforeOffsetRef.current = result.beforeOffset
           setList([...result.messages, ...mergerRef.current.list])
           setHasMore(
-            nextLimit < MAX_MESSAGES && (result.hasMore ?? result.messages.length >= pageLimit)
+            nextLimit < MAX_MESSAGES &&
+              (reportedHasMore(result.hasMore) ?? result.messages.length >= pageLimit)
           )
+          setEarlierHistoryConfirmed(reportedHasMore(result.hasMore) === true)
+          setWindowHeadMessageId(result.messages[0]?.id)
         } else {
           // Older runtimes ignore the cursor and return the growing tail.
           setList(result.messages)
           setHasMore(result.messages.length >= nextLimit)
+          setEarlierHistoryConfirmed(false)
+          setWindowHeadMessageId(undefined)
         }
       } finally {
         // A late page from a prior tab must not unlock the current tab's request.
@@ -289,6 +332,13 @@ export function useMobileNativeChatSession(args: {
     transcriptLoading: status === 'loading',
     error,
     hasMore,
+    earlierHistoryConfirmed,
+    // Undefined once a live trim drops the recorded head: nothing on screen is
+    // then known to sit mid-image-run, so no row may lose its markers.
+    windowHeadMessageId:
+      earlierHistoryConfirmed && visibleMessages.some((m) => m.id === windowHeadMessageId)
+        ? windowHeadMessageId
+        : undefined,
     loadingEarlier,
     loadEarlier
   }

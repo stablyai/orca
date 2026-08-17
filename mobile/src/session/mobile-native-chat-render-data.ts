@@ -6,7 +6,10 @@ import {
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
+import {
+  normalizeImageTranscriptMessages,
+  stripImagePromptMarkersFromTextBlocks
+} from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -43,10 +46,15 @@ export type MobileNativeChatPendingItem = {
   images?: string[]
 }
 
-export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
+export function foldMobileNativeChatMessages(
+  messages: NativeChatMessage[],
+  windowHeadMessageId?: string
+): NativeChatMessage[] {
   // Normalize first (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  return foldToolMessages(stripNoiseMessages(normalizeImageTranscriptMessages(messages)))
+  return foldToolMessages(
+    stripNoiseMessages(normalizeImageTranscriptMessages(messages, { windowHeadMessageId }))
+  )
 }
 
 /** Assemble the list data the chat renders: the folded transcript, then a
@@ -78,11 +86,25 @@ export function buildMobileNativeChatTransientData({
       previewIndex += 1
       return url ? { ...block, url } : block
     })
+    // Previews left over once every image block the turn already had has taken
+    // one. Only these add an image the turn was not already showing.
+    const appendedPreviews = Math.max(0, previews.length - previewIndex)
     while (previewIndex < previews.length) {
       blocks.push({ type: 'image-ref', url: previews[previewIndex] })
       previewIndex += 1
     }
-    return { ...message, blocks }
+    // Why: a bound preview is positive proof this turn echoes an image sent from
+    // this device (`findLandedImagePreviewEchoes` binds it to nothing else), so
+    // its markers are placeholders — no visible source run needed to vouch for
+    // them. Without this a marker-only host echo captions the user's own photo
+    // with a literal `[Image #1]`.
+    //
+    // Budget is what was APPENDED, not what looks path-less. A block the turn
+    // already carried has already had its marker spent — by the fold for a
+    // `[Image: source: …]` run, or by the host for an inline image, which some
+    // agents emit as a url with no path. Charging for those would re-strip a
+    // marker the user actually typed.
+    return { ...message, blocks: stripImagePromptMarkersFromTextBlocks(blocks, appendedPreviews) }
   })
   const data: NativeChatMessage[] = [
     ...renderedFolded,

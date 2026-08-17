@@ -126,6 +126,40 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     expect(state?.composerText).toBe('')
   })
 
+  it('declines a launch draft when the only user turn is a literal image marker', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [userTextMessage('m1', 'keep [Image #1] literal')],
+          launchDraft: 'issue link'
+        })
+      )
+    )
+
+    expect(state?.composerText).toBe('')
+  })
+
+  it('retires an adopted launch draft when a literal marker turn lands', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
+    )
+    expect(state?.composerText).toBe('issue link')
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [userTextMessage('m1', 'keep [Image #1] literal')],
+          launchDraft: 'issue link'
+        })
+      )
+    )
+    expect(state?.composerText).toBe('')
+  })
+
   it('clears an untouched prefill once a user turn lands, keeping user edits', async () => {
     await mount('a')
     await act(async () =>

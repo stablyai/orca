@@ -455,6 +455,35 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.status).toBe('ready')
   })
 
+  // The runtime RPC host clamps the read window to 2000 turns, then keeps
+  // answering `hasMore: true` while returning the same capped tail. Taking that
+  // answer as the affordance would leave a "Load earlier" button that re-reads
+  // the whole window on every scroll near the top and never grows it.
+  it('stops offering load-earlier once the host stops growing the window', async () => {
+    const transport = getMockTransport('env-1')
+    const capped = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`capped-${n}`, 'old')
+    )
+    await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: capped, hasMore: true }))
+    expect(latest?.hasMore).toBe(true)
+
+    // The host truthfully has more, but it cannot hand any of it over: the page
+    // request asked for a wider window and got back the same clamped tail.
+    transport.readSession.mockImplementationOnce(() =>
+      Promise.resolve({ messages: capped, hasMore: true })
+    )
+    await act(async () => latest?.loadEarlier())
+
+    expect(latest?.hasMore).toBe(false)
+    expect(latest?.messages).toHaveLength(NATIVE_CHAT_INITIAL_LIMIT)
+  })
+
   it('does not let an older pagination read rewind a live completion', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
@@ -705,5 +734,163 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     expect(latest?.status).not.toBe('error')
     expect(latest?.error).toBeUndefined()
     expect(latest?.messages.map((m) => m.id)).toContain('a-late')
+  })
+  // The marker fold changes what a MESSAGE SAYS, so it rides the host's reported
+  // paging flag rather than `hasMore`, which falls back to a count inference that
+  // reports true for a window filled to exactly the limit. A false positive there
+  // erases an `[Image #n]` the user typed — a regression against a pre-fold base.
+  function headWindow(): NativeChatMessage[] {
+    return [
+      user('u-head', '[Image #1] what do you see'),
+      ...Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT - 1 }, (_unused, n) =>
+        assistant(`m-${n}`, 't')
+      )
+    ]
+  }
+
+  it('keeps a head marker when the host never reported older history', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    // A host predating the field: the window is exactly full, so the count
+    // inference says there is more, but nothing confirmed it.
+    transport.readSession.mockResolvedValueOnce({ messages: headWindow() })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    expect(latest?.hasMore).toBe(true)
+    expect(latest?.messages.find((m) => m.id === 'u-head')?.blocks).toEqual([
+      { type: 'text', text: '[Image #1] what do you see' }
+    ])
+  })
+
+  it('strips a head marker once the host confirms older history', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    transport.readSession.mockResolvedValueOnce({ messages: headWindow(), hasMore: true })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    expect(latest?.messages.find((m) => m.id === 'u-head')?.blocks).toEqual([
+      { type: 'text', text: 'what do you see' }
+    ])
+  })
+  // Why: a remote adapter's FIRST snapshot folds a count inference into
+  // `hasMore`, so the frame path needs the same guard as the read path — a
+  // guessed value must not strip a marker the user typed.
+  it('keeps a head marker when a snapshot frame only inferred older history', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    await act(async () => {
+      // hasMore true, but no reported field: nobody answered.
+      transport.emit({ type: 'snapshot', messages: headWindow(), hasMore: true })
+    })
+
+    expect(latest?.hasMore).toBe(true)
+    expect(latest?.messages.find((m) => m.id === 'u-head')?.blocks).toEqual([
+      { type: 'text', text: '[Image #1] what do you see' }
+    ])
+  })
+
+  it('strips a head marker when the snapshot frame carries the host answer', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    await act(async () => {
+      transport.emit({
+        type: 'snapshot',
+        messages: headWindow(),
+        hasMore: true,
+        hasMoreReported: true
+      })
+    })
+
+    expect(latest?.messages.find((m) => m.id === 'u-head')?.blocks).toEqual([
+      { type: 'text', text: 'what do you see' }
+    ])
+  })
+})
+
+// STA-4363: the window-head rule strips a head turn's `[Image #n]` run because the
+// source turns that would vouch for it may have been trimmed by the read window.
+// That only holds while older history actually exists — otherwise the head is the
+// start of the conversation and its markers are the user's own words. The host's
+// paging answer is what tells the two apart, and a pure-function test cannot see a
+// call site that stops forwarding it.
+describe('useNativeChatLiveSession — window-head marker rule', () => {
+  const AGENT = 'claude' as const
+  const SESSION = 'sess-window-head'
+  const PANE = 'pane-window-head'
+  const roots: Root[] = []
+  let latest: NativeChatLiveSession | null = null
+
+  function Probe(props: UseNativeChatLiveSessionArgs): null {
+    latest = useNativeChatLiveSession(props)
+    return null
+  }
+
+  function markerTurn(id: string, text: string, timestamp: number): NativeChatMessage {
+    return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+  }
+
+  /** Renders a two-turn window whose head and tail both carry a literal marker. */
+  async function blocksById(earlierHistoryConfirmed: boolean): Promise<Map<string, unknown>> {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    const transport = getMockTransport('env-1')
+    await act(async () => {
+      root.render(
+        createElement(Probe, {
+          paneKey: PANE,
+          agent: AGENT,
+          sessionId: SESSION,
+          runtimeEnvironmentId: 'env-1'
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      transport.emit({
+        type: 'snapshot',
+        messages: [
+          markerTurn('u-head', '[Image #1] hello', 1),
+          markerTurn('u-tail', '[Image #2] bye', 2)
+        ],
+        hasMore: earlierHistoryConfirmed,
+        // Only the host's own answer may gate the fold; `hasMore` alone folds in
+        // a count inference that over-reports on an exactly full window.
+        hasMoreReported: earlierHistoryConfirmed
+      })
+    })
+    return new Map((latest?.messages ?? []).map((message) => [message.id, message.blocks]))
+  }
+
+  beforeEach(() => {
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+  })
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      act(() => root.unmount())
+    }
+    latest = null
+    vi.clearAllMocks()
+    resetMockTransports()
+  })
+
+  it('keeps a head turn’s literal markers when the window holds the whole conversation', async () => {
+    expect((await blocksById(false)).get('u-head')).toEqual([
+      { type: 'text', text: '[Image #1] hello' }
+    ])
+  })
+
+  it('strips the head turn’s markers only while older history is still pageable', async () => {
+    expect((await blocksById(true)).get('u-head')).toEqual([{ type: 'text', text: 'hello' }])
+  })
+
+  it('leaves a turn below the head literal even while older history exists', async () => {
+    expect((await blocksById(true)).get('u-tail')).toEqual([
+      { type: 'text', text: '[Image #2] bye' }
+    ])
   })
 })

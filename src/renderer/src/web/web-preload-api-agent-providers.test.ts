@@ -82,6 +82,9 @@ describe('web native chat preload API', () => {
         type: 'snapshot',
         messages: [message],
         hasMore: false,
+        // The host answered, so the adapter marks the answer as reported rather
+        // than leaving `hasMore` indistinguishable from its count inference.
+        hasMoreReported: false,
         lifecycle
       }
     ])

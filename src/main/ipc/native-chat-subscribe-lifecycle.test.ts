@@ -277,6 +277,8 @@ describe('nativeChat subscribe lifecycle', () => {
         type: 'snapshot',
         messages: [],
         hasMore: false,
+        // This host computes the answer, so the snapshot always marks it reported.
+        hasMoreReported: false,
         error: 'Transcript unavailable'
       }
     })
@@ -295,7 +297,8 @@ describe('nativeChat subscribe lifecycle', () => {
       frame: {
         type: 'snapshot',
         messages: [],
-        hasMore: false
+        hasMore: false,
+        hasMoreReported: false
       }
     })
   })
@@ -315,6 +318,7 @@ describe('nativeChat subscribe lifecycle', () => {
         type: 'snapshot',
         messages: [],
         hasMore: false,
+        hasMoreReported: false,
         lifecycle
       }
     })

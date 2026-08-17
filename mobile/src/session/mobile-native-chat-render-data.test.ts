@@ -125,6 +125,30 @@ describe('buildMobileNativeChatTransientData', () => {
     ])
   })
 
+  it('renders literal image-marker text in a standalone user turn', () => {
+    const data = build([user('u1', 'Please preserve [Image #1] literally')], null, [])
+
+    expect(data[0]?.blocks).toEqual([
+      { type: 'text', text: 'Please preserve [Image #1] literally' }
+    ])
+  })
+
+  it('keeps a marker beyond the folded run’s image count as literal text', () => {
+    const data = build(
+      [
+        user('u1', '[Image: source: /tmp/a.png]'),
+        user('u2', '[Image #1] compare with the [Image #2] I mentioned earlier')
+      ],
+      null,
+      []
+    )
+
+    expect(data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'compare with the [Image #2] I mentioned earlier' }
+    ])
+  })
+
   it('renders a lone image marker turn (no caption) as an image-ref block', () => {
     const data = build([user('u1', '[Image: source: /tmp/a.png]')], null, [])
     expect(data[0]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
@@ -149,6 +173,9 @@ describe('buildMobileNativeChatTransientData', () => {
     ])
   })
 
+  // A marker-only turn is the documented normal echo shape for some hosts, and a
+  // bound preview is proof the markers stand in for the photo now beside them —
+  // captioning the user's own image with a literal `[Image #1]` is never right.
   it('restores the local preview onto a marker-only transcript turn', () => {
     const result = buildMobileNativeChatTransientData({
       folded: foldMobileNativeChatMessages([user('prompt', '[Image #1]')]),
@@ -158,6 +185,81 @@ describe('buildMobileNativeChatTransientData', () => {
     })
 
     expect(result.data[0]?.blocks).toEqual([{ type: 'image-ref', url: 'file:///phone-photo.jpg' }])
+  })
+
+  // Why: the bound preview only vouches for as many markers as it shows images.
+  it('keeps surplus marker text the previews cannot vouch for', () => {
+    const result = buildMobileNativeChatTransientData({
+      folded: foldMobileNativeChatMessages([user('prompt', '[Image #1] next to [Image #2]')]),
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+    })
+
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'text', text: 'next to [Image #2]' },
+      { type: 'image-ref', url: 'file:///phone-photo.jpg' }
+    ])
+  })
+
+  // Why: a block that already has a path came from a real source turn, so the
+  // fold spent that marker and deliberately kept the surplus one as the user's
+  // own words. Charging the preview for it again re-breaks STA-4363 at render.
+  it('does not re-strip a surplus marker the fold deliberately kept', () => {
+    const result = buildMobileNativeChatTransientData({
+      folded: foldMobileNativeChatMessages([
+        user('src', '[Image: source: /tmp/a.png]'),
+        user('prompt', '[Image #1] compare with the [Image #2] I mentioned')
+      ]),
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+    })
+
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png', url: 'file:///phone-photo.jpg' },
+      { type: 'text', text: 'compare with the [Image #2] I mentioned' }
+    ])
+  })
+
+  // Why: some agents emit an inline image as a url with NO path, so "path-less"
+  // does not mean "a preview we just appended". Charging the budget for a block
+  // the turn already carried destroys a marker the user actually typed.
+  it('does not charge the budget for a path-less image the turn already carried', () => {
+    const result = buildMobileNativeChatTransientData({
+      folded: [
+        {
+          id: 'prompt',
+          role: 'user',
+          blocks: [
+            { type: 'image-ref', url: 'https://host/a.png' },
+            { type: 'text', text: 'look [Image #2] typed' }
+          ],
+          timestamp: 1,
+          source: 'transcript'
+        }
+      ],
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///local/b.jpg'] }
+    })
+
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', url: 'file:///local/b.jpg' },
+      { type: 'text', text: 'look [Image #2] typed' }
+    ])
+  })
+
+  // Why: no preview binding means no evidence, so the ticket's rule still holds.
+  it('leaves marker text alone when no preview is bound', () => {
+    const result = buildMobileNativeChatTransientData({
+      folded: foldMobileNativeChatMessages([user('prompt', '[Image #1]')]),
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: {}
+    })
+
+    expect(result.data[0]?.blocks).toEqual([{ type: 'text', text: '[Image #1]' }])
   })
 
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {

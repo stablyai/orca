@@ -5,6 +5,7 @@ import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
+import { remarkDisableDefinitions } from './remark-disable-definitions'
 import {
   compactCommentMarkdownComponents,
   createCompactCommentMarkdownComponents,
@@ -61,6 +62,9 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [remarkGfm, remarkBreaks]
+// Every chat row renders one of these, so keep both lists module-level rather
+// than allocating a fresh array per instance.
+const proseRemarkPlugins = [...remarkPlugins, remarkDisableDefinitions]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -186,6 +190,9 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   expandImages?: boolean
+  /** Set when `content` is prose the user typed, not Markdown they authored, so
+   *  a `[label]: target` line renders instead of silently disappearing. */
+  disableLinkDefinitions?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -201,6 +208,7 @@ const CommentMarkdown = React.memo(
       onLinkClick,
       allowFileUriLinks = false,
       expandImages = false,
+      disableLinkDefinitions = false,
       ...rest
     },
     ref
@@ -217,10 +225,10 @@ const CommentMarkdown = React.memo(
         ? createDocumentCommentMarkdownComponents(onLinkClick)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
     }, [expandImages, variant, onLinkClick])
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
-    )
+    const activeRemarkPlugins = React.useMemo(() => {
+      const base = disableLinkDefinitions ? proseRemarkPlugins : remarkPlugins
+      return githubRepo ? [...base, remarkGitHubReferences(githubRepo)] : base
+    }, [disableLinkDefinitions, githubRepo])
 
     return (
       <div

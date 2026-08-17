@@ -140,6 +140,24 @@ describe('assembleNativeChatSession', () => {
     ])
   })
 
+  it('renders literal image-marker text in a standalone user turn', () => {
+    const literal = msg({
+      id: 'u-literal',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Please preserve [Image #1] literally' }]
+    })
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: [literal] },
+      sessionId: 's1',
+      agent: 'claude'
+    })
+
+    expect(session.messages[0]?.blocks).toEqual([
+      { type: 'text', text: 'Please preserve [Image #1] literally' }
+    ])
+  })
+
   it('drops a scrape duplicate even when scrape is processed first by id', () => {
     const scrape = msg({
       id: 'shared-id',

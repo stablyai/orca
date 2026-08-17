@@ -24,12 +24,27 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  /** The load-earlier affordance, which may over-report on a window filled to
+   *  exactly the limit. Deliberately NOT what the fold reads. */
+  hasMore?: boolean
+  /** The host's own paging answer. Only this may decide whether the oldest
+   *  visible row is a window head that lost its image-source run — an inferred
+   *  true here would erase an `[Image #n]` the user typed. */
+  earlierHistoryConfirmed?: boolean
+  /** The row the host answered about, while it is still on screen. */
+  windowHeadMessageId?: string
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   const controller = {
     showNativeChat: tick.show ?? true,
-    nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
+    nativeChatSession: {
+      messages: tick.messages ?? [],
+      status: 'ready',
+      hasMore: tick.hasMore ?? false,
+      earlierHistoryConfirmed: tick.earlierHistoryConfirmed ?? false,
+      windowHeadMessageId: tick.windowHeadMessageId
+    },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
     nativeChatStreamingText: tick.streamingText,
@@ -170,5 +185,85 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+})
+
+// STA-4363, mobile half. The window-head rule strips a head turn's `[Image #n]`
+// run because the read window may have trimmed the source turns that vouch for
+// it — true only while older history exists. Desktop derives the head from its
+// read list, mobile from the merged list, so pin mobile's own derivation: a
+// pure-function test of the fold cannot see this call site stop guarding it.
+describe('MobileNativeChatOverlay window-head marker rule', () => {
+  function markerTurn(id: string, text: string, timestamp: number): NativeChatMessage {
+    return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+  }
+
+  /** Mounts the overlay, reads the rows it handed the chat view, unmounts. Each
+   *  case owns its renderer, so nothing leaks between them. Inferred rather than
+   *  annotated: `react-test-renderer` ships no usable types here, so naming the
+   *  handle in a union with null yields a redundant `any` constituent. */
+  async function foldedFor(tick: Tick): Promise<NativeChatMessage[]> {
+    const mounted = create(overlayElement(tick))
+    await act(async () => {})
+    const folded = mounted.root.findAll((node) => node.type === 'ChatView')[0].props
+      .folded as NativeChatMessage[]
+    mounted.unmount()
+    return folded
+  }
+
+  async function foldedById(earlierHistoryConfirmed: boolean): Promise<Map<string, unknown>> {
+    const folded = await foldedFor({
+      earlierHistoryConfirmed,
+      windowHeadMessageId: earlierHistoryConfirmed ? 'u-head' : undefined,
+      messages: [
+        markerTurn('u-head', '[Image #1] hello', 1),
+        markerTurn('u-tail', '[Image #2] bye', 2)
+      ]
+    })
+    return new Map(folded.map((message) => [message.id, message.blocks]))
+  }
+
+  it('keeps the head turn’s literal markers when the window holds the whole conversation', async () => {
+    expect((await foldedById(false)).get('u-head')).toEqual([
+      { type: 'text', text: '[Image #1] hello' }
+    ])
+  })
+
+  it('strips the head turn’s markers only while older history is still pageable', async () => {
+    expect((await foldedById(true)).get('u-head')).toEqual([{ type: 'text', text: 'hello' }])
+  })
+
+  // `hasMore` also reports true for a window filled to exactly the limit, where
+  // nothing older exists. Riding it here would erase a marker the user typed at
+  // the true start of the conversation — the ticket's own defect. Mobile's window
+  // is 40, so that exact fill is reachable.
+  it('does not strip on an inferred paging answer the host never confirmed', async () => {
+    const folded = await foldedFor({
+      hasMore: true,
+      earlierHistoryConfirmed: false,
+      messages: [markerTurn('u-head', '[Image #1] hello', 1)]
+    })
+    expect(folded[0]?.blocks).toEqual([{ type: 'text', text: '[Image #1] hello' }])
+  })
+
+  // A live append past the window trims the front, so the row that slides up was
+  // already on screen rendered literally. Re-reading it as a window head would
+  // rewrite a message the user had seen — the ticket's own defect, on mobile's
+  // 40-turn window, during any active agent run.
+  it('does not strip a row that only became the head after a live trim', async () => {
+    const folded = await foldedFor({
+      earlierHistoryConfirmed: true,
+      // The recorded head has been trimmed away; nothing on screen is known to
+      // sit mid-run any more.
+      windowHeadMessageId: 'u-trimmed-away',
+      messages: [markerTurn('u-head', '[Image #1] hello', 1)]
+    })
+    expect(folded[0]?.blocks).toEqual([{ type: 'text', text: '[Image #1] hello' }])
+  })
+
+  it('leaves a turn below the head literal even while older history exists', async () => {
+    expect((await foldedById(true)).get('u-tail')).toEqual([
+      { type: 'text', text: '[Image #2] bye' }
+    ])
   })
 })

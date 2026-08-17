@@ -1,3 +1,8 @@
+import {
+  nativeChatUserTextMatchText,
+  normalizeNativeChatUserText
+} from './mobile-native-chat-image-transcript-markers'
+
 export type MobileNativeChatPendingMessage = {
   id: string
   text: string
@@ -16,12 +21,19 @@ export type MobileNativeChatSendOrigin = {
   draftKey: string
   pendingKey: string | null
   normalizedText: string
+  imageCount: number
   baselineOccurrences: number
   baselineTailMessageId: string | null
   baselineResolved: boolean
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>
+
+/** Markers are the agent's only on a send that carried images; otherwise they
+ *  are literal text, so `captureSendOrigin` keeps them and so must this. */
+function pendingMatchText(pending: MobileNativeChatPendingMessage): string {
+  return nativeChatUserTextMatchText(pending.text, Boolean(pending.images?.length))
+}
 
 export function combineMobileNativeChatPending(
   session: MobileNativeChatPendingMessage[],
@@ -45,11 +57,21 @@ export function appendMobileNativeChatPending(
   const current = previous[key] ?? []
   const earlierOutstanding = current.filter(
     (pending) =>
-      pending.text.trim() === origin.normalizedText &&
+      pendingMatchText(pending) === origin.normalizedText &&
+      (origin.imageCount > 0
+        ? (pending.images?.length ?? 0) >= origin.imageCount
+        : !pending.images?.length) &&
       pending.expectedOccurrence > origin.baselineOccurrences
   ).length
+  // An image send whose caption is only markers still reconciles by image
+  // ordinal, matching how `captureSendOrigin` normalized it.
   const expectedImageEchoOrdinal =
-    current.filter((pending) => pending.text.trim() === '' && pending.images?.length).length + 1
+    current.filter(
+      (pending) =>
+        origin.imageCount > 0 &&
+        (pending.images?.length ?? 0) >= origin.imageCount &&
+        normalizeNativeChatUserText(pending.text) === ''
+    ).length + 1
   return {
     ...previous,
     [key]: [

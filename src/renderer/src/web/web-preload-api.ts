@@ -1348,6 +1348,12 @@ function createNativeChatApi(): NativeChatApi {
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                    // Why: the line above folds an inference into `hasMore`. Keep the
+                    // host's own answer separately for callers that change what a
+                    // message says rather than just a scroll affordance.
+                    ...(typeof result.hasMore === 'boolean'
+                      ? { hasMoreReported: result.hasMore }
+                      : {}),
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {})
                   })
@@ -1356,6 +1362,9 @@ function createNativeChatApi(): NativeChatApi {
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? false,
+                    ...(typeof result.hasMore === 'boolean'
+                      ? { hasMoreReported: result.hasMore }
+                      : {}),
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {})
                   })
@@ -1366,6 +1375,9 @@ function createNativeChatApi(): NativeChatApi {
                           type: 'replacement',
                           messages: result.messages,
                           hasMore: result.hasMore ?? false,
+                          ...(typeof result.hasMore === 'boolean'
+                            ? { hasMoreReported: result.hasMore }
+                            : {}),
                           ...(lifecycle ? { lifecycle } : {})
                         }
                       : {

@@ -47,7 +47,10 @@ export function parseRuntimeNativeChatReadSessionResult(
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
     return {
       messages: record.messages as NativeChatAppendedMessages,
-      ...(lifecycle ? { lifecycle } : {})
+      ...(lifecycle ? { lifecycle } : {}),
+      // Kept only when the host actually sent it; an older runtime omits the
+      // field and the caller falls back to inferring it from the count.
+      ...(typeof record.hasMore === 'boolean' ? { hasMore: record.hasMore } : {})
     }
   }
   if (typeof record.error === 'string') {

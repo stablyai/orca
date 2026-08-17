@@ -9,6 +9,10 @@ export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      /** Whether the transcript really holds turns older than this window. The
+       *  host knows exactly (it reads one past the limit); absent from an older
+       *  remote host, which leaves the caller to infer it from the count. */
+      hasMore?: boolean
     }
   | { error: string; notFound?: true }
 
@@ -20,6 +24,11 @@ export type NativeChatSubscriptionFrame =
       type: 'snapshot'
       messages: NativeChatMessage[]
       hasMore: boolean
+      /** Set only when the HOST answered. `hasMore` above may be a count
+       *  inference filled in by a remote adapter, which reports true for a
+       *  window filled to exactly the limit; that is fine for the load-earlier
+       *  affordance but not for anything that changes what a message says. */
+      hasMoreReported?: boolean
       error?: string
       lifecycle?: NativeChatTurnLifecycle
     }
@@ -27,6 +36,8 @@ export type NativeChatSubscriptionFrame =
       type: 'replacement'
       messages: NativeChatMessage[]
       hasMore: boolean
+      /** See the snapshot variant: set only when the HOST answered. */
+      hasMoreReported?: boolean
       lifecycle?: NativeChatTurnLifecycle
     }
   | {

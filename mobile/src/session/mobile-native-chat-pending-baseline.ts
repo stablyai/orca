@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import { nativeChatUserTextMatchText } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
 /**
@@ -45,7 +45,7 @@ export function rebaseMobileNativeChatPendingBaselines(
       return item
     }
     const reconcilesAgainstItsOwnTail =
-      Boolean(item.images?.length) || normalizeReconcileText(item.text) === ''
+      Boolean(item.images?.length) || nativeChatUserTextMatchText(item.text, false) === ''
     return item.baselineTailMessageId !== null || reconcilesAgainstItsOwnTail
       ? { ...item, baselineResolved: true }
       : { ...item, baselineResolved: true, baselineTailMessageId }

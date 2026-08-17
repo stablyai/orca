@@ -179,6 +179,9 @@ function MessageRow({
                 className="text-sm"
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
+                // A user turn is prose, so `[Image #1]: /tmp/a.png` must render
+                // as typed rather than parse away as a link definition.
+                disableLinkDefinitions
               />
             </>
           ) : (

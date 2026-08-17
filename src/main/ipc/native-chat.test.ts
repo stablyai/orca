@@ -164,6 +164,53 @@ describe('nativeChat:readSession handler', () => {
     }
   })
 
+  // The renderer decides from this flag whether a head turn's `[Image #n]` run is
+  // the user's own words (STA-4363); counting returned rows cannot tell an exactly
+  // full window from a trimmed one. The reader answers exactly, so the handler has
+  // to carry it — nothing type-links this result to the preload shape that reads it.
+  it('reports the host’s exact paging answer, including for an exactly full window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-hasmore-'))
+    tempRoots.push(root)
+    const projectDir = join(root, '.claude', 'projects', '-repo')
+    await mkdir(projectDir, { recursive: true })
+    await writeFile(
+      join(projectDir, 'sess-hasmore.jsonl'),
+      jsonLines(
+        [1, 2, 3].map((n) => ({
+          type: 'user',
+          uuid: `u-${n}`,
+          timestamp: `2026-06-01T10:00:0${n}.000Z`,
+          message: { role: 'user', content: `m${n}` }
+        }))
+      )
+    )
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      const trimmed = (await invokeReadSession({
+        agent: 'claude',
+        sessionId: 'sess-hasmore',
+        limit: 2
+      })) as { hasMore?: boolean }
+      expect(trimmed.hasMore).toBe(true)
+
+      const exactlyFull = (await invokeReadSession({
+        agent: 'claude',
+        sessionId: 'sess-hasmore',
+        limit: 3
+      })) as { messages: unknown[]; hasMore?: boolean }
+      expect(exactlyFull.messages).toHaveLength(3)
+      expect(exactlyFull.hasMore).toBe(false)
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
   it('emits snapshot and appended frames and tears down on destroy', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-sub-'))
     tempRoots.push(root)

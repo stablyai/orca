@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
+import { nativeChatUserMessageMatchText } from './mobile-native-chat-image-transcript-markers'
 
 export type MobileNativeChatLaunchDraftSeed = {
   text: string
@@ -63,7 +63,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     }
     // A user turn already in the transcript means the TUI prefill was submitted
     // or deliberately cleared; decline instead of resurrecting it.
-    if (messages.some((message) => normalizedUserText(message) !== null)) {
+    if (messages.some((message) => nativeChatUserMessageMatchText(message) !== null)) {
       seededLaunchDraftByKeyRef.current.set(draftKey, null)
       return
     }
@@ -98,7 +98,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     if (!seeded) {
       return
     }
-    const hasUserTurn = messages.some((message) => normalizedUserText(message) !== null)
+    const hasUserTurn = messages.some((message) => nativeChatUserMessageMatchText(message) !== null)
     if (!hasUserTurn && launchDraft?.trim()) {
       return
     }

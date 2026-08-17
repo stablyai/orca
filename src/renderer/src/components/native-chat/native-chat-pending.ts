@@ -162,10 +162,8 @@ export function prunePendingSends(
   const exactKeep = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
-    const available =
-      advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
-        contentKey
-      ) ?? 0
+    const inScope = messagesAfterPendingBoundary(messages, entry)
+    const available = advancedNativeChatUserContentCounts(inScope, pending).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
@@ -206,10 +204,8 @@ export function pendingSendsAsMessages(
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
-    const represented =
-      matchingNativeChatUserContentCounts(
-        messagesAfterPendingBoundary(existingMessages, entry)
-      ).get(contentKey) ?? 0
+    const inScope = messagesAfterPendingBoundary(existingMessages, entry)
+    const represented = matchingNativeChatUserContentCounts(inScope, pending).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))

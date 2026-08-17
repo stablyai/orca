@@ -95,6 +95,29 @@ describe('prunePendingSends', () => {
     expect(next).toEqual([])
   })
 
+  // The strip is bounded to the run it anchors to, so a folded image row keeps
+  // surplus markers the user typed. Reading those as photos let this row vouch
+  // for two sends and retire the two-photo one, which `prunePendingSends` then
+  // dropped from the bounded cache — the user's photos gone with no trace.
+  it('does not let one rendered photo retire a send that carried two', () => {
+    const folded: NativeChatMessage = {
+      id: 'm1',
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: '/tmp/x.png' },
+        { type: 'text', text: 'look [Image #2] [Image #3]' }
+      ],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const pending = [
+      { ...pendingOf('p-one', 'look'), imagePaths: ['/tmp/a.png'] },
+      { ...pendingOf('p-two', 'look'), imagePaths: ['/tmp/b.png', '/tmp/c.png'] }
+    ]
+    const next = prunePendingSends(pending, [folded, assistantMessage('m2', 'ok')])
+    expect(next.map((entry) => entry.id)).toEqual(['p-two'])
+  })
+
   it('drops an attachment pending send once a trailing-marker prompt advances', () => {
     const pending = [
       { ...pendingOf('p1', 'what do you see'), imagePaths: ['/Users/me/Downloads/3d.png'] }
@@ -116,11 +139,48 @@ describe('prunePendingSends', () => {
       ]
     }
     const next = prunePendingSends(
-      [pendingOf('p1', 'what do you see')],
+      [{ ...pendingOf('p1', 'what do you see'), imagePaths: ['/tmp/a.png'] }],
       [prompt, assistantMessage('m2', 'an image')]
     )
 
     expect(next).toEqual([])
+  })
+
+  // Why: a row like `[Image #1] fix` reads two ways — the user's own text, or a
+  // host echoing a 1-image send captioned "fix". Crediting BOTH readings let one
+  // turn retire two sends, so the photo send was pruned against a row rendering
+  // no photo and the preview was deleted for good.
+  it('does not let one row retire both a literal-marker send and a photo send', () => {
+    const boundary = assistantMessage('m0', 'ok', 1)
+    const pending = [
+      { ...pendingOf('p-literal', '[Image #1] fix'), afterMessageId: 'm0' },
+      { ...pendingOf('p-photo', 'fix'), afterMessageId: 'm0', imagePaths: ['/tmp/shot.png'] }
+    ]
+    const transcript = [
+      boundary,
+      userMessage('m1', '[Image #1] fix', 2),
+      assistantMessage('m2', 'done', 3)
+    ]
+
+    // The literal send is claimed by its own turn; the photo send has not landed.
+    expect(prunePendingSends(pending, transcript).map((entry) => entry.id)).toEqual(['p-photo'])
+  })
+
+  // Why: the marker reading is what retires a send on hosts that echo an image
+  // send as bare marker text with no source turn. It must survive, and it does
+  // whenever no other send is waiting on the row's literal reading.
+  it('still retires a photo send against a marker-only echo row', () => {
+    const boundary = assistantMessage('m0', 'ok', 1)
+    const pending = [
+      { ...pendingOf('p-photo', 'fix'), afterMessageId: 'm0', imagePaths: ['/tmp/shot.png'] }
+    ]
+    const transcript = [
+      boundary,
+      userMessage('m1', '[Image #1] fix', 2),
+      assistantMessage('m2', 'done', 3)
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
   })
 
   it('drops an attachment-only pending send once its image turn advances', () => {
@@ -219,6 +279,25 @@ function advancedGlueTranscript(row: string): NativeChatMessage[] {
   return [...glueTranscript(row), assistantMessage('glue-answer', 'done', 6100)]
 }
 
+/** The shape `normalizeImageTranscriptMessages` folds an image send into. */
+function foldedImageGlueTranscript(paths: readonly string[], row: string): NativeChatMessage[] {
+  return [
+    userMessage('glue-history', 'hello', 900),
+    GLUE_BOUNDARY,
+    {
+      id: 'glue-row',
+      role: 'user',
+      blocks: [
+        ...paths.map((path) => ({ type: 'image-ref' as const, path })),
+        { type: 'text' as const, text: row }
+      ],
+      timestamp: 6000,
+      source: 'transcript'
+    },
+    assistantMessage('glue-answer', 'done', 6100)
+  ]
+}
+
 describe('glued rapid sends', () => {
   it('retires both echoes when a lost Enter glued the pair into one row', () => {
     const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
@@ -246,6 +325,174 @@ describe('glued rapid sends', () => {
     expect(
       prunePendingSends(pending, advancedGlueTranscript('tell me a joke \t\n continue'))
     ).toEqual([])
+  })
+
+  // Why: the folded image turn is the only transcript evidence of a glued send
+  // that carried a photo. Ignoring rows with image blocks left both optimistic
+  // bubbles — one a duplicate of the user's photo — on screen indefinitely.
+  it('retires a glued pair whose first send carried an image', () => {
+    const pending = [
+      { ...gluePending('p1', 'look at this'), imagePaths: ['/tmp/a.png'] },
+      gluePending('p2', 'please')
+    ]
+
+    expect(
+      prunePendingSends(pending, foldedImageGlueTranscript(['/tmp/a.png'], 'look at this please'))
+    ).toEqual([])
+  })
+
+  it('hides a glued image pair as soon as the folded row lands', () => {
+    const pending = [
+      { ...gluePending('p1', 'look at this'), imagePaths: ['/tmp/a.png'] },
+      gluePending('p2', 'please')
+    ]
+
+    expect(
+      pendingSendsAsMessages(
+        pending,
+        foldedImageGlueTranscript(['/tmp/a.png'], 'look at this please')
+      )
+    ).toEqual([])
+  })
+
+  // Why: the image budget. A row carrying no image evidence must never retire a
+  // send whose photo has not landed, or the preview vanishes before it arrives.
+  it('does not let a text-only row consume a send that carried an image', () => {
+    const pending = [
+      { ...gluePending('p1', 'look at this'), imagePaths: ['/tmp/a.png'] },
+      gluePending('p2', 'please')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('look at this please'))).toEqual(
+      pending
+    )
+  })
+
+  // Why: the row's budget counts image blocks, never `[Image #n]` text. Marker
+  // text is image *evidence* for content keys, but a row showing no photo must
+  // not retire a send that carried one — that erases the preview before it lands.
+  it('does not let literal marker text inflate a text-only row image budget', () => {
+    const pending = [
+      { ...gluePending('p1', 'a'), imagePaths: ['/tmp/photo.png'] },
+      gluePending('p2', 'b [Image #1]')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('a b [Image #1]'))).toEqual(pending)
+  })
+
+  // Why: a textless send AHEAD of the glued pair separates nothing, so it must not
+  // block them. Treating it as a barrier there emptied the candidate list and
+  // killed glue for every row — and because such a send can sit unretired
+  // indefinitely, it stranded every later pair for the life of the pane.
+  it('retires a glued pair queued behind a leading uncaptioned image send', () => {
+    const pending = [
+      { ...gluePending('p0', ''), imagePaths: ['/tmp/p.png'] },
+      gluePending('p1', 'a'),
+      gluePending('p2', 'b')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('a b'))).toEqual([pending[0]])
+  })
+
+  it('retires a glued pair queued behind a leading marker-only image send', () => {
+    const pending = [
+      { ...gluePending('p0', '[Image #1]'), imagePaths: ['/tmp/p.png'] },
+      gluePending('p1', 'a'),
+      gluePending('p2', 'b')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('a b'))).toEqual([pending[0]])
+  })
+
+  it('retires a glued pair queued behind a leading whitespace-only send', () => {
+    const pending = [gluePending('p0', '   '), gluePending('p1', 'a'), gluePending('p2', 'b')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('a b'))).toEqual([pending[0]])
+  })
+
+  // Why: an uncaptioned photo send has no match text, so it can never appear in a
+  // glued row — but it still separates the sends either side of it. Skipping it
+  // would retire those two echoes while their sends are still in flight.
+  it('does not glue across an uncaptioned image send', () => {
+    const pending = [
+      gluePending('p0', 'fix'),
+      { ...gluePending('p1', ''), imagePaths: ['/tmp/p.png'] },
+      gluePending('p2', 'bug')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('fix bug'))).toEqual(pending)
+  })
+
+  // Why: a send whose whole text is the placeholder normalizes to empty too.
+  it('does not glue across a marker-only image send', () => {
+    const pending = [
+      gluePending('p0', 'fix'),
+      { ...gluePending('p1', '[Image #1]'), imagePaths: ['/tmp/p.png'] },
+      gluePending('p2', 'bug')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('fix bug'))).toEqual(pending)
+  })
+
+  it('does not glue across a whitespace-only send', () => {
+    const pending = [gluePending('p0', 'fix'), gluePending('p1', '   '), gluePending('p2', 'bug')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('fix bug'))).toEqual(pending)
+  })
+
+  // Why: some hosts echo an image send as bare `[Image #n]` text with no
+  // `[Image: source: …]` turn, so the markers are the only evidence the photo
+  // landed. Reading such a row literally left both echoes — one a duplicate
+  // photo — on screen forever.
+  it('retires a glued pair against a marker-only host echo row', () => {
+    const pending = [
+      { ...gluePending('p1', 'look'), imagePaths: ['/tmp/a.png'] },
+      gluePending('p2', 'here')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('[Image #1] look here'))).toEqual([])
+  })
+
+  it('retires a glued pair when the host echo puts the marker last', () => {
+    const pending = [
+      { ...gluePending('p1', 'look'), imagePaths: ['/tmp/a.png'] },
+      gluePending('p2', 'here')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('look here [Image #1]'))).toEqual([])
+  })
+
+  // Why: the literal reading is tried FIRST, so a marker the user actually typed
+  // still matches verbatim and never falls through to the marker-echo reading.
+  it('matches a user-typed marker literally rather than as an image echo', () => {
+    const pending = [gluePending('p1', 'what is [Image #1]'), gluePending('p2', 'about')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('what is [Image #1] about'))).toEqual(
+      []
+    )
+  })
+
+  // Why: glue is a CONTIGUOUS leading run. Skipping a send the row cannot afford
+  // would match a non-contiguous subsequence and retire echoes the row never
+  // represented — the bubble vanishes though its send is still in flight.
+  it('does not glue across an image send that landed between two text sends', () => {
+    const pending = [
+      gluePending('p0', 'fix'),
+      { ...gluePending('p1', 'the'), imagePaths: ['/tmp/p.png'] },
+      gluePending('p2', 'bug')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('fix bug'))).toEqual(pending)
+  })
+
+  it('does not let a row glue past a leading image send it cannot afford', () => {
+    const pending = [
+      { ...gluePending('p0', 'photo caption'), imagePaths: ['/tmp/p.png'] },
+      gluePending('p1', 'a'),
+      gluePending('p2', 'b')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('a b'))).toEqual(pending)
   })
 
   it('retires three prompts collapsed into one row with mixed boundaries', () => {
@@ -468,7 +715,7 @@ describe('launchPromptAsMessage', () => {
     ).toBeNull()
   })
 
-  it('uses pending-send normalization for large multiline generated prompts', () => {
+  it('does not strip literal markers from launch-prompt identity', () => {
     const prompt = [
       '[Image #1] Resolve the failing checks:',
       '',
@@ -488,17 +735,17 @@ describe('launchPromptAsMessage', () => {
       { ...assistantMessage('a1', 'I will fix it'), timestamp: 44 }
     ]
 
-    expect(
-      shouldPruneLaunchPrompt(
-        {
-          tabId: 'tab-1',
-          agent: 'codex',
-          text: prompt,
-          createdAt: 42
-        },
-        transcript
-      )
-    ).toBe(true)
+    const entry = { tabId: 'tab-1', agent: 'codex' as const, text: prompt, createdAt: 42 }
+
+    expect(launchPromptAsMessage(entry, transcript)).not.toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, transcript)).toBe(false)
+
+    const exact = [
+      { ...userMessage('u1', prompt), timestamp: 43 },
+      { ...assistantMessage('a1', 'I will fix it'), timestamp: 44 }
+    ]
+    expect(launchPromptAsMessage(entry, exact)).toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, exact)).toBe(true)
   })
 
   it('keeps the launch prompt until the transcript advances past the user turn', () => {

@@ -13,9 +13,30 @@ export function nextNativeChatLimit(currentLimit: number): number {
   return currentLimit + NATIVE_CHAT_PAGE
 }
 
-/** Whether an older page may still exist: the last read filled the window, so
- *  there could be more behind it. If the read returned fewer than requested we
- *  reached the head of the transcript and there is nothing older to load. */
-export function hasMoreNativeChatHistory(returnedCount: number, requestedLimit: number): boolean {
-  return returnedCount >= requestedLimit
+/**
+ * Whether an older page may still exist.
+ *
+ * This drives the load-earlier affordance only. Whether older history exists is
+ * necessary but not sufficient: the next read has to be able to REACH it, so a
+ * short read still ends pagination. The runtime RPC host clamps the window to
+ * 2000 turns, and past that it keeps answering `hasMore: true` while returning
+ * the same capped tail — taking its word alone leaves a "Load earlier" button
+ * that re-reads the whole window on every scroll and never loads anything.
+ *
+ * `reported` is the host's own answer, which is exact — it reads one turn past
+ * the limit to decide — so a reported `false` ends pagination immediately,
+ * sparing the wasted read the count rule alone costs on an exactly-full window.
+ *
+ * The count inference is deliberately conservative and NOT exact: a transcript
+ * whose length is exactly the requested limit fills the window without anything
+ * behind it, and still reports true. That is safe here (one wasted read) but not
+ * for anything that changes what a message says — those callers take the host's
+ * reported value directly rather than going through this function.
+ */
+export function hasMoreNativeChatHistory(
+  returnedCount: number,
+  requestedLimit: number,
+  reported?: boolean
+): boolean {
+  return reported === false ? false : returnedCount >= requestedLimit
 }

@@ -6,11 +6,12 @@ import { assembleNativeChatSession } from './native-chat-session-assembler'
 
 export function prepareNativeChatLiveMessages(
   messages: NativeChatMessage[],
-  agent: AgentType
+  agent: AgentType,
+  windowHeadMessageId?: string
 ): NativeChatMessage[] {
   const commandNames = new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
   const surfaced = surfaceSkillInvocationUserTurns(messages, commandNames)
-  const normalized = normalizeImageTranscriptMessages(surfaced)
+  const normalized = normalizeImageTranscriptMessages(surfaced, { windowHeadMessageId })
   if (!hasMixedSources(normalized)) {
     return normalized
   }
@@ -18,7 +19,8 @@ export function prepareNativeChatLiveMessages(
   return assembleNativeChatSession({
     sources: { transcript: surfaced },
     sessionId: null,
-    agent
+    agent,
+    windowHeadMessageId
   }).messages
 }
 

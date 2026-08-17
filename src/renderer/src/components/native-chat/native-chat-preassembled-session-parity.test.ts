@@ -401,3 +401,33 @@ function mulberry32(seed: number): () => number {
     return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
   }
 }
+
+// The paging signal is only worth anything if it survives the whole live path.
+// A flag that stops at a call site is dead code the pure-function tests can't see.
+describe('prepareNativeChatLiveMessages forwards the paging signal to the marker fold', () => {
+  const trimmedRun = [
+    message('u1', { role: 'user', blocks: [{ type: 'text', text: '[Image #1] what do you see' }] })
+  ]
+
+  it('strips the named window-head run when older history is still pageable', () => {
+    const out = prepareNativeChatLiveMessages(trimmedRun, 'claude', 'u1')
+    expect(out[0]!.blocks).toEqual([{ type: 'text', text: 'what do you see' }])
+  })
+
+  it('keeps the marker verbatim when the window holds the whole conversation', () => {
+    const out = prepareNativeChatLiveMessages(trimmedRun, 'claude')
+    expect(out[0]!.blocks).toEqual([{ type: 'text', text: '[Image #1] what do you see' }])
+  })
+
+  // Why: the mixed-source branch re-assembles instead of returning the first
+  // pass, so it needs the signal handed on independently.
+  it('forwards the signal through the mixed-source reassembly branch', () => {
+    const mixed = [
+      ...trimmedRun,
+      message('h1', { source: 'hook', timestamp: 5, blocks: [{ type: 'text', text: 'thinking' }] })
+    ]
+    const out = prepareNativeChatLiveMessages(mixed, 'claude', 'u1')
+    const user = out.find((m) => m.role === 'user')
+    expect(user!.blocks).toEqual([{ type: 'text', text: 'what do you see' }])
+  })
+})

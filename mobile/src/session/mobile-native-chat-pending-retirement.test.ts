@@ -237,6 +237,27 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, [pendingSend('p1', 'one', 'm1')])).toEqual([])
   })
 
+  // An image row is the echo of an image send, and image sends never glue. Keying
+  // it by its caption would let a photo turn — whose caption happens to spell the
+  // run — retire typed sends it has nothing to do with, erasing their bubbles.
+  it('never lets a photo turn’s caption glue unrelated typed sends', () => {
+    const messages = [
+      assistantTurn('m1', 'ready', 1000),
+      {
+        id: 'm2',
+        role: 'user' as const,
+        blocks: [
+          { type: 'image-ref' as const, path: '/tmp/a.png' },
+          { type: 'text' as const, text: 'one two' }
+        ],
+        timestamp: 5000,
+        source: 'transcript' as const
+      }
+    ]
+    const pending = [pendingSend('p1', 'one', 'm1'), pendingSend('p2', 'two', 'm1')]
+    expect(retiredIds(messages, pending)).toEqual([])
+  })
+
   // The cursor slides past a head that cannot match, so a turn may try several
   // start positions — but one inspection budget covers the whole slide, keeping
   // the work linear in the run length rather than quadratic. The attempt already

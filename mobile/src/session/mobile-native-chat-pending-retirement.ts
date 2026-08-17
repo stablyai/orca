@@ -1,10 +1,19 @@
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countImageSourceTurnsAfter,
-  normalizeReconcileText,
-  normalizedUserText
+  userTextOccurrenceCounts
 } from './mobile-native-chat-draft-reconcile'
+import {
+  nativeChatUserMessageMatchText,
+  nativeChatUserTextMatchText
+} from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+
+/** A send that carried no image owns its `[Image #n]` run as literal text, so it
+ *  keys verbatim; only an image send lets the marker stand in for a photo. */
+function pendingMatchText(item: MobileNativeChatPendingMessage): string {
+  return nativeChatUserTextMatchText(item.text, Boolean(item.images?.length))
+}
 
 const SPACE = ' '
 const NO_PENDING_IDS: ReadonlySet<string> = new Set()
@@ -33,13 +42,17 @@ export function selectGluedPendingIds(
   const turns: UserTurn[] = []
   for (const [index, message] of messages.entries()) {
     messageIndexById.set(message.id, index)
-    const text = normalizedUserText(message)
+    // An image row can only be the echo of an image send, and those never glue;
+    // keying it as text would let a photo turn claim unrelated typed sends.
+    const text = message.blocks.some(isImageRefBlock)
+      ? null
+      : nativeChatUserMessageMatchText(message)
     if (text) {
       turns.push({ index, text })
     }
   }
   const segments: GlueSegment[] = pending.map((item) => {
-    const text = normalizeReconcileText(item.text)
+    const text = pendingMatchText(item)
     const tail =
       item.baselineTailMessageId === null
         ? -1
@@ -138,13 +151,9 @@ export function retireLandedMobileNativeChatPending(
   current: MobileNativeChatPendingMessage[],
   landedImagePendingIds: ReadonlySet<string>
 ): MobileNativeChatPendingMessage[] {
-  const landedCounts = new Map<string, number>()
-  for (const message of messages) {
-    const text = normalizedUserText(message)
-    if (text) {
-      landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
-    }
-  }
+  // Image-bearing rows are excluded: they echo image sends, which retire through
+  // their local-preview binding, not through a text count.
+  const landedCounts = userTextOccurrenceCounts(messages)
   const landedPendingIds = new Set<string>()
   for (const item of current) {
     if (landedImagePendingIds.has(item.id)) {
@@ -161,7 +170,7 @@ export function retireLandedMobileNativeChatPending(
       item.text.trim() === ''
         ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >=
           item.expectedOccurrence
-        : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence
+        : (landedCounts.get(pendingMatchText(item)) ?? 0) >= item.expectedOccurrence
     if (landed) {
       landedPendingIds.add(item.id)
     }

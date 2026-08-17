@@ -202,8 +202,37 @@ describe('runtime subscribe', () => {
     expect(onFrame).toHaveBeenNthCalledWith(3, {
       type: 'replacement',
       messages: [message('m-replacement')],
+      hasMore: true,
+      // The host sent a real boolean here, unlike frames 1 and 2.
+      hasMoreReported: true
+    })
+  })
+
+  // Why: the first snapshot folds a count inference into `hasMore` when the host
+  // omits it, so `hasMore` alone cannot say whether the host answered. Callers
+  // that change what a message SAYS — the image-marker fold — read the reported
+  // field instead, and a guessed value must never look like an answer to them.
+  it('does not report a paging answer the host never gave', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    // Exactly `limit` rows and no hasMore: the inference says true, nobody said so.
+    deliver({ type: 'snapshot', messages: [message('m-1'), message('m-2')] })
+
+    expect(onFrame).toHaveBeenNthCalledWith(1, {
+      type: 'snapshot',
+      messages: [message('m-1'), message('m-2')],
       hasMore: true
     })
+    expect(onFrame.mock.calls[0]?.[0]).not.toHaveProperty('hasMoreReported')
   })
 
   it('validates lifecycle metadata on runtime stream frames', async () => {
