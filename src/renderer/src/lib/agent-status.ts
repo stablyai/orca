@@ -108,6 +108,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   pi: true,
   omp: true,
   'prime-agent': true,
+  gjc: true,
   gemini: true,
   antigravity: true,
   aider: true,
