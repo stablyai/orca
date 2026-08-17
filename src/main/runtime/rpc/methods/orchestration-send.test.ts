@@ -501,6 +501,42 @@ describe('orchestration RPC methods', () => {
       expect(foreign.lifecycle.reason).toBe('The Dispatch capability is invalid.')
       expect(foreign.lifecycle.reason).not.toContain('settled')
       expect(foreign.lifecycle.reason).not.toContain('escalation')
+
+      // Why: identity has three legs — token, pane, process incarnation — and
+      // revocation must stay behind all of them. A caller holding the real
+      // token from the wrong pane or a restarted process learns which check it
+      // failed and still nothing about settlement.
+      ctx = { runtime, orchestrationCapability: capability }
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_other:leaf_other' : coordinatorPaneKey
+      )
+      const wrongPane = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { code: string; reason: string } }
+      expect(wrongPane.lifecycle.code).toBe('dispatch_capability_invalid')
+      expect(wrongPane.lifecycle.reason).toBe('The caller is not the Dispatch pane.')
+      expect(wrongPane.lifecycle.reason).not.toContain('settled')
+      expect(wrongPane.lifecycle.reason).not.toContain('escalation')
+
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+      )
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
+        'runtime_test:term_worker:2'
+      )
+      const wrongProcess = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { code: string; reason: string } }
+      expect(wrongProcess.lifecycle.code).toBe('dispatch_capability_invalid')
+      expect(wrongProcess.lifecycle.reason).toBe('The Dispatch process incarnation changed.')
+      expect(wrongProcess.lifecycle.reason).not.toContain('settled')
+      expect(wrongProcess.lifecycle.reason).not.toContain('escalation')
     })
 
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
