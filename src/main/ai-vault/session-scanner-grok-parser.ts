@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -36,7 +36,7 @@ export async function parseGrokSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
     return null
   }
@@ -62,12 +62,13 @@ async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
   sessionDir: string
 ): Promise<void> {
+  const input = openTranscriptReadStream(
+    join(sessionDir, 'chat_history.jsonl'),
+    { encoding: 'utf-8' },
+    'scan'
+  )
+  const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    const lines = createInterface({
-      input: createReadStream(join(sessionDir, 'chat_history.jsonl'), { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
-
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
@@ -111,8 +112,18 @@ async function consumeGrokChatHistory(
         seedFirstUserPrompt: false
       })
     }
-  } catch {
-    // Summary-only sessions still provide enough metadata for the Vault list.
+  } catch (error) {
+    // Summary-only sessions still provide enough metadata for the Vault list. A
+    // gate refusal is a different thing — the history exists but is unreachable,
+    // so a message-less session must not be cached under the summary's mtime.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-read failure cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
   }
 }
 

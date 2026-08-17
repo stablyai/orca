@@ -53,8 +53,9 @@ describe('Cmd+J activation focus routing (#9939)', () => {
     )
     const activationCalls =
       handler.match(/const activation = activateAndRevealWorktree\(activeMatch\.id\)/g)?.length ?? 0
-    // Both issue/PR match paths must restore focus when terminal routing declines.
-    expect(activationCalls).toBe(2)
+    // Typed #N still jumps from create. Pasted issue/PR URLs jump via the
+    // worktree row (handleSelectWorktree), which has its own focus routing.
+    expect(activationCalls).toBe(1)
     expect(
       handler.match(
         /if \(!queueWorkspaceActivationTerminalFocus\(activeMatch\.id, activation\)\) \{\s*focusFallbackSurface\(\)\s*\}/g

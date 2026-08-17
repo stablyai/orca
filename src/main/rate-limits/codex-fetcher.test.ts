@@ -2,11 +2,20 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const {
+  childSpawnMock,
+  readFileMock,
+  resolveCodexCommandMock,
+  ptySpawnMock,
+  isBackfillPendingMock,
+  startBackfillRecoveryMock
+} = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
+  ptySpawnMock: vi.fn(),
+  isBackfillPendingMock: vi.fn(() => false),
+  startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
 
 vi.mock('node:child_process', () => ({
@@ -23,6 +32,14 @@ vi.mock('../codex-cli/command', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
+}))
+
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexStateDbBackfillPending: isBackfillPendingMock
+}))
+
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock
 }))
 
 // Default to signed-in so the spawn paths under test still run; the auth gate
@@ -116,6 +133,7 @@ describe('fetchCodexRateLimits', () => {
     resolveCodexCommandMock.mockReturnValue('codex')
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    isBackfillPendingMock.mockReturnValue(false)
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -134,6 +152,20 @@ describe('fetchCodexRateLimits', () => {
       error: 'Codex not signed in'
     })
 
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not let a quota probe steal an incomplete state-DB backfill lease', async () => {
+    isBackfillPendingMock.mockReturnValue(true)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '/managed-home', allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('session index')
+    })
+    expect(startBackfillRecoveryMock).toHaveBeenCalledWith('/managed-home')
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })

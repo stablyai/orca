@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // STA repro (silent-send incident): `orca terminal send` to a leaf whose ptyId
 // no provider in this process owns was a silent no-op reported as success —
@@ -233,6 +233,7 @@ type StoredMessageRow = {
 
 function makeOrchestrationDbStub(toHandle: () => string) {
   const rows: StoredMessageRow[] = []
+  const runMailbox = 'run:run_test'
   const markAsDelivered = vi.fn((ids: string[]) => {
     for (const row of rows) {
       if (ids.includes(row.id)) {
@@ -240,9 +241,18 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       }
     }
   })
+  const markAsUndelivered = vi.fn((ids: string[]) => {
+    for (const row of rows) {
+      if (ids.includes(row.id) && row.read === 0) {
+        row.delivered_at = null
+      }
+    }
+  })
   return {
     rows,
+    runMailbox,
     markAsDelivered,
+    markAsUndelivered,
     insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
         id: `msg_${rows.length + 1}`,
@@ -266,10 +276,36 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
         rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
+      getUndeliveredUnreadMailboxHandles: () => [toHandle()],
       getActiveCoordinatorRun: () => null,
+      getCurrentRunForPane: () => ({ id: 'run_test' }),
+      getRun: () => ({ id: 'run_test', coordinator_handle: toHandle() }),
+      hasUndeliveredDirectMessageForRun: (runId: string, handle: string) =>
+        rows.some(
+          (row) =>
+            row.run_id === runId && row.to_handle === handle && row.read === 0 && !row.delivered_at
+        ),
+      routeUnreadDirectMessagesToRunMailbox: (runId: string, handle: string) => {
+        const routed = rows.filter(
+          (row) => row.run_id === runId && row.to_handle === handle && row.read === 0
+        )
+        for (const row of routed) {
+          row.to_handle = runMailbox
+        }
+        return {
+          routedCount: routed.length,
+          hasMore: false,
+          types: [...new Set(routed.map((row) => row.type))]
+        }
+      },
+      areUnreadMessages: (handle: string, ids: string[]) =>
+        ids.every((id) =>
+          rows.some((row) => row.id === id && row.to_handle === handle && row.read === 0)
+        ),
       // Consulted by onPtyExit's dispatch-failure path.
       getActiveDispatchForTerminal: () => null,
       markAsDelivered,
+      markAsUndelivered,
       close: () => {}
     }
   }
@@ -327,7 +363,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
     expect(write).toHaveBeenCalledWith(
       STALE_PTY_ID,
-      expect.stringContaining('Subject: for the old session')
+      expect.stringContaining('You have 1 orchestration message')
     )
   })
 
@@ -343,7 +379,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
     const pulled: string[] = []
     const checkResumed = runtime
-      .waitForMessage(handle, { typeFilter: ['worker_done'], timeoutMs: 60_000 })
+      .waitForMessage(stub.runMailbox, { typeFilter: ['worker_done'], timeoutMs: 60_000 })
       .then(() => {
         for (const row of stub.rows) {
           if (row.type === 'worker_done' && row.read === 0) {
@@ -369,7 +405,10 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
-    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
+    const pointers = payloads.filter((data) => data.includes('orca orchestration check'))
+    expect(pointers).toHaveLength(1)
+    expect(pointers[0]).toContain('You have 1 orchestration message')
+    expect(payloads.some((data) => data.includes('unclaimed status'))).toBe(false)
     expect(payloads.some((data) => data.includes('Subject: worker completion'))).toBe(false)
   })
 
@@ -386,7 +425,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
         })
     })
 
-    const waitPromise = runtime.waitForMessage(handle, {
+    const waitPromise = runtime.waitForMessage(stub.runMailbox, {
       typeFilter: ['worker_done'],
       timeoutMs: 60_000
     })
@@ -397,7 +436,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
     // The reserving waiter goes away, then its type finally arrives — and the
     // probe dedup drops this notify, so only the continuation can deliver it.
-    runtime.cancelMessageWaiters(handle)
+    runtime.cancelMessageWaiters(stub.runMailbox)
     await expect(waitPromise).resolves.toBe('cancelled')
     stub.insert('late completion', 'worker_done')
     runtime.notifyMessageArrived(handle, 'worker_done')
@@ -411,8 +450,11 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
-    expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
-    expect(payloads.some((data) => data.includes('Subject: late completion'))).toBe(true)
+    const pointers = payloads.filter((data) => data.includes('orca orchestration check'))
+    expect(pointers).toHaveLength(1)
+    expect(pointers[0]).toContain('You have 2 orchestration messages')
+    expect(payloads.some((data) => data.includes('unclaimed status'))).toBe(false)
+    expect(payloads.some((data) => data.includes('late completion'))).toBe(false)
   })
 
   it('keeps messages queued instead of marking a proven-absent pty delivered', async () => {
@@ -440,12 +482,14 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     // Why twice: the probe continuation yields a turn before delivering.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, expect.stringContaining('Subject: hello'))
+    expect(write).toHaveBeenCalledWith(
+      STALE_PTY_ID,
+      expect.stringContaining('You have 1 orchestration message')
+    )
   })
 
-  // Why: delivered_at stamps only in the delayed-Enter callback, so the whole
-  // write→settle span — not just the probe — must be single-flight; a trigger
-  // landing inside the 500ms window would re-read the same un-stamped rows.
+  // Why: the whole pointer→Enter span must be single-flight; a trigger inside
+  // the 500ms window must park until the sequence watermark advances.
   it('delivers once across concurrent probe triggers and an in-window re-trigger, then flushes parked rows', async () => {
     vi.useFakeTimers()
     try {
@@ -464,36 +508,39 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
 
-      const firstSubjectWrites = () =>
+      const pointerWrites = () =>
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('Subject: exactly once')
+          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
         )
-      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(pointerWrites()).toHaveLength(1)
+      expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
 
-      // Re-trigger INSIDE the 500ms Enter window: the first batch is written but
-      // not yet stamped, so a fresh probe cycle would re-inject it. (On the
-      // fixed code no new probe is armed — the trigger parks; resolveProbe then
-      // re-resolves the settled first probe, a no-op.)
+      // Re-trigger inside the Enter window parks; resolving the settled first
+      // probe again is a no-op.
       stub.insert('second message')
       runtime.deliverPendingMessagesForHandle(handle)
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
-      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(pointerWrites()).toHaveLength(1)
 
-      // Enter fires, delivered_at stamps, the flight settles, and the parked
-      // trigger re-runs on its own — arming a fresh probe for the new row.
+      // The submit-time liveness probe settles the flight, then the parked
+      // trigger arms its own delivery probe for the newer sequence.
       await vi.advanceTimersByTimeAsync(500)
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
 
-      const secondSubjectWrites = write.mock.calls.filter(
-        ([, data]) => typeof data === 'string' && data.includes('Subject: second message')
-      )
-      expect(secondSubjectWrites).toHaveLength(1)
-      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(pointerWrites()).toHaveLength(2)
+      expect(pointerWrites()[1]?.[1]).toContain('You have 1 orchestration message')
 
       await vi.advanceTimersByTimeAsync(500)
-      expect(stub.rows.every((row) => row.delivered_at !== null)).toBe(true)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
+      expect(stub.rows.map((row) => row.delivered_at)).toEqual(
+        stub.rows.map(() => expect.any(String))
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -514,35 +561,32 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
 
-      const firstSubjectWrites = () =>
+      const pointerWrites = () =>
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('Subject: first')
+          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
         )
-      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(pointerWrites()).toHaveLength(1)
+      expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
       expect(probe).not.toHaveBeenCalled()
 
-      // Settle flushes the parked trigger; the second row delivers alone —
-      // its batch must not re-contain the already-stamped first row.
+      // Settle flushes the parked trigger; both still-pending rows are counted,
+      // while the newer sequence authorizes exactly one fresh pointer.
       await vi.advanceTimersByTimeAsync(500)
-      const secondOnlyWrites = write.mock.calls.filter(
-        ([, data]) =>
-          typeof data === 'string' &&
-          data.includes('Subject: second') &&
-          !data.includes('Subject: first')
-      )
-      expect(secondOnlyWrites).toHaveLength(1)
-      expect(firstSubjectWrites()).toHaveLength(1)
+      expect(pointerWrites()).toHaveLength(2)
+      expect(pointerWrites()[1]?.[1]).toContain('You have 1 orchestration message')
 
       await vi.advanceTimersByTimeAsync(500)
-      expect(stub.rows.every((row) => row.delivered_at !== null)).toBe(true)
+      expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
+      expect(stub.rows.map((row) => row.delivered_at)).toEqual(
+        stub.rows.map(() => expect.any(String))
+      )
     } finally {
       vi.useRealTimers()
     }
   })
 
   // Why: cold restore respawns under the SAME session id. An Enter armed for
-  // the dead incarnation must not fire into the replacement — it would inject
-  // \r and stamp rows the new session never received.
+  // the dead incarnation must not submit stale input into the replacement.
   it('retires an armed Enter when the pty exits and respawns under the same id inside the window', async () => {
     vi.useFakeTimers()
     try {
@@ -560,7 +604,8 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
-      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      expect(stub.markAsDelivered).toHaveBeenCalledOnce()
+      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
 
       // The replacement's own delivery starts a fresh flight and completes —
@@ -569,18 +614,19 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       expect(
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
+          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
         )
       ).toHaveLength(1)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
       const payloadWrites = write.mock.calls.filter(
-        ([, data]) => typeof data === 'string' && data.includes('Subject: for the old session')
+        ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
       )
       expect(payloadWrites).toHaveLength(2)
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
-      expect(stub.rows[0].delivered_at).not.toBeNull()
+      expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
+      expect(stub.rows[0].delivered_at).toEqual(expect.any(String))
     } finally {
       vi.useRealTimers()
     }
@@ -593,24 +639,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
         probePtyLiveness: async () => null,
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
-      const internals = runtime as unknown as {
-        messageDeliveryFlightsByPtyId: Map<string, unknown>
-        parkedMessageRedeliveryLeavesByPtyId: Map<string, unknown>
-      }
       stub.insert('first')
       runtime.deliverPendingMessagesForHandle(handle)
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
-      expect(internals.messageDeliveryFlightsByPtyId.size).toBe(1)
-      expect(internals.parkedMessageRedeliveryLeavesByPtyId.size).toBe(1)
+      await Promise.resolve()
 
       runtime.onPtyExit(STALE_PTY_ID, 0)
-      expect(internals.messageDeliveryFlightsByPtyId.size).toBe(0)
-      expect(internals.parkedMessageRedeliveryLeavesByPtyId.size).toBe(0)
 
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
-      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      expect(stub.markAsDelivered).toHaveBeenCalledOnce()
+      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
       expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
@@ -640,7 +680,8 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
-      expect(stub.markAsDelivered).not.toHaveBeenCalled()
+      expect(stub.markAsDelivered).toHaveBeenCalledOnce()
+      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()

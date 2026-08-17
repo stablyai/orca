@@ -25,7 +25,11 @@ const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok', 
 export function buildWindowsGrokHookScript(): string {
   return [
     '@echo off',
-    'setlocal',
+    // Why: a bare `setlocal` inherits delayed expansion from the caller (`cmd /v:on`
+    // or the Command Processor registry default), and every `!` in a percent-expanded
+    // value on the curl line is then eaten as a delayed reference — silently mangling
+    // paneKey and dropping worktreeId. `!` is legal in a Windows path.
+    'setlocal DisableDelayedExpansion',
     'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
     ...buildWindowsHookEnvironmentGuardLines(),
     'set "ORCA_GROK_HOME="',

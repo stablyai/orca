@@ -65,7 +65,9 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
 
 export class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
+  private recoveryPath: MobileConnectionPath | null = null
   private generation = 1
+  private readonly pathListeners = new Set<() => void>()
 
   constructor(state: ConnectionState, path: MobileConnectionPath) {
     super(state)
@@ -89,14 +91,28 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
         throw new Error('migration superseded')
       }
       this.path = path
+      this.recoveryPath = null
       this.generation += 1
+      // Connected-state publication carries the migration cleanup.
       this.publishState('connected')
     }
   )
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
   getActivePath = () => this.path
-  // This fake migrates instantly, so no dial is ever in flight to name.
-  getPendingPath = () => null
+  getPendingPath = () => (this.getState() === 'connected' ? null : this.recoveryPath)
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+    const previous = this.getPendingPath()
+    this.recoveryPath = path
+    if (previous !== this.getPendingPath()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  onConnectionPathChange = vi.fn((listener: () => void) => {
+    this.pathListeners.add(listener)
+    return () => this.pathListeners.delete(listener)
+  })
   getGeneration = () => this.generation
 }
 

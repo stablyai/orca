@@ -1,6 +1,6 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type AutomationProjectGroup = {
   projectKey: string

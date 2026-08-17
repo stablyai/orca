@@ -6,7 +6,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-search'
 
@@ -20,27 +20,30 @@ export type WorkspaceTabPaletteActivationResult =
   | { status: 'activated' }
   | { status: 'failed'; reason: WorkspaceTabPaletteActivationFailure }
 
+// Why: callers outside Cmd+J hold only the identifiers, not a full search result.
+export type WorkspaceTabPaletteActivationTarget = Pick<
+  WorkspaceTabPaletteSearchResult,
+  'contentType' | 'entityId' | 'groupId' | 'tabId' | 'worktreeId'
+> & { executionHostId?: ExecutionHostId }
+
 type WorkspaceTabPaletteActivationState = Pick<
   AppState,
   | 'activateTab'
-  | 'activeGroupIdByWorktree'
   | 'focusGroup'
+  | 'getKnownWorktreeById'
   | 'groupsByWorktree'
   | 'openFiles'
-  | 'repos'
-  | 'settings'
   | 'setActiveFile'
   | 'setActiveTab'
   | 'setActiveTabType'
   | 'unifiedTabsByWorktree'
-  | 'worktreesByRepo'
 >
 
 function validateTarget(
   state: WorkspaceTabPaletteActivationState,
-  result: WorkspaceTabPaletteSearchResult
+  result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationFailure | null {
-  if (!findWorktreeById(state.worktreesByRepo, result.worktreeId)) {
+  if (!state.getKnownWorktreeById(result.worktreeId, result.executionHostId)) {
     return 'missing-worktree'
   }
   const group = (state.groupsByWorktree[result.worktreeId] ?? []).find(
@@ -72,7 +75,7 @@ function validateTarget(
 }
 
 export function activateWorkspaceTabPaletteResult(
-  result: WorkspaceTabPaletteSearchResult
+  result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationResult {
   const initialState = useAppStore.getState()
   const initialFailure = validateTarget(initialState, result)
@@ -80,7 +83,11 @@ export function activateWorkspaceTabPaletteResult(
     return { status: 'failed', reason: initialFailure }
   }
 
-  const activated = activateAndRevealWorktree(result.worktreeId)
+  const executionHostId =
+    result.executionHostId ?? initialState.getKnownWorktreeById(result.worktreeId)?.hostId
+  const activated = executionHostId
+    ? activateAndRevealWorktree(result.worktreeId, { executionHostId })
+    : activateAndRevealWorktree(result.worktreeId)
   if (!activated) {
     return { status: 'failed', reason: 'missing-worktree' }
   }

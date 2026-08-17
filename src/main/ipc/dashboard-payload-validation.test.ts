@@ -45,6 +45,7 @@ const SNAPSHOT = {
       worktreeName: 'Dashboard',
       hostKind: 'ssh',
       executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
       workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
@@ -68,6 +69,7 @@ const SNAPSHOT = {
       parentWorktreeId: 'parent-worktree-1',
       hostKind: 'ssh',
       executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
       workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
@@ -141,6 +143,12 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], executionHostId: `ssh:${'x'.repeat(4_097)}` }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], hostLabel: 'x'.repeat(1_025) }]
       })
     ).toBe(false)
     expect(
@@ -236,6 +244,12 @@ describe('dashboard payload validation', () => {
         workspaces: [{ ...SNAPSHOT.workspaces[0], worktreeName: 'x'.repeat(1_025) }]
       })
     ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], hostLabel: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
   })
 
   it('validates bounded launch choices and spawn requests', () => {
@@ -279,6 +293,8 @@ describe('dashboard payload validation', () => {
       localWindowsConpty: true,
       osRelease: '10.0.22631',
       windowsShiftEnterEncoding: 'alt-enter',
+      windowsInputRecordPasteNewline: 'alt-enter',
+      ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
     expect(
@@ -292,6 +308,9 @@ describe('dashboard payload validation', () => {
       { ...terminalInput, localWindowsConpty: 'true' },
       { ...terminalInput, osRelease: 'x'.repeat(1_025) },
       { ...terminalInput, windowsShiftEnterEncoding: 'enter' },
+      { ...terminalInput, forceBracketedMultilineTextPaste: false },
+      { ...terminalInput, windowsInputRecordPasteNewline: 'enter' },
+      { ...terminalInput, ctrlEnterCsiU: 'true' },
       { ...terminalInput, kittyKeyboardAdvertised: 1 }
     ]) {
       expect(
@@ -314,6 +333,7 @@ describe('dashboard payload validation', () => {
         hostPlatform: 'plan9',
         localWindowsConpty: false,
         windowsShiftEnterEncoding: 'csi-u',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: true
       }
     }

@@ -1,10 +1,17 @@
 // Error classes shared across the daemon protocol boundary (client, server,
 // host). Split from types.ts, which is capped for wire-shape declarations.
+const ATTACH_CANCELED_PREFIX = 'Attach canceled for session '
+
 export class TerminalAttachCanceledError extends Error {
   constructor(sessionId: string) {
-    super(`Attach canceled for session ${sessionId}`)
+    super(`${ATTACH_CANCELED_PREFIX}${sessionId}`)
     this.name = 'TerminalAttachCanceledError'
   }
+}
+
+/** Recognizes the daemon's attach-cancellation across the wire, where only the message survives. */
+export function isTerminalAttachCanceledMessage(message: string): boolean {
+  return message.startsWith(ATTACH_CANCELED_PREFIX)
 }
 
 export class DaemonProtocolError extends Error {
@@ -26,6 +33,24 @@ export class TerminalSessionOwnerUnverifiedError extends Error {
     super(`Terminal session owner could not be verified: ${sessionId}`)
     this.name = 'TerminalSessionOwnerUnverifiedError'
   }
+}
+
+export class TerminalHostGoneError extends Error {
+  constructor() {
+    super('terminal_host_gone')
+    this.name = 'TerminalHostGoneError'
+  }
+}
+
+// Connect ENOENT/ECONNREFUSED proves the endpoint is absent; open ENOENT can be a missing token file.
+export function isDaemonEndpointGoneError(err: unknown): boolean {
+  const candidate = err as { code?: unknown; syscall?: unknown } | null
+  return (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    candidate.syscall === 'connect' &&
+    (candidate.code === 'ENOENT' || candidate.code === 'ECONNREFUSED')
+  )
 }
 
 export function decodeDaemonResponseError(message: string): Error {

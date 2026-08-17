@@ -34,18 +34,13 @@ export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPolli
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
   }
-  if (
-    args.rightSidebarOpen &&
-    (args.rightSidebarTab === 'source-control' ||
-      (args.rightSidebarTab === 'explorer' && args.rightSidebarExplorerView !== 'search') ||
-      args.rightSidebarTab === 'checks')
-  ) {
-    return true
-  }
-  if ((args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)) {
-    return true
-  }
-  return false
+  return (
+    (args.rightSidebarOpen &&
+      (args.rightSidebarTab === 'source-control' ||
+        (args.rightSidebarTab === 'explorer' && args.rightSidebarExplorerView !== 'search') ||
+        args.rightSidebarTab === 'checks')) ||
+    (args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)
+  )
 }
 
 export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boolean {

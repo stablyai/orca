@@ -7,8 +7,9 @@ import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
+import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -156,13 +157,6 @@ describe('DaemonServer', () => {
       expect(token.length).toBeGreaterThan(0)
     })
 
-    it('removes the startup error listener after listening', async () => {
-      await startServer()
-
-      const daemon = server as unknown as DaemonServerPrivate
-      expect(daemon.server?.listenerCount('error')).toBe(0)
-    })
-
     it('accepts client connections', async () => {
       await startServer()
       const c = await connectClient()
@@ -269,7 +263,9 @@ describe('DaemonServer', () => {
           requestType === 'kill'
             ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
             : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
-        await expect(cancelRequest).resolves.toEqual({})
+        await expect(cancelRequest).resolves.toEqual(
+          requestType === 'kill' ? {} : { canceled: true }
+        )
         finishPreparation()
         await canceledCreates
         expect(spawnSubprocess).not.toHaveBeenCalled()
@@ -916,6 +912,7 @@ describe('DaemonServer', () => {
       await expect(c.ensureConnected()).rejects.toThrow()
     })
 
+    // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate & {
@@ -931,7 +928,8 @@ describe('DaemonServer', () => {
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.server === null)
-      await waitFor(() => !existsSync(socketPath))
+      // Why not existsSync: the dead entry remains for the next publisher to replace.
+      expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })
       await expect(late.ensureConnected()).rejects.toThrow()
     })

@@ -2,13 +2,13 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   isUnstoppedPtyRemovalError,
   WORKTREE_TEARDOWN_FORCE_HINT,
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
-} from '../../shared/worktree-removal'
+} from '../../shared/worktree/removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
 import { createWorktreeSweepTracker, settleSweepsForForcedRemoval } from './forced-sweep-settlement'
 import {

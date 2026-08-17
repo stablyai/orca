@@ -8,13 +8,14 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
+import { PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,

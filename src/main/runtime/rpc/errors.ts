@@ -5,8 +5,22 @@
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
-import { LINEAR_ERROR_CODES } from '../../../shared/linear-agent-access'
+import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
+import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
+import {
+  AGENT_SKILL_NOT_SHAREABLE_CODE,
+  AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
+  AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
+  AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE
+} from '../../../shared/agent-skill-sharing-contract'
+import {
+  SKILL_INSTALL_RPC_ERROR_CODE,
+  classifySkillInstallFailureCode
+} from '../../../shared/skill-install-failure'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -96,7 +110,16 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',
-  'invalid_argument'
+  'invalid_argument',
+  GIT_DIFF_TOO_LARGE_CODE,
+  ARTIFACT_SHARING_DISABLED_CODE,
+  AGENT_SKILL_SHARING_DISABLED_CODE,
+  AGENT_SKILL_NOT_SHAREABLE_CODE,
+  AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
+  AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
+  AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
+  SKILL_INSTALL_RPC_ERROR_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
@@ -108,7 +131,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code))
+    return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
   if (
     error instanceof Error &&
@@ -154,6 +177,16 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)
+  }
+  const skillInstallFailure = classifySkillInstallFailureCode(message)
+  if (skillInstallFailure) {
+    return errorResponse(
+      id,
+      meta,
+      SKILL_INSTALL_RPC_ERROR_CODE,
+      skillInstallFailure.code,
+      skillInstallFailure
+    )
   }
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')

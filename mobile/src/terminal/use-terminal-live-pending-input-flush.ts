@@ -133,7 +133,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       waitForPendingLiveInputFlush
     ]
   )
-  runMirrorStepRef.current = runMirrorStep
+  // Why: assigning during render is not replay-safe. The only read is inside a
+  // held-commit timer, which fires long after commit, so an effect is soon enough.
+  useEffect(() => {
+    runMirrorStepRef.current = runMirrorStep
+  }, [runMirrorStep])
 
   const applyLiveInputMirror = useCallback(
     (handle: string, fieldText: string): void => {

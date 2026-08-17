@@ -15,7 +15,7 @@ import type {
   LinearTeamListResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 
 export function isLinearIssueContextResult(result: unknown): result is LinearIssueContextResult {
   return (

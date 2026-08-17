@@ -84,13 +84,17 @@ export function setTrackedSessionOption(
   record: NativeChatSessionOptionRecord,
   optionId: string,
   value: SessionOptionValue,
-  source: TrackedNativeChatSessionOption['source']
+  source: TrackedNativeChatSessionOption['source'],
+  /** The model the picker drew this option under when none is tracked — without it a
+   *  value set against a CLI default would be dispatched and then silently forgotten. */
+  fallbackModelId: string | null = null
 ): string | null {
   if (optionId === 'model') {
     record.model = { value, source }
     return typeof value === 'string' ? value : null
   }
-  const modelId = typeof record.model?.value === 'string' ? record.model.value : null
+  const modelId =
+    (typeof record.model?.value === 'string' ? record.model.value : null) ?? fallbackModelId
   if (!modelId) {
     return null
   }

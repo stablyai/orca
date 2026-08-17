@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
-  GitBranchCompareSummary,
-  GitStatusEntry
-} from '../../../../shared/types'
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {

@@ -52,7 +52,7 @@ function frameCell(line: string): string {
   if (line.startsWith(FRAME_COLUMN)) {
     const afterBorder = line.slice(FRAME_COLUMN.length)
     const columnEnd = afterBorder.indexOf(FRAME_COLUMN)
-    return (columnEnd < 0 ? afterBorder : afterBorder.slice(0, columnEnd)).trim()
+    return (columnEnd === -1 ? afterBorder : afterBorder.slice(0, columnEnd)).trim()
   }
   // Unframed buffers put the descriptor on the row directly, behind box art.
   return line.replace(/^[^A-Za-z0-9]+/, '').trim()
@@ -171,7 +171,7 @@ function labelNamesReportedModel(reportedModel: string, label: string): boolean 
   let cursor = 1
   for (const token of labelTokens.slice(1)) {
     const found = nameTokens.indexOf(token, cursor)
-    if (found < 0) {
+    if (found === -1) {
       return false
     }
     cursor = found + 1
@@ -212,7 +212,7 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   }
   const lines = normalizedScreenLines(screen)
   const headerIndex = lines.findIndex(isClaudeHeaderRow)
-  if (headerIndex < 0) {
+  if (headerIndex === -1) {
     return null
   }
   const descriptorCell = claudeModelDescriptorCell(lines, headerIndex)

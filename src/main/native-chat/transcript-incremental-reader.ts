@@ -1,10 +1,10 @@
-import { open, stat } from 'node:fs/promises'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
+import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
@@ -30,16 +30,21 @@ export async function readIncrementalTranscriptMessages(
   decode: NativeChatLineDecoder,
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
-  onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void
+  onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
+  signal?: AbortSignal
 ): Promise<NativeChatMessage[]> {
-  const end = (await stat(filePath)).size
+  const end = (await wslGatedStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
   const messages: NativeChatMessage[] = []
-  const handle = await open(filePath, 'r')
+  const stream = openTranscriptReadStream(
+    filePath,
+    { start: state.offset, end: end - 1 },
+    'exact',
+    signal
+  )
   try {
-    const stream = handle.createReadStream({ start: state.offset, end: end - 1, autoClose: false })
     let absoluteOffset = state.offset
     for await (const rawChunk of stream) {
       const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
@@ -62,7 +67,9 @@ export async function readIncrementalTranscriptMessages(
     }
     return messages
   } finally {
-    await handle.close()
+    // Early exits (throw/oversized-record bail) must not leak the fd or, on
+    // UNC, the gated handle the generator's finally closes.
+    stream.destroy()
   }
 
   function retainPart(part: Buffer): void {

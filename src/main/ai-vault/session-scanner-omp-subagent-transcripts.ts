@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
@@ -51,7 +51,7 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
 export async function countOmpSubagentTranscripts(transcriptFilePath: string): Promise<number> {
   let entries
   try {
-    entries = await readdir(ompArtifactDirFor(transcriptFilePath), { withFileTypes: true })
+    entries = await wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan')
   } catch {
     return 0
   }

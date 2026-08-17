@@ -9,7 +9,7 @@ import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
-} from '../../shared/types'
+} from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { resolveClaudeCommand } from '../codex-cli/command'
@@ -146,6 +146,10 @@ export class ClaudeAccountService {
 
   cancelPendingLogin(): boolean {
     return this.cancelPendingClaudeLogin?.() ?? false
+  }
+
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {

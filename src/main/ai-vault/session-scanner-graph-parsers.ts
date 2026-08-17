@@ -1,6 +1,5 @@
 import { remoteSessionContentLines } from './remote-session-content-lines'
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -41,7 +40,9 @@ export async function parseRovoSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const metadata = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const metadata = asRecord(
+    JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+  )
   if (!metadata) {
     return null
   }
@@ -166,19 +167,25 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
 }
 
 // Agents whose transcripts are append-only message-graph JSONL (session +
-// model_change + message records). OMP is a Pi fork and shares the format.
-export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp'
+// model_change + message records). OMP and Prime Agent are Pi forks and
+// share the format.
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
 
 export async function parseMessageGraphSessionFile(
   agent: MessageGraphAgent,
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  return parseMessageGraphSessionLines({ agent, file, lines, platform })
+  const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  try {
+    return await parseMessageGraphSessionLines({ agent, file, lines, platform })
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-parse throw cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
+  }
 }
 
 export async function parseMessageGraphSessionContent(
@@ -246,7 +253,7 @@ export function createMessageGraphSessionResumeState(
   )
   // Why: only OMP materializes task-subagent transcripts beside its sessions
   // (in the same-named artifact dir); the row UI shows the count without
-  // expanding details. Pi/OpenClaw have no such layout — skip the readdir.
+  // expanding details. Pi/OpenClaw/Prime Agent have no such layout — skip the readdir.
   return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
 }
 

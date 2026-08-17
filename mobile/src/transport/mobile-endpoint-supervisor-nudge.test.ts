@@ -89,7 +89,7 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
-  it('probes a healthy relay on a focus nudge and keeps it untouched', async () => {
+  it('leaves physical relay probing to the session watchdog', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
@@ -97,28 +97,27 @@ describe('mobile endpoint supervisor nudges', () => {
 
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
-    expect(logical.sendRequest).toHaveBeenCalledWith('status.get', null, { timeoutMs: 4000 })
+    expect(logical.sendRequest).not.toHaveBeenCalled()
     expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     expect(deps.openRelay).not.toHaveBeenCalled()
 
-    // Repeated focus events inside the probe window coalesce into one probe.
+    // Repeated focus events never create a second supervisor-owned liveness policy.
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
-    expect(logical.sendRequest).toHaveBeenCalledOnce()
+    expect(logical.sendRequest).not.toHaveBeenCalled()
     supervisor.stop()
   })
 
-  it('suspends and re-dials when the focus probe fails', async () => {
+  it('does not suspend a relay from one focus RPC failure', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
 
-    logical.sendRequest.mockRejectedValueOnce(new Error('relay RPC timed out: status.get'))
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
-    expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledOnce())
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    expect(deps.openRelay).not.toHaveBeenCalled()
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })

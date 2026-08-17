@@ -1,6 +1,18 @@
 import { z } from 'zod'
-import { AI_VAULT_AGENTS, type AiVaultListResult } from '../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  type AiVaultAgent,
+  type AiVaultListResult,
+  type AiVaultScanIssue,
+  type AiVaultSession
+} from '../../shared/ai-vault-types'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+
+const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)
+
+function isAiVaultAgent(agent: string): agent is AiVaultAgent {
+  return aiVaultAgentSet.has(agent)
+}
 
 const nodePlatformSchema = z.enum([
   'aix',
@@ -35,7 +47,7 @@ const aiVaultSessionSchema = z.object({
   id: z.string(),
   executionHostId: executionHostIdSchema,
   executionHostPlatform: nodePlatformSchema.nullable().optional(),
-  agent: z.enum(AI_VAULT_AGENTS),
+  agent: z.string().min(1),
   sessionId: z.string(),
   title: z.string(),
   cwd: z.string().nullable(),
@@ -67,7 +79,7 @@ const aiVaultSessionSchema = z.object({
 
 const aiVaultScanIssueSchema = z.object({
   executionHostId: executionHostIdSchema.optional(),
-  agent: z.enum(AI_VAULT_AGENTS),
+  agent: z.string().min(1),
   kind: z.enum(['host', 'scope', 'notice']).optional(),
   path: z.string(),
   message: z.string()
@@ -84,19 +96,42 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
   if (!envelope.success) {
     throw new Error(envelope.error.issues[0]?.message ?? 'unexpected result shape')
   }
-  const sessions = envelope.data.sessions.flatMap((session) => {
+  const sessions: AiVaultSession[] = []
+  let malformedSessionCount = 0
+  let wellFormedSessionCount = 0
+  for (const session of envelope.data.sessions) {
     const parsed = aiVaultSessionSchema.safeParse(session)
-    return parsed.success ? [parsed.data] : []
-  })
-  if (envelope.data.sessions.length > 0 && sessions.length === 0) {
+    if (!parsed.success) {
+      malformedSessionCount += 1
+      continue
+    }
+    wellFormedSessionCount += 1
+    if (!isAiVaultAgent(parsed.data.agent)) {
+      continue
+    }
+    sessions.push({ ...parsed.data, agent: parsed.data.agent })
+  }
+  if (
+    envelope.data.sessions.length > 0 &&
+    malformedSessionCount > 0 &&
+    wellFormedSessionCount === 0
+  ) {
     throw new Error('all supplied Agent Session History sessions were invalid')
   }
-  const issues = envelope.data.issues.flatMap((issue) => {
+  const issues: AiVaultScanIssue[] = []
+  let malformedIssueCount = 0
+  for (const issue of envelope.data.issues) {
     const parsed = aiVaultScanIssueSchema.safeParse(issue)
-    return parsed.success ? [parsed.data] : []
-  })
-  const invalidCount =
-    envelope.data.sessions.length - sessions.length + (envelope.data.issues.length - issues.length)
+    if (!parsed.success) {
+      malformedIssueCount += 1
+      continue
+    }
+    if (!isAiVaultAgent(parsed.data.agent)) {
+      continue
+    }
+    issues.push({ ...parsed.data, agent: parsed.data.agent })
+  }
+  const invalidCount = malformedSessionCount + malformedIssueCount
   if (invalidCount > 0) {
     issues.push({
       agent: 'codex',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 import {
   compareVersions,
   isBenignCheckFailure,

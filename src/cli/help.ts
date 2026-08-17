@@ -23,6 +23,8 @@ Accounts:
   account list              List managed Claude and Codex accounts on this Orca host
 
 Skills:
+  skills installed          List installed skill selectors
+  skills share              Publish selected skills behind one unlisted link
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
   skills install            Install bundled Orca skills globally via the community skills CLI
@@ -109,7 +111,7 @@ Orchestration:
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
   orchestration worker-show Inspect one supervised worker
   orchestration worker-read Read bounded output from one supervised worker
-  orchestration worker-stop Stop one supervised worker
+  orchestration worker-stop Fence one Dispatch; stop only its supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration worker-release Release a settled worker's terminal after archiving its output
   orchestration worker-retain Keep a worker terminal live for debugging
@@ -447,6 +449,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+  }
+  if (command === 'artifacts list' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
   }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'

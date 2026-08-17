@@ -1,12 +1,12 @@
 /**
  * Mail must survive a restart: never injected on restored state alone, always
- * delivered once the agent speaks again (#12536).
+ * pointed once the agent speaks again (#12536).
  *
  * Push-on-idle now fires when mail arrives rather than only on a busy→idle edge,
  * which puts restart squarely on the delivery path — a pane comes back carrying
  * the title it had at snapshot time, and anything the runtime infers from that
  * is a memory, not an observation. Typing on it would submit into an agent that
- * may be mid-turn and stamp the row delivered, losing it.
+ * may be mid-turn.
  *
  * Scope, stated plainly: this covers the restart path, not the
  * `lastAgentStatusObservedLive` gate itself. The seed only reaches leaves that
@@ -39,7 +39,7 @@ import {
 import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-const BANNER_PREFIX = '--- Orchestration Messages'
+const POINTER_COMMAND = 'orca orchestration check'
 const NO_DELIVERY_SETTLE_MS = 5_000
 const DELIVERY_TIMEOUT_MS = 20_000
 
@@ -115,6 +115,10 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     agent.setTitle(CODEX_IDLE_TITLE)
     await waitForObservedTitle(firstClient, originalHandle, CODEX_IDLE_TITLE)
     const titlesBeforeRestart = agent.titleEmitCount()
+    const run = await firstClient.call<{ run: { id: string } }>('orchestration.runCreate', {
+      objective: 'Restart-safe mailbox delivery',
+      from: originalHandle
+    })
 
     await session.close(firstApp)
     firstApp = null
@@ -146,7 +150,7 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     expect(agent.titleEmitCount()).toBe(titlesBeforeRestart)
 
     const sent = await secondClient.call<{ message: { id: string } }>('orchestration.send', {
-      to: restoredHandle!,
+      to: `run:${run.result.run.id}`,
       from: 'e2e-sender',
       subject: 'Seeded idle must wait',
       body: 'e2e body',
@@ -159,10 +163,10 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     expect(readMailRow(session.userDataDir, messageId)).toBeDefined()
     await second.page.waitForTimeout(NO_DELIVERY_SETTLE_MS)
     expect(mailDisposition(readMailRow(session.userDataDir, messageId))).toBe('pending')
-    expect(agent.readStdin()).not.toContain(BANNER_PREFIX)
+    expect(agent.readStdin()).not.toContain(POINTER_COMMAND)
 
     // Re-emitting the SAME idle title changes no status — only its liveness — so
-    // the row moving here is delivery resuming on the agent's own signal.
+    // the pointer appearing here is delivery resuming on the agent's own signal.
     agent.setTitle(CODEX_IDLE_TITLE)
     await expect
       .poll(() => agent.titleEmitCount(), { timeout: 30_000 })
@@ -172,12 +176,8 @@ test('keeps mail pending across a restart and delivers it when the agent reports
         timeout: DELIVERY_TIMEOUT_MS,
         message: 'live idle frame never released the pending mail'
       })
-      .toContain(BANNER_PREFIX)
-    await expect
-      .poll(() => mailDisposition(readMailRow(session.userDataDir, messageId)), {
-        timeout: DELIVERY_TIMEOUT_MS
-      })
-      .toBe('pushed')
+      .toContain(POINTER_COMMAND)
+    expect(mailDisposition(readMailRow(session.userDataDir, messageId))).toBe('pushed')
   } finally {
     if (firstApp) {
       await session.close(firstApp)

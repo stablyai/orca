@@ -99,6 +99,8 @@ type SnapshotFrameOptions = {
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags proven at this frame's own `seq`. */
+  kittyKeyboardFlags?: number
 }
 
 type SerializedSnapshot = {
@@ -113,6 +115,7 @@ type SerializedSnapshot = {
   scrollbackRows: number
   truncatedByByteBudget: boolean
   pendingEscapeTailAnsi?: string
+  kittyKeyboardFlags?: number
 } | null
 
 type TerminalViewportClient = {
@@ -648,6 +651,15 @@ function sendSnapshotFrames(
         source: options.source,
         oscLinks: options.oscLinks,
         pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
+        // Why conditional and additive: old clients ignore the unknown field,
+        // and a new client must read absence as unknown rather than zero, so
+        // no opcode or capability negotiation is involved (Rule 1 of
+        // docs/reference/remote-wire-compatibility.md).
+        // Why `seq` is required: the flags are only proven at this frame's own
+        // seq, so without a replay boundary the client cannot order them.
+        ...(typeof options.seq === 'number' && options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
         truncated: options.truncated === true,
         truncatedByByteBudget: options.truncatedByByteBudget === true
       })
@@ -884,6 +896,8 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  // Why: older hosts strip this optional intent and retain their direct-send behavior.
+  agentPrompt: z.literal(true).optional(),
   resolvedLaunchDraft: z
     .object({
       text: z.string(),
@@ -1222,6 +1236,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           !isTerminalQueryReply(params.text) ||
           params.enter === true ||
           params.interrupt === true ||
+          params.agentPrompt === true ||
           params.requireAgentStatus !== undefined ||
           params.client?.type !== 'mobile' ||
           !queryReplyClientId ||
@@ -1339,6 +1354,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
+      const useSettledAgentPrompt =
+        params.agentPrompt === true &&
+        hasText &&
+        params.enter === true &&
+        params.interrupt !== true &&
+        params.client?.type === 'desktop' &&
+        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -1351,21 +1373,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = await runtime.sendTerminal(
-          params.terminal,
-          {
-            text: params.text,
-            enter: params.enter === true,
-            interrupt: params.interrupt === true
-          },
-          {
-            beforeWrite,
-            ...(reserveWrite ? { reserveWrite } : {}),
-            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
-              : {})
-          }
-        )
+        result = useSettledAgentPrompt
+          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, { beforeWrite })
+          : await runtime.sendTerminal(
+              params.terminal,
+              {
+                text: params.text,
+                enter: params.enter === true,
+                interrupt: params.interrupt === true
+              },
+              {
+                beforeWrite,
+                ...(reserveWrite ? { reserveWrite } : {}),
+                ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+                  ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+                  : {})
+              }
+            )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)
@@ -1840,6 +1864,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               reason: 'ack-pending-overflow',
               seq: serialized.seq,
               source: serialized.source,
+              kittyKeyboardFlags: serialized.kittyKeyboardFlags,
               truncatedByByteBudget: serialized.truncatedByByteBudget,
               data: serialized.data
             }
@@ -2327,6 +2352,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             seq: serialized?.seq,
             cwd: serialized?.cwd,
             source: serialized?.source,
+            kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
             truncated: false,
@@ -2623,7 +2649,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const size = runtime.getTerminalSize(ptyId)
           const displayMode = runtime.getMobileDisplayMode(ptyId)
           const layoutSeq = runtime.getLayout(ptyId)?.seq
-          const snapshotFrameSeq = serialized?.seq ?? layoutSeq
+          // Why: layout versions and output offsets are different sequence domains.
           const snapshotOutputSeq = serialized?.seq
           emit({
             type: 'subscribed',
@@ -2664,11 +2690,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               cols: serialized?.cols ?? size?.cols ?? 80,
               rows: serialized?.rows ?? size?.rows ?? 24,
               displayMode,
-              seq: snapshotFrameSeq,
+              seq: snapshotOutputSeq,
               cwd: serialized?.cwd,
               truncated: initialOutputOverflowed,
               truncatedByByteBudget: serialized?.truncatedByByteBudget,
               source: serialized?.source,
+              kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
               oscLinks: serialized?.oscLinks,
               pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
               data:
@@ -3424,8 +3451,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         // Why: layout seq is the mobile stale-event filter's high-water mark (undefined pre-transition is fail-open). See docs/mobile-terminal-layout-state-machine.md.
         const layoutSeq = runtime.getLayout(ptyId)?.seq
-        const snapshotFrameSeq = serialized?.seq ?? layoutSeq
-        // Why: track the seq that actually covered the buffered chunks (recovery snapshots advance it) or an absorbed query gets zero replies.
+        // Why: only an output offset can cover buffered chunks; layout versions are a separate sequence domain.
         let snapshotOutputSeq = serialized?.seq
         emit({
           type: 'subscribed',
@@ -3445,7 +3471,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
           rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows ?? 24,
           displayMode,
-          seq: snapshotFrameSeq,
+          seq: snapshotOutputSeq,
           cwd: serialized?.cwd,
           truncated: initialOutputOverflowed,
           truncatedByByteBudget: serialized?.truncatedByByteBudget,

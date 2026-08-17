@@ -1,92 +1,27 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
-import { networkInterfaces } from 'node:os'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
-import {
-  isVirtualBridgeInterface,
-  selectAutoAdvertisedPairingAddress
-} from '../../shared/pairing-address-auto-selection'
 import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import {
+  getDefaultPairingAddress,
+  getPairingNetworkInterfaces,
+  type DefaultRouteInterfaceLookup,
+  type NetworkInterface
+} from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
-
-export type NetworkInterface = {
-  name: string
-  address: string
-}
-
-// Why: link-local IPv6 addresses (fe80::/10) require a scope/zone id to be
-// connectable and never work as a QR-advertised pairing host, so they are
-// excluded from the pickable list. The regex covers the full /10 range
-// (fe80: through febf:), not just the fe80: prefix the OS usually assigns.
-function isUsableIPv6Address(address: string): boolean {
-  return !/^fe[89ab][0-9a-f]:/i.test(address)
-}
-
-function isProxyFakeIpIPv4Address(address: string): boolean {
-  return /^198\.(?:18|19)\./.test(address)
-}
-
-// Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
-// connectable from a mobile device. We enumerate all non-internal IPv4 and
-// (non-link-local) IPv6 addresses so the user can choose which one to advertise
-// in the QR code (e.g. LAN vs Tailscale). IPv6 must be included so pairing works
-// on IPv6-only hosts (e.g. a headless `orca serve` reachable only over IPv6),
-// where an IPv4-only scan returns nothing and the UI reports "no interfaces".
-function getNetworkInterfaces(): NetworkInterface[] {
-  const result: NetworkInterface[] = []
-  const interfaces = networkInterfaces()
-  for (const [name, addrs] of Object.entries(interfaces)) {
-    if (!addrs) {
-      continue
-    }
-    for (const addr of addrs) {
-      if (addr.internal) {
-        continue
-      }
-      if (addr.family === 'IPv4') {
-        // 198.18.0.0/15 proxy fake IPs are only routable inside the desktop proxy.
-        if (isProxyFakeIpIPv4Address(addr.address)) {
-          continue
-        }
-        result.push({ name, address: addr.address })
-      } else if (addr.family === 'IPv6' && isUsableIPv6Address(addr.address)) {
-        result.push({ name, address: addr.address })
-      }
-    }
-  }
-  // Why: prefer tailnet IPv4 first (most portable across networks), then other
-  // IPv4, then IPv6 as a fallback for IPv6-only environments. Virtual bridges
-  // sort below all of them and stay in the list so they remain explicitly
-  // pickable; the automatic default skips them entirely.
-  return result.sort((a, b) => rankInterface(a) - rankInterface(b))
-}
-
-function rankInterface({ name, address }: NetworkInterface): number {
-  if (isTailnetIPv4Address(address)) {
-    return 0
-  }
-  const bridgePenalty = isVirtualBridgeInterface(name) ? 2 : 0
-  return (address.includes(':') ? 2 : 1) + bridgePenalty
-}
-
-// Why: null when every enumerated interface is a host-local bridge, so a docker0-only host
-// advertises no direct address instead of one the phone provably cannot reach.
-function getDefaultPairingAddress(): string | null {
-  return selectAutoAdvertisedPairingAddress(getNetworkInterfaces()) ?? null
-}
 
 // Why: only an explicit "This computer only" pick skips the one-way widen, and only when the address it
 // advertises really is loopback — a mismatch (a LAN address under a this-computer reach) would otherwise
@@ -119,6 +54,7 @@ export type MobileHandlerDependencies = {
   getRelayStatus?: () => RelayBrokerStatus
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
+  getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
 }
 
 export function registerMobileHandlers(
@@ -131,9 +67,14 @@ export function registerMobileHandlers(
     executablePath: process.execPath,
     systemRoot: process.env.SystemRoot
   }
-  ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
-    interfaces: getNetworkInterfaces()
-  }))
+  const getDefaultRouteInterfaceNames =
+    dependencies.getDefaultRouteInterfaceNames ?? getWindowsDefaultRouteInterfaceNames
+  ipcMain.handle(
+    'mobile:listNetworkInterfaces',
+    async (): Promise<{ interfaces: NetworkInterface[] }> => ({
+      interfaces: await getPairingNetworkInterfaces(getDefaultRouteInterfaceNames)
+    })
+  )
 
   ipcMain.handle(
     'mobile:getPairingQR',
@@ -148,7 +89,7 @@ export function registerMobileHandlers(
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? getDefaultPairingAddress()
+      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
       // Why: the local address is optional under Relay — the QR carries the relay invite, so a host
       // with nothing auto-advertisable (only container bridges, or no interface at all) still pairs.
       // The offer's endpoint then falls back to loopback, which is the phone's own device: the direct
@@ -206,7 +147,7 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const ip = args?.address ?? getDefaultPairingAddress()
+      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
       if (!ip) {
         return { available: false as const }
       }

@@ -5,17 +5,26 @@ import {
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
+/**
+ * `fallbackMs: null` waits indefinitely. A newline arriving late still arrives, so a timer is
+ * right for it; a cursor chord arriving mid-preedit reproduces the corruption the wait exists to
+ * prevent, and a conversion can hold its candidate window open for seconds. Dropping the chord
+ * costs one keypress, firing early costs a mangled line.
+ */
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
   send: () => void,
-  options?: { fallbackMs?: number }
+  options?: { fallbackMs?: number | null }
 ): void {
   if (!terminalElement) {
     window.setTimeout(send, 0)
     return
   }
 
-  const fallbackMs = options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
+  const fallbackMs =
+    options?.fallbackMs === null
+      ? null
+      : (options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
   let done = false
 
   const finish = (): void => {
@@ -28,7 +37,9 @@ export function sendTerminalInputAfterComposition(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
     )
-    window.clearTimeout(fallbackTimer)
+    if (fallbackTimer !== undefined) {
+      window.clearTimeout(fallbackTimer)
+    }
     // xterm flushes the committed glyph after compositionend.
     window.setTimeout(send, 0)
   }
@@ -42,7 +53,7 @@ export function sendTerminalInputAfterComposition(
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
   terminalElement.addEventListener('compositionend', onCompositionEnd)
   terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd)
-  const fallbackTimer = window.setTimeout(finish, fallbackMs)
+  const fallbackTimer = fallbackMs === null ? undefined : window.setTimeout(finish, fallbackMs)
 }
 
 export type TerminalImeDeferredNewlineSender = {
@@ -52,7 +63,10 @@ export type TerminalImeDeferredNewlineSender = {
     send: () => void
   ) => void
   absorbRedispatchedEnter: (enter: TerminalImeEnterIdentity) => boolean
-  releaseRedispatchedEnter: (enter: TerminalImeEnterIdentity) => void
+  releaseRedispatchedEnter: (
+    enter: TerminalImeEnterIdentity,
+    originatingEnter?: TerminalImeEnterIdentity
+  ) => void
   clearRedispatchedEnters: () => void
 }
 
@@ -62,34 +76,46 @@ export type TerminalImeModifiedEnterKind = 'shift' | 'ctrl'
 
 export type TerminalImeModifiedEnterChord = TerminalImeEnterIdentity & {
   kind: TerminalImeModifiedEnterKind
+  terminalModifierKeyDownObserved?: boolean
 }
 
 export type TerminalImeModifiedEnterChordOwner = {
   claim: (chord: TerminalImeModifiedEnterChord) => boolean
   absorb: (chord: TerminalImeModifiedEnterChord) => boolean
-  release: (chord: TerminalImeModifiedEnterChord) => void
+  ownsRedispatchedEnter: () => boolean
+  release: (chord: TerminalImeModifiedEnterChord) => TerminalImeModifiedEnterChord | null
+  releaseForEnterKeyUp: () => TerminalImeModifiedEnterChord | null
   clear: () => void
 }
 
 export function createTerminalImeModifiedEnterChordOwner(): TerminalImeModifiedEnterChordOwner {
-  let activeKind: TerminalImeModifiedEnterKind | null = null
+  let activeChord: TerminalImeModifiedEnterChord | null = null
 
   return {
-    claim: ({ kind }) => {
-      if (activeKind !== null) {
+    claim: (chord) => {
+      if (activeChord !== null) {
         return false
       }
-      activeKind = kind
+      activeChord = chord
       return true
     },
-    absorb: ({ kind }) => activeKind === kind,
+    absorb: ({ kind }) => activeChord?.kind === kind,
+    ownsRedispatchedEnter: () => activeChord?.terminalModifierKeyDownObserved === true,
     release: ({ kind }) => {
-      if (activeKind === kind) {
-        activeKind = null
+      if (activeChord?.kind === kind) {
+        const releasedChord = activeChord
+        activeChord = null
+        return releasedChord
       }
+      return null
+    },
+    releaseForEnterKeyUp: () => {
+      const releasedChord = activeChord
+      activeChord = null
+      return releasedChord
     },
     clear: () => {
-      activeKind = null
+      activeChord = null
     }
   }
 }
@@ -184,7 +210,26 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
       cleanUpIfSettled(enter, state)
       return true
     },
-    releaseRedispatchedEnter: (enter) => {
+    releaseRedispatchedEnter: (enter, originatingEnter) => {
+      if (originatingEnter) {
+        const originatingState = statesByEnterCode
+          .get(originatingEnter.code)
+          ?.get(originatingEnter.timeStamp)
+        if (originatingState && originatingState.absorbCredits > 0) {
+          originatingState.absorbCredits -= 1
+          cleanUpIfSettled(originatingEnter, originatingState)
+
+          const statesByTimeStamp = statesByEnterCode.get(enter.code) ?? new Map()
+          const state = statesByTimeStamp.get(enter.timeStamp) ?? {
+            inFlightSends: 0,
+            absorbCredits: 0
+          }
+          state.absorbCredits += 1
+          statesByTimeStamp.set(enter.timeStamp, state)
+          statesByEnterCode.set(enter.code, statesByTimeStamp)
+          return
+        }
+      }
       if (statesByEnterCode.get(enter.code)?.has(enter.timeStamp)) {
         // Chromium's balancing Process-key keyup is copied from the same native event.
         return

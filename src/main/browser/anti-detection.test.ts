@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { googleAuthUserAgent } from './browser-google-auth-ua'
 
 type PermissionQueryResult = {
   state: string
@@ -14,8 +15,16 @@ type AntiDetectionContext = {
     requestPermission: (callback?: (permission: string) => void) => Promise<string>
   }
   navigator: {
+    userAgent: string
     permissions: {
       query: (descriptor: { name: string }) => Promise<PermissionQueryResult>
+    }
+  }
+  window: {
+    chrome?: {
+      runtime?: unknown
+      csi?: () => unknown
+      loadTimes?: () => unknown
     }
   }
 }
@@ -23,6 +32,7 @@ type AntiDetectionContext = {
 function createContext(args: {
   nativeNotificationPermission: string
   requestedNotificationPermission: string
+  userAgent?: string
 }): AntiDetectionContext & Record<string, unknown> {
   class Permissions {
     query(): Promise<PermissionQueryResult> {
@@ -48,8 +58,12 @@ function createContext(args: {
     Promise,
     Set,
     performance: { now: () => 0 },
-    window: {},
+    // Electron 43 exposes this native object before the anti-detection script runs.
+    window: { chrome: {} },
     navigator: {
+      userAgent:
+        args.userAgent ??
+        'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
       plugins: [],
       languages: [],
       permissions: new Permissions()
@@ -60,6 +74,49 @@ function createContext(args: {
 }
 
 describe('ANTI_DETECTION_SCRIPT', () => {
+  it('does not expose Chrome globals under a Firefox identity', () => {
+    const context = createContext({
+      nativeNotificationPermission: 'denied',
+      requestedNotificationPermission: 'denied',
+      userAgent: googleAuthUserAgent()
+    })
+
+    runInNewContext(ANTI_DETECTION_SCRIPT, context)
+
+    expect(context.window.chrome).toBeUndefined()
+    expect('chrome' in context.window).toBe(false)
+  })
+
+  it('keeps Chrome API stubs aligned with an ordinary Chrome page', () => {
+    const context = createContext({
+      nativeNotificationPermission: 'denied',
+      requestedNotificationPermission: 'denied'
+    })
+
+    runInNewContext(ANTI_DETECTION_SCRIPT, context)
+
+    expect(context.window.chrome?.runtime).toBeUndefined()
+    expect(context.window.chrome?.csi).toBeTypeOf('function')
+    expect(context.window.chrome?.loadTimes).toBeTypeOf('function')
+  })
+
+  it.each(['geolocation', 'idle-detection', 'midi', 'storage-access'])(
+    'preserves the native denied state for %s',
+    async (name) => {
+      const context = createContext({
+        nativeNotificationPermission: 'denied',
+        requestedNotificationPermission: 'denied'
+      })
+
+      runInNewContext(ANTI_DETECTION_SCRIPT, context)
+
+      await expect(context.navigator.permissions.query({ name })).resolves.toEqual({
+        state: 'denied',
+        onchange: null
+      })
+    }
+  )
+
   it('reports notification permission as granted after a site permission request succeeds', async () => {
     const context = createContext({
       nativeNotificationPermission: 'denied',

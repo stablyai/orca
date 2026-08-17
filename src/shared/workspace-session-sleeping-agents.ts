@@ -5,6 +5,7 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
   .string()
@@ -108,23 +109,8 @@ const sleepingAgentSessionRecordSchema = z
     { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
 
-export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
-    null
-  )
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isUnsafeObjectKey(paneKey)) {
-      continue
-    }
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
-
-  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
+  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+  sleepingAgentSessionRecordSchema,
+  (paneKey, record) => record.paneKey === paneKey
+).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

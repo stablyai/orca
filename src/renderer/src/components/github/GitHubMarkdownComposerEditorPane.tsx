@@ -13,7 +13,10 @@ export function GitHubMarkdownComposerEditorPane({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
   return (
-    <div ref={scrollContainerRef} className="relative max-h-[360px] overflow-y-auto scrollbar-sleek">
+    <div
+      ref={scrollContainerRef}
+      className="relative max-h-[360px] overflow-y-auto scrollbar-sleek"
+    >
       <EditorContent editor={editor} />
       <RichMarkdownTableControls
         disabled={disabled}

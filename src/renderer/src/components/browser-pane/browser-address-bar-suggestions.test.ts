@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserHistoryEntry } from '../../../../shared/types'
+import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
 import {
   BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES,
   buildBrowserAddressBarSuggestions,

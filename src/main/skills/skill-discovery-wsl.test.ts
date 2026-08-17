@@ -48,7 +48,6 @@ describe('WSL skill discovery', () => {
         '/home/alice/.codex/skills/.system/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000000',
-        '7',
         markdown
       ),
       record(
@@ -57,7 +56,6 @@ describe('WSL skill discovery', () => {
         '/work/project/.agents/skills/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000001',
-        '9',
         markdown
       )
     ].join('')
@@ -72,7 +70,6 @@ describe('WSL skill discovery', () => {
         sourceKind: 'bundled',
         rootPath: homeRoot.path,
         skillFilePath: '/home/alice/.codex/skills/.system/review/SKILL.md',
-        fileCount: 7,
         updatedAt: 1_700_000_000_000
       })
     ])
