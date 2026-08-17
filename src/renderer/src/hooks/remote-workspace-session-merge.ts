@@ -15,13 +15,47 @@ function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTa
     : preserved
 }
 
+// Why key presence and not tab count: the host says "no tabs here" in two shapes that demand
+// opposite handling, and collapsing them is the entire bug class in this file.
+//
+//   present, empty array -> the user closed the last tab. Authoritative. Honor it, or a close
+//                           performed on one client is silently undone by the next pull.
+//   key absent           -> the host has no record for this worktree at all: its export scope
+//                           disagreed with ours, or importRemoteWorkspaceSession dropped the entry
+//                           because the worktree path did not resolve to exactly one local id.
+//                           That is UNKNOWN, not empty — and deleting on it destroys terminals the
+//                           user can see, unrecoverably.
+//
+// Deciding on tab count instead treats both as "delete" (losing data) or both as "keep" (resurrecting
+// closed tabs). The distinction is carried intact by exportRemoteWorkspaceSession, JSON, and
+// importRemoteWorkspaceSession, so this reads a real signal from the host rather than guessing.
+export function narrowDirectSshReplaceWorktreeIds(
+  requestedReplaceWorktreeIds: ReadonlySet<string>,
+  remote: WorkspaceSessionState
+): ReadonlySet<string> {
+  return new Set(
+    [...requestedReplaceWorktreeIds].filter((worktreeId) =>
+      Object.hasOwn(remote.tabsByWorktree, worktreeId)
+    )
+  )
+}
+
 export function mergeDirectSshRemoteWorkspaceSession(
   current: WorkspaceSessionState,
   remote: WorkspaceSessionState,
-  replaceWorktreeIds: ReadonlySet<string>,
+  requestedReplaceWorktreeIds: ReadonlySet<string>,
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>
 ): WorkspaceSessionState {
+  // Why narrowed here rather than trusted from the caller: this is the boundary that turns a remote
+  // report into a local delete, so it must hold on its own. Idempotent, so a caller that already
+  // narrowed pays nothing.
+  const replaceWorktreeIds = narrowDirectSshReplaceWorktreeIds(requestedReplaceWorktreeIds, remote)
+  const inReplaceScope = (worktreeId: string): boolean => replaceWorktreeIds.has(worktreeId)
+  // Why remote records are scoped: the snapshot can carry per-worktree entries for worktrees the
+  // narrowing protected, and spreading those over current would delete the state it just protected.
+  const scopedRemoteRecord = <T>(record: Record<string, T> | undefined): [string, T][] =>
+    Object.entries(record ?? {}).filter(([worktreeId]) => inReplaceScope(worktreeId))
   const currentTabsById = new Map(
     [...replaceWorktreeIds]
       .flatMap((worktreeId) => liveTabsByWorktree[worktreeId] ?? [])
@@ -29,7 +63,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   )
   const locallyPreservedTabIds = new Set<string>()
   const tabsByWorktree = Object.fromEntries(
-    Object.entries(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
+    scopedRemoteRecord(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
         const local = currentTabsById.get(tab.id)
@@ -90,11 +124,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
     terminalLayoutsByTabId,
     activeWorktreeIdsOnShutdown: [
       ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
-      ...(remote.activeWorktreeIdsOnShutdown ?? [])
+      ...(remote.activeWorktreeIdsOnShutdown ?? []).filter(inReplaceScope)
     ],
     activeTabIdByWorktree: {
       ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...remote.activeTabIdByWorktree
+      ...Object.fromEntries(scopedRemoteRecord(remote.activeTabIdByWorktree))
     },
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
@@ -110,11 +144,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
     },
     lastVisitedAtByWorktreeId: {
       ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
-      ...remote.lastVisitedAtByWorktreeId
+      ...Object.fromEntries(scopedRemoteRecord(remote.lastVisitedAtByWorktreeId))
     },
     defaultTerminalTabsAppliedByWorktreeId: {
       ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
-      ...remote.defaultTerminalTabsAppliedByWorktreeId
+      ...Object.fromEntries(scopedRemoteRecord(remote.defaultTerminalTabsAppliedByWorktreeId))
     }
   }
 }
