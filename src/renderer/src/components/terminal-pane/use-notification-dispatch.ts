@@ -186,6 +186,14 @@ export function dispatchTerminalNotification(
   // drop the repo label if that format ever changes. The worktree object
   // itself is the source of truth for its owning repo.
   const worktree = getWorktreeMapFromState(state).get(worktreeId)
+  // Why: a non-authoritative rescan can drop a deleted worktree's row from
+  // worktreesByRepo immediately, while the PTY/tab teardown that depends on an
+  // authoritative scan hasn't run yet. In that window hasLivePty/hasFreshAgentStatus
+  // above still pass, so an OS notification would otherwise fire for a worktree
+  // the sidebar no longer shows and the user cannot open.
+  if (event.source === 'agent-task-complete' && !worktree) {
+    return
+  }
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null

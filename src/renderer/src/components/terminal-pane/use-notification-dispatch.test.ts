@@ -784,4 +784,31 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
+
+  // Issue #14806: a non-authoritative worktree rescan can drop a deleted
+  // worktree's row from `worktreesByRepo` immediately, while the PTY/tab
+  // teardown that depends on an *authoritative* scan hasn't run yet. In that
+  // window the pty is still live and a fresh completion hook can still land,
+  // so neither the live-pty gate nor the fresh-snapshot gate blocks the OS
+  // notification even though the worktree the user would open no longer exists.
+  it('drops a completion notification for a worktree removed by a non-authoritative rescan', () => {
+    mockState.worktreesByRepo = {
+      repo1: [
+        {
+          id: 'wt-secondary',
+          repoId: 'repo1',
+          displayName: 'e2e-secondary',
+          branch: 'e2e-secondary'
+        }
+      ]
+    }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
 })
