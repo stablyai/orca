@@ -32,6 +32,7 @@ import {
   resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
+  seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots,
   seedCodexStateFromSnapshot,
   warnOnHookEnvOrVersionMismatch,
@@ -40,6 +41,7 @@ import {
   type HookListenerState
 } from '../../shared/agent-hook-listener'
 import {
+  claudeTeammateIdMatchesName,
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots
@@ -94,6 +96,8 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
+  /** Persisted proof that a lead boundary was held working only by child agents. */
+  claudeLeadBoundaryChildOnly?: true
 }
 
 type NormalizedLocalHook = {
@@ -329,7 +333,9 @@ function sanitizeHydratedEntry(
     compactTrigger,
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
+    teammateName: typeof record.teammateName === 'string' ? record.teammateName : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    claudeLeadBoundaryChildOnly: record.claudeLeadBoundaryChildOnly === true ? true : undefined,
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
     retainedForLiveness: retainedForLiveness ? true : undefined,
@@ -416,7 +422,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
 // Why: OSC never carries model/children; omit both so an equivalent OSC ping preserves the hook-cached identity graph.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
-  b: ParsedAgentStatusPayload
+  b: ParsedAgentStatusPayload,
+  preserveActiveTurnStamp = false
 ): boolean {
   return (
     a.state === b.state &&
@@ -425,11 +432,14 @@ function equivalentParsedAgentStatusPayload(
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
-    a.lastAssistantMessage === b.lastAssistantMessage &&
+    (a.lastAssistantMessage === b.lastAssistantMessage ||
+      (preserveActiveTurnStamp && b.lastAssistantMessage === undefined)) &&
     a.interrupted === b.interrupted &&
     // Why: a session-boundary done must never be deduped against a cached real done —
     // the flag has to reach receivers deterministically (STA-3386).
-    a.sessionBoundary === b.sessionBoundary
+    a.sessionBoundary === b.sessionBoundary &&
+    (a.turnCompletedAt === b.turnCompletedAt ||
+      (preserveActiveTurnStamp && b.turnCompletedAt === undefined))
   )
 }
 
@@ -464,6 +474,44 @@ function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
 }
 
+function attachClaudeChildOnlyBoundary(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): AgentHookEventPayload & { claudeLeadBoundaryChildOnly?: true } {
+  const establishesBoundary =
+    next.payload.agentType === 'claude' &&
+    (next.hookEventName === 'Stop' || next.hookEventName === 'StopFailure') &&
+    !next.toolAgentId &&
+    next.payload.state === 'working' &&
+    next.payload.subagents?.some((subagent) => subagent.state === 'working') === true &&
+    next.claudeRunningNonAgentTask === false
+  const carriesBoundary =
+    previous?.claudeLeadBoundaryChildOnly === true &&
+    next.payload.agentType === 'claude' &&
+    next.claudeRunningNonAgentTask === false &&
+    (next.toolAgentId !== undefined ||
+      next.hookEventName === 'SubagentStart' ||
+      next.hookEventName === 'SubagentStop' ||
+      next.hookEventName === 'TeammateIdle')
+  return establishesBoundary || carriesBoundary
+    ? { ...next, claudeLeadBoundaryChildOnly: true }
+    : next
+}
+
+function invalidateClaudeChildOnlyBoundary(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): EnrichedAgentHookEventPayload | undefined {
+  if (
+    previous?.claudeLeadBoundaryChildOnly !== true ||
+    attachClaudeChildOnlyBoundary(previous, next).claudeLeadBoundaryChildOnly === true
+  ) {
+    return previous
+  }
+  const { claudeLeadBoundaryChildOnly: _boundary, ...withoutBoundary } = previous
+  return withoutBoundary
+}
+
 function shouldKeepClaudePermissionVisible(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
@@ -483,6 +531,9 @@ function shouldKeepClaudePermissionVisible(
   if (next.hasExplicitPrompt === true) {
     return false
   }
+  if (isClaudePermissionOwningChildEnding(previous, next)) {
+    return false
+  }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
@@ -491,6 +542,24 @@ function shouldKeepClaudePermissionVisible(
     return false
   }
   return true
+}
+
+function isClaudePermissionOwningChildEnding(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): boolean {
+  const ownerId = previous.toolAgentId?.trim()
+  if (!ownerId) {
+    return false
+  }
+  if (next.hookEventName === 'SubagentStop') {
+    return ownerId === next.toolAgentId?.trim()
+  }
+  return (
+    next.hookEventName === 'TeammateIdle' &&
+    next.teammateName !== undefined &&
+    claudeTeammateIdMatchesName(ownerId, next.teammateName)
+  )
 }
 
 function isClaudePermissionResumingApprovedTool(
@@ -630,6 +699,7 @@ export class AgentHookServer {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
+  private activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
@@ -917,6 +987,9 @@ export class AgentHookServer {
         prompt: payload.prompt,
         agentType: payload.agentType,
         ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(restored.turnCompletedAt !== undefined
+          ? { turnCompletedAt: restored.turnCompletedAt }
+          : {}),
         ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
@@ -1138,7 +1211,11 @@ export class AgentHookServer {
     payload: AgentHookEventPayload,
     onAccepted?: () => void
   ): EnrichedAgentHookEventPayload {
-    const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
+    if (payload.hookEventName === 'UserPromptSubmit') {
+      // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
+      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
+    }
+    let previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
     const connectionClearWatermark = payload.connectionId
@@ -1203,6 +1280,17 @@ export class AgentHookServer {
               : stateReconciledPayload.payload
           }
         : stateReconciledPayload
+    const boundaryReconciledPrevious = invalidateClaudeChildOnlyBoundary(
+      previous,
+      rootContextPreservingPayload
+    )
+    if (boundaryReconciledPrevious !== previous) {
+      previous = boundaryReconciledPrevious
+      if (previous) {
+        this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
+        this.scheduleStatusPersist()
+      }
+    }
     const identity = resolveAgentStatusIdentity({
       existing: previous
         ? {
@@ -1235,6 +1323,7 @@ export class AgentHookServer {
             }
           }
     const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    const boundaryAwarePayload = attachClaudeChildOnlyBoundary(previous, effectivePayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
     }
@@ -1275,8 +1364,17 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
+    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, boundaryAwarePayload)
     const enriched = this.attachStatusTiming(cachedPayload, now)
+    if (
+      typeof enriched.payload.turnCompletedAt === 'number' &&
+      Number.isFinite(enriched.payload.turnCompletedAt)
+    ) {
+      this.activeHookTurnCompletedAtByPaneKey.set(
+        enriched.paneKey,
+        enriched.payload.turnCompletedAt
+      )
+    }
     // Why: an identity-matched event can still leave the aggregate backed only by another restored child; keep liveness reconciliation eligible.
     if (enriched.restoredUnconfirmed) {
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -1591,6 +1689,11 @@ export class AgentHookServer {
     if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
       this.runtimeObservedStatusPaneKeys.add(toPaneKey)
     }
+    const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
+    if (activeTurnCompletedAt !== undefined) {
+      this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
+      this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
+    }
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
     if (authorityObservation) {
       const owner = parsePaneKey(toPaneKey)
@@ -1646,6 +1749,7 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(key)
       this.clearCodexSubagentPoll(key)
       clearPaneCacheState(this.state, key)
+      this.activeHookTurnCompletedAtByPaneKey.delete(key)
       this.runtimeObservedStatusPaneKeys.delete(key)
       this.currentAuthorityObservations.delete(key)
       this.promptSentDedupeByPaneKey.delete(key)
@@ -1679,6 +1783,7 @@ export class AgentHookServer {
         }
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
@@ -1688,6 +1793,7 @@ export class AgentHookServer {
         if (shouldClearStablePaneKey) {
           // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
           clearPaneCacheState(this.state, entry.stablePaneKey)
+          this.activeHookTurnCompletedAtByPaneKey.delete(entry.stablePaneKey)
           this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
           this.currentAuthorityObservations.delete(entry.stablePaneKey)
           this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
@@ -1830,11 +1936,22 @@ export class AgentHookServer {
       | EnrichedAgentHookEventPayload
       | undefined
     if (
+      previous?.claudeLeadBoundaryChildOnly === true &&
+      previous.payload.agentType === 'claude' &&
+      event.payload.agentType === 'claude'
+    ) {
+      // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
+      return
+    }
+    const preserveActiveTurnStamp =
+      previous?.payload.turnCompletedAt !== undefined &&
+      previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
+    if (
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
-      equivalentParsedAgentStatusPayload(previous.payload, event.payload)
+      equivalentParsedAgentStatusPayload(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
       return
     }
@@ -1884,6 +2001,7 @@ export class AgentHookServer {
       compactTrigger?: unknown
       toolUseId?: string
       toolAgentId?: string
+      teammateName?: string
       toolAgentType?: string
       providerSession?: unknown
       providerSessionOnly?: unknown
@@ -1975,6 +2093,10 @@ export class AgentHookServer {
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()
         : undefined
+    const teammateName =
+      typeof envelope.teammateName === 'string' && envelope.teammateName.trim().length > 0
+        ? envelope.teammateName.trim()
+        : undefined
     const toolAgentType =
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
@@ -2061,6 +2183,7 @@ export class AgentHookServer {
       compactTrigger,
       toolUseId,
       toolAgentId,
+      teammateName,
       toolAgentType,
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
@@ -2331,6 +2454,7 @@ export class AgentHookServer {
       return null
     }
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
@@ -2411,6 +2535,7 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(paneKey)
       this.clearCodexSubagentPoll(paneKey)
       clearPaneCacheState(this.state, paneKey)
+      this.activeHookTurnCompletedAtByPaneKey.delete(paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
@@ -2432,6 +2557,7 @@ export class AgentHookServer {
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
@@ -2441,6 +2567,7 @@ export class AgentHookServer {
         paneKeys.add(legacyPaneKey)
         paneKeys.add(stablePaneKey.stablePaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         clearedAlias = true
@@ -2682,12 +2809,17 @@ export class AgentHookServer {
         // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
         if (entry.payload.agentType === 'codex') {
           seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
-        } else if (entry.payload.agentType === 'claude' && entry.payload.subagents) {
-          seedClaudeSubagentRosterFromSnapshots(
-            this.state,
-            resolvedPaneKey,
-            entry.payload.subagents
-          )
+        } else if (entry.payload.agentType === 'claude') {
+          seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry, {
+            childOnlyBoundary: entry.claudeLeadBoundaryChildOnly === true
+          })
+          if (entry.payload.subagents) {
+            seedClaudeSubagentRosterFromSnapshots(
+              this.state,
+              resolvedPaneKey,
+              entry.payload.subagents
+            )
+          }
         }
         hydrated += 1
       } else {
@@ -2783,6 +2915,8 @@ export class AgentHookServer {
       if (!isValidPaneKey(paneKey)) {
         continue
       }
+      const enrichedPayload = payload as EnrichedAgentHookEventPayload
+      const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
         claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
@@ -2790,12 +2924,13 @@ export class AgentHookServer {
         restoredUnconfirmed: _restoredUnconfirmed,
         launchToken,
         ...persistedPayload
-      } = payload as EnrichedAgentHookEventPayload
+      } = enrichedPayload
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       entries[paneKey] = {
         ...persistedPayload,
+        ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

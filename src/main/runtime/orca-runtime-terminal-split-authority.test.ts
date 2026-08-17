@@ -348,7 +348,7 @@ describe('remote runtime terminal split authority', () => {
       expect.objectContaining({ deadlineMs: expect.any(Number) })
     )
     expect(harness.kill).not.toHaveBeenCalled()
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, true)
   })
 
   it('revalidates a projected paired-runtime source after renderer adoption', async () => {
@@ -374,7 +374,7 @@ describe('remote runtime terminal split authority', () => {
       expect.objectContaining({ deadlineMs: expect.any(Number) })
     )
     expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, false)
   })
 
   it('preserves the split error when kill and retirement throw', async () => {
@@ -398,6 +398,6 @@ describe('remote runtime terminal split authority', () => {
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, false)
   })
 })

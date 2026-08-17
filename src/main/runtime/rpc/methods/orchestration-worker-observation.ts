@@ -10,7 +10,9 @@ export async function inspectWorkerTerminal(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'running' | 'exited'
+  status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
+  /** Set with `unverifiable`; names what we lost contact with. */
+  reason?: string
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker?.agent_terminal_handle) {
@@ -25,10 +27,23 @@ export async function inspectWorkerTerminal(
     paneKey: runtime.getTerminalPaneKey(worker.agent_terminal_handle),
     processIncarnation: runtime.getTerminalProcessIncarnation(worker.agent_terminal_handle)
   })
+  if (!exact) {
+    return { terminal, exact, status: 'identity_changed' }
+  }
+  // Why: the aggregate inventory only iterates registered providers, so a dropped
+  // relay clears `connected` for every remote PTY at once. Lost contact is not a
+  // death certificate, and the verdict is the only field that can tell them apart.
+  const verdict = runtime.getTerminalLivenessVerdict?.(worker.agent_terminal_handle) ?? null
+  if (verdict?.status === 'unverifiable') {
+    return { terminal, exact, status: 'unverifiable', reason: verdict.reason }
+  }
+  if (verdict?.status === 'live') {
+    return { terminal, exact, status: 'live' }
+  }
   return {
     terminal,
     exact,
-    status: exact ? (terminal.connected === false ? 'exited' : 'running') : 'identity_changed'
+    status: terminal.connected === false ? 'exited' : 'live'
   }
 }
 
@@ -71,7 +86,7 @@ export async function callFederatedWorkerShow(
     residualResources: unknown[]
   }
   terminal: unknown
-  observation: { status: string; exactWorker: boolean }
+  observation: { status: string; exactWorker: boolean; reason?: string }
 }> {
   return (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,

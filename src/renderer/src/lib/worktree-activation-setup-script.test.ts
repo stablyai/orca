@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
-import { ensureWorktreeHasInitialTerminal } from './worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
   registerWorktreeActivationReset,

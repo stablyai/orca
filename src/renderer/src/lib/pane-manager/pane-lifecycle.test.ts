@@ -497,6 +497,7 @@ describe('openTerminal — addon and provider wiring', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       querySelector: vi.fn(() => null),
+      style: { backgroundColor: '' },
       classList: { contains: vi.fn(() => false) }
     } as unknown as HTMLElement
     vi.stubGlobal(

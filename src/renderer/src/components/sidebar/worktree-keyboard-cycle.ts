@@ -1,5 +1,5 @@
 import type { HostSectionRow } from './host-section-rows'
-import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list-groups'
+import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
 import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
 
 /** Worktree ids in sidebar order, taken from the rows the sidebar actually

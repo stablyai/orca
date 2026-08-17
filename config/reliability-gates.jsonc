@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14",
+  "updatedAt": "2026-08-17",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -234,21 +234,29 @@
       "protection": "partial",
       "owner": "terminal-session-readiness",
       "layer": "posix-pty-and-shell-startup",
-      "surfaces": ["queued terminal startup commands", "zsh, bash, and Fish startup output"],
+      "surfaces": [
+        "queued terminal startup commands",
+        "zsh, bash, and Fish startup output",
+        "Bash PROMPT_COMMAND lifecycle composition"
+      ],
       "platforms": ["macos", "linux"],
       "providers": ["local", "local-daemon", "ssh-daemon", "ssh-relay", "paired-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "local-daemon", "ssh-relay", "paired-runtime"],
-      "coverageNotes": "Real macOS node-pty integration covers zsh 5.9 .zshenv/.zprofile and bash 3.2 profile replacement shells, including exec -a names, same-shell and child-process silent reads, a blocking zle-line-init hook, non-shell readline replacements, and a non-shell image renamed zsh. A real Fish PTY proves marker stripping is byte-exact and does not render bracketed-paste control text. An Ubuntu 20.04 container confirms compatible zsh/bash termios. Deterministic owner contracts cover local, daemon, and SSH relay identity/readiness composition plus provider-owned delivery; explicit terminal-paste remains renderer-owned. Live isolated journeys cover a macOS headed desktop owner with paired web client, headless orca serve with paired web client, and a Docker Linux OpenSSH/Bash target with one readiness-time reconnect. Linux desktop, WSL/Windows, live zsh-over-SSH, and physical remote hosts remain gaps.",
+      "coverageNotes": "Real macOS node-pty integration covers zsh 5.9 .zshenv/.zprofile and bash 3.2 profile replacement shells, including exec -a names, same-shell and child-process silent reads, a blocking zle-line-init hook, non-shell readline replacements, and a non-shell image renamed zsh. A real Fish PTY proves marker stripping is byte-exact and does not render bracketed-paste control text. Ubuntu 20.04/Bash 5.0 and Ubuntu 24.04/Bash 5.2 containers cover scalar and array PROMPT_COMMAND composition, including real zoxide on 24.04. Deterministic owner contracts cover local, daemon, and SSH relay identity/readiness composition plus provider-owned delivery; explicit terminal-paste remains renderer-owned. Live isolated journeys cover a macOS headed desktop owner with paired web client, headless orca serve with paired web client, and a Docker Linux OpenSSH/Bash target with one readiness-time reconnect. Linux desktop, WSL/Windows, live zsh-over-SSH, and physical remote hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/13767",
         "https://linear.app/stably/issue/STA-4067",
         "https://linear.app/stably/issue/STA-4068",
-        "https://github.com/stablyai/orca/pull/14161"
+        "https://github.com/stablyai/orca/pull/14161",
+        "https://github.com/stablyai/orca/issues/14448",
+        "https://linear.app/stably/issue/STA-4292",
+        "https://github.com/stablyai/orca/pull/14451"
       ],
-      "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
-      "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
+      "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Bash scalar and supported array PROMPT_COMMAND values preserve user bytes, hook order, and foreground exit status while emitting exactly one OSC 133 A/C/D lifecycle without syntax errors. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
+      "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Exercise Bash scalar and array PROMPT_COMMAND values with empty, repeated, escaped, whitespace, control-byte, odd-backslash, status-mutating, DEBUG-trap, zoxide, and RHEL-style hooks; require exact A,C,D:0,A,C,D:1,A,C ordering and byte preservation. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -256,6 +264,7 @@
       ],
       "testFiles": [
         "src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts",
+        "src/main/daemon/bash-prompt-command-composition.test.ts",
         "src/main/line-editor-ready-output-scanner.test.ts",
         "src/main/shell-startup-identity-scanner.test.ts",
         "src/main/shell-startup-output-scanner.test.ts",
@@ -274,6 +283,15 @@
         "tests/e2e/paired-startup-exec-readiness.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/daemon/bash-prompt-command-composition.test.ts",
+          "assertions": [
+            "scalar and array PROMPT_COMMAND values accept trailing separators and whitespace",
+            "escaped trailing spaces and semicolons remain byte-exact",
+            "BASH_REMATCH and chained DEBUG-trap command identity remain intact",
+            "OSC 133 A/C/D lifecycle ordering and command exit status remain exact"
+          ]
+        },
         {
           "file": "src/main/shell-startup-output-scanner.test.ts",
           "assertions": [
@@ -347,6 +365,15 @@
           "result": "passed",
           "durationSeconds": 6,
           "summary": "473 tests passed with one local Fish skip, including every-boundary scanner composition, real exec, silent-read, line-init-hook, renamed-image, disabled-bracketed-paste, and relay-owner oracles."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+          "result": "passed",
+          "durationSeconds": 6,
+          "summary": "233 tests passed with one local Fish skip, including exact Bash PROMPT_COMMAND byte/status/lifecycle composition across daemon, local, and relay owners."
         },
         {
           "date": "2026-08-12",
@@ -638,7 +665,7 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.8,
+          "durationSeconds": 1.6,
           "summary": "Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup."
         }
       ],
@@ -916,18 +943,24 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, direct-winner cancellation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca-cloud/pull/96"],
-      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
-      "oracle": "Inject deterministic relay close codes, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, direct-winner cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/pull/96",
+        "https://linear.app/stably/issue/STA-4587"
+      ],
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
       "testFiles": [
         "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
         "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
         "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
         "src/shared/mobile-relay-close-codes.test.ts"
       ],
       "assertionRefs": [
@@ -948,7 +981,31 @@
         {
           "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
           "assertions": [
-            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal"
+            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal",
+            "a missing or expired credential never presents a Relay connection that cannot start",
+            "backgrounding during credential selection cannot publish a stale Relay recovery path",
+            "a genuine failed Relay dial remains pending through its retry cooldown"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+          "assertions": [
+            "a supervisor-established Relay close plus 11 failed replacements publish reconnect attempt 12",
+            "the existing connection classifier escalates the continuous outage to Can't connect via Relay"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": [
+            "supervisor Relay attempts overlay but never replace a larger active-session retry count",
+            "count-only changes notify connection-path subscribers and clearing recovery restores the physical count"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+          "assertions": [
+            "a fresh credential starts Relay presentation with the controller's current count",
+            "missing or expired credentials never open a Relay socket"
           ]
         },
         {
@@ -958,21 +1015,21 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-25",
+          "date": "2026-08-17",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts",
           "result": "passed",
-          "durationSeconds": 0.89,
-          "summary": "Three focused mobile transport files passed with 39 assertions."
+          "durationSeconds": 2.31,
+          "summary": "Six focused mobile transport files passed with 82 assertions, including production-lifecycle outage escalation and logical count publication."
         },
         {
-          "date": "2026-07-25",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.19,
+          "durationSeconds": 0.17,
           "summary": "The shared close-code contract passed with five assertions."
         }
       ],
@@ -986,11 +1043,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The prior external-signal HOST_OFFLINE policy fails the retry oracle, and the prior serial direct probe fails the first-authenticated-endpoint timing oracle. Both pass with the candidate behavior."
+        "evidence": "The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms in the deterministic test, and every losing client is closed. A physical-device radio and battery budget is still required before promotion."
+        "evidence": "The production diff only projects the existing supervisor failure count through local setters and subscribers; it adds no call to a Relay dial, timer, socket, probe, or wire API. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -1022,14 +1079,14 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, and stale-generation outcomes. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
       ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay.",
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts"
       ],
       "testFiles": [
         "mobile/src/transport/client-context.test.ts",
@@ -1041,12 +1098,16 @@
         "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
         "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
         "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/connection-health.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "mobile/src/transport/client-context.test.ts",
-          "assertions": ["a retired close-on-release owner closes an ownerless manual reconnect"]
+          "assertions": [
+            "a retired close-on-release owner closes an ownerless manual reconnect",
+            "a Relay recovery path change rerenders observers without a transport-state change"
+          ]
         },
         {
           "file": "mobile/src/transport/host-open-recovery.test.tsx",
@@ -1097,18 +1158,29 @@
         },
         {
           "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": ["a delivery-unknown mutation is not replayed onto a replacement Relay"]
+          "assertions": [
+            "a delivery-unknown mutation is not replayed onto a replacement Relay",
+            "Relay recovery path changes publish and remain pending between failed dials",
+            "a connected path clears recovery state before any later disconnect"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a Relay fallback pending over five failed Tailscale attempts remains neutral and omits the Tailscale hint",
+            "a prolonged Relay recovery escalates without reviving the Tailscale hint"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-14",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
-          "durationSeconds": 0.74,
-          "summary": "Ten focused files passed 66 deterministic provider lifecycle, direct/Relay liveness, traffic, and delivery-ambiguity tests."
+          "durationSeconds": 0.77,
+          "summary": "Eleven focused files passed 85 deterministic provider lifecycle, path presentation, direct/Relay liveness, traffic, and delivery-ambiguity tests."
         }
       ],
       "runtimeBudget": {
@@ -4668,9 +4740,9 @@
       "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
@@ -4700,7 +4772,7 @@
         "src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts",
         "src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts",
         "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts",
-        "src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts",
+        "src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts",
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
         "src/renderer/src/lib/worktree-runtime-owner.test.ts",
         "src/renderer/src/store/selectors.test.ts",
@@ -4893,7 +4965,7 @@
           "date": "2026-07-30",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 8.77,
           "summary": "Nineteen files and 386 tests passed after rebasing onto 94cf2f1422f30fc309cb47c5e864a831d516fa8b, including exact-ID repo/worktree/group/folder host identity in both catalog orders, fail-closed active-repo selection when a runtime row is unavailable, selected runtime and SSH owner capture through final Add/Clone/Create/folder activation, direct-SSH authoritative pruning, reversed catalog responses, reconnect generation fencing, local-after-runtime isolation, and missing-catalog worktree routing."
@@ -4920,7 +4992,7 @@
           "date": "2026-07-31",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 7.1,
           "summary": "Twenty files and 430 tests passed on current main integration, including explicit runtime-owner preservation for terminal and browser session activation."
@@ -8299,22 +8371,25 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, Electron/CDP live-PTY Sogou-style repros, and a macOS renderer/main slice for Preview kitty commits: claimed press/release pairing in both keyup orderings, and snapshot flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
         "https://github.com/stablyai/orca/pull/6513",
         "https://github.com/stablyai/orca/pull/6999"
       ],
-      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
-      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. Layout-native Option text must preserve negotiated CSI-u alternate/associated fields and lock modifiers, distinguish repeat from press, and resolve releases with the press's primary identity plus the actual keyup modifiers without exposing a partial or stale layout refresh. An in-focus macOS input-source change must invalidate both renderer authorities before the next key can use the old source. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
+      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
-        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts"
       ],
       "testFiles": [
+        "tests/e2e/terminal-option-composed-ascii.spec.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts",
@@ -8324,9 +8399,19 @@
         "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+        "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
+        "src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts",
+        "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
+        "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
+        "src/preload/app-restart-checkpoint-routing.test.ts",
+        "src/renderer/src/web/web-preload-api-ui.test.ts",
         "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
         "src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts",
         "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
         "src/shared/terminal-kitty-keyboard-mode-tracker.test.ts",
         "src/main/ipc/terminal-preview.test.ts",
         "src/main/ipc/terminal-preview-output-stream.test.ts",
@@ -8339,13 +8424,15 @@
           "file": "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
           "assertions": [
             "native text commits route once to the intended PTY",
-            "composition/preedit bookkeeping does not leak premature text"
+            "composition/preedit bookkeeping does not leak premature text",
+            "multi-codepoint committed text is reported independently from physical key identity"
           ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
           "assertions": [
-            "synthetic and native input-source paths are classified for covered fixtures"
+            "synthetic and native input-source paths are classified for covered fixtures",
+            "report-all commits retain the unshifted physical key while associated text carries the committed substitution"
           ]
         },
         {
@@ -8397,6 +8484,89 @@
           ]
         },
         {
+          "file": "tests/e2e/terminal-option-composed-ascii.spec.ts",
+          "assertions": [
+            "a live kitty-negotiated pane receives the Option-composed ASCII character, not the physical alt chord",
+            "an Option layer that also needs Shift still reaches the pty as text",
+            "configured Option-as-Alt still reports the layout-resolved physical chord",
+            "a non-ASCII Option glyph still reaches the application as its alt hotkey"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts",
+          "assertions": [
+            "report-all Option events encode exact alternate, repeat, release, and associated-text fields",
+            "report-all native commits preserve unresolved layout characters and distinguish functional from printable numpad identities",
+            "associated text omits forbidden control codepoints",
+            "release events omit associated text and sparse PC-101 alternates retain their parameter position",
+            "CapsLock and NumLock occupy their protocol modifier bits"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts",
+          "assertions": [
+            "native Option-composed ASCII remains text outside report-all mode while configured-Alt sides remain chords",
+            "pending shifted-layout data fails safe to composed text while configured-Alt ownership remains authoritative",
+            "dead, Process, Unidentified, composing, and keyCode-229 events stay with composition",
+            "configured Alt-side dead keys retain legacy chords while other IME-owned events stay with composition",
+            "policy-owned configured Alt uses the active layout, preserves engine-owned global legacy and form-only legacy encoding, and omits associated text",
+            "report-all uses layout primary/shifted identities plus committed text for ISO and Space keys"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+          "assertions": [
+            "owned releases use live Shift and Option state and current alternate-key flags",
+            "owned releases retain the delivered press identity across layout, Shift, and NumLock changes",
+            "a native dead-key keyup is consumed without inventing an unmatched protocol release",
+            "event-type pop consumes without bytes and repeat keydowns cannot replace the original release owner"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
+          "assertions": [
+            "complete native layout characters replace atomically while input continues using the prior complete snapshot",
+            "native and browser layout sources from separate transactions are never combined",
+            "an input-source notification clears stale characters synchronously and fences the older refresh"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts",
+          "assertions": [
+            "a stale asynchronous input-source probe cannot overwrite the newest classification",
+            "an input-source notification changes the classification to unknown synchronously before refreshing"
+          ]
+        },
+        {
+          "file": "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
+          "assertions": [
+            "the native snapshot parser preserves input/layout identities and both modifier layers"
+          ]
+        },
+        {
+          "file": "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
+          "assertions": [
+            "the distributed input-source notification invalidates every live window before waiting out the old helper read",
+            "rapid input-source changes coalesce to one latest-generation refresh signal",
+            "destroyed windows and teardown races cannot crash the main process, and will-quit unsubscribes exactly once",
+            "non-macOS processes install no native subscription"
+          ]
+        },
+        {
+          "file": "src/preload/app-restart-checkpoint-routing.test.ts",
+          "assertions": [
+            "macOS keyboard reads and the change subscription remain wired after main integration",
+            "the two-phase change payload reaches the renderer unchanged",
+            "the subscription disposer removes the exact IPC listener"
+          ]
+        },
+        {
+          "file": "src/renderer/src/web/web-preload-api-ui.test.ts",
+          "assertions": [
+            "web fallbacks expose no local captured chords, no native layout snapshot, and a no-op layout-change subscription"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
           "assertions": [
             "the real forwarder behind the Preview bridge encodes the commit from the snapshot-proven flags before any live output",
@@ -8421,6 +8591,12 @@
           "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
           "assertions": [
             "the Preview hands the forwarder the live kitty mirror seeded from the snapshot's proven flags"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
+          "assertions": [
+            "native and configured-side dead-key releases remain owned by the Preview without duplicate bytes"
           ]
         },
         {
@@ -8467,13 +8643,40 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-11",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
           "result": "passed",
-          "durationSeconds": 9.84,
-          "summary": "8 test file(s) passed, 288 tests, covering the Preview kitty slice: real forwarder bytes at snapshot-proven flags, press/release pairing across both keyup/insertText orderings, and flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts — asserted on the daemon snapshot and on a host-pushed remote snapshot that carries the flags with their sequence. The emitter-side rule that a remote SnapshotStart withholds flags without a seq has no direct assertion yet; the client-side gate is what these files pin."
+          "durationSeconds": 0.8,
+          "summary": "The deterministic Option/layout slice passed exact protocol bytes for filtered committed associated text, physical and alternate key identities, functional and printable numpad keys, press-pinned releases across layout and lock changes, lock modifiers, layout-aware configured Alt across individual flags and dead keys, terminal-engine-owned global legacy handling, IME-owned DOM events, ISO/Space keys, native dead-key release suppression, pending-layout text fallback, release ownership, the two-phase native-read barrier, synchronous cache invalidation, rapid-change coalescing, generation fencing, every-live-window fanout, cleanup, and native/web platform fallbacks."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts",
+          "result": "passed",
+          "durationSeconds": 66,
+          "summary": "Four live-Electron scenarios passed against a real pty whose kitty flags were armed by the application's own CSI > 1 u: Option-composed `@` and Option+Shift-composed `\\` arrive as text with no alt chord, configured Option-as-Alt still reports the layout-resolved chord, and a non-ASCII Option glyph still reaches the application as its alt hotkey. Discrimination was proven by mutation rather than assumed — restoring the pre-fix policy makes exactly the two composed-text scenarios fail with the character never reaching the pty, while both chord scenarios stay green."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 13.9,
+          "summary": "The Electron live-PTY IME gate passed three scenarios covering Windows IME Shift commit, candidate-selector suppression with committed Chinese text, and composed text/cursor/Backspace stability; the opt-in real-agent scenario remained skipped."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.3,
+          "summary": "9 test files and 172 tests passed, covering the Preview kitty slice: real forwarder bytes at snapshot-proven flags, press/release pairing across both keyup/insertText orderings, native and configured-side dead-key release ownership, and flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts — asserted on the daemon snapshot and on a host-pushed remote snapshot that carries the flags with their sequence. The emitter-side rule that a remote SnapshotStart withholds flags without a seq has no direct assertion yet; the client-side gate is what these files pin."
         },
         {
           "date": "2026-08-09",
@@ -8544,7 +8747,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Terminal IME hot-path audit clean on 2026-07-11: candidate guards add O(1) boolean checks plus bounded per-pane Space/digit state and one renderer-scoped currently pressed physical-letter set; ref-counted renderer and pane blur listeners are disposed with pane lifecycle; no per-pane keyboard-event fan-out, polling, IPC, subprocess work, or SSH/remote transport cost added."
+        "evidence": "Terminal input hot-path audit clean on 2026-08-16: candidate guards retain O(1) checks and bounded per-pane state. Layout changes add one process-lifetime native listener, two singleton renderer subscriptions, one O(live windows) broadcast per OS event, and generation-fenced refreshes whose native helper read is deduplicated in flight. The path is event-driven with will-quit/dispose cleanup and adds no polling, timers, per-key IPC, SSH/remote transport work, unbounded queues, or retained terminal data."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",
@@ -9056,6 +9259,145 @@
       "demotionRule": "Keep non-blocking or demote to protection none if a generic busy title authorizes without exact title, verified-launch, or foreground identity; provider confirmation becomes unconditional; exact-PTY mismatch can write bytes; unsupported providers fail open; or the focused gate flakes without an actionable product or harness defect."
     },
     {
+      "id": "terminal-input.cli-agent-prompt-submit",
+      "title": "CLI text plus Enter settles recognized agent composers before submit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "cli-rpc-runtime-pty-contract",
+      "surfaces": [
+        "terminal send CLI",
+        "terminal.send RPC",
+        "agent prompt injection",
+        "PTY writes",
+        "bracketed paste"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and exact legacy behavior for every other configured agent. SSH, daemon, and remote-runtime remain explicit gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4328",
+        "https://github.com/stablyai/orca/issues/14525"
+      ],
+      "invariant": "A public CLI send containing non-empty text plus Enter and no interrupt identifies agent-prompt intent. The owning runtime uses bracketed-paste and settled submit only when a fresh foreground-process read positively identifies the exact target as Claude or Codex on a desktop call; every other agent, stale agent metadata over a shell, text-only input, bare Enter, interrupts, mobile input, query replies, and older clients keep the direct terminal contract.",
+      "oracle": "Launch a bare fake Codex through the real Electron PTY and delay its composer render for 1,200 ms, beyond the legacy generic 500 ms gap. Send a 557-byte prompt with the public CLI and require the marker, zero premature Enter, no rescue Enter, and one submission. POSIX child stdin must retain one bracketed-paste frame; Windows ConPTY consumes that control frame, so runtime tests require the frame at the PTY write boundary while the Windows child requires the exact prompt. The same harness against the installed pre-fix runtime must record one premature Enter and require one bare rescue Enter. Focused units require CLI intent only for text plus Enter, settlement only for freshly identified Claude/Codex, the legacy platform delay for every other configured agent, stale Codex launch identity over a shell to fall back, no wrapper polling, and byte-for-byte direct delivery for non-targets.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+        "pnpm run build:cli && pnpm exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm.cmd exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "node tests/tools/repro-terminal-send-submit.mjs --cli orca --worktree <registered-worktree> --discard-report"
+      ],
+      "testFiles": [
+        "src/cli/handlers/terminal.test.ts",
+        "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
+        "src/main/runtime/rpc/terminal-send.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/shared/agent-prompt-injection.test.ts",
+        "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
+        "tests/tools/repro-terminal-send-submit.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/cli/handlers/terminal.test.ts",
+          "assertions": [
+            "combined text and Enter carries explicit agent-prompt intent",
+            "text-only and bare Enter remain direct terminal input"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
+          "assertions": [
+            "a freshly proven Claude or Codex desktop target uses settled prompt delivery",
+            "a non-target agent or shell preserves the existing direct send"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "Claude and Codex wait for marker-gated composer quiescence before submit",
+            "every other configured TUI agent retains the legacy platform delay",
+            "a speculative CLI prompt check does not poll wrapper foregrounds",
+            "the PTY write boundary retains bracketed framing and one delayed submit"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
+          "assertions": [
+            "the public source-built CLI submits after a delayed composer render without rescue",
+            "the fake agent receives the marker and zero premature Enter on macOS and Windows",
+            "POSIX preserves one bracketed-paste frame while Windows validates the ConPTY-observable payload"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node tests/tools/repro-terminal-send-submit.mjs --cli orca --worktree <registered-worktree> --discard-report",
+          "result": "failed",
+          "durationSeconds": 5.46,
+          "summary": "The installed pre-fix runtime received all 567 prompt bytes but no bracketed-paste frame; Enter arrived before the 1,200 ms composer render and one later bare Enter was required."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:cli && pnpm exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 38.5,
+          "summary": "Two independent final source-built CLI/RPC/runtime/PTY journeys passed with one bracketed-paste frame, zero premature Enter, and no rescue send (36.5s and 38.5s)."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "pnpm.cmd exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 47.6,
+          "summary": "Two independent physical Windows source-built Electron/CLI/ConPTY journeys passed at cf814f2f46 with the prompt marker received, zero premature Enter, and no rescue send (47.6s and 47.1s)."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+          "result": "passed",
+          "durationSeconds": 23.2,
+          "summary": "After rebasing onto current main, the final narrowed runtime/CLI/RPC suite passed 1,201 tests with one skip, including fresh Claude/Codex identity, stale-agent shell fallback, and legacy timing for every other configured agent."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "focused units plus one isolated Electron CLI/PTY journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The final oracle passed twice in independent macOS app launches and twice on physical Windows. A shared --repeat-each fixture mode failed before test execution because only one seeded worktree loaded; supported isolated invocations were used for product evidence. CI history is not yet collected."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The fake-composer oracle was red against the installed pre-fix runtime with prematureEnters=1 and rescueSent=true. It also caught a source-built late-identity race with a complete paste frame but one premature Enter before the render gate began resolving foreground identity. The final candidate is green on macOS and Windows with prematureEnters=0 and rescueSent=false."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Only a CLI request with non-empty text plus Enter and no interrupt adds a bounded fresh foreground read and one non-retrying liveness check. Positively identified Claude and Codex reuse the O(prompt bytes) chunked prompt sender plus one PTY-local listener until post-marker quiescence or the bounded fallback. Every other agent and shell retains the existing direct-send path. Text-only, bare Enter, interrupt, mobile, renderer stream input, and query replies add no work."
+      },
+      "promotionCriteria": [
+        "Collect live Codex and Claude CLI sends on representative slow systems.",
+        "Retain mixed-version evidence that old hosts strip the optional intent and new hosts accept old clients without a protocol bump."
+      ],
+      "knownGaps": [
+        "Live SSH/daemon/remote-runtime evidence is not yet attached.",
+        "Only Claude and Codex opt into settlement; every other agent retains the legacy behavior until independently validated.",
+        "A new CLI talking to an old host safely loses the optional field and therefore keeps the old timing behavior until the host updates.",
+        "The E2E fake agent models the submission race without requiring external agent authentication; live account-backed agents are covered separately."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if direct shell/mobile/query input is reframed, an unrecognized target receives bracketed paste, a prompt can emit duplicate Enter, mixed-version decoding rejects the optional field, or the deterministic fake-composer candidate requires a rescue send."
+    },
+    {
       "id": "terminal-input.agent-prompt-injection",
       "title": "Orchestration agent prompts arrive as bracketed paste before submit",
       "maturity": "experimental",
@@ -9079,8 +9421,8 @@
         "https://github.com/stablyai/orca/issues/13821",
         "https://github.com/stablyai/orca/issues/14347"
       ],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; a late marker receives a fresh settlement window.",
-      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, and Claude- and Codex-shaped multi-frame renders where the legacy platform delay and first show-cursor marker are both premature. The candidate waits for post-marker output quiescence before one submit, resets that window on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
+      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
@@ -9106,7 +9448,8 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
-            "Claude and Codex ignore unrelated and split pre-marker output, then wait for post-marker render quiescence before one submit",
+            "Claude and Codex ignore unrelated and split pre-marker output, then wait for render quiescence before one submit",
+            "every other configured TUI agent retains the platform delay",
             "a late Codex marker receives a fresh settlement window before one submit",
             "a silent Claude composer reaches one bounded fallback submit",
             "a marked Claude composer with continuous render output reaches one bounded fallback submit",
@@ -9199,7 +9542,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude and Codex add one PTY-local output listener until 1.5s of post-marker output quiescence or an 8s fallback; a late first marker restarts the bounded window and each later frame resets one quiet timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude and Codex add one PTY-local output listener until 1.5 seconds of post-marker output quiescence or the bounded fallback; each later frame resets one quiet timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 // Import from the production source of truth so a filename rename can't silently
@@ -158,6 +159,46 @@ describe('mobile pairing userData path stability', () => {
 
     expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
     expect(readFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), 'utf-8')).toBe(canonicalKeypair)
+  })
+
+  it('rolls back the first copy when the second file fails to migrate', async () => {
+    // A half-copied pair would leave the registry without its E2EE key and, worse,
+    // trip the existing-target guard so the next launch never retries.
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof NodeFs>('node:fs')
+      let copies = 0
+      return {
+        ...actual,
+        default: actual,
+        copyFileSync: (source: string, target: string) => {
+          copies += 1
+          if (copies === 2) {
+            throw new Error('simulated copy failure')
+          }
+          actual.copyFileSync(source, target)
+        }
+      }
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      appState.userData = canonicalDir
+      const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
+        await import('../persistence')
+      initDataPath()
+
+      appState.userData = lateDir
+      writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), JSON.stringify([]))
+      writeFileSync(join(lateDir, E2EE_KEYPAIR_FILENAME), JSON.stringify({ v: 1 }))
+
+      expect(() => migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)).not.toThrow()
+
+      expect(errorSpy).toHaveBeenCalled()
+      expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
+      expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
+    } finally {
+      errorSpy.mockRestore()
+      vi.doUnmock('node:fs')
+    }
   })
 
   it('no-ops when the source path equals the canonical path (no rename happened)', async () => {

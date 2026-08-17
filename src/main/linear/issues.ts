@@ -18,14 +18,9 @@ import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../shared/linear/issue-attribute-filter'
-import {
-  acquire,
-  release,
-  getClients,
-  isAuthError,
-  clearToken,
-  type LinearClientForWorkspace
-} from './client'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
+import { getClients, isAuthError, type LinearClientForWorkspace } from './client'
 import { buildLinearListIssueFilter } from './issue-list-filter'
 import { mapLinearIssue } from './mappers'
 

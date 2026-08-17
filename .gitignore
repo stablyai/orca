@@ -94,6 +94,8 @@ docs/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
+!docs/agent-skill-sharing-implementation-checklist.md
+!docs/agent-skill-sharing-installation-plan.md
 !docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
@@ -148,3 +150,8 @@ tests/tools/benchmarks/results/terminal-pipeline-*.json
 
 # Old release trees the cross-version wire harness extracts on demand
 tests/e2e/.cross-version-checkouts/
+
+# Bundler's install path for the mobile release toolchain (mobile/Gemfile.lock
+# IS committed). Also keeps oxfmt/oxlint, which honor this file, from walking
+# vendored gems.
+/mobile/vendor/

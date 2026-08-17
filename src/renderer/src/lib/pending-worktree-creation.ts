@@ -11,7 +11,7 @@ import type {
   WorkspaceStatus
 } from '../../../shared/worktree/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.

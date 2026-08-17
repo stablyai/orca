@@ -32,7 +32,7 @@ vi.mock('./git/runner', async () => ({
 
 describe('runner script builders', () => {
   it('builds Windows runners for newline-heavy scripts without line-array splitting', async () => {
-    const { buildWindowsRunnerScript } = await import('./hooks')
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
     const script = `${'\r\n'.repeat(10_000)}pnpm install\r\nnpm run build\n`
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
@@ -63,7 +63,7 @@ describe('runner script builders', () => {
   })
 
   it('builds POSIX runners without regex-wide CRLF normalization', async () => {
-    const { buildPosixRunnerScript } = await import('./hooks')
+    const { buildPosixRunnerScript } = await import('./setup-runner-script-text')
     const script = `${'echo setup\r\n'.repeat(10_000)}echo done`
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
 
@@ -102,7 +102,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -142,7 +142,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -180,7 +180,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const { buildSetupRunnerCommand } = await import('../shared/setup-runner-command')
       const result = createSetupRunnerScript(
         makeRepo(),
@@ -213,7 +213,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -242,7 +242,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -283,7 +283,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(makeRepo(), '/test/worktree', 'pnpm install')
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
@@ -305,7 +305,7 @@ describe('createSetupRunnerScript', () => {
   it('omits waitForAgentStartup unless the repo explicitly waits for setup', async () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
-    const { createSetupRunnerScript } = await import('./hooks')
+    const { createSetupRunnerScript } = await import('./worktree-runner-script')
 
     expect(
       createSetupRunnerScript(makeRepo(), '/test/worktree', 'echo setup').waitForAgentStartup
@@ -323,7 +323,7 @@ describe('createSetupRunnerScript', () => {
   it('marks setup-runner terminals for the always-on credential guard', async () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
-    const { createSetupRunnerScript } = await import('./hooks')
+    const { createSetupRunnerScript } = await import('./worktree-runner-script')
 
     const setup = createSetupRunnerScript(makeRepo(), '/test/worktree', 'git fetch')
 
@@ -341,7 +341,7 @@ describe('resolveSetupRunnerShell', () => {
   }
 
   it('maps git-bash to POSIX setup launch metadata on Windows', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32', installedGitBash)
@@ -351,7 +351,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('falls back to the cmd runner when the git-bash setting has no installed Git Bash', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32', {
@@ -361,7 +361,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('keeps the cmd runner for a non-Git bash such as Cygwin', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'C:\\cygwin64\\bin\\bash.exe' }, 'win32', {
@@ -371,7 +371,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('keeps the cmd runner for a bare bash whose flavor cannot be resolved', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32', {
@@ -381,7 +381,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('uses the POSIX runner for a bare bash that resolves to Git Bash', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32', installedGitBash)
@@ -389,7 +389,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('uses the POSIX runner for an extension-less Git Bash path', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell(
@@ -401,7 +401,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('preserves the existing cmd runner for PowerShell terminals', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell(
@@ -416,7 +416,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('preserves cmd setup compatibility when a Windows-host project has a WSL shell setting', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
 
     expect(
       resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32', installedGitBash)
@@ -424,7 +424,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('classifies an installed explicit Git Bash executable as a POSIX runner', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
     const { resolveWindowsGitBashShellPath } = await import('./git-bash')
 
     expect(
@@ -440,7 +440,7 @@ describe('resolveSetupRunnerShell', () => {
   })
 
   it('falls back to the cmd runner when the explicit Git Bash path no longer exists', async () => {
-    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
     const { resolveWindowsGitBashShellPath } = await import('./git-bash')
 
     // Regression: a stale configured path used to commit setup to a .sh runner the

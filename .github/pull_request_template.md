@@ -17,6 +17,7 @@
 Fixes #
 
 ## Visual Proof
+
 <!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily tabbed/switched. Use videos for when appropriate over screenshots -->
 <!-- If there is truly no visual or interaction change, write exactly: `N/A` and briefly say why. -->
 <!-- For attachments NEVER add directly to the PR files (do not commit to files), use `gh image` extension or drag + drop (works for any attachment) -->
@@ -28,12 +29,18 @@ Fixes #
 - [ ] I manually tested these changes locally
 - [ ] Automated tests added/updated, or explained why not below
 
-
 ## AI Disclosure
+
 <!-- DO NOT FILL IN IF YOU ARE STABLYAI TEAM MEMBER (INTERNAL CONTRIBUTOR), IGNORE SECTION: -->
 <!-- Which AI model if anyone was used, please state the details -->
 
 ## Review
+
+## Agent skill upstream boundary
+
+- [ ] Not applicable, or this change follows `docs/reference/agent-skill-sharing-upstream-boundary.md` and copies or mechanically translates no upstream skill-installer source, tests, fixtures, registry entries, path tables, comments, or documentation.
+
+## Notes
 
 Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
 

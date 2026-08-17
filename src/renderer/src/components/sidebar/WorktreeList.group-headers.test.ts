@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/sidebar-row-reveal-ancestors'
+import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/navigation/reveal-ancestors'
 import {
   createAppStoreModuleMock,
   createDropdownMenuModuleMock,
@@ -150,6 +150,24 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
+  })
+
+  it('uncollapses pinned reveal for a descendant that only lives under a pinned parent', () => {
+    const child = makeWorktree({
+      id: 'child-of-pinned',
+      instanceId: 'child-of-pinned-instance',
+      displayName: 'Child of pinned',
+      branch: 'child',
+      sortOrder: 2
+    })
+
+    expect(
+      getPinnedWorktreeRevealCollapsedGroupKeys({
+        worktree: child,
+        collapsedGroups: new Set(['pinned', 'all']),
+        inPinnedSection: true
+      })
+    ).toEqual(['pinned'])
   })
 
   it('uncollapses pinned reveal through the pinned section after host expansion', () => {

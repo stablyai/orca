@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
+import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
@@ -75,6 +76,7 @@ function App(): React.JSX.Element {
               floatingWorkspace={floatingWorkspace}
               onboardingGate={onboardingGate}
             />
+            <BrowserWebAuthnAccountDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>

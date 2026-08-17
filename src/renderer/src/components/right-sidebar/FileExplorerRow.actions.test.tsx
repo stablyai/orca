@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import {
-  copyFileToOsClipboard,
-  downloadRemoteFile,
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
   shouldShowOpenInTerminalAction,
   shouldShowRemoteDownloadAction,
   shouldShowViewFileAction
-} from './FileExplorerRow'
+} from './file-explorer-row-action-visibility'
 import { directoryNode, fileNode } from './file-explorer-tree-node-test-fixtures'
 import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 

@@ -30,7 +30,8 @@ describe('orchestration worker recovery', () => {
     })
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
-      closed: true
+      tabId: 'tab-worker',
+      ptyKilled: true
     } as never)
   })
 
@@ -80,7 +81,7 @@ describe('orchestration worker recovery', () => {
       call('orchestration.workerShow', { dispatch: dispatch.id })
     ).resolves.toMatchObject({
       worker: { state: 'ready' },
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       terminal: { handle: 'term_worker' }
     })
     await expect(

@@ -46,7 +46,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'

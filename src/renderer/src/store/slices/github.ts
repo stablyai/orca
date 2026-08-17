@@ -34,14 +34,16 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { IssueSourcePreference, Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
-  GetProjectViewTableArgs,
-  GetProjectViewTableResult,
   GitHubProjectFieldMutationValue,
-  GitHubProjectMutationResult,
   GitHubProjectRow,
-  GitHubProjectTable,
-  GitHubProjectViewError
+  GitHubProjectTable
 } from '../../../../shared/github/project-types'
+import type {
+  GetProjectViewTableResult,
+  GitHubProjectMutationResult,
+  GitHubProjectViewError
+} from '../../../../shared/github/project-result-types'
+import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,

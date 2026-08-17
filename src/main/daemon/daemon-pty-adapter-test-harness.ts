@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { DaemonFileLog } from './daemon-file-log'
 
 export type SpawnSubprocess = ConstructorParameters<typeof DaemonServer>[0]['spawnSubprocess']

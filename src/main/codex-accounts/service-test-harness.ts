@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
+import type { CodexRateLimitHomeResolution } from './runtime-home-service'
 
 export const testState = {
   userDataDir: '',
@@ -197,14 +198,16 @@ export function createRateLimits(): RateLimitsStub {
 export type RuntimeHomeStub = {
   syncForCurrentSelection: Mock<(...args: unknown[]) => void>
   clearLastWrittenAuthJson: Mock<(...args: unknown[]) => void>
-  prepareForRateLimitFetch: Mock<(...args: unknown[]) => string | null>
+  prepareForRateLimitFetch: Mock<(...args: unknown[]) => CodexRateLimitHomeResolution>
 }
 
 export function createRuntimeHome(): RuntimeHomeStub {
   return {
     syncForCurrentSelection: vi.fn(),
     clearLastWrittenAuthJson: vi.fn(),
-    prepareForRateLimitFetch: vi.fn(() => null)
+    prepareForRateLimitFetch: vi.fn(
+      (): CodexRateLimitHomeResolution => ({ kind: 'ready', codexHomePath: null })
+    )
   }
 }
 

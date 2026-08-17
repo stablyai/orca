@@ -262,6 +262,7 @@
         },
         "editor": {
           "dcb521ed29": "This file is in a conflict state, but no working-tree file is available to edit.",
+          "conflictPlaceholderGuidance": "Resolve the conflict in Git or restore one side before reopening it.",
           "51f15c37d3": "Cannot open directory: {{value0}}",
           "f2e00db373": "File not found: {{value0}}",
           "checkRunDetailsUnavailable": "No details are available for this check.",
@@ -333,7 +334,18 @@
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
           "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
-          "a17f4d2e93": "Could not update this workspace."
+          "a17f4d2e93": "Could not update this workspace.",
+          "preservedBranchCleanupHostAmbiguous": "Multiple preserved branch cleanups are pending for \"{{value0}}\"; specify the host.",
+          "metadata": {
+            "worktree": {
+              "meta": {
+                "persist": {
+                  "877e3638d8": "Update the remote runtime to change this workspace’s linked issue",
+                  "4367540861": "Update the remote runtime to link Linear issues"
+                }
+              }
+            }
+          }
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -685,13 +697,15 @@
           "missing": "Folder not found",
           "notDirectory": "Path is not a folder",
           "ambiguousConnection": "Cannot determine connection",
-          "unavailable": "Cannot check folder"
+          "unavailable": "Cannot check folder",
+          "unrecognized": "Folder is not usable"
         },
         "description": {
           "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
           "notDirectory": "{{path}} exists, but it is not a folder.",
           "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
-          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.",
+          "unrecognized": "Orca cannot use {{path}}, and this version does not recognize the reason. Update Orca to see the details."
         },
         "createError": {
           "title": {
@@ -771,7 +785,14 @@
             "toast": {
               "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
               "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
-              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google."
+              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.",
+              "undecryptableAppBound": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
+              "undecryptableAppBoundMixed": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
+              "undecryptableKeyring": "{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
+              "undecryptableKeyringMixed": "{{value0}} cookies could not be decrypted because the system keyring was unavailable; {{value1}} more could not be decrypted for another reason. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
+              "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
+              "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
+              "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again."
             }
           }
         }
@@ -928,6 +949,8 @@
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
+        "shareSkillsTitle": "Share Skills",
+        "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
         "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
       },
       "useAppMenuPaste": {
@@ -935,6 +958,9 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Paste is too large."
+      },
+      "useInstalledAgentSkills": {
+        "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
         "title": "Seeing “Orca would like to access…” prompts?",
@@ -1021,7 +1047,7 @@
         "e52bed9264": "No checks reported yet",
         "90020cc1f3": "This pull request has no reported checks yet.",
         "ecffebc251": "No checks found",
-        "5dddefdf58": "Open in GitHub",
+        "checkOpenInBrowser": "Open in browser",
         "744197c84d": "No inline output is available for this check.",
         "08d072664d": "Jobs",
         "96d8f36798": "Annotations",
@@ -1169,7 +1195,15 @@
         "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
         "e15a8b77ef": "No inline details are available for this check.",
         "e45324fbed": "Failed to load check details.",
-        "dcb3c546fe": "Retry"
+        "dcb3c546fe": "Retry",
+        "85a2b66f54": "Open files on GitHub",
+        "86d84a17ca": "Add a review comment",
+        "d9fa90b625": "Failed to load diff.",
+        "4aecf121e7": "Close",
+        "8812225174": "Reopen",
+        "09d67a0f9b": "Failed to close pull request",
+        "88809e79db": "Failed to reopen pull request",
+        "00f55cc17b": "Repository access is unavailable for this pull request."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1477,6 +1511,9 @@
         "connectTimedOut": "Connection timed out. It may still be connecting in the background.",
         "connectingHost": "Connecting…",
         "connectHost": "Connect",
+        "setLocation": "Set project location",
+        "setLocationOnHost": "Set project location on {{host}}",
+        "setLocationTooltip": "Choose a folder or clone this project onto {{host}}.",
         "addHost": "Add host",
         "addHostHint": "Register another machine or Orca server",
         "addSshHost": "Add SSH host",
@@ -1564,7 +1601,6 @@
         "c57873d721": "Pull request merged",
         "a63b3c159c": "This will update the pull request on GitHub.",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "Failed to {{value0}} PR",
         "710e47aa06": "Pull request reopened",
         "7aa3b5f706": "Pull request closed",
         "3d77438c92": "This will reopen the pull request on GitHub.",
@@ -1662,7 +1698,13 @@
         "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
         "6b1d5ee3e4": "No inline details are available for this check.",
         "e04c027d98": "Failed to load check details.",
-        "5df7c41d2a": "Retry"
+        "5df7c41d2a": "Retry",
+        "77482513f8": "Close",
+        "2f5195c6a0": "Reopen",
+        "4b8ae7303f": "Failed to load diff.",
+        "closePullRequestFailed": "Failed to close pull request",
+        "reopenPullRequestFailed": "Failed to reopen pull request",
+        "diffLoadTimedOut": "Timed out loading this diff."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -2767,12 +2809,15 @@
           "commands": {
             "TerminalQuickCommandActionToggle": {
               "b0d58e37ed": "Agent Prompt",
-              "b5ea4d64f6": "Terminal Command"
+              "b5ea4d64f6": "Terminal Command",
+              "terminal_short": "Terminal",
+              "agent_short": "Agent"
             },
             "TerminalQuickCommandAppendEnterSwitch": {
               "e4e5fed3b3": "Toggle append Enter",
               "c936c2d6d2": "Submit immediately instead of only inserting text.",
-              "5fa607d807": "Append Enter"
+              "5fa607d807": "Append Enter",
+              "767e4be3e3": "Append Enter — run immediately"
             },
             "TerminalQuickCommandDialog": {
               "925b8e0f6e": "Advanced",
@@ -2784,12 +2829,16 @@
               "346d409ab2": "Choose agent",
               "0adba8fa0c": "Agent",
               "ec8f081919": "Action",
-              "ed04233b3e": "Save terminal commands or agent prompts for quick access.",
+              "ed04233b3e": "Saved items appear in the tab bar menu for one-click run.",
               "ca414324ee": "Command Text",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Add Quick Command",
               "f9b184fc16": "Edit Quick Command",
-              "6751598542": "edit"
+              "6751598542": "edit",
+              "command_label": "Command",
+              "agent_toolbar_hint": "Supports /goal, skills, paths",
+              "agent_footer_hint": "Multi-line prompts are fine — keep them focused.",
+              "resize_hint": "Drag corner to resize"
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "Save",
@@ -3448,7 +3497,9 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
-            "floatingTerminalNewActivity": "{{label}}, new activity"
+            "floatingTerminalNewActivity": "{{label}}, new activity",
+            "codexSignInSuccess": "Signed in to Codex",
+            "codexSignInError": "Codex sign-in failed. Please try again."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4045,6 +4096,49 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "Refresh",
+          "984405683f": "Plugin",
+          "4d177feabd": "Bundled",
+          "aa59462502": "Repository",
+          "571c5818c1": "Home",
+          "0bc1379f4c": "All sources",
+          "38e0951c3a": "Agent Skills",
+          "fb6bf60b52": "Claude",
+          "426be2aac6": "Codex",
+          "39b6998ddb": "All providers",
+          "a68dee6a32": "Search skills",
+          "e46e162e2e": "from",
+          "b088e0785d": "Beta",
+          "f43ad6edf3": "Skills",
+          "7e828fb2c6": "Back",
+          "ea72d6185b": "Could not scan skills",
+          "dc4c3328ee": "Reveal file",
+          "9963dff6d3": "No description found.",
+          "995fde8337": "Could not reveal skill file",
+          "ab5b777350": "Checked home, repository, bundled, and plugin skill folders.",
+          "08a321a984": "Adjust the search or filters.",
+          "4acd6d68ec": "No skills found",
+          "6a62a0168c": "No matches",
+          "cd7893fbc1": "Scanning skills",
+          "35b9a724a0": "Available",
+          "0c74e7ff34": "Installed",
+          "c13b82793c": "Manage installs",
+          "aee7b99cc6": "Install from link",
+          "filterProvider": "Filter by agent",
+          "filterSource": "Filter by source",
+          "allSources": "All",
+          "clearFilters": "Clear filters",
+          "closeSkills": "Close skills",
+          "closeTooltip": "Close · Esc",
+          "moreActions": "More actions",
+          "sharedLinks": "Shared links",
+          "emptyCopy": "The scanned skill folders are empty. Install a shared bundle, or refresh after adding a skill.",
+          "retry": "Retry",
+          "remoteShareNotice": "These skills live on {{host}}. Open Skills on that machine to share them.",
+          "viewSwitch": "Show",
+          "searchLinks": "Search links"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
           "titleMany": "{{value0}} installed Orca skills are out of date",
@@ -4143,6 +4237,397 @@
           "needsAttention": "Review skill",
           "checking": "Checking...",
           "checkFailed": "Check failed"
+        },
+        "SkillShareDialog": {
+          "reconnect": "Reconnect your Orca account before sharing.",
+          "unconfigured": "Connect an Orca Cloud account before sharing.",
+          "prepareFailed": "Could not prepare this skill for sharing.",
+          "peopleRequired": "Select at least one teammate.",
+          "publishCancelled": "Upload cancelled. The prepared copy is still available to retry.",
+          "publishFailed": "Could not publish this skill. The prepared copy is still available to retry.",
+          "copied": "Share link copied",
+          "preparing": "Preparing preview…",
+          "ready": "Skill link ready",
+          "title": "Share skill",
+          "readyDescription": "Recipients authenticate with Orca before they can inspect or install it.",
+          "newVersionDescription": "Review the exact files, then publish an immutable version to the existing Cloud package.",
+          "description": "Review the exact files, choose who can access them, then publish an immutable version.",
+          "0f07fa2a79": "Publish skill",
+          "7aa4ba0dba": "Publish new version",
+          "3a51d0f34f": "Cancel upload",
+          "e9d652ae3d": "Cancelling…",
+          "30985d4fc0": "Cancel",
+          "3af85f6add": "Done",
+          "readyDescriptionV2": "Anyone with this unlisted link can inspect and install the skills.",
+          "descriptionV2": "Review the exact files, then publish an immutable version behind an unlisted link.",
+          "publishBundle": "Publish bundle"
+        },
+        "SkillCard": {
+          "d25a1b8ae6": "Share skill",
+          "01c5a16e01": "Select {{value0}}"
+        },
+        "SkillCloudManagementActions": {
+          "ed753624c0": "Delete Cloud package",
+          "640bc6b92e": "Confirm package deletion",
+          "6b6adf68c1": "Delete selected Cloud version",
+          "bbec37d8f8": "Confirm version deletion",
+          "7a80285dad": "Unshare",
+          "0ac5c175fd": "Confirm unshare",
+          "9e6bd31487": "No active share links.",
+          "c7f2b69122": "Unsharing blocks future installs. Copies already installed on any machine remain there.",
+          "8cac3b9362": "Active links",
+          "cc8e4ef6ba": "Save access",
+          "eb603f7888": "outside the current roster will be preserved.",
+          "3d346ddce8": "existing recipient",
+          "2b8c569ea7": "Current organization",
+          "2552c12fea": "Access",
+          "505cd6105c": "Cloud sharing controls",
+          "linkCopied": "Share link copied",
+          "activeLinkBearerDescription": "Anyone with an active link can inspect and install the skills. Revoking blocks future access but leaves installed copies unchanged.",
+          "copyLink": "Copy link"
+        },
+        "SkillInstallDialog": {
+          "39acb9e8f4": "Install skill",
+          "59c3b76cdd": "Retry install",
+          "241e72f9d6": "Installing…",
+          "05588076a9": "Cancel installation",
+          "d198ec91e5": "Close",
+          "4a00d133c5": "Orca verifies access and package identity before changing the selected machine.",
+          "fcbec627cc": "Install shared skill",
+          "01c5a14e01": "Install shared skills",
+          "opening": "Opening this link…"
+        },
+        "SkillInstallManagementDialog": {
+          "8095927ff3": "Close",
+          "e91af0079f": "Remove",
+          "470d8d2476": "Confirm remove",
+          "c1d03ee50d": "Cancel installation",
+          "561e49ccd1": "Install selected version",
+          "2ae587d39c": "Retry incomplete coverage",
+          "f7c5075e77": "Discard changes and remove",
+          "e1884c812e": "Discard changes and install version",
+          "070654c6d1": "Orca will preserve them unless you explicitly discard the local changes.",
+          "74b70892ea": "Local files were modified",
+          "86ed219b55": "Choose a version",
+          "9c04bd0120": "Installed version",
+          "64c71cf7b9": "No Orca-managed skill installs were found on this machine.",
+          "0900db719a": "— disconnected",
+          "176fef9516": "· SSH",
+          "6cb1fbe039": "This computer",
+          "3677ae58e7": "Update, roll back, or safely remove versions installed by Orca.",
+          "44d118a8f7": "Manage installed skills",
+          "1c9e7f420a": "Installed bundle skills",
+          "34c2ef9e71": "Install {{count}} skills",
+          "a0cab67c2f": "Remove {{count}} skills",
+          "f970d8088d": "Confirm remove {{count}} skills",
+          "dab29e4b54": "{{installed}} installed · {{updated}} updated · {{keptLocal}} kept local",
+          "installAnotherMachine": "Install on another machine"
+        },
+        "SkillInstallReviewContent": {
+          "89e2601162": "Discard and replace",
+          "a5675fb371": "content and left it untouched. Keep it, or explicitly discard and replace it with this version.",
+          "37d990b94c": "changed",
+          "2a31912f14": "Orca found",
+          "651b7d8a57": "Local copy needs a decision",
+          "98ed90e523": "A skill contains instructions and may include scripts. Treat it as code from its author.",
+          "f72ee4022a": "SHA-256",
+          "3d8421ca2f": "executable",
+          "87137bcb8d": "scripts",
+          "fab8fce842": "files",
+          "8f9833d509": "Immutable version",
+          "66270286ac": "· You can retry safely.",
+          "1b6ad2ca5c": "checked.",
+          "3fc62a61eb": "placement",
+          "157de228b4": "Inspect skill",
+          "69236de8d6": "Checking…",
+          "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
+          "66cff7a804": "https://app.orca.dev/skills/share/…",
+          "93eb0fe8c7": "Orca skill link",
+          "releaseNotes": "Release notes:"
+        },
+        "SkillInstallTargetFields": {
+          "8e6a972229": "No workspaces are known on this machine.",
+          "7a366323e7": "Folder",
+          "d628c416a2": "Git worktree",
+          "5845cfe543": "Choose a worktree or folder",
+          "0e5b43a9e3": "Workspace",
+          "0c10a406fb": "WSL ·",
+          "e5b0d15e64": "Host operating system",
+          "cb47652227": "Execution environment",
+          "a4dfd33095": "One workspace",
+          "c779621aa0": "Global skills",
+          "63cc9e31fe": "Destination",
+          "85d85880df": "· SSH",
+          "71eefd7660": "— disconnected",
+          "0785d0a503": "— update required",
+          "8562dd1e6e": "This computer",
+          "b8a0b706ad": "Machine"
+        },
+        "SkillShareReviewContent": {
+          "e3caf6baeb": "Revoking this link blocks future access. It does not remove copies already installed on recipients’ machines.",
+          "6d6233a3a4": "Copy link",
+          "0142581727": "Uploading…",
+          "ad940367a5": "Validating and publishing…",
+          "bf02d6ed9e": "What changed in this version?",
+          "f0c0411549": "Release notes",
+          "4895d3e0ee": "No teammates are available.",
+          "8188f5d765": "can access the link.",
+          "fe204e06f0": "the organization",
+          "0cd4b3e396": "Everyone currently in",
+          "f25429e266": "Selected people",
+          "0a49d901ab": "Organization",
+          "6817a7f6f8": "Skill access",
+          "c15d90c10b": "A connected Orca Cloud account is required.",
+          "266527d295": "Publishing as {{value0}}{{value1}}.",
+          "78d863235c": "Access",
+          "b3b1d4b911": "SHA-256",
+          "77f636eac3": "executable",
+          "8edd32622f": "scripts",
+          "3121f44358": "files",
+          "2dca0b720b": "Publish new skill version",
+          "01c5a17e01": "{{value0}} skills",
+          "01c5a17e02": "Review included skills",
+          "01c5a17e03": "{{value0}} files · {{value1}}",
+          "unlistedLinkTitle": "Unlisted link",
+          "unlistedPublishingAs": "Publishing as {{value0}}. Anyone with the link can inspect and install these skills.",
+          "unlistedLinkDetails": "The link is not searchable or listed publicly. Revoke it to block future access; installed copies remain.",
+          "bundleReady": "Skill bundle link ready",
+          "publishBundleVersion": "Publish new skill bundle version",
+          "shareBundle": "Share skill bundle",
+          "publishingLink": "Publishing link…",
+          "verifyingPackage": "Verifying package…"
+        },
+        "SkillBundleInstallFlow": {
+          "01c5a13e01": "Close",
+          "01c5a13e02": "Cancel installation",
+          "01c5a13e03": "Installing…",
+          "01c5a13e04": "Retry {{value0}} skills",
+          "01c5a13e05": "Install {{value0}} skills"
+        },
+        "SkillBundleInstallOutcome": {
+          "01c5a12e01": "Installed",
+          "01c5a12e02": "Updated",
+          "01c5a12e03": "Unchanged",
+          "01c5a12e04": "Kept local",
+          "01c5a12e05": "Failed",
+          "01c5a12e06": "Cancelled",
+          "01c5a12e07": "Bundle installation needs attention.",
+          "01c5a12e08": "Skills installed and verified.",
+          "01c5a12e09": "{{value0}} selected skills checked.",
+          "01c5a12e10": "Needs retry"
+        },
+        "SkillBundleInstallReview": {
+          "01c5a11e01": "Immutable version",
+          "01c5a11e02": "{{value0}} skills",
+          "01c5a11e03": "{{value0}} files",
+          "01c5a11e04": "{{value0}} scripts",
+          "01c5a11e05": "{{value0}} executable",
+          "01c5a11e06": "SHA-256",
+          "01c5a11e09": "Release notes:",
+          "01c5a11e0a": "Skills contain instructions and may include scripts. Treat them as code from their author.",
+          "01c5a11e0b": "Skills to install",
+          "01c5a11e0c": "Choose any subset from this bundle.",
+          "01c5a11e0d": "Select all",
+          "01c5a11e0e": "No description",
+          "01c5a11e0f": "{{value0}} files · {{value1}} scripts",
+          "01c5a11e10": "{{value0}} executable",
+          "01c5a11e11": "Local copies need a decision",
+          "01c5a11e12": "Orca will keep these local copies by default. Select only the copies you want to discard and replace.",
+          "01c5a11e13": "Replace {{value0}} ({{value1}})",
+          "01c5a11e14": "{{value0}} new",
+          "01c5a11e15": "{{value0}} unchanged",
+          "01c5a11e16": "{{value0}} updates",
+          "01c5a11e17": "{{value0}} conflicts"
+        },
+        "SkillShareSelectionControls": {
+          "01c5a15e05": "Share {{value0}} skills",
+          "01c5a15e01": "Cancel sharing",
+          "01c5a15e02": "Share skills",
+          "01c5a15e03": "{{value0}} selected",
+          "01c5a15e04": "Select all results",
+          "01c5a15e06": "Open this skill on its owning machine to share it.",
+          "01c5a15e07": "Install this skill before sharing it.",
+          "01c5a15e08": "Only home and workspace skills can be shared.",
+          "01c5a15e09": "A skill with this name is already selected from another source."
+        },
+        "SkillManagedInstallList": {
+          "86c76cb262": "{{count}} skill bundle"
+        },
+        "skill-install-progress-state": {
+          "currentSkill": "Installing {{value0}} of {{value1}}: {{value2}}…"
+        },
+        "SkillRow": {
+          "updatedUnknown": "No date",
+          "pathCopied": "Path copied",
+          "copyPath": "Copy path",
+          "notShareable": "Not shareable",
+          "detailPath": "Path",
+          "detailSource": "Source",
+          "detailContents": "Contents",
+          "skillActions": "Actions for {{value0}}",
+          "viewDetails": "View details"
+        },
+        "SkillSelectionBar": {
+          "selectAll": "Select all {{count}} eligible",
+          "clear": "Clear"
+        },
+        "SkillsList": {
+          "listLabel": "Skills"
+        },
+        "sourceStatus": {
+          "missing": "Folder not found",
+          "remoteRepo": "Remote repo — not scanned",
+          "unavailable": "Not scanned"
+        },
+        "sources": {
+          "heading": "Skill folders"
+        },
+        "sourceKind": {
+          "home": "Home",
+          "workspace": "Workspace",
+          "bundled": "Bundled",
+          "plugin": "Plugin"
+        },
+        "count": {
+          "skillOne": "{{count}} skill",
+          "skillOther": "{{count}} skills",
+          "sourceOne": "{{count}} source",
+          "sourceOther": "{{count}} sources",
+          "fileOne": "{{count}} file",
+          "fileOther": "{{count}} files",
+          "resultOne": "{{count}} result",
+          "resultOther": "{{count}} results",
+          "selected": "{{count}} selected",
+          "shareOne": "Share {{count}} skill",
+          "shareOther": "Share {{count}} skills",
+          "installOne": "Install {{count}} skill",
+          "installOther": "Install {{count}} skills",
+          "retryOne": "Retry {{count}} skill",
+          "retryOther": "Retry {{count}} skills",
+          "linkOne": "{{count}} link",
+          "linkOther": "{{count}} links"
+        },
+        "host": {
+          "local": "This machine",
+          "remote": "Connected runtime"
+        },
+        "share": {
+          "fileExecutable": "executable",
+          "fileScript": "script",
+          "reviewFiles": "Review files that can run",
+          "reviewSkills": "Review included skills",
+          "releaseNotesVersion": "Release notes",
+          "releaseNotesOptional": "Add release notes (optional)",
+          "releaseNotesFirst": "Describe this release",
+          "readyDescription": "Copy the link to share it.",
+          "newVersionDescription": "Publishes an immutable version to the existing package.",
+          "description": "Publishes an immutable version behind an unlisted link.",
+          "accessSummary": "Anyone with the link can install this. It is not listed anywhere, and revoking it blocks new installs — not copies already installed. Publishing as {{value0}}.",
+          "manageLinks": "Manage or revoke this link in Settings",
+          "scriptOne": "{{count}} script",
+          "scriptOther": "{{count}} scripts",
+          "executableOne": "{{count}} executable",
+          "executableOther": "{{count}} executables",
+          "noExecutableContent": "No scripts or executables",
+          "newVersionDescriptionPlain": "Adds a new version to the existing link.",
+          "accessSummaryShort": "Unlisted link — anyone with it can install this. Publishing as {{value0}}.",
+          "accessSummaryPlain": "Unlisted link — anyone with it can install this."
+        },
+        "description": {
+          "showLess": "Show less",
+          "showMore": "Show more"
+        },
+        "install": {
+          "agentsLabel": "Agents",
+          "agentsCanonical": "Always installed for {{value0}}, which read {{value1}}.",
+          "agentsNoneChosen": "No extra agents",
+          "agentsSummary": "Also: {{value0}}",
+          "agentNotInstalled": "Not installed",
+          "bundleDestinationSummary": "{{value0}} new · {{value1}} already installed · {{value2}} need a decision",
+          "trustNote": "Skills are instructions and code from their author. Install what you trust.",
+          "agentsNone": "No agents selected",
+          "agentsSelected": "Installing for: {{value0}}",
+          "agentAlways": "Always",
+          "agentsCanonicalNote": "{{value0}} read {{value1}}, which every install writes.",
+          "linkHint": "Opening a link never installs anything — you review it first.",
+          "rowNeedsDecision": "Needs a decision",
+          "rowInstalled": "Already installed",
+          "rowUpdate": "Update",
+          "rowNew": "New",
+          "chooseSkills": "Choose what to install from this link.",
+          "singleRunnableWarning": "This skill includes scripts or binary files.",
+          "runnableWarning": "{{affectedCount}} of {{selectedCount}} selected skills include scripts or binary files: {{affected}}.",
+          "reviewRunnableFiles": "Includes scripts or binary files",
+          "reviewSupportingFiles": "Includes supporting files",
+          "reviewInstructions": "About this skill",
+          "supportingFileWarning": "The selected skills include {{fileCount}} beyond SKILL.md.",
+          "agentAccessWarning": "Skills contain instructions your agent may follow. Continue only if you trust the source of this share link.",
+          "fileBinary": "binary",
+          "fileRunnable": "runnable"
+        },
+        "filter": {
+          "allAgents": "All agents",
+          "sharedAgent": "Shared (.agents)"
+        },
+        "SkillsSelectionHeader": {
+          "exit": "Exit selection",
+          "exitTooltip": "Exit selection · Esc",
+          "title": "Select skills to share",
+          "selectAll": "Select all {{count}} eligible",
+          "clear": "Clear"
+        },
+        "SkillDetailDialog": {
+          "agents": "Agents",
+          "updated": "Updated",
+          "copy": "Copy"
+        },
+        "SkillSharedLinkRow": {
+          "contentsUnavailable": "Could not load what this link contains.",
+          "loading": "Loading contents…",
+          "deleteFailed": "Orca could not delete this from the Cloud.",
+          "deleted": "Deleted from the Cloud",
+          "confirmDelete": "Confirm delete",
+          "moreActions": "More actions for {{name}}",
+          "deletePackage": "Delete from the Cloud"
+        },
+        "SkillSharedLinksView": {
+          "loading": "Loading shared links…",
+          "noMatches": "No links match this search."
+        },
+        "SkillsSharedLinksHeader": {
+          "back": "Back to skills",
+          "backTooltip": "Back to skills · Esc",
+          "unlisted": "Unlisted — only people with a link can open it."
+        },
+        "managedInstall": {
+          "versionLabel": "Version",
+          "editedWarning": "Your edits are kept unless you choose to discard them.",
+          "finishInstall": "Finish installing",
+          "useVersion": "Use this version",
+          "reinstall": "Reinstall",
+          "cancel": "Cancel",
+          "sendToMachine": "Send to another machine",
+          "confirmRemove": "Confirm remove",
+          "remove": "Remove",
+          "discardEditsRemove": "Discard my edits and remove",
+          "discardEdits": "Discard my edits and reinstall",
+          "titleMore": "{{name}} +{{count}}",
+          "scopeWorkspace": "This workspace",
+          "scopeGlobal": "Everywhere",
+          "installedOn": "Installed {{date}}",
+          "stateEdited": "Edited after installing",
+          "stateMissing": "Files are missing",
+          "skillEdited": "Edited",
+          "skillMissing": "Missing",
+          "versionCurrent": "{{date}} (installed)",
+          "installElsewhere": "Install elsewhere…"
+        },
+        "skillWarningPreview": {
+          "bundleDescription": "A preview bundle covering every warning level.",
+          "instructionsOnlyDescription": "Instructions contained entirely in SKILL.md.",
+          "supportingFilesDescription": "Includes readable reference files beyond the main instructions.",
+          "runnableFilesDescription": "Includes scripts that an agent may run with your access.",
+          "binaryFilesDescription": "Includes opaque assets and an executable binary."
         }
       },
       "sidebar": {
@@ -4516,7 +5001,8 @@
           "0ccba862b8": "Open GitHub tasks",
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
-          "artifacts": "Artifacts"
+          "artifacts": "Artifacts",
+          "skills": "Skills"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -5649,6 +6135,7 @@
           "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
@@ -10655,7 +11142,9 @@
           "artifactsTitle": "Artifact sharing",
           "artifactsDescription": "Publish HTML and Markdown files, then manage every shared link from Orca.",
           "relayTitle": "Orca Relay",
-          "relayDescription": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi."
+          "relayDescription": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi.",
+          "skillsTitle": "Skill sharing",
+          "skillsDescription": "Share one skill or a whole set behind an unlisted link, and install them on any machine you use."
         },
         "automations": {
           "showButton": "Show Automations Button",
@@ -10677,6 +11166,49 @@
           "on": "On",
           "auto": "Agent",
           "off": "Off"
+        },
+        "shareSkills": {
+          "title": "Share Skills",
+          "description": "Share your skills with an unlisted link. Anyone who has it can install them.",
+          "allowAgentPublishing": "Allow agents and the Orca CLI to publish skill links",
+          "allowAgentPublishingDescription": "Let commands publish explicitly named installed skills. Skill folders can contain scripts, configuration, or secrets, so this is off by default.",
+          "allowAgentPublishingWebDescription": "Desktop only. Open Settings → Share Skills on the host device to change this setting.",
+          "selectTitle": "Select one or more skills",
+          "selectDescription": "Open Skills, choose Share skills, and select the skills to bundle behind one link.",
+          "reviewTitle": "Review and publish",
+          "reviewDescription": "Review included files, scripts, and executables before uploading the immutable bundle.",
+          "copyTitle": "Copy the unlisted link",
+          "copyDescription": "Anyone with the link can inspect and install all or selected skills without signing in.",
+          "manageTitle": "Manage or revoke links",
+          "manageDescription": "Revoking blocks future access. Skills already installed on another machine remain there.",
+          "linkTitle": "Unlisted skill links",
+          "linkDescription": "Shared bundles are not searchable or listed in Orca. The link is the credential, so send it only to people you trust.",
+          "signInTitle": "Sign in to share skills",
+          "signInWebDescription": "Publishing and link management are available in the Orca desktop app.",
+          "signInDescription": "Use your Orca account to publish bundles and manage their links. Recipients do not need an account.",
+          "signingIn": "Signing in…",
+          "signInAgain": "Sign in again",
+          "signIn": "Sign in to Orca",
+          "howToTitle": "How to share skills",
+          "howToDescription": "Publish one skill or a bundle such as a collection of 30 skills behind one link.",
+          "openSkills": "Open Skills",
+          "openSkillsDescription": "Publish a bundle, install from a link, or manage installed and shared skills.",
+          "searchDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
+          "linksReconnect": "Sign in again to manage shared links.",
+          "linksUnavailable": "Shared links are unavailable right now.",
+          "linkCopied": "Share link copied",
+          "linkRevoked": "Link revoked",
+          "revokeFailed": "Orca could not revoke this link.",
+          "activeLinks": "Active shared links",
+          "activeLinksDescription": "Only people with a link can open it. Unshare a link to block future inspection and installs.",
+          "refreshLinks": "Refresh",
+          "noActiveLinks": "No active links. Publish a skill bundle from Skills to create one.",
+          "copyLink": "Copy link",
+          "confirmUnshare": "Confirm unshare",
+          "unshare": "Unshare",
+          "showButton": "Show Skills button",
+          "showButtonDescription": "Show the Skills shortcut in the sidebar.",
+          "manageInSkills": "Manage in Skills"
         },
         "bitbucket": {
           "credentials": {
@@ -11783,6 +12315,52 @@
                     }
                   }
                 }
+              },
+              "compare": {
+                "summary": {
+                  "dd72a6fd37": "{{value0}} commit{{value1}} ahead of {{value2}}"
+                }
+              },
+              "conflict": {
+                "status": {
+                  "cards": {
+                    "5302a1ddba": "Merge conflicts",
+                    "7f3af87549": "Rebase conflicts",
+                    "6a8e9ad490": "Cherry-pick conflicts",
+                    "bdf8772106": "Conflicts",
+                    "edc2d82a2b": "Merge in progress",
+                    "5c3707aa44": "Rebase in progress",
+                    "ffe53a1da6": "Cherry-pick in progress",
+                    "35eb76d323": "Operation in progress"
+                  }
+                }
+              },
+              "content": {
+                "status": {
+                  "3f425c239c": "No changes on this branch",
+                  "640f6fdb36": "This workspace is clean and this branch has no changes ahead of {{value0}}",
+                  "8deb86bbec": "base",
+                  "978eba351e": "Search text is too large",
+                  "0bce43409f": "Use a shorter file filter.",
+                  "1b6caf533d": "No matching files",
+                  "00c07771b7": "No changed files match \"{{value0}}\""
+                }
+              },
+              "diff": {
+                "comments": {
+                  "list": {
+                    "cefacd0ec7": "whole file"
+                  }
+                }
+              },
+              "commit": {
+                "area": {
+                  "cc5739bd1d": "Generating commit message…",
+                  "4cbd0cd9d2": "Commit in progress…",
+                  "e7876a2bde": "Stage at least one file to generate a message.",
+                  "0904be2505": "Clear the message to regenerate.",
+                  "1ea9ba37aa": "Pick an agent in Settings -> Git -> Source Control AI."
+                }
               }
             }
           },
@@ -11791,6 +12369,11 @@
               "control": {
                 "ai": {
                   "cfafa92509": "No unresolved conflicts to send."
+                },
+                "bulk": {
+                  "actions": {
+                    "2f67630884": "Bulk stage/unstage failed"
+                  }
                 }
               }
             }
@@ -12400,6 +12983,15 @@
       },
       "new": {
         "workspace": {
+          "SetProjectLocationDialog": {
+            "title": "Set project location",
+            "description": "Choose where {{project}} lives on {{host}}.",
+            "browseFolder": "Browse folder",
+            "browseFolderHelp": "Use an existing checkout or folder on this host.",
+            "cloneFromUrl": "Clone from URL",
+            "cloneFromUrlHelp": "Clone this repository onto {{host}}.",
+            "saveLocation": "Set location"
+          },
           "SmartWorkspaceNameField": {
             "2a0d535f69": "Create new branch",
             "a44229ce4d": "as workspace name",
@@ -14329,6 +14921,15 @@
                 "5bf47a3c91": "May improve Google sign-in, but can reduce compatibility with bot-protected sites."
               }
             }
+          }
+        },
+        "webauthn": {
+          "account": {
+            "fallback": "Passkey",
+            "title": "Choose a passkey",
+            "description": "Choose the account to use with this security key.",
+            "site": "Site",
+            "cancel": "Cancel"
           }
         }
       },

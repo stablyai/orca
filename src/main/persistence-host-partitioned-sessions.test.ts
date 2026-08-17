@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
+import { isTerminalLeafId } from '../shared/stable-pane-id'
 import {
   testState,
   createStore,
@@ -68,6 +69,27 @@ describe('Store host-partitioned workspace sessions', () => {
     ...getDefaultWorkspaceSession(),
     activeRepoId
   })
+
+  const makeLegacyPaneHostSession = (repoId: string, ptyId: string): WorkspaceSessionState => {
+    const worktreeId = `${repoId}::/worktree`
+    return {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: repoId,
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-shared',
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'tab-shared', worktreeId, ptyId })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-shared': {
+          root: { type: 'leaf', leafId: 'pane:1' },
+          activeLeafId: 'pane:1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'pane:1': ptyId }
+        }
+      }
+    }
+  }
 
   const makeBoundHostSession = (ptyId: string | null): WorkspaceSessionState => ({
     ...getDefaultWorkspaceSession(),
@@ -163,6 +185,134 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
 
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('canonical-local')
+  })
+
+  it('rewrites legacy pane ids inside a host partition and remaps its leases', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'ssh:ssh-1': makeLegacyPaneHostSession('repo-ssh', 'remote-pty')
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'ssh-1',
+          ptyId: 'remote-pty',
+          worktreeId: 'repo-ssh::/worktree',
+          tabId: 'tab-shared',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    const root = store.getWorkspaceSession('ssh:ssh-1').terminalLayoutsByTabId['tab-shared']?.root
+    const leafId = root?.type === 'leaf' ? root.leafId : null
+    expect(leafId && isTerminalLeafId(leafId)).toBe(true)
+    // The lease follows the partition's rewritten leaf, not the legacy `pane:1`.
+    expect(store.getSshRemotePtyLeases('ssh-1')[0]?.leafId).toBe(leafId)
+  })
+
+  it('remaps legacy SSH leases within their execution-host partition', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'ssh:host-a': makeLegacyPaneHostSession('repo-a', 'pty-a'),
+        'ssh:host-b': makeLegacyPaneHostSession('repo-b', 'pty-b')
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'host-a',
+          ptyId: 'pty-a',
+          worktreeId: 'repo-a::/worktree',
+          tabId: 'tab-shared',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          targetId: 'host-b',
+          ptyId: 'pty-b',
+          worktreeId: 'repo-b::/worktree',
+          tabId: 'tab-shared',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+    const rootA = store.getWorkspaceSession('ssh:host-a').terminalLayoutsByTabId['tab-shared']?.root
+    const rootB = store.getWorkspaceSession('ssh:host-b').terminalLayoutsByTabId['tab-shared']?.root
+    const leafA = rootA?.type === 'leaf' ? rootA.leafId : null
+    const leafB = rootB?.type === 'leaf' ? rootB.leafId : null
+
+    expect(leafA && isTerminalLeafId(leafA)).toBe(true)
+    expect(leafB && isTerminalLeafId(leafB)).toBe(true)
+    expect(leafA).not.toBe(leafB)
+    expect(store.getSshRemotePtyLeases('host-a')[0]?.leafId).toBe(leafA)
+    expect(store.getSshRemotePtyLeases('host-b')[0]?.leafId).toBe(leafB)
+  })
+
+  it('repairs a stable SSH lease leaf copied from another host partition', async () => {
+    const leafA = '11111111-1111-4111-8111-111111111111'
+    const leafB = '22222222-2222-4222-8222-222222222222'
+    const makeStableHostSession = (
+      repoId: string,
+      ptyId: string,
+      leafId: string
+    ): WorkspaceSessionState => {
+      const worktreeId = `${repoId}::/worktree`
+      return {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: repoId,
+        activeWorktreeId: worktreeId,
+        activeTabId: 'tab-shared',
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'tab-shared', worktreeId, ptyId })]
+        },
+        terminalLayoutsByTabId: {
+          'tab-shared': {
+            root: { type: 'leaf', leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leafId]: ptyId }
+          }
+        }
+      }
+    }
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'ssh:host-a': makeStableHostSession('repo-a', 'pty-a', leafA),
+        'ssh:host-b': makeStableHostSession('repo-b', 'pty-b', leafB)
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'host-b',
+          ptyId: 'pty-b',
+          worktreeId: 'repo-b::/worktree',
+          tabId: 'tab-shared',
+          leafId: leafA,
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getSshRemotePtyLeases('host-b')[0]?.leafId).toBe(leafB)
   })
 
   it('isolates writes: setting host A does not mutate host B or local', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list-groups'
+import { buildRows } from './worktree-list/grouping/build-rows'
 import { repo, worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'

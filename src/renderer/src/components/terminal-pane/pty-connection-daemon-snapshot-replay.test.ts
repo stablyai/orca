@@ -2,9 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_MODE_RESET,
-  POST_REPLAY_REATTACH_RESET
+  POST_REPLAY_REATTACH_RESET,
+  RESET_GRAPHIC_RENDITION
 } from '../../../../shared/terminal-mode-reset-profiles'
-import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import { Terminal } from '@xterm/headless'
+import { flushAsyncTicks, createDeferred, writeHeadlessTerminal } from './pty-connection-test-async'
 import { createRect } from './pty-connection-test-dom'
 import {
   LEAF_1,
@@ -149,12 +151,13 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('resets reattach renderer state after daemon snapshot replay without applying the full mode reset', async () => {
+  it('clears the captured pen for a normal-buffer fallback reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
+    const snapshot = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       if (sessionId) {
-        return { id: sessionId, snapshot: '\x1b[?1004hrestored snapshot' }
+        return { id: sessionId, snapshot }
       }
       return null
     })
@@ -179,9 +182,12 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      '\x1b[?1004hrestored snapshot',
+      `${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `${RESET_GRAPHIC_RENDITION}${snapshot}`,
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -192,6 +198,26 @@ describe('connectPanePty', () => {
       POST_REPLAY_MODE_RESET,
       expect.any(Function)
     )
+
+    const rendered = new Terminal({ cols: 40, rows: 6, allowProposedApi: true })
+    try {
+      await writeHeadlessTerminal(rendered, '\x1b[1;44mDIRTY')
+      for (const [data] of pane.terminal.write.mock.calls) {
+        if (data) {
+          await writeHeadlessTerminal(rendered, data)
+        }
+      }
+      await writeHeadlessTerminal(rendered, 'PLAIN')
+      const line = rendered.buffer.active.getLine(rendered.buffer.active.baseY)
+      const plainColumn = line?.translateToString(true).indexOf('PLAIN') ?? -1
+
+      expect(line?.getCell(plainColumn)?.isBold()).toBe(0)
+      expect(line?.getCell(plainColumn)?.getFgColor()).toBe(-1)
+      expect(line?.getCell(plainColumn)?.getBgColor()).toBe(-1)
+      expect(rendered.buffer.active.getLine(5)?.getCell(39)?.getBgColor()).toBe(-1)
+    } finally {
+      rendered.dispose()
+    }
   })
 
   it('drops a too-wide daemon alt frame and keeps the scrollback prefix', async () => {
@@ -397,6 +423,7 @@ describe('connectPanePty', () => {
     expect(writes.join('')).toContain('PREFIX-SCROLLBACK')
     expect(writes.join('')).toContain('RESTORE-LIVE-STATE')
     expect(writes.join('')).not.toContain('ALT-FRAME-BODY')
+    expect(writes).toContain(`${RESET_GRAPHIC_RENDITION}PREFIX-SCROLLBACKRESTORE-LIVE-STATE`)
     expect(writes).toContain(POST_REPLAY_MODE_RESET)
   })
 
@@ -443,7 +470,9 @@ describe('connectPanePty', () => {
       }
     )
     const snapshotWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
-      (_order, index) => pane.terminal.write.mock.calls[index][0] === '\x1b[?1004hrestored snapshot'
+      (_order, index) =>
+        pane.terminal.write.mock.calls[index][0] ===
+        `${RESET_GRAPHIC_RENDITION}\x1b[?1004hrestored snapshot`
     )
     expect(resizeToSnapshotCall).toBeDefined()
     expect(snapshotWriteCall).toBeDefined()
