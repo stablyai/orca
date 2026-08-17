@@ -42,6 +42,11 @@ export type WslCapturedLoginShellCommand = {
   command: string
   /** Payload the command wrote, or null when the fence never appeared. */
   readStdout: (stdout: string) => string | null
+  // Why exposed: binary reads (`git show` blob content) must slice bytes rather
+  // than decode to a string first, and this module is bundled for the renderer,
+  // so it cannot reference Buffer itself.
+  beginMarker: string
+  endMarker: string
 }
 
 // Why: the fence has to be absent from both the rc output ahead of it and the
@@ -70,6 +75,8 @@ export function buildWslCapturedLoginShellCommand(
   const begin = `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`
   const end = `__ORCA_WSL_CAPTURE_END_${nonce}__`
   return {
+    beginMarker: begin,
+    endMarker: end,
     command: buildWslLoginShellCommand(
       [
         `printf %s ${quotePosixShell(begin)}`,
