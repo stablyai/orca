@@ -10,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import { useSettledAgentToolStep, type AgentToolStep } from '@/hooks/use-settled-agent-tool-step'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
 function formatShortTimeAgo(ts: number, now: number): string {
@@ -36,19 +37,15 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+function getCompactAgentSecondary(agent: DashboardAgentRowData, toolStep: AgentToolStep): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
-  if (agent.state === 'working') {
-    const toolName = agent.entry.toolName?.trim() ?? ''
-    const toolInput = agent.entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
+  if (toolStep.toolName && toolStep.toolInput) {
+    return `${toolStep.toolName}: ${toolStep.toolInput}`
+  }
+  if (toolStep.toolName) {
+    return toolStep.toolName
   }
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
   if (lastAssistantMessage) {
@@ -123,7 +120,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
+  // Why: gate on 'working' — a stale tool step on a done row reads as still-running.
+  const isWorking = agent.state === 'working'
+  // Why: the tool step shares this row's one truncated line with the prompt, so a
+  // per-hook rewrite reads as the identity itself flickering (#11075).
+  const toolStep = useSettledAgentToolStep(
+    isWorking ? (agent.entry.toolName?.trim() ?? '') : '',
+    isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  )
+  const secondary = getCompactAgentSecondary(agent, toolStep)
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)

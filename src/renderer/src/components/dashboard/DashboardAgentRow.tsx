@@ -13,6 +13,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useSettledAgentToolStep } from '@/hooks/use-settled-agent-tool-step'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -146,8 +147,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  // Why: hooks rewrite the pair several times a second; hold it for a readable dwell (#11075).
+  const { toolName, toolInput } = useSettledAgentToolStep(
+    isWorking ? (agent.entry.toolName?.trim() ?? '') : '',
+    isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  )
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
