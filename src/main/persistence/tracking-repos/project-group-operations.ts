@@ -1,18 +1,34 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
+  resolveFolderWorkspaceCatalogOwnerHostId,
+  resolveFolderWorkspaceProjectGroupWithLegacySsh
+} from '../../../shared/folder-workspaces'
+import {
+  buildProjectGroupOwnerIndex,
   createProjectGroup,
-  getProjectGroupSubtreeIds,
-  normalizeProjectGroupName
+  getProjectGroupOwnerIdentity,
+  getProjectGroupOwnerSubtreeIdentities,
+  normalizeProjectGroupName,
+  resolveProjectGroupMembership,
+  resolveProjectGroupOwner
 } from '../../../shared/project-groups'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
-import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
   state: StoreOwnedPersistedState
   scheduleSave: () => void
-  removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
+  removeWorkspaceLineageForFolderParent: (
+    folderWorkspaceId: string,
+    ownerHostId?: ExecutionHostId | null,
+    removeBareKey?: boolean
+  ) => void
+  removeWorkspaceSessionStateForWorktree: (
+    worktreeId: string,
+    ownerHostId?: ExecutionHostId | null
+  ) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
 
@@ -27,8 +43,16 @@ export class ProjectGroupPersistenceOperations {
     this.operations.scheduleSave()
   }
 
-  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForFolderParent(folderWorkspaceId)
+  private removeWorkspaceLineageForFolderParent(
+    folderWorkspaceId: string,
+    ownerHostId?: ExecutionHostId | null,
+    removeBareKey?: boolean
+  ): void {
+    this.operations.removeWorkspaceLineageForFolderParent(
+      folderWorkspaceId,
+      ownerHostId,
+      removeBareKey
+    )
   }
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
@@ -64,9 +88,15 @@ export class ProjectGroupPersistenceOperations {
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    ownerHostId?: ExecutionHostId
   ): ProjectGroup | null {
-    const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
+    const projectGroups = this.state.projectGroups ?? []
+    const group = resolveProjectGroupOwner(
+      buildProjectGroupOwnerIndex(projectGroups),
+      groupId,
+      ownerHostId
+    )
     if (!group) {
       return null
     }
@@ -87,35 +117,67 @@ export class ProjectGroupPersistenceOperations {
     return group
   }
 
-  deleteProjectGroup(groupId: string): boolean {
+  deleteProjectGroup(groupId: string, ownerHostId?: ExecutionHostId): boolean {
+    const projectGroups = this.state.projectGroups ?? []
+    const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
+    const rootGroup = resolveProjectGroupOwner(projectGroupIndex, groupId, ownerHostId)
+    if (!rootGroup) {
+      return false
+    }
     const before = this.state.projectGroups?.length ?? 0
-    const deletedGroupIds = getProjectGroupSubtreeIds(this.state.projectGroups ?? [], groupId)
-    this.state.projectGroups = (this.state.projectGroups ?? []).filter(
-      (group) => !deletedGroupIds.has(group.id)
+    const deletedGroupIdentities = getProjectGroupOwnerSubtreeIdentities(projectGroups, rootGroup)
+    this.state.projectGroups = projectGroups.filter(
+      (group) => !deletedGroupIdentities.has(getProjectGroupOwnerIdentity(group))
     )
     if ((this.state.projectGroups?.length ?? 0) === before) {
       return false
     }
     // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
-    this.state.repos = this.state.repos.map((repo) =>
-      repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
+    this.state.repos = this.state.repos.map((repo) => {
+      if (!repo.projectGroupId) {
+        return repo
+      }
+      const group = resolveProjectGroupMembership(
+        projectGroupIndex,
+        repo.projectGroupId,
+        getRepoExecutionHostId(repo)
+      )
+      return group && deletedGroupIdentities.has(getProjectGroupOwnerIdentity(group))
         ? { ...repo, projectGroupId: null }
         : repo
+    })
+    const folderWorkspaces = this.state.folderWorkspaces ?? []
+    const removedFolderWorkspaces = folderWorkspaces.filter((workspace) => {
+      const group = resolveFolderWorkspaceProjectGroupWithLegacySsh(projectGroupIndex, workspace)
+      return group && deletedGroupIdentities.has(getProjectGroupOwnerIdentity(group))
+    })
+    const removedFolderWorkspaceSet = new Set(removedFolderWorkspaces)
+    this.state.folderWorkspaces = folderWorkspaces.filter(
+      (workspace) => !removedFolderWorkspaceSet.has(workspace)
+    )
+    const remainingFolderWorkspaceIds = new Set(
+      this.state.folderWorkspaces.map((workspace) => workspace.id)
     )
     const removedFolderWorkspaceKeys = new Set<string>()
-    for (const workspace of this.state.folderWorkspaces ?? []) {
-      if (deletedGroupIds.has(workspace.projectGroupId)) {
-        removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
-        this.removeWorkspaceLineageForFolderParent(workspace.id)
+    for (const workspace of removedFolderWorkspaces) {
+      const workspaceOwnerHostId = resolveFolderWorkspaceCatalogOwnerHostId(
+        workspace,
+        projectGroups
+      )
+      const workspaceKeys: string[] = []
+      if (workspaceOwnerHostId) {
+        workspaceKeys.push(folderWorkspaceKey(workspace.id, workspaceOwnerHostId))
       }
+      const removeBareKey = !remainingFolderWorkspaceIds.has(workspace.id)
+      if (removeBareKey) {
+        workspaceKeys.push(folderWorkspaceKey(workspace.id))
+      }
+      for (const key of workspaceKeys) {
+        removedFolderWorkspaceKeys.add(key)
+        this.operations.removeWorkspaceSessionStateForWorktree(key, workspaceOwnerHostId)
+      }
+      this.removeWorkspaceLineageForFolderParent(workspace.id, workspaceOwnerHostId, removeBareKey)
     }
-    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
-      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
-    )
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
     this.scheduleSave()
     return true

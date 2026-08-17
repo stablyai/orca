@@ -1,20 +1,43 @@
 import { randomUUID } from 'node:crypto'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
-import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
-import { getNextProjectGroupOrder } from '../../../shared/project-groups'
+import {
+  normalizeFolderWorkspaceName,
+  resolveFolderWorkspaceCatalogOwnerHostId
+} from '../../../shared/folder-workspaces'
+import {
+  buildProjectGroupOwnerIndex,
+  resolveProjectGroupOwner
+} from '../../../shared/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
-import { removeWorkspaceSessionOwner } from './session-owner-removal'
+import {
+  findFolderWorkspaceForOwner,
+  sortFolderWorkspaces
+} from './folder-workspace-owner-resolution'
+import { moveProjectToGroupForOwner } from './project-group-repo-move'
 
 export type FolderWorkspaceMutationOperations = {
   state: StoreOwnedPersistedState
   scheduleSave: () => void
-  removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
+  removeWorkspaceLineageForFolderParent: (
+    folderWorkspaceId: string,
+    ownerHostId?: ExecutionHostId | null,
+    removeBareKey?: boolean
+  ) => void
+  removeWorkspaceSessionStateForWorktree: (
+    worktreeId: string,
+    ownerHostId?: ExecutionHostId | null
+  ) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
   hydrateRepo: (repo: Repo) => Repo
 }
@@ -30,8 +53,16 @@ export class FolderWorkspacePersistenceOperations {
     this.operations.scheduleSave()
   }
 
-  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForFolderParent(folderWorkspaceId)
+  private removeWorkspaceLineageForFolderParent(
+    folderWorkspaceId: string,
+    ownerHostId?: ExecutionHostId | null,
+    removeBareKey?: boolean
+  ): void {
+    this.operations.removeWorkspaceLineageForFolderParent(
+      folderWorkspaceId,
+      ownerHostId,
+      removeBareKey
+    )
   }
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
@@ -43,13 +74,16 @@ export class FolderWorkspacePersistenceOperations {
   }
 
   getFolderWorkspaces(): FolderWorkspace[] {
-    return [...(this.state.folderWorkspaces ?? [])].sort(
-      (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
-    )
+    return sortFolderWorkspaces(this.state.folderWorkspaces ?? [])
   }
 
-  getFolderWorkspace(id: string): FolderWorkspace | undefined {
-    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  getFolderWorkspace(id: string, ownerHostId?: ExecutionHostId): FolderWorkspace | undefined {
+    return findFolderWorkspaceForOwner(
+      this.state.folderWorkspaces ?? [],
+      this.state.projectGroups ?? [],
+      id,
+      ownerHostId
+    )
   }
 
   createFolderWorkspace(input: {
@@ -63,8 +97,15 @@ export class FolderWorkspacePersistenceOperations {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
-    const group = (this.state.projectGroups ?? []).find(
-      (entry) => entry.id === input.projectGroupId
+    const projectGroupIndex = buildProjectGroupOwnerIndex(this.state.projectGroups ?? [])
+    const group = resolveProjectGroupOwner(
+      projectGroupIndex,
+      input.projectGroupId,
+      input.connectionId !== undefined
+        ? input.connectionId
+          ? toSshExecutionHostId(input.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+        : undefined
     )
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
@@ -127,9 +168,10 @@ export class FolderWorkspacePersistenceOperations {
         | 'lastActivityAt'
         | 'diffComments'
       >
-    >
+    >,
+    ownerHostId?: ExecutionHostId
   ): FolderWorkspace | null {
-    const workspace = this.getFolderWorkspace(id)
+    const workspace = this.getFolderWorkspace(id, ownerHostId)
     if (!workspace) {
       return null
     }
@@ -207,40 +249,49 @@ export class FolderWorkspacePersistenceOperations {
     return workspace
   }
 
-  removeFolderWorkspace(id: string): boolean {
-    const before = this.state.folderWorkspaces?.length ?? 0
-    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
-      (workspace) => workspace.id !== id
-    )
-    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+  removeFolderWorkspace(id: string, ownerHostId?: ExecutionHostId): boolean {
+    const workspace = this.getFolderWorkspace(id, ownerHostId)
+    if (!workspace) {
       return false
     }
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      folderWorkspaceKey(id)
-    )!
-    this.removeWorkspaceLineageForFolderParent(id)
-    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (candidate) => candidate !== workspace
+    )
+    const resolvedOwnerHostId =
+      ownerHostId ??
+      resolveFolderWorkspaceCatalogOwnerHostId(workspace, this.state.projectGroups ?? []) ??
+      undefined
+    const removeBareKey = !this.state.folderWorkspaces.some((candidate) => candidate.id === id)
+    const keys = new Set<string>()
+    if (resolvedOwnerHostId) {
+      keys.add(folderWorkspaceKey(id, resolvedOwnerHostId))
+    }
+    if (removeBareKey) {
+      keys.add(folderWorkspaceKey(id))
+    }
+    for (const key of keys) {
+      this.operations.removeWorkspaceSessionStateForWorktree(key, resolvedOwnerHostId)
+    }
+    this.removeWorkspaceLineageForFolderParent(id, resolvedOwnerHostId, removeBareKey)
+    this.pruneMobileClientTabSelections((worktreeId) => keys.has(worktreeId))
     this.scheduleSave()
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
-    if (!repo) {
-      return null
-    }
-    const normalizedGroupId =
-      groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
-        ? groupId
-        : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
-    repo.projectGroupId = normalizedGroupId
-    repo.projectGroupOrder =
-      typeof order === 'number' && Number.isFinite(order)
-        ? order
-        : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave()
-    return this.hydrateRepo(repo)
+  moveProjectToGroup(
+    repoId: string,
+    groupId: string | null,
+    order?: number,
+    ownerHostId?: ExecutionHostId
+  ): Repo | null {
+    return moveProjectToGroupForOwner({
+      state: this.state,
+      repoId,
+      groupId,
+      order,
+      ownerHostId,
+      hydrateRepo: (repo) => this.hydrateRepo(repo),
+      scheduleSave: () => this.scheduleSave()
+    })
   }
 }

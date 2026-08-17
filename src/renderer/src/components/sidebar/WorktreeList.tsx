@@ -13,7 +13,11 @@ import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
+import {
+  getActiveSidebarWorkspaceId,
+  getProjectGroupSelectorKey
+} from '../../../../shared/workspace-scope'
+import { getProjectGroupOwnerHostId } from '../../../../shared/project-groups'
 import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -211,7 +215,10 @@ const WorktreeList = React.memo(function WorktreeList({
         return
       }
       openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
+        initialProjectGroupId: getProjectGroupSelectorKey(
+          projectGroup.id,
+          getProjectGroupOwnerHostId(projectGroup)
+        ),
         telemetrySource: 'sidebar'
       })
     },

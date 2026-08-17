@@ -43,7 +43,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'expandedDirs',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
-  'recentlyClosedTabKindsByWorktree'
+  'recentlyClosedTabKindsByWorktree',
+  'restoredRuntimeHostIdByWorkspaceSessionKey'
 ] as const satisfies readonly (keyof AppState)[]
 
 /**

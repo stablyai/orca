@@ -8,11 +8,13 @@ import {
 } from '@/lib/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useFolderWorkspaceComposerPathStatus(
   projectGroup: ProjectGroup | null,
   open: boolean,
-  runtimeEnvironmentId?: string | null
+  runtimeEnvironmentId?: string | null,
+  ownerHostId?: ExecutionHostId
 ): {
   pathStatusBlocksCreate: boolean
   pathStatusProjectError: string | null
@@ -32,8 +34,14 @@ export function useFolderWorkspaceComposerPathStatus(
   )
   const pathStatusRequest = useMemo(
     () =>
-      projectGroup ? { scope: 'project-group' as const, projectGroupId: projectGroup.id } : null,
-    [projectGroup]
+      projectGroup
+        ? {
+            scope: 'project-group' as const,
+            projectGroupId: projectGroup.id,
+            ...(ownerHostId ? { ownerHostId } : {})
+          }
+        : null,
+    [ownerHostId, projectGroup]
   )
   const cacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(folderWorkspacePathStatuses)
   const activePathStatusRefreshIdRef = useRef(0)

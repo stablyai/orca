@@ -6,9 +6,11 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../../../shared/execution-host'
-import type { FolderWorkspacePathStatusRequest } from '../../../../../../shared/folder-workspace-path-status'
+import type { OwnerQualifiedFolderWorkspacePathStatusRequest } from '../../../../../../shared/folder-workspaces'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import { buildProjectGroupOwnerIndex } from '../../../../../../shared/project-groups'
+import { resolveFolderWorkspaceProjectGroupWithLegacySsh } from '../../../../../../shared/folder-workspaces'
 
 /** null means "no host filter" — every host is visible. */
 export function getVisibleSidebarHostIdSet(
@@ -45,12 +47,14 @@ export function filterFolderWorkspacesForVisibleHosts(
   if (!visibleHostIdSet) {
     return folderWorkspaces
   }
-  const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+  const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
   return folderWorkspaces.filter((folderWorkspace) =>
     visibleHostIdSet.has(
       getFolderWorkspaceExecutionHostIdForRows({
         folderWorkspace,
-        projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
+        projectGroup:
+          resolveFolderWorkspaceProjectGroupWithLegacySsh(projectGroupIndex, folderWorkspace) ??
+          undefined,
         defaultHostId
       })
     )
@@ -118,10 +122,19 @@ export function getFolderPathStatusRouteOptionsForRows({
   projectGroupsById,
   folderWorkspacesById
 }: {
-  request: FolderWorkspacePathStatusRequest
+  request: OwnerQualifiedFolderWorkspacePathStatusRequest
   projectGroupsById: ReadonlyMap<string, ProjectGroup>
   folderWorkspacesById: ReadonlyMap<string, FolderWorkspace>
-}): { runtimeEnvironmentId: string | null } | undefined {
+}): { runtimeEnvironmentId: string | null; ownerHostId?: ExecutionHostId } | undefined {
+  if (
+    (request.scope === 'project-group' || request.scope === 'folder-workspace') &&
+    request.ownerHostId
+  ) {
+    return {
+      runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderPathStatusHost(request.ownerHostId),
+      ownerHostId: request.ownerHostId
+    }
+  }
   const folderWorkspace =
     request.scope === 'folder-workspace'
       ? folderWorkspacesById.get(request.folderWorkspaceId)

@@ -1,6 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { branchName } from '@/lib/git-utils'
 import { refreshHostedReviewCard } from '../../hosted-review'
@@ -8,7 +7,6 @@ import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById
 } from '../listing/detected-worktree-meta'
-import { getFolderWorkspaceActivityPersistence } from './folder-workspace-activity'
 import {
   persistPassiveWorktreeMetaForOwner,
   trySettingsForWorktreeOwner,
@@ -16,6 +14,11 @@ import {
 } from '../listing/worktree-owner-settings'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
+import {
+  bumpFolderWorkspaceActivity,
+  clearFolderWorkspaceUnread,
+  markFolderWorkspaceUnread
+} from './folder-workspace-unread-activity'
 
 export function createMarkWorktreeUnread(
   set: WorktreeSliceSet,
@@ -24,34 +27,7 @@ export function createMarkWorktreeUnread(
   return (worktreeId) => {
     // Why: attention dot stays until the user engages the worktree; cleared by pane interaction or activation.
     const now = Date.now()
-    const workspaceScope = parseWorkspaceKey(worktreeId)
-    if (workspaceScope?.type === 'folder') {
-      const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      let shouldPersist = false
-      set((s) => {
-        const folderWorkspace = s.folderWorkspaces.find(
-          (workspace) => workspace.id === folderWorkspaceId
-        )
-        if (!folderWorkspace || folderWorkspace.isUnread) {
-          return s
-        }
-        shouldPersist = true
-        return {
-          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId
-              ? { ...workspace, isUnread: true, lastActivityAt: now }
-              : workspace
-          ),
-          sortEpoch: s.sortEpoch + 1
-        }
-      })
-      if (!shouldPersist) {
-        return
-      }
-      void get().updateFolderWorkspace(folderWorkspaceId, {
-        isUnread: true,
-        lastActivityAt: now
-      })
+    if (markFolderWorkspaceUnread(set, get, worktreeId, now)) {
       return
     }
     let shouldPersist = false
@@ -168,22 +144,7 @@ export function createClearWorktreeUnread(
   get: WorktreeSliceGet
 ): WorktreeSlice['clearWorktreeUnread'] {
   return (worktreeId) => {
-    const workspaceScope = parseWorkspaceKey(worktreeId)
-    if (workspaceScope?.type === 'folder') {
-      const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      const folderWorkspace = get().folderWorkspaces.find(
-        (workspace) => workspace.id === folderWorkspaceId
-      )
-      if (!folderWorkspace?.isUnread) {
-        return
-      }
-      // Why: flip locally first — this runs per keystroke, so the guard above must dedupe before the IPC round-trip lands.
-      set((s) => ({
-        folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-          workspace.id === folderWorkspaceId ? { ...workspace, isUnread: false } : workspace
-        )
-      }))
-      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+    if (clearFolderWorkspaceUnread(set, get, worktreeId)) {
       return
     }
     let shouldPersist = false
@@ -231,29 +192,7 @@ export function createBumpWorktreeActivity(
 ): WorktreeSlice['bumpWorktreeActivity'] {
   return (worktreeId) => {
     const now = Date.now()
-    const workspaceScope = parseWorkspaceKey(worktreeId)
-    if (workspaceScope?.type === 'folder') {
-      // Why: folder meta lives on the FolderWorkspace record — persistWorktreeMeta would write a
-      // worktreeMeta['folder:…'] row that folderWorkspaces:list never reads back (#10251).
-      const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      let shouldPersist = false
-      set((s) => {
-        if (!s.folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-          return s
-        }
-        shouldPersist = true
-        const isActive = s.activeWorktreeId === worktreeId
-        return {
-          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId ? { ...workspace, lastActivityAt: now } : workspace
-          ),
-          // Why: active-workspace PTY events are click side-effects, so they must not reorder it.
-          ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
-        }
-      })
-      if (shouldPersist) {
-        getFolderWorkspaceActivityPersistence(get).record(folderWorkspaceId, now)
-      }
+    if (bumpFolderWorkspaceActivity(set, get, worktreeId, now)) {
       return
     }
     let shouldPersist = false

@@ -4,6 +4,8 @@ import {
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list/grouping/row-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { getProjectGroupHeaderKey } from './worktree-list/grouping/group-keys'
+import { getProjectGroupOwnerHostId } from '../../../../shared/project-groups'
 
 export type ProjectGroupHeaderDragBucketKey = string
 
@@ -34,18 +36,31 @@ function isConcreteProjectGroup(
   return typeof projectGroup?.id === 'string'
 }
 
+function getProjectGroupMapKey(
+  group: Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>,
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
+): string {
+  const candidates = [
+    getProjectGroupHeaderKey(group.id, getProjectGroupOwnerHostId(group)),
+    getProjectGroupHeaderKey(group.id),
+    group.id
+  ]
+  return candidates.find((candidate) => projectGroupById?.has(candidate)) ?? candidates[1]
+}
+
 export function getProjectGroupHeaderDragBucketKey(
-  group: Pick<ProjectGroup, 'parentGroupId'>,
+  group: Pick<ProjectGroup, 'parentGroupId' | 'connectionId' | 'executionHostId'>,
   projectGroupById?: ReadonlyMap<string, ProjectGroup>
 ): ProjectGroupHeaderDragBucketKey {
   const parentGroupId = group.parentGroupId ?? null
   if (!parentGroupId) {
     return ROOT_PROJECT_GROUP_HEADER_BUCKET
   }
-  if (projectGroupById && !projectGroupById.has(parentGroupId)) {
+  const parentKey = getProjectGroupMapKey({ ...group, id: parentGroupId }, projectGroupById)
+  if (projectGroupById && !projectGroupById.has(parentKey)) {
     return ROOT_PROJECT_GROUP_HEADER_BUCKET
   }
-  return `parent:${parentGroupId}`
+  return `parent:${parentKey}`
 }
 
 export function getSidebarOrderedProjectGroupHeaderIdsByBucket(
@@ -59,7 +74,7 @@ export function getSidebarOrderedProjectGroupHeaderIdsByBucket(
     }
     const bucketKey = getProjectGroupHeaderDragBucketKey(row.projectGroup, projectGroupById)
     const list = buckets.get(bucketKey) ?? []
-    list.push(row.projectGroup.id)
+    list.push(getProjectGroupMapKey(row.projectGroup, projectGroupById))
     buckets.set(bucketKey, list)
   }
   return buckets

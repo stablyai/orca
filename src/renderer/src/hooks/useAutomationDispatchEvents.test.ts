@@ -32,7 +32,7 @@ const createdWorktree = {
   displayName: 'Automation worktree',
   path: '/repo/worktree'
 }
-type TestWorktree = typeof createdWorktree
+type TestWorktree = typeof createdWorktree & { selectedCheckout?: boolean; hostId?: string }
 type TestRepo = {
   id: string
   connectionId: string | null
@@ -43,6 +43,7 @@ type TestRepo = {
 const state = {
   activeView: 'terminal' as const,
   activeWorktreeId: 'wt-active',
+  activeWorkspaceExecutionHostId: 'local' as string | null,
   activeTabId: 'tab-active',
   activeTabType: 'terminal' as const,
   repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }] as TestRepo[],
@@ -51,6 +52,7 @@ const state = {
     projectGroupId: string
     folderPath: string
     connectionId: string | null
+    executionHostId?: string | null
   }[],
   projectGroups: [] as {
     id: string
@@ -61,7 +63,9 @@ const state = {
   detectedWorktreesByRepo: {},
   agentStatusByPaneKey: {},
   allWorktrees: vi.fn<() => TestWorktree[]>(() => []),
-  getKnownWorktreeById: vi.fn<(worktreeId: string) => TestWorktree | undefined>(() => undefined),
+  getKnownWorktreeById: vi.fn<
+    (worktreeId: string, executionHostId?: string) => TestWorktree | undefined
+  >(() => undefined),
   createWorktree: mockCreateWorktree,
   subscribe: vi.fn(() => () => {}),
   setActiveView: vi.fn(),
@@ -183,6 +187,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     vi.clearAllMocks()
     state.activeView = 'terminal'
     state.activeWorktreeId = 'wt-active'
+    state.activeWorkspaceExecutionHostId = 'local'
     state.activeTabId = 'tab-active'
     state.activeTabType = 'terminal'
     state.repos = [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }]
@@ -360,7 +365,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       displayName: 'Existing workspace',
       path: '/repo/existing'
     }
-    state.allWorktrees.mockReturnValue([existingWorktree])
+    state.getKnownWorktreeById.mockReturnValue(existingWorktree)
 
     await registerAndDispatch(
       makeAutomation({
@@ -502,7 +507,8 @@ describe('useAutomationDispatchEvents setup launch', () => {
       id: 'wt-detected',
       repoId: 'repo-1',
       displayName: 'Detected',
-      path: '/repo/detected'
+      path: '/repo/detected',
+      selectedCheckout: false
     })
 
     await registerAndDispatch(
@@ -512,7 +518,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       })
     )
 
-    expect(state.getKnownWorktreeById).not.toHaveBeenCalled()
+    expect(state.getKnownWorktreeById).toHaveBeenCalledWith('wt-detected', 'local')
     expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
     expect(mockMarkDispatchResult).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'skipped_unavailable' })

@@ -1,6 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { markInputQuietSchedulerInput } from '@/lib/input-quiet-scheduler'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
 import {
@@ -8,14 +7,23 @@ import {
   folderWorkspaceMatchesHost
 } from '../listing/detected-worktree-meta'
 import { shouldDeferActivationTerminalPrep } from './activation-terminal-prep'
+import {
+  migrateFolderWorkspaceSessionAlias,
+  resolveFolderWorkspaceSessionTarget
+} from './folder-workspace-session-target'
 
 export function createSetActiveFolderWorkspace(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['setActiveFolderWorkspace'] {
   return (folderWorkspaceId, executionHostId) => {
-    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-    const workspace = findKnownWorktreeById(get(), workspaceKey, executionHostId)
+    const target = resolveFolderWorkspaceSessionTarget(get(), folderWorkspaceId, executionHostId)
+    if (!target) {
+      return
+    }
+    migrateFolderWorkspaceSessionAlias(set, target, get())
+    const { ownerHostId, workspaceKey } = target
+    const workspace = findKnownWorktreeById(get(), workspaceKey, ownerHostId)
     if (!workspace) {
       return
     }
@@ -101,7 +109,7 @@ export function createSetActiveFolderWorkspace(
         activeRepoId: null,
         activeWorktreeId: workspaceKey,
         activeWorkspaceKey: workspaceKey,
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: ownerHostId,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -114,8 +122,7 @@ export function createSetActiveFolderWorkspace(
         everActivatedWorktreeIds: nextEverActivated,
         folderWorkspaces: workspace.isUnread
           ? s.folderWorkspaces.map((entry) =>
-              entry.id === folderWorkspaceId &&
-              (!executionHostId || folderWorkspaceMatchesHost(entry, executionHostId))
+              entry.id === folderWorkspaceId && folderWorkspaceMatchesHost(entry, ownerHostId)
                 ? { ...entry, isUnread: false }
                 : entry
             )
@@ -126,7 +133,7 @@ export function createSetActiveFolderWorkspace(
       void get().updateFolderWorkspace(
         folderWorkspaceId,
         { isUnread: false },
-        executionHostId ? { executionHostId } : undefined
+        { executionHostId: ownerHostId }
       )
     }
   }

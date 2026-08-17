@@ -8,6 +8,7 @@ import type {
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import WorktreeCard from '../../WorktreeCard'
@@ -18,6 +19,8 @@ import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
+import { getProjectGroupOwnerHostId } from '../../../../../../shared/project-groups'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 export type FolderWorkspaceRowContext = {
   groupBy: WorktreeGroupBy
@@ -35,6 +38,7 @@ export type FolderWorkspaceRowContext = {
   getCachedFolderWorkspacePathStatus: (request: {
     scope: 'folder-workspace'
     folderWorkspaceId: string
+    ownerHostId?: ExecutionHostId
   }) => FolderWorkspacePathStatus | null
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect: (
@@ -57,10 +61,14 @@ export function renderFolderWorkspaceVirtualRow(args: {
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const { ctx, row, vItem } = args
-  const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
+  const folderWorktree = {
+    ...folderWorkspaceToWorktree(row.folderWorkspace),
+    id: row.workspaceKey ?? folderWorkspaceKey(row.folderWorkspace.id)
+  }
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
-    folderWorkspaceId: row.folderWorkspace.id
+    folderWorkspaceId: row.folderWorkspace.id,
+    ownerHostId: getProjectGroupOwnerHostId(row.projectGroup)
   })
   const activationDisabled =
     pathStatus?.exists === false &&

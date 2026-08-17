@@ -18,6 +18,8 @@ import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-dro
 import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
+import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { getProjectGroupOwnerHostId } from '../../../../../../shared/project-groups'
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
@@ -79,9 +81,25 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
-  const projectGroupByIdForHeaderDrag = useMemo(
-    () => new Map(projectGroups.map((group) => [group.id, group])),
+  const duplicateProjectGroupIds = useMemo(
+    () =>
+      new Set(
+        projectGroups.map((group) => group.id).filter((id, index, ids) => ids.indexOf(id) !== index)
+      ),
     [projectGroups]
+  )
+  const projectGroupByIdForHeaderDrag = useMemo(
+    () =>
+      new Map(
+        projectGroups.map((group) => [
+          getProjectGroupHeaderKey(
+            group.id,
+            duplicateProjectGroupIds.has(group.id) ? getProjectGroupOwnerHostId(group) : undefined
+          ),
+          group
+        ])
+      ),
+    [duplicateProjectGroupIds, projectGroups]
   )
 
   // Why: reorder keeps scrollTop stable; flag direct scroll input so anchor-restore won't chase the moved row (jumpy drop).

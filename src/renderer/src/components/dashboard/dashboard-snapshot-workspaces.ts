@@ -15,9 +15,19 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  buildProjectGroupOwnerIndex,
+  getProjectGroupOwnerHostId,
+  resolveProjectGroupOwner
+} from '../../../../shared/project-groups'
+import {
+  getFolderWorkspaceCatalogOwnerHostId,
+  resolveFolderWorkspaceProjectGroupWithLegacySsh
+} from '../../../../shared/folder-workspaces'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { folderWorkspaceKey, getProjectGroupSelectorKey } from '../../../../shared/workspace-scope'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -109,29 +119,59 @@ export function collectActiveDashboardWorkspaces(
     }
   }
 
-  const projectGroupsById = new Map(
-    (state.projectGroups ?? []).map((projectGroup) => [projectGroup.id, projectGroup])
+  const projectGroupIndex = buildProjectGroupOwnerIndex(state.projectGroups ?? [])
+  const duplicateProjectGroupIds = new Set(
+    [...projectGroupIndex.byId].flatMap(([id, groups]) => (groups.length > 1 ? [id] : []))
   )
+  const folderOwnersById = new Map<string, Set<ExecutionHostId>>()
   for (const folderWorkspace of state.folderWorkspaces ?? []) {
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    const ownerHostId = getFolderWorkspaceCatalogOwnerHostId(
+      folderWorkspace,
+      state.projectGroups ?? []
+    )
+    const owners = folderOwnersById.get(folderWorkspace.id) ?? new Set<ExecutionHostId>()
+    owners.add(ownerHostId)
+    folderOwnersById.set(folderWorkspace.id, owners)
+  }
+  for (const folderWorkspace of state.folderWorkspaces ?? []) {
+    const projectGroup =
+      resolveFolderWorkspaceProjectGroupWithLegacySsh(projectGroupIndex, folderWorkspace) ??
+      resolveProjectGroupOwner(projectGroupIndex, folderWorkspace.projectGroupId)
+    if (!projectGroup) {
+      continue
+    }
+    const ownerHostId = getFolderWorkspaceCatalogOwnerHostId(
+      folderWorkspace,
+      state.projectGroups ?? []
+    )
+    const worktree = {
+      ...folderWorkspaceToWorktree(folderWorkspace),
+      id: folderWorkspaceKey(
+        folderWorkspace.id,
+        (folderOwnersById.get(folderWorkspace.id)?.size ?? 0) > 1 ? ownerHostId : undefined
+      )
+    }
     if (folderWorkspace.isArchived || seenWorkspaceIds.has(worktree.id)) {
       continue
     }
-    const projectGroup = projectGroupsById.get(folderWorkspace.projectGroupId)
     const workspaceHostLabel = includeMapMetadata
       ? resolveHostLabel(getWorktreeExecutionHostId(worktree, undefined))
       : undefined
     workspaces.push({
-      projectId: `folder-workspace:${folderWorkspace.projectGroupId}`,
-      projectName: projectGroup?.name ?? folderWorkspace.name,
+      projectId: `folder-workspace:${
+        duplicateProjectGroupIds.has(projectGroup.id)
+          ? getProjectGroupSelectorKey(projectGroup.id, getProjectGroupOwnerHostId(projectGroup))
+          : projectGroup.id
+      }`,
+      projectName: projectGroup.name,
       repo: null,
       repoIcon: null,
       worktree,
       workspaceKind: 'folder',
       remoteHostKind: includeMapMetadata
         ? remoteHostKind(
-            folderWorkspace.connectionId ?? projectGroup?.connectionId,
-            worktree.hostId ?? projectGroup?.executionHostId
+            folderWorkspace.connectionId ?? projectGroup.connectionId,
+            worktree.hostId ?? projectGroup.executionHostId
           )
         : null,
       ...(workspaceHostLabel ? { hostLabel: workspaceHostLabel } : {})

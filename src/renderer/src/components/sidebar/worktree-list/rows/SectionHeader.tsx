@@ -90,7 +90,7 @@ export function renderWorktreeSectionHeaderRow(args: {
   const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
-      ? row.projectGroup.id
+      ? row.key
       : undefined
   const repoHeaderIndex =
     projectIdForHeader !== undefined
@@ -160,7 +160,7 @@ export function renderWorktreeSectionHeaderRow(args: {
   const projectGroupPathStatus = folderBackedProjectGroup
     ? ctx.getCachedFolderWorkspacePathStatus({
         scope: 'project-group',
-        projectGroupId: folderBackedProjectGroup.id
+        projectGroupId: row.key
       })
     : null
   const isHeaderCollapsed = ctx.collapsedGroups.has(row.key)

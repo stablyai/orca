@@ -34,11 +34,13 @@ export function createUpdateWorktreeMeta(
 ): WorktreeSlice['updateWorktreeMeta'] {
   return async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
-    const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    const executionHostId =
+      workspaceScope?.type === 'folder' ? workspaceScope.ownerHostId : undefined
+    const existingWorktree = get().getKnownWorktreeById(worktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
-    const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
       if (Object.keys(folderUpdates).length === 0) {
@@ -49,7 +51,8 @@ export function createUpdateWorktreeMeta(
         // reporting ok would show the dialog a save that silently undid itself.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
-          folderUpdates
+          folderUpdates,
+          executionHostId ? { executionHostId } : undefined
         )
         return updated
           ? { ok: true }

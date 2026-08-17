@@ -1,7 +1,16 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
-import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
+import {
+  buildProjectGroupOwnerIndex,
+  getEffectiveProjectGroupManualRank,
+  getProjectGroupIdentity,
+  getProjectGroupOwnerHostId,
+  getProjectGroupOwnerIdentity
+} from '../../../../../../shared/project-groups'
+import { resolveFolderWorkspaceProjectGroupWithLegacySsh } from '../../../../../../shared/folder-workspaces'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { PROJECT_GROUP_META, getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
@@ -25,13 +34,21 @@ export function appendProjectGroupSections(
   const { orderedGroups, projectGroups, folderWorkspaces, projectOrderBy, repoOrder } = args
   const { result, collapsedGroups } = ctx
 
-  const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
+  const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
+  const duplicateFolderWorkspaceIds = new Set(
+    folderWorkspaces
+      .map((workspace) => workspace.id)
+      .filter((id, index, ids) => ids.indexOf(id) !== index)
+  )
+  const groupByProjectGroupIdentity = new Map<string | null, OrderedGroupEntry[]>()
   for (const entry of orderedGroups) {
     const repo = entry[1].repo
-    const projectGroupId = repo?.projectGroupId ?? null
-    const list = groupByProjectGroupId.get(projectGroupId) ?? []
+    const projectGroupIdentity = repo?.projectGroupId
+      ? getProjectGroupIdentity(repo.projectGroupId, getRepoExecutionHostId(repo))
+      : null
+    const list = groupByProjectGroupIdentity.get(projectGroupIdentity) ?? []
     list.push(entry)
-    groupByProjectGroupId.set(projectGroupId, list)
+    groupByProjectGroupIdentity.set(projectGroupIdentity, list)
   }
 
   const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
@@ -50,69 +67,85 @@ export function appendProjectGroupSections(
     })
   }
 
-  const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  const folderWorkspacesByProjectGroupId = new Map<string, FolderWorkspace[]>()
+  const folderWorkspacesByProjectGroupIdentity = new Map<string, FolderWorkspace[]>()
   for (const workspace of folderWorkspaces) {
-    const group = projectGroupsById.get(workspace.projectGroupId)
+    const group = resolveFolderWorkspaceProjectGroupWithLegacySsh(projectGroupIndex, workspace)
     if (!group?.parentPath) {
       continue
     }
-    const list = folderWorkspacesByProjectGroupId.get(workspace.projectGroupId) ?? []
+    const identity = getProjectGroupOwnerIdentity(group)
+    const list = folderWorkspacesByProjectGroupIdentity.get(identity) ?? []
     list.push(workspace)
-    folderWorkspacesByProjectGroupId.set(workspace.projectGroupId, list)
+    folderWorkspacesByProjectGroupIdentity.set(identity, list)
   }
-  for (const list of folderWorkspacesByProjectGroupId.values()) {
+  for (const list of folderWorkspacesByProjectGroupIdentity.values()) {
     list.sort((left, right) => {
       const leftOrder = left.manualOrder ?? left.sortOrder
       const rightOrder = right.manualOrder ?? right.sortOrder
       return rightOrder - leftOrder || left.name.localeCompare(right.name)
     })
   }
-  const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
+  const childGroupsByParentIdentity = new Map<string | null, ProjectGroup[]>()
   for (const group of projectGroups) {
-    const parentId =
-      group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
-    const children = childGroupsByParentId.get(parentId) ?? []
+    const parentIdentity = group.parentGroupId
+      ? getProjectGroupIdentity(group.parentGroupId, getProjectGroupOwnerHostId(group))
+      : null
+    const resolvedParentIdentity =
+      parentIdentity && projectGroupIndex.byIdentity.has(parentIdentity) ? parentIdentity : null
+    const children = childGroupsByParentIdentity.get(resolvedParentIdentity) ?? []
     children.push(group)
-    childGroupsByParentId.set(parentId, children)
+    childGroupsByParentIdentity.set(resolvedParentIdentity, children)
   }
-  for (const groups of childGroupsByParentId.values()) {
+  for (const groups of childGroupsByParentIdentity.values()) {
     groups.sort(
       (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
     )
   }
 
-  const getProjectGroupSubtreeCount = (groupId: string): number => {
-    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
-    const folderWorkspaceCount = folderWorkspacesByProjectGroupId.get(groupId)?.length ?? 0
-    const children = childGroupsByParentId.get(groupId) ?? []
+  const getProjectGroupSubtreeCount = (group: ProjectGroup): number => {
+    const identity = getProjectGroupOwnerIdentity(group)
+    const directCount = groupByProjectGroupIdentity.get(identity)?.length ?? 0
+    const folderWorkspaceCount = folderWorkspacesByProjectGroupIdentity.get(identity)?.length ?? 0
+    const children = childGroupsByParentIdentity.get(identity) ?? []
     return children.reduce(
-      (count, child) => count + getProjectGroupSubtreeCount(child.id),
+      (count, child) => count + getProjectGroupSubtreeCount(child),
       directCount + folderWorkspaceCount
     )
   }
 
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
-    const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
-    const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
-    const key = getProjectGroupHeaderKey(projectGroup.id)
+    const identity = getProjectGroupOwnerIdentity(projectGroup)
+    const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupIdentity.get(identity) ?? [])
+    const childGroups = childGroupsByParentIdentity.get(identity) ?? []
+    const key = getProjectGroupHeaderKey(
+      projectGroup.id,
+      (projectGroupIndex.byId.get(projectGroup.id)?.length ?? 0) > 1
+        ? getProjectGroupOwnerHostId(projectGroup)
+        : undefined
+    )
     result.push({
       type: 'header',
       key,
       label: projectGroup.name,
-      count: getProjectGroupSubtreeCount(projectGroup.id),
+      count: getProjectGroupSubtreeCount(projectGroup),
       tone: PROJECT_GROUP_META.tone,
       icon: PROJECT_GROUP_META.icon,
       projectGroup,
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      for (const folderWorkspace of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
+      for (const folderWorkspace of folderWorkspacesByProjectGroupIdentity.get(identity) ?? []) {
         result.push({
           type: 'folder-workspace',
-          key: `folder-workspace:${folderWorkspace.id}`,
+          key: `${key}:folder-workspace:${folderWorkspace.id}`,
           folderWorkspace,
           projectGroup,
+          workspaceKey: folderWorkspaceKey(
+            folderWorkspace.id,
+            duplicateFolderWorkspaceIds.has(folderWorkspace.id)
+              ? getProjectGroupOwnerHostId(projectGroup)
+              : undefined
+          ),
           depth: 0,
           groupDepth: depth + 1
         })
@@ -122,16 +155,16 @@ export function appendProjectGroupSections(
         appendProjectGroup(childGroup, depth + 1)
       }
     }
-    groupByProjectGroupId.delete(projectGroup.id)
+    groupByProjectGroupIdentity.delete(identity)
   }
 
-  for (const projectGroup of childGroupsByParentId.get(null) ?? []) {
+  for (const projectGroup of childGroupsByParentIdentity.get(null) ?? []) {
     appendProjectGroup(projectGroup, 0)
   }
 
-  const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
-  for (const [projectGroupId, entries] of groupByProjectGroupId) {
-    if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
+  const remainingRepoEntries = [...(groupByProjectGroupIdentity.get(null) ?? [])]
+  for (const [projectGroupIdentity, entries] of groupByProjectGroupIdentity) {
+    if (projectGroupIdentity === null || projectGroupIndex.byIdentity.has(projectGroupIdentity)) {
       continue
     }
     // Why: startup can have repos from hosts whose project-group metadata was

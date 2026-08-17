@@ -9,7 +9,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, getProjectGroupSelectorKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
@@ -192,21 +192,29 @@ describe('project group store routing', () => {
     expect(projectGroupsList).not.toHaveBeenCalled()
   })
 
-  it('routes folder path status through an explicit runtime owner when provided', async () => {
+  it('routes an owner-qualified path status selector over the legacy runtime wire', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-path-status',
       ok: true,
       result: { status: { path: '/workspace/platform', exists: true } },
       _meta: { runtimeId: 'runtime-remote' }
     })
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    const folderGroup = {
+      ...projectGroup,
+      parentPath: '/workspace/platform',
+      executionHostId: 'runtime:env-1' as const
+    }
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
       projectGroups: [folderGroup]
     })
 
-    const request = { scope: 'project-group' as const, projectGroupId: folderGroup.id }
+    const request = {
+      scope: 'project-group' as const,
+      projectGroupId: getProjectGroupSelectorKey(folderGroup.id, 'runtime:env-1')
+    }
+    const cacheScope = `project-group:["runtime:env-1","${folderGroup.id}"]`
 
     await expect(
       store.getState().fetchFolderWorkspacePathStatus(request, {
@@ -216,13 +224,13 @@ describe('project group store routing', () => {
     ).resolves.toEqual({ path: '/workspace/platform', exists: true })
 
     expect(store.getState().getFolderWorkspacePathStatusCacheKey(request)).toBe(
-      `environment:wrong-env:project-group:${folderGroup.id}`
+      `environment:wrong-env:${cacheScope}`
     )
     expect(
       store
         .getState()
         .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: 'env-1' })
-    ).toBe(`environment:env-1:project-group:${folderGroup.id}`)
+    ).toBe(`environment:env-1:${cacheScope}`)
     expect(
       store.getState().getFreshFolderWorkspacePathStatus(request, { runtimeEnvironmentId: 'env-1' })
     ).toEqual({ path: '/workspace/platform', exists: true })
@@ -230,7 +238,7 @@ describe('project group store routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'folderWorkspace.getPathStatus',
-      params: request,
+      params: { scope: 'project-group', projectGroupId: folderGroup.id },
       timeoutMs: 15_000
     })
   })

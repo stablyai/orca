@@ -4,6 +4,9 @@ import {
   buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
   findActionableFolderProjectGroup,
+  getNewWorkspaceProjectGroupOptionId,
+  getNewWorkspaceProjectGroupsForOwner,
+  getProjectGroupSelectorFromNewWorkspaceOptionId,
   getRepoIdFromNewWorkspaceFolderSourceOptionId,
   isNewWorkspaceProjectOptionQueryTooLarge,
   searchNewWorkspaceProjectOptions,
@@ -479,13 +482,57 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
 
     expect(options.map((option) => option.id).sort()).toEqual([
       'github:stablyai/orca',
-      'project-group:folder-group'
+      getNewWorkspaceProjectGroupOptionId('folder-group', 'local')
     ])
-    expect(options.find((option) => option.id === 'project-group:folder-group')).toMatchObject({
+    expect(
+      options.find(
+        (option) => option.id === getNewWorkspaceProjectGroupOptionId('folder-group', 'local')
+      )
+    ).toMatchObject({
       kind: 'project-group',
       projectGroupId: 'folder-group',
       displayName: 'Platform',
       detail: '/tmp/platform'
+    })
+  })
+
+  it('gives duplicate group ids distinct owner-qualified option values', async () => {
+    const { buildNewWorkspaceCreateTargetOptions } = await import('./new-workspace-project-options')
+    const options = buildNewWorkspaceCreateTargetOptions({
+      projects: [],
+      projectHostSetups: [],
+      eligibleRepos: [],
+      hosts: [
+        { id: 'local', label: 'Local Mac' },
+        { id: 'runtime:env-1', label: 'Remote' }
+      ],
+      projectGroups: [
+        group({ id: 'same-id', executionHostId: 'local' }),
+        group({ id: 'same-id', executionHostId: 'runtime:env-1' })
+      ]
+    })
+
+    expect(options.map((option) => option.id)).toEqual([
+      getNewWorkspaceProjectGroupOptionId('same-id', 'local'),
+      getNewWorkspaceProjectGroupOptionId('same-id', 'runtime:env-1')
+    ])
+    expect(getProjectGroupSelectorFromNewWorkspaceOptionId(options[1].id)).toEqual({
+      groupId: 'same-id',
+      ownerHostId: 'runtime:env-1'
+    })
+  })
+
+  it('keeps host-shaped legacy group ids distinct from owner-qualified options', () => {
+    const legacyOptionId = 'project-group:local:same-id'
+    const qualifiedOptionId = getNewWorkspaceProjectGroupOptionId('same-id', 'local')
+
+    expect(legacyOptionId).not.toBe(qualifiedOptionId)
+    expect(getProjectGroupSelectorFromNewWorkspaceOptionId(legacyOptionId)).toEqual({
+      groupId: 'local:same-id'
+    })
+    expect(getProjectGroupSelectorFromNewWorkspaceOptionId(qualifiedOptionId)).toEqual({
+      groupId: 'same-id',
+      ownerHostId: 'local'
     })
   })
 })
@@ -534,5 +581,47 @@ describe('findActionableFolderProjectGroup', () => {
         actionableHostIds: new Set(['local'])
       })
     ).toBeNull()
+  })
+
+  it('fails closed for duplicate ids unless the owner is explicit', () => {
+    const duplicates = [
+      group({ id: 'same-id', executionHostId: 'local' }),
+      group({ id: 'same-id', executionHostId: 'runtime:env-1' })
+    ]
+    const actionableHostIds = new Set(['local', 'runtime:env-1'] as const)
+
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: duplicates,
+        groupId: 'same-id',
+        actionableHostIds
+      })
+    ).toBeNull()
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: duplicates,
+        groupId: 'same-id',
+        ownerHostId: 'runtime:env-1',
+        actionableHostIds
+      })
+    ).toBe(duplicates[1])
+  })
+
+  it('limits folder source traversal to the selected group owner', () => {
+    const localRoot = group({ id: 'root', executionHostId: 'local' })
+    const localUnrelated = group({ id: 'foreign-child', executionHostId: 'local' })
+    const runtimeRoot = group({ id: 'root', executionHostId: 'runtime:env-1' })
+    const runtimeChild = group({
+      id: 'foreign-child',
+      executionHostId: 'runtime:env-1',
+      parentGroupId: 'root'
+    })
+
+    expect(
+      getNewWorkspaceProjectGroupsForOwner(
+        [localRoot, localUnrelated, runtimeRoot, runtimeChild],
+        localRoot
+      )
+    ).toEqual([localRoot, localUnrelated])
   })
 })

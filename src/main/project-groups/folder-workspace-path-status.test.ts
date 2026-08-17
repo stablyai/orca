@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath,
-  inferFolderWorkspacePathConnection
+  inferFolderWorkspacePathConnection,
+  resolveFolderWorkspaceStatusPath
 } from './folder-workspace-path-status'
 import type { IFilesystemProvider } from '../providers/types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -39,6 +40,139 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     ...overrides
   }
 }
+
+it('resolves same-id project-group paths by exact owner', () => {
+  const local = makeGroup({ id: 'same-id', parentPath: '/local' })
+  const ssh = makeGroup({ id: 'same-id', parentPath: '/remote', connectionId: 'builder' })
+  const store = {
+    getRepos: () => [],
+    getProjectGroups: () => [local, ssh]
+  }
+
+  expect(
+    resolveFolderWorkspaceStatusPath({
+      store,
+      request: { scope: 'project-group', projectGroupId: 'same-id', ownerHostId: 'ssh:builder' }
+    })
+  ).toEqual({
+    folderPath: '/remote',
+    projectGroupId: 'same-id',
+    connectionId: 'builder',
+    ownerHostId: 'ssh:builder'
+  })
+  expect(() =>
+    resolveFolderWorkspaceStatusPath({
+      store,
+      request: { scope: 'project-group', projectGroupId: 'same-id' }
+    })
+  ).toThrow('folder_workspace_path_scope_not_found')
+})
+
+it('resolves same-id folder-workspace paths by exact owner and rejects a bare selector', () => {
+  const local = makeGroup({ id: 'same-id', parentPath: '/local' })
+  const ssh = makeGroup({ id: 'same-id', parentPath: '/remote', connectionId: 'builder' })
+  const store = {
+    getRepos: () => [],
+    getProjectGroups: () => [local, ssh],
+    getFolderWorkspaces: () => [
+      {
+        id: 'same-folder',
+        projectGroupId: 'same-id',
+        name: 'Local',
+        folderPath: '/local/folder',
+        connectionId: null,
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'same-folder',
+        projectGroupId: 'same-id',
+        name: 'SSH',
+        folderPath: '/remote/folder',
+        connectionId: 'builder',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 2,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+  }
+
+  expect(
+    resolveFolderWorkspaceStatusPath({
+      store,
+      request: {
+        scope: 'folder-workspace',
+        folderWorkspaceId: 'same-folder',
+        ownerHostId: 'ssh:builder'
+      }
+    })
+  ).toEqual({
+    folderPath: '/remote/folder',
+    projectGroupId: 'same-id',
+    connectionId: 'builder',
+    ownerHostId: 'ssh:builder'
+  })
+  expect(() =>
+    resolveFolderWorkspaceStatusPath({
+      store,
+      request: { scope: 'folder-workspace', folderWorkspaceId: 'same-folder' }
+    })
+  ).toThrow('folder_workspace_path_scope_not_found')
+})
+
+it('resolves a legacy SSH folder against one unstamped group', () => {
+  const store = {
+    getRepos: () => [],
+    getProjectGroups: () => [makeGroup({ id: 'legacy' })],
+    getFolderWorkspaces: () => [
+      {
+        id: 'legacy-folder',
+        projectGroupId: 'legacy',
+        name: 'Legacy SSH',
+        folderPath: '/remote/folder',
+        connectionId: 'builder',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+  }
+
+  expect(
+    resolveFolderWorkspaceStatusPath({
+      store,
+      request: {
+        scope: 'folder-workspace',
+        folderWorkspaceId: 'legacy-folder',
+        ownerHostId: 'ssh:builder'
+      }
+    })
+  ).toEqual({
+    folderPath: '/remote/folder',
+    projectGroupId: 'legacy',
+    connectionId: 'builder',
+    ownerHostId: 'ssh:builder'
+  })
+})
 
 describe('folder workspace path status', () => {
   it('reports existing local directories and local files', async () => {

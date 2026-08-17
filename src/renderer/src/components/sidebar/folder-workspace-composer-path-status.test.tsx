@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { useAppStore } from '@/store'
 import { useFolderWorkspaceComposerPathStatus } from './folder-workspace-composer-path-status'
+import { getProjectGroupSelectorKey } from '../../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()
 
@@ -35,6 +36,19 @@ function HookProbe(): null {
   return null
 }
 
+function RuntimeHookProbe(): null {
+  useFolderWorkspaceComposerPathStatus(
+    {
+      ...projectGroup,
+      id: getProjectGroupSelectorKey('same-id', 'runtime:env-1'),
+      executionHostId: 'runtime:env-1'
+    },
+    true,
+    'env-1'
+  )
+  return null
+}
+
 describe('useFolderWorkspaceComposerPathStatus', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -47,6 +61,26 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     delete (globalThis as { __folderWorkspaceComposerPathStatusResult?: unknown })
       .__folderWorkspaceComposerPathStatusResult
     useAppStore.setState(initialState, true)
+  })
+
+  it('retains the selected group owner in path-status requests', () => {
+    const fetchFolderWorkspacePathStatus = vi.fn()
+    useAppStore.setState({ fetchFolderWorkspacePathStatus, folderWorkspacePathStatuses: {} })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<RuntimeHookProbe />)
+    })
+
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(
+      {
+        scope: 'project-group',
+        projectGroupId: getProjectGroupSelectorKey('same-id', 'runtime:env-1')
+      },
+      { force: true, runtimeEnvironmentId: 'env-1' }
+    )
   })
 
   it('blocks creation while an expired path status refresh is pending', async () => {
@@ -112,7 +146,10 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusProjectError
     ).toContain('/workspace/platform')
-    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, {
+      force: true,
+      runtimeEnvironmentId: undefined
+    })
   })
 
   it('unblocks creation when the first path status check settles without cache', async () => {
@@ -151,7 +188,10 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
     ).toBe(false)
-    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, {
+      force: true,
+      runtimeEnvironmentId: undefined
+    })
   })
 
   it('blocks creation while the first path status check is unknown', () => {
@@ -177,7 +217,10 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
     ).toBe(true)
-    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, {
+      force: true,
+      runtimeEnvironmentId: undefined
+    })
   })
 
   it('does not block creation for an unavailable path status', () => {

@@ -10,6 +10,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { resolveFolderWorkspaceCatalogOwnerHostId } from '../../../../../../shared/folder-workspaces'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
@@ -55,17 +56,24 @@ export function folderWorkspaceMatchesHost(
 }
 
 export function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
+  state: Pick<
+    AppState,
+    'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'projectGroups'
+  >,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const preferredHostId = executionHostId ?? workspaceScope.ownerHostId
+    const matches = state.folderWorkspaces.filter(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
-        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
+        (!preferredHostId ||
+          resolveFolderWorkspaceCatalogOwnerHostId(workspace, state.projectGroups) ===
+            preferredHostId)
     )
+    const folderWorkspace = matches.length === 1 ? matches[0] : undefined
     if (!folderWorkspace) {
       return undefined
     }

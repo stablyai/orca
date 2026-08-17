@@ -10,6 +10,15 @@ import {
 import { useAppStore } from '@/store'
 import { getRepoHeaderCreateState } from '@/components/sidebar/repo-header-create-state'
 import { translate } from '@/i18n/i18n'
+import {
+  buildProjectGroupOwnerIndex,
+  getProjectGroupOwnerHostId,
+  resolveProjectGroupOwner
+} from '../../../../shared/project-groups'
+import {
+  getProjectGroupSelectorKey,
+  parseProjectGroupSelectorKey
+} from '../../../../shared/workspace-scope'
 
 const FOLDER_PROJECT_PREFIX = 'folder-workspace:'
 
@@ -25,6 +34,34 @@ type AgentMapProjectContextMenuProps = {
   onOpenChange?: (open: boolean) => void
 }
 
+export function resolveAgentMapProjectContextTarget(args: {
+  projectId: string
+  repos: ReturnType<typeof useAppStore.getState>['repos']
+  projectGroups: ReturnType<typeof useAppStore.getState>['projectGroups']
+}):
+  | { kind: 'folder'; group: ReturnType<typeof useAppStore.getState>['projectGroups'][number] }
+  | { kind: 'repo'; repo: ReturnType<typeof useAppStore.getState>['repos'][number] }
+  | null {
+  if (args.projectId.startsWith(FOLDER_PROJECT_PREFIX)) {
+    const encodedGroupId = args.projectId.slice(FOLDER_PROJECT_PREFIX.length)
+    const selector = parseProjectGroupSelectorKey(encodedGroupId) ?? { groupId: encodedGroupId }
+    const group = resolveProjectGroupOwner(
+      buildProjectGroupOwnerIndex(args.projectGroups),
+      selector.groupId,
+      selector.ownerHostId
+    )
+    return group ? { kind: 'folder', group } : null
+  }
+  const owners = args.repos.filter((repo) => repo.id === args.projectId)
+  return owners.length === 1 ? { kind: 'repo', repo: owners[0] } : null
+}
+
+export function getAgentMapFolderComposerProjectGroupId(
+  group: ReturnType<typeof useAppStore.getState>['projectGroups'][number]
+): string {
+  return getProjectGroupSelectorKey(group.id, getProjectGroupOwnerHostId(group))
+}
+
 export function AgentMapProjectContextMenu({
   request,
   onOpenChange
@@ -32,15 +69,15 @@ export function AgentMapProjectContextMenu({
   const triggerRef = useRef<HTMLSpanElement>(null)
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
-  const target = useMemo(() => {
-    if (request.projectId.startsWith(FOLDER_PROJECT_PREFIX)) {
-      const groupId = request.projectId.slice(FOLDER_PROJECT_PREFIX.length)
-      const groups = projectGroups.filter((group) => group.id === groupId)
-      return groups.length === 1 ? { kind: 'folder' as const, group: groups[0] } : null
-    }
-    const owners = repos.filter((repo) => repo.id === request.projectId)
-    return owners.length === 1 ? { kind: 'repo' as const, repo: owners[0] } : null
-  }, [projectGroups, repos, request.projectId])
+  const target = useMemo(
+    () =>
+      resolveAgentMapProjectContextTarget({
+        projectId: request.projectId,
+        repos,
+        projectGroups
+      }),
+    [projectGroups, repos, request.projectId]
+  )
   const repo = target?.kind === 'repo' ? target.repo : null
   const sshStatus = useAppStore((state) =>
     repo?.connectionId ? (state.sshConnectionStates.get(repo.connectionId)?.status ?? null) : null
@@ -100,7 +137,10 @@ export function AgentMapProjectContextMenu({
                 'new-workspace-composer',
                 target.kind === 'repo'
                   ? { initialRepoId: target.repo.id, telemetrySource: 'sidebar' }
-                  : { initialProjectGroupId: target.group.id, telemetrySource: 'sidebar' }
+                  : {
+                      initialProjectGroupId: getAgentMapFolderComposerProjectGroupId(target.group),
+                      telemetrySource: 'sidebar'
+                    }
               )
             }}
           >

@@ -24,6 +24,7 @@ import {
 } from '../listing/detected-worktree-meta'
 import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
+import { resolveFolderWorkspaceCatalogOwnerHostId } from '../../../../../../shared/folder-workspaces'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -124,7 +125,10 @@ export function createSetActiveWorktree(
       const nextFolderWorkspaces =
         shouldClearUnread && workspaceScope?.type === 'folder'
           ? s.folderWorkspaces.map((workspace) =>
-              workspace.id === workspaceScope.folderWorkspaceId
+              workspace.id === workspaceScope.folderWorkspaceId &&
+              (!executionHostId ||
+                resolveFolderWorkspaceCatalogOwnerHostId(workspace, s.projectGroups) ===
+                  executionHostId)
                 ? { ...workspace, isUnread: false }
                 : workspace
             )
@@ -266,7 +270,11 @@ export function createSetActiveWorktree(
 
     if (shouldClearUnread) {
       if (workspaceScope?.type === 'folder') {
-        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
+        void get().updateFolderWorkspace(
+          workspaceScope.folderWorkspaceId,
+          { isUnread: false },
+          executionHostId ? { executionHostId } : undefined
+        )
         return true
       }
       persistPassiveWorktreeMetaForOwner(

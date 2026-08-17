@@ -67,6 +67,8 @@ import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { unnestWorktrees } from './worktree-unnest'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 
 type Props = {
   worktree: Worktree
@@ -109,6 +111,14 @@ const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 // data. Extracted as a pure function so the stable-reference contract is unit-testable.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+export function getContextMenuWorktreeMetaId(worktree: Pick<Worktree, 'id' | 'hostId'>): string {
+  const workspaceScope = parseWorkspaceKey(worktree.id)
+  const executionHostId = normalizeExecutionHostId(worktree.hostId)
+  return workspaceScope?.type === 'folder' && executionHostId
+    ? folderWorkspaceKey(workspaceScope.folderWorkspaceId, executionHostId)
+    : worktree.id
 }
 
 // Why: the Developer submenu is hidden by default and revealed only by holding
@@ -552,8 +562,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [worktree.path])
 
   const handleToggleRead = useCallback(() => {
-    updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-  }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
+    updateWorktreeMeta(getContextMenuWorktreeMetaId(worktree), { isUnread: !worktree.isUnread })
+  }, [worktree, updateWorktreeMeta])
 
   const handleTogglePin = useCallback(() => {
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)

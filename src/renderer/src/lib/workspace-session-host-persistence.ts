@@ -149,7 +149,13 @@ function getFolderWorkspaceRuntimeHostId(
   if (scope?.type !== 'folder') {
     return LOCAL_EXECUTION_HOST_ID
   }
-  const workspace = state.folderWorkspaces?.find((entry) => entry.id === scope.folderWorkspaceId)
+  const qualifiedOwner = parseExecutionHostId(scope.ownerHostId)
+  if (qualifiedOwner) {
+    return qualifiedOwner.kind === 'runtime' ? qualifiedOwner.id : LOCAL_EXECUTION_HOST_ID
+  }
+  const matchingWorkspaces =
+    state.folderWorkspaces?.filter((entry) => entry.id === scope.folderWorkspaceId) ?? []
+  const workspace = matchingWorkspaces.length === 1 ? matchingWorkspaces[0] : null
   const group = workspace
     ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
     : null

@@ -1,4 +1,6 @@
 import type { Worktree } from '../../../../shared/worktree/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { resolveFolderWorkspaceCatalogOwnerHostId } from '../../../../shared/folder-workspaces'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
@@ -13,7 +15,8 @@ import { addHostSectionRows } from './host-section-rows'
 import { orderHostSectionOptions } from './host-section-order'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { getLogicalRepoOrderRankById } from './project-header-drop'
-import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
+import type { WorktreeRow } from './worktree-list/grouping/row-types'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
@@ -113,11 +116,31 @@ export function computeRenderedSidebarWorktreeOrder(
       })
     : rows
 
-  return Array.from(
-    new Set(
-      getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy).map(
-        (worktree) => worktree.id
-      )
-    )
+  const itemRows = sectionRows.filter((row): row is WorktreeRow => row.type === 'item')
+  const preferredRowKeys = new Set(
+    getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
+  const duplicateFolderIds = new Set(
+    state.folderWorkspaces
+      .map((workspace) => workspace.id)
+      .filter((id, index, ids) => ids.indexOf(id) !== index)
+  )
+  const workspaceIds: string[] = []
+  for (const row of sectionRows) {
+    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
+      workspaceIds.push(row.worktree.id)
+    } else if (row.type === 'folder-workspace') {
+      const ownerHostId = resolveFolderWorkspaceCatalogOwnerHostId(
+        row.folderWorkspace,
+        projectGroups
+      )
+      workspaceIds.push(
+        folderWorkspaceKey(
+          row.folderWorkspace.id,
+          duplicateFolderIds.has(row.folderWorkspace.id) ? (ownerHostId ?? undefined) : undefined
+        )
+      )
+    }
+  }
+  return Array.from(new Set(workspaceIds))
 }

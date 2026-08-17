@@ -24,7 +24,6 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -98,17 +97,30 @@ export function useAutomationDispatchEvents(): void {
         const focusBeforeDispatch = {
           activeView: state.activeView,
           activeWorktreeId: state.activeWorktreeId,
+          activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
           activeTabId: state.activeTabId,
           activeTabType: state.activeTabType
         }
         const runRepoId = getAutomationRunRepoId(automation)
-        const repo = state.repos.find((entry) => entry.id === runRepoId)
+        const requestedRunHostId = parseExecutionHostId(automation.runContext?.hostId)?.id
+        const matchingRepos = state.repos.filter((entry) => entry.id === runRepoId)
+        const repo = requestedRunHostId
+          ? matchingRepos.find((entry) => getRepoExecutionHostId(entry) === requestedRunHostId)
+          : matchingRepos.length === 1
+            ? matchingRepos[0]
+            : undefined
+        const runHostId = repo
+          ? (requestedRunHostId ?? getRepoExecutionHostId(repo))
+          : requestedRunHostId
         const automationWorkspaceScope = parseWorkspaceKey(automation.workspaceId ?? '')
-        const automationWorktree = automation.workspaceId
-          ? automationWorkspaceScope?.type === 'folder'
-            ? state.getKnownWorktreeById(automation.workspaceId)
-            : state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
-          : null
+        const knownAutomationWorktree =
+          automation.workspaceId && runHostId
+            ? state.getKnownWorktreeById(automation.workspaceId, runHostId)
+            : null
+        const automationWorktree =
+          knownAutomationWorktree && !('selectedCheckout' in knownAutomationWorktree)
+            ? knownAutomationWorktree
+            : null
         let dispatchWorkspaceId = automation.workspaceId
         let dispatchWorkspaceDisplayName =
           automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
@@ -142,7 +154,11 @@ export function useAutomationDispatchEvents(): void {
         try {
           const folderWorkspaceConnectionId =
             automationWorkspaceScope?.type === 'folder'
-              ? getFolderWorkspaceConnectionId(state, automationWorkspaceScope.folderWorkspaceId)
+              ? getFolderWorkspaceConnectionId(
+                  state,
+                  automationWorkspaceScope.folderWorkspaceId,
+                  runHostId
+                )
               : null
           const folderWorkspaceHostId =
             automationWorkspaceScope?.type === 'folder' && automationWorktree
@@ -150,10 +166,8 @@ export function useAutomationDispatchEvents(): void {
                 ? null
                 : folderWorkspaceConnectionId
                   ? toSshExecutionHostId(folderWorkspaceConnectionId)
-                  : getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
+                  : runHostId
               : null
-          const runHostId =
-            parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
           const workspaceMatchesRunTarget =
             automationWorkspaceScope?.type === 'folder'
               ? folderWorkspaceHostId !== null && folderWorkspaceHostId === runHostId
@@ -647,11 +661,16 @@ export function useAutomationDispatchEvents(): void {
           // Why: Run Now and scheduled dispatches should create workspaces/tabs in
           // the background; only an explicit row click should navigate there.
           if (
-            focusBeforeDispatch.activeWorktreeId !== worktree.id &&
-            currentState.activeWorktreeId === worktree.id
+            currentState.activeWorktreeId === worktree.id &&
+            currentState.activeWorkspaceExecutionHostId === runHostId &&
+            (focusBeforeDispatch.activeWorktreeId !== worktree.id ||
+              focusBeforeDispatch.activeWorkspaceExecutionHostId !== runHostId)
           ) {
             currentState.setActiveView(focusBeforeDispatch.activeView)
-            currentState.setActiveWorktree(focusBeforeDispatch.activeWorktreeId)
+            currentState.setActiveWorktree(
+              focusBeforeDispatch.activeWorktreeId,
+              focusBeforeDispatch.activeWorkspaceExecutionHostId ?? undefined
+            )
             if (focusBeforeDispatch.activeTabId) {
               currentState.setActiveTab(focusBeforeDispatch.activeTabId)
             }

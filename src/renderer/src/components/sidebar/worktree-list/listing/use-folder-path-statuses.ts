@@ -5,8 +5,14 @@ import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-worksp
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import { getFolderPathStatusRouteOptionsForRows } from './host-filtering'
+import { getProjectGroupOwnerHostId } from '../../../../../../shared/project-groups'
+import {
+  buildProjectGroupOwnerIndex,
+  getFolderWorkspaceProjectGroupOwnerHostId
+} from '../../../../../../shared/project-groups'
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
@@ -78,18 +84,41 @@ export function useFolderWorkspacePathStatusRows(args: {
       string,
       {
         request: FolderPathStatusRequest
-        options?: { runtimeEnvironmentId: string | null }
+        options?: { runtimeEnvironmentId: string | null; ownerHostId?: ExecutionHostId }
       }
     >()
+    const duplicateProjectGroupIds = new Set(
+      projectGroups.map((group) => group.id).filter((id, index, ids) => ids.indexOf(id) !== index)
+    )
     for (const group of projectGroups) {
       if (group.parentPath) {
-        const request = { scope: 'project-group' as const, projectGroupId: group.id }
+        const request = {
+          scope: 'project-group' as const,
+          projectGroupId: group.id,
+          ...(duplicateProjectGroupIds.has(group.id)
+            ? { ownerHostId: getProjectGroupOwnerHostId(group) }
+            : {})
+        }
         const options = getFolderPathStatusRouteOptions(request)
         requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
       }
     }
+    const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
+    const duplicateFolderWorkspaceIds = new Set(
+      folderWorkspaces
+        .map((workspace) => workspace.id)
+        .filter((id, index, ids) => ids.indexOf(id) !== index)
+    )
     for (const workspace of folderWorkspaces) {
-      const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
+      const request = {
+        scope: 'folder-workspace' as const,
+        folderWorkspaceId: workspace.id,
+        ...(duplicateFolderWorkspaceIds.has(workspace.id)
+          ? {
+              ownerHostId: getFolderWorkspaceProjectGroupOwnerHostId(workspace, projectGroupIndex)
+            }
+          : {})
+      }
       const options = getFolderPathStatusRouteOptions(request)
       requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
     }

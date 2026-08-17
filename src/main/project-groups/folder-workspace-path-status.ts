@@ -1,13 +1,23 @@
 import { stat as statLocalPath } from 'node:fs/promises'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
-import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import type { FolderWorkspacePathStatus } from '../../shared/folder-workspace-path-status'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import {
+  buildProjectGroupOwnerIndex,
+  getFolderWorkspaceProjectGroupOwnerHostId,
+  getProjectGroupOwnerHostId,
+  getProjectGroupSubtreeIds,
+  resolveFolderWorkspaceProjectGroup,
+  resolveProjectGroupOwner
+} from '../../shared/project-groups'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
+import {
+  type OwnerQualifiedFolderWorkspacePathStatusRequest,
+  resolveFolderWorkspaceCatalogOwnerHostIdFromIndex,
+  resolveLegacySshFolderWorkspaceProjectGroup
+} from '../../shared/folder-workspaces'
 import type { IFilesystemProvider } from '../providers/types'
 
 type FolderWorkspacePathStatusStore = {
@@ -153,20 +163,30 @@ export async function getFolderWorkspacePathStatusForPath(
 
 export function resolveFolderWorkspaceStatusPath(args: {
   store: FolderWorkspacePathStatusStore
-  request: FolderWorkspacePathStatusRequest
-}): { folderPath: string; projectGroupId: string | null; connectionId?: string | null } {
+  request: OwnerQualifiedFolderWorkspacePathStatusRequest
+}): {
+  folderPath: string
+  projectGroupId: string | null
+  connectionId?: string | null
+  ownerHostId?: ExecutionHostId
+} {
   const { request } = args
+  const projectGroups = args.store.getProjectGroups?.() ?? []
+  const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
   if (request.scope === 'project-group') {
-    const group = args.store
-      .getProjectGroups?.()
-      .find((entry) => entry.id === request.projectGroupId)
+    const group = resolveProjectGroupOwner(
+      projectGroupIndex,
+      request.projectGroupId,
+      request.ownerHostId
+    )
     if (!group?.parentPath) {
       throw new Error('folder_workspace_path_scope_not_found')
     }
     return {
       folderPath: group.parentPath,
       projectGroupId: group.id,
-      connectionId: group.connectionId ?? null
+      connectionId: group.connectionId ?? null,
+      ownerHostId: getProjectGroupOwnerHostId(group)
     }
   }
 
@@ -178,35 +198,50 @@ export function resolveFolderWorkspaceStatusPath(args: {
     }
   }
 
-  const workspace = args.store
-    .getFolderWorkspaces?.()
-    .find((entry) => entry.id === request.folderWorkspaceId)
+  const matches = (args.store.getFolderWorkspaces?.() ?? []).filter(
+    (entry) =>
+      entry.id === request.folderWorkspaceId &&
+      (!request.ownerHostId ||
+        resolveFolderWorkspaceCatalogOwnerHostIdFromIndex(entry, projectGroupIndex) ===
+          request.ownerHostId)
+  )
+  const workspace = matches.length === 1 ? matches[0] : null
   if (!workspace) {
     throw new Error('folder_workspace_path_scope_not_found')
   }
-  const group = args.store
-    .getProjectGroups?.()
-    .find((entry) => entry.id === workspace.projectGroupId)
+  const group =
+    resolveFolderWorkspaceProjectGroup(projectGroupIndex, workspace) ??
+    resolveLegacySshFolderWorkspaceProjectGroup(projectGroupIndex, workspace)
+  if (!group && projectGroupIndex.byId.has(workspace.projectGroupId)) {
+    throw new Error('folder_workspace_path_scope_not_found')
+  }
+  const ownerHostId = getFolderWorkspaceProjectGroupOwnerHostId(workspace, projectGroupIndex)
   return {
     folderPath: workspace.folderPath,
     projectGroupId: workspace.projectGroupId,
-    connectionId: workspace.connectionId ?? group?.connectionId ?? null
+    connectionId: workspace.connectionId ?? group?.connectionId ?? null,
+    ownerHostId
   }
 }
 
 export async function getFolderWorkspacePathStatus(
   store: FolderWorkspacePathStatusStore,
-  request: FolderWorkspacePathStatusRequest,
+  request: OwnerQualifiedFolderWorkspacePathStatusRequest,
   deps: FolderWorkspacePathStatusDeps
 ): Promise<FolderWorkspacePathStatus> {
   const scope = resolveFolderWorkspaceStatusPath({ store, request })
+  const projectGroups = store.getProjectGroups?.() ?? []
   return getFolderWorkspacePathStatusForPath(
     {
       folderPath: scope.folderPath,
       projectGroupId: scope.projectGroupId,
       connectionId: scope.connectionId,
-      projectGroups: store.getProjectGroups?.() ?? [],
-      repos: store.getRepos()
+      projectGroups: scope.ownerHostId
+        ? projectGroups.filter((group) => getProjectGroupOwnerHostId(group) === scope.ownerHostId)
+        : projectGroups,
+      repos: scope.ownerHostId
+        ? store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === scope.ownerHostId)
+        : store.getRepos()
     },
     deps
   )

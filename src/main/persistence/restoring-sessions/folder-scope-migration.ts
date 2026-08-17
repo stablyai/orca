@@ -2,17 +2,43 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
+import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  buildProjectGroupOwnerIndex,
+  getProjectGroupOwnerIdentity,
+  getProjectGroupOwnerSubtreeIdentities,
+  resolveProjectGroupMembership,
+  resolveProjectGroupOwner,
+  type ProjectGroupOwnerIndex
+} from '../../../shared/project-groups'
 
 export function inferFolderScopeConnectionIdForMigration(args: {
   folderPath: string
-  projectGroupId: string
+  projectGroup: ProjectGroup
   projectGroups: readonly ProjectGroup[]
+  projectGroupIndex: ProjectGroupOwnerIndex
   repos: readonly Repo[]
 }): string | null {
-  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+  if (args.projectGroupIndex.byId.get(args.projectGroup.id)?.length !== 1) {
+    return null
+  }
+  const groupIdentities = getProjectGroupOwnerSubtreeIdentities(
+    args.projectGroups,
+    args.projectGroup
+  )
   const groupRepos = args.repos.filter(
-    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
+    (repo) =>
+      typeof repo.projectGroupId === 'string' &&
+      (() => {
+        const exactGroup = resolveProjectGroupMembership(
+          args.projectGroupIndex,
+          repo.projectGroupId,
+          getRepoExecutionHostId(repo)
+        )
+        const group =
+          exactGroup ?? resolveProjectGroupOwner(args.projectGroupIndex, repo.projectGroupId)
+        return group !== null && groupIdentities.has(getProjectGroupOwnerIdentity(group))
+      })()
   )
   const candidateRepos =
     groupRepos.length > 0
@@ -42,15 +68,21 @@ export function backfillFolderScopeConnectionIds(state: PersistedState): {
 } {
   const groups = state.projectGroups ?? []
   const repos = state.repos ?? []
+  const originalProjectGroupIndex = buildProjectGroupOwnerIndex(groups)
   let changed = false
   const projectGroups = groups.map((group) => {
-    if (group.connectionId || !group.parentPath) {
+    if (
+      group.connectionId !== undefined ||
+      normalizeExecutionHostId(group.executionHostId) ||
+      !group.parentPath
+    ) {
       return group
     }
     const connectionId = inferFolderScopeConnectionIdForMigration({
       folderPath: group.parentPath,
-      projectGroupId: group.id,
+      projectGroup: group,
       projectGroups: groups,
+      projectGroupIndex: originalProjectGroupIndex,
       repos
     })
     if (!connectionId) {
@@ -59,20 +91,27 @@ export function backfillFolderScopeConnectionIds(state: PersistedState): {
     changed = true
     return { ...group, connectionId }
   })
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const projectGroupIndex = buildProjectGroupOwnerIndex(projectGroups)
   const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
-    if (workspace.connectionId) {
+    if (
+      workspace.connectionId !== undefined ||
+      normalizeExecutionHostId(workspace.executionHostId)
+    ) {
       return workspace
     }
-    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const group = resolveProjectGroupOwner(projectGroupIndex, workspace.projectGroupId)
+    const groupConnectionId = group?.connectionId ?? null
     const connectionId =
       groupConnectionId ??
-      inferFolderScopeConnectionIdForMigration({
-        folderPath: workspace.folderPath,
-        projectGroupId: workspace.projectGroupId,
-        projectGroups,
-        repos
-      })
+      (group
+        ? inferFolderScopeConnectionIdForMigration({
+            folderPath: workspace.folderPath,
+            projectGroup: group,
+            projectGroups,
+            projectGroupIndex,
+            repos
+          })
+        : null)
     if (!connectionId) {
       return workspace
     }

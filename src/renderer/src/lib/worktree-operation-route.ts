@@ -132,7 +132,11 @@ export function resolveWorktreeOperationRouteResult(
   // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
+    return resolveFolderWorkspaceOperationRoute(
+      state,
+      workspaceScope.folderWorkspaceId,
+      workspaceScope.ownerHostId
+    )
   }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind !== 'missing') {
@@ -177,21 +181,26 @@ export function resolveWorktreeOperationRouteResult(
 
 function resolveFolderWorkspaceOperationRoute(
   state: WorktreeOperationRouteState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): WorktreeOperationRouteResolution {
-  if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+  if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
     // Why: deleted/stale folder ids keep failing closed like unknown worktrees.
     return { kind: 'missing' }
   }
   // Why: a found folder record is positive identity evidence, so keep terminal-owner parity;
   // the worktree legacy hydration gates would fail local folders closed whenever unrelated
   // runtimes exist — the exact #10251 symptom.
-  const executionHostId = getExecutionHostIdForFolderWorkspace(state, folderWorkspaceId)
-  const parsedHost = parseExecutionHostId(executionHostId)
+  const resolvedExecutionHostId = getExecutionHostIdForFolderWorkspace(
+    state,
+    folderWorkspaceId,
+    executionHostId
+  )
+  const parsedHost = parseExecutionHostId(resolvedExecutionHostId)
   return {
     kind: 'resolved',
     route: {
-      executionHostId,
+      executionHostId: resolvedExecutionHostId,
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }

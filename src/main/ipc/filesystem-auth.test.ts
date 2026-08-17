@@ -145,6 +145,34 @@ describe('filesystem auth worktree roots', () => {
 })
 
 describe('filesystem-auth path containment', () => {
+  it('does not authorize a runtime-owned repo path on the local filesystem', () => {
+    const runtimePath = resolve('/runtime-only/repo')
+    const store = makeStore([
+      {
+        ...repo,
+        path: runtimePath,
+        connectionId: null,
+        executionHostId: 'runtime:env-1'
+      }
+    ])
+
+    expect(isPathAllowed(runtimePath, store)).toBe(false)
+  })
+
+  it('does not authorize an SSH repo when stale host metadata says local', () => {
+    const sshPath = resolve('/ssh-only/repo')
+    const store = makeStore([
+      {
+        ...repo,
+        path: sshPath,
+        connectionId: 'ssh-target',
+        executionHostId: 'local'
+      }
+    ])
+
+    expect(isPathAllowed(sshPath, store)).toBe(false)
+  })
+
   it('authorizes missing nested descendants under an allowed repo', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-missing-'))
     try {
@@ -248,6 +276,63 @@ describe('filesystem-auth path containment', () => {
     }
   })
 
+  it('does not authorize a repo-less legacy SSH folder through its local-stamped group', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-legacy-remote-folder-'))
+    try {
+      const folderPath = join(tempRoot, 'remote-platform')
+      await mkdir(folderPath, { recursive: true })
+      const projectGroup = makeProjectGroup({
+        parentPath: folderPath,
+        connectionId: undefined,
+        executionHostId: 'local'
+      })
+      const folderWorkspace = makeFolderWorkspace({
+        folderPath,
+        projectGroupId: projectGroup.id,
+        connectionId: 'ssh-1'
+      })
+      const store = makeStore([], {
+        projectGroups: [projectGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps connection-free local folders authorized beside legacy SSH folders', () => {
+    const localPath = resolve('/explicit-local-mixed-folder/local')
+    const sshPath = resolve('/explicit-local-mixed-folder/ssh')
+    const projectGroup = makeProjectGroup({
+      parentPath: localPath,
+      connectionId: undefined,
+      executionHostId: 'local'
+    })
+    const store = makeStore([], {
+      projectGroups: [projectGroup],
+      folderWorkspaces: [
+        makeFolderWorkspace({
+          id: 'local-folder',
+          folderPath: localPath,
+          projectGroupId: projectGroup.id,
+          connectionId: undefined,
+          executionHostId: undefined
+        }),
+        makeFolderWorkspace({
+          id: 'ssh-folder',
+          folderPath: sshPath,
+          projectGroupId: projectGroup.id,
+          connectionId: 'ssh-1'
+        })
+      ]
+    })
+
+    expect(isPathAllowed(localPath, store)).toBe(true)
+    expect(isPathAllowed(sshPath, store)).toBe(false)
+  })
+
   it('does not authorize SSH-only folder-backed project group roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-project-group-'))
     try {
@@ -266,6 +351,155 @@ describe('filesystem-auth path containment', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
+  })
+
+  it('authorizes only the local same-id folder owner', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-same-id-folders-'))
+    try {
+      const localPath = join(tempRoot, 'local')
+      const sshPath = join(tempRoot, 'ssh')
+      await mkdir(localPath)
+      await mkdir(sshPath)
+      const localGroup = makeProjectGroup({ id: 'same-id', parentPath: localPath })
+      const sshGroup = makeProjectGroup({
+        id: 'same-id',
+        parentPath: sshPath,
+        connectionId: 'ssh-1'
+      })
+      const store = makeStore([], {
+        projectGroups: [localGroup, sshGroup],
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            id: 'local-folder',
+            projectGroupId: 'same-id',
+            folderPath: localPath,
+            connectionId: null
+          }),
+          makeFolderWorkspace({
+            id: 'ssh-folder',
+            projectGroupId: 'same-id',
+            folderPath: sshPath,
+            connectionId: 'ssh-1'
+          })
+        ]
+      })
+
+      await expect(resolveAuthorizedPath(localPath, store)).resolves.toBe(await realpath(localPath))
+      await expect(resolveAuthorizedPath(sshPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a foreign-stamped folder whose group exists only locally', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-stale-folder-owner-'))
+    try {
+      const localPath = join(tempRoot, 'local')
+      const foreignPath = join(tempRoot, 'foreign')
+      await mkdir(localPath)
+      await mkdir(foreignPath)
+      const store = makeStore([], {
+        projectGroups: [makeProjectGroup({ id: 'same-id', parentPath: localPath })],
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            id: 'foreign-folder',
+            projectGroupId: 'same-id',
+            folderPath: foreignPath,
+            connectionId: 'missing'
+          })
+        ]
+      })
+
+      await expect(resolveAuthorizedPath(foreignPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects legacy remote-only roots when a prefix sibling sorts first', () => {
+    const folderPath = resolve('/workspace/scope')
+    const store = makeStore(
+      [
+        { ...repo, path: `${folderPath}-archive`, connectionId: 'builder' },
+        { ...repo, id: 'nested', path: join(folderPath, 'repo'), connectionId: 'builder' }
+      ],
+      {
+        projectGroups: [
+          makeProjectGroup({ id: 'legacy', parentPath: folderPath, connectionId: undefined })
+        ],
+        folderWorkspaces: []
+      }
+    )
+
+    expect(isPathAllowed(folderPath, store)).toBe(false)
+  })
+
+  it('keeps large multi-owner folder authorization linear in catalog size', () => {
+    const groupCount = 2_048
+    const repoCount = 2_048
+    let pathReads = 0
+    const projectGroups = Array.from({ length: groupCount }, (_, index) =>
+      makeProjectGroup({
+        id: index < 16 ? 'same-id' : `group-${index}`,
+        parentPath: index % 16 === 0 ? `/local/group-${index}` : null,
+        executionHostId: index % 16 === 0 ? 'local' : `runtime:env-${index % 16}`
+      })
+    )
+    const folderWorkspaces = Array.from({ length: groupCount }, (_, index) =>
+      makeFolderWorkspace({
+        id: index < 16 ? 'same-folder' : `folder-${index}`,
+        projectGroupId: index < 16 ? 'same-id' : `group-${index}`,
+        folderPath: `/folder-${index}`,
+        executionHostId: index % 16 === 0 ? 'local' : `runtime:env-${index % 16}`,
+        connectionId: index % 16 === 0 ? null : undefined
+      })
+    )
+    const repos = Array.from({ length: repoCount }, (_, index) => {
+      const ownerIndex = index % 16
+      return {
+        ...repo,
+        id: `repo-${index}`,
+        get path() {
+          pathReads += 1
+          return `/repo-${index}`
+        },
+        projectGroupId: ownerIndex === 0 ? 'same-id' : `group-${index}`,
+        executionHostId: ownerIndex === 0 ? 'local' : `runtime:env-${ownerIndex}`,
+        connectionId: ownerIndex === 0 ? null : undefined
+      } as Repo
+    })
+    const store = makeStore(repos, { projectGroups, folderWorkspaces })
+
+    const allowed = isPathAllowed('/local/group-0', store)
+
+    expect(allowed).toBe(true)
+    // Why: indexed auth must not re-scan every path for every group/folder on each authorize.
+    expect(pathReads).toBeLessThan(repoCount * 4)
+  })
+
+  it('bounds deep legacy folder hierarchies without materializing every subtree', () => {
+    const groupCount = 4_096
+    const projectGroups = Array.from({ length: groupCount }, (_, index) =>
+      makeProjectGroup({
+        id: `group-${index}`,
+        parentPath: index === 0 ? '/legacy/root' : null,
+        parentGroupId: index === 0 ? null : `group-${index - 1}`
+      })
+    )
+    const repos = [
+      {
+        ...repo,
+        id: 'remote-leaf',
+        path: '/outside/repo',
+        projectGroupId: `group-${groupCount - 1}`,
+        connectionId: 'builder'
+      } as Repo
+    ]
+    const store = makeStore(repos, { projectGroups, folderWorkspaces: [] })
+
+    const allowed = isPathAllowed('/legacy/root', store)
+
+    expect(allowed).toBe(false)
   })
 
   it.skipIf(process.platform === 'win32')(
