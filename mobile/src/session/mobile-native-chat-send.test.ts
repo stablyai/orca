@@ -5,12 +5,17 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import {
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
   openMobileNativeChatSendBudget,
+  buildMobileNativeChatBodyText,
   clearMobileNativeChatInput,
   sendMobileNativeChatMessage,
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome
 } from './mobile-native-chat-send'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START
+} from '../../../src/shared/terminal-bracketed-paste-text'
 
 afterEach(() => vi.useRealTimers())
 
@@ -19,6 +24,40 @@ function clientWithResponse(response: unknown): RpcClient {
     sendRequest: vi.fn().mockResolvedValue(response)
   } as unknown as RpcClient
 }
+
+describe('buildMobileNativeChatBodyText', () => {
+  it('leaves single-line text unframed', () => {
+    expect(buildMobileNativeChatBodyText('hello')).toBe('hello')
+  })
+
+  it('neutralizes escapes in single-line composer text', () => {
+    expect(buildMobileNativeChatBodyText('before\x1b[201~after')).toBe('before␛[201~after')
+  })
+
+  it('bracket-pastes multi-line text so agent composers keep the full payload', () => {
+    expect(buildMobileNativeChatBodyText('line one\nline two')).toBe(
+      `${BRACKETED_PASTE_START}line one\rline two${BRACKETED_PASTE_END}`
+    )
+  })
+
+  it('preserves Unicode while normalizing CRLF and neutralizing escapes', () => {
+    expect(buildMobileNativeChatBodyText('café 😀\r\nnext\x1b[201~tail')).toBe(
+      `${BRACKETED_PASTE_START}café 😀\rnext␛[201~tail${BRACKETED_PASTE_END}`
+    )
+  })
+
+  it('uses Windows input records instead of paste frames when the agent requires them', () => {
+    expect(buildMobileNativeChatBodyText('line one\r\nline two\x1b[201~', 'alt-enter')).toBe(
+      'line one\x1b\rline two␛[201~'
+    )
+  })
+
+  it('keeps raw newlines when the terminal platform is unknown', () => {
+    expect(buildMobileNativeChatBodyText('line one\nline two\x1b[201~', 'raw')).toBe(
+      'line one\nline two␛[201~'
+    )
+  })
+})
 
 describe('sendMobileNativeChatMessage', () => {
   it('returns true only when the terminal accepts the send', async () => {
@@ -47,6 +86,53 @@ describe('sendMobileNativeChatMessage', () => {
         resolvedLaunchDraft: { text: 'seed', createdAt: 7 },
         client: { id: 'device', type: 'mobile' }
       },
+      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+    )
+  })
+
+  it('sends multi-line chat bodies as one bracketed paste frame', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: 'line one\nline two'
+    })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'term',
+        text: `${BRACKETED_PASTE_START}line one\rline two${BRACKETED_PASTE_END}`,
+        enter: true
+      },
+      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+    )
+  })
+
+  it('leaves control keystrokes unframed', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: '\r',
+      enter: false,
+      rawTerminalInput: true
+    })
+
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      { terminal: 'term', text: '\r', enter: false },
       { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
     )
   })
@@ -234,7 +320,8 @@ describe('sendMobileNativeChatMessage', () => {
       client,
       terminal: 'term',
       text: String.fromCharCode(27),
-      enter: false
+      enter: false,
+      rawTerminalInput: true
     })
     expect(client.sendRequest).toHaveBeenCalledWith(
       'terminal.send',

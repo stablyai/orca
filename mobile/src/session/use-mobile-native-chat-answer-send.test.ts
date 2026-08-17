@@ -202,14 +202,16 @@ describe('useMobileNativeChatAnswerSend', () => {
     let result: Promise<boolean> | undefined
     await act(async () => {
       // A newline in raw keystrokes would submit early — must collapse to space.
-      result = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [], other: 'zeta\nspaces' }])
+      result = answerSend?.answerAsk(TABS_OR_SPACES, [
+        { indices: [], other: 'zeta\nspaces\x1b[201~' }
+      ])
     })
     await act(async () => vi.runAllTimersAsync())
 
     await expect(result).resolves.toBe(true)
     expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
       expect.objectContaining({ text: '3', enter: false }),
-      expect.objectContaining({ text: 'zeta spaces', enter: false }),
+      expect.objectContaining({ text: 'zeta spaces␛[201~', enter: false }),
       expect.objectContaining({ text: '\r', enter: false })
     ])
   })

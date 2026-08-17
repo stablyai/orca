@@ -22,6 +22,7 @@ export function sendMobileNativeChatPermissionResponse(args: {
     terminal: args.terminal,
     text: args.text,
     enter: false,
+    rawTerminalInput: true,
     ...(args.deviceToken ? { mobileClient: { id: args.deviceToken, type: 'mobile' as const } } : {})
   })
 }

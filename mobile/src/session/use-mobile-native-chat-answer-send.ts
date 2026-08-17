@@ -159,7 +159,11 @@ export function useMobileNativeChatAnswerSend(args: {
         // It bounds transport time only: each deliberate pacing wait is credited back
         // below, so a long multi-question answer still gets a full budget to write in.
         let deadline = openMobileNativeChatSendBudget()
-        const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
+        const sendTerminal = async (
+          body: string,
+          enter: boolean,
+          rawTerminalInput = false
+        ): Promise<boolean> => {
           const activeRoute = activeRouteRef.current
           if (
             !activeRoute.enabled ||
@@ -175,6 +179,7 @@ export function useMobileNativeChatAnswerSend(args: {
             terminal: handle,
             text: body,
             enter,
+            rawTerminalInput,
             deadline,
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -267,8 +272,9 @@ export function useMobileNativeChatAnswerSend(args: {
             return false
           }
           const group = groups[index]!
-          const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
-          if (!(await sendTerminal(body, false))) {
+          const rawTerminalInput = 'raw' in group
+          const body = rawTerminalInput ? group.raw : sanitizeAskFreeText(group.text)
+          if (!(await sendTerminal(body, false, rawTerminalInput))) {
             return fail()
           }
           if (index < groups.length - 1) {

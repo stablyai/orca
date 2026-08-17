@@ -36,6 +36,17 @@ describe('mobile terminal records', () => {
     ])
   })
 
+  it('keeps spawn-time platform metadata when session snapshots omit it', () => {
+    const known: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'Old title', hostPlatform: 'win32', isActive: false }
+    ]
+    const snapshot: TerminalRecord[] = [{ handle: 'pty-1', title: 'Current title', isActive: true }]
+
+    expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
+      { handle: 'pty-1', title: 'Current title', hostPlatform: 'win32', isActive: true }
+    ])
+  })
+
   it('keeps session-tab terminal themes when terminal.list omits them', () => {
     const terminalList: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Terminal', isActive: true },

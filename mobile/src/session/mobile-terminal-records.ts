@@ -4,6 +4,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 export type TerminalRecord = {
   handle: string
   title: string
+  hostPlatform?: NodeJS.Platform
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -133,6 +134,7 @@ function mergeTerminalSnapshotWithKnownRecord(
 ): TerminalRecord {
   return {
     ...snapshot,
+    hostPlatform: snapshot.hostPlatform ?? known.hostPlatform,
     terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
   }
 }
@@ -193,6 +195,7 @@ export function mergeTerminalListWithKnownRecords(
     // session-tab/current record so polling cannot reset TerminalWebView.
     return {
       ...terminal,
+      hostPlatform: terminal.hostPlatform ?? currentTerminal?.hostPlatform,
       terminalTheme:
         sessionTerminal?.terminalTheme ?? currentTerminal?.terminalTheme ?? terminal.terminalTheme
     }
@@ -209,6 +212,7 @@ export function terminalRecordsEqual(
       (terminal, index) =>
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
+        terminal.hostPlatform === b[index]?.hostPlatform &&
         JSON.stringify(terminal.terminalTheme ?? null) ===
           JSON.stringify(b[index]?.terminalTheme ?? null) &&
         terminal.isActive === b[index]?.isActive

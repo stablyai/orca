@@ -3,11 +3,24 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import {
+  sanitizeBracketedPasteText,
+  wrapTerminalBracketedPasteText
+} from '../../../src/shared/terminal-bracketed-paste-text'
+import {
+  encodeWindowsInputRecordPasteText,
+  type WindowsInputRecordPasteNewline
+} from '../../../src/shared/terminal-input-record-paste'
 
 type MobileTerminalClient = {
   id: string
   type: 'mobile'
 }
+
+export type MobileNativeChatBodyEncoding =
+  | WindowsInputRecordPasteNewline
+  | 'bracketed-paste'
+  | 'raw'
 
 // Why: Ctrl+U kills the TUI's current input line (desktop native chat sends the
 // same byte before its body), so a launch-context prefill parked there cannot
@@ -19,11 +32,30 @@ type MobileTerminalClient = {
 // src/shared/agent-tui-input-clear.ts for the measured 2N-1 law.
 const CLEAR_UNSUBMITTED_INPUT = '\x15'
 
+/** Match desktop native-chat framing; native chat has no mode/readiness signal (#14888). */
+export function buildMobileNativeChatBodyText(
+  text: string,
+  encoding: MobileNativeChatBodyEncoding = 'bracketed-paste'
+): string {
+  if (encoding === 'alt-enter' || encoding === 'csi-u') {
+    return encodeWindowsInputRecordPasteText(text, encoding)
+  }
+  if (encoding === 'raw') {
+    return sanitizeBracketedPasteText(text)
+  }
+  if (/[\r\n]/.test(text)) {
+    return wrapTerminalBracketedPasteText(text)
+  }
+  return sanitizeBracketedPasteText(text)
+}
+
 type MobileNativeChatSendArgs = {
   client: RpcClient
   terminal: string
   text: string
   enter?: boolean
+  rawTerminalInput?: boolean
+  bodyEncoding?: MobileNativeChatBodyEncoding
   clearInputFirst?: boolean
   /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
@@ -61,11 +93,15 @@ export async function sendMobileNativeChatMessageWithOutcome(
     return 'rejected'
   }
   try {
+    const body = args.rawTerminalInput
+      ? args.text
+      : buildMobileNativeChatBodyText(args.text, args.bodyEncoding)
     const response = await args.client.sendRequest(
       'terminal.send',
       {
         terminal: args.terminal,
-        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        // Ctrl+U must stay outside the frame or the composer inserts it literally.
+        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${body}` : body,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})
@@ -113,6 +149,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
         terminal: args.terminal,
         text: key,
         enter: false,
+        rawTerminalInput: true,
         ...(isSubmit && args.resolvedLaunchDraft
           ? { resolvedLaunchDraft: args.resolvedLaunchDraft }
           : {}),

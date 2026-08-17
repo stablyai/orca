@@ -29,6 +29,7 @@ export function useMobileNativeChatCancelAsk(args: {
       terminal: handle,
       text: String.fromCharCode(27),
       enter: false,
+      rawTerminalInput: true,
       ...(deviceTokenRef.current
         ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
         : {})

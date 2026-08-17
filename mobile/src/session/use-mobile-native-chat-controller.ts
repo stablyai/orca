@@ -34,6 +34,7 @@ export function useMobileNativeChatController(args: {
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
+  terminalHostPlatform: NodeJS.Platform | null
   nativeChatTranscriptIsLocalReadable: boolean
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
@@ -51,6 +52,7 @@ export function useMobileNativeChatController(args: {
     activeSessionTabId,
     activeHandleRef,
     deviceTokenRef,
+    terminalHostPlatform,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
@@ -219,6 +221,7 @@ export function useMobileNativeChatController(args: {
     handleRef: activeHandleRef,
     deviceTokenRef,
     agentRef: activeChatAgentRef,
+    terminalHostPlatform,
     commandSendRef: recordSessionOptionCommandRef,
     captureSendOrigin,
     readSeededLaunchDraftSeed,

@@ -128,6 +128,7 @@ import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
+import { isTuiAgent } from '../../../../../src/shared/tui-agent-config'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
@@ -958,6 +959,14 @@ export default function SessionScreen() {
   // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+  const activeTerminalHostPlatform =
+    terminals.find((terminal) => terminal.handle === activeHandle)?.hostPlatform ?? null
+  const activeTerminalAgent =
+    activeSessionTab?.type === 'terminal'
+      ? isTuiAgent(activeSessionTab.agentStatus?.agentType)
+        ? activeSessionTab.agentStatus?.agentType
+        : (activeSessionTab.launchAgent ?? null)
+      : null
   const {
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,
@@ -1103,6 +1112,7 @@ export default function SessionScreen() {
     activeSessionTabId,
     activeHandleRef,
     deviceTokenRef,
+    terminalHostPlatform: activeTerminalHostPlatform,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
@@ -3572,7 +3582,9 @@ export default function SessionScreen() {
     onSuccess: triggerSelection,
     ptyModesRef,
     refreshCanPaste,
-    showToast
+    showToast,
+    terminalAgent: activeTerminalAgent,
+    terminalHostPlatform: activeTerminalHostPlatform
   })
 
   const flushPendingLiveInputBeforeAttachmentSend = useMobileAttachmentInputLeaseGate({

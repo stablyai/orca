@@ -1,8 +1,9 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
+import { resolveWindowsInputRecordPasteNewline } from '../../../../shared/terminal-input-record-paste'
 
 /**
  * Why: xterm brackets a paste only after seeing DECSET 2004, which can be lost by
@@ -81,9 +82,7 @@ export function resolveProtectedMultilinePasteOptionsForAgentEvidence({
   // measured live. An idle agent also sits at `done` past the 30-minute freshness
   // TTL, so neither state nor TTL can gate this either. A false negative sends the
   // user's parked draft; a false positive only changes encoding within this paste.
-  const windowsInputRecordPasteNewline = agent
-    ? TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
-    : undefined
+  const windowsInputRecordPasteNewline = resolveWindowsInputRecordPasteNewline(hostPlatform, agent)
   if (hostPlatform === 'win32' && windowsInputRecordPasteNewline) {
     return {
       windowsInputRecordNewline: windowsInputRecordPasteNewline

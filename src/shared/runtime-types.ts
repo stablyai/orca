@@ -468,6 +468,8 @@ export type RuntimeTerminalSummary = {
   /** Where this terminal actually runs. Absent when the host predates the field
    *  or could not name the host — never read an absent value as local. */
   executionHostId?: ExecutionHostId
+  /** Spawn-time execution platform; absent means the input protocol is unknown. */
+  hostPlatform?: NodeJS.Platform
 }
 
 export type RuntimeTerminalVisualTerminalNode = {

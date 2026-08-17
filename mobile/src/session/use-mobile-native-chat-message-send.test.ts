@@ -2,7 +2,7 @@
 // injects its own baseSend stub, so it never observes the real send params.
 
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Type-only, so it is erased before the `./mobile-native-chat-send` mock below applies.
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -31,11 +31,15 @@ import {
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
+type MountedRenderer = {
+  unmount: () => void
+}
+type TestHostPlatform = 'darwin' | 'win32' | null
 
 const DRAFT = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'
 
 describe('useMobileNativeChatMessageSend', () => {
-  let renderer: ReactTestRenderer | null = null
+  let renderer: MountedRenderer | null = null
   let api: Send | null = null
   const acceptSend = vi.fn()
   const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
@@ -49,7 +53,8 @@ describe('useMobileNativeChatMessageSend', () => {
 
   const mount = (
     readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null,
-    agent: string | null = 'claude'
+    agent: string | null = 'claude',
+    terminalHostPlatform: TestHostPlatform = 'darwin'
   ): void => {
     agentRef.current = agent
     function Probe(): null {
@@ -59,6 +64,7 @@ describe('useMobileNativeChatMessageSend', () => {
         handleRef: { current: 'term' },
         deviceTokenRef: { current: 'device' },
         agentRef,
+        terminalHostPlatform,
         commandSendRef,
         captureSendOrigin,
         readSeededLaunchDraftSeed,
@@ -78,6 +84,7 @@ describe('useMobileNativeChatMessageSend', () => {
   const sentArgs = (): {
     text?: string
     clearInputFirst?: boolean
+    bodyEncoding?: string
     resolvedLaunchDraft?: { text: string; createdAt: number }
   } =>
     sendWithOutcome.mock.calls[0]![0] as {
@@ -132,6 +139,22 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(clearInputWrite.mock.invocationCallOrder[0]).toBeLessThan(
       sendWithOutcome.mock.invocationCallOrder[0]!
     )
+  })
+
+  it('selects input-record newlines for Codex on a Windows host', async () => {
+    mount(() => null, 'codex', 'win32')
+    await act(async () => {
+      await api!.send('line one\nline two')
+    })
+    expect(sentArgs()).toMatchObject({ bodyEncoding: 'alt-enter' })
+  })
+
+  it('falls back to raw multiline input when the terminal platform is unknown', async () => {
+    mount(() => null, 'codex', null)
+    await act(async () => {
+      await api!.send('line one\nline two')
+    })
+    expect(sentArgs()).toMatchObject({ bodyEncoding: 'raw' })
   })
 
   it('aborts without sending the body when the clear is rejected', async () => {

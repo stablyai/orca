@@ -5,12 +5,19 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import {
   buildMobileImagePastePayload,
   prepareMobileClipboardImageBase64,
   saveMobileClipboardImageAsTempFile,
   type MobileClipboardImageResizer
 } from './mobile-clipboard-image'
+import { buildTerminalClipboardPasteText } from '../../../src/shared/terminal-bracketed-paste-text'
+import {
+  encodeWindowsInputRecordPasteText,
+  resolveWindowsInputRecordPasteNewline
+} from '../../../src/shared/terminal-input-record-paste'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 
@@ -57,18 +64,6 @@ const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, t
   }
 }
 
-function buildMobileTerminalClipboardTextPayload(
-  text: string,
-  modes: TerminalModes | undefined
-): string {
-  const wrap = modes?.bracketedPasteMode === true && !modes.altScreen
-  // Why: strip embedded bracketed-paste markers so copied text cannot terminate
-  // paste mode early and turn trailing bytes into shell commands.
-  // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-  const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-  return wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
-}
-
 type UseMobileTerminalPasteOptions = {
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -86,6 +81,8 @@ type UseMobileTerminalPasteOptions = {
   readonly ptyModesRef: RefObject<Map<string, TerminalModes>>
   readonly refreshCanPaste: () => void
   readonly showToast: (message: string, durationMs?: number) => void
+  readonly terminalAgent: TuiAgent | null
+  readonly terminalHostPlatform: NodeJS.Platform | null
 }
 
 export function useMobileTerminalPaste({
@@ -104,7 +101,9 @@ export function useMobileTerminalPaste({
   onSuccess,
   ptyModesRef,
   refreshCanPaste,
-  showToast
+  showToast,
+  terminalAgent,
+  terminalHostPlatform
 }: UseMobileTerminalPasteOptions): () => Promise<void> {
   return useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
@@ -115,10 +114,13 @@ export function useMobileTerminalPaste({
       const text = await Clipboard.getStringAsync()
       let payload: string | null = null
       if (text.length > 0) {
-        payload = buildMobileTerminalClipboardTextPayload(
-          text,
-          ptyModesRef.current.get(targetHandle)
+        const windowsInputRecordPasteNewline = resolveWindowsInputRecordPasteNewline(
+          terminalHostPlatform,
+          terminalAgent
         )
+        payload = windowsInputRecordPasteNewline
+          ? encodeWindowsInputRecordPasteText(text, windowsInputRecordPasteNewline)
+          : buildTerminalClipboardPasteText(text, ptyModesRef.current.get(targetHandle))
       } else {
         const image = await Clipboard.getImageAsync({ format: 'png' })
         if (!image) {
@@ -155,7 +157,7 @@ export function useMobileTerminalPaste({
       ) {
         return
       }
-      await currentClient.sendRequest('terminal.send', {
+      const response = await currentClient.sendRequest('terminal.send', {
         terminal: targetHandle,
         text: payload,
         enter: false,
@@ -163,6 +165,9 @@ export function useMobileTerminalPaste({
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
+      if (!isTerminalSendRpcAccepted(response)) {
+        throw new Error('Terminal rejected paste')
+      }
       onSuccess()
       refreshCanPaste()
     } catch (e) {
@@ -195,6 +200,8 @@ export function useMobileTerminalPaste({
     onSuccess,
     ptyModesRef,
     refreshCanPaste,
-    showToast
+    showToast,
+    terminalAgent,
+    terminalHostPlatform
   ])
 }

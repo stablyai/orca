@@ -1452,6 +1452,9 @@ type RuntimePtyWorktreeRecord = {
   // selection must follow the pane that executes it, not process.platform.
   isWsl: boolean | null
   wslDistro: string | null
+  hostPlatform: NodeJS.Platform | null
+  // Host platform belongs to one PTY incarnation; never carry it into a reused id.
+  hostPlatformIncarnationId: PtyIncarnationId | null
   // Why: background CLI PTYs can outlive a failed renderer reveal. Preserve the
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
@@ -10602,6 +10605,11 @@ export class OrcaRuntimeService {
     this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
+      const replacedIncarnation = incarnationId !== undefined && incarnationId !== pty.incarnationId
+      if (replacedIncarnation) {
+        pty.hostPlatform = null
+        pty.hostPlatformIncarnationId = null
+      }
       if (incarnationId) {
         pty.incarnationId = incarnationId
       }
@@ -10636,13 +10644,27 @@ export class OrcaRuntimeService {
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
         ? makePaneKey(binding.tabId, binding.leafId)
         : null
+    const existingPty = this.ptysById.get(ptyId)
+    const wslDistro = connectionId === null ? (this.wslDistroByPtyId.get(ptyId) ?? null) : null
+    const nextIsWsl = isWsl ?? Boolean(wslDistro)
+    const shouldSnapshotPlatform =
+      !existingPty ||
+      existingPty.hostPlatform === null ||
+      (binding?.incarnationId !== undefined &&
+        binding.incarnationId !== existingPty.hostPlatformIncarnationId)
     const pty = this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
       ...(binding && this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${binding.tabId}`)
         ? { runtimeSessionOwned: true }
         : {}),
-      ...(isWsl !== undefined ? { isWsl } : {}),
+      isWsl: nextIsWsl,
+      ...(shouldSnapshotPlatform
+        ? {
+            hostPlatform: this.snapshotPtyHostPlatform(connectionId, nextIsWsl, wslDistro),
+            hostPlatformIncarnationId: binding?.incarnationId ?? existingPty?.incarnationId ?? null
+          }
+        : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
@@ -10783,6 +10805,10 @@ export class OrcaRuntimeService {
     }
     if (pty) {
       pty.wslDistro = wslDistro
+      if (pty.connectionId === null) {
+        pty.hostPlatform = this.snapshotPtyHostPlatform(null, Boolean(wslDistro), wslDistro)
+        pty.hostPlatformIncarnationId = pty.incarnationId
+      }
     }
     if (!options.resetIncarnation && previous !== wslDistro && this.headlessTerminals.has(ptyId)) {
       // Why: bytes parsed with two distro namespaces would leave an internally
@@ -27921,16 +27947,34 @@ export class OrcaRuntimeService {
       return {}
     }
     if (pty.connectionId) {
-      const remotePlatform = getRegisteredSshState(pty.connectionId)?.remotePlatform
+      // Restored SSH graph records can predate relay readiness. Backfill only
+      // an unknown platform; a non-null spawn snapshot remains immutable.
+      const hostPlatform =
+        pty.hostPlatform ?? getRegisteredSshState(pty.connectionId)?.remotePlatform ?? null
+      if (pty.hostPlatform === null && hostPlatform !== null) {
+        pty.hostPlatform = hostPlatform
+        pty.hostPlatformIncarnationId = pty.incarnationId
+      }
       return {
         executionHostId: toSshExecutionHostId(pty.connectionId),
-        ...(remotePlatform ? { hostPlatform: remotePlatform } : {})
+        ...(hostPlatform ? { hostPlatform } : {})
       }
     }
     return {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
-      hostPlatform: pty.isWsl || pty.wslDistro ? 'linux' : process.platform
+      ...(pty.hostPlatform ? { hostPlatform: pty.hostPlatform } : {})
     }
+  }
+
+  private snapshotPtyHostPlatform(
+    connectionId: string | null,
+    isWsl: boolean,
+    wslDistro: string | null
+  ): NodeJS.Platform | null {
+    if (connectionId) {
+      return getRegisteredSshState(connectionId)?.remotePlatform ?? null
+    }
+    return isWsl || wslDistro ? 'linux' : process.platform
   }
 
   async launchAgentTerminal(
@@ -31628,6 +31672,8 @@ export class OrcaRuntimeService {
         | 'runtimeSessionOwned'
         | 'isWsl'
         | 'wslDistro'
+        | 'hostPlatform'
+        | 'hostPlatformIncarnationId'
         | 'incarnationId'
       >
     > = {}
@@ -31653,6 +31699,11 @@ export class OrcaRuntimeService {
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
         wslDistro,
+        hostPlatform:
+          state.hostPlatform !== undefined
+            ? state.hostPlatform
+            : this.snapshotPtyHostPlatform(connectionId, state.isWsl ?? false, wslDistro),
+        hostPlatformIncarnationId: state.hostPlatformIncarnationId ?? state.incarnationId ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
         launchConfig: null,
@@ -31729,6 +31780,10 @@ export class OrcaRuntimeService {
       } else {
         this.wslDistroByPtyId.delete(ptyId)
       }
+    }
+    if (state.hostPlatform !== undefined) {
+      pty.hostPlatform = state.hostPlatform
+      pty.hostPlatformIncarnationId = state.hostPlatformIncarnationId ?? pty.incarnationId ?? null
     }
     if (state.tabId !== undefined) {
       pty.tabId = state.tabId
@@ -32321,7 +32376,8 @@ export class OrcaRuntimeService {
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
       preview: leaf.preview,
-      ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId)
+      ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
+      ...this.terminalHostPlatformField(leaf.ptyId)
     }
   }
 
@@ -32338,6 +32394,11 @@ export class OrcaRuntimeService {
     }
     const hostId = fromPtyId ?? this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
     return hostId ? { executionHostId: hostId } : {}
+  }
+
+  private terminalHostPlatformField(ptyId: string | null): { hostPlatform?: NodeJS.Platform } {
+    const hostPlatform = this.getPtyExecutionHostMetadata(ptyId).hostPlatform
+    return hostPlatform ? { hostPlatform } : {}
   }
 
   // Returns the worktrees whose stored snapshot object changed during this
@@ -34279,7 +34340,8 @@ export class OrcaRuntimeService {
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
-      ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId)
+      ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
+      ...this.terminalHostPlatformField(pty.ptyId)
     }
   }
 
