@@ -102,9 +102,9 @@ describe('WSL login-shell reads are fenced', () => {
   }
 
   function sshCommandFromLastGitCall(): string | undefined {
-    const gitCall = execFileMock.mock.calls
-      .filter((call) => !String(call[1]?.at(-1)).includes('core.sshCommand'))
-      .at(-1)
+    const gitCall = execFileMock.mock.calls.findLast(
+      (call) => !String(call[1]?.at(-1)).includes('core.sshCommand')
+    )
     return (gitCall?.[2] as { env?: NodeJS.ProcessEnv } | undefined)?.env?.GIT_SSH_COMMAND
   }
 
