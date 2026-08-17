@@ -14550,7 +14550,9 @@
         },
         "PlantUmlBlock": {
           "line": "line",
-          "diagramError": "Diagram error:"
+          "diagramError": "Diagram error:",
+          "unsupportedDiagram": "Diagram not supported by this release of PlantUML",
+          "renderFailed": "PlantUML could not render this diagram"
         }
       },
       "diff": {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type * as plantUmlNamespace from '@plantuml/core'
 import DOMPurify from 'dompurify'
-import { detectPlantUmlErrorDiagram } from './plantuml-error-diagram'
+import { detectPlantUmlErrorDiagram, type PlantUmlErrorDiagram } from './plantuml-error-diagram'
 import { enqueuePlantUmlRender } from './plantuml-render-queue'
 import { translate } from '@/i18n/i18n'
 
@@ -45,6 +45,31 @@ type PlantUmlBlockProps = {
   isDark: boolean
 }
 
+/**
+ * Turns a detected error card into banner text. Our own wording is localized; the
+ * engine's diagnosis is shown verbatim because it only ever emits English.
+ */
+function describePlantUmlError(error: PlantUmlErrorDiagram): string {
+  if (error.kind === 'unsupported') {
+    return translate(
+      'auto.components.editor.PlantUmlBlock.unsupportedDiagram',
+      'Diagram not supported by this release of PlantUML'
+    )
+  }
+  const body =
+    error.kind === 'diagnosis' && error.detail !== undefined
+      ? error.detail
+      : translate(
+          'auto.components.editor.PlantUmlBlock.renderFailed',
+          'PlantUML could not render this diagram'
+        )
+  if (error.line === undefined) {
+    return body
+  }
+  const where = `${translate('auto.components.editor.PlantUmlBlock.line', 'line')} ${error.line}`
+  return `${where}: ${body}`
+}
+
 function renderDiagram(api: PlantUmlApi, content: string, isDark: boolean): Promise<string> {
   return new Promise((resolve, reject) => {
     api.renderToString(
@@ -84,11 +109,7 @@ export default function PlantUmlBlock({ content, isDark }: PlantUmlBlockProps): 
         // upstream upgrade nag. Surface our own banner instead of drawing theirs.
         const errorDiagram = detectPlantUmlErrorDiagram(svg)
         if (errorDiagram) {
-          const where =
-            errorDiagram.line === undefined
-              ? ''
-              : `${translate('auto.components.editor.PlantUmlBlock.line', 'line')} ${errorDiagram.line}: `
-          setResult({ error: `${where}${errorDiagram.message}` })
+          setResult({ error: describePlantUmlError(errorDiagram) })
           return
         }
         // Why: the engine builds SVG from diagram text that can carry arbitrary
