@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { acquireSkillInstallLock, skillInstallLockPath } from './skill-install-lock'
+import {
+  acquireSkillInstallLock,
+  reclaimDeadSkillInstallLocks,
+  skillInstallLockPath
+} from './skill-install-lock'
 
 const roots: string[] = []
 
@@ -43,5 +47,108 @@ describe('skill install lock', () => {
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     await secondRelease()
     await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('publishes only complete owner records when acquisitions overlap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    let ownerWritten!: () => void
+    const ownerIsVisible = new Promise<void>((resolve) => {
+      ownerWritten = resolve
+    })
+    let finishWrite!: () => void
+    const mayFinishWrite = new Promise<void>((resolve) => {
+      finishWrite = resolve
+    })
+    const firstAcquire = acquireSkillInstallLock({
+      path: lockPath,
+      timeoutMs: 0,
+      writeOwner: async (handle, value) => {
+        await handle.writeFile(value, 'utf8')
+        await handle.sync()
+        ownerWritten()
+        await mayFinishWrite
+      }
+    })
+
+    await ownerIsVisible
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    finishWrite()
+    await expect(firstAcquire).rejects.toMatchObject({
+      data: { code: 'skill-install-busy' }
+    })
+    await secondRelease()
+  })
+
+  it('does not publish a lock when writing its owner fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+
+    await expect(
+      acquireSkillInstallLock({
+        path: lockPath,
+        writeOwner: async () => {
+          throw new Error('injected-write-failure')
+        }
+      })
+    ).rejects.toThrow('injected-write-failure')
+
+    const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    await release()
+  })
+
+  it('reclaims abandoned atomic owner files at startup', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const stateDirectory = join(root, 'state')
+    const lockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'alpha'))
+    const ownerPath = `${lockPath}.11111111-1111-4111-8111-111111111111.owner`
+    await mkdir(dirname(ownerPath), { recursive: true })
+    await writeFile(
+      ownerPath,
+      JSON.stringify({ token: 'abandoned-owner', pid: 2_147_483_647, createdAt: Date.now() })
+    )
+
+    await expect(reclaimDeadSkillInstallLocks(stateDirectory)).resolves.toMatchObject({
+      scanned: 1,
+      reclaimed: 1
+    })
+    await expect(readFile(ownerPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('keeps ownership active until release deletion finishes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    let deletionStarted!: () => void
+    const deletionIsPending = new Promise<void>((resolve) => {
+      deletionStarted = resolve
+    })
+    let finishDeletion!: () => void
+    const mayFinishDeletion = new Promise<void>((resolve) => {
+      finishDeletion = resolve
+    })
+    const release = await acquireSkillInstallLock({
+      path: lockPath,
+      removeLock: async (path) => {
+        deletionStarted()
+        await mayFinishDeletion
+        await rm(path, { force: true })
+      }
+    })
+    const releasing = release()
+    expect(release()).toBe(releasing)
+
+    await deletionIsPending
+    await expect(acquireSkillInstallLock({ path: lockPath, timeoutMs: 0 })).rejects.toMatchObject({
+      data: { code: 'skill-install-busy' }
+    })
+    finishDeletion()
+    await releasing
+
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    await secondRelease()
   })
 })

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   SkillSharePreview,
@@ -101,10 +101,19 @@ export class SkillSharePreparationService {
           ) {
             return source
           }
-          const receipt = await readSkillInstallReceipt(
+          let receipt = await readSkillInstallReceipt(
             this.options.installStateDirectory,
             source.sourceDirectory
           )
+          if (!receipt) {
+            const physicalSource = await realpath(source.sourceDirectory).catch(() => null)
+            if (physicalSource) {
+              receipt = await readSkillInstallReceipt(
+                this.options.installStateDirectory,
+                physicalSource
+              )
+            }
+          }
           return receipt?.fileModes
             ? {
                 ...source,

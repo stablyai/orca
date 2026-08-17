@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readdir, readFile, rm, stat } from 'node:fs/promises'
+import { link, mkdir, open, readdir, readFile, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { SKILL_INSTALL_BUSY_FAILURE } from '../../shared/skill-install-failure'
 import { SkillInstallOperationError } from './skill-install-operation-error'
@@ -9,6 +9,7 @@ const LOCK_RETRY_MS = 50
 const LOCK_STALE_MS = 30 * 60 * 1000
 const MAX_STARTUP_LOCKS = 128
 const LOCK_NAME = /^[a-f0-9]{64}\.lock$/
+const LOCK_OWNER_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.owner$/
 const activeLockTokens = new Set<string>()
 
 type SkillInstallLockOwner = {
@@ -66,7 +67,9 @@ export async function reclaimDeadSkillInstallLocks(stateDirectory: string): Prom
     throw error
   })
   const locks = entries
-    .filter((entry) => entry.isFile() && LOCK_NAME.test(entry.name))
+    .filter(
+      (entry) => entry.isFile() && (LOCK_NAME.test(entry.name) || LOCK_OWNER_NAME.test(entry.name))
+    )
     .sort((left, right) => left.name.localeCompare(right.name))
   let reclaimed = 0
   for (const lock of locks.slice(0, MAX_STARTUP_LOCKS)) {
@@ -91,6 +94,7 @@ export async function acquireSkillInstallLock(input: {
   path: string
   timeoutMs?: number
   removeLock?: (path: string) => Promise<void>
+  writeOwner?: (handle: FileHandle, value: string) => Promise<void>
 }): Promise<() => Promise<void>> {
   await mkdir(dirname(input.path), { recursive: true, mode: 0o700 })
   const deadline = Date.now() + (input.timeoutMs ?? 5_000)
@@ -100,36 +104,64 @@ export async function acquireSkillInstallLock(input: {
     createdAt: Date.now()
   }
   for (;;) {
+    const ownerPath = `${input.path}.${owner.token}.owner`
+    const handle = await open(ownerPath, 'wx', 0o600)
     try {
-      const handle = await open(input.path, 'wx', 0o600)
       try {
-        await handle.writeFile(JSON.stringify(owner), 'utf8')
-        await handle.sync()
+        await (
+          input.writeOwner ??
+          (async (lockHandle, value) => {
+            await lockHandle.writeFile(value, 'utf8')
+            await lockHandle.sync()
+          })
+        )(handle, JSON.stringify(owner))
       } finally {
         await handle.close()
       }
-      activeLockTokens.add(owner.token)
-      return async () => {
+    } catch (error) {
+      await rm(ownerPath, { force: true }).catch(() => undefined)
+      throw error
+    }
+    activeLockTokens.add(owner.token)
+    try {
+      try {
+        await link(ownerPath, input.path)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+          throw error
+        }
+        await removeStaleLock(input.path)
+        if (Date.now() >= deadline) {
+          throw new SkillInstallOperationError(SKILL_INSTALL_BUSY_FAILURE)
+        }
         activeLockTokens.delete(owner.token)
-        let current: SkillInstallLockOwner | null = null
-        try {
-          current = JSON.parse(await readFile(input.path, 'utf8')) as SkillInstallLockOwner
-        } catch {
-          current = null
-        }
-        if (current?.token === owner.token) {
-          await (input.removeLock ?? ((path) => rm(path, { force: true })))(input.path)
-        }
+        await new Promise<void>((resolve) => setTimeout(resolve, LOCK_RETRY_MS))
+        continue
+      }
+      let releasePromise: Promise<void> | null = null
+      return () => {
+        releasePromise ??= (async () => {
+          try {
+            let current: SkillInstallLockOwner | null = null
+            try {
+              current = JSON.parse(await readFile(input.path, 'utf8')) as SkillInstallLockOwner
+            } catch {
+              current = null
+            }
+            if (current?.token === owner.token) {
+              await (input.removeLock ?? ((path) => rm(path, { force: true })))(input.path)
+            }
+          } finally {
+            activeLockTokens.delete(owner.token)
+          }
+        })()
+        return releasePromise
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        throw error
-      }
-      await removeStaleLock(input.path)
-      if (Date.now() >= deadline) {
-        throw new SkillInstallOperationError(SKILL_INSTALL_BUSY_FAILURE)
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, LOCK_RETRY_MS))
+      activeLockTokens.delete(owner.token)
+      throw error
+    } finally {
+      await rm(ownerPath, { force: true }).catch(() => undefined)
     }
   }
 }

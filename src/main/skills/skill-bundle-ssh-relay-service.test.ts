@@ -270,4 +270,43 @@ describe('previewSkillBundleInstallOnSshHost', () => {
     ).rejects.toThrow('skill-bundle-ssh-update-required')
     expect(requestHostRpc).toHaveBeenCalledOnce()
   })
+
+  it('adopts the current provider generation when preview retries after reconnect', async () => {
+    const request = previewRequest()
+    const response = {
+      packageId: request.package.packageId,
+      versionId: request.package.versionId,
+      bundleDigest: request.package.bundleDigest,
+      destinationIdentity: 'global:ssh-host',
+      skills: request.selectedSkills.map((skill) => ({
+        ...skill,
+        currentState: 'missing' as const
+      }))
+    }
+    const secondRpc = vi.fn(async (method: string) =>
+      method === 'relay.status' ? { capabilities: ['skills.preview.bundle.v1'] } : response
+    )
+    const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
+    let currentProvider: IPtyProvider
+    const firstRpc = vi.fn(async (method: string) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.preview.bundle.v1'] }
+      }
+      currentProvider = secondProvider
+      throw new Error('disconnected-provider-generation')
+    })
+    currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
+
+    await expect(
+      previewSkillBundleInstallOnSshHost({ provider: () => currentProvider, request })
+    ).resolves.toEqual(response)
+    expect(firstRpc.mock.calls.map(([method]) => method)).toEqual([
+      'relay.status',
+      'skills.previewBundleInstall'
+    ])
+    expect(secondRpc.mock.calls.map(([method]) => method)).toEqual([
+      'relay.status',
+      'skills.previewBundleInstall'
+    ])
+  })
 })

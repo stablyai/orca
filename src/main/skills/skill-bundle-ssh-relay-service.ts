@@ -139,20 +139,27 @@ export async function previewSkillBundleInstallOnSshHost(input: {
   request: SkillBundleInstallPreviewRequest
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillBundleInstallPreview> {
-  const client = requireSkillSshRelayClient(input.provider)
-  const supported = await skillSshRelayCapabilities(client)
-  if (!supported.includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
-    recordSkillCapabilityAbsence({
-      capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
-      destination: 'global-ssh'
-    })
-    throw new Error('skill-bundle-ssh-update-required')
-  }
   return SkillBundleInstallPreviewSchema.parse(
-    await client(
-      SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
-      { request: input.request, workspace: input.workspace },
-      { timeoutMs: 30_000 }
-    )
+    await retrySkillTransferRpc({
+      retryable: (error) =>
+        (error as Error)?.message !== 'skill-bundle-ssh-update-required' &&
+        retryableSkillSshTransportError(error),
+      call: async () => {
+        const provider = typeof input.provider === 'function' ? input.provider() : input.provider
+        const client = requireSkillSshRelayClient(provider)
+        if (!(await skillSshRelayCapabilities(client)).includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
+          recordSkillCapabilityAbsence({
+            capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
+            destination: 'global-ssh'
+          })
+          throw new Error('skill-bundle-ssh-update-required')
+        }
+        return client(
+          SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
+          { request: input.request, workspace: input.workspace },
+          { timeoutMs: 30_000 }
+        )
+      }
+    })
   )
 }
