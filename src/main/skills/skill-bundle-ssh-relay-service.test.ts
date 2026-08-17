@@ -78,7 +78,9 @@ function previewRequest(count = 30): SkillBundleInstallPreviewRequest {
 
 describe('installSkillBundleOnSshHost', () => {
   it('adopts the current provider generation when an RPC retry follows reconnect', async () => {
-    const secondRpc = vi.fn(async () => result())
+    const secondRpc = vi.fn(async (method: string) =>
+      method === 'relay.status' ? { capabilities: ['skills.install.bundle.v1'] } : result()
+    )
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
     let currentProvider: IPtyProvider
     const firstRpc = vi.fn(async (method: string) => {
@@ -103,7 +105,36 @@ describe('installSkillBundleOnSshHost', () => {
       'relay.status',
       'skills.installBundle'
     ])
-    expect(secondRpc).toHaveBeenCalledOnce()
+    expect(secondRpc.mock.calls.map(([method]) => method)).toEqual([
+      'relay.status',
+      'skills.installBundle'
+    ])
+  })
+
+  it('does not reuse newer capabilities after reconnecting to an older host', async () => {
+    const secondRpc = vi.fn(async (_method: string) => ({
+      capabilities: ['skills.install.v1']
+    }))
+    const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
+    let currentProvider: IPtyProvider
+    const firstRpc = vi.fn(async (method: string) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.install.bundle.v1'] }
+      }
+      currentProvider = secondProvider
+      throw new Error('disconnected-provider-generation')
+    })
+    currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
+
+    await expect(
+      installSkillBundleOnSshHost({
+        provider: () => currentProvider,
+        userDataPath: await userDataPath(),
+        request: request(Buffer.from('archive')),
+        requireHttps: true
+      })
+    ).rejects.toThrow('skill-bundle-ssh-update-required')
+    expect(secondRpc.mock.calls.map(([method]) => method)).toEqual(['relay.status'])
   })
 
   it('uses the additive method only when advertised by the SSH host', async () => {
@@ -224,6 +255,7 @@ describe('installSkillBundleOnSshHost', () => {
     expect(requestHostRpc.mock.calls.map(([method]) => method)).toEqual([
       'relay.status',
       'skills.installBundle',
+      'relay.status',
       'skills.beginUpload',
       'skills.uploadChunk',
       'skills.commitUpload',

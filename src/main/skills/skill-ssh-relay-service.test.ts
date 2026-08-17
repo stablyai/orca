@@ -49,6 +49,30 @@ function request(bytes: Buffer) {
 }
 
 describe('installSkillOnSshHost', () => {
+  it('does not reuse newer capabilities after reconnecting to an older host', async () => {
+    const secondRpc = vi.fn(async (_method: string) => ({ capabilities: [] }))
+    const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
+    let currentProvider: IPtyProvider
+    const firstRpc = vi.fn(async (method: string) => {
+      if (method === 'relay.status') {
+        return { capabilities: ['skills.install.v1'] }
+      }
+      currentProvider = secondProvider
+      throw new Error('disconnected-provider-generation')
+    })
+    currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
+
+    await expect(
+      installSkillOnSshHost({
+        provider: () => currentProvider,
+        userDataPath: await userDataPath(),
+        request: request(Buffer.from('archive')),
+        requireHttps: true
+      })
+    ).rejects.toThrow('skill-install-ssh-update-required')
+    expect(secondRpc.mock.calls.map(([method]) => method)).toEqual(['relay.status'])
+  })
+
   it('requires a relay update before sending an explicit provider choice', async () => {
     const requestHostRpc = vi.fn(async () => ({ capabilities: ['skills.install.v1'] }))
     await expect(
@@ -132,6 +156,7 @@ describe('installSkillOnSshHost', () => {
     expect(requestHostRpc.mock.calls.map(([method]) => method)).toEqual([
       'relay.status',
       'skills.install',
+      'relay.status',
       'skills.beginUpload',
       'skills.beginUpload',
       'skills.uploadChunk',

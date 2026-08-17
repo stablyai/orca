@@ -1,4 +1,4 @@
-import { link, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,8 +14,16 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
+async function readPublishedOwner(lockPath: string): Promise<Record<string, unknown>> {
+  const ownerName = (await readdir(lockPath)).find((name) => name.endsWith('.owner'))
+  if (!ownerName) {
+    throw new Error('missing-owner')
+  }
+  return JSON.parse(await readFile(join(lockPath, ownerName), 'utf8')) as Record<string, unknown>
+}
+
 describe('skill install lock', () => {
-  it('reclaims a fresh lock whose process was killed', async () => {
+  it('reclaims a fresh legacy lock whose process was killed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
@@ -26,12 +34,12 @@ describe('skill install lock', () => {
     )
 
     const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
-    expect(JSON.parse(await readFile(lockPath, 'utf8')).token).not.toBe('dead-owner')
+    expect((await readPublishedOwner(lockPath)).token).not.toBe('dead-owner')
     await release()
-    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('reclaims a same-process lock after its release deletion fails', async () => {
+  it('reclaims a lock after its release deletion fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
@@ -44,12 +52,16 @@ describe('skill install lock', () => {
     })
 
     await expect(release()).rejects.toThrow('injected-delete-failure')
+    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(dirname(lockPath))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/\.lock\.[a-f0-9-]+\.released$/)])
+    )
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     await secondRelease()
-    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('publishes only complete owner records when acquisitions overlap', async () => {
+  it('publishes a complete candidate atomically when acquisitions overlap', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
@@ -63,7 +75,6 @@ describe('skill install lock', () => {
     })
     const firstAcquire = acquireSkillInstallLock({
       path: lockPath,
-      timeoutMs: 0,
       writeOwner: async (handle, value) => {
         await handle.writeFile(value, 'utf8')
         await handle.sync()
@@ -73,12 +84,19 @@ describe('skill install lock', () => {
     })
 
     await ownerIsVisible
+    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     finishWrite()
-    await expect(firstAcquire).rejects.toMatchObject({
-      data: { code: 'skill-install-busy' }
+    let firstPublished = false
+    void firstAcquire.then(() => {
+      firstPublished = true
     })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(firstPublished).toBe(false)
     await secondRelease()
+    const release = await firstAcquire
+    await expect(readPublishedOwner(lockPath)).resolves.toMatchObject({ pid: process.pid })
+    await release()
   })
 
   it('does not publish a lock when writing its owner fails', async () => {
@@ -96,54 +114,37 @@ describe('skill install lock', () => {
     ).rejects.toThrow('injected-write-failure')
 
     await expect(readdir(dirname(lockPath))).resolves.toEqual([])
-
     const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     await release()
   })
 
-  it('falls back when the state filesystem does not support hard links', async () => {
+  it('retries when the current owner releases after a contended rename', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
-    const release = await acquireSkillInstallLock({
-      path: lockPath,
-      createLink: async () => {
-        const error = new Error('hard-links-unsupported') as NodeJS.ErrnoException
-        error.code = 'ENOTSUP'
-        throw error
-      }
-    })
+    const firstRelease = await acquireSkillInstallLock({ path: lockPath })
+    let attempts = 0
 
-    await expect(readFile(lockPath, 'utf8')).resolves.toContain(`"pid":${process.pid}`)
-    await release()
-    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
-  it('uses a fresh owner file for each contention retry', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
-    roots.push(root)
-    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
-    const ownerPaths: string[] = []
-    const release = await acquireSkillInstallLock({
+    const secondRelease = await acquireSkillInstallLock({
       path: lockPath,
-      timeoutMs: 100,
-      createLink: async (ownerPath, targetPath) => {
-        ownerPaths.push(ownerPath)
-        if (ownerPaths.length === 1) {
+      timeoutMs: 500,
+      publishLock: async (candidatePath, targetPath) => {
+        attempts += 1
+        if (attempts === 1) {
+          await firstRelease()
           const error = new Error('injected-contention') as NodeJS.ErrnoException
-          error.code = 'EEXIST'
+          error.code = 'ENOTEMPTY'
           throw error
         }
-        await link(ownerPath, targetPath)
+        await rename(candidatePath, targetPath)
       }
     })
 
-    expect(ownerPaths).toHaveLength(2)
-    expect(ownerPaths[0]).not.toBe(ownerPaths[1])
-    await release()
+    expect(attempts).toBe(2)
+    await secondRelease()
   })
 
-  it('reclaims abandoned atomic owner files at startup', async () => {
+  it('reclaims abandoned legacy owner files at startup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
@@ -162,10 +163,46 @@ describe('skill install lock', () => {
     await expect(readFile(ownerPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('keeps ownership active until release deletion finishes', async () => {
+  it('reclaims dead locks, abandoned candidates, and completed releases at startup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
-    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    const stateDirectory = join(root, 'state')
+    const deadPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'alpha'))
+    const releasedLockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'beta'))
+    const candidateLockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'gamma'))
+    const deadToken = '11111111-1111-4111-8111-111111111111'
+    const releasedToken = '22222222-2222-4222-8222-222222222222'
+    const candidateToken = '33333333-3333-4333-8333-333333333333'
+    await mkdir(deadPath, { recursive: true })
+    const releasedPath = `${releasedLockPath}.${releasedToken}.released`
+    const candidatePath = `${candidateLockPath}.${candidateToken}.candidate`
+    await mkdir(releasedPath, { recursive: true })
+    await mkdir(candidatePath, { recursive: true })
+    await writeFile(
+      join(deadPath, `${deadToken}.owner`),
+      JSON.stringify({ token: deadToken, pid: 2_147_483_647, createdAt: Date.now() })
+    )
+    await writeFile(
+      join(releasedPath, `${releasedToken}.owner`),
+      JSON.stringify({ token: releasedToken, pid: process.pid, createdAt: Date.now() })
+    )
+    await writeFile(
+      join(candidatePath, `${candidateToken}.owner`),
+      JSON.stringify({ token: candidateToken, pid: 2_147_483_647, createdAt: Date.now() })
+    )
+
+    await expect(reclaimDeadSkillInstallLocks(stateDirectory)).resolves.toEqual({
+      scanned: 3,
+      reclaimed: 3,
+      truncated: false
+    })
+  })
+
+  it('frees the canonical lock before release cleanup finishes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const stateDirectory = join(root, 'state')
+    const lockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'alpha'))
     let deletionStarted!: () => void
     const deletionIsPending = new Promise<void>((resolve) => {
       deletionStarted = resolve
@@ -179,20 +216,19 @@ describe('skill install lock', () => {
       removeLock: async (path) => {
         deletionStarted()
         await mayFinishDeletion
-        await rm(path, { force: true })
+        await rmdir(path)
       }
     })
     const releasing = release()
     expect(release()).toBe(releasing)
 
     await deletionIsPending
-    await expect(acquireSkillInstallLock({ path: lockPath, timeoutMs: 0 })).rejects.toMatchObject({
-      data: { code: 'skill-install-busy' }
+    await expect(reclaimDeadSkillInstallLocks(stateDirectory)).resolves.toMatchObject({
+      reclaimed: 1
     })
-    finishDeletion()
-    await releasing
-
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     await secondRelease()
+    finishDeletion()
+    await releasing
   })
 })

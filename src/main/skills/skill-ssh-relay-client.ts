@@ -12,13 +12,11 @@ export type SkillSshRelayClient = NonNullable<IPtyProvider['requestHostRpc']>
 export type SkillSshProviderSource = IPtyProvider | (() => IPtyProvider)
 
 export function requireSkillSshRelayClient(source: SkillSshProviderSource): SkillSshRelayClient {
-  return (method, params, options) => {
-    const provider = typeof source === 'function' ? source() : source
-    if (!provider.requestHostRpc) {
-      throw new Error('skill-install-ssh-relay-unavailable')
-    }
-    return provider.requestHostRpc(method, params, options)
+  const provider = typeof source === 'function' ? source() : source
+  if (!provider.requestHostRpc) {
+    throw new Error('skill-install-ssh-relay-unavailable')
   }
+  return provider.requestHostRpc.bind(provider)
 }
 
 export function shouldUseSkillSshClientTransfer(error: unknown, requireHttps: boolean): boolean {
