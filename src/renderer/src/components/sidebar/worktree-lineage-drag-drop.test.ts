@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -43,6 +45,38 @@ describe('getWorktreeLineageDropTargetId', () => {
     })
 
     expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBeNull()
+  })
+
+  it('measures a populated parent before its nested child rows', () => {
+    const container = document.createElement('div')
+    const parentRow = document.createElement('div')
+    const parentContent = document.createElement('div')
+    const parentTarget = document.createElement('span')
+    const lineageChildren = document.createElement('div')
+    const childRow = document.createElement('div')
+    const childContent = document.createElement('div')
+    const childTarget = document.createElement('span')
+    parentRow.dataset.worktreeDragId = 'parent'
+    parentContent.dataset.worktreeCardHoverTrigger = ''
+    lineageChildren.dataset.worktreeLineageChildren = ''
+    childRow.dataset.worktreeDragId = 'child'
+    childContent.dataset.worktreeCardHoverTrigger = ''
+    childContent.append(childTarget)
+    childRow.append(childContent)
+    lineageChildren.append(childRow)
+    parentContent.append(parentTarget, lineageChildren)
+    parentRow.append(parentContent)
+    container.append(parentRow)
+    parentContent.getBoundingClientRect = () => ({ top: 100, bottom: 240 }) as DOMRect
+    lineageChildren.getBoundingClientRect = () => ({ top: 160, bottom: 240 }) as DOMRect
+    childContent.getBoundingClientRect = () => ({ top: 180, bottom: 220 }) as DOMRect
+
+    expect(getWorktreeLineageDropTargetId({ container, target: parentTarget, pointerY: 130 })).toBe(
+      'parent'
+    )
+    expect(getWorktreeLineageDropTargetId({ container, target: childTarget, pointerY: 200 })).toBe(
+      'child'
+    )
   })
 })
 
@@ -174,11 +208,12 @@ function makeTarget(args: {
 } {
   const row = {
     getAttribute: (name: string) => (name === 'data-worktree-drag-id' ? args.worktreeId : null)
-  } as HTMLElement
+  } as unknown as HTMLElement
   const content = {
     getBoundingClientRect: () => ({ top: args.top, bottom: args.bottom }),
+    querySelector: () => null,
     closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? row : null)
-  } as HTMLElement
+  } as unknown as HTMLElement
   const target = {
     closest: (selector: string) =>
       selector === '[data-worktree-card-hover-trigger]' ? content : null
