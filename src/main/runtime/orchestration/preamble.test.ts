@@ -110,10 +110,16 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble(baseParams())
     // Why: "use it whenever you have something to say" would pull blockers and
     // questions into a message the coordinator only logs by subject. The status
-    // rule has to name its neighbours to stay in its lane.
-    expect(result).toMatch(/ask when you need an answer/)
-    expect(result).toMatch(/escalation when you are blocked/)
-    expect(result).toMatch(/Put the headline in --subject/)
+    // rule has to name its neighbours to stay in its lane — inside its own
+    // block, so a phrase surviving elsewhere in the preamble cannot satisfy it.
+    const start = result.indexOf('# Report mid-run progress')
+    const end = result.indexOf('# BEHAVIOR RULE: send a heartbeat')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const statusBlock = result.slice(start, end)
+    expect(statusBlock).toMatch(/ask when you need an answer/)
+    expect(statusBlock).toMatch(/escalation when you are blocked/)
+    expect(statusBlock).toMatch(/Put the headline in --subject/)
   })
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {

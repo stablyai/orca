@@ -917,6 +917,9 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      // Why: completion without revocation would leave the settled dispatch's
+      // capability live — the exact hole the status/worker_done split guards.
+      expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).not.toBeNull()
     })
 
     it('does not release dispatch lock for non-lifecycle sends', async () => {
