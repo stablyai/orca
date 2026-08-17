@@ -142,6 +142,8 @@ export {
   toLinearProjectUpdateHealth
 } from './project-agent-writes'
 export type {
+  LinearProjectCreateRequest,
+  LinearProjectCreateResult,
   LinearProjectUpdateAddRequest,
   LinearProjectUpdateAddResult,
   LinearProjectUpdateHealthInput

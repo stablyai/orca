@@ -392,6 +392,8 @@ import type {
   LinearIssueListResult,
   LinearProjectLabelsResult,
   LinearProjectListResult,
+  LinearProjectCreateRequest,
+  LinearProjectCreateResult,
   LinearProjectShowRequest,
   LinearProjectShowResult,
   LinearProjectStatusesResult,
@@ -488,7 +490,7 @@ import {
   clampLinearProjectUpdatesLimit,
   clampLinearSearchLimit
 } from '../../shared/linear/agent-access'
-import { isLinearUuid } from '../../shared/linear/uuid'
+import { isLinearUuid, isLinearUuidV4 } from '../../shared/linear/uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import {
@@ -908,7 +910,17 @@ import {
   getProjectUpdateById,
   type LinearProjectUpdateRecord
 } from '../linear/project-update-posts'
+import {
+  createProjectForAgent,
+  getProjectByIdForAgent,
+  type LinearProjectWriteRecord
+} from '../linear/project-create'
 import { normalizeLinearLineEndings } from '../linear/linear-text-digest'
+import {
+  projectMatchesCreateIntent,
+  type LinearProjectCreateIntent
+} from './linear-project-create-intent'
+import { resolveLinearProjectCreateIntent } from './linear-project-create-resolution'
 import {
   projectUpdateMatchesAddIntent,
   type LinearProjectUpdateAddIntent
@@ -34623,6 +34635,128 @@ export class OrcaRuntimeService {
         url: project.url
       },
       meta: { workspaceId: project.workspaceId, bodyChars, writeId, deduplicated }
+    }
+  }
+
+  async linearProjectCreateForAgents(
+    request: LinearProjectCreateRequest
+  ): Promise<LinearProjectCreateResult> {
+    if (request.workspaceId === 'all') {
+      throw linearError(
+        'linear_invalid_workspace',
+        '--workspace all is only valid for project list, statuses, and labels.'
+      )
+    }
+    // Why: ProjectCreateInput.id is documented as UUID v4; randomUUID() already is one.
+    const writeId = request.writeId ?? randomUUID()
+    if (!isLinearUuidV4(writeId)) {
+      throw linearError(
+        'linear_invalid_write_id',
+        '--write-id must be a UUID v4 for project create.'
+      )
+    }
+    this.assertLinearProseWithinCap(request.description)
+    this.assertLinearProseWithinCap(request.content)
+    this.validateLinearCreateWorkspaceScope(request.workspaceId)
+    const intent = await this.linearProjectCreateIntentForWrite(request)
+    const unconfirmed = (cause?: string): LinearAgentAccessError =>
+      linearProjectWriteUnconfirmed({
+        kind: 'create',
+        writeId,
+        intent,
+        ...(cause ? { cause } : {})
+      })
+    const existing =
+      request.writeId !== undefined
+        ? await this.getMatchingLinearProjectCreate(writeId, intent)
+        : null
+    if (existing) {
+      return this.linearProjectCreateResult(existing, intent.workspaceId, writeId, true)
+    }
+    const { workspaceId, ...fields } = intent
+    try {
+      const created = await this.runLinearAgentWrite(
+        (signal) => createProjectForAgent({ id: writeId, ...fields }, workspaceId, { signal }),
+        unconfirmed
+      )
+      return this.linearProjectCreateResult(created, workspaceId, writeId, false)
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        const created = await this.refetchLinearProjectAfterDuplicate(writeId, intent, unconfirmed)
+        return this.linearProjectCreateResult(created, workspaceId, writeId, true)
+      }
+      throw error
+    }
+  }
+
+  private assertLinearProseWithinCap(value: string | undefined): void {
+    if (value !== undefined && normalizeLinearLineEndings(value).length > LINEAR_WRITE_BODY_CAP) {
+      throw linearError('linear_body_too_large', 'Linear project text is too large.')
+    }
+  }
+
+  private async linearProjectCreateIntentForWrite(
+    request: LinearProjectCreateRequest
+  ): Promise<LinearProjectCreateIntent> {
+    try {
+      return await resolveLinearProjectCreateIntent(request)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async getMatchingLinearProjectCreate(
+    writeId: string,
+    intent: LinearProjectCreateIntent
+  ): Promise<LinearProjectWriteRecord | null> {
+    const existing = await this.readLinearWriteLookup(() =>
+      getProjectByIdForAgent(writeId, intent.workspaceId)
+    )
+    if (!existing) {
+      return null
+    }
+    if (projectMatchesCreateIntent(existing.fields, intent)) {
+      return existing
+    }
+    throw linearError(
+      'linear_invalid_write_id',
+      'The write id belongs to a Linear project with different fields.'
+    )
+  }
+
+  private async refetchLinearProjectAfterDuplicate(
+    writeId: string,
+    intent: LinearProjectCreateIntent,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<LinearProjectWriteRecord> {
+    try {
+      // Why: duplicate_id can mean the original create landed; only the full intent proves it.
+      const existing = await this.getMatchingLinearProjectCreate(writeId, intent)
+      if (existing) {
+        return existing
+      }
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
+        throw error
+      }
+      throw unconfirmed(
+        error instanceof Error
+          ? sanitizeLinearErrorMessage(error.message)
+          : sanitizeLinearErrorMessage(String(error))
+      )
+    }
+    throw unconfirmed()
+  }
+
+  private linearProjectCreateResult(
+    created: LinearProjectWriteRecord,
+    workspaceId: string,
+    writeId: string,
+    deduplicated: boolean
+  ): LinearProjectCreateResult {
+    return {
+      project: created.project,
+      meta: { workspaceId, writeId, deduplicated }
     }
   }
 

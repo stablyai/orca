@@ -30,6 +30,36 @@ describe('shouldReadRemoteCliStdin', () => {
     expect(shouldReadRemoteCliStdin(['linear', 'project', 'show', '--body-file', '-'])).toBe(false)
   })
 
+  it('reads stdin for a Linear project create piped over the relay', () => {
+    expect(
+      shouldReadRemoteCliStdin([
+        'linear',
+        'project',
+        'create',
+        '--name',
+        'Launch',
+        '--team',
+        'ENG',
+        '--content-file',
+        '-'
+      ])
+    ).toBe(true)
+    expect(
+      shouldReadRemoteCliStdin(['linear', 'project', 'create', '--name', 'L', '--content-file=-'])
+    ).toBe(true)
+    expect(
+      shouldReadRemoteCliStdin([
+        'linear',
+        'project',
+        'create',
+        '--name',
+        'L',
+        '--content-file',
+        'overview.md'
+      ])
+    ).toBe(false)
+  })
+
   it('reads stdin for *-stdin payload flags bridged to the full host CLI', () => {
     expect(shouldReadRemoteCliStdin(['computer', 'action', '--app', 'Notes', '--text-stdin'])).toBe(
       true

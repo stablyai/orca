@@ -13,7 +13,10 @@ import type {
   LinearProjectUpdateNode,
   LinearWorkspaceFanoutMeta
 } from './project-agent-access'
-import type { LinearProjectUpdateAddResult } from './project-agent-writes'
+import type {
+  LinearProjectCreateResult,
+  LinearProjectUpdateAddResult
+} from './project-agent-writes'
 
 /**
  * Single source of human-readable project rendering: the local CLI and the SSH
@@ -105,6 +108,24 @@ export function formatLinearProjectLabels(result: LinearProjectLabelsResult): st
       ].join(' ')
     )
     .join('\n')
+}
+
+export function formatLinearProjectCreate(result: LinearProjectCreateResult): string {
+  const { project, meta } = result
+  const target = `${toSingleLineLinearProjectText(project.name)} (${project.slugId})`
+  return [
+    meta.deduplicated
+      ? `Deduplicated Linear project ${target}`
+      : `Created Linear project ${target}`,
+    ...(meta.deduplicated
+      ? [
+          'Deduplicated: the pinned --write-id already created this project; nothing new was created.'
+        ]
+      : []),
+    `URL: ${project.url}`,
+    `Project id: ${project.id}`,
+    `Workspace: ${meta.workspaceId}  Write id: ${meta.writeId}`
+  ].join('\n')
 }
 
 export function formatLinearProjectUpdateAdd(result: LinearProjectUpdateAddResult): string {

@@ -170,6 +170,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca linear label add [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'label', 'workspace', 'id'],
+    repeatableFlags: ['label'],
     positionalArgs: ['id'],
     examples: ['orca linear label add --current --label Bug --json']
   },
@@ -179,6 +180,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca linear label remove [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'label', 'workspace', 'id'],
+    repeatableFlags: ['label'],
     positionalArgs: ['id'],
     examples: ['orca linear label remove --current --label Bug --json']
   },
@@ -188,6 +190,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'label', 'workspace', 'id'],
+    repeatableFlags: ['label'],
     positionalArgs: ['id'],
     examples: ['orca linear label set ENG-123 --label Bug --json']
   },
@@ -248,6 +251,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
       'write-id',
       'workspace'
     ],
+    repeatableFlags: ['label'],
     examples: [
       'orca linear create --title "Investigate flaky login" --team ENG --project "Launch"',
       'orca linear create --title "Follow-up bug" --parent-current --body-file - --json'

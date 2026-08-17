@@ -8,6 +8,7 @@ import type {
   LinearMcpIssueListResult,
   LinearIssueTaskUpdateResult,
   LinearIssueRelationWriteResult,
+  LinearProjectCreateResult,
   LinearProjectListResult,
   LinearProjectLabelsResult,
   LinearProjectShowResult,
@@ -114,6 +115,21 @@ export function isLinearProjectUpdateAddResult(
     typeof result.projectUpdate.id === 'string' &&
     typeof result.projectUpdate.url === 'string' &&
     typeof result.meta.bodyChars === 'number' &&
+    typeof result.meta.deduplicated === 'boolean'
+  )
+}
+
+// Why: `projectUpdate` absence is what separates a create result from the update-add result.
+export function isLinearProjectCreateResult(result: unknown): result is LinearProjectCreateResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.project) &&
+    isRecord(result.meta) &&
+    result.projectUpdate === undefined &&
+    typeof result.project.slugId === 'string' &&
+    typeof result.project.url === 'string' &&
+    typeof result.meta.workspaceId === 'string' &&
+    typeof result.meta.writeId === 'string' &&
     typeof result.meta.deduplicated === 'boolean'
   )
 }

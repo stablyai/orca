@@ -8,6 +8,9 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  // Why: repeatability is per command — a globally repeatable flag would silently
+  // change every other command that reads the same flag name as a single value.
+  repeatableFlags?: readonly string[]
   positionalArgs?: string[]
   examples?: string[]
   notes?: string[]

@@ -183,6 +183,7 @@ Commands:
   statuses      List Linear project statuses
   labels        List Linear project labels
   list          List connected Linear projects
+  create        Create a Linear project
   update        Linear project update commands
 
 Run \`orca linear project <command> --help\` for command-specific usage.`

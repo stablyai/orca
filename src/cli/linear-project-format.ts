@@ -15,6 +15,7 @@ import type { RuntimeRpcSuccess } from './runtime/types'
 const JSON_RAW_CONTROL_PATTERN = /[\u007f-\u009f]/g
 
 export {
+  formatLinearProjectCreate,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,

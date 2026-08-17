@@ -1,6 +1,6 @@
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { isLinearUuid } from '../../shared/linear/uuid'
+import { isLinearUuid, isLinearUuidV4 } from '../../shared/linear/uuid'
 
 type ParsedRemoteCli = {
   commandPath: string[]
@@ -125,6 +125,29 @@ export function optionalWriteId(flags: Map<string, string | boolean>): string | 
   return writeId
 }
 
+/** Project create pins `ProjectCreateInput.id`, which Linear requires to be UUID v4. */
+export function optionalWriteIdV4(flags: Map<string, string | boolean>): string | undefined {
+  if (!flags.has('write-id')) {
+    return undefined
+  }
+  const writeId = requiredString(flags, 'write-id')
+  if (!isLinearUuidV4(writeId)) {
+    throw new RemoteLinearWriteArgumentError(
+      'linear_invalid_write_id',
+      '--write-id must be a UUID v4'
+    )
+  }
+  return writeId
+}
+
+export function hexColorFlag(flags: Map<string, string | boolean>, name: string): string {
+  const value = requiredString(flags, name)
+  if (!/^#[0-9A-Fa-f]{6}$/.test(value)) {
+    throw new RemoteLinearWriteArgumentError('invalid_argument', `--${name} must be #RRGGBB`)
+  }
+  return value
+}
+
 export function priorityFlag(flags: Map<string, string | boolean>, name: string): number {
   const value = requiredString(flags, name).toLocaleLowerCase()
   const priority = LINEAR_PRIORITY_VALUES.get(value)
@@ -148,7 +171,7 @@ export function nonNegativeIntegerFlag(flags: Map<string, string | boolean>, nam
   return value
 }
 
-export function dueDateFlag(flags: Map<string, string | boolean>, name: string): string {
+export function calendarDateFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = requiredString(flags, name)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new RemoteLinearWriteArgumentError('invalid_argument', `--${name} must use YYYY-MM-DD`)
@@ -167,6 +190,8 @@ export function dueDateFlag(flags: Map<string, string | boolean>, name: string):
   }
   return value
 }
+
+export const dueDateFlag = calendarDateFlag
 
 export function repeatedString(flags: Map<string, string | boolean>, name: string): string[] {
   const value = optionalString(flags, name)

@@ -9,6 +9,7 @@ import * as sharedProjectFormat from '../shared/linear/project-agent-format'
 import type { LinearProjectUpdateAddResult } from '../shared/linear/project-agent-writes'
 import {
   escapeJsonControlCharacters,
+  formatLinearProjectCreate,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
@@ -144,6 +145,7 @@ describe('shared renderer delegation', () => {
     expect(formatLinearProjectStatuses).toBe(sharedProjectFormat.formatLinearProjectStatuses)
     expect(formatLinearProjectLabels).toBe(sharedProjectFormat.formatLinearProjectLabels)
     expect(formatLinearProjectUpdateAdd).toBe(sharedProjectFormat.formatLinearProjectUpdateAdd)
+    expect(formatLinearProjectCreate).toBe(sharedProjectFormat.formatLinearProjectCreate)
     expect(sanitizeLinearProjectText).toBe(sharedProjectFormat.sanitizeLinearProjectText)
     expect(toSingleLineLinearProjectText).toBe(sharedProjectFormat.toSingleLineLinearProjectText)
   })

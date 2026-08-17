@@ -7,13 +7,17 @@ import type {
 } from './project-agent-access'
 import {
   LINEAR_PROJECT_STATUSES_NOUN,
+  formatLinearProjectCreate,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
   formatLinearProjectUpdateAdd,
   linearProjectFanoutWarningLines
 } from './project-agent-format'
-import type { LinearProjectUpdateAddResult } from './project-agent-writes'
+import type {
+  LinearProjectCreateResult,
+  LinearProjectUpdateAddResult
+} from './project-agent-writes'
 
 function boundedString(value: string) {
   return { value, truncated: false, chars: value.length, sha256: 'c'.repeat(64) }
@@ -124,6 +128,20 @@ const LABELS_FIXTURE = {
   }
 } as LinearProjectLabelsResult
 
+const CREATE_FIXTURE: LinearProjectCreateResult = {
+  project: {
+    id: 'project-1',
+    name: '\u001b[31mPayments V2\u001b[0m',
+    slugId: 'payments-v2',
+    url: 'https://linear.app/acme/project/payments-v2-8f3a'
+  },
+  meta: {
+    workspaceId: 'workspace-1',
+    writeId: '6d1c5a7e-3ac8-4f75-b9dc-f7af49d91234',
+    deduplicated: false
+  }
+}
+
 const UPDATE_ADD_FIXTURE: LinearProjectUpdateAddResult = {
   projectUpdate: {
     id: 'update-1',
@@ -196,6 +214,30 @@ describe('shared project rendering', () => {
     expect(formatLinearProjectStatuses(STATUSES_FIXTURE)).toBe(
       `${'In Progress'.padEnd(28)} ${'started'.padEnd(10)} ${'Acme'.padEnd(20)} status-1`
     )
+  })
+
+  it('renders the canonical project create block with control bytes stripped', () => {
+    expect(formatLinearProjectCreate(CREATE_FIXTURE)).toBe(
+      [
+        'Created Linear project Payments V2 (payments-v2)',
+        'URL: https://linear.app/acme/project/payments-v2-8f3a',
+        'Project id: project-1',
+        'Workspace: workspace-1  Write id: 6d1c5a7e-3ac8-4f75-b9dc-f7af49d91234'
+      ].join('\n')
+    )
+  })
+
+  it('marks a deduplicated create instead of claiming a new project', () => {
+    const output = formatLinearProjectCreate({
+      ...CREATE_FIXTURE,
+      meta: { ...CREATE_FIXTURE.meta, deduplicated: true }
+    })
+
+    expect(output.split('\n').slice(0, 2)).toEqual([
+      'Deduplicated Linear project Payments V2 (payments-v2)',
+      'Deduplicated: the pinned --write-id already created this project; nothing new was created.'
+    ])
+    expect(output).not.toContain('Created Linear project')
   })
 
   it('renders the canonical project-update post block', () => {

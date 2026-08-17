@@ -51,6 +51,45 @@ export const LINEAR_PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [PROJECT_METADATA_NOTE]
   },
   {
+    path: ['linear', 'project', 'create'],
+    summary: 'Create a Linear project',
+    usage:
+      'orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file <path|->] [--status <status>] [--lead me|<user>] [--member <user>...] [--label <label>...] [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--icon <icon>] [--write-id <uuid-v4>] [--workspace <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'name',
+      'team',
+      'description',
+      'content',
+      'content-file',
+      'status',
+      'lead',
+      'member',
+      'label',
+      'priority',
+      'start-date',
+      'target-date',
+      'color',
+      'icon',
+      'write-id',
+      'workspace'
+    ],
+    repeatableFlags: ['team', 'member', 'label'],
+    examples: [
+      'orca linear project create --name "Payments V2" --team ENG --description "Card + ACH rails"',
+      'orca linear project create --name "Payments V2" --team ENG --team DESIGN --content-file - --json'
+    ],
+    notes: [
+      '--name and at least one --team are required; there is no positional project argument.',
+      'Repeat --team, --member, and --label to pass more than one value.',
+      'All teams must resolve inside one workspace; --status and --label are project statuses and project labels, not issue workflow states or issue labels.',
+      'Use --content-file - to read the long Markdown overview from stdin; over SSH only - is accepted.',
+      '--color needs shell quoting because # starts a shell comment.',
+      '--write-id must be a UUID v4 and pins the created project id so a retry cannot create a second project.',
+      '--workspace all is not valid for a project write.'
+    ]
+  },
+  {
     path: ['linear', 'project', 'update', 'add'],
     summary: 'Post a Linear project update',
     usage:

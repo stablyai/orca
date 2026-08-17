@@ -1,6 +1,7 @@
 import {
   LINEAR_PROJECT_LABELS_NOUN,
   LINEAR_PROJECT_STATUSES_NOUN,
+  formatLinearProjectCreate,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
@@ -8,6 +9,7 @@ import {
   linearProjectFanoutWarningLines
 } from '../../shared/linear/project-agent-format'
 import {
+  isLinearProjectCreateResult,
   isLinearProjectLabelsResult,
   isLinearProjectShowResult,
   isLinearProjectStatusesResult,
@@ -37,6 +39,9 @@ export function formatRemoteLinearProjectCli(
   }
   if (isLinearProjectUpdateAddResult(result)) {
     return { stdout: `${formatLinearProjectUpdateAdd(result)}\n`, stderr: '' }
+  }
+  if (isLinearProjectCreateResult(result)) {
+    return { stdout: `${formatLinearProjectCreate(result)}\n`, stderr: '' }
   }
   return null
 }

@@ -1,31 +1,13 @@
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
-
-const REMOTE_BOOLEAN_FLAGS = new Set([
-  'all',
-  'attachments',
-  'children',
-  'comments',
-  'current',
-  'full',
-  'help',
-  'hide-diff',
-  'inject',
-  'include-archived',
-  'include-visual-layouts',
-  'json',
-  'me',
-  'relations',
-  'parent-current',
-  'unread',
-  'updates',
-  'wait'
-])
-const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_REMOTE_STRING_FLAGS = new Set(['label'])
+import {
+  foldRemoteFlagOccurrences,
+  isRemoteBooleanFlag,
+  type RemoteFlagOccurrence
+} from './ssh-remote-cli-command-grammar'
 
 export function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
   const commandPath: string[] = []
-  const flags = new Map<string, string | boolean>()
+  const occurrences: RemoteFlagOccurrence[] = []
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
     if (!token.startsWith('--')) {
@@ -36,20 +18,24 @@ export function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
     // Why: the SSH relay-backed shim should accept values beginning with `--` via `--flag=value`.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      setRemoteFlag(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      occurrences.push({
+        name: assignment.slice(0, equalsIndex),
+        value: assignment.slice(equalsIndex + 1)
+      })
       continue
     }
 
     const flag = assignment
     const next = argv[i + 1]
     if (!isRemoteBooleanFlag(flag, commandPath) && next && !next.startsWith('--')) {
-      setRemoteFlag(flags, flag, next)
+      occurrences.push({ name: flag, value: next })
       i += 1
     } else {
-      setRemoteFlag(flags, flag, true)
+      occurrences.push({ name: flag, value: true })
     }
   }
-  return { commandPath, flags }
+  // Why: repeatability is command-scoped, so occurrences only fold once the full path is known.
+  return { commandPath, flags: foldRemoteFlagOccurrences(commandPath, occurrences) }
 }
 
 export function resolveRemoteCliHandle(
@@ -92,29 +78,4 @@ export function optionalRemoteCliNumber(
     throw new RemoteCliArgumentError('invalid_argument', `Invalid numeric value for --${name}`)
   }
   return parsed
-}
-
-function isRemoteBooleanFlag(flag: string, commandPath: string[]): boolean {
-  // Why: Android launch already uses --activity <name>; only Linear issue reads use it as a boolean.
-  return (
-    REMOTE_BOOLEAN_FLAGS.has(flag) ||
-    (flag === 'activity' && commandPath[0] === 'linear' && commandPath[1] === 'issue')
-  )
-}
-
-function setRemoteFlag(
-  flags: Map<string, string | boolean>,
-  name: string,
-  value: string | boolean
-): void {
-  const previous = flags.get(name)
-  if (
-    typeof previous === 'string' &&
-    typeof value === 'string' &&
-    REPEATABLE_REMOTE_STRING_FLAGS.has(name)
-  ) {
-    flags.set(name, `${previous}${REPEATED_FLAG_SEPARATOR}${value}`)
-    return
-  }
-  flags.set(name, value)
 }

@@ -83,6 +83,7 @@ orca linear project show (<project> | --id <project>) [--updates] [--updates-lim
 orca linear project statuses [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear project labels [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear project update add (<project> | --id <project>) (--body <text> | --body-file <path|->) [--health on-track|at-risk|off-track] [--hide-diff] [--write-id <uuid>] [--workspace <id>] [--json]
+orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file <path|->] [--status <status>] [--lead me|<user>] [--member <user>]... [--label <label>]... [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--icon <icon>] [--write-id <uuid-v4>] [--workspace <id>] [--json]
 orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear status set [<id>] [--current] --to <state> [--workspace <id>] [--json]
 orca linear assignee set [<id>] [--current] (--me | --to-id <userId>) [--workspace <id>] [--json]
@@ -120,6 +121,8 @@ Prefer IDs for automation. Names are accepted only when they exactly and uniquel
 `project show` accepts a project UUID, `slugId`, Linear project URL, or unique exact name, and takes the same value as `--id`. Add `--updates` to include the newest project status posts (`--updates-limit` requires `--updates` and is capped at 25); the default read never fetches update bodies. Project statuses and project labels are workspace entities distinct from `team states` and `team labels`, so resolve them with `project statuses` and `project labels` rather than the issue metadata commands. `--workspace all` is accepted by `project list`, `project statuses`, and `project labels`, and rejected for `project show`.
 
 `project update add` posts to a project's Updates feed. It is an explicit, user-authorized action, never an implicit side effect of finishing work. It takes the same `--write-id` retry contract as `comment add`: reuse the id from a `linear_write_unconfirmed` error to retry that exact post without duplicating it. `--health` accepts only `on-track`, `at-risk`, and `off-track`.
+
+`project create` needs `--name` and at least one `--team`, and every repeated `--team` must resolve inside one workspace. Repeated `--team`, `--member`, and `--label` values are collected for this command. Resolve `--status` and `--label` with `project statuses` and `project labels`, not `team states` or `team labels`. Its `--write-id` must be a UUID v4, unlike every other Linear write id. Quote `--color` so the shell keeps the leading `#`. Creating a project is an explicit, user-authorized action.
 
 
 `save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, or parent.

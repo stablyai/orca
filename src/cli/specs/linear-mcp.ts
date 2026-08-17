@@ -27,6 +27,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'workspace',
       'id'
     ],
+    repeatableFlags: ['label'],
     positionalArgs: ['id'],
     examples: [
       'orca linear save-issue --team ENG --title "Fix auth" --priority high --json',

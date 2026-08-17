@@ -3,19 +3,26 @@ import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import {
   LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES,
   toLinearProjectUpdateHealth,
+  type LinearProjectCreateRequest,
   type LinearProjectUpdateAddRequest
 } from '../../shared/linear/project-agent-writes'
 import type { LinearProjectUpdateHealth } from '../../shared/linear/project-agent-access'
 import {
   RemoteLinearWriteArgumentError,
+  calendarDateFlag,
   call,
+  hexColorFlag,
   isRemoteCommand,
   optionalString,
   optionalWriteId,
+  optionalWriteIdV4,
+  priorityFlag,
   readRemoteBody,
   rejectAllWorkspaceForWrite,
   remotePositional,
+  repeatedString,
   requiredString,
+  requiredStringAllowingEmpty,
   validateLinearRemoteArgs
 } from './ssh-remote-linear-write-support'
 
@@ -24,21 +31,34 @@ type ParsedRemoteCli = {
   flags: Map<string, string | boolean>
 }
 
-const LINEAR_PROJECT_WRITE_FLAGS = [
-  'help',
-  'json',
-  'pairing-code',
-  'environment',
-  'workspace',
-  'id'
-]
+const LINEAR_PROJECT_WRITE_FLAGS = ['help', 'json', 'pairing-code', 'environment', 'workspace']
+const LINEAR_PROJECT_TARGET_WRITE_FLAGS = [...LINEAR_PROJECT_WRITE_FLAGS, 'id']
 const LINEAR_PROJECT_UPDATE_ADD_COMMAND = ['linear', 'project', 'update', 'add']
 const LINEAR_PROJECT_UPDATE_ADD_FLAGS = new Set([
-  ...LINEAR_PROJECT_WRITE_FLAGS,
+  ...LINEAR_PROJECT_TARGET_WRITE_FLAGS,
   'body',
   'body-file',
   'health',
   'hide-diff',
+  'write-id'
+])
+const LINEAR_PROJECT_CREATE_COMMAND = ['linear', 'project', 'create']
+const LINEAR_PROJECT_CREATE_FLAGS = new Set([
+  ...LINEAR_PROJECT_WRITE_FLAGS,
+  'name',
+  'team',
+  'description',
+  'content',
+  'content-file',
+  'status',
+  'lead',
+  'member',
+  'label',
+  'priority',
+  'start-date',
+  'target-date',
+  'color',
+  'icon',
   'write-id'
 ])
 
@@ -54,7 +74,80 @@ export async function tryDispatchRemoteLinearProjectWriteCli(
       buildRemoteLinearProjectUpdateAddRequest(parsed, stdin)
     )
   }
+  if (isRemoteCommand(parsed, ...LINEAR_PROJECT_CREATE_COMMAND)) {
+    return await call(
+      dispatcher,
+      'linear.agentProjectCreate',
+      buildRemoteLinearProjectCreateRequest(parsed, stdin)
+    )
+  }
   return null
+}
+
+function buildRemoteLinearProjectCreateRequest(
+  parsed: ParsedRemoteCli,
+  stdin: string | undefined
+): LinearProjectCreateRequest {
+  validateLinearRemoteArgs(
+    parsed,
+    LINEAR_PROJECT_CREATE_FLAGS,
+    LINEAR_PROJECT_CREATE_COMMAND,
+    0,
+    'id'
+  )
+  rejectAllWorkspaceForWrite(parsed.flags)
+  const name = requiredString(parsed.flags, 'name').trim()
+  if (!name) {
+    throw new RemoteLinearWriteArgumentError('invalid_argument', '--name must not be empty')
+  }
+  const teams = repeatedString(parsed.flags, 'team')
+  if (teams.length === 0) {
+    throw new RemoteLinearWriteArgumentError('invalid_argument', 'Missing required --team')
+  }
+  // Why: references travel as user input; the host that owns the Linear token resolves them.
+  return {
+    name,
+    teams,
+    ...remoteProjectCreateText(parsed.flags, stdin),
+    status: optionalString(parsed.flags, 'status'),
+    lead: optionalString(parsed.flags, 'lead'),
+    ...(parsed.flags.has('member') ? { members: repeatedString(parsed.flags, 'member') } : {}),
+    ...(parsed.flags.has('label') ? { labels: repeatedString(parsed.flags, 'label') } : {}),
+    ...remoteProjectCreateScalars(parsed.flags),
+    writeId: optionalWriteIdV4(parsed.flags),
+    workspaceId: optionalString(parsed.flags, 'workspace')
+  }
+}
+
+/** Description and content are never trimmed: empty prose is a meaningful create value. */
+function remoteProjectCreateText(
+  flags: Map<string, string | boolean>,
+  stdin: string | undefined
+): { description?: string; content?: string } {
+  const content = readRemoteBody(flags, false, stdin, { value: 'content', file: 'content-file' })
+  return {
+    ...(flags.has('description')
+      ? { description: requiredStringAllowingEmpty(flags, 'description') }
+      : {}),
+    ...(content !== undefined ? { content } : {})
+  }
+}
+
+/** Spread per flag so priority `none` (0) survives instead of being dropped as falsy. */
+function remoteProjectCreateScalars(flags: Map<string, string | boolean>): {
+  priority?: number
+  startDate?: string
+  targetDate?: string
+  color?: string
+  icon?: string
+} {
+  return {
+    ...(flags.has('priority') ? { priority: priorityFlag(flags, 'priority') } : {}),
+    ...(flags.has('start-date') ? { startDate: calendarDateFlag(flags, 'start-date') } : {}),
+    ...(flags.has('target-date') ? { targetDate: calendarDateFlag(flags, 'target-date') } : {}),
+    ...(flags.has('color') ? { color: hexColorFlag(flags, 'color') } : {}),
+    icon: optionalString(flags, 'icon')
+  }
 }
 
 function buildRemoteLinearProjectUpdateAddRequest(

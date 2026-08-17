@@ -51,7 +51,7 @@ function isLinearBodyWriteCommand(commandPath: string[]): boolean {
   if (commandPath[1] === 'project') {
     // Why: the relay only forwards stdin for commands listed here, so every
     // Linear write that accepts `-` has to be named or its `-` form reads nothing.
-    return commandPath[2] === 'update' && commandPath[3] === 'add'
+    return commandPath[2] === 'create' || (commandPath[2] === 'update' && commandPath[3] === 'add')
   }
   return (commandPath[1] === 'comment' && commandPath[2] === 'add') || commandPath[1] === 'create'
 }

@@ -345,7 +345,8 @@ describe('SSH Linear parsing after adding --updates', () => {
     ])
     const issue = parseRemoteCliArgs(['linear', 'issue', 'ENG-123', '--activity', '--full'])
 
-    expect(listIssues.flags.get('label')).toBe('Bug\u0000Growth')
+    // Why: list-issues reads one --label, so the command grammar leaves it last-value-wins.
+    expect(listIssues.flags.get('label')).toBe('Growth')
     expect(listIssues.flags.get('include-archived')).toBe(true)
     expect(issue.flags.get('activity')).toBe(true)
     expect(issue.commandPath).toEqual(['linear', 'issue', 'ENG-123'])

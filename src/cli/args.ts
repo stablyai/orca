@@ -1,13 +1,18 @@
 import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
 import { specPaths, type CommandSpec } from './command-spec'
+import { recordFlagOccurrence } from './repeatable-flags'
 
 export { specPaths }
 export type { CommandSpec }
+export { REPEATED_FLAG_SEPARATOR } from './repeatable-flags'
 
 export type ParsedArgs = {
   commandPath: string[]
   flags: Map<string, string | boolean>
+  // Why: repeated values are folded only after the command is resolved, so the
+  // parser hands every occurrence downstream instead of deciding here.
+  flagOccurrences?: Map<string, (string | boolean)[]>
   positionalFlagConflicts?: string[]
 }
 
@@ -58,18 +63,6 @@ export const BOOLEAN_FLAGS = new Set([
   'wait'
 ])
 
-export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
-
-function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
-  const existing = flags.get(name)
-  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
-    flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
-    return
-  }
-  flags.set(name, value)
-}
-
 function commandPathStartsAt(argv: string[], tokenIndex: number, path: string[]): boolean {
   let cursor = tokenIndex
   for (const part of path) {
@@ -89,6 +82,10 @@ function commandPathStartsAt(argv: string[], tokenIndex: number, path: string[])
 export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
+  const flagOccurrences = new Map<string, (string | boolean)[]>()
+  const setFlag = (name: string, value: string | boolean): void => {
+    recordFlagOccurrence(flags, flagOccurrences, name, value)
+  }
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
@@ -103,33 +100,33 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setFlag(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
     if (BOOLEAN_FLAGS.has(flag)) {
-      flags.set(flag, true)
+      setFlag(flag, true)
       continue
     }
     // Why: a pre-command flag must not consume a registry-resolvable command path.
     const startsCommandAt = (tokenIndex: number): boolean =>
       commandPaths?.some((path) => commandPathStartsAt(argv, tokenIndex, path)) ?? false
     if (commandPath.length === 0 && startsCommandAt(i + 1) && !startsCommandAt(i + 2)) {
-      flags.set(flag, true)
+      setFlag(flag, true)
       continue
     }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {
-      flags.set(flag, true)
+      setFlag(flag, true)
       continue
     }
-    setFlagValue(flags, flag, next)
+    setFlag(flag, next)
     i += 1
   }
 
-  return { commandPath, flags }
+  return { commandPath, flags, flagOccurrences }
 }
 
 export function resolveHelpPath(parsed: ParsedArgs): string[] | null {
@@ -229,7 +226,12 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
           flags.set(name, value)
         }
       })
-      return { commandPath: spec.path, flags, positionalFlagConflicts }
+      return {
+        commandPath: spec.path,
+        flags,
+        flagOccurrences: parsed.flagOccurrences,
+        positionalFlagConflicts
+      }
     }
   }
   return parsed

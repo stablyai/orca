@@ -238,7 +238,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'linear-project-writes',
-    keys: ['linear project update add'],
+    keys: ['linear project create', 'linear project update add'],
     load: async () =>
       (await import('./handlers/linear-project-writes.js')).LINEAR_PROJECT_WRITES_HANDLERS
   },

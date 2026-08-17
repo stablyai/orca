@@ -20,6 +20,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'orca skills share --skill <selector> [--skill <selector> ...] --bundle-name <name> ' +
       '[--release-notes <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'bundle-name', 'release-notes'],
+    repeatableFlags: ['skill'],
     notes: [
       'Requires the default-off permission in Settings → Share Skills.',
       'The bundle name may be human-readable; Orca converts it to a portable lowercase package name.',
@@ -64,6 +65,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'orca skills install [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
       '[--local] [--dry-run] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'dry-run'],
+    repeatableFlags: ['skill'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
       'Resolves to the same `npx skills add <repo> --skill <name> ...` command used by ' +
@@ -96,6 +98,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Update already-installed Orca skills via the community skills CLI',
     usage: 'orca skills update [--skill <name>]... [--all] [--local] [--dry-run] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'local', 'dry-run'],
+    repeatableFlags: ['skill'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
       'Resolves to the same `npx skills update <names...>` command used by Orca Settings, ' +

@@ -476,6 +476,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear project show' && flag === 'updates-limit') {
     return '--updates-limit <n>   Project updates to include; requires --updates (max 25)'
   }
+  if (command === 'linear project create') {
+    const projectCreateHelp = linearProjectCreateFlagHelp(flag)
+    if (projectCreateHelp) {
+      return projectCreateHelp
+    }
+  }
   if (command === 'linear project update add' && flag === 'id') {
     return '--id <project>        Linear project UUID, slugId, URL, or unique exact name'
   }
@@ -548,6 +554,27 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--key <key>            Single key, e.g. Return, Escape, Tab, Left, or PageUp'
   }
   return formatFlagHelp(flag)
+}
+
+function linearProjectCreateFlagHelp(flag: string): string | undefined {
+  const helpByFlag: Record<string, string> = {
+    name: '--name <title>        New Linear project name',
+    team: '--team <key|id>       Linear team; repeat for more than one team',
+    description: '--description <text>  Short project summary',
+    content: '--content <text>      Long Markdown project overview',
+    'content-file': '--content-file <path|-> Read the project overview from a file or stdin',
+    status: '--status <status>     Project status name or id (not an issue workflow state)',
+    lead: '--lead me|<user>      Project lead: me, a user id, email, or exact display name',
+    member: '--member <user>       Project member; repeat for more than one member',
+    label: '--label <label>       Project label; repeat for more than one label',
+    priority: '--priority <level>    none, low, medium, high, or urgent',
+    'start-date': '--start-date <date>   Project start date as YYYY-MM-DD',
+    'target-date': '--target-date <date>  Project target date as YYYY-MM-DD',
+    color: '--color <#RRGGBB>     Project color; quote it so the shell keeps the #',
+    icon: '--icon <icon>         Linear project icon name',
+    'write-id': '--write-id <uuid-v4>  UUID v4 pinning the created project id for retries'
+  }
+  return helpByFlag[flag]
 }
 
 export function formatFlagHelp(flag: string): string {

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
 import {
-  REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
   normalizeCommandPositionals,
   parseArgs,
@@ -150,10 +149,18 @@ describe('parseArgs', () => {
     expect(parsed.positionalFlagConflicts).toEqual([])
   })
 
-  it('preserves repeated string flags', () => {
+  it('records every occurrence while keeping last-value-wins in the flag map', () => {
     const parsed = parseArgs(['linear', 'label', 'add', '--label', 'Bug', '--label=Regression'])
 
-    expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
+    expect(parsed.flags.get('label')).toBe('Regression')
+    expect(parsed.flagOccurrences?.get('label')).toEqual(['Bug', 'Regression'])
+  })
+
+  it('records boolean occurrences so a valueless repeat is not folded as text', () => {
+    const parsed = parseArgs(['skills', 'install', '--skill', 'orca-cli', '--all'])
+
+    expect(parsed.flagOccurrences?.get('skill')).toEqual(['orca-cli'])
+    expect(parsed.flagOccurrences?.get('all')).toEqual([true])
   })
 
   it('parses --updates as a boolean flag without swallowing the next token', () => {

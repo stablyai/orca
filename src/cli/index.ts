@@ -11,6 +11,7 @@ import { isCommandPathGroup } from './command-path-groups'
 import { dispatch } from './dispatch'
 import { reportCliError } from './format'
 import { printHelp } from './help'
+import { foldRepeatableFlags } from './repeatable-flags'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 
@@ -61,7 +62,11 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
-  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
+  // Why: repeated values collect only for flags the resolved command declares
+  // repeatable, so the fold has to sit after command resolution and before any
+  // handler or validation reads the flag map.
+  const resolved = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
+  const parsed = { ...resolved, flags: foldRepeatableFlags(COMMAND_SPECS, resolved) }
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
