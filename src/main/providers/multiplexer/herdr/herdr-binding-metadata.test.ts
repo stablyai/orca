@@ -5,6 +5,7 @@ import {
   ORCA_BINDING_TOKEN,
   orcaPaneBinding,
   orcaWorkspaceBinding,
+  reclaimExclusiveOrcaPaneBinding,
   recoverPaneIdsFromStockLayout,
   restoreOrcaPaneBindings
 } from './herdr-binding-metadata'
@@ -173,6 +174,57 @@ describe('stock Herdr metadata bindings', () => {
       paneId: 'w1:p1',
       binding: orcaPaneBinding('project-1', 'left')
     })
+  })
+
+  it('reclaims a duplicate pane token onto the persisted pane and clears the rest', async () => {
+    const binding = orcaPaneBinding('project-1', 'leaf-a')
+    const cleared: string[] = []
+    const transport: HerdrHostTransport = {
+      ensureSession: async () => {},
+      request: async <T>(_s: string, _m: string, params: unknown): Promise<HerdrResponse<T>> => {
+        const input = params as { pane_id: string; tokens?: Record<string, string | null> }
+        if (input.tokens?.[ORCA_BINDING_TOKEN] === null) {
+          cleared.push(input.pane_id)
+        }
+        return { id: '1', result: { type: 'ok' } as unknown as T }
+      }
+    }
+    const snapshot: HerdrSessionSnapshot = {
+      version: '1',
+      protocol: 1,
+      workspaces: [],
+      tabs: [],
+      panes: [
+        {
+          pane_id: 'w7:p2',
+          tab_id: 'w7:t2',
+          workspace_id: 'w7',
+          tokens: { [ORCA_BINDING_TOKEN]: binding }
+        },
+        {
+          pane_id: 'w7:p1',
+          tab_id: 'w7:t1',
+          workspace_id: 'w7',
+          tokens: { [ORCA_BINDING_TOKEN]: binding }
+        }
+      ],
+      layouts: [],
+      agents: []
+    }
+
+    const winner = await reclaimExclusiveOrcaPaneBinding(transport, 'orca', snapshot, binding, {
+      preferredPaneId: 'w7:p1',
+      workspaceId: 'w7'
+    })
+
+    expect(winner?.pane_id).toBe('w7:p1')
+    expect(cleared).toEqual(['w7:p2'])
+    expect(
+      snapshot.panes.find((pane) => pane.pane_id === 'w7:p2')?.tokens?.[ORCA_BINDING_TOKEN]
+    ).toBeUndefined()
+    expect(
+      snapshot.panes.find((pane) => pane.pane_id === 'w7:p1')?.tokens?.[ORCA_BINDING_TOKEN]
+    ).toBe(binding)
   })
 
   it('claims a free binding once and refuses to double-claim it on another live pane', async () => {

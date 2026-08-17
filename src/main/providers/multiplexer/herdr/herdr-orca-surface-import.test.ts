@@ -60,6 +60,42 @@ describe('collectUnboundHerdrSurfaces', () => {
     expect(surfaces[0].ptyId.startsWith('herdr:')).toBe(true)
   })
 
+  it('imports a Herdr-created tab even when its pane still has a stale binding', () => {
+    const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
+    const staleBinding = orcaPaneBinding(project.id, 'gone-leaf')
+    const surfaces = collectUnboundHerdrSurfaces(
+      'orca',
+      {
+        project,
+        worktrees: [worktree],
+        tabsByWorktreeId: { 'wt-1': [] },
+        layoutsByTabId: {}
+      },
+      snapshot({
+        workspaces: [
+          { workspace_id: 'w1', label: 'repo', tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding } }
+        ],
+        tabs: [{ tab_id: 'w1:t2', workspace_id: 'w1', label: 'logs' }],
+        panes: [
+          {
+            pane_id: 'w1:p9',
+            tab_id: 'w1:t2',
+            workspace_id: 'w1',
+            tokens: { [ORCA_BINDING_TOKEN]: staleBinding }
+          }
+        ]
+      }),
+      new Map()
+    )
+
+    expect(surfaces).toHaveLength(1)
+    expect(surfaces[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      paneId: 'w1:p9',
+      title: 'logs'
+    })
+  })
+
   it('imports an unbound sibling pane as a split on the bound Orca tab', () => {
     const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
     const leafId = 'leaf-1'

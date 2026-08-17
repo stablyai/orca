@@ -26,6 +26,23 @@ describe('stock Herdr CLI request adapter', () => {
       '--token',
       'orca_binding=abc123'
     ])
+    expect(
+      herdrStockCliInvocation('orca-app', 'pane.report_metadata', {
+        pane_id: 'w1:p2',
+        source: 'orca',
+        tokens: { orca_binding: null }
+      }).args
+    ).toEqual([
+      '--session',
+      'orca-app',
+      'pane',
+      'report-metadata',
+      'w1:p2',
+      '--source',
+      'orca',
+      '--clear-token',
+      'orca_binding'
+    ])
   })
 
   it('normalizes pane read text into the provider response contract', () => {

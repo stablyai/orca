@@ -8,7 +8,7 @@ import type {
   HerdrSessionSnapshot
 } from './herdr-runtime-contract'
 import { HerdrRuntimeManager } from './herdr-runtime-manager'
-import { ORCA_BINDING_TOKEN } from './herdr-binding-metadata'
+import { ORCA_BINDING_TOKEN, orcaPaneBinding, orcaWorkspaceBinding } from './herdr-binding-metadata'
 
 function project(): Project {
   return {
@@ -177,10 +177,18 @@ function stockTransport(
         return { id: 'workspace-metadata', result: { type: 'ok' } }
       }
       if (method === 'pane.report_metadata') {
-        const input = params as { pane_id: string; tokens: Record<string, string> }
+        const input = params as { pane_id: string; tokens: Record<string, string | null> }
         const pane = snapshot.panes.find((candidate) => candidate.pane_id === input.pane_id)
         if (pane) {
-          pane.tokens = { ...pane.tokens, ...input.tokens }
+          const tokens = { ...pane.tokens }
+          for (const [key, value] of Object.entries(input.tokens ?? {})) {
+            if (value === null) {
+              delete tokens[key]
+            } else {
+              tokens[key] = value
+            }
+          }
+          pane.tokens = tokens
         }
         return { id: 'pane-metadata', result: { type: 'ok' } }
       }
@@ -284,6 +292,35 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     )
     expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')).toBe(
       'w1:p2'
+    )
+  })
+
+  it('adopts a uniquely checked-out workspace even when its orca token is stale', async () => {
+    const host = stockTransport({
+      workspaces: [
+        {
+          workspace_id: 'w7',
+          label: 'repo',
+          worktree: { checkout_path: '/repo' },
+          tokens: { [ORCA_BINDING_TOKEN]: 'stale-from-previous-project' }
+        }
+      ]
+    })
+    const manager = new HerdrRuntimeManager(host.transport)
+    await manager.reconcileProjectHost(graph())
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(0)
+    expect(host.snapshot.workspaces).toHaveLength(1)
+    expect(host.snapshot.workspaces[0].workspace_id).toBe('w7')
+    expect(host.snapshot.workspaces[0].tokens?.[ORCA_BINDING_TOKEN]).toBe(
+      orcaWorkspaceBinding('project-1', {
+        id: 'worktree-1',
+        instanceId: 'instance-1',
+        path: '/repo',
+        displayName: 'repo'
+      })
     )
   })
 
@@ -513,6 +550,85 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     expect(
       manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')
     ).not.toBeNull()
+  })
+
+  it('reclaims a duplicate stock pane binding and imports the extra herdr tabs', async () => {
+    const leafId = '9ff5d61c-7a93-445e-8fe9-4783e56808d5'
+    const worktree = {
+      id: 'worktree-1',
+      instanceId: 'instance-1',
+      path: '/repo',
+      displayName: 'repo'
+    }
+    const workspaceBinding = orcaWorkspaceBinding('project-1', worktree)
+    const paneBinding = orcaPaneBinding('project-1', leafId)
+    const host = stockTransport({
+      workspaces: [
+        {
+          workspace_id: 'w7',
+          label: 'repo',
+          tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding },
+          worktree: { checkout_path: '/repo' }
+        }
+      ],
+      tabs: [
+        { tab_id: 'w7:t1', workspace_id: 'w7', label: 'Terminal' },
+        { tab_id: 'w7:t2', workspace_id: 'w7', label: 'logs' },
+        { tab_id: 'w7:t3', workspace_id: 'w7', label: 'git' }
+      ],
+      panes: [
+        {
+          pane_id: 'w7:p1',
+          tab_id: 'w7:t1',
+          workspace_id: 'w7',
+          tokens: { [ORCA_BINDING_TOKEN]: paneBinding }
+        },
+        {
+          pane_id: 'w7:p2',
+          tab_id: 'w7:t2',
+          workspace_id: 'w7',
+          tokens: { [ORCA_BINDING_TOKEN]: paneBinding }
+        },
+        { pane_id: 'w7:p3', tab_id: 'w7:t3', workspace_id: 'w7' }
+      ]
+    })
+    const persist = vi.fn()
+    const present = vi.fn()
+    const manager = new HerdrRuntimeManager(host.transport, undefined, undefined, {
+      persist,
+      present
+    })
+
+    await expect(
+      manager.reconcileProjectHost({
+        ...singleLeafGraph(),
+        layoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null
+          }
+        }
+      })
+    ).resolves.toBeTruthy()
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'tab.create')
+    ).toHaveLength(0)
+    expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', leafId)).toBe(
+      'w7:p1'
+    )
+    expect(
+      host.snapshot.panes.filter((pane) => pane.tokens?.[ORCA_BINDING_TOKEN] === paneBinding)
+    ).toHaveLength(1)
+    expect(
+      host.snapshot.panes.find((pane) => pane.pane_id === 'w7:p2')?.tokens?.[ORCA_BINDING_TOKEN]
+    ).not.toBe(paneBinding)
+    expect(persist.mock.calls.map((call) => call[0].paneId).sort()).toEqual(['w7:p2', 'w7:p3'])
+    expect(present).toHaveBeenCalledTimes(2)
   })
 
   it('imports an unbound sibling pane through surface sync persist and present', async () => {

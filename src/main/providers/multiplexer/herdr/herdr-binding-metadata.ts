@@ -26,6 +26,66 @@ export function findUniqueHerdrMatch<T>(
   return matches[0]
 }
 
+export type ReclaimOrcaPaneBindingOptions = {
+  preferredPaneId?: string
+  workspaceId?: string
+}
+
+type ReclaimableHerdrPane = {
+  pane_id: string
+  workspace_id?: string
+  tokens?: Record<string, string>
+}
+
+// Stock pane.report_metadata is not exclusive. When two panes carry the same
+// orca_binding, keep one owner and persist-clear the rest.
+export async function reclaimExclusiveOrcaPaneBinding<T extends ReclaimableHerdrPane>(
+  transport: HerdrHostTransport,
+  sessionName: string,
+  snapshot: { panes: T[] },
+  binding: string,
+  options: ReclaimOrcaPaneBindingOptions = {}
+): Promise<T | null> {
+  const matches = snapshot.panes.filter((pane) => pane.tokens?.[ORCA_BINDING_TOKEN] === binding)
+  if (matches.length === 0) {
+    return null
+  }
+  const winner = pickExclusiveOrcaPane(matches, options)
+  for (const extra of matches) {
+    if (extra.pane_id === winner.pane_id) {
+      continue
+    }
+    await unwrapHerdrResponse(
+      await transport.request(sessionName, 'pane.report_metadata', {
+        pane_id: extra.pane_id,
+        source: ORCA_METADATA_SOURCE,
+        tokens: { [ORCA_BINDING_TOKEN]: null }
+      })
+    )
+    if (extra.tokens) {
+      delete extra.tokens[ORCA_BINDING_TOKEN]
+    }
+  }
+  return winner
+}
+
+function pickExclusiveOrcaPane<T extends ReclaimableHerdrPane>(
+  matches: readonly T[],
+  options: ReclaimOrcaPaneBindingOptions
+): T {
+  if (options.preferredPaneId) {
+    const preferred = matches.find((pane) => pane.pane_id === options.preferredPaneId)
+    if (preferred) {
+      return preferred
+    }
+  }
+  const scoped = options.workspaceId
+    ? matches.filter((pane) => pane.workspace_id === options.workspaceId)
+    : matches
+  const pool = scoped.length > 0 ? scoped : matches
+  return [...pool].sort((left, right) => left.pane_id.localeCompare(right.pane_id))[0]
+}
+
 export function orcaPaneBinding(projectId: string, leafId: string): string {
   return createHash('sha256').update(`orca:binding:${projectId}:${leafId}`).digest('hex')
 }
@@ -141,20 +201,20 @@ export async function restoreOrcaPaneBindings(
     }
 
     const pane = snapshot.panes.find((p) => p.pane_id === paneId)
-    if (pane?.tokens?.[ORCA_BINDING_TOKEN] === binding) {
-      continue
+    if (pane && pane.tokens?.[ORCA_BINDING_TOKEN] !== binding) {
+      await claimOrcaPaneBinding(transport, sessionName, projectId, leafId, pane, snapshot)
+    } else if (!pane) {
+      await unwrapHerdrResponse(
+        await transport.request(sessionName, 'pane.report_metadata', {
+          pane_id: paneId,
+          source: ORCA_METADATA_SOURCE,
+          tokens: { [ORCA_BINDING_TOKEN]: binding }
+        })
+      )
     }
-
-    await unwrapHerdrResponse(
-      await transport.request(sessionName, 'pane.report_metadata', {
-        pane_id: paneId,
-        source: ORCA_METADATA_SOURCE,
-        tokens: { [ORCA_BINDING_TOKEN]: binding }
-      })
-    )
-    if (pane) {
-      pane.tokens = { ...pane.tokens, [ORCA_BINDING_TOKEN]: binding }
-    }
+    await reclaimExclusiveOrcaPaneBinding(transport, sessionName, snapshot, binding, {
+      preferredPaneId: paneId
+    })
   }
 }
 

@@ -69,9 +69,6 @@ function collectUnboundTabSurfaces(
 ): HerdrImportedSurface[] {
   const panes = snapshot.panes.filter((pane) => pane.tab_id === tab.tab_id)
   const unbound = panes.filter((pane) => !pane.tokens?.[ORCA_BINDING_TOKEN])
-  if (unbound.length === 0) {
-    return []
-  }
   const owner = findOrcaOwnerForHerdrTab(
     sessionName,
     graph,
@@ -80,12 +77,18 @@ function collectUnboundTabSurfaces(
     paneIdsBySessionAndBinding
   )
   if (!owner) {
-    const root = unbound[0]
+    const root = unbound[0] ?? panes[0]
+    if (!root) {
+      return []
+    }
     const leafId = randomUUID()
     const tabId = randomUUID()
     return [
       surfaceFor(graph, worktreeId, tabId, leafId, root, tab.label, undefined, snapshot, tab.tab_id)
     ]
+  }
+  if (unbound.length === 0) {
+    return []
   }
   return unbound.map((pane) => {
     const leafId = randomUUID()

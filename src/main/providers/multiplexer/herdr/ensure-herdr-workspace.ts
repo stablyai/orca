@@ -188,8 +188,7 @@ function findAdoptableWorkspace(
 ): HerdrWorkspace | null {
   const byCheckout = findUniqueHerdrMatch(
     workspaces,
-    (workspace) =>
-      !workspace.tokens?.[ORCA_BINDING_TOKEN] && workspaceMatchesCheckout(workspace, worktree.path),
+    (workspace) => workspaceMatchesCheckout(workspace, worktree.path),
     `workspace checkout ${worktree.path}`
   )
   if (byCheckout) {

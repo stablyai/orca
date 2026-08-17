@@ -14,6 +14,7 @@ import {
   ORCA_BINDING_TOKEN,
   ORCA_METADATA_SOURCE,
   orcaPaneBinding,
+  reclaimExclusiveOrcaPaneBinding,
   restoreOrcaPaneBindings
 } from './herdr-binding-metadata'
 import { applyTabLayout, ensureTabSplits } from './herdr-layout-reconcile'
@@ -50,10 +51,15 @@ export async function ensureTabLayout(
     return
   }
   const rootBinding = orcaPaneBinding(projectId, rootLeafId)
-  let rootPane = findUniqueHerdrMatch(
-    snapshot.panes,
-    (pane) => pane.tokens?.[ORCA_BINDING_TOKEN] === rootBinding,
-    `pane binding for ${rootLeafId}`
+  let rootPane = await reclaimExclusiveOrcaPaneBinding(
+    transport,
+    sessionName,
+    snapshot,
+    rootBinding,
+    {
+      preferredPaneId: persistedPaneIds[rootLeafId],
+      workspaceId
+    }
   )
   const hintedPane = collectLeafIds(root)
     .map((leafId) => persistedPaneIds[leafId])

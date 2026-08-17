@@ -6,9 +6,8 @@ import type { LayoutApplyResult, LayoutNode } from './herdr-socket-types'
 import {
   claimOrcaPaneBinding,
   collectLeafIds,
-  findUniqueHerdrMatch,
-  ORCA_BINDING_TOKEN,
-  orcaPaneBinding
+  orcaPaneBinding,
+  reclaimExclusiveOrcaPaneBinding
 } from './herdr-binding-metadata'
 
 // Convert an Orca terminal layout tree into a herdr LayoutNode. Leaves are
@@ -108,11 +107,7 @@ export async function ensureTabSplits(
     return
   }
   const binding = orcaPaneBinding(projectId, secondLeafId)
-  let secondPane = findUniqueHerdrMatch(
-    snapshot.panes,
-    (pane) => pane.tokens?.[ORCA_BINDING_TOKEN] === binding,
-    `pane binding for ${secondLeafId}`
-  )
+  let secondPane = await reclaimExclusiveOrcaPaneBinding(transport, sessionName, snapshot, binding)
   if (!secondPane) {
     secondPane = unwrapHerdrResponse<{ pane: HerdrPane }>(
       await transport.request(sessionName, 'pane.split', {
