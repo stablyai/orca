@@ -72,6 +72,8 @@ export type GlobalSettings = {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** End-of-line authorship on the cursor line; defaults on when unset. */
+  editorInlineBlameEnabled?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

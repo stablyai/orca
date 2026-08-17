@@ -61,6 +61,7 @@ export type StatusBarItem =
   | 'ssh'
   | 'resource-usage'
   | 'ports'
+  | 'line-blame'
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
