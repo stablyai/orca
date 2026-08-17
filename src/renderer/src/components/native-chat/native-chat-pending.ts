@@ -5,7 +5,6 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
-import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
   advancedNativeChatUserTexts,
@@ -18,6 +17,7 @@ import {
   nativeChatPendingOccurrence,
   selectPendingIndicesRepresentedByUserTexts
 } from './native-chat-pending-occurrence'
+import type { NativeChatTranscriptOrder } from './native-chat-transcript-order'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -36,8 +36,11 @@ export type NativeChatPendingSend = {
   afterMessageTimestamp?: number | null
   /** 1-based occurrence among identical sends sharing the same boundary. */
   matchingOccurrence?: number
-  /** Shared time boundary when that message boundary is unavailable. */
+  /** Shared host-domain time bound when the message id boundary is paged out. */
   matchingAfterTimestamp?: number
+  /** Renderer-local live-stream position captured when no transcript row exists. */
+  afterTranscriptGeneration?: number
+  afterTranscriptHighWater?: number
 }
 
 export type NativeChatPendingSendScope = {
@@ -90,20 +93,44 @@ export function clearPendingSendCacheForTests(): void {
 
 function messagesAfterPendingBoundary(
   messages: readonly NativeChatMessage[],
-  pending: NativeChatPendingSend
+  pending: NativeChatPendingSend,
+  transcriptOrder?: NativeChatTranscriptOrder
 ): readonly NativeChatMessage[] {
+  if (
+    transcriptOrder !== undefined &&
+    pending.afterTranscriptGeneration !== undefined &&
+    transcriptOrder.generation !== pending.afterTranscriptGeneration
+  ) {
+    // Pending sends are pane-local. A source rebind clears their cache; until
+    // that effect runs, never match an old send against the replacement list.
+    return []
+  }
   if (pending.afterMessageId === undefined) {
     return messages
   }
   if (pending.afterMessageId === null) {
-    return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
+    if (transcriptOrder === undefined) {
+      return messages
+    }
+    if (
+      pending.afterTranscriptGeneration === undefined ||
+      pending.afterTranscriptHighWater === undefined ||
+      transcriptOrder.generation !== pending.afterTranscriptGeneration
+    ) {
+      return []
+    }
+    const highWater = pending.afterTranscriptHighWater
+    return messages.filter((message) => {
+      const sequence = transcriptOrder.messageSequenceById.get(message.id)
+      return sequence !== undefined && sequence > highWater
+    })
   }
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
   if (boundaryIndex !== -1) {
     return messages.slice(boundaryIndex + 1)
   }
-  // A bounded authoritative read can page the boundary out. Fall back to the
-  // send time instead of matching an arbitrary older identical prompt.
+  // A bounded authoritative read can page the boundary out. Use the pending
+  // host-domain timestamp when available; otherwise match by identity/occurrence.
   return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
 }
 
@@ -115,34 +142,23 @@ function messageIsAfterPendingTimestamp(
   // rows would make the echo unmatchable forever, stranding a rank-pinned
   // bubble at the list tail — which reads as the conversation reordering.
   if (message.timestamp === null) {
-    return true
+    // A paged-out boundary without a timestamp cannot prove post-boundary
+    // ordering; treating every row as newer can retire an older identical turn.
+    return false
   }
   const boundary = nativeChatPendingMatchingAfter(pending)
+  // Why: `sentAt` is renderer-clock; `message.timestamp` is host/provider clock
+  // on remote runtimes. Never fall back to sentAt here — a host behind strands
+  // the echo forever, and a host ahead matches an older identical prompt.
+  // Without a host-domain bound, identity/occurrence matching sees the full list.
+  if (boundary == null) {
+    return false
+  }
   // A transcript-clock boundary describes an existing message, so exclude ties.
-  // Local send time has no existing record and remains inclusive.
+  // Inclusive only when the bound was not taken from a concrete boundary row.
   return pending.afterMessageTimestamp == null
     ? message.timestamp >= boundary
     : message.timestamp > boundary
-}
-
-/**
- * Rows a glue match may consume. Glue always starts at the oldest still-open
- * echo, so that echo's send boundary is the floor: unbounded, an older turn
- * whose text happens to split across the queue ("fix the bug" vs "fix the" +
- * "bug") would retire sends issued long after it. A missing message boundary
- * falls back to send time — a fuzzy match must never reach further back than
- * an exact one.
- */
-function gluedCandidateMessages(
-  messages: readonly NativeChatMessage[],
-  open: readonly NativeChatPendingSend[]
-): readonly NativeChatMessage[] {
-  const oldest = open[0]
-  if (!oldest) {
-    return []
-  }
-  const anchor = oldest.afterMessageId === undefined ? { ...oldest, afterMessageId: null } : oldest
-  return messagesAfterPendingBoundary(messages, anchor)
 }
 
 /**
@@ -153,7 +169,8 @@ function gluedCandidateMessages(
  */
 export function prunePendingSends(
   pending: NativeChatPendingSend[],
-  messages: NativeChatMessage[]
+  messages: NativeChatMessage[],
+  transcriptOrder?: NativeChatTranscriptOrder
 ): NativeChatPendingSend[] {
   if (pending.length === 0) {
     return pending
@@ -163,9 +180,9 @@ export function prunePendingSends(
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
-      advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
-        contentKey
-      ) ?? 0
+      advancedNativeChatUserContentCounts(
+        messagesAfterPendingBoundary(messages, entry, transcriptOrder)
+      ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
@@ -173,11 +190,14 @@ export function prunePendingSends(
   })
   // Why: when a lost Enter glued two optimistic sends onto one input line, the
   // transcript carries one row ("joke"+"continue"→"jokecontinue") that no exact
-  // key matches. Drop those echoes once an assistant turn advances past it.
+  // key matches. Boundary-filter per send so an older row cannot retire a
+  // fresh queued pair after its transcript high-water.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
-  const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
+  const gluedRepresented = gluedPendingIndicesAfterBoundaries(
     stillOpen,
-    advancedNativeChatUserTexts(gluedCandidateMessages(messages, stillOpen))
+    messages,
+    transcriptOrder,
+    advancedNativeChatUserTexts
   )
   const next = pending.filter((entry, index) => {
     if (!exactKeep[index]) {
@@ -197,7 +217,8 @@ export function prunePendingSends(
  */
 export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
-  existingMessages: NativeChatMessage[] = []
+  existingMessages: NativeChatMessage[] = [],
+  transcriptOrder?: NativeChatTranscriptOrder
 ): NativeChatMessage[] {
   if (pending.length === 0) {
     return []
@@ -208,7 +229,7 @@ export function pendingSendsAsMessages(
     const key = nativeChatPendingMatchKey(entry)
     const represented =
       matchingNativeChatUserContentCounts(
-        messagesAfterPendingBoundary(existingMessages, entry)
+        messagesAfterPendingBoundary(existingMessages, entry, transcriptOrder)
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
@@ -218,9 +239,11 @@ export function pendingSendsAsMessages(
   // Hide optimistic echoes that were glued into a single transcript user row
   // even before the assistant reply lands (matching, not advanced).
   const stillVisible = pending.filter((_, index) => exactVisible[index])
-  const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
+  const gluedRepresented = gluedPendingIndicesAfterBoundaries(
     stillVisible,
-    matchingNativeChatUserTexts(gluedCandidateMessages(existingMessages, stillVisible))
+    existingMessages,
+    transcriptOrder,
+    matchingNativeChatUserTexts
   )
   return pending
     .filter((entry, index) => {
@@ -242,164 +265,87 @@ export function pendingSendsAsMessages(
     }))
 }
 
+function pendingBoundaryKey(pending: NativeChatPendingSend): string {
+  return [
+    String(pending.afterMessageId),
+    String(pending.afterTranscriptGeneration),
+    String(pending.afterTranscriptHighWater),
+    String(nativeChatPendingMatchingAfter(pending))
+  ].join('\0')
+}
+
+function messagesAfterGlueBoundary(
+  messages: readonly NativeChatMessage[],
+  pending: NativeChatPendingSend,
+  transcriptOrder: NativeChatTranscriptOrder | undefined
+): readonly NativeChatMessage[] {
+  if (pending.afterMessageId === undefined && transcriptOrder === undefined) {
+    // No comparable transcript boundary exists in this legacy shape. Identity
+    // and occurrence matching may inspect the list, but renderer sentAt must
+    // never be compared with a provider timestamp.
+    return []
+  }
+  return messagesAfterPendingBoundary(messages, pending, transcriptOrder)
+}
+
+/** Glue-match only inside each send's post-boundary window (never full history). */
+function gluedPendingIndicesAfterBoundaries(
+  open: readonly NativeChatPendingSend[],
+  messages: readonly NativeChatMessage[],
+  transcriptOrder: NativeChatTranscriptOrder | undefined,
+  userTextsOf: (window: readonly NativeChatMessage[]) => readonly string[]
+): Set<number> {
+  const represented = new Set<number>()
+  if (open.length < 2) {
+    return represented
+  }
+  const groups = new Map<string, number[]>()
+  for (let index = 0; index < open.length; index += 1) {
+    const entry = open[index]
+    if (!entry) {
+      continue
+    }
+    const key = pendingBoundaryKey(entry)
+    const group = groups.get(key)
+    if (group) {
+      group.push(index)
+    } else {
+      groups.set(key, [index])
+    }
+  }
+  for (const indices of groups.values()) {
+    if (indices.length < 2) {
+      continue
+    }
+    const headIndex = indices[0]
+    const head = headIndex === undefined ? undefined : open[headIndex]
+    if (!head) {
+      continue
+    }
+    const groupPending = indices.flatMap((index) => {
+      const entry = open[index]
+      return entry ? [entry] : []
+    })
+    const local = selectPendingIndicesRepresentedByUserTexts(
+      groupPending,
+      userTextsOf(messagesAfterGlueBoundary(messages, head, transcriptOrder))
+    )
+    for (const localIndex of local) {
+      const openIndex = indices[localIndex]
+      if (openIndex !== undefined) {
+        represented.add(openIndex)
+      }
+    }
+  }
+  return represented
+}
+
 /** True when a message id was minted for an optimistic pending send. */
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
 }
 
-// Why: the seeded prompt has a synthetic id that never matches the real turn's,
-// so dedup/prune match on normalized user-message text instead — this hides the
-// optimistic bubble once the transcript's own copy of the turn catches up.
-export function launchPromptAsMessage(
-  entry: NativeChatLaunchPrompt | null,
-  existingMessages: NativeChatMessage[] = []
-): NativeChatMessage | null {
-  if (!entry) {
-    return null
-  }
-  // Why: a launch prompt seeds a brand-new session, so a matching user turn
-  // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
-  const represented = matchingNativeChatUserContentCounts(
-    existingMessages.filter(
-      (message) => message.timestamp === null || message.timestamp >= entry.createdAt
-    )
-  )
-  if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
-    return null
-  }
-  return {
-    id: `launch-pending:${entry.tabId}`,
-    role: 'user' as const,
-    blocks: entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [],
-    timestamp: entry.createdAt,
-    source: 'scrape' as const
-  }
-}
-
-// Why: prune only once an assistant turn has landed after the matching user
-// text — keeping the optimistic bubble through the user-only phase avoids a
-// first-turn flash before the transcript's own copy of the turn catches up.
-export function shouldPruneLaunchPrompt(
-  entry: NativeChatLaunchPrompt,
-  messages: NativeChatMessage[]
-): boolean {
-  const relevant = messages.filter(
-    (message) => message.timestamp === null || message.timestamp >= entry.createdAt
-  )
-  return (
-    (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
-  )
-}
-
 export function nextNativeChatPendingSendId(now = Date.now()): string {
   pendingSendCounter += 1
   return `${now}-${pendingSendCounter}`
-}
-
-export function isLaunchPromptMessageId(id: string): boolean {
-  return id.startsWith('launch-pending:')
-}
-
-/** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
- *  the agent's TUI and are not chat turns, so we surface a small system line as
- *  feedback that the command ran rather than echoing a user bubble. */
-export type NativeChatCommandMarker = {
-  id: string
-  /** The command as typed, e.g. `/clear`. */
-  command: string
-  sentAt: number
-}
-
-export type NativeChatCommandMarkerScope = {
-  paneKey: string
-  agent: string
-  sessionId: string | null
-}
-
-const COMMAND_MARKER_LIMIT = 8
-const commandMarkerCache = new Map<string, NativeChatCommandMarker[]>()
-let commandMarkerCounter = 0
-
-function commandMarkerScopeKey(scope: NativeChatCommandMarkerScope): string {
-  return `${scope.paneKey}\0${scope.agent}\0${scope.sessionId ?? ''}`
-}
-
-export function readCommandMarkerCache(
-  scope: NativeChatCommandMarkerScope
-): NativeChatCommandMarker[] {
-  return [...(commandMarkerCache.get(commandMarkerScopeKey(scope)) ?? [])]
-}
-
-export function appendCommandMarkerCache(
-  scope: NativeChatCommandMarkerScope,
-  command: string,
-  sentAt = Date.now()
-): NativeChatCommandMarker[] {
-  commandMarkerCounter += 1
-  const key = commandMarkerScopeKey(scope)
-  // Why: native/TUI view switches remount the chat surface, but slash commands
-  // are not transcript turns, so their local feedback needs a pane-scoped cache.
-  const next = [
-    ...(commandMarkerCache.get(key) ?? []),
-    { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
-  ].slice(-COMMAND_MARKER_LIMIT)
-  // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
-  // sessionId changes on every /clear) is ephemeral and was never evicted, so it
-  // grew one entry per (pane, session) for the renderer's whole life. LRU-bound
-  // the key count (mirrors the #7566 draft/attachment caches in this folder).
-  setBoundedScopeCacheEntry(commandMarkerCache, key, next)
-  return [...next]
-}
-
-export function clearCommandMarkerCacheForTests(): void {
-  commandMarkerCache.clear()
-  commandMarkerCounter = 0
-}
-
-function isClearCommand(command: string): boolean {
-  return command.trim().toLowerCase().split(/\s+/)[0] === '/clear'
-}
-
-function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
-  let latest: number | null = null
-  for (const marker of markers) {
-    if (isClearCommand(marker.command) && (latest === null || marker.sentAt > latest)) {
-      latest = marker.sentAt
-    }
-  }
-  return latest
-}
-
-export function applyCommandMarkerBoundaries(
-  messages: readonly NativeChatMessage[],
-  markers: readonly NativeChatCommandMarker[]
-): NativeChatMessage[] {
-  const clearSentAt = latestClearSentAt(markers)
-  if (clearSentAt === null) {
-    return messages as NativeChatMessage[]
-  }
-  // Why: `/clear` mutates the TUI/transcript asynchronously. Hide the current
-  // transcript immediately so native chat reflects the command before the agent
-  // writes a replacement session or truncates the file.
-  return messages.filter((message) => message.timestamp !== null && message.timestamp > clearSentAt)
-}
-
-/** Render command markers as compact `system` messages. The `system` role draws
- *  as a muted aside (not a user bubble); the text avoids the harness noise
- *  prefixes so stripNoiseMessages keeps it. */
-export function commandMarkersAsMessages(
-  markers: readonly NativeChatCommandMarker[]
-): NativeChatMessage[] {
-  return markers.map((marker) => ({
-    id: `command:${marker.id}`,
-    role: 'system' as const,
-    blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
-    timestamp: marker.sentAt,
-    source: 'scrape' as const
-  }))
-}
-
-/** True when a message id was minted for a slash-command marker. */
-export function isCommandMarkerId(id: string): boolean {
-  return id.startsWith('command:')
 }

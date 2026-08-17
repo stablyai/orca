@@ -52,7 +52,12 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
 })
 
 vi.mock('./native-chat-session-transport', () => ({
-  getNativeChatSessionTransport: transportFactory
+  getNativeChatSessionTransport: transportFactory,
+  subscribeNativeChatSession: (
+    transport: { subscribe: (...args: unknown[]) => unknown },
+    args: unknown,
+    onFrame: unknown
+  ) => transport.subscribe(args, onFrame)
 }))
 
 // Imported after vi.mock is hoisted, so it binds to the mocked transport.
@@ -381,6 +386,171 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((message) => message.id)).toEqual(['u-live'])
+  })
+
+  it('orders only live appends after a non-adoption snapshot baseline', async () => {
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('old', 'same')],
+        hasMore: false
+      })
+    )
+    const generation = latest?.transcriptOrder.generation
+    expect(latest?.transcriptOrder.highWater).toBe(0)
+    expect(latest?.transcriptOrder.messageSequenceById.has('old')).toBe(false)
+
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [user('new-user', 'same'), assistant('new-answer', 'done')]
+      })
+    )
+
+    expect(latest?.transcriptOrder).toMatchObject({ generation, highWater: 2 })
+    expect(latest?.transcriptOrder.messageSequenceById.get('new-user')).toBe(1)
+    expect(latest?.transcriptOrder.messageSequenceById.get('new-answer')).toBe(2)
+
+    await act(async () =>
+      transport.emit({
+        type: 'replacement',
+        messages: [user('replacement', 'fresh')],
+        hasMore: false
+      })
+    )
+    // Same-session replacement keeps generation and settles post-action rows.
+    expect(latest?.transcriptOrder.generation).toBe(generation)
+    expect(latest?.transcriptOrder.messageSequenceById.get('replacement')).toBe(3)
+    expect(latest?.transcriptOrder.highWater).toBe(3)
+  })
+
+  it('null-session send then session metadata initial snapshot retires the pending turn', async () => {
+    // Harness: null → send boundary capture → session id + path → mandatory snapshot.
+    // Bad: snapshotVisible=[pending:p1], snapshotPruned=[p1]
+    // Good: snapshot settles the first turn so visible/prune both drop p1.
+    const root = await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: null,
+      runtimeEnvironmentId: 'env-1'
+    })
+    const orderAtSend = latest?.transcriptOrder
+    expect(orderAtSend).toMatchObject({ highWater: 0 })
+    const pending = [
+      {
+        id: 'p1',
+        text: 'hello first',
+        sentAt: 100,
+        afterMessageId: null as string | null,
+        afterTranscriptGeneration: orderAtSend?.generation ?? 0,
+        afterTranscriptHighWater: orderAtSend?.highWater ?? 0
+      }
+    ]
+
+    await rerender(root, {
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      transcriptPath: '/host/transcript.jsonl',
+      runtimeEnvironmentId: 'env-1'
+    })
+    // Adoption must not mint a new generation (pending still matches).
+    expect(latest?.transcriptOrder.generation).toBe(orderAtSend?.generation)
+
+    await act(async () =>
+      getMockTransport('env-1').emit({
+        type: 'snapshot',
+        messages: [user('u1', 'hello first'), assistant('a1', 'hi')],
+        hasMore: false
+      })
+    )
+
+    const { pendingSendsAsMessages, prunePendingSends } = await import('./native-chat-pending')
+    const snapshotVisible = pendingSendsAsMessages(
+      pending,
+      latest?.messages ?? [],
+      latest?.transcriptOrder
+    ).map((message) => message.id)
+    const snapshotPruned = prunePendingSends(
+      pending,
+      latest?.messages ?? [],
+      latest?.transcriptOrder
+    ).map((entry) => entry.id)
+
+    expect(latest?.transcriptOrder.messageSequenceById.get('u1')).toBe(1)
+    expect(latest?.transcriptOrder.messageSequenceById.get('a1')).toBe(2)
+    expect(snapshotVisible).toEqual([])
+    expect(snapshotPruned).toEqual([])
+  })
+
+  it('same-session clear empty then replacement settles post-clear rows', async () => {
+    // Harness: clear on empty → replacement with fresh rows.
+    // Bad: visibleAfterClearReplacement=[]
+    // Good: replacement-settled sequences are visible past the clear high-water.
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    const orderAtClear = latest?.transcriptOrder
+    const clearMarkers = [
+      {
+        id: 'c1',
+        command: '/clear',
+        sentAt: 10,
+        clearAfterMessageId: null as string | null,
+        clearTranscriptGeneration: orderAtClear?.generation ?? 0,
+        clearTranscriptHighWater: orderAtClear?.highWater ?? 0
+      }
+    ]
+
+    await act(async () =>
+      transport.emit({
+        type: 'replacement',
+        messages: [user('new-u', 'fresh'), assistant('new-a', 'ok')],
+        hasMore: false
+      })
+    )
+
+    const { applyCommandMarkerBoundaries } = await import('./native-chat-command-markers')
+    const visibleAfterClearReplacement = applyCommandMarkerBoundaries(
+      latest?.messages ?? [],
+      clearMarkers,
+      latest?.transcriptOrder
+    ).map((message) => message.id)
+
+    expect(latest?.transcriptOrder.generation).toBe(orderAtClear?.generation)
+    expect(latest?.transcriptOrder.messageSequenceById.get('new-u')).toBe(1)
+    expect(visibleAfterClearReplacement).toEqual(['new-u', 'new-a'])
+  })
+
+  it('same-session pagination does not sequence prepended baseline rows', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`m-${n}`, 't')
+    )
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    expect(latest?.transcriptOrder.highWater).toBe(0)
+
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [user('live', 'go')]
+      })
+    )
+    expect(latest?.transcriptOrder.messageSequenceById.get('live')).toBe(1)
+
+    transport.readSession.mockResolvedValueOnce({
+      messages: [assistant('older', 'page'), ...many, user('live', 'go')]
+    })
+    await act(async () => latest?.loadEarlier())
+    await flush()
+
+    // Pagination only replaces the base list; order stays append-settled.
+    expect(latest?.transcriptOrder.messageSequenceById.get('live')).toBe(1)
+    expect(latest?.transcriptOrder.messageSequenceById.has('older')).toBe(false)
+    expect(latest?.messages.map((message) => message.id)).toContain('older')
   })
 
   it("self-heals a stale 'working' hook once the turn-complete marker lands", async () => {

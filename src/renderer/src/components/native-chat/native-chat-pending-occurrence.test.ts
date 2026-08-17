@@ -34,13 +34,15 @@ describe('pending send occurrence reconciliation', () => {
       id: 'p1',
       text: 'repeat',
       sentAt: 100,
-      afterMessageId: 'paged-out-boundary'
+      afterMessageId: 'paged-out-boundary',
+      afterMessageTimestamp: 100
     })
     const repeated = appendPendingSendCache(scope, {
       id: 'p2',
       text: 'repeat',
       sentAt: 200,
-      afterMessageId: 'paged-out-boundary'
+      afterMessageId: 'paged-out-boundary',
+      afterMessageTimestamp: 100
     })
     expect(first[0]?.matchingOccurrence).toBeUndefined()
     expect(repeated[1]).toMatchObject({ matchingOccurrence: 2, matchingAfterTimestamp: 100 })
@@ -63,6 +65,23 @@ describe('pending send occurrence reconciliation', () => {
     ]
     expect(pendingSendsAsMessages(afterFirstPrune, secondCompletedTurn)).toEqual([])
     expect(prunePendingSends(afterFirstPrune, secondCompletedTurn)).toEqual([])
+  })
+
+  it('inherits only a host-domain matchingAfterTimestamp, never renderer sentAt', () => {
+    appendPendingSendCache(scope, {
+      id: 'p1',
+      text: 'repeat',
+      sentAt: 1_000_000,
+      afterMessageId: null
+    })
+    const repeated = appendPendingSendCache(scope, {
+      id: 'p2',
+      text: 'repeat',
+      sentAt: 1_000_100,
+      afterMessageId: null
+    })
+    expect(repeated[1]?.matchingOccurrence).toBe(2)
+    expect(repeated[1]?.matchingAfterTimestamp).toBeUndefined()
   })
 })
 

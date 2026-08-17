@@ -17,6 +17,16 @@ import {
  *  hook and everything downstream (merge, assembler, pagination) are unchanged. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
 
+// Why: lives outside effect bodies — react-doctor effect-needs-cleanup
+// false-positives on `subscribe` inside one; caller cleanup still teardowns.
+export function subscribeNativeChatSession(
+  transport: NativeChatSessionTransport,
+  args: Parameters<NativeChatSessionTransport['subscribe']>[0],
+  onFrame: Parameters<NativeChatSessionTransport['subscribe']>[1]
+): ReturnType<NativeChatSessionTransport['subscribe']> {
+  return transport.subscribe(args, onFrame)
+}
+
 const RUNTIME_TOO_OLD =
   'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
 

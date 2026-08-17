@@ -12,6 +12,8 @@ export type NativeChatPendingOccurrence = {
   afterMessageTimestamp?: number | null
   matchingOccurrence?: number
   matchingAfterTimestamp?: number
+  afterTranscriptGeneration?: number
+  afterTranscriptHighWater?: number
 }
 
 export function normalizeNativeChatPendingText(text: string): string {
@@ -196,7 +198,8 @@ export function selectPendingIndicesRepresentedByUserTexts(
 }
 
 export function nativeChatPendingMatchKey(pending: NativeChatPendingOccurrence): string {
-  return `${String(pending.afterMessageId)}\0${nativeChatPendingContentKey(pending)}`
+  const transcriptBoundary = `${String(pending.afterTranscriptGeneration)}:${String(pending.afterTranscriptHighWater)}`
+  return `${String(pending.afterMessageId)}\0${transcriptBoundary}\0${nativeChatPendingContentKey(pending)}`
 }
 
 export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOccurrence>(
@@ -214,16 +217,21 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
   const first = matching[0]
   // Why: pruning an earlier echo must not let a later identical send reuse the
   // same transcript occurrence, even after the read pages out its boundary.
+  // Only inherit a host-domain time bound — never renderer `sentAt`.
+  const matchingAfterTimestamp =
+    first?.matchingAfterTimestamp ?? first?.afterMessageTimestamp ?? undefined
   return {
     ...entry,
     matchingOccurrence: previousOccurrence + 1,
-    matchingAfterTimestamp:
-      first?.matchingAfterTimestamp ?? first?.afterMessageTimestamp ?? first?.sentAt
+    ...(matchingAfterTimestamp != null ? { matchingAfterTimestamp } : {})
   }
 }
 
-export function nativeChatPendingMatchingAfter(pending: NativeChatPendingOccurrence): number {
-  return pending.matchingAfterTimestamp ?? pending.afterMessageTimestamp ?? pending.sentAt
+/** Host-domain lower bound for transcript matching, or null when none exists. */
+export function nativeChatPendingMatchingAfter(
+  pending: NativeChatPendingOccurrence
+): number | null {
+  return pending.matchingAfterTimestamp ?? pending.afterMessageTimestamp ?? null
 }
 
 export function nativeChatPendingOccurrence(

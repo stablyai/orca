@@ -8,6 +8,7 @@ import type {
   NativeChatLiveSession,
   UseNativeChatLiveSessionArgs
 } from './use-native-chat-live-session'
+import { createNativeChatTranscriptOrder } from './native-chat-transcript-order'
 
 const { liveSession } = vi.hoisted(() => ({ liveSession: vi.fn() }))
 
@@ -39,7 +40,8 @@ function session(
     hasMore: false,
     loadingEarlier: false,
     loadEarlier: vi.fn(),
-    readPhase
+    readPhase,
+    transcriptOrder: createNativeChatTranscriptOrder()
   }
 }
 

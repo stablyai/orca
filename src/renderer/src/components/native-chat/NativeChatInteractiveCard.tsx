@@ -34,6 +34,8 @@ export function NativeChatInteractiveCard({
   canSend,
   messages,
   transcriptSettled,
+  clearBoundaryUnavailable = false,
+  hasClearMarker = false,
   onShowingQuestionChange,
   answerInputRef
 }: {
@@ -44,6 +46,9 @@ export function NativeChatInteractiveCard({
    *  command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages?: readonly NativeChatMessage[]
   transcriptSettled: boolean
+  /** Prevent stale transcript asks from reappearing while /clear is unresolved. */
+  clearBoundaryUnavailable?: boolean
+  hasClearMarker?: boolean
   /** Reports whether a question card is on screen so the view can replace the
    *  composer with it (the card's free-text row is the answer input). */
   onShowingQuestionChange?: (showing: boolean) => void
@@ -60,17 +65,27 @@ export function NativeChatInteractiveCard({
   const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
   const card = useMemo(() => {
-    const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
+    const statusCard =
+      clearBoundaryUnavailable || hasClearMarker
+        ? null
+        : parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
     if (statusCard?.kind === 'approval') {
       return statusCard
     }
     const prompt = resolveNativeChatAsk({
       liveAsk: statusCard?.prompt ?? null,
       messages: messages ?? [],
-      transcriptSettled: transcriptSettled && messages != null
+      transcriptSettled: transcriptSettled && messages != null && !clearBoundaryUnavailable
     })
     return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
+  }, [
+    clearBoundaryUnavailable,
+    hasClearMarker,
+    interactivePrompt,
+    interactiveToolName,
+    messages,
+    transcriptSettled
+  ])
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep

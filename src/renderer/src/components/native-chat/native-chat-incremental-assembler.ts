@@ -26,6 +26,19 @@ export function createIncrementalAssembler(): IncrementalChatAssembler {
   return { byId: new Map(), byTurn: new Map(), messages: [] }
 }
 
+export function sharesNativeChatMessagePrefix(
+  whole: readonly NativeChatMessage[],
+  prefix: readonly NativeChatMessage[],
+  length: number
+): boolean {
+  for (let index = 0; index < length; index += 1) {
+    if (whole[index] !== prefix[index]) {
+      return false
+    }
+  }
+  return true
+}
+
 /** Rebuild the assembled state from a base list (the windowed read). Canonical
  *  path — equivalent to assembleNativeChatSession over `{ transcript: base }`. */
 export function reset(
