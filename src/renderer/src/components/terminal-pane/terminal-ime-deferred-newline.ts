@@ -1,4 +1,5 @@
 import {
+  capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,
   XTERM_COMPOSITION_SESSION_END_EVENT
 } from './terminal-ime-composition-route'
@@ -14,6 +15,10 @@ export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
  * Returns a disposer that stops waiting without sending. An indefinite wait has no other exit, so
  * a caller that can outlive the composition must hold it — otherwise the listeners stay on the
  * terminal element and a later composition flushes the stale send.
+ *
+ * The wait is scoped to the compositions already open when it starts. A composition the user
+ * begins afterwards is behind this input, not in front of it, so letting it hold the wait would
+ * reorder the two — `한` Enter `글` reaching the terminal as `한글\n`.
  */
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
@@ -30,6 +35,7 @@ export function sendTerminalInputAfterComposition(
       ? null
       : (options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
   let done = false
+  const capturedSessions = capturePendingTerminalImeCompositionSessions(terminalElement)
 
   const stopWaiting = (): void => {
     if (done) {
@@ -56,7 +62,7 @@ export function sendTerminalInputAfterComposition(
   }
 
   const finishAfterPendingComposition = (): void => {
-    if (!hasPendingTerminalImeComposition(terminalElement)) {
+    if (!hasPendingTerminalImeComposition(terminalElement, capturedSessions)) {
       finish()
     }
   }

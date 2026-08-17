@@ -142,6 +142,37 @@ describe('sendTerminalInputAfterComposition', () => {
     route.dispose()
   })
 
+  // A composition the user starts after pressing Enter must not hold that Enter behind itself, or
+  // the terminal sees `한글\n` for what was typed as `한` Enter `글`.
+  it('does not let a composition started after the defer hold the newline', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const terminal = { input: vi.fn() }
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal,
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    const sessionEvent = (type: string, id: number, data: string) =>
+      new CustomEvent(type, { cancelable: true, detail: { id, data } })
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1, ''))
+    const stopWaiting = sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 2, ''))
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 1, '한'))
+    vi.advanceTimersByTime(0)
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(terminal.input.mock.calls).toEqual([['한']])
+
+    stopWaiting()
+    route.dispose()
+  })
+
   it('sends only once and drops the listener after firing', () => {
     const el = document.createElement('div')
     const send = vi.fn()
