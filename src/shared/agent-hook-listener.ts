@@ -3573,18 +3573,13 @@ export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: 
 function codexLeadStateForHookEvent(
   eventName: string | undefined
 ): CodexLeadTurnState['state'] | undefined {
-  if (eventName === 'Stop') {
+  if (eventName === 'Stop' || eventName === 'SessionStart') {
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
     return 'waiting'
   }
-  if (
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-  ) {
+  if (eventName === 'UserPromptSubmit' || eventName === 'PreToolUse' || eventName === 'PostToolUse') {
     return 'working'
   }
   return undefined
@@ -3649,7 +3644,11 @@ function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean }
+  options: {
+    stateName: 'working' | 'waiting' | 'done'
+    updateLead: boolean
+    sessionBoundary?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -3669,7 +3668,8 @@ function buildCodexStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
+    sessionBoundary: options.sessionBoundary
   })
 }
 
@@ -3733,8 +3733,22 @@ function normalizeCodexEvent(
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
+  const agentId = readString(hookPayload, 'agent_id')
+  if (eventName === 'SessionStart' && !agentId) {
+    // Why: SessionStart is the only signal a resumed idle Codex TUI emits before
+    // the first prompt (STA-3386). Land it as a session-boundary 'done' row so
+    // the sidebar appears without a phantom spinner or a ping.
+    state.codexSubagentRosterByPaneKey.delete(paneKey)
+    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+    state.codexLeadStateByPaneKey.set(paneKey, { state: 'done' })
+    return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+      stateName: 'done',
+      updateLead: true,
+      sessionBoundary: true
+    })
+  }
+
   const stateName =
-    eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     (eventName === 'PreToolUse' && !isUserInputPreTool) ||
     eventName === 'PostToolUse'
@@ -3748,7 +3762,6 @@ function normalizeCodexEvent(
     return null
   }
 
-  const agentId = readString(hookPayload, 'agent_id')
   if (agentId) {
     upsertCodexSubagent(
       getOrCreateCodexSubagentRoster(state, paneKey),
@@ -3763,11 +3776,6 @@ function normalizeCodexEvent(
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (eventName === 'SessionStart') {
-    // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  }
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (transcriptPath) {
     reconcileCodexSubagentTranscript(
