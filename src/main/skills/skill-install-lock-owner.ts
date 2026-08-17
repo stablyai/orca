@@ -10,7 +10,9 @@ function validOwner(value: unknown): SkillInstallLockOwner | null {
   const owner = value as Partial<SkillInstallLockOwner> | null
   return owner &&
     typeof owner.token === 'string' &&
+    typeof owner.pid === 'number' &&
     Number.isInteger(owner.pid) &&
+    owner.pid > 0 &&
     typeof owner.createdAt === 'number'
     ? (owner as SkillInstallLockOwner)
     : null

@@ -7,6 +7,7 @@ import {
   reclaimDeadSkillInstallLocks,
   skillInstallLockPath
 } from './skill-install-lock'
+import { readSkillInstallLockOwner } from './skill-install-lock-owner'
 
 const roots: string[] = []
 
@@ -23,6 +24,15 @@ async function readPublishedOwner(lockPath: string): Promise<Record<string, unkn
 }
 
 describe('skill install lock', () => {
+  it.each([0, -1])('rejects a non-positive owner pid (%s)', async (pid) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const ownerPath = join(root, 'owner.json')
+    await writeFile(ownerPath, JSON.stringify({ token: 'invalid-pid', pid, createdAt: Date.now() }))
+
+    await expect(readSkillInstallLockOwner(ownerPath)).resolves.toBeNull()
+  })
+
   it('reclaims a fresh legacy lock whose process was killed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
@@ -73,6 +83,10 @@ describe('skill install lock', () => {
     const mayFinishWrite = new Promise<void>((resolve) => {
       finishWrite = resolve
     })
+    let contentionObserved!: () => void
+    const firstContention = new Promise<void>((resolve) => {
+      contentionObserved = resolve
+    })
     const firstAcquire = acquireSkillInstallLock({
       path: lockPath,
       writeOwner: async (handle, value) => {
@@ -80,21 +94,35 @@ describe('skill install lock', () => {
         await handle.sync()
         ownerWritten()
         await mayFinishWrite
+      },
+      publishLock: async (candidatePath, targetPath) => {
+        try {
+          await rename(candidatePath, targetPath)
+        } catch (error) {
+          contentionObserved()
+          throw error
+        }
       }
     })
 
     await ownerIsVisible
     await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
-    finishWrite()
     let firstPublished = false
-    void firstAcquire.then(() => {
-      firstPublished = true
-    })
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    const observedFirstAcquire = firstAcquire.then(
+      () => {
+        firstPublished = true
+      },
+      () => {
+        firstPublished = true
+      }
+    )
+    finishWrite()
+    await firstContention
     expect(firstPublished).toBe(false)
     await secondRelease()
     const release = await firstAcquire
+    await observedFirstAcquire
     await expect(readPublishedOwner(lockPath)).resolves.toMatchObject({ pid: process.pid })
     await release()
   })
@@ -196,6 +224,32 @@ describe('skill install lock', () => {
       reclaimed: 3,
       truncated: false
     })
+  })
+
+  it('continues startup recovery past a non-empty released lock', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
+    roots.push(root)
+    const stateDirectory = join(root, 'state')
+    const lockDirectory = join(stateDirectory, 'locks')
+    const releasedToken = '11111111-1111-4111-8111-111111111111'
+    const deadToken = '22222222-2222-4222-8222-222222222222'
+    const releasedPath = join(lockDirectory, `${'0'.repeat(64)}.lock.${releasedToken}.released`)
+    const deadPath = join(lockDirectory, `${'f'.repeat(64)}.lock`)
+    await mkdir(releasedPath, { recursive: true })
+    await mkdir(deadPath)
+    await writeFile(join(releasedPath, 'unexpected-entry'), 'preserve')
+    await writeFile(
+      join(deadPath, `${deadToken}.owner`),
+      JSON.stringify({ token: deadToken, pid: 2_147_483_647, createdAt: Date.now() })
+    )
+
+    await expect(reclaimDeadSkillInstallLocks(stateDirectory)).resolves.toEqual({
+      scanned: 2,
+      reclaimed: 1,
+      truncated: false
+    })
+    await expect(readdir(releasedPath)).resolves.toEqual(['unexpected-entry'])
+    await expect(readdir(deadPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('frees the canonical lock before release cleanup finishes', async () => {
