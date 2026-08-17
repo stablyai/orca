@@ -63,6 +63,7 @@ import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-int
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
+import PlantUmlBlock from './PlantUmlBlock'
 import {
   applyMarkdownPreviewSearchHighlights,
   clearMarkdownPreviewSearchHighlights,
@@ -1680,6 +1681,10 @@ export default function MarkdownPreview({
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
           )
         }
+        // Why: accept `puml`/`uml` alongside `plantuml` — all three are in common use in the wild.
+        if (/language-(plantuml|puml|uml)\b/.test(className || '')) {
+          return <PlantUmlBlock content={String(children).trimEnd()} isDark={isDark} />
+        }
         return (
           <code className={className} {...props}>
             {children}
@@ -1689,7 +1694,10 @@ export default function MarkdownPreview({
       // Why: wrap <pre> for the copy button, but pass MermaidBlock through unwrapped (it renders via innerHTML so extractText copies nothing, and <div> in <pre> is invalid HTML).
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
+        if (
+          React.isValidElement(child) &&
+          (child.type === MermaidBlock || child.type === PlantUmlBlock)
+        ) {
           return <>{children}</>
         }
         return wrapAnnotatedBlock(

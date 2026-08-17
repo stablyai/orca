@@ -710,6 +710,16 @@
   font-size: 0.85em;
   margin-bottom: 0.5em;
 }
+/* PlantUML diagram container */
+.plantuml-block svg {
+  max-width: 100%;
+  height: auto;
+}
+.plantuml-error {
+  color: var(--color-warning, #d29922);
+  font-size: 0.85em;
+  margin-bottom: 0.5em;
+}
 /* Full-file mermaid diagram viewer — used when opening .mmd/.mermaid files
    in diagram mode. Centers the rendered SVG and adds padding so diagrams
    don't press against viewport edges. */

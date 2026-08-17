@@ -14232,7 +14232,8 @@
           "026653f21f": "CSS",
           "4daed43ae3": "C++",
           "4227cf50fe": "Bash",
-          "13822cdfda": "Plain text"
+          "13822cdfda": "Plain text",
+          "plantuml": "PlantUML"
         },
         "RichMarkdownDocLinkMenu": {
           "e17b987473": "↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss",
@@ -14546,6 +14547,10 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "PlantUmlBlock": {
+          "line": "line",
+          "diagramError": "Diagram error:"
         }
       },
       "diff": {
