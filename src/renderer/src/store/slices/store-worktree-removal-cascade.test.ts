@@ -268,6 +268,40 @@ describe('removeWorktree cascade', () => {
     })
   })
 
+  it('promotes a queued row to deleting when a real delete starts (phase-aware skip guard)', () => {
+    const store = createTestStore()
+    const queued = 'repo1::/path/queued'
+    const inProgress = 'repo1::/path/in-progress'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [queued]: {
+          isDeleting: true,
+          phase: 'queued',
+          error: null,
+          canForceDelete: false,
+          forceDeleteReason: null
+        },
+        [inProgress]: {
+          isDeleting: true,
+          phase: 'deleting',
+          error: null,
+          canForceDelete: false,
+          forceDeleteReason: null
+        }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([queued, inProgress])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      // A queued row is promoted so the sidebar shows real deletion progress.
+      [queued]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false },
+      // A row already in the deleting phase is left untouched.
+      [inProgress]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false }
+    })
+  })
+
   it('marks multiple worktrees queued for deletion in one optimistic state update', () => {
     const store = createTestStore()
     const first = 'repo1::/path/wt1'

@@ -85,6 +85,7 @@ vi.mock('./github-enterprise-repository', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: vi.fn(() => 0),
   getSshGitProvider: vi.fn()
 }))
 

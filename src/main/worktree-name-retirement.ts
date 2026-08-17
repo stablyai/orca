@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getRepoExecutionHostId } from '../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
   creatureNameTier,
   EMPTY_RETIRED_NAME_REGISTRY,
@@ -239,8 +239,13 @@ export async function ensureRetiredWorktreeNamesBackfilled(
   settings: RetirementPathSettings
 ): Promise<string | null> {
   // Remote workspaces keep their agent state on the execution host, which this scan cannot see, so
-  // a re-added SSH repo does not recover its retirements the way a local one does.
-  if (isFolderRepo(repo) || repo.connectionId) {
+  // a re-added remote repo does not recover its retirements the way a local one does.
+  //
+  // Why the host id and not `connectionId`: a runtime-owned repo carries `executionHostId` with no
+  // `connectionId`, so a connectionId check calls it local, scans THIS machine's directories, and
+  // files the result under the runtime's namespace — retiring names never used there while missing
+  // the ones that were.
+  if (isFolderRepo(repo) || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return null
   }
   const probePath = await computeWorktreePathAsync(

@@ -128,8 +128,9 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  // v7: give the terminal daemon helper an Orca-specific TCC identity.
-  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v7'
+  // v10: add the keyboard-layout helper. A stale copy only emits extra fields
+  // the parser ignores, so narrowing its schema needs no bump.
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v10'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -169,7 +170,8 @@ function prepareMacDevElectronApp() {
       'Electron Framework.framework',
       'Resources',
       'icudtl.dat'
-    )
+    ),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
   ]
 
   function copiedAppIsUsable() {
@@ -239,6 +241,23 @@ function prepareMacDevElectronApp() {
   } catch (error) {
     console.warn(
       `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
+    )
+  }
+
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
     )
   }
 

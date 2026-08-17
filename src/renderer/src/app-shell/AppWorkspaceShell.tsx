@@ -20,6 +20,7 @@ const TaskPage = lazy(() => import('../components/TaskPage'))
 const AutomationsPage = lazy(() => import('../components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('../components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('../components/settings/Settings'))
+const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
@@ -68,6 +69,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
+      {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
       {activeView === 'tasks' ? <TaskPage /> : null}
       {activeView === 'automations' ? <AutomationsPage /> : null}

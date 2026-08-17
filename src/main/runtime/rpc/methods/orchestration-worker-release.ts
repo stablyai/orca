@@ -61,7 +61,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
           (await runtime.inspectTerminalProcessIncarnationLiveness(
             processIncarnation,
             resource.host_scope
-          )) === 'dead'
+          )) === 'exited'
         ) {
           const reconciled = db.settleDeadWorkerTerminalRelease({
             requestingDispatchId: params.dispatch,

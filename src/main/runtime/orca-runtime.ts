@@ -3,6 +3,7 @@
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
 import {
   detectAgentStatusFromTitle,
+  extractLastOscTitle,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
   isOpenCodeNativeTitle,
@@ -13,6 +14,10 @@ import {
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import {
+  assertAgentSkillSharingAllowed,
+  isAgentSkillSharingEnabled
+} from '../../shared/agent-skill-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -97,6 +102,10 @@ import {
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
 import {
+  type AgentPromptActivity,
+  verifyAgentPromptSubmission
+} from './agent-prompt-submission-verification'
+import {
   awaitWindowsHostGitEnvironmentReady,
   gitExecFileAsync,
   gitSpawnAfterWindowsEnvironmentReady,
@@ -114,7 +123,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
@@ -147,6 +156,75 @@ import type {
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
+import type {
+  SkillCloudDownloadGrant,
+  SkillCloudOperation,
+  SkillCloudOptions,
+  SkillCloudPackageDetails,
+  SkillCloudPublishRequest,
+  SkillCloudPublishResult,
+  SkillCloudVersion
+} from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
+import {
+  AGENT_SKILL_NOT_SHAREABLE_CODE,
+  AGENT_SKILL_SHARING_BUSY_CODE,
+  AgentSkillSharingError,
+  type AgentSkillShareOperation,
+  type AgentSkillShareRequest
+} from '../../shared/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../shared/skills'
+import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
+import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
+import type {
+  SkillInstallPreview,
+  SkillInstallPreviewRequest,
+  SkillInstallRequest,
+  SkillInstallResult,
+  ManagedSkillInstall,
+  SkillRemoveRequest
+} from '../../shared/skill-install-contract'
+import type {
+  SkillBundleInstallPreview,
+  SkillBundleInstallPreviewRequest,
+  SkillBundleInstallProgress,
+  SkillBundleInstallRequest,
+  SkillBundleInstallResult
+} from '../../shared/skill-bundle-install-contract'
+import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
+import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
+import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
+import {
+  previewSharedSkillBundleInstall,
+  previewSharedSkillInstall,
+  removeSharedSkillInstall
+} from '../skills/skill-install-management-service'
+import { listManagedSkillInstalls } from '../skills/skill-install-provenance'
+import { getWslHome, toLinuxPath } from '../wsl'
+import { WslSkillInstallFilesystem } from '../skills/skill-wsl-install-filesystem'
+import { nativeSkillInstallFilesystem } from '../skills/skill-install-filesystem'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import {
+  resolveEnvironmentSkillProviderRoots,
+  resolveWslGrokSkillProviderRoot,
+  withClaudeSkillProviderRoot
+} from '../skills/skill-provider-runtime-roots'
+import type {
+  SkillUploadBeginRequest,
+  SkillUploadChunkRequest
+} from '../../shared/skill-upload-session-contract'
+import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
+import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
+import {
+  installSkillBundleOnSshHost,
+  previewSkillBundleInstallOnSshHost
+} from '../skills/skill-bundle-ssh-relay-service'
+import {
+  installSkillOnSshHost,
+  listSkillInstallsOnSshHost,
+  previewSkillInstallOnSshHost,
+  removeSkillInstallOnSshHost
+} from '../skills/skill-ssh-relay-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -350,6 +428,7 @@ import {
   type RuntimeTerminalSplit,
   type RuntimeTerminalFocus,
   type RuntimeTerminalClose,
+  type RuntimeTerminalListHostScope,
   type RuntimeTerminalListResult,
   type RuntimeTerminalOrphanAdoptionRequest,
   type RuntimeTerminalOrphanAdoptionResult,
@@ -445,6 +524,7 @@ import {
   parsePaneKey
 } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
@@ -586,6 +666,12 @@ import {
   type RetiredTerminalSurface
 } from './mobile-session-terminal-retirement'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
+import {
+  NO_OBSERVING_PROVIDER_REASON,
+  SSH_EXIT_UNCONFIRMED_REASON,
+  SSH_PROVIDER_UNREGISTERED_REASON,
+  type PtyLivenessVerdict
+} from '../../shared/pty-liveness-verdict'
 import {
   advanceTerminalTopologyRevision,
   hasHostAuthoritativeTerminalMembership
@@ -889,7 +975,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-types'
+} from '../../shared/github/project-request-types'
 import {
   getBaseRefDefault,
   getDefaultRemote,
@@ -923,23 +1009,24 @@ import {
   removeWorktree
 } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { isENOENT, invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import {
-  createSetupRunnerScript,
-  getDefaultTabCommandTrustContent,
-  getDefaultTabsLaunch,
   getEffectiveHooks,
-  getEffectiveSetupRunPolicy,
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
   parseOrcaYaml,
-  readIssueCommand,
-  resolveSetupRunnerShell,
-  runHook,
-  shouldRunSetupForCreate,
-  writeIssueCommand
+  runHook
 } from '../hooks'
+import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import {
+  getDefaultTabCommandTrustContent,
+  getDefaultTabsLaunch,
+  getEffectiveSetupRunPolicy,
+  shouldRunSetupForCreate
+} from '../effective-hook-config'
+import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -960,6 +1047,7 @@ import {
   resolveWorktreeSharedDirectories
 } from '../git/worktree-shared-directories'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
+import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   cleanupUnusedWorktreePushTargetRemoteSsh,
@@ -1241,6 +1329,7 @@ type RuntimeStore = {
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
+    agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -1408,6 +1497,14 @@ type RuntimePtyWorktreeRecord = {
   tailWaitState?: TerminalTailWaitState
 }
 
+type TerminalAgentStatusSnapshot = {
+  waitText: string
+  waitBlockedAt: number | null
+  title: string | null
+  titleStatus: AgentStatus | null
+  titleStatusIsLive: boolean
+}
+
 type TerminalCreateOptions = {
   command?: string
   claudeAgentTeamsSourceCommand?: string
@@ -1477,6 +1574,14 @@ function isAgentSessionOperationOutcomeUnknown(error: unknown): boolean {
     'agentSessionOperationOutcome' in error &&
     error.agentSessionOperationOutcome === 'unknown'
   )
+}
+
+// Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
+const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
+
+type TrackedPtyLivenessVerdict = {
+  verdict: PtyLivenessVerdict
+  observedAt: number
 }
 
 const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
@@ -1776,7 +1881,7 @@ type RuntimePtyController = {
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
   attach?(ptyId: string): Promise<boolean>
   kill(ptyId: string): boolean
-  retireRejectedPty?(ptyId: string): void
+  retireRejectedPty?(ptyId: string, stopConfirmed: boolean): void
   stopAndWait?(
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
@@ -1794,6 +1899,10 @@ type RuntimePtyController = {
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
   listProcesses?(connectionId?: string | null): Promise<PtyProcessInfo[]>
+  listProcessesWithHostScope?(): Promise<{
+    processes: PtyProcessInfo[]
+    hostIds: ExecutionHostId[]
+  }>
   serializeBuffer?(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
@@ -1838,6 +1947,7 @@ type PtyControllerInventory = Readonly<{
   // must consult the unscoped inventory or a misattributed live PTY reads as dead.
   allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
+  queriedHostIds: ReadonlySet<ExecutionHostId>
 }>
 
 type WorktreeStartupDraftPaste = {
@@ -1880,8 +1990,69 @@ const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_QUIET_MS = 1500
-// Why: Claude and Codex emit show-cursor while rendering pasted composer content.
+// Why: Claude and Codex emit show-cursor after accepting bracketed paste.
 const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
+
+function assertAgentPromptRequestActive(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error('request_aborted')
+  }
+}
+
+async function waitForAgentPromptPromise<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) {
+    return await promise
+  }
+  assertAgentPromptRequestActive(signal)
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (result: { value: T } | { error: unknown }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      if ('error' in result) {
+        reject(result.error)
+      } else {
+        resolve(result.value)
+      }
+    }
+    const onAbort = (): void => finish({ error: new Error('request_aborted') })
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    promise.then(
+      (value) => finish({ value }),
+      (error: unknown) => finish({ error })
+    )
+  })
+}
+
+async function waitForAgentPromptDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+    return
+  }
+  assertAgentPromptRequestActive(signal)
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(new Error('request_aborted'))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+    }
+  })
+}
+
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
@@ -3051,11 +3222,24 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  // Why a separate map: `connected` is a wire field that any inventory gap
+  // clears, so it cannot distinguish an observed exit from lost contact. This
+  // records the last liveness verdict we actually earned, and outlives the pty
+  // record so a close/stop receipt can still say the stop was unconfirmed.
+  private ptyLivenessVerdictByPtyId = new Map<string, TrackedPtyLivenessVerdict>()
+  private ptyLivenessObservationSequence = 0
   private readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
+  private agentPromptLifecycleByPtyId = new Map<
+    string,
+    { status: AgentStatus | null; workingSequence: number; updatedAt: number }
+  >()
+  private agentPromptPermissionSequenceByPtyId = new Map<string, number>()
+  private agentPromptExplicitStatusFloorByPtyId = new Map<string, number>()
+  private agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
   private providerSequenceInitializedPtys = new Set<string>()
   private providerSequenceOffsetByPtyId = new Map<string, number>()
   private providerSnapshotPreferredPtys = new Set<string>()
@@ -3424,6 +3608,12 @@ export class OrcaRuntimeService {
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
   private artifactService: ArtifactCloudService | null = null
+  private skillCloudService: SkillCloudService | null = null
+  private agentSkillShareInProgress = false
+  private skillUploadSessions: SkillUploadSessionService | null = null
+  private readonly skillTransactionRecovery: Promise<unknown>
+  private readonly skillInstallOperations = new Map<string, AbortController>()
+  private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
   private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
   private mobileDictation: {
     id: string
@@ -3475,6 +3665,7 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      skillTransactionRecovery?: Promise<unknown>
     }
   ) {
     this.store = store
@@ -3487,6 +3678,11 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.skillTransactionRecovery = (deps?.skillTransactionRecovery ?? Promise.resolve()).catch(
+      (error) => {
+        console.warn('[skills] startup transaction recovery failed:', error)
+      }
+    )
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3633,6 +3829,7 @@ export class OrcaRuntimeService {
     // Read-only on purpose: clients preflight the publish capability here, but SettingsUpdate
     // still omits the key so no RPC caller can grant it to itself.
     | 'artifactSharingEnabled'
+    | 'agentSkillSharingEnabled'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -3657,7 +3854,8 @@ export class OrcaRuntimeService {
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
-      artifactSharingEnabled: isArtifactSharingEnabled(settings)
+      artifactSharingEnabled: isArtifactSharingEnabled(settings),
+      agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings)
     }
   }
 
@@ -4713,6 +4911,693 @@ export class OrcaRuntimeService {
     this.artifactService = service
   }
 
+  setSkillCloudService(service: SkillCloudService): void {
+    this.skillCloudService = service
+  }
+
+  assertAgentSkillSharingAllowed(): void {
+    assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.store?.getSettings()))
+  }
+
+  async publishDiscoveredSkillsFromAgent(
+    request: AgentSkillShareRequest,
+    discoveredSkills: readonly DiscoveredSkill[],
+    signal?: AbortSignal
+  ): Promise<AgentSkillShareOperation> {
+    this.assertAgentSkillSharingAllowed()
+    if (this.agentSkillShareInProgress) {
+      throw new AgentSkillSharingError(
+        AGENT_SKILL_SHARING_BUSY_CODE,
+        'Another agent skill bundle is being published. Wait for it to finish and try again.'
+      )
+    }
+    this.agentSkillShareInProgress = true
+    try {
+      return await this.executeAgentSkillShare(request, discoveredSkills, signal)
+    } finally {
+      this.agentSkillShareInProgress = false
+    }
+  }
+
+  private async executeAgentSkillShare(
+    request: AgentSkillShareRequest,
+    discoveredSkills: readonly DiscoveredSkill[],
+    signal?: AbortSignal
+  ): Promise<AgentSkillShareOperation> {
+    const selectedSkills = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
+    const operationRoot = join(app.getPath('userData'), 'agent-skill-share-operations')
+    const cloud = this.requireSkillCloudService()
+    const preparations = new SkillSharePreparationService(
+      operationRoot,
+      {
+        publishVersion: (input) => cloud.publishVersion(input),
+        createShare: (packageId, input) => cloud.createShare(packageId, input)
+      },
+      {
+        installStateDirectory: join(app.getPath('userData'), 'skill-installs')
+      }
+    )
+    let preparationId: string | null = null
+    const cancel = (): void => {
+      if (preparationId) {
+        preparations.cancel(preparationId)
+      }
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
+    try {
+      if (signal?.aborted) {
+        throw signal.reason ?? new Error('skill-share-cancelled')
+      }
+      const preview = await preparations
+        .prepare({
+          sources: selectedSkills.map((skill) => ({
+            id: skill.name,
+            sourceDirectory: skill.directoryPath
+          })),
+          bundleName: request.bundleName,
+          description:
+            selectedSkills.length === 1
+              ? (selectedSkills[0].description ?? '')
+              : `${selectedSkills.length} shared skills`
+        })
+        .catch((error: unknown) => {
+          if (
+            error instanceof Error &&
+            ['skill-package-skill-name-required', 'skill-package-skill-name-invalid'].includes(
+              error.message
+            )
+          ) {
+            throw new AgentSkillSharingError(
+              AGENT_SKILL_NOT_SHAREABLE_CODE,
+              'A selected skill cannot be shared. Its SKILL.md must declare a lowercase name containing only letters, numbers, and hyphens.'
+            )
+          }
+          throw error
+        })
+      preparationId = preview.preparationId
+      if (signal?.aborted) {
+        throw signal.reason ?? new Error('skill-share-cancelled')
+      }
+      this.assertAgentSkillSharingAllowed()
+      const published = await preparations.publish({
+        preparationId,
+        releaseNotes: request.releaseNotes
+      })
+      return published.status === 'ok'
+        ? {
+            status: 'ok',
+            value: {
+              ...published.value,
+              selectedSkills: selectedSkills.map(({ id, name, description }) => ({
+                id,
+                name,
+                description
+              }))
+            }
+          }
+        : published
+    } finally {
+      signal?.removeEventListener('abort', cancel)
+      await preparations.dispose()
+    }
+  }
+
+  publishSkillPackage(
+    request: SkillCloudPublishRequest
+  ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
+    return this.requireSkillCloudService().publish(request)
+  }
+
+  publishSkillPackageVersion(
+    request: SkillCloudPublishRequest
+  ): Promise<SkillCloudOperation<SkillCloudVersion>> {
+    return this.requireSkillCloudService().publishVersion(request)
+  }
+
+  createSkillPackageShare(
+    packageId: string,
+    request: SkillCloudOptions & {
+      pinnedVersionId?: string
+      idempotencyKey?: string
+    }
+  ) {
+    return this.requireSkillCloudService().createShare(packageId, request)
+  }
+
+  resolveSkillShare(
+    shareId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<{ id: string; version: SkillCloudVersion }>> {
+    return this.requireSkillCloudService().resolveShare(shareId, options)
+  }
+
+  createSkillDownloadGrant(
+    shareId: string,
+    options: SkillCloudOptions & {
+      versionId?: string
+      installTarget?: 'local' | 'remote'
+    }
+  ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
+    return this.requireSkillCloudService().createDownloadGrant(shareId, options)
+  }
+
+  createSkillPackageVersionDownloadGrant(
+    packageId: string,
+    versionId: string,
+    options: SkillCloudOptions & { installTarget?: 'local' | 'remote' }
+  ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
+    return this.requireSkillCloudService().createPackageVersionDownloadGrant(
+      packageId,
+      versionId,
+      options
+    )
+  }
+
+  getSkillPackage(
+    packageId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<SkillCloudPackageDetails>> {
+    return this.requireSkillCloudService().getPackage(packageId, options)
+  }
+
+  listOwnedSkillShares(options: SkillCloudOptions) {
+    return this.requireSkillCloudService().listOwnedShares(options)
+  }
+
+  revokeSkillShare(
+    shareId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().revokeShare(shareId, options)
+  }
+
+  deleteSkillPackageVersion(
+    packageId: string,
+    versionId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().deleteVersion(packageId, versionId, options)
+  }
+
+  deleteSkillPackage(
+    packageId: string,
+    options: SkillCloudOptions
+  ): Promise<SkillCloudOperation<void>> {
+    return this.requireSkillCloudService().deletePackage(packageId, options)
+  }
+
+  async installSharedSkillRequest(
+    request: SkillInstallRequest,
+    signal?: AbortSignal
+  ): Promise<SkillInstallResult> {
+    if (this.skillInstallOperations.has(request.operationId)) {
+      throw new Error('skill-install-operation-in-progress')
+    }
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    if (signal?.aborted) {
+      abort()
+    } else {
+      signal?.addEventListener('abort', abort, { once: true })
+    }
+    this.skillInstallOperations.set(request.operationId, controller)
+    try {
+      return await this.executeSharedSkillInstall(request, controller.signal)
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      if (this.skillInstallOperations.get(request.operationId) === controller) {
+        this.skillInstallOperations.delete(request.operationId)
+      }
+    }
+  }
+
+  async installSharedSkillBundleRequest(
+    request: SkillBundleInstallRequest,
+    signal?: AbortSignal,
+    onProgress?: (progress: SkillBundleInstallProgress) => void
+  ): Promise<SkillBundleInstallResult> {
+    if (this.skillInstallOperations.has(request.operationId)) {
+      throw new Error('skill-install-operation-in-progress')
+    }
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    if (signal?.aborted) {
+      abort()
+    } else {
+      signal?.addEventListener('abort', abort, { once: true })
+    }
+    this.skillInstallOperations.set(request.operationId, controller)
+    const reportProgress = (progress: SkillBundleInstallProgress): void => {
+      this.skillInstallProgress.set(request.operationId, progress)
+      try {
+        onProgress?.(progress)
+      } catch {
+        // Why: renderer teardown must not change the host-owned install outcome.
+      }
+    }
+    try {
+      const runtimeId = this.getStatus().runtimeId
+      const sshTarget = await this.resolveSkillSshTarget(request.destination)
+      if (sshTarget) {
+        return installSkillBundleOnSshHost({
+          provider: sshTarget.provider,
+          userDataPath: app.getPath('userData'),
+          request: {
+            ...request,
+            destination:
+              request.destination.scope === 'global'
+                ? { scope: 'global', executionTarget: { kind: 'host' } }
+                : request.destination
+          },
+          workspace: sshTarget.workspace,
+          requireHttps: app.isPackaged,
+          signal: controller.signal,
+          onProgress: reportProgress
+        })
+      }
+      await this.skillTransactionRecovery
+      const allowedDownloadOrigins = ['https://storage.googleapis.com']
+      if (!app.isPackaged && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+        allowedDownloadOrigins.push(
+          ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean)
+        )
+      }
+      return await executeSkillBundleInstallRequest(request, {
+        authority: this.skillInstallDestinationAuthority(runtimeId),
+        stateDirectory: app.getPath('userData'),
+        allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
+        requireHttps: app.isPackaged,
+        resolveStagedUpload: (uploadId, identity) =>
+          this.requireSkillUploadSessions().take(uploadId, identity),
+        detectProviders: detectInstalledAgentsWithShellPathHydration,
+        resolveProviderRootOverrides: (destination) =>
+          this.resolveSkillProviderRootOverrides(destination),
+        signal: controller.signal,
+        onProgress: reportProgress
+      })
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      if (this.skillInstallOperations.get(request.operationId) === controller) {
+        this.skillInstallOperations.delete(request.operationId)
+      }
+      this.skillInstallProgress.delete(request.operationId)
+    }
+  }
+
+  getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null {
+    return this.skillInstallProgress.get(operationId) ?? null
+  }
+
+  cancelSharedSkillInstall(operationId: string): boolean {
+    const operation = this.skillInstallOperations.get(operationId)
+    operation?.abort()
+    return Boolean(operation)
+  }
+
+  private async executeSharedSkillInstall(
+    request: SkillInstallRequest,
+    signal: AbortSignal
+  ): Promise<SkillInstallResult> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return installSkillOnSshHost({
+        provider: sshTarget.provider,
+        userDataPath: app.getPath('userData'),
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace,
+        requireHttps: app.isPackaged,
+        signal
+      })
+    }
+    await this.skillTransactionRecovery
+    const allowedDownloadOrigins = ['https://storage.googleapis.com']
+    if (!app.isPackaged && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+      allowedDownloadOrigins.push(
+        ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean)
+      )
+    }
+    return executeSkillInstallRequest(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
+      requireHttps: app.isPackaged,
+      resolveStagedUpload: (uploadId, identity) =>
+        this.requireSkillUploadSessions().take(uploadId, identity),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination),
+      signal
+    })
+  }
+
+  async previewSharedSkillInstallRequest(
+    request: SkillInstallPreviewRequest
+  ): Promise<SkillInstallPreview> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return previewSkillInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
+      })
+    }
+    await this.skillTransactionRecovery
+    return previewSharedSkillInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async previewSharedSkillBundleInstallRequest(
+    request: SkillBundleInstallPreviewRequest
+  ): Promise<SkillBundleInstallPreview> {
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return previewSkillBundleInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
+      })
+    }
+    await this.skillTransactionRecovery
+    const runtimeId = this.getStatus().runtimeId
+    return previewSharedSkillBundleInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
+    const runtimeId = this.getStatus().runtimeId
+    const sshTarget = await this.resolveSkillSshTarget(request.destination)
+    if (sshTarget) {
+      return removeSkillInstallOnSshHost({
+        provider: sshTarget.provider,
+        request: {
+          ...request,
+          destination:
+            request.destination.scope === 'global'
+              ? { scope: 'global', executionTarget: { kind: 'host' } }
+              : request.destination
+        },
+        workspace: sshTarget.workspace
+      })
+    }
+    await this.skillTransactionRecovery
+    return removeSharedSkillInstall(request, {
+      authority: this.skillInstallDestinationAuthority(runtimeId),
+      stateDirectory: app.getPath('userData'),
+      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      resolveProviderRootOverrides: (destination) =>
+        this.resolveSkillProviderRootOverrides(destination)
+    })
+  }
+
+  async listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
+    if (connectionId) {
+      const provider = this.requireSkillSshProvider(connectionId)
+      return listSkillInstallsOnSshHost({
+        provider,
+        connectionId,
+        workspaces: await this.listSkillSshWorkspaces(connectionId)
+      })
+    }
+    await this.skillTransactionRecovery
+    const runtimeId = this.getStatus().runtimeId
+    const [installs, worktrees] = await Promise.all([
+      listManagedSkillInstalls(join(app.getPath('userData'), 'skill-installs'), {
+        observeReceipt: async (receipt) => {
+          if (!receipt.wslDistro) {
+            return nativeSkillInstallFilesystem.observeSkill(
+              receipt.canonicalPath,
+              receipt.fileModes
+            )
+          }
+          const filesystem = new WslSkillInstallFilesystem(receipt.wslDistro, [
+            dirname(receipt.canonicalPath)
+          ])
+          return filesystem.observeSkill(receipt.canonicalPath, receipt.fileModes)
+        }
+      }),
+      this.listResolvedWorktrees()
+    ])
+    const folderWorkspaces = this.listFolderWorkspaces()
+    return installs.flatMap((install): ManagedSkillInstall[] => {
+      if (install.scope === 'global') {
+        const wslPrefix = `global:${runtimeId}:wsl:`
+        return [
+          {
+            ...install,
+            destination: install.destinationIdentity.startsWith(wslPrefix)
+              ? {
+                  scope: 'global',
+                  executionTarget: {
+                    kind: 'wsl',
+                    distro: install.destinationIdentity.slice(wslPrefix.length)
+                  }
+                }
+              : { scope: 'global' }
+          }
+        ]
+      }
+      const worktree = worktrees.find(
+        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
+      )
+      if (worktree) {
+        return [{ ...install, destination: { scope: 'workspace', worktreeId: worktree.id } }]
+      }
+      const folder = folderWorkspaces.find(
+        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
+      )
+      return folder
+        ? [{ ...install, destination: { scope: 'workspace', folderWorkspaceId: folder.id } }]
+        : []
+    })
+  }
+
+  async skillInstallDestinationUsesSsh(
+    destination: SkillInstallRequest['destination']
+  ): Promise<boolean> {
+    return Boolean(await this.resolveSkillSshTarget(destination))
+  }
+
+  async resolveSkillDiscoveryProviderRoots(target: {
+    kind: 'native-host' | 'wsl'
+    distro?: string
+  }): Promise<SkillProviderRootOverrides> {
+    const roots = await this.resolveSkillProviderRootOverrides({
+      scope: 'global',
+      homeDirectory: homedir(),
+      ...(target.kind === 'wsl' && target.distro ? { wslDistro: target.distro } : {})
+    })
+    if (target.kind !== 'wsl') {
+      return roots
+    }
+    return Object.fromEntries(
+      Object.entries(roots).map(([provider, root]) => [provider, toLinuxPath(root)])
+    )
+  }
+
+  private async resolveSkillProviderRootOverrides(destination: {
+    scope: 'global' | 'workspace'
+    homeDirectory: string
+    workspaceDirectory?: string
+    wslDistro?: string
+  }): Promise<SkillProviderRootOverrides> {
+    if (destination.scope !== 'global') {
+      return {}
+    }
+    const wslGrokRoot = destination.wslDistro
+      ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
+      : null
+    const roots: SkillProviderRootOverrides = destination.wslDistro
+      ? wslGrokRoot
+        ? { grok: wslGrokRoot }
+        : {}
+      : resolveEnvironmentSkillProviderRoots()
+    const claudeConfigDirectory = this.accountServices?.claudeAccounts.getRuntimeConfigDir(
+      destination.wslDistro
+        ? { runtime: 'wsl', wslDistro: destination.wslDistro }
+        : { runtime: 'host' }
+    )
+    return withClaudeSkillProviderRoot(roots, claudeConfigDirectory)
+  }
+
+  private skillInstallDestinationAuthority(runtimeId: string): SkillInstallDestinationAuthority {
+    return {
+      environmentId: runtimeId,
+      homeDirectory: homedir(),
+      resolveWorktree: async (id) => {
+        const repo = this.listRepos().find(
+          (candidate) => candidate.id === getRepoIdFromWorktreeId(id)
+        )
+        if (repo?.connectionId) {
+          throw new Error('skill-install-ssh-dispatch-required')
+        }
+        const projectRuntime = this.resolveProjectRuntimeForWorktree(id)
+        const worktree = await this.showManagedWorktree(`id:${id}`)
+        if (worktree.id !== id) {
+          return null
+        }
+        return {
+          id,
+          path: worktree.path,
+          ...(projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+            ? { wslDistro: projectRuntime.runtime.distro }
+            : {})
+        }
+      },
+      resolveFolderWorkspace: async (id) => {
+        const workspace = this.listFolderWorkspaces().find((candidate) => candidate.id === id)
+        if (!workspace || workspace.connectionId) {
+          return null
+        }
+        return {
+          id,
+          path: workspace.folderPath,
+          ...(parseWslUncPath(workspace.folderPath)?.distro
+            ? { wslDistro: parseWslUncPath(workspace.folderPath)!.distro }
+            : {})
+        }
+      },
+      resolveWsl: async (distro) => {
+        if (process.platform !== 'win32') {
+          return null
+        }
+        const homeDirectory = getWslHome(distro)
+        return homeDirectory ? { homeDirectory } : null
+      }
+    }
+  }
+
+  private async resolveSkillSshTarget(destination: SkillInstallRequest['destination']): Promise<{
+    provider: () => IPtyProvider
+    workspace?: SkillSshWorkspaceAuthority
+  } | null> {
+    if (destination.scope === 'global') {
+      if (destination.executionTarget?.kind !== 'ssh') {
+        return null
+      }
+      const connectionId = destination.executionTarget.connectionId
+      return { provider: () => this.requireSkillSshProvider(connectionId) }
+    }
+    if (destination.worktreeId) {
+      const repo = this.listRepos().find(
+        (candidate) => candidate.id === getRepoIdFromWorktreeId(destination.worktreeId!)
+      )
+      if (!repo?.connectionId) {
+        return null
+      }
+      const worktree = await this.showManagedWorktree(`id:${destination.worktreeId}`)
+      if (worktree.id !== destination.worktreeId) {
+        throw new Error('skill-install-workspace-not-found')
+      }
+      return {
+        provider: () => this.requireSkillSshProvider(repo.connectionId!),
+        workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
+      }
+    }
+    const folder = this.listFolderWorkspaces().find(
+      (candidate) => candidate.id === destination.folderWorkspaceId
+    )
+    if (!folder?.connectionId) {
+      return null
+    }
+    return {
+      provider: () => this.requireSkillSshProvider(folder.connectionId!),
+      workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
+    }
+  }
+
+  private requireSkillSshProvider(connectionId: string): IPtyProvider {
+    const provider = this.getSshProviderFn?.(connectionId)
+    if (!provider?.requestHostRpc) {
+      throw new Error('skill-install-ssh-relay-unavailable')
+    }
+    return provider
+  }
+
+  private async listSkillSshWorkspaces(
+    connectionId: string
+  ): Promise<SkillSshWorkspaceAuthority[]> {
+    const repos = new Map(
+      this.listRepos()
+        .filter((repo) => repo.connectionId === connectionId)
+        .map((repo) => [repo.id, repo])
+    )
+    const worktrees = (await this.listResolvedWorktrees())
+      .filter((worktree) => repos.has(getRepoIdFromWorktreeId(worktree.id)))
+      .map(
+        (worktree): SkillSshWorkspaceAuthority => ({
+          kind: 'worktree',
+          id: worktree.id,
+          path: worktree.path
+        })
+      )
+    const folders = this.listFolderWorkspaces()
+      .filter((folder) => folder.connectionId === connectionId)
+      .map(
+        (folder): SkillSshWorkspaceAuthority => ({
+          kind: 'folder',
+          id: folder.id,
+          path: folder.folderPath
+        })
+      )
+    return [...worktrees, ...folders]
+  }
+
+  beginSkillUpload(request: SkillUploadBeginRequest): Promise<{
+    uploadId: string
+    chunkBytes: number
+    acknowledgedOffset: number
+  }> {
+    return this.requireSkillUploadSessions().begin(request)
+  }
+
+  appendSkillUploadChunk(
+    request: SkillUploadChunkRequest
+  ): Promise<{ acknowledgedOffset: number }> {
+    return this.requireSkillUploadSessions().append(request)
+  }
+
+  commitSkillUpload(uploadId: string): Promise<{ uploadId: string }> {
+    return this.requireSkillUploadSessions().commit(uploadId)
+  }
+
+  cancelSkillUpload(uploadId: string): Promise<void> {
+    return this.requireSkillUploadSessions().cancel(uploadId)
+  }
+
   listArtifacts(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
     return this.requireArtifactService().list(options)
   }
@@ -4752,6 +5637,20 @@ export class OrcaRuntimeService {
       throw new Error('Artifact service is unavailable.')
     }
     return this.artifactService
+  }
+
+  private requireSkillCloudService(): SkillCloudService {
+    if (!this.skillCloudService) {
+      throw new Error('Skill Cloud service is unavailable.')
+    }
+    return this.skillCloudService
+  }
+
+  private requireSkillUploadSessions(): SkillUploadSessionService {
+    this.skillUploadSessions ??= new SkillUploadSessionService(
+      join(app.getPath('userData'), 'skill-installs', 'remote-uploads')
+    )
+    return this.skillUploadSessions
   }
 
   getRuntimeId(): string {
@@ -4974,6 +5873,9 @@ export class OrcaRuntimeService {
       if (!workspace) {
         return null
       }
+      if (workspace.executionHostId != null) {
+        return parseExecutionHostId(workspace.executionHostId)?.id ?? null
+      }
       const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
@@ -5021,6 +5923,48 @@ export class OrcaRuntimeService {
     return worktreeIds
   }
 
+  // Every execution host known to this runtime; knowledge is not coverage.
+  private listKnownExecutionHostIds(
+    additionalHostIds: Iterable<ExecutionHostId> = [],
+    includeConfiguredHosts = true
+  ): Set<ExecutionHostId> {
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
+      hostIds.add(hostId)
+    }
+    for (const hostId of additionalHostIds) {
+      hostIds.add(hostId)
+    }
+    if (!includeConfiguredHosts) {
+      return hostIds
+    }
+    const repos = this.store?.getRepos?.() ?? []
+    for (const repo of repos) {
+      hostIds.add(getRepoExecutionHostId(repo))
+    }
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    for (const workspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      if (workspace.executionHostId != null) {
+        const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
+        if (explicitHostId) {
+          hostIds.add(explicitHostId)
+        }
+        continue
+      }
+      const connection = inferFolderWorkspacePathConnection({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        connectionId: workspace.connectionId ?? null,
+        projectGroups,
+        repos
+      })
+      if (connection.kind === 'ssh') {
+        hostIds.add(toSshExecutionHostId(connection.connectionId))
+      }
+    }
+    return hostIds
+  }
+
   private getWorkspaceSessionHydrationTargets(
     includeAllPersistedWorktrees: boolean
   ): Map<string, WorkspaceSessionState> {
@@ -5037,7 +5981,7 @@ export class OrcaRuntimeService {
         ] as const
       })
     )
-    const hostIds = new Set<ExecutionHostId>(['local'])
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
@@ -9650,6 +10594,7 @@ export class OrcaRuntimeService {
     incarnationId?: PtyIncarnationId,
     options: { awaitsRegistration?: boolean } = {}
   ): void {
+    this.forgetPtyLivenessVerdict(ptyId)
     if (options.awaitsRegistration !== false) {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
       this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
@@ -9683,6 +10628,7 @@ export class OrcaRuntimeService {
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    this.forgetPtyLivenessVerdict(ptyId)
     this.spawnPublishedPtys.add(ptyId)
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
@@ -10110,6 +11056,11 @@ export class OrcaRuntimeService {
         // bell — the chunk's agentStatus:set events must reach the renderer
         // before its pty:sideEffect batch.
         retainedAgentStatusChanged = this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+        const lastPayloadTitleOffset =
+          agentStatusChunk.lastPayloadCleanOffset === null
+            ? null
+            : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
+        this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
       } finally {
         // Why: flushed in the finally so a throwing tracker callback cannot
         // strand this chunk's facts to be emitted under the next chunk's seq.
@@ -10205,6 +11156,7 @@ export class OrcaRuntimeService {
     }
     if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, state.appended)) {
       pty.waitBlockedAt = at
+      this.recordAgentPromptPermissionObservation(ptyId)
     }
     state.lastAt = at
     state.lastWaitState = nextWaitState
@@ -10671,6 +11623,7 @@ export class OrcaRuntimeService {
     const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
     const recordedTitle = identityOnlyTitle ? null : normalizedTitle
     const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
+    this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
@@ -10786,6 +11739,9 @@ export class OrcaRuntimeService {
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.agentPromptLifecycleByPtyId.delete(ptyId)
+    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.clearWaitBlockedCheckState(ptyId)
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       pty.lastOscTitle = null
@@ -10799,13 +11755,18 @@ export class OrcaRuntimeService {
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.managementTitle = null
       pty.managementTitleAt = null
+      pty.waitBlockedAt = null
+      pty.tailWaitState = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null
       leaf.lastOscTitleAt = null
       leaf.lastAgentStatus = null
       leaf.lastAgentStatusObservedLive = false
+      leaf.waitBlockedAt = null
+      leaf.tailWaitState = undefined
     }
+    this.primeWaitBlockedBaselineFromSeededTail(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
   }
 
@@ -10944,6 +11905,10 @@ export class OrcaRuntimeService {
     }
     let retainedChanged = false
     for (const payload of chunk.payloads) {
+      this.recordAgentPromptLifecycleState(
+        ptyId,
+        mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
+      )
       for (const target of targets.values()) {
         retainedChanged =
           this.retainAgentRowSnapshot(
@@ -11011,7 +11976,9 @@ export class OrcaRuntimeService {
       (previous.payload.agentType ?? null) !== (payload.agentType ?? null) ||
       (previous.payload.toolName ?? null) !== (payload.toolName ?? null) ||
       (previous.payload.interactivePrompt ?? null) !== (payload.interactivePrompt ?? null) ||
-      (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false)
+      (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false) ||
+      (previous.payload.turnCompletedAt ?? null) !== (payload.turnCompletedAt ?? null) ||
+      (previous.payload.lastAssistantMessage ?? null) !== (payload.lastAssistantMessage ?? null)
     )
   }
 
@@ -11027,6 +11994,64 @@ export class OrcaRuntimeService {
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  private recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
+    if (status === 'permission') {
+      this.recordAgentPromptPermissionObservation(ptyId)
+    }
+    const current = this.agentPromptLifecycleByPtyId.get(ptyId)
+    const updatedAt = Date.now()
+    if (!current) {
+      this.agentPromptLifecycleByPtyId.set(ptyId, {
+        status,
+        workingSequence: status === 'working' ? 1 : 0,
+        updatedAt
+      })
+      return
+    }
+    this.agentPromptLifecycleByPtyId.set(ptyId, {
+      status,
+      workingSequence:
+        current.workingSequence + (status === 'working' && current.status !== 'working' ? 1 : 0),
+      updatedAt
+    })
+  }
+
+  private recordAgentPromptPermissionObservation(ptyId: string): void {
+    this.agentPromptPermissionSequenceByPtyId.set(
+      ptyId,
+      (this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0) + 1
+    )
+  }
+
+  private restoreAgentPromptLifecycleByteOrder(
+    ptyId: string,
+    titleInput: string,
+    lastPayloadTitleOffset: number | null
+  ): void {
+    if (lastPayloadTitleOffset === null) {
+      return
+    }
+    const titleRange = findLastCompleteOscTitleRange(titleInput)
+    if (!titleRange || titleRange.end <= lastPayloadTitleOffset) {
+      return
+    }
+    const title = extractLastOscTitle(titleInput)
+    if (title === null) {
+      return
+    }
+    const status = detectAgentStatusFromTitle(title)
+    const current = this.agentPromptLifecycleByPtyId.get(ptyId)
+    if (!current || current.status === status) {
+      return
+    }
+    this.agentPromptLifecycleByPtyId.set(ptyId, {
+      status,
+      workingSequence:
+        current.workingSequence + (status === 'working' && current.status !== 'working' ? 1 : 0),
+      updatedAt: Date.now()
+    })
+  }
+
   private getPtyLifecycleGeneration(ptyId: string): number {
     const existing = this.ptyLifecycleGenerationById.get(ptyId)
     if (existing !== undefined) {
@@ -11039,6 +12064,9 @@ export class OrcaRuntimeService {
 
   private advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    this.agentPromptLifecycleByPtyId.delete(ptyId)
+    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecoveredPtys.delete(ptyId)
     // Why: a respawn under the same session id needs its own subscriber-driven attach.
     this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
@@ -11091,6 +12119,7 @@ export class OrcaRuntimeService {
       if (pty) {
         pty.wslDistro = null
       }
+      // Why: raced post-spawn bytes may already contain the replacement's permission state.
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
         this.resetTrackedTerminalStateForProviderGeneration(ptyId)
       }
@@ -13894,14 +14923,25 @@ export class OrcaRuntimeService {
     }
   }
 
-  onPtyExit(ptyId: string, exitCode: number, exitIncarnationId?: PtyIncarnationId): void {
+  onPtyExit(
+    ptyId: string,
+    exitCode: number,
+    exitIncarnationId?: PtyIncarnationId,
+    options?: { hostExitConfirmed?: boolean }
+  ): void {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
     }
     const preservesAbnormalSshSurface =
-      this.isSshOwnedPtyId(ptyId) && pty?.connectionId != null && exitCode < 0
+      this.isSshOwnedPtyId(ptyId) &&
+      pty?.connectionId != null &&
+      exitCode < 0 &&
+      options?.hostExitConfirmed !== true
     if (preservesAbnormalSshSurface) {
+      if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
+        this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
+      }
       this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     } else {
       this.retirePtyAgentLaunchAuthority(ptyId)
@@ -13970,6 +15010,7 @@ export class OrcaRuntimeService {
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -14034,6 +15075,11 @@ export class OrcaRuntimeService {
       this.setPairedRendererSessionOwnership(pty.ptyId, false)
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
+      if (exitCode >= 0 || options?.hostExitConfirmed === true) {
+        // A real wait status from the owning host is the death certificate; the
+        // synthetic -1 we emit on a failed/unroutable stop is not.
+        this.forgetPtyLivenessVerdict(ptyId)
+      }
       // Why: the exited process's live frames say nothing about a replacement.
       // A same-id respawn makes the leaf writable again before any new title,
       // so leaving this true would let push delivery type into the new process
@@ -15687,7 +16733,7 @@ export class OrcaRuntimeService {
     }
 
     const errorContext = `Agent exited with code ${exitCode}`
-    this._orchestrationDb.failDispatch(dispatch.id, errorContext)
+    this._orchestrationDb.failDispatch(dispatch.id, errorContext, { workerProcessExited: true })
 
     // Why: create an escalation message so the coordinator is notified about
     // the unexpected exit on its next check cycle, even if the circuit breaker
@@ -15849,6 +16895,12 @@ export class OrcaRuntimeService {
 
     return {
       terminals: listedTerminals,
+      hostScope: this.buildTerminalListHostScope(
+        targetWorktreeId,
+        matchingTerminals,
+        worktreesById.values(),
+        controllerInventory?.queriedHostIds ?? new Set()
+      ),
       ...(visualLayouts.length > 0 ? { visualLayouts } : {}),
       topologyRevisions: Object.fromEntries(
         [...new Set(matchingTerminals.map((terminal) => terminal.worktreeId))].map((worktreeId) => [
@@ -15861,20 +16913,66 @@ export class OrcaRuntimeService {
     }
   }
 
+  // A worktree-scoped request answers for one host only, so name the hosts it
+  // skipped: absence from a scoped listing is not evidence a worker exited.
+  private buildTerminalListHostScope(
+    targetWorktreeId: string | null,
+    terminals: readonly RuntimeTerminalSummary[],
+    worktrees: Iterable<ResolvedWorktree>,
+    queriedHostIds: ReadonlySet<ExecutionHostId>
+  ): RuntimeTerminalListHostScope {
+    const knownHostIds = this.listKnownExecutionHostIds(
+      queriedHostIds,
+      targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID
+    )
+    let resolvedTargetHostId: ExecutionHostId | null = null
+    for (const worktree of worktrees) {
+      if (worktree.hostId) {
+        knownHostIds.add(worktree.hostId)
+        if (worktree.id === targetWorktreeId) {
+          resolvedTargetHostId = worktree.hostId
+        }
+      }
+    }
+    for (const terminal of terminals) {
+      if (terminal.executionHostId) {
+        knownHostIds.add(terminal.executionHostId)
+      }
+    }
+    const scopedHostId = targetWorktreeId
+      ? (resolvedTargetHostId ?? this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
+      : null
+    if (scopedHostId) {
+      knownHostIds.add(scopedHostId)
+    }
+    const candidates = targetWorktreeId ? (scopedHostId ? [scopedHostId] : []) : knownHostIds
+    // Paired runtimes own a separate control plane. Mirrored rows are evidence
+    // for those rows only; this runtime cannot claim their complete inventory.
+    const coveredHostIds = new Set(
+      [...candidates].filter(
+        (hostId) => queriedHostIds.has(hostId) && parseExecutionHostId(hostId)?.kind !== 'runtime'
+      )
+    )
+    return {
+      hostIds: [...coveredHostIds].sort(),
+      omittedHostIds: [...knownHostIds].filter((hostId) => !coveredHostIds.has(hostId)).sort()
+    }
+  }
+
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
     serializedHostScope: string | null
-  ): Promise<'live' | 'dead' | 'unknown'> {
+  ): Promise<'live' | 'exited' | 'unverifiable'> {
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
     if (!hostScope || !this.ptyController?.listProcesses) {
-      return 'unknown'
+      return 'unverifiable'
     }
     const listed = await withTimeoutResult(
       this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {
-      return 'unknown'
+      return 'unverifiable'
     }
     return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
   }
@@ -16722,6 +17820,68 @@ export class OrcaRuntimeService {
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
   }
 
+  /**
+   * Records that we lost contact with a PTY's owning host. Callers must never
+   * read this as an exit: a detached relay PTY is designed to outlive the
+   * provider that addressed it.
+   */
+  markPtyLivenessUnverifiable(ptyId: string, reason: string): void {
+    this.rememberPtyLivenessVerdict(ptyId, { status: 'unverifiable', reason })
+  }
+
+  markPtyLivenessLive(ptyId: string): void {
+    this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
+  }
+
+  /** Null when nothing has been observed either way, so callers keep their own default. */
+  getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
+    return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
+  }
+
+  getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
+    const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
+    return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null
+  }
+
+  private rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
+    if (verdict.status === 'exited') {
+      // An earned death certificate ends the question; nothing left to remember.
+      this.ptyLivenessVerdictByPtyId.delete(ptyId)
+      return
+    }
+    this.ptyLivenessVerdictByPtyId.delete(ptyId)
+    this.ptyLivenessObservationSequence += 1
+    this.ptyLivenessVerdictByPtyId.set(ptyId, {
+      verdict,
+      observedAt: this.ptyLivenessObservationSequence
+    })
+    while (this.ptyLivenessVerdictByPtyId.size > MAX_TRACKED_PTY_LIVENESS_VERDICTS) {
+      let oldestOrphaned: string | null = null
+      for (const candidate of this.ptyLivenessVerdictByPtyId.keys()) {
+        if (
+          !this.ptysById.has(candidate) &&
+          !this.handleByPtyId.has(candidate) &&
+          !this.leafExistsForPty(candidate)
+        ) {
+          oldestOrphaned = candidate
+          break
+        }
+      }
+      if (!oldestOrphaned) {
+        return
+      }
+      this.ptyLivenessVerdictByPtyId.delete(oldestOrphaned)
+    }
+  }
+
+  private forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
+    const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+    if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
+      return
+    }
+    this.ptyLivenessVerdictByPtyId.delete(ptyId)
+  }
+
   getExactWorkerProviderSession(
     handle: string,
     observedAfter: number
@@ -17049,17 +18209,33 @@ export class OrcaRuntimeService {
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
-    const bytesWritten = Buffer.byteLength(`${payload}${AGENT_PROMPT_SUBMIT}`, 'utf8')
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
       await assertTerminalInputWithinLimitWithYield(payload)
-      await this.writeTerminalAgentPrompt(pty.pty.ptyId, payload, options)
+      const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
+      const submits = await this.serializeAgentPromptSubmission(
+        pty.pty.ptyId,
+        generation,
+        async () => {
+          this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
+          this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
+          return await this.writeTerminalAgentPrompt(
+            handle,
+            pty.pty.ptyId,
+            generation,
+            payload,
+            options
+          )
+        }
+      )
+      const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
       return { handle, accepted: true, bytesWritten }
     }
 
@@ -17073,7 +18249,13 @@ export class OrcaRuntimeService {
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    await this.writeTerminalAgentPrompt(leaf.ptyId, payload, options)
+    const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
+    const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
+      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
+      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
+      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+    })
+    const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
   }
 
@@ -17081,21 +18263,10 @@ export class OrcaRuntimeService {
     const ptyId = this.getTerminalAgentStatusPtyId(handle)
     const terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
-    const liveTitleClearsBlockedText =
-      terminal.titleStatusIsLive &&
-      terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission' &&
-      !isOpenCodeNativeTitle(terminal.title)
-    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
-      return { handle, isRunningAgent: true, status: 'permission' }
-    }
+    const lifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
     if (
-      blockedByWaitText &&
-      !liveTitleClearsBlockedText &&
-      (!explicitStatus ||
-        explicitStatus.status === 'permission' ||
-        (terminal.waitBlockedAt !== null && terminal.waitBlockedAt >= explicitStatus.updatedAt))
+      (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) ||
+      this.hasAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle)
     ) {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
@@ -17165,13 +18336,7 @@ export class OrcaRuntimeService {
   private getTerminalAgentStatusSnapshot(
     handle: string,
     expectedPtyId: string
-  ): {
-    waitText: string
-    waitBlockedAt: number | null
-    title: string | null
-    titleStatus: AgentStatus | null
-    titleStatusIsLive: boolean
-  } {
+  ): TerminalAgentStatusSnapshot {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected || pty.pty.ptyId !== expectedPtyId) {
@@ -17228,6 +18393,36 @@ export class OrcaRuntimeService {
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
       titleStatusIsLive: (title?.updatedAt ?? 0) > 0
     }
+  }
+
+  private hasAuthoritativeTerminalWaitPermission(
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ): boolean {
+    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    if (!blockedByWaitText) {
+      return false
+    }
+    const liveTitleClearsBlockedText =
+      terminal.titleStatusIsLive &&
+      terminal.titleStatus !== null &&
+      terminal.titleStatus !== 'permission' &&
+      !isOpenCodeNativeTitle(terminal.title)
+    if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
+      return false
+    }
+    const newestPermissionAt = Math.max(
+      explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
+      lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
+      terminal.waitBlockedAt ?? -1
+    )
+    const newestClearAt = Math.max(
+      explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
+      lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
+    )
+    // Equal wall-clock observations fail closed because their raw intra-chunk order is unknown.
+    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt
   }
 
   private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
@@ -17629,13 +18824,20 @@ export class OrcaRuntimeService {
   }
 
   private async writeTerminalAgentPrompt(
+    handle: string,
     ptyId: string,
+    generation: number,
     pastePayload: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      signal?: AbortSignal
     } = {}
-  ): Promise<void> {
+  ): Promise<number> {
+    assertAgentPromptRequestActive(options.signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
+    const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
+    this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const renderGate = this.createAgentPromptRenderGate(ptyId)
     let wrotePasteBytes = false
     let completedPaste = false
@@ -17644,7 +18846,15 @@ export class OrcaRuntimeService {
       let chunk = chunks.next()
       while (!chunk.done) {
         const nextChunk = chunks.next()
+        assertAgentPromptRequestActive(options.signal)
+        this.assertAgentPromptGeneration(ptyId, generation)
         await options.beforeWrite?.(ptyId)
+        assertAgentPromptRequestActive(options.signal)
+        this.assertAgentPromptGeneration(ptyId, generation)
+        this.assertAgentPromptPermissionSafe(
+          permissionBaseline,
+          this.getAgentPromptActivity(handle, ptyId)
+        )
         if (nextChunk.done) {
           renderGate?.arm()
         }
@@ -17660,7 +18870,11 @@ export class OrcaRuntimeService {
       }
       completedPaste = true
     } catch (error) {
-      if (wrotePasteBytes && !completedPaste) {
+      if (
+        wrotePasteBytes &&
+        !completedPaste &&
+        this.getPtyLifecycleGeneration(ptyId) === generation
+      ) {
         this.ptyController?.write(ptyId, AGENT_PROMPT_BRACKETED_PASTE_END)
       }
       renderGate?.dispose()
@@ -17668,11 +18882,16 @@ export class OrcaRuntimeService {
     }
 
     if (renderGate) {
-      await renderGate.wait()
-      renderGate.dispose()
+      try {
+        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
+      } finally {
+        renderGate.dispose()
+      }
     } else {
-      await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_SUBMIT_DELAY_MS))
+      await waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS, options.signal)
     }
+    assertAgentPromptRequestActive(options.signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
     try {
       await options.beforeWrite?.(ptyId)
     } catch (error) {
@@ -17681,9 +18900,92 @@ export class OrcaRuntimeService {
       }
       throw error
     }
+    assertAgentPromptRequestActive(options.signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
+    const baseline = this.getAgentPromptActivity(handle, ptyId)
+    this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
     if (!suffixWrote) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+    }
+    await verifyAgentPromptSubmission({
+      baseline,
+      readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+      signal: options.signal
+    })
+    return 1
+  }
+
+  private async serializeAgentPromptSubmission<T>(
+    ptyId: string,
+    generation: number,
+    submit: () => Promise<T>
+  ): Promise<T> {
+    const queueKey = `${ptyId}\u0000${generation}`
+    const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve()
+    const submission = previous.catch(() => undefined).then(submit)
+    const tail = submission.then(
+      () => undefined,
+      () => undefined
+    )
+    this.agentPromptSubmissionTailByPtyId.set(queueKey, tail)
+    try {
+      return await submission
+    } finally {
+      if (this.agentPromptSubmissionTailByPtyId.get(queueKey) === tail) {
+        this.agentPromptSubmissionTailByPtyId.delete(queueKey)
+      }
+    }
+  }
+
+  private getAgentPromptActivity(handle: string, ptyId: string): AgentPromptActivity {
+    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    const explicitCandidate = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicitFloor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
+    const explicit =
+      explicitCandidate &&
+      (explicitFloor === undefined || explicitCandidate.updatedAt > explicitFloor)
+        ? explicitCandidate
+        : null
+    const lifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
+    const ptyStatus =
+      lifecycle || explicitFloor === undefined
+        ? (this.ptysById.get(ptyId)?.lastAgentStatus ?? null)
+        : null
+    const lifecycleIsNewer =
+      lifecycle &&
+      (!explicit ||
+        lifecycle.updatedAt > explicit.updatedAt ||
+        (lifecycle.updatedAt === explicit.updatedAt && lifecycle.status === 'permission'))
+    const terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
+    const status = this.hasAuthoritativeTerminalWaitPermission(terminal, explicit, lifecycle)
+      ? 'permission'
+      : lifecycleIsNewer
+        ? lifecycle.status
+        : (explicit?.status ?? ptyStatus ?? null)
+    return {
+      generation: this.getPtyLifecycleGeneration(ptyId),
+      permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
+      workingSequence: lifecycle?.workingSequence ?? 0,
+      status
+    }
+  }
+
+  private assertAgentPromptPermissionSafe(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): void {
+    if (
+      current.status === 'permission' ||
+      current.permissionSequence > baseline.permissionSequence
+    ) {
+      throw new Error('agent_prompt_blocked')
+    }
+  }
+
+  private assertAgentPromptGeneration(ptyId: string, expected: number): void {
+    if (this.getPtyLifecycleGeneration(ptyId) !== expected) {
+      throw new Error('terminal_handle_stale')
     }
   }
 
@@ -17694,11 +18996,11 @@ export class OrcaRuntimeService {
   } | null {
     const pty = this.ptysById.get(ptyId)
     const agent = pty?.launchAgent ?? pty?.foregroundAgent
-    if (agent !== 'claude' && agent !== 'codex') {
+    if (!isTerminalSendSettlementAgent(agent)) {
       return null
     }
     let armed = false
-    let observedMarker = false
+    let canSettle = false
     let settled = false
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
@@ -17739,13 +19041,13 @@ export class OrcaRuntimeService {
       if (!armed || settled) {
         return
       }
-      if (!observedMarker) {
+      if (!canSettle) {
         const combined = markerCarry + data
         markerCarry = combined.slice(-(AGENT_PROMPT_RENDER_MARKER.length - 1))
         if (!combined.includes(AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
-        observedMarker = true
+        canSettle = true
         // Why: a slow initial redraw must still receive the full settlement window.
         armHardTimer()
       }
@@ -17755,13 +19057,11 @@ export class OrcaRuntimeService {
       arm: () => {
         armed = true
         markerCarry = ''
+        armHardTimer()
       },
       wait: async () => {
         if (settled) {
           return
-        }
-        if (!hardTimer) {
-          armHardTimer()
         }
         await rendered
       },
@@ -25000,6 +26300,7 @@ export class OrcaRuntimeService {
               .then((gate) => gate.finish(false))
               .catch(() => {})
           }
+          await deleteRemoteWorktreeHistory(sshPtyProvider, removalTarget.id)
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
@@ -25044,6 +26345,7 @@ export class OrcaRuntimeService {
               console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
             })
           }
+          await deleteRemoteWorktreeHistory(folderSshPtyProvider, removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
           this.invalidateResolvedWorktreeCache()
@@ -25127,6 +26429,10 @@ export class OrcaRuntimeService {
                 removalTarget.id,
                 removedPushTarget,
                 store
+              )
+              await deleteRemoteWorktreeHistory(
+                this.getSshProviderFn?.(repo.connectionId),
+                removalTarget.id
               )
             } else {
               const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
@@ -25233,6 +26539,12 @@ export class OrcaRuntimeService {
                   store,
                   localWorktreeGitOptions
                 ))
+            if (repo.connectionId) {
+              await deleteRemoteWorktreeHistory(
+                this.getSshProviderFn?.(repo.connectionId),
+                removalTarget.id
+              )
+            }
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
@@ -25325,6 +26637,10 @@ export class OrcaRuntimeService {
             removalTarget.id,
             removedPushTarget,
             store
+          )
+          await deleteRemoteWorktreeHistory(
+            this.getSshProviderFn?.(repo.connectionId),
+            removalTarget.id
           )
           this.rememberPreservedBranchCleanupTarget(
             removalTarget.id,
@@ -27624,13 +28940,34 @@ export class OrcaRuntimeService {
     let addressedPtyStopped = false
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
-      let verifiedStopped = false
-      try {
-        verifiedStopped = (await this.ptyController?.stopAndWait?.(ptyId, { deadlineMs })) ?? false
-      } catch {
-        // Why: verified teardown is preferred, but its transport failure must not suppress the legacy provider kill.
+      let stopped = false
+      if (this.ptyController?.stopAndWait) {
+        try {
+          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
+        } catch (error) {
+          this.markPtyLivenessUnverifiable(
+            ptyId,
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+        if (!stopped) {
+          const verdict = this.getPtyLivenessVerdict(ptyId)
+          const providerAlreadyRetiredPty =
+            verdict?.status === 'unverifiable' &&
+            verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
+          if (!providerAlreadyRetiredPty) {
+            this.ptyController.kill(ptyId)
+            if (!verdict || verdict.status === 'live') {
+              this.markPtyLivenessUnverifiable(
+                ptyId,
+                'a follow-up stop was issued but its outcome could not be verified'
+              )
+            }
+          }
+        }
+      } else {
+        stopped = this.ptyController?.kill(ptyId) ?? false
       }
-      const stopped = verifiedStopped || (this.ptyController?.kill(ptyId) ?? false)
       if (ptyId === addressedPtyId) {
         addressedPtyStopped = stopped
       }
@@ -27832,15 +29169,15 @@ export class OrcaRuntimeService {
           this.notifier.closeTerminal?.(tabId)
         }
         const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return { handle, tabId, ptyKilled }
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
       if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
         const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return { handle, tabId, ptyKilled }
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
-      const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
+      const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
           // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
@@ -27856,7 +29193,7 @@ export class OrcaRuntimeService {
           this.notifier?.closeTerminal(tabId)
         }
       }
-      return { handle, tabId, ptyKilled }
+      return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -27879,7 +29216,36 @@ export class OrcaRuntimeService {
     if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
-    return { handle, tabId: leaf.tabId, ptyKilled }
+    return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, ptyKilled)
+  }
+
+  /**
+   * A close receipt must not read as a kill nobody performed: when the stop was
+   * not confirmed, the receipt carries why so the CLI and callers can say so.
+   */
+  private describeTerminalClose(
+    handle: string,
+    tabId: string,
+    ptyId: string | null,
+    ptyKilled: boolean
+  ): RuntimeTerminalClose {
+    if (ptyKilled || !ptyId) {
+      return { handle, tabId, ptyKilled }
+    }
+    const verdict = this.getPtyLivenessVerdict(ptyId)
+    if (verdict?.status === 'unverifiable') {
+      return {
+        handle,
+        tabId,
+        ptyKilled,
+        ptyStopVerdict: 'unverifiable',
+        ptyStopReason: verdict.reason
+      }
+    }
+    if (verdict?.status === 'live') {
+      return { handle, tabId, ptyKilled, ptyStopVerdict: 'live' }
+    }
+    return { handle, tabId, ptyKilled }
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
@@ -28110,7 +29476,7 @@ export class OrcaRuntimeService {
         }
       }
       try {
-        this.ptyController.retireRejectedPty?.(result.id)
+        this.ptyController.retireRejectedPty?.(result.id, stopped)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }
@@ -30420,7 +31786,8 @@ export class OrcaRuntimeService {
         return {
           livePtyIds: targetedLiveness,
           allLivePtyIds: targetedLiveness,
-          terminalIdentityByPtyId: new Map()
+          terminalIdentityByPtyId: new Map(),
+          queriedHostIds: new Set([LOCAL_EXECUTION_HOST_ID])
         }
       }
     }
@@ -30429,14 +31796,39 @@ export class OrcaRuntimeService {
     }
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
+    const livenessObservationAtStart = this.ptyLivenessObservationSequence
     const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
     } else {
       this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
     }
+    const processInventory =
+      connectionId === undefined && this.ptyController.listProcessesWithHostScope
+        ? this.ptyController.listProcessesWithHostScope()
+        : this.ptyController.listProcesses(connectionId).then((processes) => {
+            const hostIds = new Set<ExecutionHostId>()
+            if (connectionId === undefined || connectionId === null) {
+              hostIds.add(LOCAL_EXECUTION_HOST_ID)
+            } else {
+              hostIds.add(toSshExecutionHostId(connectionId))
+            }
+            if (connectionId === undefined) {
+              for (const process of processes) {
+                const hostId = getPtyExecutionHost(process.id)
+                if (
+                  hostId &&
+                  hostId !== 'foreign' &&
+                  parseExecutionHostId(hostId)?.kind === 'ssh'
+                ) {
+                  hostIds.add(hostId)
+                }
+              }
+            }
+            return { processes, hostIds: [...hostIds] }
+          })
     const sessionsResult = await withTimeoutResult(
-      this.ptyController.listProcesses(connectionId),
+      processInventory,
       deadline === undefined
         ? PTY_CONTROLLER_LIST_TIMEOUT_MS
         : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
@@ -30457,7 +31849,8 @@ export class OrcaRuntimeService {
     if (!isCurrentInventory) {
       return null
     }
-    const sessions = sessionsResult.value
+    const sessions = sessionsResult.value.processes
+    const queriedHostIds = new Set(sessionsResult.value.hostIds)
     const controllerIdentityByPtyId = new Map<string, PtyControllerTerminalIdentity>()
     const ptyIdByControllerHandle = new Map<string, string>()
     const ambiguousControllerPtyIds = new Set<string>()
@@ -30513,6 +31906,8 @@ export class OrcaRuntimeService {
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
+      // The owning inventory positively observed this PTY again; prior lost-contact doubt is stale.
+      this.forgetPtyLivenessVerdict(session.id, livenessObservationAtStart)
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
@@ -30615,7 +32010,18 @@ export class OrcaRuntimeService {
         continue
       }
       if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
-        if (this.ptyController.hasPty?.(pty.ptyId) === true) {
+        const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
+        if (
+          currentVerdict &&
+          currentVerdict.observedAt > livenessObservationAtStart &&
+          currentVerdict.verdict.status === 'unverifiable'
+        ) {
+          pty.connected = false
+          pty.disconnectedAt ??= Date.now()
+          continue
+        }
+        const observed = this.ptyController.hasPty?.(pty.ptyId)
+        if (observed === true) {
           // Why: an SSH spawn can become addressable before an overlapping relay list includes it.
           allLivePtyIds.add(pty.ptyId)
           if (
@@ -30626,17 +32032,27 @@ export class OrcaRuntimeService {
           }
           pty.connected = true
           pty.disconnectedAt = null
+          this.forgetPtyLivenessVerdict(pty.ptyId)
           continue
         }
         pty.connected = false
         pty.disconnectedAt ??= Date.now()
+        // Why: this list only enumerates registered providers, so a dropped relay
+        // clears `connected` for every one of its PTYs at once. Only `false` here
+        // is an observed absence; `null` means no provider could be asked.
+        if (observed === false) {
+          this.forgetPtyLivenessVerdict(pty.ptyId)
+        } else if (observed === null) {
+          this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
+        }
       }
     }
     this.pruneDisconnectedPtyRecords()
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
-      terminalIdentityByPtyId: controllerIdentityByPtyId
+      terminalIdentityByPtyId: controllerIdentityByPtyId,
+      queriedHostIds
     }
   }
 
@@ -30710,6 +32126,7 @@ export class OrcaRuntimeService {
         if (pty) {
           pty.connected = true
           pty.disconnectedAt = null
+          this.forgetPtyLivenessVerdict(ptyId)
           this.refreshPtyForegroundAgent(ptyId)
         }
       } else if (pty && !this.leafExistsForPty(ptyId)) {
@@ -30885,8 +32302,24 @@ export class OrcaRuntimeService {
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview
+      preview: leaf.preview,
+      ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId)
     }
+  }
+
+  // Why: the PTY id names its own host when it has one; only a host-less id may
+  // fall back to the worktree's. A foreign id with no owner stays unset rather
+  // than inheriting a local worktree's host and reading as local.
+  private terminalExecutionHostField(
+    ptyId: string | null,
+    worktreeId: string
+  ): { executionHostId?: ExecutionHostId } {
+    const fromPtyId = getPtyExecutionHost(ptyId)
+    if (fromPtyId === 'foreign') {
+      return {}
+    }
+    const hostId = fromPtyId ?? this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    return hostId ? { executionHostId: hostId } : {}
   }
 
   // Returns the worktrees whose stored snapshot object changed during this
@@ -31635,6 +33068,31 @@ export class OrcaRuntimeService {
         : livePty
           ? this.issuePtyHandle(livePty)
           : null
+      const projectedAgentStatus =
+        agentStatus ??
+        this.buildPtyMobileAgentStatus(
+          mobileStatusPty,
+          tab,
+          terminalHandle,
+          retainedAgentStatus,
+          getHookRowsForPane
+        )
+      const projectedStatusEntry = projectedAgentStatus.agentStatus as
+        | (AgentStatusEntry & { turnCompletedAt?: number })
+        | undefined
+      const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
+        projectedStatusEntry ?? {}
+      const clientAgentStatus = projectedStatusEntry
+        ? { agentStatus: clientStatusFields as AgentStatusEntry }
+        : {}
+      const rawTurnCompletedAt =
+        hookAgentStatus?.live?.payload.turnCompletedAt ??
+        this.getHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
+        projectedTurnCompletedAt
+      const turnCompletedAt =
+        typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
+          ? rawTurnCompletedAt
+          : undefined
       tabs.push({
         type: 'terminal',
         id: tab.id,
@@ -31644,14 +33102,8 @@ export class OrcaRuntimeService {
         ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
         ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
         ...(launchAgent ? { launchAgent } : {}),
-        ...(agentStatus ??
-          this.buildPtyMobileAgentStatus(
-            mobileStatusPty,
-            tab,
-            terminalHandle,
-            retainedAgentStatus,
-            getHookRowsForPane
-          )),
+        ...clientAgentStatus,
+        ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
         ...(tab.color != null ? { color: tab.color } : {}),
@@ -32413,12 +33865,15 @@ export class OrcaRuntimeService {
   }
 
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
-  async isTerminalRunningAgent(handle: string): Promise<boolean> {
+  async isTerminalRunningAgent(
+    handle: string,
+    options: { retryForegroundWrappers?: boolean } = {}
+  ): Promise<boolean> {
     try {
       const pty = this.getLivePtyForHandle(handle)
       if (pty) {
         const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
-        return await this.isPtyRunningAgent(pty.pty, leaf)
+        return await this.isPtyRunningAgent(pty.pty, leaf, options)
       }
       const { leaf } = this.getLiveLeafForHandle(handle)
       const trackedPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : null
@@ -32469,8 +33924,33 @@ export class OrcaRuntimeService {
       }
       // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
       return await this.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
-        suppressClaude: shouldSuppressClaudeForeground
+        suppressClaude: shouldSuppressClaudeForeground,
+        retryWrappers: options.retryForegroundWrappers !== false
       })
+    } catch {
+      return false
+    }
+  }
+
+  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+    try {
+      const livePty = this.getLivePtyForHandle(handle)
+      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
+      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
+      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
+      if (!ptyId || !trackedPty || !this.ptyController) {
+        return false
+      }
+      const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
+      const recognizedAgent = recognized?.agent
+      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
+        return false
+      }
+      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
+        return false
+      }
+      trackedPty.foregroundAgent = recognizedAgent
+      return true
     } catch {
       return false
     }
@@ -32478,7 +33958,8 @@ export class OrcaRuntimeService {
 
   private async isPtyRunningAgent(
     pty: RuntimePtyWorktreeRecord,
-    leaf: RuntimeLeafRecord | null = null
+    leaf: RuntimeLeafRecord | null = null,
+    options: { retryForegroundWrappers?: boolean } = {}
   ): Promise<boolean> {
     const leafTitle = leaf
       ? getLatestAgentCandidateTitle(
@@ -32537,14 +34018,15 @@ export class OrcaRuntimeService {
     }
     // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
     return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
-      suppressClaude: shouldSuppressClaudeForeground
+      suppressClaude: shouldSuppressClaudeForeground,
+      retryWrappers: options.retryForegroundWrappers !== false
     })
   }
 
   private async isRecognizedForegroundAgentProcess(
     ptyId: string,
     foregroundProcess: string,
-    options: { suppressClaude?: boolean } = {}
+    options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
   ): Promise<boolean> {
     const initialRecognition = recognizeAgentProcess(foregroundProcess)
     if (initialRecognition !== null) {
@@ -32553,7 +34035,11 @@ export class OrcaRuntimeService {
         isExpectedAgentProcess(initialRecognition.processName, 'claude')
       )
     }
-    if (!this.isAgentWrapperForegroundProcess(foregroundProcess) || !this.ptyController) {
+    if (
+      options.retryWrappers === false ||
+      !this.isAgentWrapperForegroundProcess(foregroundProcess) ||
+      !this.ptyController
+    ) {
       return false
     }
     const startedAt = Date.now()
@@ -32774,7 +34260,8 @@ export class OrcaRuntimeService {
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
-      preview: pty.preview
+      preview: pty.preview,
+      ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId)
     }
   }
 
@@ -36281,7 +37768,7 @@ export class OrcaRuntimeService {
 const WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS = 50
 // Why: chunks that could complete an actionable prompt bypass the throttle so blocked stamps stay immediate; scanned over the new chunk + short carry, never the whole window.
 const WAIT_BLOCKED_KEYWORD_PATTERN =
-  /press enter|press t to trust|do you trust|trust this|trusted workspace|update available|choose working directory|codex just got an upgrade|hooks need review/
+  /press enter|press t to trust|do you trust|trust this|trusted workspace|permission required|requires permission|allow once|allow always|update available|choose working directory|codex just got an upgrade|hooks need review/
 const WAIT_BLOCKED_KEYWORD_CARRY_CHARS = 31
 const MAX_TAIL_LINES = 2000
 const MAX_TAIL_CHARS = 256 * 1024
@@ -38356,6 +39843,51 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
     return 'management'
   }
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+}
+
+function isTerminalSendSettlementAgent(
+  agent: TuiAgent | null | undefined
+): agent is 'claude' | 'codex' {
+  return agent === 'claude' || agent === 'codex'
+}
+
+function findLastCompleteOscTitleRange(data: string): { start: number; end: number } | null {
+  // Why: one forward cursor keeps hostile unterminated OSC output linear-time.
+  let last: { start: number; end: number } | null = null
+  let searchFrom = 0
+  while (searchFrom < data.length) {
+    const start = data.indexOf('\x1b]', searchFrom)
+    if (start === -1) {
+      break
+    }
+    const command = data[start + 2]
+    if ((command !== '0' && command !== '1' && command !== '2') || data[start + 3] !== ';') {
+      searchFrom = start + 2
+      continue
+    }
+    let cursor = start + 4
+    for (; cursor < data.length; cursor += 1) {
+      if (data[cursor] === '\x07') {
+        last = { start, end: cursor + 1 }
+        searchFrom = cursor + 1
+        break
+      }
+      if (data[cursor] !== '\x1b') {
+        continue
+      }
+      if (data[cursor + 1] === '\\') {
+        last = { start, end: cursor + 2 }
+        searchFrom = cursor + 2
+      } else {
+        searchFrom = cursor
+      }
+      break
+    }
+    if (cursor === data.length) {
+      break
+    }
+  }
+  return last
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {

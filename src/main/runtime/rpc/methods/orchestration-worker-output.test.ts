@@ -83,6 +83,19 @@ describe('exact orchestration worker output', () => {
     expect(readTerminal).not.toHaveBeenCalled()
   })
 
+  it('reports unverifiable liveness without claiming the terminal is running', async () => {
+    const result = await read({
+      terminalStatus: 'unknown',
+      terminalLiveness: 'unverifiable'
+    })
+
+    expect(result.status).toEqual({
+      worker: 'ready',
+      terminal: 'unknown',
+      liveness: 'unverifiable'
+    })
+  })
+
   it('reads Grok through the shared Native Chat transcript decoder', async () => {
     await writeFile(
       transcriptA,

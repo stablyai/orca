@@ -686,13 +686,13 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'needs attention',
-        type: 'escalation',
+        type: 'question',
         run: activeRunId
       })
 
       const result = await waitPromise
       expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('escalation')
+      expect(result.messages[0].type).toBe('question')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {

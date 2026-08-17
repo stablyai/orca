@@ -8,7 +8,9 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 
-function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+function lifecycleGroupRecipientError(
+  type: 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
+): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
@@ -205,6 +207,107 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
       expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
     })
+
+    it('fences a replacement process for a capability-less manual Dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'process-bound manual work' })
+      const dispatch = db.createDispatchContext(
+        task.id,
+        'term_worker',
+        'tab_worker:leaf_worker',
+        undefined,
+        'runtime_test:term_worker:1'
+      )
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+      )
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+      const payload = JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded'
+      })
+
+      const rejected = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done after replacement',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { action: string; code: string } }
+
+      expect(rejected.lifecycle).toEqual({
+        action: 'rejected',
+        code: 'sender_not_assignee',
+        reason: `Dispatch ${dispatch.id} process incarnation is no longer current for its pane.`
+      })
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
+      const accepted = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done by assignee',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { action: string } }
+      expect(accepted.lifecycle.action).toBe('completed')
+    })
+
+    it.each(['escalation', 'decision_gate'] as const)(
+      'fences a replacement process from a %s mutation',
+      async (type) => {
+        setup()
+        const task = db.createTask({ spec: `process-bound ${type}` })
+        const dispatch = db.createDispatchContext(
+          task.id,
+          'term_worker',
+          'tab_worker:leaf_worker',
+          undefined,
+          'runtime_test:term_worker:1'
+        )
+        vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+          handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+        )
+        vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
+          'runtime_test:term_worker:2'
+        )
+
+        const rejected = (await call('orchestration.send', {
+          from: 'term_worker',
+          subject: `${type} after replacement`,
+          type,
+          payload: JSON.stringify({
+            taskId: task.id,
+            ...(type === 'decision_gate' ? { question: 'Proceed?' } : {})
+          })
+        })) as {
+          lifecycle: { action: string; code: string }
+          message: { type: string }
+        }
+
+        expect(rejected.lifecycle).toMatchObject({
+          action: 'rejected',
+          code: 'sender_not_assignee'
+        })
+        expect(db.getTask(task.id)?.status).toBe('dispatched')
+        expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+        expect(db.listGates({ taskId: task.id })).toHaveLength(0)
+        expect(rejected.message.type).toBe('status')
+
+        vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
+          'runtime_test:term_worker:1'
+        )
+        const accepted = (await call('orchestration.send', {
+          from: 'term_worker',
+          subject: `${type} by assignee`,
+          type,
+          payload: JSON.stringify({
+            taskId: task.id,
+            ...(type === 'decision_gate' ? { question: 'Proceed?' } : {})
+          })
+        })) as { message: { type: string } }
+        expect(accepted.message.type).toBe(type)
+      }
+    )
 
     it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
       setup()
@@ -550,6 +653,27 @@ describe('orchestration RPC methods', () => {
       expect(listTerminals).not.toHaveBeenCalled()
       expect(db.getInbox(100)).toHaveLength(0)
     })
+
+    it.each(['escalation', 'decision_gate'] as const)(
+      'rejects %s group sends before inserting rows',
+      async (type) => {
+        setup()
+        const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+        await expect(
+          call('orchestration.send', {
+            from: 'term_worker',
+            to: '@all',
+            subject: `${type} broadcast`,
+            type,
+            payload: JSON.stringify({ taskId: 'task_1' })
+          })
+        ).rejects.toThrow(lifecycleGroupRecipientError(type))
+
+        expect(listTerminals).not.toHaveBeenCalled()
+        expect(db.getInbox(100)).toHaveLength(0)
+      }
+    )
 
     it('continues to send worker_done to a concrete terminal handle', async () => {
       setup()

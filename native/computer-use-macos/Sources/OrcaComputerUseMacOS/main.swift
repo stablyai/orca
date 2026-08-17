@@ -810,14 +810,31 @@ final class Provider {
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
-        let result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
+        let current = rawAttributeValue(record.element, kAXValueAttribute as String)
+        let coercion = AttributeValueCoercion(existingValue: current, requested: expected)
+        let result: AXError
+        switch coercion.writeValue {
+        case .string:
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
+        case let .integer(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, NSNumber(value: value))
+        case let .double(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, NSNumber(value: value))
+        case let .boolean(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
+        }
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
-        let actual = rawStringAttribute(record.element, kAXValueAttribute as String)
-        let verification = actual == expected
-            ? verifiedAction(property: "value", expected: expected, actualPreview: actual)
-            : unverifiedAction(reason: actual == nil ? "provider_unavailable" : "value_mismatch", expected: expected, actualPreview: actual)
+        let verification: [String: Any]
+        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
+        case let .match(actualPreview):
+            verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
+        case let .mismatch(actualPreview):
+            verification = unverifiedAction(reason: "value_mismatch", expected: expected, actualPreview: actualPreview)
+        case .unsupported:
+            verification = unverifiedAction(reason: "readback_unsupported", expected: expected)
+        }
         return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
 
@@ -1495,14 +1512,19 @@ private func stringAttribute(_ element: AXUIElement, _ attribute: String) -> Str
 }
 
 private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
-    var value: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
-          let value,
-          CFGetTypeID(value) == CFStringGetTypeID()
+    guard let value = rawAttributeValue(element, attribute), CFGetTypeID(value) == CFStringGetTypeID()
     else {
         return nil
     }
     return value as? String
+}
+
+private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
+        return nil
+    }
+    return value
 }
 
 private func boolAttribute(_ element: AXUIElement, _ attribute: String) -> Bool? {

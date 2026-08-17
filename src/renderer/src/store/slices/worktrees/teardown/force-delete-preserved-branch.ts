@@ -43,6 +43,18 @@ export function createForceDeletePreservedBranch(
       if ((options?.hostId || options?.runtimeEnvironmentId) && !retainedTarget) {
         throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
       }
+      // Ambiguous route: deleting against the active runtime could hit the wrong host's branch.
+      // Localized because it surfaces in the toast below; the throw above mirrors a main-process
+      // message verbatim (orca-runtime.ts, ipc/worktrees.ts) and must stay in sync with it.
+      if (!retainedTarget && matchingRetainedTargets.length > 1) {
+        throw new Error(
+          translate(
+            'auto.store.slices.worktrees.preservedBranchCleanupHostAmbiguous',
+            'Multiple preserved branch cleanups are pending for "{{value0}}"; specify the host.',
+            { value0: branchName }
+          )
+        )
+      }
       const cleanupHostId = options?.hostId ?? retainedTarget?.cleanup.hostId
       // Why: the removed row no longer records its nested HUB owner, so retain the deletion-time route.
       const target =

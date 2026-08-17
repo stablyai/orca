@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())

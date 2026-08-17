@@ -5,7 +5,7 @@ import {
   resolveSourceControlDisplayedBaseRef,
   shouldShowSourceControlBranchContextChrome,
   shouldShowSourceControlBranchContextRow
-} from './source-control-branch-context-stats'
+} from './source-control/panel/branch-context-stats'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 
 const readySummary: GitBranchCompareSummary = {

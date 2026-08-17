@@ -14,6 +14,7 @@ import {
   XTERM_COMPOSITION_SESSION_END_EVENT,
   XTERM_COMPOSITION_SESSION_START_EVENT
 } from './terminal-ime-composition-route'
+import { TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS } from './terminal-ime-deferred-chord'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
@@ -30,12 +31,34 @@ function keyboardEvent(
   return event
 }
 
+/** Live registrations on the terminal element, so a deferral that never disposes is visible. */
+function trackCompositionListeners(element: HTMLElement): () => number {
+  const live = new Set<EventListenerOrEventListenerObject>()
+  const watched = new Set(['compositionend', XTERM_COMPOSITION_SESSION_END_EVENT])
+  const { addEventListener, removeEventListener } = element
+  element.addEventListener = function (type, listener, options): void {
+    if (watched.has(type) && listener) {
+      live.add(listener)
+    }
+    addEventListener.call(this, type, listener, options)
+  }
+  element.removeEventListener = function (type, listener, options): void {
+    if (watched.has(type) && listener) {
+      live.delete(listener)
+    }
+    removeEventListener.call(this, type, listener, options)
+  }
+  return () => live.size
+}
+
 function createHarness(): {
   deps: KeyboardHandlersDeps
   terminalElement: HTMLDivElement
   terminalInput: HTMLTextAreaElement
   /** Every byte reaching the pty, in arrival order, whichever route it took. */
   wire: string[]
+  /** Registrations added after the composition route's own, i.e. the deferrals still waiting. */
+  deferralListenerCount: () => number
   startComposition: () => void
   endComposition: (data: string) => void
   dispose: () => void
@@ -77,6 +100,8 @@ function createHarness(): {
     capturedTransport: transport,
     getCurrentTransport: () => transport
   })
+  // Installed after the route so only the deferral's own registrations are counted.
+  const deferralListenerCount = trackCompositionListeners(terminalElement)
 
   const deps: KeyboardHandlersDeps = {
     tabId: 'tab-1',
@@ -110,6 +135,7 @@ function createHarness(): {
     terminalElement,
     terminalInput,
     wire,
+    deferralListenerCount,
     startComposition: () => {
       terminalElement.dispatchEvent(
         new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, { detail: { id: 1 } })
@@ -217,6 +243,59 @@ describe('a cursor chord pressed during a composition', () => {
     pressCmdArrowLeft(harness, false)
 
     expect(harness.wire).toEqual(['\x01'])
+    hook.unmount()
+    harness.dispose()
+  })
+
+  // STA-4476: an indefinite wait has no exit of its own. Without a disposer the listeners outlive
+  // the pane and a later composition on the same element flushes the stale chord.
+  it('drops the held chord and its listeners when the pane tears down', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    pressCmdArrowLeft(harness, true)
+    expect(harness.deferralListenerCount()).toBeGreaterThan(0)
+
+    hook.unmount()
+    harness.endComposition('다')
+    vi.runAllTimers()
+
+    expect(harness.wire).toEqual(['다'])
+    expect(harness.deferralListenerCount()).toBe(0)
+    harness.dispose()
+  })
+
+  it('drops the held chord and its listeners on blur', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    pressCmdArrowLeft(harness, true)
+    window.dispatchEvent(new Event('blur'))
+    harness.endComposition('다')
+    vi.runAllTimers()
+
+    expect(harness.wire).toEqual(['다'])
+    expect(harness.deferralListenerCount()).toBe(0)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  // A composition that never commits must not strand the wait forever. The chord is discarded,
+  // never sent late — a late send is #12871 again.
+  it('abandons a chord whose composition never ends', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    pressCmdArrowLeft(harness, true)
+    vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS + 1)
+    harness.endComposition('다')
+    vi.runAllTimers()
+
+    expect(harness.wire).toEqual(['다'])
+    expect(harness.deferralListenerCount()).toBe(0)
     hook.unmount()
     harness.dispose()
   })

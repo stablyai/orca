@@ -31,6 +31,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
+import { bindCoordinatorMutationPayload } from '../../orchestration/dispatch-message-binding'
 import {
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
@@ -64,7 +65,20 @@ async function routeAllMailboxPages(
   }
 }
 
-function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+type DispatchMutationMessageType = 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
+
+function isDispatchMutationMessageType(
+  type: string | undefined
+): type is DispatchMutationMessageType {
+  return (
+    type === 'worker_done' ||
+    type === 'heartbeat' ||
+    type === 'escalation' ||
+    type === 'decision_gate'
+  )
+}
+
+function getLifecycleGroupRecipientError(type: DispatchMutationMessageType): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
@@ -79,6 +93,22 @@ function parseRemoteWorkerPayload(payload: string | undefined): Record<string, u
       : {}
   } catch {
     throw new OrchestrationError('invalid_argument', 'Message payload must be valid JSON.')
+  }
+}
+
+function parseMessageTaskId(payload: string | undefined): string | undefined {
+  if (!payload) {
+    return undefined
+  }
+  try {
+    const parsed: unknown = JSON.parse(payload)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? typeof (parsed as { taskId?: unknown }).taskId === 'string'
+        ? (parsed as { taskId: string }).taskId
+        : undefined
+      : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -115,11 +145,7 @@ const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
-    if (
-      (params.type !== 'worker_done' && params.type !== 'heartbeat') ||
-      !params.to ||
-      !isGroupAddress(params.to)
-    ) {
+    if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
     // Why: dispatch lifecycle messages are authority/liveness signals for one coordinator; fanout would create lifecycle mail in unrelated terminals.
@@ -486,7 +512,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             type,
             priority: params.priority ?? 'normal',
             threadId: params.threadId ?? null,
-            payload: params.payload ?? null
+            payload: bindCoordinatorMutationPayload(
+              type,
+              params.payload,
+              remoteAttachment.dispatch_id
+            )
           }),
           ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
         })
@@ -619,15 +649,21 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         // Point-to-point — existing single-recipient behavior
         revalidateLegacyCoordinator?.()
+        const dispatch = routing.dispatchId
+          ? db.getDispatchContextById(routing.dispatchId)
+          : undefined
+        const messageType = (params.type ?? 'status') as MessageType
         const msg = db.insertMessage({
           from,
           to,
           subject: params.subject,
           body: params.body,
-          type: params.type as MessageType,
+          type: messageType,
           priority: params.priority as MessagePriority,
           threadId: params.threadId,
-          payload: params.payload,
+          payload: dispatch
+            ? bindCoordinatorMutationPayload(messageType, params.payload, dispatch.id)
+            : params.payload,
           senderPaneKey,
           runId: routing.run?.id,
           deliveryContract: legacyWorkerDeliveryContract(
@@ -636,32 +672,77 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             to
           )
         })
-        const dispatch = routing.dispatchId
-          ? db.getDispatchContextById(routing.dispatchId)
-          : undefined
-        if ((msg.type === 'worker_done' || msg.type === 'heartbeat') && dispatch?.capability_hash) {
-          const authority = db.verifyDispatchCapability({
-            dispatchId: dispatch.id,
-            capability: orchestrationCapability,
-            paneKey: senderPaneKey,
-            processIncarnation:
-              attestedCaller?.processIncarnation ??
-              runtime.getTerminalProcessIncarnation(from) ??
-              undefined
-          })
+        const dispatchMutationMessage = isDispatchMutationMessageType(msg.type)
+        if (dispatchMutationMessage) {
+          const processIncarnation =
+            attestedCaller?.processIncarnation ??
+            runtime.getTerminalProcessIncarnation(from) ??
+            undefined
+          const taskId = parseMessageTaskId(params.payload)
+          const capabilityBacked = Boolean(dispatch?.capability_hash)
+          const coordinatorMutation = msg.type === 'escalation' || msg.type === 'decision_gate'
+          let authority: {
+            valid: boolean
+            code: 'sender_not_assignee' | 'task_dispatch_mismatch' | 'dispatch_capability_invalid'
+            reason: string
+          }
+          if (!dispatch) {
+            authority = {
+              valid: !coordinatorMutation,
+              code: 'sender_not_assignee',
+              reason: 'No active Dispatch belongs to this message sender.'
+            }
+          } else if (coordinatorMutation && taskId && taskId !== dispatch.task_id) {
+            authority = {
+              valid: false,
+              code: 'task_dispatch_mismatch',
+              reason: `Task ${taskId} does not belong to Dispatch ${dispatch.id}.`
+            }
+          } else if (capabilityBacked) {
+            const capabilityAuthority = db.verifyDispatchCapability({
+              dispatchId: dispatch.id,
+              capability: orchestrationCapability,
+              paneKey: senderPaneKey,
+              processIncarnation
+            })
+            authority = {
+              valid: capabilityAuthority.valid,
+              code: 'dispatch_capability_invalid',
+              reason: capabilityAuthority.valid ? '' : capabilityAuthority.reason
+            }
+          } else if (dispatch.process_incarnation) {
+            authority = {
+              valid: db.isDispatchProcessCurrent({
+                dispatchId: dispatch.id,
+                paneKey: senderPaneKey ?? null,
+                processIncarnation: processIncarnation ?? null
+              }),
+              code: 'sender_not_assignee',
+              reason: `Dispatch ${dispatch.id} process incarnation is no longer current for its pane.`
+            }
+          } else {
+            authority = {
+              valid:
+                !coordinatorMutation ||
+                db.isDispatchMessageSender({
+                  dispatchId: dispatch.id,
+                  handle: from,
+                  paneKey: senderPaneKey
+                }),
+              code: 'sender_not_assignee',
+              reason: `Terminal ${from} does not own Dispatch ${dispatch.id}.`
+            }
+          }
           if (!authority.valid) {
+            const code = authority.code
             const rejection =
-              db.convertLifecycleMessageToRejection(
-                msg.id,
-                'dispatch_capability_invalid',
-                authority.reason
-              ) ?? msg
+              db.convertLifecycleMessageToRejection(msg.id, code, authority.reason) ?? msg
             runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
             return {
               message: rejection,
               lifecycle: {
                 action: 'rejected',
-                code: 'dispatch_capability_invalid',
+                code,
                 reason: authority.reason
               }
             }

@@ -429,7 +429,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
 // Why: OSC never carries model/children; omit both so an equivalent OSC ping preserves the hook-cached identity graph.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
-  b: ParsedAgentStatusPayload
+  b: ParsedAgentStatusPayload,
+  preserveActiveTurnStamp = false
 ): boolean {
   return (
     a.state === b.state &&
@@ -438,11 +439,14 @@ function equivalentParsedAgentStatusPayload(
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
-    a.lastAssistantMessage === b.lastAssistantMessage &&
+    (a.lastAssistantMessage === b.lastAssistantMessage ||
+      (preserveActiveTurnStamp && b.lastAssistantMessage === undefined)) &&
     a.interrupted === b.interrupted &&
     // Why: a session-boundary done must never be deduped against a cached real done —
     // the flag has to reach receivers deterministically (STA-3386).
-    a.sessionBoundary === b.sessionBoundary
+    a.sessionBoundary === b.sessionBoundary &&
+    (a.turnCompletedAt === b.turnCompletedAt ||
+      (preserveActiveTurnStamp && b.turnCompletedAt === undefined))
   )
 }
 
@@ -643,6 +647,7 @@ export class AgentHookServer {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
+  private activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
@@ -935,6 +940,9 @@ export class AgentHookServer {
         prompt: payload.prompt,
         agentType: payload.agentType,
         ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(restored.turnCompletedAt !== undefined
+          ? { turnCompletedAt: restored.turnCompletedAt }
+          : {}),
         ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
@@ -1193,6 +1201,10 @@ export class AgentHookServer {
     payload: AgentHookEventPayload,
     onAccepted?: () => void
   ): EnrichedAgentHookEventPayload {
+    if (payload.hookEventName === 'UserPromptSubmit') {
+      // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
+      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
+    }
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -1332,6 +1344,15 @@ export class AgentHookServer {
     }
     const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
     const enriched = this.attachStatusTiming(cachedPayload, now)
+    if (
+      typeof enriched.payload.turnCompletedAt === 'number' &&
+      Number.isFinite(enriched.payload.turnCompletedAt)
+    ) {
+      this.activeHookTurnCompletedAtByPaneKey.set(
+        enriched.paneKey,
+        enriched.payload.turnCompletedAt
+      )
+    }
     // Why: an identity-matched event can still leave the aggregate backed only by another restored child; keep liveness reconciliation eligible.
     if (enriched.restoredUnconfirmed) {
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -1646,6 +1667,11 @@ export class AgentHookServer {
     if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
       this.runtimeObservedStatusPaneKeys.add(toPaneKey)
     }
+    const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
+    if (activeTurnCompletedAt !== undefined) {
+      this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
+      this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
+    }
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
     if (authorityObservation) {
       const owner = parsePaneKey(toPaneKey)
@@ -1701,6 +1727,7 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(key)
       this.clearCodexSubagentPoll(key)
       clearPaneCacheState(this.state, key)
+      this.activeHookTurnCompletedAtByPaneKey.delete(key)
       this.runtimeObservedStatusPaneKeys.delete(key)
       this.currentAuthorityObservations.delete(key)
       this.promptSentDedupeByPaneKey.delete(key)
@@ -1734,6 +1761,7 @@ export class AgentHookServer {
         }
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
@@ -1743,6 +1771,7 @@ export class AgentHookServer {
         if (shouldClearStablePaneKey) {
           // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
           clearPaneCacheState(this.state, entry.stablePaneKey)
+          this.activeHookTurnCompletedAtByPaneKey.delete(entry.stablePaneKey)
           this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
           this.currentAuthorityObservations.delete(entry.stablePaneKey)
           this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
@@ -1884,12 +1913,15 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const preserveActiveTurnStamp =
+      previous?.payload.turnCompletedAt !== undefined &&
+      previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
     if (
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
-      equivalentParsedAgentStatusPayload(previous.payload, event.payload)
+      equivalentParsedAgentStatusPayload(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
       return
     }
@@ -2409,6 +2441,7 @@ export class AgentHookServer {
       return null
     }
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
@@ -2489,6 +2522,7 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(paneKey)
       this.clearCodexSubagentPoll(paneKey)
       clearPaneCacheState(this.state, paneKey)
+      this.activeHookTurnCompletedAtByPaneKey.delete(paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
@@ -2510,6 +2544,7 @@ export class AgentHookServer {
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
@@ -2519,6 +2554,7 @@ export class AgentHookServer {
         paneKeys.add(legacyPaneKey)
         paneKeys.add(stablePaneKey.stablePaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         clearedAlias = true

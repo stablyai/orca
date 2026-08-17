@@ -8,7 +8,7 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import type { DaemonFileLog } from './daemon-file-log'
 import { HistoryReader } from './history-reader'
 import type { HistoryCheckpointResult } from './terminal-history-manager-options'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
 const REATTACH_BUDGET_MS = 2_000

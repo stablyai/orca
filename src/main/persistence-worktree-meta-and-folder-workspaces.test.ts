@@ -287,6 +287,29 @@ describe('Store', () => {
     ])
   })
 
+  it('persists the exact folder workspace path provided on create and update', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      folderPath: '/workspace/platform '
+    })
+
+    expect(workspace.folderPath).toBe('/workspace/platform ')
+    expect(
+      store.updateFolderWorkspace(workspace.id, { folderPath: '/workspace/platform-next ' })
+        ?.folderPath
+    ).toBe('/workspace/platform-next ')
+
+    store.flush()
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.folderPath).toBe('/workspace/platform-next ')
+  })
+
   it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
