@@ -13,7 +13,10 @@ export function getDevSafeStorageKeychainNames(appName = DEV_SAFE_STORAGE_APP_NA
 }
 
 function runSecurity(args) {
-  execFileSync('/usr/bin/security', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+  // Why the timeout: on a locked keychain `security` blocks on an unlock dialog, which would
+  // hang `pnpm dev` startup indefinitely. Timing out degrades to the pre-existing behaviour
+  // (Electron creates its own item, macOS may prompt) instead of wedging the runner.
+  execFileSync('/usr/bin/security', args, { stdio: ['ignore', 'ignore', 'pipe'], timeout: 10_000 })
 }
 
 /**

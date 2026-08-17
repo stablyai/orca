@@ -69,6 +69,21 @@ describe('dev-safe-storage-keychain', () => {
     })
   })
 
+  it('degrades instead of hanging when security is killed by the timeout', () => {
+    // A locked keychain makes `security` block on an unlock dialog; the timeout kills it,
+    // leaving status null rather than an exit code.
+    const run = vi.fn(() => {
+      throw Object.assign(new Error('spawnSync /usr/bin/security ETIMEDOUT'), {
+        status: null,
+        signal: 'SIGTERM'
+      })
+    })
+
+    expect(ensureDevSafeStorageKeychainItem({ platform: 'darwin', run })).toMatchObject({
+      outcome: 'failed'
+    })
+  })
+
   it('is a no-op off macOS', () => {
     const run = vi.fn()
     for (const platform of ['win32', 'linux'] as const) {
