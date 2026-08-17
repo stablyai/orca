@@ -374,6 +374,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'repo.show', { repo: 'id:folder-1' })
     const createCall = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
+    expect(createCall).toBeDefined()
     expect(createCall?.[1]).not.toHaveProperty('branchNameOverride')
   })
 
