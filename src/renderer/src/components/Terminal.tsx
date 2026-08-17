@@ -10,6 +10,8 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
+import { pickTabCloseLanding } from '../store/slices/tab-close-landing'
+import { activateUnifiedTab } from '@/lib/unified-tab-activation'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { useAllWorktrees } from '../store/selectors'
@@ -1768,9 +1770,18 @@ function Terminal(): React.JSX.Element | null {
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
+        // Why: pick before the close so the group MRU still holds the tab the user came from.
+        const landingTab = pickTabCloseLanding(state, owningWorktreeId, {
+          contentType: 'browser',
+          entityId: tabId
+        })
         destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
         closeBrowserTab(tabId)
         if (state.activeWorktreeId === owningWorktreeId) {
+          if (landingTab) {
+            activateUnifiedTab(useAppStore.getState(), landingTab)
+            return
+          }
           const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
           if (worktreeFile) {
             setActiveFile(worktreeFile.id)

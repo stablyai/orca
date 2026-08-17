@@ -9,6 +9,8 @@ import {
   resolveHostSessionTabIdForWebSessionTab
 } from '@/runtime/web-session-tabs-sync'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { activateUnifiedTab } from '@/lib/unified-tab-activation'
+import { pickTabCloseLanding } from '@/store/slices/tab-close-landing'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -199,6 +201,14 @@ export function closeTerminalTab(
   const terminalCountBeforeClose =
     precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
   if (terminalCountBeforeClose <= 1) {
+    // Why: pick before the close so the group MRU still holds the tab the user came from.
+    const landingTab =
+      state.activeWorktreeId === owningWorktreeId
+        ? pickTabCloseLanding(state, owningWorktreeId, {
+            contentType: 'terminal',
+            entityId: terminalTabId
+          })
+        : null
     closeLocalTerminalTabState(terminalTabId, {
       reason: options?.reason,
       ...(options?.captureRecentlyClosed !== undefined
@@ -212,6 +222,11 @@ export function closeTerminalTab(
         : {})
     })
     if (state.activeWorktreeId === owningWorktreeId) {
+      if (landingTab) {
+        activateUnifiedTab(useAppStore.getState(), landingTab)
+        options?.onClosed?.()
+        return
+      }
       // Why: only deactivate the worktree when no tabs of any kind remain.
       // Editor files are a separate tab type; closing the last terminal tab
       // should switch to the editor view instead of tearing down the workspace.
