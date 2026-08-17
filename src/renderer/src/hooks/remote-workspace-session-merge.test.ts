@@ -201,3 +201,156 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
     expect(merged?.remoteSessionIdsByTabId).toEqual({ 'shared-tab': 'ssh:target-a@@new' })
   })
 })
+
+function namedTab(
+  id: string,
+  worktreeId: string,
+  ptyId: string | null,
+  generation?: number
+): TerminalTab {
+  return { id, worktreeId, ptyId, generation } as TerminalTab
+}
+
+describe('mergeDirectSshRemoteWorkspaceSession live-tab graft', () => {
+  const worktreeId = 'repo-a::/work-a'
+
+  it('grafts pty-bound local tabs missing from a snapshot of unbound rows', () => {
+    const liveBound = namedTab('live-1', worktreeId, 'ssh:target-a@@pty-34')
+    const liveLayoutBound = namedTab('live-2', worktreeId, null)
+    const current = session({ [worktreeId]: [liveBound, liveLayoutBound] })
+    current.terminalLayoutsByTabId = {
+      'live-2': {
+        root: { type: 'leaf', leafId: 'leaf-a' },
+        activeLeafId: 'leaf-a',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-a': 'ssh:target-a@@pty-35' }
+      }
+    }
+    current.remoteSessionIdsByTabId = { 'live-1': 'ssh:target-a@@pty-34' }
+    const remote = session({
+      [worktreeId]: [
+        namedTab('ghost-1', worktreeId, null, 110),
+        namedTab('ghost-2', worktreeId, null, 84)
+      ]
+    })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]?.map((entry) => entry.id)).toEqual([
+      'ghost-1',
+      'ghost-2',
+      'live-1',
+      'live-2'
+    ])
+    expect(merged?.terminalLayoutsByTabId['live-2']?.ptyIdsByLeafId).toEqual({
+      'leaf-a': 'ssh:target-a@@pty-35'
+    })
+    expect(merged?.remoteSessionIdsByTabId).toEqual({ 'live-1': 'ssh:target-a@@pty-34' })
+    expect(merged?.activeWorktreeIdsOnShutdown).toContain(worktreeId)
+  })
+
+  it('grafts a live tab whose worktree is absent from the snapshot', () => {
+    const live = namedTab('live-1', worktreeId, 'ssh:target-a@@pty-34')
+    const current = session({ [worktreeId]: [live] })
+    const remote = session({})
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]?.map((entry) => entry.id)).toEqual(['live-1'])
+  })
+
+  it('drops unbound local rows so dormant duplicates cannot resurrect', () => {
+    const dormant = namedTab('dormant-1', worktreeId, null)
+    const current = session({ [worktreeId]: [dormant] })
+    const remote = session({ [worktreeId]: [namedTab('remote-1', worktreeId, null, 5)] })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]?.map((entry) => entry.id)).toEqual(['remote-1'])
+  })
+
+  it('does not graft a tab bound only to a foreign connection', () => {
+    const foreign = namedTab('foreign-1', worktreeId, 'ssh:target-b@@pty-9')
+    const current = session({ [worktreeId]: [foreign] })
+    const remote = session({ [worktreeId]: [] })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]).toEqual([])
+  })
+
+  it('follows the snapshot placement for an id the snapshot owns elsewhere', () => {
+    const worktreeB = 'repo-b::/work-b'
+    const live = namedTab('moved-1', worktreeId, 'ssh:target-a@@pty-3')
+    const current = session({ [worktreeId]: [live] })
+    const remote = session({ [worktreeB]: [namedTab('moved-1', worktreeB, null, 7)] })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId, worktreeB]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(merged?.tabsByWorktree[worktreeB]?.map((entry) => entry.id)).toEqual(['moved-1'])
+  })
+
+  it('grafts a recovery-authority tab and a pending activation spawn', () => {
+    const recovering = namedTab('recover-1', worktreeId, null)
+    const spawning = { ...namedTab('spawn-1', worktreeId, null), pendingActivationSpawn: true }
+    const current = session({ [worktreeId]: [recovering, spawning] })
+    const remote = session({ [worktreeId]: [] })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set([directSshTerminalTabKey(worktreeId, 'recover-1')]),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]?.map((entry) => entry.id)).toEqual([
+      'recover-1',
+      'spawn-1'
+    ])
+    expect(merged?.tabsByWorktree[worktreeId]?.[1]?.pendingActivationSpawn).toBeTruthy()
+  })
+})
