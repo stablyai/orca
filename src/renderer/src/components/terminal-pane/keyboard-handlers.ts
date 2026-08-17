@@ -56,6 +56,10 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  findSpatiallyAdjacentPaneId,
+  isSpatialFocusDirection
+} from '@/lib/pane-manager/pane-spatial-focus'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -739,7 +743,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Cmd+[ / Cmd+] cycles active split pane focus.
+      // Sequential cycle stays creation-order; spatial moves use #8263 adjacency.
       if (action.type === 'focusPane') {
         const panes = manager.getPanes()
         if (panes.length < 2) {
@@ -757,6 +761,14 @@ export function useTerminalKeyboardShortcuts({
         }
 
         const activeId = manager.getActivePane()?.id ?? panes[0].id
+        if (isSpatialFocusDirection(action.direction)) {
+          const neighborId = findSpatiallyAdjacentPaneId(activeId, panes, action.direction)
+          if (neighborId !== null) {
+            manager.setActivePane(neighborId, { focus: true })
+          }
+          return
+        }
+
         const currentIdx = panes.findIndex((p) => p.id === activeId)
         if (currentIdx === -1) {
           return

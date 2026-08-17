@@ -763,6 +763,16 @@ export function createMainWindow(
       return false
     }
 
+    // Why: terminal.focusPaneLeft/Right default to the same Mod+Alt+Arrow chords
+    // as worktree history. Yield in a focused terminal so the renderer can move
+    // to an adjacent pane, or fall through to history when there is no split.
+    if (
+      action.type === 'worktreeHistoryNavigate' &&
+      focusedShortcutContext.context === 'terminal'
+    ) {
+      return false
+    }
+
     const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
     if (isIndexJump && isAutoRepeat) {
       // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a

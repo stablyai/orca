@@ -107,6 +107,10 @@ export type KeybindingActionId =
   | 'terminal.clear'
   | 'terminal.focusNextPane'
   | 'terminal.focusPreviousPane'
+  | 'terminal.focusPaneLeft'
+  | 'terminal.focusPaneRight'
+  | 'terminal.focusPaneUp'
+  | 'terminal.focusPaneDown'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
   | 'terminal.setTitle'
@@ -1011,6 +1015,40 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
     defaultBindings: platformBindings(['Mod+BracketLeft'])
+  },
+  {
+    id: 'terminal.focusPaneLeft',
+    title: 'Focus pane left',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'left', 'spatial', 'adjacent'],
+    // Why: Ghostty/iTerm2 pane nav. Left/right share worktree.history chords;
+    // main yields those in a focused terminal so this action can run.
+    defaultBindings: platformBindings(['Mod+Alt+ArrowLeft'])
+  },
+  {
+    id: 'terminal.focusPaneRight',
+    title: 'Focus pane right',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'right', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowRight'])
+  },
+  {
+    id: 'terminal.focusPaneUp',
+    title: 'Focus pane up',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'up', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowUp'])
+  },
+  {
+    id: 'terminal.focusPaneDown',
+    title: 'Focus pane down',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'down', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
   },
   {
     id: 'terminal.equalizePaneSizes',

@@ -184,6 +184,17 @@ describe('keybindings', () => {
     ).toEqual([])
   })
 
+  it('does not treat shared Mod+Alt+Arrow history/pane-focus chords as a Settings conflict', () => {
+    expect(findKeybindingConflicts('darwin')).toEqual([])
+    expect(findKeybindingConflicts('linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('worktree.history.back', 'darwin')).toEqual([
+      'Mod+Alt+ArrowLeft'
+    ])
+    expect(getEffectiveKeybindingsForAction('terminal.focusPaneLeft', 'darwin')).toEqual([
+      'Mod+Alt+ArrowLeft'
+    ])
+  })
+
   it('reports customized renderer conflicts with native menu accelerators', () => {
     expect(findKeybindingConflicts('darwin')).toEqual([])
 
