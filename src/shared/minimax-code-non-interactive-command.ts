@@ -14,7 +14,6 @@ function basename(token: string): string {
 }
 
 export function isMiniMaxCodeNonInteractiveCommand(tokens: readonly string[]): boolean {
-  const terminatorIndex = tokens.indexOf('--')
   const entrypointIndex = tokens.findIndex((token) => {
     const name = basename(token).replace(/\.(?:exe|cmd|bat|ps1)$/i, '')
     return name === 'mcode' || name === 'minimax-code' || name === 'cli.js'
@@ -22,9 +21,25 @@ export function isMiniMaxCodeNonInteractiveCommand(tokens: readonly string[]): b
   if (entrypointIndex === -1) {
     return false
   }
-  const commandIndex = entrypointIndex + 1
-  if (terminatorIndex !== -1 && terminatorIndex <= commandIndex) {
-    return false
+  let commandIndex = entrypointIndex + 1
+  while (commandIndex < tokens.length) {
+    const token = tokens[commandIndex]?.toLowerCase() ?? ''
+    if (token === '--') {
+      return false
+    }
+    if (token === '-c' || token === '--continue' || token.startsWith('--session=')) {
+      commandIndex += 1
+      continue
+    }
+    if (token === '--session') {
+      if (tokens[commandIndex + 1] === '--') {
+        commandIndex += 2
+        continue
+      }
+      commandIndex += tokens[commandIndex + 1]?.startsWith('-') ? 1 : 2
+      continue
+    }
+    return NON_INTERACTIVE_SUBCOMMANDS.has(token)
   }
-  return NON_INTERACTIVE_SUBCOMMANDS.has(tokens[commandIndex]?.toLowerCase() ?? '')
+  return false
 }

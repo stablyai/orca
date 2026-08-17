@@ -210,8 +210,16 @@ describe('agent process recognition', () => {
       )
     ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
     expect(
+      recognizeAgentProcessFromCommandLine('node /usr/local/lib/node_modules/@minimax/code/cli.js')
+    ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
+    expect(
       recognizeAgentProcessFromCommandLine(
         String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@minimax-ai\code\cli.js`
+      )
+    ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@minimax\code\cli.js`
       )
     ).toEqual({ agent: 'minimax-code', processName: 'minimax-code' })
   })
@@ -234,6 +242,15 @@ describe('agent process recognition', () => {
         'node /usr/local/lib/node_modules/@minimax-ai/code/cli.js acp'
       )
     ).toBeNull()
+    for (const command of [
+      'mcode --session sample exec --help',
+      'mcode --session=sample acp',
+      'mcode --session -- exec --help',
+      'mcode --continue login --help',
+      'mcode -c update'
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+    }
     expect(recognizeAgentProcessFromCommandLine('mcode -- "exec the release plan"')).toEqual({
       agent: 'minimax-code',
       processName: 'mcode'

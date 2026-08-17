@@ -23,7 +23,7 @@ function parseDesktopConfiguredAgents(): string[] {
   const match = source.match(/TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {([\s\S]*?)^}/m)
   expect(match).not.toBeNull()
   return Array.from(
-    match?.[1].matchAll(/^  (?:'([^']+)'|([a-z][a-z0-9-]*)): {/gm) ?? [],
+    match?.[1].matchAll(/^  (?:'([^']+)'|([a-z][a-z0-9-]*)):/gm) ?? [],
     (entry) => entry[1] ?? entry[2]
   )
 }
