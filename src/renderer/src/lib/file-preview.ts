@@ -10,11 +10,17 @@ import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
+import { translate } from '@/i18n/i18n'
 
 export type PreviewableLanguage = 'html'
-export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
+export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE = translate(
+  'renderer.lib.filePreview.remoteFileUnsupported',
   'Open in Orca Browser is only available for local files.'
-const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
+)
+const FILE_BROWSER_OPEN_FAILED_MESSAGE = translate(
+  'renderer.lib.filePreview.openFailed',
+  'Unable to open this file in Orca Browser.'
+)
 
 type WorkspaceFileBrowserActionMode = 'local-client' | 'paired-runtime' | null
 

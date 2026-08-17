@@ -3175,12 +3175,15 @@
           "commands": {
             "TerminalQuickCommandActionToggle": {
               "b0d58e37ed": "Agent Prompt",
-              "b5ea4d64f6": "Terminal Command"
+              "b5ea4d64f6": "Terminal Command",
+              "terminal_short": "Terminal",
+              "agent_short": "Agent"
             },
             "TerminalQuickCommandAppendEnterSwitch": {
               "e4e5fed3b3": "Toggle append Enter",
               "c936c2d6d2": "Submit immediately instead of only inserting text.",
-              "5fa607d807": "Append Enter"
+              "5fa607d807": "Append Enter",
+              "767e4be3e3": "Append Enter — run immediately"
             },
             "TerminalQuickCommandDialog": {
               "925b8e0f6e": "Advanced",
@@ -3192,12 +3195,16 @@
               "346d409ab2": "Choose agent",
               "0adba8fa0c": "Agent",
               "ec8f081919": "Action",
-              "ed04233b3e": "Save terminal commands or agent prompts for quick access.",
+              "ed04233b3e": "Saved items appear in the tab bar menu for one-click run.",
               "ca414324ee": "Command Text",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Add Quick Command",
               "f9b184fc16": "Edit Quick Command",
-              "6751598542": "edit"
+              "6751598542": "edit",
+              "command_label": "Command",
+              "agent_toolbar_hint": "Supports /goal, skills, paths",
+              "agent_footer_hint": "Multi-line prompts are fine — keep them focused.",
+              "resize_hint": "Drag corner to resize"
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "Save",
