@@ -230,6 +230,10 @@ export function AutomationEditorDialogFooter({
                 }
                 defaultAgent={settings?.defaultTuiAgent ?? null}
                 triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
+                // Why: an automation always dispatches its prompt to an agent,
+                // so offering Blank Terminal here is a dead option — picking it
+                // emits null and the draft keeps the previous agent.
+                allowBlankTerminal={false}
                 allowNarrowTrigger
               />
             </Field>
