@@ -80,6 +80,27 @@ describe('autoFocusRichEditor', () => {
     expect(focus).toHaveBeenCalledWith(null, { scrollIntoView: false })
   })
 
+  it('restores the selection after an editor tab activation', () => {
+    let runFrame: FrameRequestCallback = () => {}
+    const tab = document.createElement('div')
+    tab.dataset.tabId = 'editor-tab'
+    tab.tabIndex = 0
+    document.body.append(tab)
+    tab.focus()
+    const selection = Object.create(TextSelection.prototype)
+    const focus = vi.fn()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      runFrame = callback
+      return 8
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    autoFocusRichEditor(createEditor(focus, vi.fn(), selection), null)
+    runFrame(0)
+
+    expect(focus).toHaveBeenCalledWith(null, { scrollIntoView: false })
+  })
+
   it('starts at the beginning for an explicit handoff', () => {
     const selection = Object.create(TextSelection.prototype)
     const { focus, runFrame } = setupScheduledFocus(null, true, selection)

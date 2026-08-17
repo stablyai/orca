@@ -31,17 +31,17 @@ export function autoFocusRichEditor(
     // Why: explicit file-open requests may hand focus to the editor; ordinary
     // lazy mounts must still leave unrelated fields and dialogs alone.
     const canTakeFocus =
-      force || active === null || active === document.body || (rootEl?.contains(active) ?? false)
+      force ||
+      active === null ||
+      active === document.body ||
+      (rootEl?.contains(active) ?? false) ||
+      (active instanceof HTMLElement && active.hasAttribute('data-tab-id'))
     if (!canTakeFocus) {
       return
     }
-    // Why: a freshly-created empty document has an AllSelection, so focus it at
-    // the start to render a normal caret. Ordinary remounts may already have a
-    // restored TextSelection, which null preserves instead of resetting it.
-    // Explicit handoffs still start at position 1.
+    // Preserve a restored TextSelection; forced and non-text focus starts at position 1.
     const focusPosition =
       force || !(nextEditor.state.selection instanceof TextSelection) ? 'start' : null
-    //
     // Why: `scrollIntoView: false` prevents Tiptap's focus command from
     // scrolling the cursor into view, which would otherwise race with
     // useEditorScrollRestore's RAF retry loop and clobber the cached
