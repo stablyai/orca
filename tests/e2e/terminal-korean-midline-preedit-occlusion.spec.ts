@@ -54,6 +54,16 @@ function describeOcclusion(sample: MidlinePreeditOcclusionSample): string {
   return `covers ${JSON.stringify(sample.hiddenByOverlay)} / renders ${JSON.stringify(sample.overlayText)}`
 }
 
+/**
+ * The invariant, stated so it survives a different cell width: every committed cell the overlay
+ * covers must appear in what it draws. How MANY cells it covers is a function of the runner's
+ * font metrics — 34.4px over an 8.43px grid spans four columns where an 8px grid spans two — so
+ * asserting the covered text verbatim pins the machine, not the behaviour.
+ */
+function rendersEverythingItCovers(sample: MidlinePreeditOcclusionSample): boolean {
+  return sample.overlayText.includes(sample.hiddenByOverlay)
+}
+
 test.describe('Terminal mid-line Korean preedit occlusion', () => {
   test('renders the row tail it covers, so the character after the cursor stays readable', async ({
     orcaPage
@@ -77,9 +87,13 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
       // grid: an opaque box that covers committed cells has to reproduce them, or the user loses
       // text for the length of the composition.
       expect(
-        describeOcclusion(sample),
-        `the preedit overlay must render every committed cell it covers — ${JSON.stringify(sample)}`
-      ).toBe('covers "하세요" / renders "가하세요"')
+        sample.hiddenByOverlay.length,
+        `the overlay covers no committed text, so there is nothing to assert — ${describeOcclusion(sample)}`
+      ).toBeGreaterThan(0)
+      expect(
+        rendersEverythingItCovers(sample),
+        `the preedit overlay must render every committed cell it covers — ${describeOcclusion(sample)} ${JSON.stringify(sample)}`
+      ).toBe(true)
       completed = true
     } finally {
       await closeTerminalImePaneArena(
