@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWslCodexAvailabilityArgs,
-  buildWslCodexIdentityArgs,
+  buildWslCodexIdentityProbe,
   buildWslCodexLoginArgs
 } from './wsl-codex-command'
 
@@ -26,7 +26,7 @@ describe('WSL Codex commands', () => {
   })
 
   it('reports the login-shell binary path and version for identity checks', () => {
-    const command = buildWslCodexIdentityArgs('Ubuntu').at(-1)
+    const command = buildWslCodexIdentityProbe('Ubuntu').args.at(-1)
 
     expect(command).toMatch(/printf .*"\$resolved"/)
     expect(command).toContain('exec "$resolved" --version')
