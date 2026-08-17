@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileTypeIcon } from '@/lib/use-file-type-icon'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -64,7 +64,7 @@ export function FileResultRow({
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
-  const FileIcon = getFileTypeIcon(fileResult.relativePath)
+  const FileIcon = useFileTypeIcon(fileResult.relativePath)
   const matchCount = normalizeSearchFileMatchCount(fileResult)
 
   return (

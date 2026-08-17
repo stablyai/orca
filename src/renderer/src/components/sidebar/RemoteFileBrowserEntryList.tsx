@@ -2,7 +2,7 @@ import type React from 'react'
 import { useMemo, type RefObject } from 'react'
 import { ChevronRight, Folder, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileIconTheme, resolveFileTypeIcon } from '@/lib/use-file-type-icon'
 import {
   filterEntries,
   isRemoteFileBrowserPathResolveTextTooLarge,
@@ -37,6 +37,7 @@ export function RemoteFileBrowserEntryList({
   handleRowClick,
   handleRowDoubleClick
 }: RemoteFileBrowserEntryListProps): React.JSX.Element {
+  const iconTheme = useFileIconTheme()
   const previewFilteredEntries = useMemo(
     () => (preview ? filterEntries(preview.entries, preview.filter) : []),
     [preview]
@@ -91,7 +92,7 @@ export function RemoteFileBrowserEntryList({
           </div>
         ) : (
           displayEntries.map((entry) => {
-            const FileIcon = getFileTypeIcon(entry.name)
+            const FileIcon = resolveFileTypeIcon(entry.name, iconTheme)
             return (
               <button
                 key={entry.name}

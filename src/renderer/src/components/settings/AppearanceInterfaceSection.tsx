@@ -113,6 +113,28 @@ export function AppearanceInterfaceSection({
         />
       </SearchableSetting>
 
+      <SearchableSetting
+        title="File Icons"
+        description="Choose the icon style used for files across the UI."
+        keywords={['icons', 'file', 'symbols', 'lucide', 'icon theme']}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsRow
+          label="File Icons"
+          control={
+            <SettingsSegmentedControl
+              ariaLabel="File icon theme"
+              value={settings.fileIconTheme ?? 'lucide'}
+              onChange={(option) => updateSettings({ fileIconTheme: option as 'lucide' | 'symbols' })}
+              options={[
+                { value: 'lucide', label: 'Default' },
+                { value: 'symbols', label: 'Symbols' }
+              ]}
+            />
+          }
+        />
+      </SearchableSetting>
+
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting
           title={languageTitle}

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileIconTheme, resolveFileTypeIcon } from '@/lib/use-file-type-icon'
 import {
   CommandDialog,
   CommandInput,
@@ -51,6 +51,7 @@ export default function QuickOpen(): React.JSX.Element | null {
 }
 
 function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element {
+  const iconTheme = useFileIconTheme()
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)
@@ -169,7 +170,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : (
           filtered.map((item) => {
             const { directory, filename } = splitTrailingSegment(item.path)
-            const FileIcon = getFileTypeIcon(item.path)
+            const FileIcon = resolveFileTypeIcon(item.path, iconTheme)
 
             return (
               <CommandItem

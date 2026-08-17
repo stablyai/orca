@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, Folder, FolderOpen, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileTypeIcon } from '@/lib/use-file-type-icon'
 import { cn } from '@/lib/utils'
 import {
   buildSourceControlTree,
@@ -156,7 +156,7 @@ function ConflictReviewFileTreeRow({
     )
   }
 
-  const FileIcon = getFileTypeIcon(node.entry.path)
+  const FileIcon = useFileTypeIcon(node.entry.path)
   const liveEntry = node.entry.liveEntry
   const isStillUnresolved = liveEntry?.conflictStatus === 'unresolved'
 

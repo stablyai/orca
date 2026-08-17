@@ -6,7 +6,7 @@ import {
   toSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileTypeIcon } from '@/lib/use-file-type-icon'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
@@ -28,7 +28,7 @@ function CommitFileRow({
   onOpen: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
 }): React.JSX.Element {
   const status = entry.status as GitFileStatus
-  const FileIcon = getFileTypeIcon(entry.path)
+  const FileIcon = useFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir

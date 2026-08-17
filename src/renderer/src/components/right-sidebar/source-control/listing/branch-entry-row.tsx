@@ -1,6 +1,6 @@
 import React from 'react'
 import { MessageSquare } from 'lucide-react'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileTypeIcon } from '@/lib/use-file-type-icon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { translate } from '@/i18n/i18n'
@@ -32,7 +32,7 @@ export function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
+  const FileIcon = useFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
