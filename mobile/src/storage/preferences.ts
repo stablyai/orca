@@ -205,7 +205,7 @@ export async function loadProjectsHomeEnabled(): Promise<boolean> {
 }
 
 export async function saveProjectsHomeEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(PROJECTS_HOME_KEY, String(enabled))
+  await AsyncStorage.setItem(PROJECTS_HOME_KEY, String(enabled)).catch(() => undefined)
 }
 
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'

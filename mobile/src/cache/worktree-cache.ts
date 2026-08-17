@@ -147,7 +147,9 @@ function readValidatedCatalog(hostId: string, entry: CachedWorktrees | null): Wo
   }
   const validated = readMergedWorktreeRows(entry.worktrees)
   if (!validated) {
-    cache.delete(hostId)
+    if (!readHomeWorktreeSummaries(entry.worktrees)) {
+      cache.delete(hostId)
+    }
     return null
   }
   return validated

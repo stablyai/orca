@@ -29,6 +29,14 @@ vi.mock('../storage/projects-home-view-settings', async (importOriginal) => {
 const KEEP = '["desktop-a","local"]'
 const STALE = '["desktop-b","ssh:retired"]'
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('useProjectsHomeViewState', () => {
   let renderer: ReactTestRenderer | null = null
   let latest: ProjectsHomeViewState | null = null
@@ -70,6 +78,34 @@ describe('useProjectsHomeViewState', () => {
     expect(saveProjectsHomeViewSettings).toHaveBeenCalledWith(
       expect.objectContaining({ executionHostIds: [KEEP] })
     )
+    act(() => renderer?.unmount())
+  })
+
+  it('merges and persists changes made before hydration finishes', async () => {
+    const load = deferred<ProjectsHomeViewSettings>()
+    vi.mocked(loadProjectsHomeViewSettings).mockReturnValue(load.promise)
+    await mount()
+
+    act(() => latest?.toggleHideSleeping())
+    await act(async () => {
+      load.resolve({
+        groupMode: 'prStatus',
+        sortMode: 'name',
+        hideSleeping: false,
+        hideDefaultBranch: true,
+        executionHostIds: [KEEP]
+      })
+      await load.promise
+    })
+
+    expect(latest?.settings).toEqual({
+      groupMode: 'prStatus',
+      sortMode: 'name',
+      hideSleeping: true,
+      hideDefaultBranch: true,
+      executionHostIds: [KEEP]
+    })
+    expect(saveProjectsHomeViewSettings).toHaveBeenCalledWith(latest?.settings)
     act(() => renderer?.unmount())
   })
 })

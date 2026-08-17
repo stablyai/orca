@@ -112,6 +112,15 @@ describe('worktree-cache provenance', () => {
     expect(getProvenCachedWorktrees(hostId)).toBeNull()
   })
 
+  it('keeps a valid summary entry when the full-catalog reader cannot use it', () => {
+    const hostId = 'host-summary-shape'
+    const seeded = [summary('a')]
+    setCachedWorktrees(hostId, seeded)
+
+    expect(getCachedWorkspaceCatalog(hostId)).toBeNull()
+    expect(getCachedWorktrees(hostId)).toEqual(seeded)
+  })
+
   it('reports nothing proven for a host it has never cached', () => {
     expect(getProvenCachedWorktrees('host-never-seen')).toBeNull()
   })

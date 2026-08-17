@@ -37,7 +37,10 @@ describe('buildProjectsHomeDesktopRoster', () => {
         catalogEntry('desktop-3'),
         catalogEntry('desktop-4'),
         catalogEntry('desktop-5'),
-        catalogEntry('desktop-6', 'missing')
+        {
+          ...catalogEntry('desktop-6', 'missing'),
+          profile: profile('desktop-6')
+        }
       ],
       clients.map((client, index) => ({
         hostId: `desktop-${index + 1}`,
@@ -69,5 +72,7 @@ describe('buildProjectsHomeDesktopRoster', () => {
       state: 'auth-failed',
       availableOnDemand: false
     })
+    expect(roster[5]).not.toHaveProperty('profile')
+    expect(roster[5]).not.toHaveProperty('acquireClient')
   })
 })

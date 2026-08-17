@@ -103,5 +103,5 @@ export async function loadProjectsHomeViewSettings(): Promise<ProjectsHomeViewSe
 export async function saveProjectsHomeViewSettings(
   settings: ProjectsHomeViewSettings
 ): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings)).catch(() => undefined)
 }

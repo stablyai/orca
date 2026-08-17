@@ -1,10 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_PROJECTS_HOME_VIEW_SETTINGS,
-  parseProjectsHomeViewSettings
+  parseProjectsHomeViewSettings,
+  saveProjectsHomeViewSettings
 } from './projects-home-view-settings'
 
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { setItem: vi.fn() }
+}))
+
 describe('parseProjectsHomeViewSettings', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
   it('falls back to defaults for absent or unparseable records', () => {
     expect(parseProjectsHomeViewSettings(null)).toEqual(DEFAULT_PROJECTS_HOME_VIEW_SETTINGS)
     expect(parseProjectsHomeViewSettings('{oops')).toEqual(DEFAULT_PROJECTS_HOME_VIEW_SETTINGS)
@@ -51,5 +61,13 @@ describe('parseProjectsHomeViewSettings', () => {
       '["desktop","ssh:gpu-box"]',
       '["desktop",null]'
     ])
+  })
+
+  it('absorbs best-effort storage failures', async () => {
+    vi.mocked(AsyncStorage.setItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(
+      saveProjectsHomeViewSettings(DEFAULT_PROJECTS_HOME_VIEW_SETTINGS)
+    ).resolves.toBeUndefined()
   })
 })

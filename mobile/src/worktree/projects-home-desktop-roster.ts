@@ -23,18 +23,19 @@ export function buildProjectsHomeDesktopRoster(
   const clients = new Map(knownClients.map((entry) => [entry.hostId, entry] as const))
   return hostCatalog.map((host) => {
     const entry = clients.get(host.id)
+    const onDemandProfile = host.credentialStatus === 'ready' ? host.profile : null
     return {
       hostId: host.id,
       hostName: host.name,
       client: entry?.client ?? null,
-      availableOnDemand: !entry && host.profile != null,
+      availableOnDemand: !entry && onDemandProfile != null,
       state:
         host.credentialStatus === 'missing'
           ? 'auth-failed'
           : host.credentialStatus === 'temporarily-unavailable'
             ? 'disconnected'
             : resolveHomeHostConnectionState(host.id, entry?.state, autoConnectHostIds),
-      ...(host.profile ? { profile: host.profile, acquireClient } : {})
+      ...(onDemandProfile ? { profile: onDemandProfile, acquireClient } : {})
     }
   })
 }

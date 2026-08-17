@@ -1,7 +1,7 @@
 // View state (group / sort / filters / collapsed groups) for the merged Projects
 // home, persisted locally. Kept out of the screen so the screen stays a renderer.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_PROJECTS_HOME_VIEW_SETTINGS,
   loadProjectsHomeViewSettings,
@@ -34,17 +34,36 @@ export function useProjectsHomeViewState(): ProjectsHomeViewState {
   const [settings, setSettings] = useState<ProjectsHomeViewSettings>(
     DEFAULT_PROJECTS_HOME_VIEW_SETTINGS
   )
+  const settingsRef = useRef(settings)
+  const hydratedRef = useRef(false)
+  const dirtyKeysRef = useRef(new Set<keyof ProjectsHomeViewSettings>())
   // Why: collapsed groups are view-session state, not a preference — a group the
   // user folded to scan one repo should not still be folded next launch.
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set())
-  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     void loadProjectsHomeViewSettings().then((loaded) => {
       if (!cancelled) {
-        setSettings(loaded)
-        setHydrated(true)
+        const current = settingsRef.current
+        const dirty = dirtyKeysRef.current
+        const merged = {
+          groupMode: dirty.has('groupMode') ? current.groupMode : loaded.groupMode,
+          sortMode: dirty.has('sortMode') ? current.sortMode : loaded.sortMode,
+          hideSleeping: dirty.has('hideSleeping') ? current.hideSleeping : loaded.hideSleeping,
+          hideDefaultBranch: dirty.has('hideDefaultBranch')
+            ? current.hideDefaultBranch
+            : loaded.hideDefaultBranch,
+          executionHostIds: dirty.has('executionHostIds')
+            ? current.executionHostIds
+            : loaded.executionHostIds
+        }
+        settingsRef.current = merged
+        hydratedRef.current = true
+        setSettings(merged)
+        if (dirty.size > 0) {
+          void saveProjectsHomeViewSettings(merged)
+        }
       }
     })
     return () => {
@@ -52,19 +71,24 @@ export function useProjectsHomeViewState(): ProjectsHomeViewState {
     }
   }, [])
 
-  const update = useCallback(
-    (patch: Partial<ProjectsHomeViewSettings>) => {
-      setSettings((prev) => {
-        const next = { ...prev, ...patch }
-        // Why the guard: writing before the load resolves would persist the
-        // defaults over settings still in flight and silently reset the user.
-        if (hydrated) {
-          void saveProjectsHomeViewSettings(next)
-        }
-        return next
-      })
+  const commitSettings = useCallback(
+    (next: ProjectsHomeViewSettings, changedKeys: readonly (keyof ProjectsHomeViewSettings)[]) => {
+      settingsRef.current = next
+      setSettings(next)
+      if (hydratedRef.current) {
+        void saveProjectsHomeViewSettings(next)
+      } else {
+        changedKeys.forEach((key) => dirtyKeysRef.current.add(key))
+      }
     },
-    [hydrated]
+    []
+  )
+
+  const update = useCallback(
+    <Key extends keyof ProjectsHomeViewSettings>(patch: Pick<ProjectsHomeViewSettings, Key>) => {
+      commitSettings({ ...settingsRef.current, ...patch }, Object.keys(patch) as Key[])
+    },
+    [commitSettings]
   )
 
   const filters = useMemo<FilterState>(
@@ -85,41 +109,27 @@ export function useProjectsHomeViewState(): ProjectsHomeViewState {
 
   const toggleExecutionHost = useCallback(
     (hostId: string) => {
-      setSettings((prev) => {
-        const selected = new Set(prev.executionHostIds)
-        if (!selected.delete(hostId)) {
-          selected.add(hostId)
-        }
-        const next = { ...prev, executionHostIds: [...selected] }
-        if (hydrated) {
-          void saveProjectsHomeViewSettings(next)
-        }
-        return next
-      })
+      const selected = new Set(settingsRef.current.executionHostIds)
+      if (!selected.delete(hostId)) {
+        selected.add(hostId)
+      }
+      update({ executionHostIds: [...selected] })
     },
-    [hydrated]
+    [update]
   )
 
   const pruneExecutionHosts = useCallback(
     (options: readonly ExecutionHostFilterOption[]) => {
-      setSettings((prev) => {
-        const retained = [
-          ...retainRepresentedExecutionHostIds(new Set(prev.executionHostIds), options)
-        ]
-        if (
-          retained.length === prev.executionHostIds.length &&
-          retained.every((id, index) => id === prev.executionHostIds[index])
-        ) {
-          return prev
-        }
-        const next = { ...prev, executionHostIds: retained }
-        if (hydrated) {
-          void saveProjectsHomeViewSettings(next)
-        }
-        return next
-      })
+      const previous = settingsRef.current.executionHostIds
+      const retained = [...retainRepresentedExecutionHostIds(new Set(previous), options)]
+      if (
+        retained.length !== previous.length ||
+        retained.some((id, index) => id !== previous[index])
+      ) {
+        update({ executionHostIds: retained })
+      }
     },
-    [hydrated]
+    [update]
   )
 
   const toggleCollapsedGroup = useCallback((key: string) => {
@@ -140,12 +150,12 @@ export function useProjectsHomeViewState(): ProjectsHomeViewState {
     setGroupMode: useCallback((groupMode) => update({ groupMode }), [update]),
     setSortMode: useCallback((sortMode) => update({ sortMode }), [update]),
     toggleHideSleeping: useCallback(
-      () => update({ hideSleeping: !settings.hideSleeping }),
-      [update, settings.hideSleeping]
+      () => update({ hideSleeping: !settingsRef.current.hideSleeping }),
+      [update]
     ),
     toggleHideDefaultBranch: useCallback(
-      () => update({ hideDefaultBranch: !settings.hideDefaultBranch }),
-      [update, settings.hideDefaultBranch]
+      () => update({ hideDefaultBranch: !settingsRef.current.hideDefaultBranch }),
+      [update]
     ),
     toggleExecutionHost,
     pruneExecutionHosts,
