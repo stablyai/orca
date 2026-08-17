@@ -23,9 +23,17 @@ import {
   toHostRemovalPath
 } from './local-worktree-filesystem'
 
+// Stand in for the guest shell: rc banner first, then the payload inside the
+// fence the command itself carries. Reads are rejected without one.
 function completeExecFile(stdout = ''): void {
-  execFileMock.mockImplementation((_file, _args, _options, callback) => {
-    callback(null, stdout, '')
+  execFileMock.mockImplementation((_file, args, _options, callback) => {
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
+    callback(
+      null,
+      'To run a command as administrator (user "root"), use "sudo <command>".\n\n' +
+        `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${stdout}__ORCA_WSL_CAPTURE_END_${nonce}__`,
+      ''
+    )
   })
 }
 

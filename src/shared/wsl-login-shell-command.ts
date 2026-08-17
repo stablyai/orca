@@ -80,7 +80,11 @@ export function buildWslCapturedLoginShellCommand(
       ].join('\n')
     ),
     readStdout: (stdout) => {
-      const beginIndex = stdout.indexOf(begin)
+      // Why lastIndexOf: a login shell can echo the command text before running
+      // it (`set -x` in an rc file), which repeats the opening fence verbatim.
+      // The real payload always follows the last one. The nonce keeps a payload
+      // that happens to quote a marker from colliding.
+      const beginIndex = stdout.lastIndexOf(begin)
       if (beginIndex === -1) {
         return null
       }

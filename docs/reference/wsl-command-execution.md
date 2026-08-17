@@ -17,10 +17,11 @@ $HOME
 ```
 
 So under `--`, a script means something other than what it says. `awk '{print $2}'` reaches the
-guest as `awk '{print }'` and prints the whole line; `sed` backreferences and `"\$literal"` are
-rewritten the same way. Escaping `$` on the Windows side cannot fix this reliably — an earlier
-attempt skipped every `$` preceded by a backslash, which is exactly the case a POSIX script uses to
-mean a literal dollar.
+guest as `awk '{print }'` and prints the whole line; a positional `"$1"`, a shell local, and a
+`"\$literal"` are blanked or rewritten the same way. (Expansions with no `$` are unaffected — a
+`sed` backreference like `s/(a)(b)/\2\1/` survives either way.) Escaping `$` on the Windows side
+cannot fix this reliably — an earlier attempt skipped every `$` preceded by a backslash, which is
+exactly the case a POSIX script uses to mean a literal dollar.
 
 Build argv with `buildWslExecArgs()` in `src/shared/wsl-login-shell-command.ts`. A test walks the
 tree and fails if the `--` form reappears.

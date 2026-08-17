@@ -212,7 +212,31 @@ describe('wsl login shell command helpers', () => {
       ).toBe('directory')
     })
 
-    it('preserves the payload exit status', () => {
+    it.skipIf(!canRunWslSh())(
+      'propagates the payload exit status to the caller',
+      () => {
+        // Why a real shell: asserting the script merely *contains* `exit $?` passes
+        // for any input. statPath maps this exit 2 to ENOENT, so it has to survive
+        // the fence for real.
+        const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2')
+
+        let status: number | undefined
+        try {
+          execFileSync('wsl.exe', buildWslExecArgs(undefined, ['sh', '-lc', captured.command]), {
+            encoding: 'utf8',
+            timeout: WSL_TEST_COMMAND_TIMEOUT_MS,
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+        } catch (error) {
+          status = (error as { status?: number }).status
+        }
+
+        expect(status).toBe(2)
+      },
+      30_000
+    )
+
+    it('emits the status plumbing the payload needs', () => {
       const captured = buildWslCapturedLoginShellCommand('exit 2', 'nonce1')
 
       expect(captured.command).toContain('_orca_capture_status=$?')

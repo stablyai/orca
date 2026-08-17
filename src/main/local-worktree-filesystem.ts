@@ -68,7 +68,13 @@ async function runWslLoginShellCommand(
     { timeout: WSL_FILE_OPERATION_TIMEOUT_MS }
   )
   const payload = captured.readStdout(result.stdout)
-  return payload === null ? result : { ...result, stdout: payload }
+  if (payload === null) {
+    // Why throw: falling back to the raw stream would hand callers the banner as
+    // if it were file contents or a stat result -- the exact bug the fence fixes,
+    // but silently. A missing fence means the shell never reached the payload.
+    throw new Error('WSL command produced no fenced output')
+  }
+  return { ...result, stdout: payload }
 }
 
 function isWslMissingPathError(error: unknown): boolean {
