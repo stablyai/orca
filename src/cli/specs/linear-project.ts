@@ -1,3 +1,4 @@
+import { LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES } from '../../shared/linear/project-agent-writes'
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 
@@ -48,5 +49,33 @@ export const LINEAR_PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'orca linear project labels --query launch --limit 20 --json'
     ],
     notes: [PROJECT_METADATA_NOTE]
+  },
+  {
+    path: ['linear', 'project', 'update', 'add'],
+    summary: 'Post a Linear project update',
+    usage:
+      'orca linear project update add (<project> | --id <project>) (--body <text> | --body-file <path|->) [--health on-track|at-risk|off-track] [--hide-diff] [--write-id <uuid>] [--workspace <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'body',
+      'body-file',
+      'health',
+      'hide-diff',
+      'write-id',
+      'workspace',
+      'id'
+    ],
+    positionalArgs: ['id'],
+    examples: [
+      'orca linear project update add launch-q3 --body "Rails migration merged; load test pending." --health at-risk',
+      'orca linear project update add --id launch-q3 --body-file - --hide-diff --json'
+    ],
+    notes: [
+      PROJECT_TARGET_NOTE,
+      'Use --body-file - to read a multiline update body from stdin; over SSH only - is accepted.',
+      `--health accepts only ${LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES.join(', ')}.`,
+      'This appends a new project update; it never edits project fields.',
+      '--workspace all is not valid for a project write.'
+    ]
   }
 ]

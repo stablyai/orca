@@ -10,8 +10,10 @@ import {
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
+  formatLinearProjectUpdateAdd,
   linearProjectFanoutWarningLines
 } from './project-agent-format'
+import type { LinearProjectUpdateAddResult } from './project-agent-writes'
 
 function boundedString(value: string) {
   return { value, truncated: false, chars: value.length, sha256: 'c'.repeat(64) }
@@ -122,6 +124,27 @@ const LABELS_FIXTURE = {
   }
 } as LinearProjectLabelsResult
 
+const UPDATE_ADD_FIXTURE: LinearProjectUpdateAddResult = {
+  projectUpdate: {
+    id: 'update-1',
+    url: 'https://linear.app/acme/project/launch-q3-1a2b3c#update-1',
+    health: 'atRisk',
+    createdAt: '2026-06-01T00:00:00.000Z'
+  },
+  project: {
+    id: 'project-1',
+    name: '\u001b[31mLaunch Q3\u001b[0m',
+    slugId: 'launch-q3',
+    url: 'https://linear.app/acme/project/launch-q3-1a2b3c'
+  },
+  meta: {
+    workspaceId: 'workspace-1',
+    bodyChars: 42,
+    writeId: '123e4567-e89b-12d3-a456-426614174000',
+    deduplicated: false
+  }
+}
+
 // Why: the golden text both the local CLI and the SSH shim must print; drift here is drift between them.
 describe('shared project rendering', () => {
   it('renders the canonical project show block', () => {
@@ -173,6 +196,35 @@ describe('shared project rendering', () => {
     expect(formatLinearProjectStatuses(STATUSES_FIXTURE)).toBe(
       `${'In Progress'.padEnd(28)} ${'started'.padEnd(10)} ${'Acme'.padEnd(20)} status-1`
     )
+  })
+
+  it('renders the canonical project-update post block', () => {
+    expect(formatLinearProjectUpdateAdd(UPDATE_ADD_FIXTURE)).toBe(
+      [
+        'Posted Linear project update on Launch Q3 (launch-q3)',
+        'Update: update-1 at-risk 2026-06-01T00:00:00.000Z',
+        'URL: https://linear.app/acme/project/launch-q3-1a2b3c#update-1',
+        'Body: 42 chars',
+        'Workspace: workspace-1  Write id: 123e4567-e89b-12d3-a456-426614174000'
+      ].join('\n')
+    )
+  })
+
+  it('marks a deduplicated post instead of claiming a new one', () => {
+    const output = formatLinearProjectUpdateAdd({
+      ...UPDATE_ADD_FIXTURE,
+      meta: { ...UPDATE_ADD_FIXTURE.meta, deduplicated: true }
+    })
+
+    expect(output.split('\n').slice(0, 2)).toEqual([
+      'Deduplicated Linear project update on Launch Q3 (launch-q3)',
+      'Deduplicated: the pinned --write-id already posted this update; nothing new was created.'
+    ])
+    expect(output).not.toContain('Posted Linear project update')
+  })
+
+  it('strips terminal control sequences from the project-update post block', () => {
+    expect(formatLinearProjectUpdateAdd(UPDATE_ADD_FIXTURE)).not.toContain('\u001b')
   })
 
   it('emits truncation, workspace-error and partial warning lines in order', () => {

@@ -6,11 +6,13 @@ import type {
   LinearProjectStatusesResult
 } from '../shared/linear/project-agent-access'
 import * as sharedProjectFormat from '../shared/linear/project-agent-format'
+import type { LinearProjectUpdateAddResult } from '../shared/linear/project-agent-writes'
 import {
   escapeJsonControlCharacters,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
+  formatLinearProjectUpdateAdd,
   printLinearProjectLabelsWarnings,
   printLinearProjectResult,
   printLinearProjectStatusesWarnings,
@@ -141,6 +143,7 @@ describe('shared renderer delegation', () => {
     expect(formatLinearProjectShow).toBe(sharedProjectFormat.formatLinearProjectShow)
     expect(formatLinearProjectStatuses).toBe(sharedProjectFormat.formatLinearProjectStatuses)
     expect(formatLinearProjectLabels).toBe(sharedProjectFormat.formatLinearProjectLabels)
+    expect(formatLinearProjectUpdateAdd).toBe(sharedProjectFormat.formatLinearProjectUpdateAdd)
     expect(sanitizeLinearProjectText).toBe(sharedProjectFormat.sanitizeLinearProjectText)
     expect(toSingleLineLinearProjectText).toBe(sharedProjectFormat.toSingleLineLinearProjectText)
   })
@@ -225,6 +228,49 @@ describe('metadata list formatting', () => {
   })
 })
 
+function updateAddResult(deduplicated = false): LinearProjectUpdateAddResult {
+  return {
+    projectUpdate: {
+      id: 'update-1',
+      url: 'https://linear.app/acme/project/launch-q3-1a2b3c#update-1',
+      health: 'offTrack',
+      createdAt: '2026-06-01T00:00:00.000Z'
+    },
+    project: {
+      id: 'project-1',
+      name: 'Launch Q3',
+      slugId: 'launch-q3',
+      url: 'https://linear.app/acme/project/launch-q3-1a2b3c'
+    },
+    meta: {
+      workspaceId: 'workspace-1',
+      bodyChars: 42,
+      writeId: '123e4567-e89b-12d3-a456-426614174000',
+      deduplicated
+    }
+  }
+}
+
+describe('formatLinearProjectUpdateAdd', () => {
+  it('summarizes a new post with its health, url, size and write id', () => {
+    const output = formatLinearProjectUpdateAdd(updateAddResult())
+
+    expect(output).toContain('Posted Linear project update on Launch Q3 (launch-q3)')
+    expect(output).toContain('Update: update-1 off-track 2026-06-01T00:00:00.000Z')
+    expect(output).toContain('URL: https://linear.app/acme/project/launch-q3-1a2b3c#update-1')
+    expect(output).toContain('Body: 42 chars')
+    expect(output).toContain('Write id: 123e4567-e89b-12d3-a456-426614174000')
+  })
+
+  it('marks a deduplicated post so a retry is never read as a second update', () => {
+    const output = formatLinearProjectUpdateAdd(updateAddResult(true))
+
+    expect(output).toContain('Deduplicated Linear project update on Launch Q3 (launch-q3)')
+    expect(output).toContain('nothing new was created')
+    expect(output).not.toContain('Posted Linear project update')
+  })
+})
+
 describe('fan-out warnings', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -284,6 +330,16 @@ describe('terminal-control safety', () => {
     result.meta.workspaceName = C1_ATTACK
 
     const output = formatLinearProjectShow(result)
+
+    expect(hasTerminalControlBytes(output)).toBe(false)
+    expect(output).toContain('maliciousoverwritten')
+  })
+
+  it('leaves no cursor-moving byte in a human project-update post summary', () => {
+    const result = updateAddResult()
+    result.project.name = CURSOR_ATTACK
+
+    const output = formatLinearProjectUpdateAdd(result)
 
     expect(hasTerminalControlBytes(output)).toBe(false)
     expect(output).toContain('maliciousoverwritten')

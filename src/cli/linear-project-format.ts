@@ -18,6 +18,7 @@ export {
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
+  formatLinearProjectUpdateAdd,
   sanitizeLinearProjectText,
   toSingleLineLinearProjectText
 } from '../shared/linear/project-agent-format'

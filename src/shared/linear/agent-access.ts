@@ -137,6 +137,15 @@ export type {
   LinearProjectWorkspaceReadRequest,
   LinearWorkspaceFanoutMeta
 } from './project-agent-access'
+export {
+  LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES,
+  toLinearProjectUpdateHealth
+} from './project-agent-writes'
+export type {
+  LinearProjectUpdateAddRequest,
+  LinearProjectUpdateAddResult,
+  LinearProjectUpdateHealthInput
+} from './project-agent-writes'
 
 export type LinearWriteTargetRequest = {
   input?: string

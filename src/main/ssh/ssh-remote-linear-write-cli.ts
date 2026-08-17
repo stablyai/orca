@@ -2,6 +2,7 @@ import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { getRemoteLinearWriteHelp } from './ssh-remote-linear-write-help'
 import { dispatchRemoteLinearRelationWrite } from './ssh-remote-linear-relation-write'
+import { tryDispatchRemoteLinearProjectWriteCli } from './ssh-remote-linear-project-write-cli'
 import { dispatchRemoteLinearSaveIssue } from './ssh-remote-linear-save-issue'
 import {
   RemoteLinearWriteArgumentError,
@@ -67,6 +68,10 @@ export async function tryDispatchRemoteLinearWriteCli(
   env: Record<string, string>,
   stdin?: string
 ): Promise<RpcResponse | null> {
+  const projectWrite = await tryDispatchRemoteLinearProjectWriteCli(dispatcher, parsed, stdin)
+  if (projectWrite) {
+    return projectWrite
+  }
   if (isRemoteCommand(parsed, 'linear', 'save-issue')) {
     return await dispatchRemoteLinearSaveIssue(dispatcher, parsed, env, stdin)
   }

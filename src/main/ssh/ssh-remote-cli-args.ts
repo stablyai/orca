@@ -8,6 +8,7 @@ const REMOTE_BOOLEAN_FLAGS = new Set([
   'current',
   'full',
   'help',
+  'hide-diff',
   'inject',
   'include-archived',
   'include-visual-layouts',

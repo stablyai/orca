@@ -85,6 +85,7 @@ orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [
 orca linear project show (<project> | --id <project>) [--updates] [--updates-limit <n>] [--workspace <id>] [--json]
 orca linear project statuses [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear project labels [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
+orca linear project update add (<project> | --id <project>) (--body <text> | --body-file <path|->) [--health on-track|at-risk|off-track] [--hide-diff] [--write-id <uuid>] [--workspace <id>] [--json]
 orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear status set [<id>] [--current] --to <state> [--workspace <id>] [--json]
 orca linear assignee set [<id>] [--current] (--me | --to-id <userId>) [--workspace <id>] [--json]
@@ -120,6 +121,8 @@ orca linear project labels --query <label-name> --workspace <workspaceId> --json
 
 Prefer IDs for automation. Names are accepted only when they exactly and uniquely match in the relevant team or workspace.
 `project show` accepts a project UUID, `slugId`, Linear project URL, or unique exact name, and takes the same value as `--id`. Add `--updates` to include the newest project status posts (`--updates-limit` requires `--updates` and is capped at 25); the default read never fetches update bodies. Project statuses and project labels are workspace entities distinct from `team states` and `team labels`, so resolve them with `project statuses` and `project labels` rather than the issue metadata commands. `--workspace all` is accepted by `project list`, `project statuses`, and `project labels`, and rejected for `project show`.
+
+`project update add` posts to a project's Updates feed. It is an explicit, user-authorized action, never an implicit side effect of finishing work. It takes the same `--write-id` retry contract as `comment add`: reuse the id from a `linear_write_unconfirmed` error to retry that exact post without duplicating it. `--health` accepts only `on-track`, `at-risk`, and `off-track`.
 
 
 `save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, or parent.

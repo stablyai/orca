@@ -16,6 +16,20 @@ describe('shouldReadRemoteCliStdin', () => {
     )
   })
 
+  it('reads stdin for a Linear project update post piped over the relay', () => {
+    expect(
+      shouldReadRemoteCliStdin(['linear', 'project', 'update', 'add', 'launch', '--body-file', '-'])
+    ).toBe(true)
+    expect(
+      shouldReadRemoteCliStdin(['linear', 'project', 'update', 'add', 'launch', '--body-file=-'])
+    ).toBe(true)
+    expect(
+      shouldReadRemoteCliStdin(['linear', 'project', 'update', 'add', '--body', 'shipped'])
+    ).toBe(false)
+    // Why: reads take no stdin, so a stray --body-file must not block on it.
+    expect(shouldReadRemoteCliStdin(['linear', 'project', 'show', '--body-file', '-'])).toBe(false)
+  })
+
   it('reads stdin for *-stdin payload flags bridged to the full host CLI', () => {
     expect(shouldReadRemoteCliStdin(['computer', 'action', '--app', 'Notes', '--text-stdin'])).toBe(
       true

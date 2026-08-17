@@ -395,6 +395,8 @@ import type {
   LinearProjectShowRequest,
   LinearProjectShowResult,
   LinearProjectStatusesResult,
+  LinearProjectUpdateAddRequest,
+  LinearProjectUpdateAddResult,
   LinearProjectWorkspaceReadRequest,
   LinearIssueSummary,
   LinearIssueRequest,
@@ -897,9 +899,21 @@ import {
 import {
   findLinearProjectTargetCandidates,
   resolveLinearProjectTarget,
-  type LinearProjectTargetCandidates
+  type LinearProjectTargetCandidates,
+  type LinearResolvedProject
 } from '../linear/project-target-resolution'
 import { getProjectShowForAgent } from '../linear/project-agent-read'
+import {
+  addProjectUpdateForAgent,
+  getProjectUpdateById,
+  type LinearProjectUpdateRecord
+} from '../linear/project-update-posts'
+import { normalizeLinearLineEndings } from '../linear/linear-text-digest'
+import {
+  projectUpdateMatchesAddIntent,
+  type LinearProjectUpdateAddIntent
+} from './linear-project-update-write-intent'
+import { linearProjectWriteUnconfirmed } from './linear-project-write-recovery'
 import {
   listProjectLabelsForAgent,
   listProjectStatusesForAgent
@@ -34462,6 +34476,153 @@ export class OrcaRuntimeService {
       })
     } catch (error) {
       throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  async linearProjectUpdateAddForAgents(
+    request: LinearProjectUpdateAddRequest
+  ): Promise<LinearProjectUpdateAddResult> {
+    if (request.workspaceId === 'all') {
+      throw linearError(
+        'linear_invalid_workspace',
+        '--workspace all is only valid for project list, statuses, and labels.'
+      )
+    }
+    const body = normalizeLinearLineEndings(request.body)
+    if (body.length > LINEAR_WRITE_BODY_CAP) {
+      throw linearError('linear_body_too_large', 'Linear project update body is too large.')
+    }
+    const project = await this.resolveLinearProjectForWrite(request.input, request.workspaceId)
+    const writeId = request.writeId ?? randomUUID()
+    const intent: LinearProjectUpdateAddIntent = {
+      projectId: project.id,
+      body,
+      ...(request.health ? { health: request.health } : {}),
+      isDiffHidden: request.isDiffHidden === true
+    }
+    const unconfirmed = (cause?: string): LinearAgentAccessError =>
+      linearProjectWriteUnconfirmed({
+        kind: 'update-add',
+        target: { projectId: project.id, workspaceId: project.workspaceId },
+        writeId,
+        intent,
+        ...(cause ? { cause } : {})
+      })
+    const existing =
+      request.writeId !== undefined
+        ? await this.getMatchingLinearProjectUpdateWrite(writeId, project.workspaceId, intent)
+        : null
+    if (existing) {
+      return this.linearProjectUpdateAddResult(existing, project, body.length, writeId, true)
+    }
+    try {
+      const posted = await this.runLinearAgentWrite(
+        (signal) =>
+          addProjectUpdateForAgent(
+            project.id,
+            {
+              body,
+              ...(intent.health ? { health: intent.health } : {}),
+              isDiffHidden: intent.isDiffHidden,
+              id: writeId
+            },
+            project.workspaceId,
+            { signal }
+          ),
+        unconfirmed
+      )
+      return this.linearProjectUpdateAddResult(posted, project, body.length, writeId, false)
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        const posted = await this.refetchLinearProjectUpdateAfterDuplicate(
+          writeId,
+          project.workspaceId,
+          intent,
+          unconfirmed
+        )
+        return this.linearProjectUpdateAddResult(posted, project, body.length, writeId, true)
+      }
+      throw error
+    }
+  }
+
+  private async resolveLinearProjectForWrite(
+    input: string,
+    workspaceId: string | undefined
+  ): Promise<LinearResolvedProject> {
+    try {
+      return await resolveLinearProjectTarget(input, workspaceId)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async getMatchingLinearProjectUpdateWrite(
+    writeId: string,
+    workspaceId: string,
+    intent: LinearProjectUpdateAddIntent
+  ): Promise<LinearProjectUpdateRecord | null> {
+    const posted = await this.readLinearWriteLookup(() =>
+      getProjectUpdateById(writeId, workspaceId)
+    )
+    if (!posted) {
+      return null
+    }
+    if (projectUpdateMatchesAddIntent(posted, intent)) {
+      return posted
+    }
+    throw linearError(
+      'linear_invalid_write_id',
+      'The write id belongs to a project update with different content.'
+    )
+  }
+
+  private async refetchLinearProjectUpdateAfterDuplicate(
+    writeId: string,
+    workspaceId: string,
+    intent: LinearProjectUpdateAddIntent,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<LinearProjectUpdateRecord> {
+    try {
+      // Why: a duplicate-id response can mean the original post landed; only the full intent proves this pinned retry.
+      const posted = await this.getMatchingLinearProjectUpdateWrite(writeId, workspaceId, intent)
+      if (posted) {
+        return posted
+      }
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
+        throw error
+      }
+      throw unconfirmed(
+        error instanceof Error
+          ? sanitizeLinearErrorMessage(error.message)
+          : sanitizeLinearErrorMessage(String(error))
+      )
+    }
+    throw unconfirmed()
+  }
+
+  private linearProjectUpdateAddResult(
+    posted: LinearProjectUpdateRecord,
+    project: LinearResolvedProject,
+    bodyChars: number,
+    writeId: string,
+    deduplicated: boolean
+  ): LinearProjectUpdateAddResult {
+    return {
+      projectUpdate: {
+        id: posted.id,
+        url: posted.url,
+        health: posted.health,
+        createdAt: posted.createdAt
+      },
+      project: {
+        id: project.id,
+        name: project.name,
+        slugId: project.slugId,
+        url: project.url
+      },
+      meta: { workspaceId: project.workspaceId, bodyChars, writeId, deduplicated }
     }
   }
 

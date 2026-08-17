@@ -62,42 +62,47 @@ export function buildRemoteContext(env: Record<string, string>): Record<string, 
   }
 }
 
+/** `textFlags` lets other text inputs (e.g. `--content` / `--content-file`) reuse the stdin-only rule. */
 export function readRemoteBody(
   flags: Map<string, string | boolean>,
   required: boolean,
-  stdin?: string
+  stdin?: string,
+  textFlags: { value: string; file: string } = { value: 'body', file: 'body-file' }
 ): string | undefined {
-  const hasBody = flags.has('body')
-  const hasBodyFile = flags.has('body-file')
-  if (hasBody && hasBodyFile) {
+  const hasValue = flags.has(textFlags.value)
+  const hasFile = flags.has(textFlags.file)
+  if (hasValue && hasFile) {
     throw new RemoteLinearWriteArgumentError(
       'invalid_argument',
-      'Use either --body or --body-file, not both'
+      `Use either --${textFlags.value} or --${textFlags.file}, not both`
     )
   }
-  if (hasBodyFile) {
-    const path = requiredString(flags, 'body-file')
+  if (hasFile) {
+    const path = requiredString(flags, textFlags.file)
     if (path !== '-') {
       throw new RemoteLinearWriteArgumentError(
         'invalid_argument',
-        'SSH Linear writes only support --body-file - for stdin.'
+        `SSH Linear writes only support --${textFlags.file} - for stdin.`
       )
     }
     if (stdin === undefined) {
       throw new RemoteLinearWriteArgumentError(
         'invalid_argument',
-        'SSH Linear writes require stdin when using --body-file -.'
+        `SSH Linear writes require stdin when using --${textFlags.file} -.`
       )
     }
     return stdin
   }
-  if (!hasBody) {
+  if (!hasValue) {
     if (required) {
-      throw new RemoteLinearWriteArgumentError('invalid_argument', 'Missing --body or --body-file')
+      throw new RemoteLinearWriteArgumentError(
+        'invalid_argument',
+        `Missing --${textFlags.value} or --${textFlags.file}`
+      )
     }
     return undefined
   }
-  return requiredStringAllowingEmpty(flags, 'body')
+  return requiredStringAllowingEmpty(flags, textFlags.value)
 }
 
 export function rejectAllWorkspaceForWrite(flags: Map<string, string | boolean>): void {

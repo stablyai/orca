@@ -63,6 +63,9 @@ export function getRemoteLinearWriteHelp(parsed: ParsedRemoteCli): string | null
   if (matchesRemoteCommand(path, 'linear', 'comment', 'add')) {
     return LINEAR_COMMENT_HELP
   }
+  if (matchesRemoteCommand(path, 'linear', 'project', 'update', 'add')) {
+    return LINEAR_PROJECT_UPDATE_ADD_HELP
+  }
   if (matchesRemoteCommand(path, 'linear', 'attach')) {
     return LINEAR_ATTACH_HELP
   }
@@ -89,5 +92,6 @@ const LINEAR_LABEL_ADD_HELP = `orca linear label add\n\nUsage: orca linear label
 const LINEAR_LABEL_REMOVE_HELP = `orca linear label remove\n\nUsage: orca linear label remove [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nRemove labels from a Linear issue`
 const LINEAR_LABEL_SET_HELP = `orca linear label set\n\nUsage: orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nReplace labels on a Linear issue`
 const LINEAR_COMMENT_HELP = `orca linear comment add\n\nUsage: orca linear comment add [<id>] [--current] (--body <text> | --body-file -) [--reply-to <commentId>] [--write-id <uuid>] [--workspace <id>] [--json]\n\nAdd a comment to a Linear issue`
+const LINEAR_PROJECT_UPDATE_ADD_HELP = `orca linear project update add\n\nUsage: orca linear project update add (<project> | --id <project>) (--body <text> | --body-file -) [--health on-track|at-risk|off-track] [--hide-diff] [--write-id <uuid>] [--workspace <id>] [--json]\n\nPost a Linear project update`
 const LINEAR_ATTACH_HELP = `orca linear attach\n\nUsage: orca linear attach [<id>] [--current] --url <url> [--title <title>] [--write-id <uuid>] [--workspace <id>] [--json]\n\nAttach a link to a Linear issue`
 const LINEAR_CREATE_HELP = `orca linear create\n\nUsage: orca linear create --title <title> [--body <text> | --body-file -] [--team <key|id>] [--project <projectId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]\n\nCreate a Linear issue`

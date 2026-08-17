@@ -12,6 +12,7 @@ import type {
   LinearProjectLabelsResult,
   LinearProjectShowResult,
   LinearProjectStatusesResult,
+  LinearProjectUpdateAddResult,
   LinearSearchResult,
   LinearStatusSetResult,
   LinearTeamLabelsResult,
@@ -99,6 +100,21 @@ export function isLinearProjectStatusesResult(
 export function isLinearProjectLabelsResult(result: unknown): result is LinearProjectLabelsResult {
   return (
     isRecord(result) && Array.isArray(result.labels) && isLinearWorkspaceFanoutMeta(result.meta)
+  )
+}
+
+export function isLinearProjectUpdateAddResult(
+  result: unknown
+): result is LinearProjectUpdateAddResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.projectUpdate) &&
+    isRecord(result.project) &&
+    isRecord(result.meta) &&
+    typeof result.projectUpdate.id === 'string' &&
+    typeof result.projectUpdate.url === 'string' &&
+    typeof result.meta.bodyChars === 'number' &&
+    typeof result.meta.deduplicated === 'boolean'
   )
 }
 

@@ -13,6 +13,7 @@ import type {
   LinearProjectUpdateNode,
   LinearWorkspaceFanoutMeta
 } from './project-agent-access'
+import type { LinearProjectUpdateAddResult } from './project-agent-writes'
 
 /**
  * Single source of human-readable project rendering: the local CLI and the SSH
@@ -104,6 +105,23 @@ export function formatLinearProjectLabels(result: LinearProjectLabelsResult): st
       ].join(' ')
     )
     .join('\n')
+}
+
+export function formatLinearProjectUpdateAdd(result: LinearProjectUpdateAddResult): string {
+  const { project, projectUpdate, meta } = result
+  const target = `${toSingleLineLinearProjectText(project.name)} (${project.slugId})`
+  return [
+    meta.deduplicated
+      ? `Deduplicated Linear project update on ${target}`
+      : `Posted Linear project update on ${target}`,
+    ...(meta.deduplicated
+      ? ['Deduplicated: the pinned --write-id already posted this update; nothing new was created.']
+      : []),
+    `Update: ${projectUpdate.id} ${formatHealth(projectUpdate.health)} ${projectUpdate.createdAt}`,
+    `URL: ${projectUpdate.url}`,
+    `Body: ${meta.bodyChars} chars`,
+    `Workspace: ${meta.workspaceId}  Write id: ${meta.writeId}`
+  ].join('\n')
 }
 
 /** Per-workspace truncation, per-workspace failure, then the partial-fan-out line. */

@@ -222,20 +222,27 @@ export function getHttpUrlFlag(flags: Map<string, string | boolean>, name: strin
   throw new RuntimeClientError('linear_invalid_url', '--url must be an absolute http(s) URL')
 }
 
+type ReadLinearBodyOptions = {
+  required: boolean
+  // Why: the cap is defined over the normalized text, so normalization has to
+  // run before the length check rather than after the value is returned.
+  normalize?: (value: string) => string
+}
+
 export function readLinearBody(
   flags: Map<string, string | boolean>,
   cwd: string,
-  options: { required: true }
+  options: ReadLinearBodyOptions & { required: true }
 ): Promise<string>
 export function readLinearBody(
   flags: Map<string, string | boolean>,
   cwd: string,
-  options: { required: false }
+  options: ReadLinearBodyOptions & { required: false }
 ): Promise<string | undefined>
 export async function readLinearBody(
   flags: Map<string, string | boolean>,
   cwd: string,
-  options: { required: boolean }
+  options: ReadLinearBodyOptions
 ): Promise<string | undefined> {
   const hasBody = flags.has('body')
   const hasBodyFile = flags.has('body-file')
@@ -248,9 +255,10 @@ export async function readLinearBody(
     }
     return undefined
   }
-  const body = hasBody
+  const raw = hasBody
     ? getRequiredStringFlagAllowingEmpty(flags, 'body')
     : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
+  const body = options.normalize ? options.normalize(raw) : raw
   if (body.length > LINEAR_WRITE_BODY_CAP) {
     throw new RuntimeClientError(
       'linear_body_too_large',

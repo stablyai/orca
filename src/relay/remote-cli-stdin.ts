@@ -13,12 +13,14 @@ export function shouldReadRemoteCliStdin(argv: string[]): boolean {
     return false
   }
   return argv.some((part, index) => {
-    if (part === '--body-file') {
+    if (LINEAR_STDIN_FILE_FLAGS.has(part)) {
       return argv[index + 1] === '-'
     }
-    return part === '--body-file=-'
+    return [...LINEAR_STDIN_FILE_FLAGS].some((flag) => part === `${flag}=-`)
   })
 }
+
+const LINEAR_STDIN_FILE_FLAGS = new Set(['--body-file', '--content-file'])
 
 const REMOTE_STDIN_BOOLEAN_FLAGS = new Set(['current', 'help', 'json', 'parent-current'])
 
@@ -45,6 +47,11 @@ function parseRemoteCliCommandPath(argv: string[]): string[] {
 function isLinearBodyWriteCommand(commandPath: string[]): boolean {
   if (commandPath[0] !== 'linear') {
     return false
+  }
+  if (commandPath[1] === 'project') {
+    // Why: the relay only forwards stdin for commands listed here, so every
+    // Linear write that accepts `-` has to be named or its `-` form reads nothing.
+    return commandPath[2] === 'update' && commandPath[3] === 'add'
   }
   return (commandPath[1] === 'comment' && commandPath[2] === 'add') || commandPath[1] === 'create'
 }

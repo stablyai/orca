@@ -476,6 +476,15 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear project show' && flag === 'updates-limit') {
     return '--updates-limit <n>   Project updates to include; requires --updates (max 25)'
   }
+  if (command === 'linear project update add' && flag === 'id') {
+    return '--id <project>        Linear project UUID, slugId, URL, or unique exact name'
+  }
+  if (command === 'linear project update add' && flag === 'health') {
+    return '--health <state>      Project update health: on-track, at-risk, or off-track'
+  }
+  if (command === 'linear project update add' && flag === 'hide-diff') {
+    return '--hide-diff           Hide the auto-generated scope and progress diff'
+  }
   if (isLinearProjectMetadataCommand(command) && flag === 'query') {
     return '--query <text>        Case-insensitive filter over project metadata names'
   }
