@@ -72,6 +72,28 @@ export function mergeProjectHostSetupCompatibilityState(
   }
 }
 
+export function backfillLegacyTerminalBackendActivations(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const hostIdsByProject = new Map<string, Set<ExecutionHostId>>()
+  for (const setup of state.projectHostSetups) {
+    const hostIds = hostIdsByProject.get(setup.projectId) ?? new Set<ExecutionHostId>()
+    hostIds.add(setup.hostId)
+    hostIdsByProject.set(setup.projectId, hostIds)
+  }
+  return {
+    ...state,
+    projects: state.projects.map((project) => {
+      const hostIds = hostIdsByProject.get(project.id) ?? new Set<ExecutionHostId>(['local'])
+      const terminalBackendByHost = { ...project.terminalBackendByHost }
+      for (const hostId of hostIds) {
+        terminalBackendByHost[hostId] ??= { backend: 'orca', state: 'ready' }
+      }
+      return { ...project, terminalBackendByHost }
+    })
+  }
+}
+
 export function makeProjectHostSetupId(
   projectId: string,
   hostId: ExecutionHostId,

@@ -13,6 +13,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
+import { normalizeHerdrSessionName } from '../../../shared/terminal-backend'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
@@ -94,6 +95,29 @@ export class ProjectHostPersistenceOperations {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('herdrSessionName' in updates) {
+      const sessionName = normalizeHerdrSessionName(updates.herdrSessionName)
+      if (!sessionName) {
+        delete project.herdrSessionName
+      } else {
+        project.herdrSessionName = sessionName
+      }
+    }
+    if ('terminalBackendPreference' in updates) {
+      const preference = updates.terminalBackendPreference
+      if (!preference) {
+        delete project.terminalBackendPreference
+      } else {
+        project.terminalBackendPreference = preference
+      }
+    }
+    if ('terminalBackendByHost' in updates) {
+      if (!updates.terminalBackendByHost) {
+        delete project.terminalBackendByHost
+      } else {
+        project.terminalBackendByHost = structuredClone(updates.terminalBackendByHost)
       }
     }
     project.updatedAt = Date.now()

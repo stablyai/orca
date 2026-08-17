@@ -404,6 +404,10 @@ const SHIFT_ENTER_RECONFIRM_IDLE_MS = 350
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: user attention (focus, recent input) outlasts the exact keystroke; a
+// hidden-visibility pane that saw attention within this window still renders
+// foreground instead of being throttled by workspace visibility tracking.
+const USER_ATTENTION_TTL_MS = 5000
 // Why: a submit repaint can take longer than one keystroke echo to fully
 // arrive, so a synchronized frame that *began* this close to a keystroke stays
 // latency-sensitive even when ConPTY splits its end marker past the redraw
@@ -691,7 +695,7 @@ let codexRestartNoticePresence = false
 let inactiveForegroundImmediateBudgetChars = 0
 let inactiveForegroundImmediateBudgetWindowStart = 0
 
-type PanePtyBinding = IDisposable & {
+export type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
   reassertPtySizeAfterWindowWake: () => void
@@ -710,6 +714,9 @@ type PanePtyBinding = IDisposable & {
   requestWindowsShiftEnterReconfirmation: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
+  /** Mark recent user attention (click, focus, window focus) so output renders
+   *  as foreground even if workspace visibility tracking says hidden. */
+  markUserAttention: () => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -915,25 +922,6 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
     return true
   }
   return sessionId.slice(0, separatorIdx) === worktreeId
-}
-
-function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
-  if (!isPaneVisible) {
-    return false
-  }
-  if (typeof document === 'undefined') {
-    return true
-  }
-  // Why: Electron can keep visible panes mounted while the whole app is
-  // backgrounded. Treat hidden documents like background tabs so Chromium
-  // timer throttling cannot pin terminal writes on the renderer foreground path.
-  if (document.visibilityState === 'visible') {
-    return true
-  }
-  // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
-  // display sleep; proven-stale means real user input contradicted it, so the
-  // hidden-delivery gate must not keep dropping a watched pane's bytes.
-  return isDocumentVisibilityProvenStale()
 }
 
 type SynchronizedForegroundScan = {
@@ -1193,7 +1181,7 @@ export function connectPanePty(
       return
     }
     writeTerminalOutput(pane.terminal, idleAgentTerminalModeReset, {
-      foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      foreground: shouldWritePtyOutputForeground()
     })
   }
   // Why: passphrase-gate waits register a teardown here so dispose() can
@@ -3819,6 +3807,27 @@ export function connectPanePty(
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
+  // Why: user attention (focus, recent input) overrides workspace visibility
+  // tracking: a pane with attention must render foreground even when
+  // isVisible/visibilityState say hidden (macOS occlusion bug, background tab).
+  const shouldWritePtyOutputForeground = (): boolean => {
+    if (!deps.isVisibleRef.current) {
+      return false
+    }
+    if (typeof document === 'undefined') {
+      return true
+    }
+    if (document.visibilityState === 'visible') {
+      return true
+    }
+    if (performance.now() - lastTerminalInputAt <= USER_ATTENTION_TTL_MS) {
+      return true
+    }
+    // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
+    // display sleep; proven-stale means real user input contradicted it, so the
+    // hidden-delivery gate must not keep dropping a watched pane's bytes.
+    return isDocumentVisibilityProvenStale()
+  }
   let deferredReattachLiveData: DeferredReattachLiveDataQueue | null = null
   let reattachLiveDataDeferralDepth = 0
   let deferredReattachLiveDataOwners = new Map<number, { failed: boolean }>()
@@ -3884,6 +3893,7 @@ export function connectPanePty(
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
     leafId: pane.leafId,
+    terminalLayout: useAppStore.getState().terminalLayoutsByTabId[deps.tabId],
     activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
@@ -4288,7 +4298,19 @@ export function connectPanePty(
     capturedTransport: transport,
     getCurrentTransport: () => deps.paneTransportsRef.current.get(pane.id)
   })
-
+  // Why: focus on the terminal (click, tab navigation) proves user attention
+  // even without keystrokes. Update lastTerminalInputAt so output renders as foreground.
+  const terminalElement = pane.terminal.element
+  let focusDisposable: { dispose: () => void } | null = null
+  if (terminalElement && typeof terminalElement.addEventListener === 'function') {
+    const onFocus = (): void => {
+      lastTerminalInputAt = performance.now()
+    }
+    terminalElement.addEventListener('focus', onFocus, { capture: true })
+    focusDisposable = {
+      dispose: () => terminalElement.removeEventListener('focus', onFocus, { capture: true })
+    }
+  }
   const shouldSuppressDesktopPtyResize = (): boolean => {
     const currentPtyId = transport.getPtyId()
     return Boolean(
@@ -5407,7 +5429,7 @@ export function connectPanePty(
               spawnedPtyId.startupCwdFallback?.kind === 'worktree'
             ) {
               writeTerminalOutput(pane.terminal, STARTUP_CWD_FALLBACK_NOTICE, {
-                foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+                foreground: shouldWritePtyOutputForeground()
               })
             }
             if (
@@ -6078,7 +6100,7 @@ export function connectPanePty(
         hiddenDeliveryGateActive &&
         !runtimeEnvironmentId &&
         !disposed &&
-        !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+        !shouldWritePtyOutputForeground()
       )
     }
 
@@ -6102,7 +6124,7 @@ export function connectPanePty(
     // re-arm restores — that is the rc.7.perf feedback loop.
     function isForegroundRestoreBackpressureContext(): boolean {
       return (
-        shouldWritePtyOutputForeground(deps.isVisibleRef.current) &&
+        shouldWritePtyOutputForeground() &&
         (hiddenOutputRestoreInFlight !== null || isHiddenOutputRestoreFloodSuppressed())
       )
     }
@@ -6249,9 +6271,7 @@ export function connectPanePty(
         }
       }
       if (isRemoteRuntimePtyId(ptyId) && canUseHiddenOutputSnapshot(ptyId)) {
-        transport.setOutputPaused?.(
-          !disposed && !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
-        )
+        transport.setOutputPaused?.(!disposed && !shouldWritePtyOutputForeground())
         return
       }
       if (hiddenDeliverySyncedPtyId !== null && hiddenDeliverySyncedPtyId !== ptyId) {
@@ -6262,7 +6282,7 @@ export function connectPanePty(
       if (!isHiddenDeliveryGateManagedPty(ptyId) || !canUseHiddenOutputSnapshot(ptyId)) {
         return
       }
-      const shouldHide = !disposed && !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      const shouldHide = !disposed && !shouldWritePtyOutputForeground()
       const isFirstSyncForPty = hiddenDeliverySyncedPtyId !== ptyId
       hiddenDeliverySyncedPtyId = ptyId
       if (shouldHide) {
@@ -6541,10 +6561,7 @@ export function connectPanePty(
       if (disposed) {
         return
       }
-      writePtyOutputToXterm(
-        idleAgentTerminalModeReset,
-        shouldWritePtyOutputForeground(deps.isVisibleRef.current)
-      )
+      writePtyOutputToXterm(idleAgentTerminalModeReset, shouldWritePtyOutputForeground())
     }
 
     function markHiddenOutputRestoreNeeded(): void {
@@ -6557,7 +6574,7 @@ export function connectPanePty(
       }
       hiddenOutputRestorePtyId = ptyId
       hiddenOutputRestoreNeeded = true
-      if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+      if (shouldWritePtyOutputForeground()) {
         requestHiddenOutputRestoreIfNeeded()
       }
     }
@@ -7051,7 +7068,7 @@ export function connectPanePty(
       if (
         disposed ||
         hiddenOutputRestoreForegroundDeadlineTimer !== null ||
-        !shouldWritePtyOutputForeground(deps.isVisibleRef.current) ||
+        !shouldWritePtyOutputForeground() ||
         (isRemoteRuntimePtyId(hiddenOutputRestorePtyId) &&
           hiddenOutputRestoreLegacyPtyId !== hiddenOutputRestorePtyId &&
           typeof transport.serializeBufferOutcome === 'function') ||
@@ -7071,7 +7088,7 @@ export function connectPanePty(
           disposed ||
           hiddenOutputRestoreGeneration !== deadlineGeneration ||
           hiddenOutputRestorePtyId !== ptyId ||
-          !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+          !shouldWritePtyOutputForeground()
         ) {
           return
         }
@@ -7187,7 +7204,7 @@ export function connectPanePty(
       if (
         disposed ||
         hiddenOutputRestoreDeferredRetryTimer !== null ||
-        !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+        !shouldWritePtyOutputForeground()
       ) {
         return
       }
@@ -7302,7 +7319,7 @@ export function connectPanePty(
     function writeRestoreUnavailableWarning(): void {
       // The reset must parse before both the warning and any foreground drain.
       writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
-      if (!shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+      if (!shouldWritePtyOutputForeground()) {
         return
       }
       writeTerminalOutput(pane.terminal, HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING, {
@@ -7545,7 +7562,7 @@ export function connectPanePty(
                   transport.getPtyId() !== scheduledPtyId ||
                   !canUseHiddenOutputSnapshot(scheduledPtyId) ||
                   (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) ||
-                  !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+                  !shouldWritePtyOutputForeground()
                 ) {
                   return
                 }
@@ -7688,7 +7705,7 @@ export function connectPanePty(
             clearHiddenOutputRestoreForegroundDeadlineTimer()
             return
           }
-          if (!shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+          if (!shouldWritePtyOutputForeground()) {
             // Why: hidden bytes arriving during the snapshot aren't in renderer memory; leave recovery pending for reveal, don't loop snapshots in a throttled tab.
             hiddenOutputRestoreNeeded = true
             return
@@ -7735,7 +7752,7 @@ export function connectPanePty(
         if (
           !hiddenOutputRestoreRetryDeferred &&
           hiddenOutputRestoreNeeded &&
-          shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+          shouldWritePtyOutputForeground()
         ) {
           requestHiddenOutputRestoreIfNeeded()
         }
@@ -7757,7 +7774,7 @@ export function connectPanePty(
       const onDocumentVisibilityChange = (): void => {
         // Why: document hide/show flips the foreground predicate with no pane lifecycle event; re-sync the hidden-delivery gate both ways.
         syncHiddenRendererPtyDelivery()
-        if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+        if (shouldWritePtyOutputForeground()) {
           requestHiddenOutputRestoreIfNeeded()
         }
       }
@@ -7829,8 +7846,7 @@ export function connectPanePty(
         reportError(codexBackfillNotice)
       }
       // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
-      const foreground =
-        shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true
+      const foreground = shouldWritePtyOutputForeground() && meta?.background !== true
       // Why: latch the hidden-delivery gate from the byte path too, covering a PTY id that arrives after the initial sync (no-op when current).
       if (!foreground) {
         syncHiddenRendererPtyDelivery()
@@ -7900,7 +7916,7 @@ export function connectPanePty(
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
       const skipBackgroundAlternateScreenFrame =
         meta?.background === true &&
-        shouldWritePtyOutputForeground(deps.isVisibleRef.current) &&
+        shouldWritePtyOutputForeground() &&
         pane.terminal.buffer.active.type === 'alternate' &&
         !containsStatefulRendererQuery(orderedRendererData)
       if (skipBackgroundAlternateScreenFrame) {
@@ -9471,6 +9487,9 @@ export function connectPanePty(
     },
     reconcileIfSessionDead,
     reconcileIfSessionMissing,
+    markUserAttention: () => {
+      lastTerminalInputAt = performance.now()
+    },
     dispose() {
       disposed = true
       // Why: a detached client stops observing the pane's bytes, so it must cede
@@ -9577,6 +9596,7 @@ export function connectPanePty(
       }
       imeCompositionRouteDisposable.dispose()
       onDataDisposable.dispose()
+      focusDisposable?.dispose()
       userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()

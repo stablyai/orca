@@ -58,6 +58,14 @@ import {
 } from '../claude-accounts/live-pty-gate'
 import { parseDaemonReadyIdentity, readDaemonProcessIncarnation } from './daemon-ready-identity'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import type { Store } from '../persistence'
+import { createLocalHerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-provider-factory'
+import type { HerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-pty-provider'
+import { HerdrTransport } from '../providers/multiplexer/herdr/herdr-transport'
+import {
+  HerdrDaemonSupervisor,
+  type HerdrDaemonStatus
+} from '../providers/multiplexer/herdr/herdr-daemon-supervisor'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -97,6 +105,8 @@ let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
 let adapter: DaemonProvider | null = null
+let herdrStore: Store | null = null
+let herdrProvider: HerdrPtyProvider | null = null
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
 
@@ -121,6 +131,52 @@ function getDaemonEntryPath(): string {
     return directEntryPath
   }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
+}
+
+function getHerdrDaemonEntryPath(): string {
+  const appPath = app.getAppPath()
+  const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  const directEntryPath = join(basePath, 'herdr-daemon-entry.js')
+  if (existsSync(directEntryPath)) {
+    return directEntryPath
+  }
+  return join(basePath, 'out', 'main', 'herdr-daemon-entry.js')
+}
+
+let herdrDaemonSupervisor: HerdrDaemonSupervisor | null = null
+
+// Why: fire-and-forget by design. The supervisor probes daemon readiness via socket
+// ping in the background, so a slow or failing daemon can never block or fail boot.
+function startHerdrDaemon(runtimeDir: string): HerdrDaemonSupervisor {
+  if (herdrDaemonSupervisor) {
+    return herdrDaemonSupervisor
+  }
+  const supervisor = new HerdrDaemonSupervisor({
+    entryPath: getHerdrDaemonEntryPath(),
+    runtimeDir,
+    socketPath: HerdrTransport.getDefaultSocketPath()
+  })
+  herdrDaemonSupervisor = supervisor
+  console.error(
+    '[herdr-daemon] starting supervisor:',
+    JSON.stringify({
+      entryPath: getHerdrDaemonEntryPath(),
+      runtimeDir,
+      socketPath: HerdrTransport.getDefaultSocketPath()
+    })
+  )
+  supervisor.start()
+  return supervisor
+}
+
+export function stopHerdrDaemon(): void {
+  const supervisor = herdrDaemonSupervisor
+  herdrDaemonSupervisor = null
+  void supervisor?.stop()
+}
+
+export function getHerdrDaemonStatus(): HerdrDaemonStatus {
+  return herdrDaemonSupervisor?.getStatus() ?? 'stopped'
 }
 
 // Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
@@ -920,8 +976,46 @@ function createOutOfProcessLauncher(
 
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
-  options: { macosLoginSessionWatch?: boolean } = {}
+  options: { macosLoginSessionWatch?: boolean } = {},
+  store?: Store | null
 ): Promise<void> {
+  herdrStore = store ?? null
+  // Why: react to backend switches without a restart, so toggling the terminal
+  // backend in settings swaps the local provider and stops/starts the stock
+  // herdr daemon in place.
+  store?.onSettingsChanged((updates) => {
+    if (
+      !('terminalBackendDefault' in updates) &&
+      !('herdrRuntimeSource' in updates) &&
+      !('herdrSessionName' in updates)
+    ) {
+      return
+    }
+    const activeStore = herdrStore
+    const herdrBackendActive = activeStore?.getSettings().terminalBackendDefault === 'herdr'
+    const runtimeSource = activeStore?.getSettings().herdrRuntimeSource ?? 'stock'
+    if (herdrBackendActive) {
+      // Why: the local provider caches transports and the shared session name
+      // at construction, so backend, runtime-source, and session-name switches
+      // need a fresh provider to take effect without a restart.
+      if (activeStore) {
+        herdrProvider = createLocalHerdrPtyProvider(adapter ?? undefined, activeStore)
+        setLocalPtyProvider(herdrProvider)
+        rebindLocalProviderListeners()
+      }
+      if (runtimeSource === 'daemon') {
+        startHerdrDaemon(getRuntimeDir())
+      } else {
+        stopHerdrDaemon()
+      }
+    } else {
+      stopHerdrDaemon()
+      if (adapter) {
+        setLocalPtyProvider(adapter)
+        rebindLocalProviderListeners()
+      }
+    }
+  })
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
@@ -941,6 +1035,34 @@ export async function initDaemonPtyProvider(
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
+
+  // Why: gate the stock herdr daemon on the configured backend. Non-blocking by
+  // design: the supervisor probes readiness in the background, so a slow or failing
+  // daemon can never delay or fail daemon init.
+  const herdrBackendActive =
+    store?.getSettings().terminalBackendDefault === 'herdr' &&
+    store?.getSettings().herdrRuntimeSource === 'daemon'
+  console.error(
+    '[herdr-daemon] boot decision:',
+    JSON.stringify({
+      storePresent: store != null,
+      terminalBackendDefault: store?.getSettings().terminalBackendDefault ?? '<no-store>',
+      herdrRuntimeSource: store?.getSettings().herdrRuntimeSource ?? '<no-store>',
+      herdrBackendActive
+    })
+  )
+  if (herdrBackendActive) {
+    startHerdrDaemon(runtimeDir)
+    logDaemonMilestone('herdr-daemon-supervisor-started', {
+      socketPath: HerdrTransport.getDefaultSocketPath()
+    })
+  } else {
+    logDaemonMilestone('herdr-daemon-supervisor-skipped', {
+      backend: store?.getSettings().terminalBackendDefault,
+      runtimeSource: store?.getSettings().herdrRuntimeSource
+    })
+  }
+
   if (signal?.aborted) {
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
@@ -1029,7 +1151,14 @@ export async function initDaemonPtyProvider(
   }
   spawner = newSpawner
   adapter = routedAdapter
-  setLocalPtyProvider(routedAdapter)
+  // Why: herdr is opt-in. Install it only when the user selected the herdr
+  // terminal backend; the orca daemon adapter serves terminals otherwise.
+  if (store?.getSettings().terminalBackendDefault === 'herdr') {
+    herdrProvider = createLocalHerdrPtyProvider(undefined, store)
+    setLocalPtyProvider(herdrProvider)
+  } else {
+    setLocalPtyProvider(routedAdapter)
+  }
   // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', {
@@ -1103,6 +1232,10 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
+  if (herdrProvider) {
+    herdrProvider.replaceFallback(newAdapter)
+    return
+  }
   setLocalPtyProvider(newAdapter)
 }
 
@@ -1267,12 +1400,16 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
 // Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
+  herdrProvider?.dispose()
+  herdrProvider = null
   await adapter?.disconnectOnly()
   adapter = null
 }
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */
 export async function shutdownDaemon(): Promise<void> {
+  herdrProvider?.dispose()
+  herdrProvider = null
   adapter?.dispose()
   adapter = null
   await spawner?.shutdown()

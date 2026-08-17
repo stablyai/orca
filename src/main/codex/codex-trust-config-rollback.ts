@@ -99,7 +99,11 @@ export function restoreCodexTrustConfig(
   // real target too, or Orca's atomic rename would disconnect dotfiles users.
   const tempPath = `${restorePath}.${process.pid}.${randomUUID()}.rollback.tmp`
   try {
-    writeFileSync(tempPath, snapshot.contents, { mode: snapshot.mode })
+    // Why: writeFileSync applies the process umask to the mode option, which
+    // strips bits on restrictive shells; an explicit chmod restores the exact
+    // captured mode regardless of umask.
+    writeFileSync(tempPath, snapshot.contents)
+    chmodSync(tempPath, snapshot.mode)
     renameFileWithWindowsRetry(tempPath, restorePath)
   } catch (error) {
     try {

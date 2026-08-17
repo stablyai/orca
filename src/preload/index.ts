@@ -21,6 +21,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
+import type { TerminalLayoutSnapshot } from '../shared/terminal-tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -4132,6 +4133,16 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:renameTerminal', listener)
       return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
+    },
+    onApplyTerminalLayout: (
+      callback: (data: { tabId: string; layout: TerminalLayoutSnapshot }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; layout: TerminalLayoutSnapshot }
+      ) => callback(data)
+      ipcRenderer.on('ui:applyTerminalLayout', listener)
+      return () => ipcRenderer.removeListener('ui:applyTerminalLayout', listener)
     },
     onFocusTerminal: (
       callback: (data: {

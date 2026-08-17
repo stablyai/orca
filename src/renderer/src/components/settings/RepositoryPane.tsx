@@ -30,6 +30,7 @@ import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
+import { RepositoryTerminalBackendSection } from './RepositoryTerminalBackendSection'
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
@@ -333,6 +334,18 @@ export function RepositoryPane({
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
+
+        {settings && project && updateProject ? (
+          <RepositoryTerminalBackendSection
+            repo={repo}
+            settings={settings}
+            project={project}
+            hostId={selectedHostId}
+            runtimeSessionSummary={runtimeSessionSummary}
+            updateProject={updateProject}
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        ) : null}
 
         {!isFolder ? (
           <>

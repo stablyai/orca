@@ -58,6 +58,13 @@ import type { SparsePreset } from '../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/project-execution-runtime'
+import {
+  DEFAULT_HERDR_SESSION_NAME,
+  normalizeHerdrBinarySource,
+  normalizeHerdrRuntimeSource,
+  normalizeHerdrSessionName,
+  normalizeTerminalBackend
+} from '../../../shared/terminal-backend'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
@@ -308,6 +315,7 @@ import {
   type WorkspaceSessionPaneIdentityRemap
 } from '../restoring-sessions/workspace-pane-normalization'
 import {
+  backfillLegacyTerminalBackendActivations,
   mergeProjectHostSetupCompatibilityState,
   projectHostSetupCompatibilityStateEqual
 } from '../tracking-repos/project-host-compatibility'
@@ -813,6 +821,7 @@ export class Store {
     })
 
     let result: PersistedState | null = null
+    let backfillLegacyTerminalBackends = false
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -823,6 +832,8 @@ export class Store {
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        backfillLegacyTerminalBackends =
+          parsed.settings?.terminalBackendActivationDefaultedToOrca !== true
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
@@ -1285,7 +1296,16 @@ export class Store {
             voice: {
               ...getDefaultVoiceSettings(),
               ...parsed.settings?.voice
-            }
+            },
+            terminalBackendDefault: normalizeTerminalBackend(
+              parsed.settings?.terminalBackendDefault
+            ),
+            herdrBinarySource: normalizeHerdrBinarySource(parsed.settings?.herdrBinarySource),
+            herdrRuntimeSource: normalizeHerdrRuntimeSource(parsed.settings?.herdrRuntimeSource),
+            herdrSessionName:
+              normalizeHerdrSessionName(parsed.settings?.herdrSessionName) ??
+              DEFAULT_HERDR_SESSION_NAME,
+            terminalBackendActivationDefaultedToOrca: true
           },
           // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
           ui: (() => {
@@ -1586,7 +1606,13 @@ export class Store {
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
-    const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    let projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    if (backfillLegacyTerminalBackends) {
+      projectHostSetupCompatibility = backfillLegacyTerminalBackendActivations(
+        projectHostSetupCompatibility
+      )
+      this.loadNeedsSave = true
+    }
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
     }

@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
   getManageSessionsSearchEntries,
+  getTerminalBackendSearchEntries,
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
@@ -19,6 +20,7 @@ import {
 } from './terminal-windows-search'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
+import { TerminalBackendSection } from './TerminalBackendSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
 import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
@@ -61,6 +63,9 @@ export function TerminalPane({
     showWindowsHostSettings && windowsShell === 'powershell.exe'
 
   const visibleSections = [
+    matchesSettingsSearch(searchQuery, getTerminalBackendSearchEntries()) ? (
+      <TerminalBackendSection key="backend" settings={settings} updateSettings={updateSettings} />
+    ) : null,
     showWindowsHostSettings &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
       <TerminalWindowsShellSection

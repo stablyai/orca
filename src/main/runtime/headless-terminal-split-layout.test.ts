@@ -48,6 +48,30 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
     expect(next.ptyIdsByLeafId).toEqual({ 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' })
   })
 
+  it('falls back to the active leaf when runtime source metadata is stale', () => {
+    const existing: TerminalLayoutSnapshot = {
+      root: { type: 'leaf', leafId: 'persisted-leaf' },
+      activeLeafId: 'persisted-leaf',
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'persisted-leaf': 'pty-a' }
+    }
+
+    const next = buildHeadlessTerminalSplitLayout(existing, {
+      leafId: 'new-leaf',
+      ptyId: 'pty-b',
+      splitFromLeafId: 'stale-runtime-leaf',
+      direction: 'horizontal'
+    })
+
+    expect(next.root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: 'persisted-leaf' },
+      second: { type: 'leaf', leafId: 'new-leaf' }
+    })
+    expect(countTerminalLayoutLeaves(next.root)).toBe(2)
+  })
+
   it('splits a nested leaf inside an existing split (split-of-a-split)', () => {
     const existing: TerminalLayoutSnapshot = {
       root: {

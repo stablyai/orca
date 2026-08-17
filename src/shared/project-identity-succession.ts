@@ -1,4 +1,5 @@
 import type { Project } from './project-types'
+import { normalizeTerminalBackendActivation } from './terminal-backend'
 
 export type ProjectIdentitySuccession = {
   /** Projected projects with user-set state carried forward from their predecessor row. */
@@ -8,10 +9,31 @@ export type ProjectIdentitySuccession = {
 }
 
 function carryUserState(projected: Project, previous: Project): Project {
-  return previous.localWindowsRuntimePreference
+  const carried: Partial<Project> = {}
+  if (previous.localWindowsRuntimePreference) {
+    carried.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+  }
+  if (previous.herdrSessionName) {
+    carried.herdrSessionName = previous.herdrSessionName
+  }
+  if (previous.terminalBackendPreference) {
+    carried.terminalBackendPreference = previous.terminalBackendPreference
+  }
+  if (previous.terminalBackendByHost) {
+    const normalizedByHost = Object.fromEntries(
+      Object.entries(previous.terminalBackendByHost).flatMap(([hostId, activation]) => {
+        const normalized = normalizeTerminalBackendActivation(activation)
+        return normalized ? [[hostId, normalized] as const] : []
+      })
+    )
+    if (Object.keys(normalizedByHost).length > 0) {
+      carried.terminalBackendByHost = normalizedByHost
+    }
+  }
+  return Object.keys(carried).length > 0
     ? {
         ...projected,
-        localWindowsRuntimePreference: previous.localWindowsRuntimePreference,
+        ...carried,
         updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
       }
     : projected

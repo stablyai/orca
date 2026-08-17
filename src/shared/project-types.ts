@@ -5,6 +5,7 @@ import type { LocalWindowsRuntimePreference } from './project-execution-runtime'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { Repo, RepoKind } from './repo-types'
+import type { TerminalBackendActivation, TerminalBackendPreference } from './terminal-backend'
 
 export type ProjectProviderIdentity = {
   provider: 'github'
@@ -23,6 +24,12 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /** Stable named Herdr session. Undefined derives a deterministic name from the project id. */
+  herdrSessionName?: string
+  /** Desired backend for project hosts that have not been activated yet. */
+  terminalBackendPreference?: TerminalBackendPreference
+  /** Active backend is durable per host so changing defaults cannot switch live terminals. */
+  terminalBackendByHost?: Partial<Record<ExecutionHostId, TerminalBackendActivation>>
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -30,7 +37,12 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: {
+    localWindowsRuntimePreference?: Project['localWindowsRuntimePreference']
+    herdrSessionName?: string | null
+    terminalBackendPreference?: TerminalBackendPreference | null
+    terminalBackendByHost?: Project['terminalBackendByHost'] | null
+  }
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

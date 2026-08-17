@@ -9,28 +9,28 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "语言",
+    "text": "\u8bed\u8a00",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "語言",
+    "text": "\u8a9e\u8a00",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "언어",
+    "text": "\uc5b8\uc5b4",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "言語",
+    "text": "\u8a00\u8a9e",
     "dynamic": false,
     "count": 1
   },
@@ -66,6 +66,48 @@
     "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "ghostty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "terminal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "runtime",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "backend",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "herdr",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "multiplexer",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "persistence",
     "dynamic": false,
     "count": 1
   }

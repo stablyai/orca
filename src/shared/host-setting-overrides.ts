@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
+import type { HerdrBinarySource } from './terminal-backend'
 
 /** Per-host overrides for client preferences that genuinely vary by execution
  *  host. NARROW by design: only settings whose value is meaningless to share
@@ -11,13 +12,14 @@ import type { GlobalSettings } from './global-settings-types'
 export type HostSettingOverrides = {
   displayLabel?: string
   defaultWorktreeLocation?: string
+  herdrBinarySource?: HerdrBinarySource
 }
 
 // Why: per-host preferences follow `effective = host override ?? client default`.
 // These pure helpers centralize that rule so the UI, registry, and tests share a
 // single implementation instead of re-deriving the fallback at each call site.
 
-export type HostSettingOverrideKey = keyof HostSettingOverrides
+export type HostSettingOverrideKey = Exclude<keyof HostSettingOverrides, 'herdrBinarySource'>
 
 type HostSettingsSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
 

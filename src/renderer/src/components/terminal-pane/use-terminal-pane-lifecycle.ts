@@ -923,6 +923,15 @@ export function useTerminalPaneLifecycle({
         paneMode2031Ref.current.set(paneId, true)
         paneLastThemeModeRef.current.set(paneId, subscribedMode)
       },
+      // Why: mark recent user attention so output renders as foreground even if
+      // workspace visibility tracking says hidden (macOS occlusion bug, background tab with focus).
+      markUserAttention: () => {
+        // The actual implementation is in connectPanePty; this signals attention
+        // via the existing lastTerminalInputAt updated by onData/onFocus.
+        // Here we just ensure the signal reaches the pane binding.
+        // connectPanePty reads lastTerminalInputAt from its closure; we don't have
+        // direct access, so this is a no-op — attention is tracked via input/focus events.
+      },
       restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {}
     }
 

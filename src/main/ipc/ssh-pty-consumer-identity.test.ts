@@ -21,6 +21,7 @@ vi.mock('../providers/ssh-git-provider', () => mocks.sshGitProvider)
 vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => mocks.herdrProviderFactory)
 
 import type { SshTarget } from '../../shared/ssh-types'
 import { getSshPtyConsumerRecovery } from '../ssh/ssh-pty-consumer-recovery'

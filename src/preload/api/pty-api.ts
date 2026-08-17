@@ -15,6 +15,7 @@ import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetr
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { PtyManagementApi } from './pty-management-api'
 
 export type PtyApi = {
@@ -44,6 +45,7 @@ export type PtyApi = {
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
+    terminalLayout?: TerminalLayoutSnapshot
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }) => Promise<{

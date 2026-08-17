@@ -53,9 +53,24 @@ export function buildHeadlessTerminalSplitLayout(
     type: 'leaf',
     leafId: args.splitFromLeafId
   }
+  const containsLeaf = (node: TerminalPaneLayoutNode, leafId: string): boolean =>
+    node.type === 'leaf'
+      ? node.leafId === leafId
+      : containsLeaf(node.first, leafId) || containsLeaf(node.second, leafId)
+  const firstLeafId = (node: TerminalPaneLayoutNode): string =>
+    node.type === 'leaf' ? node.leafId : firstLeafId(node.first)
+  const requestedSourceExists = containsLeaf(existingRoot, args.splitFromLeafId)
+  const activeSourceExists =
+    typeof existing?.activeLeafId === 'string' && containsLeaf(existingRoot, existing.activeLeafId)
+  const splitFromLeafId = requestedSourceExists
+    ? args.splitFromLeafId
+    : activeSourceExists
+      ? existing.activeLeafId!
+      : firstLeafId(existingRoot)
+
   const insertSplit = (node: TerminalPaneLayoutNode): TerminalPaneLayoutNode => {
     if (node.type === 'leaf') {
-      if (node.leafId !== args.splitFromLeafId) {
+      if (node.leafId !== splitFromLeafId) {
         return node
       }
       return {

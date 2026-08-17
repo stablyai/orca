@@ -34,6 +34,10 @@ vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
 }))
 
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (fallback: unknown) => fallback
+}))
+
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 const { SshRelaySession } = await import('./ssh-relay-session')
 

@@ -12,7 +12,6 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
-import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
@@ -99,7 +98,7 @@ import {
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
-import { connectPanePty } from './pty-connection'
+import { connectPanePty, type PanePtyBinding } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
@@ -337,7 +336,7 @@ function TerminalPane(
   // Why: per-pane mirror of kitty keyboard flags; the keyboard policy reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
   const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
-  const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
+  const panePtyBindingsRef = useRef<Map<number, PanePtyBinding>>(new Map())
   // Why: panes replaying recorded PTY bytes; while non-zero, pty-connection drops xterm onData so auto-replies don't leak to the shell. See replay-guard.ts.
   const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
@@ -1786,10 +1785,18 @@ function TerminalPane(
     let releasedHelperOnWindowBlur: HTMLElement | null = null
     // Why: the IME refresh's blur emits a focusout that would clear terminalInputFocused mid-handoff; latch it so Terminal-first shortcut routing survives until refocus.
     let refreshingImeInputContext = false
+    const markAttention = (): void => {
+      const activePane = managerRef.current?.getActivePane()
+      if (activePane) {
+        const binding = panePtyBindingsRef.current.get(activePane.id)
+        binding?.markUserAttention?.()
+      }
+    }
     const syncFocused = (focused: boolean): void => {
       ownsRegularTerminalFocus = focused
       if (focused) {
         releasedHelperOnWindowBlur = null
+        markAttention()
       }
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
@@ -1828,6 +1835,7 @@ function TerminalPane(
         pointerTarget: event.target,
         syncFocused
       })
+      markAttention()
     }
     const onWindowBlur = (): void => {
       // Why: webview/browser handoff keeps the helper textarea focused, so clear only the main-process mirror and let guest focus proceed.
@@ -1849,6 +1857,7 @@ function TerminalPane(
       ) {
         releasedHelperOnWindowBlur = null
       }
+      markAttention()
     }
 
     if (
@@ -1873,7 +1882,7 @@ function TerminalPane(
         syncFocused(false)
       }
     }
-  }, [])
+  }, []) // markAttention is stable (refs only), so no deps needed
 
   // Intercept paste at keydown: Chromium fires no paste event for image-only clipboard on a textarea (xterm's focus target), so image pastes would be lost.
   // Paste-event handler is a fallback for non-keyboard triggers; it also bypasses Chromium's clipboard pipeline that intermittently fails concurrent CLI reads.

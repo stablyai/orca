@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -63,6 +64,7 @@ export type PtySpawnOptions = {
   /** Stable terminal tab identity used as a coarser attach guard when a pane
    *  identity is unavailable. */
   tabId?: string
+  terminalLayout?: TerminalLayoutSnapshot
   /** Daemon session ID. A caller-provided ID is treated as an attach request;
    *  daemon hosts also pass minted IDs for fresh sessions that need stable
    *  per-PTY state before provider.spawn returns. */
@@ -226,4 +228,18 @@ export type IPtyProvider = {
       cause?: TerminalExitCause
     }) => void
   ): () => void
+
+  /** Optional: SSH-specific rejected data events (e.g., source malformed). */
+  onRejectedData?: (
+    callback: (payload: {
+      id: string
+      data: string
+      providerGeneration: number
+      ptyIncarnation: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+      sourceMalformed?: boolean
+    }) => void
+  ) => () => void
 }

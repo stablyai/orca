@@ -853,11 +853,28 @@ const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('windows-host') }),
   z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
 ])
+const TerminalBackendPreferenceIpcArgs = z.enum(['inherit', 'orca', 'herdr'])
+const TerminalBackendActivationIpcArgs = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('ready'), backend: z.enum(['orca', 'herdr']) }),
+  z.object({
+    state: z.literal('migrating'),
+    backend: z.enum(['orca', 'herdr']),
+    migrationId: z.string().min(1),
+    target: z.enum(['orca', 'herdr']),
+    phase: z.enum(['preparing', 'committing'])
+  })
+])
 
 const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
+    herdrSessionName: z.string().trim().min(1).max(64).nullable().optional(),
+    terminalBackendPreference: TerminalBackendPreferenceIpcArgs.nullable().optional(),
+    terminalBackendByHost: z
+      .record(z.string(), TerminalBackendActivationIpcArgs)
+      .nullable()
+      .optional()
   })
 })
 

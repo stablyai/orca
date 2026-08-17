@@ -13,6 +13,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
@@ -167,6 +168,9 @@ export type UiCommandEventApi = {
   ) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
+  ) => () => void
+  onApplyTerminalLayout: (
+    callback: (data: { tabId: string; layout: TerminalLayoutSnapshot }) => void
   ) => () => void
   onFocusTerminal: (
     callback: (data: {

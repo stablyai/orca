@@ -8,6 +8,9 @@ const { acceptOutputExitMock, muxRequestMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (fallback: unknown) => fallback
+}))
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: vi.fn(async (_mux, options) => ({
     clientInstanceId: options.clientInstanceId,

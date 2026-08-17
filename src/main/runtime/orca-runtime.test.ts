@@ -2993,6 +2993,7 @@ describe('OrcaRuntimeService', () => {
     const shown = await runtime.showTerminal(terminals.terminals[0].handle)
     expect(shown.handle).toBe(terminals.terminals[0].handle)
     expect(shown.ptyId).toBe('pty-1')
+    expect(shown.backend).toBe('orca')
     const mobileTabs = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileHandle = mobileTabs.tabs.find((tab) => tab.type === 'terminal')?.terminal
     if (!mobileHandle) {
@@ -15320,16 +15321,37 @@ describe('OrcaRuntimeService', () => {
     const sourceEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const workspaceSessionStore = store as typeof store & {
+      getWorkspaceSession: () => unknown
+    }
+    Object.assign(workspaceSessionStore, { getWorkspaceSession: vi.fn(() => undefined) })
 
-    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
-      handle: expect.stringMatching(/^term_/),
-      tabId: sourceEnv.ORCA_TAB_ID,
-      paneRuntimeId: -1
-    })
+    try {
+      await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject(
+        {
+          handle: expect.stringMatching(/^term_/),
+          tabId: sourceEnv.ORCA_TAB_ID,
+          paneRuntimeId: -1
+        }
+      )
+    } finally {
+      delete (workspaceSessionStore as { getWorkspaceSession?: unknown }).getWorkspaceSession
+    }
 
     const splitEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        tabId: sourceEnv.ORCA_TAB_ID,
+        leafId: splitLeafId,
+        terminalLayout: expect.objectContaining({
+          root: expect.objectContaining({ type: 'split', direction: 'vertical' }),
+          activeLeafId: splitLeafId
+        })
+      })
+    )
     expect(splitTerminal).not.toHaveBeenCalled()
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)

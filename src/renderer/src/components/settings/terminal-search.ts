@@ -1,4 +1,18 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
+
+export function getTerminalBackendSearchEntries(): SettingsSearchEntry[] {
+  return [
+    {
+      title: translate('auto.components.settings.terminalSearch.runtimeTitle', 'Terminal runtime'),
+      description: translate(
+        'auto.components.settings.terminalSearch.runtimeDescription',
+        'Choose Orca or Herdr as the terminal backend.'
+      ),
+      keywords: ['terminal', 'runtime', 'backend', 'herdr', 'multiplexer', 'persistence']
+    }
+  ]
+}
 import {
   getTerminalAdvancedSearchEntries,
   getTerminalGhosttyImportSearchEntries,
@@ -107,6 +121,7 @@ export function getTerminalPaneSearchEntries(platform: {
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
+    ...getTerminalBackendSearchEntries(),
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
     ...(isWindowsTerminalHost

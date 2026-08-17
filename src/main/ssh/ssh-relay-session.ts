@@ -68,6 +68,7 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 import { makeRemoteDirectoryCommand } from './ssh-remote-commands'
+import { createSshHerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-provider-factory'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -128,6 +129,8 @@ import {
 } from './ssh-pty-consumer-recovery'
 import { classifySshPtyFrameRejection, SshPtyFrameRejectionLog } from './ssh-pty-frame-rejection'
 import { SshPtyTargetedReattachQueue } from './ssh-pty-targeted-reattach-queue'
+import type { IPtyProvider } from '../providers/types'
+import type { PtyDataEvent } from '../providers/pty-provider-events'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -356,6 +359,8 @@ export class SshRelaySession {
   private readonly ptyConsumerClientInstanceId: string
   private ptyConsumerSessionState: SshPtyConsumerSessionState | null = null
   private activeCompatibilityAttachmentIds = new Set<string>()
+  private rawSshPtyProvider: SshPtyProvider | null = null
+  private routedSshPtyProvider: (IPtyProvider & { dispose?: () => void }) | null = null
 
   constructor(
     readonly targetId: string,
@@ -1009,34 +1014,37 @@ export class SshRelaySession {
     this.wireUpRemoteOrcaCli(mux, connectionIncarnation)
 
     const providerGeneration = allocateSshPtyProviderGeneration()
-    const ptyProvider = new SshPtyProvider(
+    const rawPtyProvider = new SshPtyProvider(
       this.targetId,
       mux,
       this.remoteCliBridgeEnv ?? undefined,
       providerGeneration
     )
+    this.rawSshPtyProvider = rawPtyProvider
     const consumerOwnerState = this.activePtyConsumerOwner()
     if (consumerOwnerState) {
-      ptyProvider.setPtyDeliveryPauseAdapter?.(({ id, providerGeneration: generation, paused }) => {
-        if (
-          generation !== providerGeneration ||
-          this.activePtyProviderGeneration !== providerGeneration ||
-          this.mux !== mux
-        ) {
-          return
+      rawPtyProvider.setPtyDeliveryPauseAdapter?.(
+        ({ id, providerGeneration: generation, paused }) => {
+          if (
+            generation !== providerGeneration ||
+            this.activePtyProviderGeneration !== providerGeneration ||
+            this.mux !== mux
+          ) {
+            return
+          }
+          const sourceIdentity = this.sourceIdentityByRelayPtyId.get(id)
+          if (consumerOwnerState.outputFlowControl && !sourceIdentity) {
+            return
+          }
+          mux.notify('pty.setDeliveryPaused', {
+            id,
+            paused,
+            clientGeneration: consumerOwnerState.clientGeneration,
+            ownerGeneration: consumerOwnerState.ownerGeneration,
+            ...(sourceIdentity ? { deliveryToken: sourceIdentity.deliveryToken } : {})
+          })
         }
-        const sourceIdentity = this.sourceIdentityByRelayPtyId.get(id)
-        if (consumerOwnerState.outputFlowControl && !sourceIdentity) {
-          return
-        }
-        mux.notify('pty.setDeliveryPaused', {
-          id,
-          paused,
-          clientGeneration: consumerOwnerState.clientGeneration,
-          ownerGeneration: consumerOwnerState.ownerGeneration,
-          ...(sourceIdentity ? { deliveryToken: sourceIdentity.deliveryToken } : {})
-        })
-      })
+      )
     }
     this.sourceAckPublisherCleanup?.()
     this.sourceAckPublisherCleanup = null
@@ -1074,7 +1082,24 @@ export class SshRelaySession {
       )
     }
     this.activePtyProviderGeneration = providerGeneration
-    registerSshPtyProvider(this.targetId, ptyProvider)
+    let routedPtyProvider: IPtyProvider & { dispose?: () => void }
+    try {
+      routedPtyProvider = createSshHerdrPtyProvider(
+        rawPtyProvider,
+        this.store,
+        this.requireReadyConnection(),
+        this.targetId,
+        this.getHostPlatform() ?? undefined
+      )
+    } catch (error) {
+      if ('dispose' in rawPtyProvider) {
+        ;(rawPtyProvider as { dispose: () => void }).dispose()
+      }
+      this.rawSshPtyProvider = null
+      throw error
+    }
+    this.routedSshPtyProvider = routedPtyProvider
+    registerSshPtyProvider(this.targetId, routedPtyProvider)
     this.installPtyRecoveryNotifications(mux)
 
     const connection = this.requireReadyConnection()
@@ -1115,7 +1140,7 @@ export class SshRelaySession {
     )
     registerSshGitProvider(this.targetId, gitProvider)
 
-    this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
+    this.wireUpPtyEvents(routedPtyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
     void this.installManagedHooksOnRemote(mux, shouldContinue)
@@ -1615,10 +1640,14 @@ export class SshRelaySession {
       agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
 
-    const ptyProvider = getSshPtyProvider(this.targetId)
-    if (ptyProvider && 'dispose' in ptyProvider) {
-      ;(ptyProvider as { dispose: () => void }).dispose()
+    this.routedSshPtyProvider?.dispose?.()
+    if (this.rawSshPtyProvider && this.rawSshPtyProvider !== this.routedSshPtyProvider) {
+      if ('dispose' in this.rawSshPtyProvider) {
+        ;(this.rawSshPtyProvider as { dispose: () => void }).dispose()
+      }
     }
+    this.routedSshPtyProvider = null
+    this.rawSshPtyProvider = null
     const fsProvider = getSshFilesystemProvider(this.targetId)
     if (fsProvider && 'dispose' in fsProvider) {
       ;(fsProvider as { dispose: () => void }).dispose()
@@ -1715,46 +1744,34 @@ export class SshRelaySession {
   }
 
   private wireUpPtyEvents(
-    ptyProvider: SshPtyProvider,
+    ptyProvider: IPtyProvider,
     mux: SshChannelMultiplexer,
     providerGeneration: number
   ): void {
-    ptyProvider.onData((payload) => {
+    ptyProvider.onData((rawPayload) => {
+      const payload = rawPayload as PtyDataEvent & Partial<SshPtyDataPayload>
+      if (payload.providerGeneration === undefined) {
+        this.acceptHerdrBackendPtyData(rawPayload, mux)
+        return
+      }
+      const relayPayload = payload as SshPtyDataPayload
       if (
         this.mux !== mux ||
         this.activePtyProviderGeneration !== providerGeneration ||
-        payload.providerGeneration !== providerGeneration
+        relayPayload.providerGeneration !== providerGeneration
       ) {
         return
       }
-      const pending = this.pendingPtyReattaches.get(payload.id)
+      const pending = this.pendingPtyReattaches.get(relayPayload.id)
       if (pending && this.activePtyConsumerOwner()?.outputFlowControl) {
         if (pending.livePassthrough) {
-          void this.acceptPtyData(payload).catch(() => {})
+          void this.acceptPtyData(relayPayload).catch(() => {})
           return
         }
-        this.quarantineReattachData(pending, payload)
+        this.quarantineReattachData(pending, relayPayload)
         return
       }
-      void this.acceptPtyData(payload).catch(() => {})
-    })
-    ptyProvider.onRejectedData?.((payload) => {
-      if (
-        this.mux !== mux ||
-        this.activePtyProviderGeneration !== providerGeneration ||
-        payload.providerGeneration !== providerGeneration
-      ) {
-        return
-      }
-      const pending = this.pendingPtyReattaches.get(payload.id)
-      if (pending) {
-        pending.restoreRequired = payload.sourceMalformed
-          ? 'recoverySourceMalformed'
-          : 'recoverySourceUnadmitted'
-        this.wakeRecovery(pending)
-        return
-      }
-      void this.acceptPtyData(payload).catch(() => {})
+      void this.acceptPtyData(relayPayload).catch(() => {})
     })
     ptyProvider.onReplay((payload) => {
       if (this.mux !== mux || this.activePtyProviderGeneration !== providerGeneration) {
@@ -1765,26 +1782,71 @@ export class SshRelaySession {
         win.webContents.send('pty:replay', payload)
       }
     })
-    ptyProvider.onExit((payload) => {
+    ptyProvider.onExit((rawPayload) => {
+      const payload = rawPayload as {
+        id: string
+        code: number
+        incarnationId?: string
+      } & Partial<SshPtyExitPayload>
+      if (payload.providerGeneration === undefined) {
+        this.acceptHerdrBackendPtyExit(rawPayload, mux)
+        return
+      }
+      const relayPayload = payload as SshPtyExitPayload
       if (
         this.mux !== mux ||
         this.activePtyProviderGeneration !== providerGeneration ||
-        payload.providerGeneration !== providerGeneration
+        relayPayload.providerGeneration !== providerGeneration
       ) {
         return
       }
-      const pendingReattach = this.pendingPtyReattaches.get(payload.id)
+      const pendingReattach = this.pendingPtyReattaches.get(relayPayload.id)
       if (pendingReattach && !pendingReattach.activated) {
         // Why: attach response and exit can share one transport batch, before incarnation restoration runs.
-        pendingReattach.exits.push(payload)
+        pendingReattach.exits.push(relayPayload)
         this.wakeRecovery(pendingReattach)
         return
       }
-      if (!isCurrentPtyExit(payload)) {
+      if (!isCurrentPtyExit(relayPayload)) {
         return
       }
-      void this.acceptPtyExit(payload).catch(() => {})
+      void this.acceptPtyExit(relayPayload).catch(() => {})
     })
+  }
+
+  private acceptHerdrBackendPtyData(payload: PtyDataEvent, mux: SshChannelMultiplexer): void {
+    if (this.mux !== mux) {
+      return
+    }
+    const rawLength = payload.sequenceChars ?? payload.data.length
+    this.runtime?.onPtyData(
+      payload.id,
+      payload.data,
+      Date.now(),
+      rawLength,
+      payload.transformed === true
+    )
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:data', payload)
+    }
+  }
+
+  private acceptHerdrBackendPtyExit(
+    payload: { id: string; code: number; incarnationId?: string },
+    mux: SshChannelMultiplexer
+  ): void {
+    if (this.mux !== mux) {
+      return
+    }
+    if (!isCurrentPtyExit(payload)) {
+      return
+    }
+    this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:exit', payload)
+    }
   }
 
   private acceptPtyData(payload: SshPtyDataPayload): Promise<unknown> {
@@ -2272,6 +2334,10 @@ export class SshRelaySession {
         ...leasedPtyIds
       ])
     )
+    // Why: the registered provider is the routed (herdr-wrapped) provider when
+    // herdr is active; reattach must run against it, not the raw provider, so
+    // reconnect keeps herdr-owned PTYs on their runtime host (matches
+    // reattachRejectedPty and the attach-time registration).
     const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
     const providerGeneration = this.activePtyProviderGeneration
     if (!ptyProvider || providerGeneration === null || this.mux !== mux) {

@@ -16,9 +16,7 @@ const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdap
     pauseAdapterMock: vi.fn()
   }))
 
-vi.mock('./ssh-relay-deploy', () => ({
-  deployAndLaunchRelay: vi.fn()
-}))
+vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
@@ -76,6 +74,9 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   }
 }))
 
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (p: unknown) => p
+}))
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()

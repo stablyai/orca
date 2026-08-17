@@ -11,6 +11,7 @@ import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-at
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
+import { DEFAULT_HERDR_SESSION_NAME } from './terminal-backend'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
@@ -235,6 +236,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,
     localWindowsRuntimeDefault: { kind: 'windows-host' },
+    terminalBackendDefault: 'orca',
+    herdrBinarySource: { kind: 'system' },
+    herdrRuntimeSource: 'stock',
+    herdrSessionName: DEFAULT_HERDR_SESSION_NAME,
+    terminalBackendActivationDefaultedToOrca: true,
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,

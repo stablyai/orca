@@ -291,4 +291,27 @@ describe('createIpcPtyTransport', () => {
     })
     expect(writeMock).not.toHaveBeenCalled()
   })
+
+  it('forwards the renderer-authoritative layout with a pane spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const terminalLayout = {
+      root: { type: 'leaf' as const, leafId: '22222222-2222-4222-8222-222222222222' },
+      activeLeafId: '22222222-2222-4222-8222-222222222222',
+      expandedLeafId: null
+    }
+    const transport = createIpcPtyTransport({
+      tabId: 'tab-1',
+      leafId: terminalLayout.activeLeafId,
+      terminalLayout
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    try {
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ terminalLayout }))
+    } finally {
+      transport.disconnect()
+    }
+  })
 })

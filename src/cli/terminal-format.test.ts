@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTerminalClose, formatTerminalFocus } from './terminal-format'
+import { formatTerminalClose, formatTerminalFocus, formatTerminalShow } from './terminal-format'
 
 describe('formatTerminalFocus', () => {
   it('distinguishes superseded navigation from a winning focus', () => {
@@ -57,5 +57,31 @@ describe('formatTerminalClose', () => {
         }
       })
     ).toBe('Closed terminal term_live. The PTY is live.')
+  })
+})
+
+describe('formatTerminalShow', () => {
+  it('prints the explicit terminal backend', () => {
+    const output = formatTerminalShow({
+      terminal: {
+        handle: 'term_herdr',
+        ptyId: 'herdr:v1:encoded',
+        backend: 'herdr',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        branch: 'main',
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'Herdr',
+        connected: true,
+        writable: true,
+        lastOutputAt: null,
+        preview: '',
+        paneRuntimeId: 1,
+        rendererGraphEpoch: 1
+      }
+    })
+
+    expect(output).toContain('backend: herdr')
   })
 })

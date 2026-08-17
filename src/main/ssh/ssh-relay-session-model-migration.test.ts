@@ -69,6 +69,9 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   }
 }))
 
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (p: unknown) => p
+}))
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()

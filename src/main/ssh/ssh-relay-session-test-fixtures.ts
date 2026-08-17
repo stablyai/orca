@@ -26,7 +26,13 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     markSshRemotePtyLeasesAsync: vi.fn(),
     markSshRemotePtyLeasesForShutdown: vi.fn(),
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
-    persistPtyBinding: vi.fn()
+    markSshRemotePtyLeasesTerminatedAsync: vi.fn(),
+    persistPtyBinding: vi.fn().mockReturnValue(true),
+    getSettings: vi.fn().mockReturnValue({
+      herdrBinarySource: { kind: 'system' },
+      hostSettingOverrides: {},
+      herdrSessionName: undefined as string | undefined
+    })
   } as unknown as Store
   const mockPortForward = {
     removeAllForwards: vi.fn()

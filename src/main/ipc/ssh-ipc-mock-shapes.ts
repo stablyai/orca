@@ -52,6 +52,7 @@ export type SshPtyProviderMock = {
   attach: Mock
   attachForReconnect: Mock
   shutdown: Mock
+  dispose: Mock
   providerGeneration: number
 }
 
@@ -110,6 +111,7 @@ export type SshIpcMockModules = {
   sshGitDispatch: SshIpcMockModule
   sshPortForward: SshIpcMockModule
   sshPortScanner: SshIpcMockModule
+  herdrProviderFactory: SshIpcMockModule
 }
 
 export type SshIpcMocks = SshIpcMockState & SshIpcMockModules

@@ -23,6 +23,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -113,6 +114,7 @@ import {
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
+import { createLocalHerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-provider-factory'
 import {
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
@@ -247,10 +249,36 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 
-// ─── Provider Registry ──────────────────────────────────────────────
-// Routes PTY operations by connectionId (null = local provider).
+import type { HerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-pty-provider'
 
+// ─── Provider Registry ──────────────────────────────────────────────
+// Routes PTY operations - Herdr is the universal multiplexer for all PTYs.
+
+// Why: herdr is opt-in. The local provider is the orca daemon adapter by
+// default; daemon init swaps in the herdr provider only when the user selected
+// the herdr terminal backend.
 let localProvider: IPtyProvider = new LocalPtyProvider()
+
+// Herdr is the multiplexer only when the user selects it (local, SSH, remote)
+let herdrProvider: HerdrPtyProvider | null = null
+let herdrStore: Store | null = null
+
+export function setHerdrStore(store: Store): void {
+  herdrStore = store
+  // Reset the provider so it gets recreated with the new store
+  herdrProvider = null
+}
+
+export function getHerdrProvider(): HerdrPtyProvider {
+  if (!herdrProvider) {
+    if (!herdrStore) {
+      throw new Error('Herdr store not initialized. Call setHerdrStore() first.')
+    }
+    herdrProvider = createLocalHerdrPtyProvider(undefined, herdrStore)
+  }
+  return herdrProvider
+}
+
 const sshProviders = new Map<string, IPtyProvider>()
 const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 
@@ -260,10 +288,11 @@ type RegisteredPtyProvider = {
 }
 
 function registeredPtyProviders(): RegisteredPtyProvider[] {
-  return [
-    { provider: localProvider, connectionId: null },
-    ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
-  ]
+  const providers: RegisteredPtyProvider[] = [{ provider: localProvider, connectionId: null }]
+  for (const [connectionId, provider] of sshProviders) {
+    providers.push({ provider, connectionId })
+  }
+  return providers
 }
 
 // Why: settling each provider separately only bounds a relay that *rejects*. An
@@ -991,7 +1020,7 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   if (connectionId === undefined) {
     const parsedSshId = parseAppSshPtyId(ptyId)
     if (parsedSshId) {
-      // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the HUB-local provider.
+      // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the local provider.
       return getProvider(parsedSshId.connectionId)
     }
     return localProvider
@@ -2071,15 +2100,13 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
   return sshProviders.get(connectionId)
 }
 
-/** Get the installed PTY provider (for direct access in tests/runtime).
- *  After daemon init this may be a DaemonPtyAdapter/DaemonPtyRouter, not LocalPtyProvider;
- *  callers needing LocalPtyProvider-specific methods must type-narrow or import the class. */
+/** Get the installed local PTY provider (herdr when selected, orca otherwise). */
 export function getLocalPtyProvider(): IPtyProvider {
   return localProvider
 }
 
-/** Replace the local PTY provider with a daemon-backed one.
- *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
+/** Replace the PTY provider (primarily for tests).
+ *  Call before registerPtyHandlers so the IPC layer routes through the provider. */
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
 }
@@ -2205,7 +2232,7 @@ export function restorePtyIncarnation(id: string, incarnationId: string): void {
   ptyIncarnationById.set(id, incarnationId)
 }
 
-// Why: localProvider.onData/onExit return unsubscribe functions. Without
+// Why: provider onData/onExit methods return unsubscribe functions. Without
 // storing and calling these on re-registration, macOS app re-activation
 // creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
 // duplicate listeners that forward every event twice.
@@ -4064,7 +4091,7 @@ export function registerPtyHandlers(
     // each affected pane here so background panes remount + re-attach too, not
     // just the pane whose write happened to detect the dead endpoint (STA-2373).
     localWriteUnavailableUnsub =
-      localProvider.onWriteUnavailable?.((payload) => {
+      getLocalPtyProvider().onWriteUnavailable?.((payload) => {
         if (
           mainWindow.isDestroyed() ||
           (typeof mainWindow.webContents.isDestroyed === 'function' &&
@@ -4077,7 +4104,7 @@ export function registerPtyHandlers(
 
     // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
     localBackgroundStreamUnsub =
-      localProvider.onBackgroundStreamEvent?.((payload) => {
+      getLocalPtyProvider().onBackgroundStreamEvent?.((payload) => {
         if (payload.kind === 'backgroundMarker') {
           runtime?.setPtyTransientFactDelegation(
             payload.id,
@@ -4101,16 +4128,16 @@ export function registerPtyHandlers(
       }) ?? null
 
     // Why: daemon providers lack configure().onData, so feed the runtime here or their tail buffer (terminal.read, agent-detection, mobile stream) stays empty.
-    const isLocalProvider = localProvider instanceof LocalPtyProvider
+    const isLocalProvider = getLocalPtyProvider() instanceof LocalPtyProvider
 
-    localDataUnsub = localProvider.onData((payload) => {
+    localDataUnsub = getLocalPtyProvider().onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
       const outputSeq = isLocalProvider
         ? runtime?.getPtyOutputSequence(payload.id)
         : runtime?.onPtyData(payload.id, payload.data, Date.now(), rawLength, payload.transformed)
       acceptPtyDataForRenderer(payload, outputSeq)
     })
-    localExitUnsub = localProvider.onExit((payload) => {
+    localExitUnsub = getLocalPtyProvider().onExit((payload) => {
       if (!isCurrentPtyExit(payload)) {
         return
       }
@@ -4267,8 +4294,8 @@ export function registerPtyHandlers(
 
   // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
   clearDidFinishLoadHandler()
-  if (localProvider instanceof LocalPtyProvider) {
-    const lp = localProvider
+  if (getLocalPtyProvider() instanceof LocalPtyProvider) {
+    const lp = getLocalPtyProvider() as LocalPtyProvider
     didFinishLoadHandler = () => {
       // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
       const generation = lp.advanceGeneration()
@@ -4924,6 +4951,9 @@ export function registerPtyHandlers(
       }
       if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
         spawnOptions.tabId = args.tabId
+      }
+      if (args.terminalLayout) {
+        spawnOptions.terminalLayout = args.terminalLayout
       }
       if (process.platform === 'win32' && !args.connectionId) {
         spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
@@ -5883,7 +5913,14 @@ export function registerPtyHandlers(
     },
     listProcesses: async (connectionId, opts) => {
       if (connectionId === null) {
-        return localProvider.listProcesses()
+        // Why: legacy worker recovery can race the provider install at
+        // startup; an empty inventory is the truthful state then, not a
+        // liveness failure.
+        try {
+          return await getLocalPtyProvider().listProcesses()
+        } catch {
+          return []
+        }
       }
       if (connectionId !== undefined) {
         try {
@@ -6053,6 +6090,7 @@ export function registerPtyHandlers(
         // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
         tabId?: string
         leafId?: string
+        terminalLayout?: TerminalLayoutSnapshot
         // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
         telemetry?: {
           agent_kind?: unknown
@@ -6622,6 +6660,9 @@ export function registerPtyHandlers(
         }
         if (launchCommand !== undefined) {
           spawnOptions.command = launchCommand
+        }
+        if (args.terminalLayout) {
+          spawnOptions.terminalLayout = args.terminalLayout
         }
         if (args.commandDelivery !== undefined) {
           spawnOptions.commandDelivery = args.commandDelivery

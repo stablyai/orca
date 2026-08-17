@@ -1872,6 +1872,7 @@ type RuntimePtyController = {
     preAllocatedHandle?: string
     tabId?: string
     leafId?: string
+    terminalLayout?: TerminalLayoutSnapshot
     sessionId?: string
     isNewSession?: boolean
     persistHostSessionBinding?: boolean
@@ -8981,6 +8982,24 @@ export class OrcaRuntimeService {
     return true
   }
 
+  private restoreHeadlessTerminalLayout(
+    worktreeId: string,
+    tabId: string,
+    previousLayout: TerminalLayoutSnapshot | undefined
+  ): void {
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const terminalLayoutsByTabId = { ...session.terminalLayoutsByTabId }
+    if (previousLayout) {
+      terminalLayoutsByTabId[tabId] = this.cloneTerminalLayoutSnapshot(previousLayout)
+    } else {
+      delete terminalLayoutsByTabId[tabId]
+    }
+    this.setWorkspaceSessionForWorktree(worktreeId, { ...session, terminalLayoutsByTabId })
+  }
+
   private persistHeadlessTerminalActiveLeaf(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
@@ -9180,6 +9199,18 @@ export class OrcaRuntimeService {
         return finishCommittedClose()
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
+        const herdrPtyIds = Array.from(
+          new Set(
+            snapshot!.tabs.flatMap((candidate) => {
+              if (candidate.type !== 'terminal' || candidate.parentTabId !== tab.parentTabId) {
+                return []
+              }
+              const ptyId =
+                this.findPtyForMobileTerminalTab(worktreeId, candidate)?.ptyId ?? candidate.ptyId
+              return ptyId?.startsWith('herdr:') ? [ptyId] : []
+            })
+          )
+        )
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
         const win = this.getAvailableAuthoritativeWindow()
@@ -9216,6 +9247,23 @@ export class OrcaRuntimeService {
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
+        }
+        const stopResults = await Promise.allSettled(
+          herdrPtyIds.map(async (ptyId) => {
+            if (this.ptyController?.stopAndWait) {
+              await this.ptyController.stopAndWait(ptyId)
+            } else {
+              this.ptyController?.kill(ptyId)
+            }
+          })
+        )
+        for (const [index, result] of stopResults.entries()) {
+          if (result.status === 'rejected') {
+            console.warn(
+              `[runtime] Failed to stop Herdr PTY ${herdrPtyIds[index]} after closing terminal tab:`,
+              result.reason
+            )
+          }
         }
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return finishCommittedClose()
@@ -18299,6 +18347,7 @@ export class OrcaRuntimeService {
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return {
         ...summary,
+        backend: pty.pty.ptyId.startsWith('herdr:') ? 'herdr' : 'orca',
         preview,
         tabId: pty.pty.tabId ?? pty.record.tabId,
         leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
@@ -18322,6 +18371,7 @@ export class OrcaRuntimeService {
     }
     return {
       ...summary,
+      backend: leaf.ptyId?.startsWith('herdr:') ? 'herdr' : 'orca',
       preview,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
@@ -29839,6 +29889,17 @@ export class OrcaRuntimeService {
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
+    const existingLayout = this.getWorkspaceSessionForWorktree(workspace.id)
+      ?.terminalLayoutsByTabId?.[parentTabId]
+    const terminalLayout = buildHeadlessTerminalSplitLayout(
+      existingLayout ? this.cloneTerminalLayoutSnapshot(existingLayout) : undefined,
+      {
+        leafId,
+        ptyId: preAllocatedHandle,
+        splitFromLeafId: parsedPaneKey.leafId,
+        direction
+      }
+    )
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
@@ -29852,6 +29913,7 @@ export class OrcaRuntimeService {
       preAllocatedHandle,
       tabId: parentTabId,
       leafId,
+      terminalLayout,
       persistHostSessionBinding: true,
       ...(sourceAuthority.persisted
         ? {
@@ -29902,6 +29964,7 @@ export class OrcaRuntimeService {
       })
     }
 
+    let persistedSplit = false
     try {
       const revalidateSourceAuthority = (): void => {
         const current = this.resolveTerminalSplitSourceAuthority(
@@ -29939,6 +30002,7 @@ export class OrcaRuntimeService {
         if (sourceAuthority.persisted && !persisted) {
           throw new Error('workspace_session_unavailable')
         }
+        persistedSplit = persisted
         this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
           tabId: parentTabId,
           leafId,
@@ -29948,6 +30012,9 @@ export class OrcaRuntimeService {
         })
       }
     } catch (error) {
+      if (persistedSplit) {
+        this.restoreHeadlessTerminalLayout(workspace.id, parentTabId, existingLayout)
+      }
       this.setPairedRendererSessionOwnership(result.id, false)
       let stopped = false
       try {
@@ -30113,7 +30180,11 @@ export class OrcaRuntimeService {
   private waitForNewLeafInTab(
     tabId: string,
     existingLeafKeys: Set<string>,
-    timeoutMs = 10_000
+    // Herdr must reconcile the persistent workspace/tab/pane graph and attach
+    // its controller before the renderer can publish a PTY-backed leaf. Keep
+    // this above the transport's 15s command timeout so a real transport error
+    // wins over a misleading renderer-handle timeout.
+    timeoutMs = 30_000
   ): Promise<string> {
     const tryResolve = (): string | null => {
       for (const [key, leaf] of this.leaves) {

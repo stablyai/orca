@@ -30,10 +30,41 @@ createHelperApp()
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
     run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    const tripleBinary = path.join(
+      packagePath,
+      '.build',
+      triple,
+      'release',
+      'orca-computer-use-macos'
+    )
+    return thinToTriple(tripleBinary, triple)
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
+}
+
+// Why: stale .build state can leave a fat (multi-arch) artifact in a triple
+// dir, and lipo -create rejects duplicate architectures. Thin fat artifacts
+// back to the triple they represent; non-fat artifacts pass through.
+function thinToTriple(binary, triple) {
+  const arch = triple === 'arm64-apple-macosx' ? 'arm64' : 'x86_64'
+  const info = spawnSync('lipo', ['-info', binary], { encoding: 'utf8' })
+  if (info.status !== 0) {
+    console.error(`[computer-macos] lipo -info failed for ${binary}: ${info.stderr}`)
+    process.exit(1)
+  }
+  if (info.stdout.includes('Non-fat file')) {
+    if (!info.stdout.includes(`is architecture: ${arch}`)) {
+      console.error(
+        `[computer-macos] ${triple} artifact has unexpected architecture: ${info.stdout.trim()}`
+      )
+      process.exit(1)
+    }
+    return binary
+  }
+  const thinned = path.join(path.dirname(binary), `orca-computer-use-macos-${arch}`)
+  run('lipo', ['-thin', arch, binary, '-output', thinned])
+  return thinned
 }
 
 function createHelperApp() {

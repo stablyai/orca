@@ -6656,7 +6656,9 @@
           "show": "显示",
           "hide": "隐藏",
           "externalWorktreesGlobal": "全局默认值：{{value0}}",
-          "useGlobal": "使用全局设置"
+          "useGlobal": "使用全局设置",
+          "terminalBackend": "Terminal backend",
+          "terminalBackendDescription": "Choose Orca or Herdr for this project."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
@@ -10172,6 +10174,44 @@
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",
           "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
+        },
+        "ProjectTerminalBackendSetting": {
+          "title": "Terminal backend",
+          "active": "Active: {{value0}}",
+          "herdr": "Herdr",
+          "orca": "Orca",
+          "preference": "Project preference",
+          "preferenceDescription": "Changing an active project requires an explicit migration. Running Orca PTYs block migration to Herdr.",
+          "aria": "Project terminal backend",
+          "inherit": "Inherit",
+          "blockedSingular": "将此项目迁移到 Herdr 之前，请关闭 {{count}} 个正在运行的 Orca 终端。",
+          "blockedPlural": "将此项目迁移到 Herdr 之前，请关闭 {{count}} 个正在运行的 Orca 终端。"
+        },
+        "TerminalBackendSection": {
+          "title": "Terminal runtime",
+          "description": "Choose which runtime owns new project terminal sessions.",
+          "defaultBackend": "Default backend",
+          "defaultDescription": "Existing projects keep their active backend until you migrate them explicitly.",
+          "defaultAria": "Default terminal backend",
+          "orca": "Orca",
+          "herdr": "Herdr",
+          "installation": "Herdr installation",
+          "installationDescription": "From PATH resolves the stock Herdr executable on each execution host.",
+          "installationAria": "Herdr installation source",
+          "system": "From PATH",
+          "custom": "Custom",
+          "customPath": "Custom Herdr path",
+          "customPathDescription": "Absolute executable path on the execution host.",
+          "customPathAria": "Custom Herdr executable path",
+          "customPathPlaceholder": "/usr/local/bin/herdr",
+          "sessionName": "Shared Herdr session name",
+          "sessionNameDescription": "All projects without an explicit override share this stock Herdr session. Clear it to fall back to per-project sessions.",
+          "sessionNameAria": "Shared Herdr session name",
+          "sessionNamePlaceholder": "orca"
+        },
+        "terminalSearch": {
+          "runtimeTitle": "Terminal runtime",
+          "runtimeDescription": "Choose Orca or Herdr as the terminal backend."
         }
       },
       "right": {

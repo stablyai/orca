@@ -29,6 +29,9 @@ const { acceptOutputExitMock, muxRequestMock, openConsumerSessionMock, muxInstan
 const muxInstances = muxInstancesRaw as MockMuxInstance[]
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+vi.mock('../providers/multiplexer/herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (fallback: unknown) => fallback
+}))
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))

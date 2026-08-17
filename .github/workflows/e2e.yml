@@ -283,6 +283,48 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Why: the stock herdr runtime integration test drives a real herdr binary
+  # over the CLI transport, so it needs the pinned release (not a build). One
+  # runner per architecture downloads the prebuilt binary and exercises the
+  # workspace/pane/metadata contract against it.
+  herdr-stock-integration:
+    name: herdr stock integration ${{ matrix.name }}
+    needs: build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runs-on: ubuntu-latest
+          - name: macos-arm64
+            runs-on: macos-14
+          - name: macos-x86_64
+            runs-on: macos-13
+    runs-on: ${{ matrix.runs-on }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run stock herdr integration test
+        run: pnpm run test:herdr:stock
+
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
     needs: build

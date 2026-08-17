@@ -57,6 +57,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       attach: vi.fn(),
       attachForReconnect: vi.fn().mockResolvedValue({}),
       shutdown: vi.fn(),
+      dispose: vi.fn(),
       providerGeneration: 0
     },
     mockFsProvider: {},
@@ -245,6 +246,11 @@ export function createSshIpcMocks(): SshIpcMocks {
           mockPortScannerCallbacks.delete(targetId)
         }
       }
+    },
+    herdrProviderFactory: {
+      // Why: the SSH relay-session routes the raw pty provider through the herdr
+      // backend when enabled; tests short-circuit that routing to the raw provider.
+      createSshHerdrPtyProvider: (fallback: unknown) => fallback
     }
   }
   return { ...state, ...modules }

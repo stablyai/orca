@@ -244,5 +244,18 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'skills',
     keys: ['skills list', 'skills get', 'skills install', 'skills update'],
     load: async () => (await import('./handlers/skills.js')).SKILL_HANDLERS
+  },
+  {
+    name: 'herdr',
+    keys: [
+      'herdr daemon',
+      'herdr session list',
+      'herdr pane create',
+      'herdr pane split',
+      'herdr pane resize',
+      'herdr pane close',
+      'herdr pane send-keys'
+    ],
+    load: async () => (await import('./handlers/herdr.js')).HERDR_HANDLERS
   }
 ]

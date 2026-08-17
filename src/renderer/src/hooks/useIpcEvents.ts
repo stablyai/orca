@@ -1917,6 +1917,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onApplyTerminalLayout(({ tabId, layout }) => {
+        useAppStore.getState().setTabLayout(tabId, layout)
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onFocusTerminal(
         ({
           tabId,
