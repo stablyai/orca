@@ -67,6 +67,7 @@ export function createUpdateWorktreeLineage(
     } catch (err) {
       console.error('Failed to update worktree lineage:', err)
       await refreshWorktreeLineageBestEffort(ownerSettings, set)
+      throw err
     }
   }
 }
