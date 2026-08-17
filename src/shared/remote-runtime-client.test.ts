@@ -15,8 +15,11 @@ import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remot
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from './protocol-version'
+import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
 const servers: WebSocketServer[] = []
 
@@ -74,7 +77,10 @@ describe('subscribeRemoteRuntimeRequest', () => {
       deviceToken: 'device-token',
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        SKILL_INSTALL_RESULT_V2_CAPABILITY,
+        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
       ]
     })
     const bytes = new Uint8Array([1, 2, 3])
@@ -239,6 +245,33 @@ describe('sendRemoteRuntimeRequest', () => {
       ok: true,
       result: { satisfied: true }
     })
+  })
+
+  it('aborts and closes an in-flight one-shot socket', async () => {
+    let requestObserved: () => void = () => {}
+    const observed = new Promise<void>((resolve) => {
+      requestObserved = resolve
+    })
+    const server = await createOneShotServer({ onRequest: requestObserved })
+    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
+    const controller = new AbortController()
+    try {
+      const request = sendRemoteRuntimeRequest(
+        server.pairing,
+        'skills.install',
+        {},
+        60_000,
+        undefined,
+        controller.signal
+      )
+      await observed
+
+      controller.abort()
+      await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+      expect(closeSpy).toHaveBeenCalled()
+    } finally {
+      closeSpy.mockRestore()
+    }
   })
 
   it('preserves structured failure data for remote computer-use recovery hints', async () => {

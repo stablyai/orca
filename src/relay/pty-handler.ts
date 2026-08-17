@@ -25,21 +25,15 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree-id'
+import { splitWorktreeId } from '../shared/worktree/id'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
+import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
-  createShellReadyScanState,
-  drainShellReadyHeldBytes,
-  scanForShellReady,
-  SHELL_READY_MARKER_PREFIX,
-  type ShellReadyScanState
-} from '../main/shell-ready-marker-scanner'
-import {
-  createShellStartupIdentityScanState,
-  drainShellStartupIdentityHeldBytes,
-  scanForShellStartupIdentity,
-  type ShellStartupIdentityScanState
-} from '../main/shell-startup-identity-scanner'
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput,
+  type ShellStartupOutputScanState
+} from '../main/shell-startup-output-scanner'
 import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
@@ -50,9 +44,10 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
-import type { TuiAgent } from '../shared/types'
+import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -196,8 +191,7 @@ type ManagedStartupCommand = {
   providerDelivery: boolean
   delivered: boolean
   waitForShellReady: boolean
-  scanState: ShellReadyScanState | null
-  identityScanState: ShellStartupIdentityScanState | null
+  outputScanState: ShellStartupOutputScanState | null
   shellPid: number | null
   promptProbe: ShellPromptReadinessProbe | null
   timer: ReturnType<typeof setTimeout> | null
@@ -622,6 +616,8 @@ export class PtyHandler {
       }
     }
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
+    // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
+    stripLegacyTerminalShimEnv(result, process.platform)
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -658,17 +654,11 @@ export class PtyHandler {
   }
 
   private drainStartupScanBytes(startup: ManagedStartupCommand): string {
-    let heldBytes = startup.identityScanState
-      ? drainShellStartupIdentityHeldBytes(startup.identityScanState)
-      : ''
-    startup.identityScanState = null
-    if (startup.scanState && heldBytes) {
-      heldBytes = scanForShellReady(startup.scanState, heldBytes).output
+    if (!startup.outputScanState) {
+      return ''
     }
-    if (startup.scanState) {
-      heldBytes += drainShellReadyHeldBytes(startup.scanState)
-      startup.scanState = null
-    }
+    const heldBytes = drainShellStartupOutputScanState(startup.outputScanState)
+    startup.outputScanState = null
     return heldBytes
   }
 
@@ -767,18 +757,13 @@ export class PtyHandler {
     }
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand
-      if (startup?.identityScanState && !startup.delivered) {
-        const scanned = scanForShellStartupIdentity(startup.identityScanState, data)
+      if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
+        const scanned = scanShellStartupOutput(startup.outputScanState, data)
         data = scanned.output
         if (scanned.shellPid) {
           startup.shellPid = scanned.shellPid
-          startup.identityScanState = null
         }
-      }
-      if (startup?.waitForShellReady && startup.scanState && !startup.delivered) {
-        const scanned = scanForShellReady(startup.scanState, data)
-        data = scanned.output
-        if (scanned.matched) {
+        if (scanned.ready) {
           if (startup.providerDelivery) {
             this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
           } else {
@@ -1644,13 +1629,9 @@ export class PtyHandler {
               providerDelivery: shouldProviderDeliverCommand,
               delivered: false,
               waitForShellReady: shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
-              scanState:
+              outputScanState:
                 shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
-                  ? createShellReadyScanState()
-                  : null,
-              identityScanState:
-                shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
-                  ? createShellStartupIdentityScanState()
+                  ? createShellStartupOutputScanState()
                   : null,
               shellPid: null,
               promptProbe: null,

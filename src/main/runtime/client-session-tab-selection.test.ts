@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { PersistedMobileClientTabSelections } from '../../shared/types'
+import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,

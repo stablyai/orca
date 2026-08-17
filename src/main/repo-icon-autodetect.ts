@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
+import type { GitHubRepositoryIdentity } from '../shared/github/pull-request-types'
+import type { RepoKind } from '../shared/repo-types'
 import {
   faviconUrlFromWebsite,
   githubAvatarIcon,

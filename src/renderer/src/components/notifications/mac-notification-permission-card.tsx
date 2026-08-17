@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BellRing, Check, Settings, TriangleAlert } from 'lucide-react'
-import type { NotificationDeliveryProbeResult } from '../../../../shared/types'
+import type { NotificationDeliveryProbeResult } from '../../../../shared/notification-settings-types'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 

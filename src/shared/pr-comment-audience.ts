@@ -1,4 +1,4 @@
-import type { PRComment } from './types'
+import type { PRComment } from './github/comment-types'
 import { normalizePRCommentAuthorLogin } from './pr-bot-author-overrides'
 
 export type PRCommentAudienceFilter = 'all' | 'human' | 'bot'

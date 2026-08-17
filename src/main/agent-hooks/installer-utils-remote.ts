@@ -48,11 +48,13 @@ export async function readHooksJsonRemote(
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
-  config: HooksConfig
+  config: HooksConfig,
+  // Why: mirrors the local writer — a JSONC config supplies text edited in place.
+  options?: { serialized?: string }
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   // Why: skip the write when on-disk content is identical so repeated
   // install() calls do not bump the file's mtime / inode unnecessarily.
   try {

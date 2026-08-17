@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { githubProjectHost } from '../../../../shared/github-project-identity'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
@@ -58,17 +58,15 @@ import {
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { GitHubReactionContent, PRComment } from '../../../../shared/github/comment-types'
+import type { PRRefreshErrorType } from '../../../../shared/github/pull-request-refresh-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type {
   GitLabDiscussionResolveResult,
   GitLabProjectRef,
-  GitLabWorkItemDetails,
-  PRInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  GitHubReactionContent,
-  PRRefreshErrorType
-} from '../../../../shared/types'
+  GitLabWorkItemDetails
+} from '../../../../shared/gitlab-types'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   buildResolvePullRequestConflictsPrompt,
@@ -97,7 +95,7 @@ import type {
   PendingPRCommentAiAck,
   PendingPRCommentAiAckGithubTarget
 } from './pr-comments-ai-launch-ack'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import {
   hostedReviewProviderSupportsDraft,
@@ -191,7 +189,8 @@ import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import { useHostedReviewStackParent } from './useHostedReviewStackParent'
 import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import { formatCreateError } from './create-pull-request-review-copy'
-import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import { stripBaseRef } from './create-pull-request-base-ref-normalization'
+import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'

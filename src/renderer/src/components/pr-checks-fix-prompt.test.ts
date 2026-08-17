@@ -6,7 +6,7 @@ import {
   getCheckDetailsPromptKey,
   truncateLogTailForPrompt
 } from './pr-checks-fix-prompt'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 const failingCheck: PRCheckDetail = {
   name: 'unit',

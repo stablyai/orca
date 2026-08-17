@@ -68,7 +68,12 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     })
 
     await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(ROLLOUT_UNC, expect.anything(), expect.anything())
+    expect(mocks.install).toHaveBeenCalledWith(
+      ROLLOUT_UNC,
+      expect.anything(),
+      expect.anything(),
+      expect.any(AbortSignal)
+    )
     expect(mocks.install.mock.calls.every(([path]) => path !== ROLLOUT_LINUX)).toBe(true)
     subscription.unsubscribe()
   })
@@ -84,7 +89,12 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     })
 
     await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(ROLLOUT_LINUX, expect.anything(), expect.anything())
+    expect(mocks.install).toHaveBeenCalledWith(
+      ROLLOUT_LINUX,
+      expect.anything(),
+      expect.anything(),
+      expect.any(AbortSignal)
+    )
     subscription.unsubscribe()
   })
 })

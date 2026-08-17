@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -183,6 +184,32 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex'
     })
+  })
+
+  it('keeps Floating Workspace authority on native Windows beside an active WSL project', async () => {
+    store.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      launchPlatform: 'win32'
+    })
+
+    expect(result).not.toBeNull()
+    expect(mockIsWebRuntimeSessionActive).toHaveBeenLastCalledWith(null)
+    expect(mockCreateWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      undefined,
+      { launchAgent: 'codex' }
+    )
   })
 
   it('opens supported submit-after-ready launches in chat and seeds a launch prompt echo', async () => {

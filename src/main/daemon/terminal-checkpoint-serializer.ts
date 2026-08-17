@@ -5,6 +5,7 @@ import { HeadlessEmulator } from './headless-emulator'
 type CheckpointMetadata = {
   cwd: string | null
   generation: number
+  pendingOutputSeq?: number
   checkpointedAt: string
 }
 
@@ -27,6 +28,9 @@ function checkpointFile(
     scrollbackLines: snapshot.scrollbackLines,
     ...(snapshot.lastTitle ? { lastTitle: snapshot.lastTitle } : {}),
     generation: metadata.generation,
+    ...(metadata.pendingOutputSeq !== undefined
+      ? { pendingOutputSeq: metadata.pendingOutputSeq }
+      : {}),
     checkpointedAt: metadata.checkpointedAt
   }
 }

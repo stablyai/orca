@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 

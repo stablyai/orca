@@ -74,6 +74,20 @@ async function run() {
     value: 'remove-me',
     secure: true
   })
+  // Why: the excluded origin is HTTPS, so prove registrable-domain matching also keeps HTTP.
+  await targetSession.cookies.set({
+    url: 'http://mail.google.com/',
+    name: 'http-google',
+    value: 'live-http-value',
+    secure: false
+  })
+  await targetSession.cookies.set({
+    url: 'https://google.com/',
+    domain: '.google.com',
+    name: 'domain-google',
+    value: 'live-domain-value',
+    secure: true
+  })
   mark('ordinary cookie set')
 
   const beforeCookies = (await debug.sendCommand('Network.getAllCookies')).cookies
@@ -189,6 +203,11 @@ describe('native Chromium excluded partition cookie under Electron', () => {
       ok: true,
       summary: { importedCookies: 1, domains: ['example.com'] }
     })
-    expect(result.remainingNames).toEqual(['imported', 'partitioned-google'])
+    expect(result.remainingNames).toEqual([
+      'domain-google',
+      'http-google',
+      'imported',
+      'partitioned-google'
+    ])
   }, 90_000)
 })

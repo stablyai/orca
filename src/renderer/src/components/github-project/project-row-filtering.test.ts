@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
-import type { Repo } from '../../../../shared/types'
+import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   filterProjectTableRowsByOpenRepos,
   filterProjectTableRowsBySelectedRepos,

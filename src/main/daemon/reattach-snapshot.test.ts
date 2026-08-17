@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle & {
   simulateData: (data: string) => void

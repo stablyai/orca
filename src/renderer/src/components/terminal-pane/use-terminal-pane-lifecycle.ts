@@ -57,13 +57,10 @@ import {
 } from '@/lib/http-link-routing'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/workspace-browser-tab-open'
-import type {
-  GlobalSettings,
-  SetupSplitDirection,
-  TerminalTab,
-  TerminalLayoutSnapshot,
-  TuiAgent
-} from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -92,6 +89,10 @@ import { copyTerminalSelection } from './terminal-selection-copy'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import {
+  isNonLatinControlChordKeyup,
+  resolveNonLatinControlChordInput
+} from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -272,6 +273,7 @@ type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
   managerRef: React.RefObject<PaneManager | null>
+  getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
@@ -624,6 +626,7 @@ export function useTerminalPaneLifecycle({
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
   managerRef,
+  getTabWideAgentHintLeafId,
   containerRef,
   expandedStyleSnapshotRef,
   paneFontSizesRef,
@@ -921,7 +924,8 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       getManager: () => managerRef.current,
       getContainer: () => containerRef.current,
-      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
+      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
+      getTabWideAgentHintLeafId
     })
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
@@ -982,6 +986,7 @@ export function useTerminalPaneLifecycle({
 
         // Why: let host-handled keys bypass xterm's kitty CSI-u encoder — with kittyKeyboard on it preventDefaults Cmd+C and blocks Chromium's native copy. See xterm-bypass-policy.ts.
         let pendingTerminalInterruptKeyup = false
+        let claimedNonLatinControlChordCode: string | null = null
         const pendingTerminalImeCandidateKeyReleases =
           createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
@@ -1076,6 +1081,22 @@ export function useTerminalPaneLifecycle({
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
+            return false
+          }
+          // Why here: after the Ctrl+C interrupt arm, which owns its own ETX and kitty reset.
+          // This covers the other 25 letters, whose only failure is the kitty encoder reading
+          // the layout glyph out of `key`. Sending the C0 byte reproduces what the OS control
+          // table produces for that physical key on any layout.
+          if (isNonLatinControlChordKeyup(e, claimedNonLatinControlChordCode)) {
+            claimedNonLatinControlChordCode = null
+            observeLinuxCandidateEvent()
+            return false
+          }
+          const nonLatinControlChord = resolveNonLatinControlChordInput(e)
+          if (nonLatinControlChord) {
+            claimedNonLatinControlChordCode = e.code
+            pane.terminal.input(nonLatinControlChord)
             observeLinuxCandidateEvent()
             return false
           }
@@ -1505,7 +1526,10 @@ export function useTerminalPaneLifecycle({
       onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
-        const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
+        const terminalFontWeights = resolveTerminalFontWeights(
+          currentSettings?.terminalFontWeight,
+          currentSettings?.terminalFontWeightBold
+        )
         const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
         const storeState = useAppStore.getState()
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(

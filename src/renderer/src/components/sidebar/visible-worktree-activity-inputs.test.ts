@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserWorkspace, TerminalTab } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs

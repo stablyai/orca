@@ -6,7 +6,7 @@ import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
 import { AlertCircle, Check, Loader2, Minus, X } from 'lucide-react'
-import type { ChangelogData } from '../../../shared/types'
+import type { ChangelogData } from '../../../shared/update-status-types'
 import { UpdateErrorCardContent, type UpdateErrorCardModel } from './UpdateErrorCardContent'
 import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 import {

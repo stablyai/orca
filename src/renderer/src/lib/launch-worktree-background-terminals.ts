@@ -14,12 +14,12 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/setup-runner-command'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type {
-  TerminalLayoutSnapshot,
-  Worktree,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
+} from '../../../shared/worktree/launch-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type BackgroundPane = {
   leafId: string

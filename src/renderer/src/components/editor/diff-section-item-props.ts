@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
-import type { DecoratedDiffComment } from '../diff-comments/useDiffCommentDecorator'
+import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
 import type { DiffSection } from './diff-section-types'
 
 export type DiffSectionItemProps = {
