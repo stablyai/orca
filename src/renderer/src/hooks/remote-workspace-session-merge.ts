@@ -126,7 +126,9 @@ export function mergeDirectSshRemoteWorkspaceSession(
       }
       graftedTabIds.add(tab.id)
     }
-    if (remote.tabsByWorktree[worktreeId] === undefined) {
+    // An empty snapshot list counts too: closing a worktree's last tab keeps
+    // the key with a zero-row array, and the export round-trips that shape.
+    if ((remote.tabsByWorktree[worktreeId] ?? []).length === 0) {
       graftOnlyWorktreeIds.add(worktreeId)
     }
     locallyPreservedWorktreeIds.add(worktreeId)

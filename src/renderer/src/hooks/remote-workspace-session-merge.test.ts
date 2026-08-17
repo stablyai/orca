@@ -460,4 +460,29 @@ describe('mergeDirectSshRemoteWorkspaceSession live-tab graft', () => {
     expect(merged?.activeTabId).toBe('live-1')
     expect(merged?.activeTabIdByWorktree?.[worktreeId]).toBe('live-1')
   })
+
+  it('keeps active-tab bookkeeping when the snapshot lists the worktree with zero rows', () => {
+    const live = namedTab('live-1', worktreeId, 'ssh:target-a@@pty-34')
+    const current = session({ [worktreeId]: [live] })
+    current.activeWorktreeId = worktreeId
+    current.activeTabId = 'live-1'
+    current.activeTabIdByWorktree = { [worktreeId]: 'live-1' }
+    const remote = session({ [worktreeId]: [] })
+    remote.activeTabIdByWorktree = { [worktreeId]: null }
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([worktreeId]),
+      current.tabsByWorktree,
+      new Set(),
+      {},
+      authority
+    )
+
+    expect(merged?.tabsByWorktree[worktreeId]?.map((entry) => entry.id)).toEqual(['live-1'])
+    expect(merged?.activeWorktreeId).toBe(worktreeId)
+    expect(merged?.activeTabId).toBe('live-1')
+    expect(merged?.activeTabIdByWorktree?.[worktreeId]).toBe('live-1')
+  })
 })
