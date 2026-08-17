@@ -999,6 +999,12 @@
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
+/* Live PlantUML diagram preview rendered below the editable source */
+.plantuml-preview {
+  padding: 12px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
 .rich-markdown-editor pre {
   padding: 14px 18px;
   border-radius: 8px;

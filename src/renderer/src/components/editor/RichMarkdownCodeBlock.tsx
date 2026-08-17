@@ -5,6 +5,7 @@ import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
 import { useAppStore } from '@/store'
 import MermaidBlock from './MermaidBlock'
+import PlantUmlBlock from './PlantUmlBlock'
 import { translate } from '@/i18n/i18n'
 
 /**
@@ -99,6 +100,12 @@ const LANGUAGES = [
     }
   },
   {
+    value: 'plantuml',
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.plantuml', 'PlantUML')
+    }
+  },
+  {
     value: 'python',
     get label() {
       return translate('auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python')
@@ -177,6 +184,8 @@ export function RichMarkdownCodeBlock({
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const isMermaid = language === 'mermaid'
+  // Why: `puml`/`uml` are common fence aliases in the wild, so accept all three.
+  const isPlantUml = language === 'plantuml' || language === 'puml' || language === 'uml'
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -276,6 +285,11 @@ export function RichMarkdownCodeBlock({
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
           <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
+        </div>
+      )}
+      {isPlantUml && node.textContent.trim() && (
+        <div contentEditable={false} className="plantuml-preview">
+          <PlantUmlBlock content={node.textContent.trim()} isDark={isDark} />
         </div>
       )}
     </NodeViewWrapper>

@@ -63,6 +63,7 @@ import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-int
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
+import PlantUmlBlock from './PlantUmlBlock'
 import {
   applyMarkdownPreviewSearchHighlights,
   clearMarkdownPreviewSearchHighlights,
@@ -1680,16 +1681,24 @@ export default function MarkdownPreview({
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
           )
         }
+        // Why: accept `puml`/`uml` alongside `plantuml` (all three are in common use), but
+        // anchor on the whole class token so `language-plantuml-extra` is left alone.
+        if (/(?:^|\s)language-(?:plantuml|puml|uml)(?=\s|$)/.test(className || '')) {
+          return <PlantUmlBlock content={String(children).trimEnd()} isDark={isDark} />
+        }
         return (
           <code className={className} {...props}>
             {children}
           </code>
         )
       },
-      // Why: wrap <pre> for the copy button, but pass MermaidBlock through unwrapped (it renders via innerHTML so extractText copies nothing, and <div> in <pre> is invalid HTML).
+      // Why: wrap <pre> for the copy button, but pass the diagram blocks through unwrapped (they render SVG into a <div>, so extractText copies nothing and <div> in <pre> is invalid HTML).
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
+        if (
+          React.isValidElement(child) &&
+          (child.type === MermaidBlock || child.type === PlantUmlBlock)
+        ) {
           return <>{children}</>
         }
         return wrapAnnotatedBlock(
