@@ -94,7 +94,7 @@ describe('orchestration worker recovery', () => {
     await expect(
       call('orchestration.workerShow', { dispatch: dispatch.id })
     ).resolves.toMatchObject({
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       agentStatus: {
         handle: 'term_worker',
         isRunningAgent: true,
@@ -125,7 +125,7 @@ describe('orchestration worker recovery', () => {
     await expect(
       call('orchestration.workerShow', { dispatch: dispatch.id })
     ).resolves.toMatchObject({
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       agentStatus: null
     })
   })
@@ -168,7 +168,7 @@ describe('orchestration worker recovery', () => {
         residualResources: []
       },
       terminal: { handle: 'term_windows_worker', connected: true },
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       agentStatus: {
         handle: 'term_windows_worker',
         isRunningAgent: true,
@@ -179,7 +179,7 @@ describe('orchestration worker recovery', () => {
     await expect(
       call('orchestration.workerShow', { dispatch: started.dispatch.id })
     ).resolves.toMatchObject({
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       agentStatus: {
         handle: 'term_windows_worker',
         isRunningAgent: true,
