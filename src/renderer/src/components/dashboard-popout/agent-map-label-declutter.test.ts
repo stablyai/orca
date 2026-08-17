@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
+import {
+  agentMapProjectLabelBoxes,
+  agentMapProjectLabelFrameWidth,
+  selectVisibleAgentMapLabels
+} from './agent-map-label-declutter'
 import type { AgentMapLayout, AgentMapProjectRing, AgentMapWorktreeRing } from './agent-map-layout'
 import {
   agentMapQuietCount,
@@ -56,6 +60,78 @@ function layoutOf(
   }
 }
 
+describe('agentMapProjectLabelBoxes', () => {
+  it('bounds long project names to the rendered label frame', () => {
+    const shortName = layoutOf([], { name: 'orca', x: 100, y: 200, radius: 80 })
+    const longName = layoutOf([], { name: 'x'.repeat(1_024), x: 100, y: 200, radius: 80 })
+
+    const [shortBox] = agentMapProjectLabelBoxes(shortName, 2, 0.5)
+    const [longBox] = agentMapProjectLabelBoxes(longName, 2, 0.5)
+
+    expect(longBox.right - longBox.left).toBe(156)
+    expect(shortBox.right - shortBox.left).toBeLessThan(longBox.right - longBox.left)
+  })
+
+  it.each([
+    [0.5, 80],
+    [1, 160],
+    [2, 160],
+    [4, 160]
+  ])('uses a local frame width of %s scale without compounding zoom', (mapScale, expectedWidth) => {
+    expect(agentMapProjectLabelFrameWidth(80, mapScale)).toBe(expectedWidth)
+  })
+
+  it('keeps project obstacles linear above unit map scale', () => {
+    const layout = layoutOf([], { name: 'x'.repeat(1_024), radius: 80 })
+    const screenWidths = [1, 2, 4].map((mapScale) => {
+      const [box] = agentMapProjectLabelBoxes(layout, 1, mapScale)
+      return (box.right - box.left) * mapScale
+    })
+
+    expect(screenWidths[1] / screenWidths[0]).toBe(2)
+    expect(screenWidths[2] / screenWidths[0]).toBe(4)
+  })
+
+  it('includes unique host badges and their flex gaps in project obstacles', () => {
+    const firstHost = worktree({
+      id: 'ssh-a',
+      executionHostId: 'ssh:shared',
+      hostKind: 'ssh'
+    })
+    const duplicateHost = worktree({
+      id: 'ssh-a-copy',
+      executionHostId: 'ssh:shared',
+      hostKind: 'ssh'
+    })
+    const secondHost = worktree({
+      id: 'remote-b',
+      executionHostId: 'runtime:other',
+      hostKind: 'remote'
+    })
+    const boxWidth = (worktrees: AgentMapWorktreeRing[]): number => {
+      const [box] = agentMapProjectLabelBoxes(layoutOf(worktrees, { name: 'a', radius: 200 }), 1, 1)
+      return box.right - box.left
+    }
+    const withoutHosts = boxWidth([])
+    const oneHost = boxWidth([firstHost])
+
+    expect(oneHost - withoutHosts).toBe(16)
+    expect(boxWidth([firstHost, duplicateHost])).toBe(oneHost)
+    expect(boxWidth([firstHost, secondHost]) - oneHost).toBe(16)
+  })
+
+  it('models badge overflow when fixed project content exceeds the frame', () => {
+    const hosts = ['a', 'b', 'c'].map((id) =>
+      worktree({ id, executionHostId: `ssh:${id}`, hostKind: 'ssh' })
+    )
+    const layout = layoutOf(hosts, { name: 'a', radius: 20 })
+    const [box] = agentMapProjectLabelBoxes(layout, 1, 1)
+
+    expect(box.right - box.left).toBe(70)
+    expect(box.right - box.left).toBeGreaterThan(agentMapProjectLabelFrameWidth(20, 1))
+  })
+})
+
 describe('selectVisibleAgentMapLabels', () => {
   it('keeps both labels when they are far enough apart', () => {
     const layout = layoutOf([
@@ -88,6 +164,15 @@ describe('selectVisibleAgentMapLabels', () => {
     })
 
     const labels = selectVisibleAgentMapLabels(layoutOf([covered]), 1, 1)
+
+    expect(labels.worktreeIds.size).toBe(0)
+  })
+
+  it('hides optional labels behind occupied agent label bounds', () => {
+    const layout = layoutOf([worktree({ id: 'covered' })])
+    const occupied = [{ left: -80, right: 80, top: -60, bottom: -30 }]
+
+    const labels = selectVisibleAgentMapLabels(layout, 1, 1, occupied)
 
     expect(labels.worktreeIds.size).toBe(0)
   })
@@ -129,6 +214,25 @@ describe('selectVisibleAgentMapLabels', () => {
 
     expect([...worktreeIds]).toEqual(['a'])
     expect(projectCountIds.size).toBe(0)
+  })
+
+  it('keeps workspace labels out of rendered host badge space', () => {
+    const nearProjectLabel = worktree({ id: 'near', name: 'w', x: 25, y: -138 })
+    const project = { x: 0, y: 0, radius: 200, name: 'a' }
+    const localLayout = layoutOf([nearProjectLabel], project)
+    const hostedLayout = layoutOf(
+      [
+        {
+          ...nearProjectLabel,
+          executionHostId: 'ssh:host',
+          hostKind: 'ssh'
+        }
+      ],
+      project
+    )
+
+    expect([...selectVisibleAgentMapLabels(localLayout, 1, 1).worktreeIds]).toEqual(['near'])
+    expect(selectVisibleAgentMapLabels(hostedLayout, 1, 1).worktreeIds.size).toBe(0)
   })
 
   it('keeps the project count when nothing is in its way', () => {

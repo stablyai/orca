@@ -45,10 +45,9 @@ import {
 } from './dashboard-snapshot-workspaces'
 import {
   boundedLabel,
-  boundedLabelOrUndefined,
   nonEmpty,
-  rowConversationName,
-  rowTask
+  rowDashboardConversationName,
+  rowDashboardIdentity
 } from './dashboard-card-labels'
 import {
   buildDashboardWorktreeLaunchOptions,
@@ -81,13 +80,7 @@ export type DashboardSnapshotState = Pick<
       Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'>
   >
 
-/**
- * Derive the serializable dashboard snapshot from the live renderer store.
- * Reuses the exact per-worktree row machinery the sidebar uses
- * (buildWorktreeAgentRows + the indexed selectors), then flattens every
- * worktree's rows into presentational cards. Provider subagents without their
- * own terminal stay folded into their spawning card.
- */
+/** Derives serializable dashboard cards through sidebar row machinery. */
 export function buildDashboardSnapshot(
   state: DashboardSnapshotState,
   now: number,
@@ -273,7 +266,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
-        task: isTitleDerived ? '' : rowTask(row),
+        ...(isTitleDerived ? { task: '' } : rowDashboardIdentity(row)),
         repoId: workspace.projectId,
         worktreeId,
         tabId,
@@ -303,7 +296,7 @@ export function buildDashboardSnapshot(
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
-        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
+        ...rowDashboardConversationName(row, generatedTitlesEnabled),
         ...(terminalInput ? { terminalInput } : {})
       })
     }

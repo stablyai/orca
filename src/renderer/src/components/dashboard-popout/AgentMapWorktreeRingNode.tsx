@@ -13,11 +13,11 @@ import type {
   AgentMapProjectRing,
   AgentMapWorktreeRing
 } from './agent-map-layout'
+import type { AgentMapAgentLabelPlacement } from './agent-map-agent-label-layout'
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
-import { AgentMapQuestionMarker } from './AgentMapQuestionMarker'
+import { AgentMapAgentNodeView } from './AgentMapAgentNode'
 import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import {
-  agentMapAttentionMarkerScale,
   agentMapStatusLabel,
   agentName,
   formatDuration,
@@ -36,6 +36,7 @@ type AgentMapWorktreeRingNodeProps = {
   allowAggregation: boolean
   showOrchestrationLinks: boolean
   recentFlareStatuses: ReadonlyMap<string, AgentMapFlareStatus>
+  agentLabelPlacements: ReadonlyMap<string, AgentMapAgentLabelPlacement>
   launchableAgents?: readonly TuiAgent[]
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -46,6 +47,8 @@ type AgentMapWorktreeRingNodeProps = {
   ) => void
   onLabelHoverChange: (worktreeId: string, active: boolean) => void
   onLabelFocusChange: (worktreeId: string, active: boolean) => void
+  onAgentHoverChange: (paneKey: string, active: boolean) => void
+  onAgentFocusChange: (paneKey: string, active: boolean) => void
   onAgentKeyDown: (event: React.KeyboardEvent<SVGGElement>, agent: AgentMapAgentNode) => void
 }
 
@@ -169,6 +172,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   allowAggregation,
   showOrchestrationLinks,
   recentFlareStatuses,
+  agentLabelPlacements,
   launchableAgents,
   nodeRefs,
   onSelectAgent,
@@ -176,6 +180,8 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   onOpenWorkspaceContextMenu,
   onLabelHoverChange,
   onLabelFocusChange,
+  onAgentHoverChange,
+  onAgentFocusChange,
   onAgentKeyDown
 }: AgentMapWorktreeRingNodeProps): React.JSX.Element {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -294,106 +300,24 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                 )
               })}
             </g>
-            {worktree.agents.map((agent) => {
-              const iconSize = Math.max(12, Math.min(22, agent.radius * 1.05))
-              const agentExiting = exiting || agent.motionState === 'exiting'
-              const flareStatus = recentFlareStatuses.get(agent.card.paneKey)
-              // `done` here is the unread finish only — `done-seen` demotes to a bare
-              // emerald ring so the halo keeps meaning "this one is still unread".
-              const hasStatusGlow =
-                agent.status === 'working' ||
-                agent.status === 'waiting' ||
-                agent.status === 'blocked' ||
-                agent.status === 'done'
-              return (
-                <g
-                  key={agent.card.paneKey}
-                  ref={(node) => {
-                    if (node) {
-                      nodeRefs.current.set(agent.card.paneKey, node)
-                    } else {
-                      nodeRefs.current.delete(agent.card.paneKey)
-                    }
-                  }}
-                  data-agent-map-agent=""
-                  data-agent-provider={agent.card.agentType}
-                  role="button"
-                  tabIndex={agentExiting ? -1 : 0}
-                  aria-hidden={agentExiting || undefined}
-                  aria-pressed={selectedPaneKey === agent.card.paneKey}
-                  aria-label={`${agentName(agent.card)}, ${agentMapStatusLabel(agent.status)}${agent.card.unseen ? ', unread' : ''}, ${formatDuration(agent.durationMinutes)}, ${worktree.name}, ${project.name}`}
-                  className={`agent-map-agent-node fleet-status-${agent.status}${selectedPaneKey === agent.card.paneKey ? ' is-selected' : ''}${agent.motionState ? ` is-${agent.motionState}` : ''}`}
-                  transform={`translate(${agent.x} ${agent.y})`}
-                  onClick={(event) => {
-                    if (agentExiting) {
-                      return
-                    }
-                    event.currentTarget.focus()
-                    onSelectAgent(agent.card)
-                  }}
-                  onKeyDown={(event) => {
-                    if (!agentExiting) {
-                      onAgentKeyDown(event, agent)
-                    }
-                  }}
-                >
-                  <g className="agent-map-agent-visual">
-                    {hasStatusGlow ? (
-                      <circle
-                        className={`agent-map-agent-status-glow fleet-status-${agent.status}`}
-                        data-agent-map-agent-status-glow=""
-                        data-agent-active-status={agent.status}
-                        r={agent.radius + 1}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    {/* One-shot ripple for fresh questions and finishes. */}
-                    {flareStatus && !agentExiting ? (
-                      <circle
-                        className={`agent-map-agent-status-flare fleet-status-${flareStatus}`}
-                        data-agent-map-agent-status-flare=""
-                        r={agent.radius + 1}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    <circle className="agent-map-agent-hit" r={Math.max(10, agent.radius + 3)} />
-                    <circle className="agent-map-agent-mark" r={agent.radius} />
-                    <foreignObject
-                      className="agent-map-agent-icon"
-                      x={-iconSize / 2}
-                      y={-iconSize / 2}
-                      width={iconSize}
-                      height={iconSize}
-                    >
-                      <div>
-                        <AgentIcon
-                          agent={agentTypeToIconAgent(agent.card.agentType)}
-                          size={iconSize}
-                        />
-                      </div>
-                    </foreignObject>
-                    {/* Unread dot sits ON the ring stroke; its halo breaks the ring around it. */}
-                    {agent.card.unseen ? (
-                      <circle
-                        className="agent-map-agent-unread-mark"
-                        data-agent-unread-marker=""
-                        cx={-agent.radius * Math.SQRT1_2}
-                        cy={-agent.radius * Math.SQRT1_2}
-                        r={agent.radius * 0.225 * agentMapAttentionMarkerScale(mapScale)}
-                        vectorEffect="none"
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    {agent.status === 'waiting' ? (
-                      <AgentMapQuestionMarker
-                        radius={agent.radius}
-                        markerScale={agentMapAttentionMarkerScale(mapScale)}
-                      />
-                    ) : null}
-                  </g>
-                </g>
-              )
-            })}
+            {worktree.agents.map((agent) => (
+              <AgentMapAgentNodeView
+                key={agent.card.paneKey}
+                agent={agent}
+                projectName={project.name}
+                worktreeName={worktree.name}
+                mapScale={mapScale}
+                labelPlacement={agentLabelPlacements.get(agent.card.paneKey)!}
+                selectedPaneKey={selectedPaneKey}
+                exiting={exiting}
+                flareStatus={recentFlareStatuses.get(agent.card.paneKey)}
+                nodeRefs={nodeRefs}
+                onSelectAgent={onSelectAgent}
+                onHoverChange={onAgentHoverChange}
+                onFocusChange={onAgentFocusChange}
+                onAgentKeyDown={onAgentKeyDown}
+              />
+            ))}
           </>
         )}
       </g>

@@ -33,6 +33,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     bucket: 'working',
     dotState: 'working',
     task: 'Build map',
+    conversationNameExplicit: false,
     repoId: 'repo-1',
     worktreeId: 'worktree-1',
     tabId: 'tab-1',
@@ -178,16 +179,16 @@ describe('agent map layout', () => {
     expect(agentTop - worktreeTop).toBeGreaterThanOrEqual(AGENT_MAP_RING_HEADER_HEIGHT)
   })
 
-  it('keeps sparse project and workspace rings compact around their header bands', () => {
+  it('keeps sparse rings compact around readable labels and header bands', () => {
     const single = deriveAgentMapLayout([card()], NOW).projects[0]
     const four = deriveAgentMapLayout(
       Array.from({ length: 4 }, (_unused, index) => card({ paneKey: `agent-${index}` })),
       NOW
     ).projects[0]
 
-    expect(single.worktrees[0].radius).toBeLessThanOrEqual(72)
-    expect(single.radius).toBeLessThanOrEqual(104)
-    expect(four.worktrees[0].radius).toBeLessThanOrEqual(100)
+    expect(single.worktrees[0].radius).toBeLessThanOrEqual(120)
+    expect(single.radius).toBeLessThanOrEqual(155)
+    expect(four.worktrees[0].radius).toBeLessThanOrEqual(210)
   })
 
   it.each([
@@ -436,6 +437,25 @@ describe('agent map layout', () => {
     expect(updatedAgents[1].radius).toBe(initialAgents[1].radius)
   })
 
+  it('recomputes cell geometry when an agent name changes', () => {
+    const initialCards = [
+      card({ paneKey: 'a', worktreeId: 'wt-a', orchestrationDisplayName: 'Reviewer' }),
+      card({ paneKey: 'b', worktreeId: 'wt-a', parentPaneKey: 'a' })
+    ]
+    const initial = updateAgentMapLayout(null, initialCards, NOW)
+    const updated = updateAgentMapLayout(
+      initial.cache,
+      [
+        { ...initialCards[0], orchestrationDisplayName: 'Long-running adversarial reviewer' },
+        initialCards[1]
+      ],
+      NOW
+    )
+
+    expect(updated.cache).not.toBe(initial.cache)
+    expect(updated.layout.topologyKey).not.toBe(initial.layout.topologyKey)
+  })
+
   it('reuses packed geometry while refreshing live card metadata', () => {
     const initialCards = [
       card({ paneKey: 'a', worktreeId: 'wt-a' }),
@@ -499,7 +519,7 @@ describe('agent map layout', () => {
     expect(updated.layout.projects[0].worktrees[0].hostLabel).toBe('CI Builder')
   })
 
-  it('packs worktree rings tightly without a square grid', () => {
+  it('packs readable-label worktree rings tightly without a square grid', () => {
     const layout = deriveAgentMapLayout(
       Array.from({ length: 36 }, (_, index) =>
         card({
@@ -511,7 +531,7 @@ describe('agent map layout', () => {
     )
     const project = layout.projects[0]
 
-    expect(project.radius).toBeLessThan(700)
+    expect(project.radius).toBeLessThan(850)
     expect(
       new Set(project.worktrees.map((worktree) => worktree.x.toFixed(3))).size
     ).toBeGreaterThan(12)
@@ -641,7 +661,7 @@ describe('agent map layout', () => {
     let minimumDistance = Number.POSITIVE_INFINITY
 
     expect(children.every((child) => child.y > parent.y)).toBe(true)
-    expect(worktree.radius).toBeLessThan(1_000)
+    expect(worktree.radius).toBeLessThan(1_100)
     for (const [index, child] of children.entries()) {
       for (const other of children.slice(index + 1)) {
         minimumDistance = Math.min(

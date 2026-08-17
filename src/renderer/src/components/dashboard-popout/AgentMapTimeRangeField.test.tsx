@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import type * as AgentMapLayoutModule from './agent-map-layout'
 import type * as AgentMapProjectPlacementModule from './agent-map-project-placement'
@@ -121,21 +122,23 @@ const DRAFT_CANCELLATIONS = [
 
 function renderMapView(): ReturnType<typeof render> {
   return render(
-    <AgentDashboardMapView
-      snapshot={SNAPSHOT}
-      cards={CARDS}
-      query=""
-      onQueryChange={vi.fn()}
-      filters={{ projects: [], workspaceStatuses: [], reviewStates: [] }}
-      onFiltersChange={vi.fn()}
-      searchInputRef={{ current: null }}
-      now={NOW}
-      dialogCard={null}
-      onDialogOpenChange={vi.fn()}
-      onRevealAgent={vi.fn()}
-      onOpenTerminal={vi.fn()}
-      workspaceContextMenusEnabled={false}
-    />
+    <TooltipProvider>
+      <AgentDashboardMapView
+        snapshot={SNAPSHOT}
+        cards={CARDS}
+        query=""
+        onQueryChange={vi.fn()}
+        filters={{ projects: [], workspaceStatuses: [], reviewStates: [] }}
+        onFiltersChange={vi.fn()}
+        searchInputRef={{ current: null }}
+        now={NOW}
+        dialogCard={null}
+        onDialogOpenChange={vi.fn()}
+        onRevealAgent={vi.fn()}
+        onOpenTerminal={vi.fn()}
+        workspaceContextMenusEnabled={false}
+      />
+    </TooltipProvider>
   )
 }
 

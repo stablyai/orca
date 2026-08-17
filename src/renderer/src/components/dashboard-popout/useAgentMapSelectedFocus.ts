@@ -6,7 +6,7 @@ type AgentMapSelectedFocusOptions = {
   agents: AgentMapAgentNode[]
   selectedPaneKey: string | null
   viewportRef: { current: AgentMapViewport }
-  resolveFocusZoom: () => number
+  resolveFocusViewport: (agent: AgentMapAgentNode) => AgentMapViewport
   animateViewport: (from: AgentMapViewport, to: AgentMapViewport) => void
   stopViewportTransition: () => void
 }
@@ -15,7 +15,7 @@ export function useAgentMapSelectedFocus({
   agents,
   selectedPaneKey,
   viewportRef,
-  resolveFocusZoom,
+  resolveFocusViewport,
   animateViewport,
   stopViewportTransition
 }: AgentMapSelectedFocusOptions): void {
@@ -32,30 +32,27 @@ export function useAgentMapSelectedFocus({
       stopViewportTransition()
       return
     }
-    const targetZoom = resolveFocusZoom()
+    const target = resolveFocusViewport(selected)
     const focused = focusedAgentRef.current
     if (
       focused?.paneKey === selectedPaneKey &&
-      focused.x === selected.x &&
-      focused.y === selected.y &&
-      focused.zoom === targetZoom
+      focused.x === target.center.x &&
+      focused.y === target.center.y &&
+      focused.zoom === target.zoom
     ) {
       return
     }
     focusedAgentRef.current = {
       paneKey: selectedPaneKey,
-      x: selected.x,
-      y: selected.y,
-      zoom: targetZoom
+      x: target.center.x,
+      y: target.center.y,
+      zoom: target.zoom
     }
-    animateViewport(viewportRef.current, {
-      center: { x: selected.x, y: selected.y },
-      zoom: targetZoom
-    })
+    animateViewport(viewportRef.current, target)
   }, [
     agents,
     animateViewport,
-    resolveFocusZoom,
+    resolveFocusViewport,
     selectedPaneKey,
     stopViewportTransition,
     viewportRef

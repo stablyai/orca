@@ -1,5 +1,6 @@
 import type * as DashboardSnapshotTypes from '../../../../shared/dashboard-snapshot'
-import { placeAgentMapAgents } from './agent-map-agent-placement'
+import { fallbackAgentMapWorktreeRadius, placeAgentMapAgents } from './agent-map-agent-placement'
+import { agentMapAgentLabelLayoutScale } from './agent-map-agent-label-metrics'
 import { layoutAgentMapLineage } from './agent-map-lineage-layout'
 import { refreshAgentMapMetadata } from './agent-map-layout-metadata'
 import {
@@ -33,10 +34,7 @@ export const AGENT_MAP_AGGREGATE_ZOOM = 1.15
 export const AGENT_MAP_RING_HEADER_HEIGHT = 40
 
 /**
- * Every map node is a top-level pane agent — in-process subagent rows are folded
- * into their parent card's `subagents` roster and never become cards themselves
- * (`build-dashboard-snapshot.ts`). So an edge between two nodes is always an
- * orchestration dispatch, and there is no second relation to distinguish.
+ * Map nodes represent top-level pane agents, so every edge is an orchestration dispatch.
  */
 export const AGENT_MAP_LINEAGE_RELATION = 'orchestration'
 
@@ -137,21 +135,19 @@ export function shouldAggregateAgentMapWorktree(
   )
 }
 
-function worktreeRadius(agentCount: number): number {
-  return Math.max(
-    52,
-    24 + Math.ceil(Math.sqrt(Math.max(1, agentCount))) * (AGENT_MAP_AGENT_RADIUS + 8)
-  )
-}
-
 function buildLocalWorktree(
   id: string,
   cards: DashboardCard[],
   now: number,
   workspace?: DashboardWorkspace
 ): LocalWorktree {
-  const lineageLayout = layoutAgentMapLineage(cards, AGENT_MAP_AGENT_RADIUS)
-  const contentRadius = lineageLayout?.radius ?? worktreeRadius(cards.length)
+  const lineageLayout = layoutAgentMapLineage(
+    cards,
+    AGENT_MAP_AGENT_RADIUS,
+    agentMapAgentLabelLayoutScale(cards.length)
+  )
+  const contentRadius =
+    lineageLayout?.radius ?? fallbackAgentMapWorktreeRadius(cards.length, AGENT_MAP_AGENT_RADIUS)
   const radius = contentRadius + RING_CONTENT_OFFSET
   const statusCounts = emptyAgentMapStatusCounts()
   for (const card of cards) {

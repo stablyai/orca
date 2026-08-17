@@ -45,24 +45,48 @@ export function orchestrationLabelsMatchLiveDispatch(
   return liveTaskId === orchestrationTaskId
 }
 
-export function getAgentRowPrimaryText(
+/** True when orchestration metadata still owns this pane's current turn. */
+export function isCurrentOrchestrationPaneLineage(
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
+): boolean {
+  const dispatchStatus = entry.orchestration?.dispatchStatus
+  if (!entry.orchestration) {
+    return false
+  }
+  if (dispatchStatus === undefined) {
+    return orchestrationLabelsMatchLiveDispatch(entry)
+  }
+  const active = dispatchStatus === 'pending' || dispatchStatus === 'dispatched'
+  return active && (entry.prompt === '' || orchestrationLabelsMatchLiveDispatch(entry))
+}
+
+export function getAgentRowOrchestrationDisplayName(
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
+): string | undefined {
+  if (!orchestrationLabelsMatchLiveDispatch(entry)) {
+    return undefined
+  }
+  return entry.orchestration?.displayName?.trim() || undefined
+}
+
+export function getAgentRowTaskText(
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
 ): string {
-  // Why: prefer richer orchestration labels when they match the live dispatch,
-  // then fall back to the TASK-body preview. Never surface the lifecycle
-  // preamble itself — status prompts are single-line ~200-char folds, and the
-  // first characters are boilerplate ("You are working inside Orca…").
   if (orchestrationLabelsMatchLiveDispatch(entry)) {
-    return (
-      entry.orchestration?.displayName?.trim() ||
-      entry.orchestration?.taskTitle?.trim() ||
-      getOrcaDispatchTaskPreview(entry.prompt)
-    )
+    return entry.orchestration?.taskTitle?.trim() || getOrcaDispatchTaskPreview(entry.prompt)
   }
   if (isOrcaDispatchPrompt(entry.prompt)) {
     return getOrcaDispatchTaskPreview(entry.prompt)
   }
   return entry.prompt.trim()
+}
+
+export function getAgentRowPrimaryText(
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
+): string {
+  // Why: prefer richer orchestration identity when it matches the live dispatch,
+  // then fall back to task text. Never surface the lifecycle preamble itself.
+  return getAgentRowOrchestrationDisplayName(entry) || getAgentRowTaskText(entry)
 }
 
 export function getAgentRowGeneratedTitleText(

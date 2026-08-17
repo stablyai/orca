@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import {
   getAgentRowGeneratedTitleText,
+  getAgentRowOrchestrationDisplayName,
   getAgentRowPrimaryText,
+  getAgentRowTaskText,
   getOrcaDispatchTaskId,
+  isCurrentOrchestrationPaneLineage,
   isOrcaDispatchPrompt
 } from './agent-row-primary-text'
 
@@ -221,6 +224,101 @@ Implement the detailed worker instructions that should not stay as the final lab
       })
     ).toBe('Compact body preview')
   })
+})
+
+describe('task and orchestration identity text', () => {
+  const entry = {
+    prompt: `You are working inside Orca, a multi-agent IDE.\nYour task ID is: task-1\n=== TASK ===\nRaw task body`,
+    orchestration: {
+      taskId: 'task-1',
+      dispatchId: 'dispatch-1',
+      taskTitle: 'Readable task title',
+      displayName: 'Readable worker identity'
+    }
+  }
+
+  it('keeps task semantics separate from display identity', () => {
+    expect(getAgentRowTaskText(entry)).toBe('Readable task title')
+    expect(getAgentRowOrchestrationDisplayName(entry)).toBe('Readable worker identity')
+  })
+
+  it('ignores stale orchestration identity and uses current task body', () => {
+    const stale = { ...entry, orchestration: { ...entry.orchestration, taskId: 'old-task' } }
+    expect(getAgentRowTaskText(stale)).toBe('Raw task body')
+    expect(getAgentRowOrchestrationDisplayName(stale)).toBeUndefined()
+  })
+})
+
+describe('isCurrentOrchestrationPaneLineage', () => {
+  const prompt = `You are working inside Orca, a multi-agent IDE.\nYour task ID is: task-1\n=== TASK ===\nCurrent task`
+  const orchestration = {
+    taskId: 'task-1',
+    dispatchId: 'dispatch-1',
+    parentPaneKey: 'tab-parent:leaf-parent'
+  }
+
+  it.each(['pending', 'dispatched'] as const)(
+    'accepts %s matching dispatches',
+    (dispatchStatus) => {
+      expect(
+        isCurrentOrchestrationPaneLineage({
+          prompt,
+          orchestration: { ...orchestration, dispatchStatus }
+        })
+      ).toBe(true)
+    }
+  )
+
+  it('accepts active status pings with an omitted prompt', () => {
+    expect(
+      isCurrentOrchestrationPaneLineage({
+        prompt: '',
+        orchestration: { ...orchestration, dispatchStatus: 'dispatched' }
+      })
+    ).toBe(true)
+  })
+
+  it('accepts active ownership before a parent pane key resolves', () => {
+    expect(
+      isCurrentOrchestrationPaneLineage({
+        prompt,
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentTerminalHandle: 'term-parent'
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('accepts matching mixed-version contexts without dispatch status', () => {
+    expect(isCurrentOrchestrationPaneLineage({ prompt, orchestration })).toBe(true)
+  })
+
+  it.each(['completed', 'failed', 'circuit_broken'] as const)(
+    'rejects %s dispatches even when the prompt matches',
+    (dispatchStatus) => {
+      expect(
+        isCurrentOrchestrationPaneLineage({
+          prompt,
+          orchestration: { ...orchestration, dispatchStatus }
+        })
+      ).toBe(false)
+    }
+  )
+
+  it.each(['Standalone work', prompt.replace('task-1', 'task-2')])(
+    'rejects stale lineage for prompt %s',
+    (currentPrompt) => {
+      expect(
+        isCurrentOrchestrationPaneLineage({
+          prompt: currentPrompt,
+          orchestration: { ...orchestration, dispatchStatus: 'dispatched' }
+        })
+      ).toBe(false)
+    }
+  )
 })
 
 describe('getOrcaDispatchTaskId', () => {

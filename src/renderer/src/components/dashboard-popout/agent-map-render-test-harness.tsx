@@ -1,5 +1,7 @@
 import { cleanup, render } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   DashboardCard,
   DashboardCardHostKind,
@@ -27,6 +29,7 @@ export function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     repoName: 'Orca',
     worktreeName: 'Agent map',
     conversationName: 'Agent alpha',
+    conversationNameExplicit: true,
     startedAt: NOW - 10 * 60_000,
     finishedAt: null,
     stateChangedAt: NOW - 1_000,
@@ -49,6 +52,14 @@ export type RenderMapOptions = {
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
 }
 
+export function AgentMapTestRoot(props: ComponentProps<typeof AgentMap>): React.JSX.Element {
+  return (
+    <TooltipProvider>
+      <AgentMap {...props} />
+    </TooltipProvider>
+  )
+}
+
 export function renderMap(
   cards: DashboardCard[],
   {
@@ -64,7 +75,7 @@ export function renderMap(
   }: RenderMapOptions = {}
 ): ReturnType<typeof render> {
   return render(
-    <AgentMap
+    <AgentMapTestRoot
       cards={cards}
       now={NOW}
       onOpenTerminal={onOpenTerminal}

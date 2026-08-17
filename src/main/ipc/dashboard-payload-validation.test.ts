@@ -272,17 +272,41 @@ describe('dashboard payload validation', () => {
     expect(isDashboardSpawnAgentArgs({ worktreeId: 'worktree-1', agent: 'unknown' })).toBe(false)
   })
 
-  it('bounds the conversation name', () => {
+  it('bounds optional agent identity labels', () => {
     expect(
       isDashboardSnapshot({
         ...SNAPSHOT,
-        cards: [{ ...SNAPSHOT.cards[0], conversationName: 'Sparse-checkout parser' }]
+        cards: [
+          {
+            ...SNAPSHOT.cards[0],
+            conversationName: 'Sparse-checkout parser',
+            conversationNameExplicit: true
+          }
+        ]
       })
     ).toBe(true)
     expect(
       isDashboardSnapshot({
         ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], conversationNameExplicit: 'yes' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], conversationName: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], orchestrationDisplayName: 'Readable worker' }]
+      })
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], orchestrationDisplayName: 'x'.repeat(1_025) }]
       })
     ).toBe(false)
   })

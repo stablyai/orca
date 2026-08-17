@@ -11,11 +11,12 @@ function source(file: string): string {
 
 describe('Agent Map glow performance boundary', () => {
   it('uses one conditional SVG halo per active entity without filter effects', () => {
-    const component = source('AgentMapWorktreeRingNode.tsx')
+    const worktree = source('AgentMapWorktreeRingNode.tsx')
+    const agent = source('AgentMapAgentNode.tsx')
 
-    expect(component.match(/data-agent-map-worktree-status-glow/g)).toHaveLength(1)
-    expect(component.match(/data-agent-map-agent-status-glow/g)).toHaveLength(1)
-    expect(component).not.toMatch(/<filter|filter=/)
+    expect(worktree.match(/data-agent-map-worktree-status-glow/g)).toHaveLength(1)
+    expect(agent.match(/data-agent-map-agent-status-glow/g)).toHaveLength(1)
+    expect(`${worktree}${agent}`).not.toMatch(/<filter|filter=/)
   })
 
   it('keeps glow styling free of animated and filtered paint work', () => {
@@ -56,14 +57,15 @@ describe('Agent Map glow performance boundary', () => {
   })
 
   it('confines status flares to nodes inside the recency window', () => {
-    const component = source('AgentMapWorktreeRingNode.tsx')
+    const worktree = source('AgentMapWorktreeRingNode.tsx')
+    const agent = source('AgentMapAgentNode.tsx')
     const metadata = source('agent-map-node-metadata.ts')
 
     // The flare is the one animated element on an agent node, so it must stay gated on
     // the globally capped recent-status map rather than on status alone.
-    expect(component.match(/data-agent-map-agent-status-flare/g)).toHaveLength(1)
-    expect(component).toMatch(/recentFlareStatuses\.get\(agent\.card\.paneKey\)/)
-    expect(component).not.toMatch(/<filter|filter=/)
+    expect(agent.match(/data-agent-map-agent-status-flare/g)).toHaveLength(1)
+    expect(worktree).toMatch(/recentFlareStatuses\.get\(agent\.card\.paneKey\)/)
+    expect(`${worktree}${agent}`).not.toMatch(/<filter|filter=/)
 
     const css = source('agent-map.css')
     const flareRule = css.match(/\.agent-map-agent-status-flare\s*\{[^}]+\}/s)?.[0] ?? ''

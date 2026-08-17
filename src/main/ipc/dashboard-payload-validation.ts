@@ -258,6 +258,7 @@ function isDashboardCard(value: unknown): boolean {
     typeof card.dotState === 'string' &&
     DASHBOARD_DOT_STATES.has(card.dotState) &&
     isBoundedString(card.task, AGENT_STATUS_MAX_FIELD_LENGTH, true) &&
+    isOptionalBoundedString(card.orchestrationDisplayName, MAX_LABEL_LENGTH) &&
     isOptionalBoundedString(card.lastUserMessage, AGENT_STATUS_MAX_FIELD_LENGTH) &&
     isOptionalBoundedString(card.lastAgentMessage, AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH) &&
     isBoundedString(card.repoId, MAX_ID_LENGTH) &&
@@ -290,6 +291,8 @@ function isDashboardCard(value: unknown): boolean {
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
+    (card.conversationNameExplicit === undefined ||
+      typeof card.conversationNameExplicit === 'boolean') &&
     isDashboardTerminalInput(card.terminalInput)
   )
 }

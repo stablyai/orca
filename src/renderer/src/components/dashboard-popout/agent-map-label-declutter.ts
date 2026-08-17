@@ -1,4 +1,10 @@
-import type { AgentMapLayout, AgentMapWorktreeRing } from './agent-map-layout'
+import type { AgentMapLayout, AgentMapProjectRing, AgentMapWorktreeRing } from './agent-map-layout'
+import {
+  addAgentMapLabelBox as addBox,
+  agentMapLabelGridCollides as collides,
+  type AgentMapLabelBox as LabelBox,
+  type AgentMapLabelGrid as LabelGrid
+} from './agent-map-label-spatial-grid'
 
 /** Metrics for the label styles in agent-map.css. Estimating text extents from
  *  the character count avoids a per-frame DOM measure of every label. */
@@ -10,7 +16,10 @@ const GLYPH_WIDTH_RATIO = 0.56
 const UPPERCASE_GLYPH_WIDTH_RATIO = 0.66
 const ASCENT_RATIO = 0.8
 const DESCENT_RATIO = 0.2
-const PROJECT_LABEL_ICON_PX = 16
+const PROJECT_LABEL_ICON_PX = 12
+const PROJECT_HOST_BADGE_PX = 12
+const PROJECT_LABEL_ITEM_GAP_PX = 4
+const PROJECT_LABEL_FRAME_INSET_PX = 8
 /** Local-unit breathing room so two labels never appear to touch. */
 const LABEL_GAP_X_PX = 3
 const LABEL_GAP_Y_PX = 1
@@ -23,17 +32,7 @@ const PROJECT_NAME_BOTTOM = 21
 /** Past this many candidates the pass stops admitting labels; a map that dense
  *  is unreadable long before the cap, and this bounds the work. */
 const MAX_LABEL_CANDIDATES = 600
-const DECLUTTER_GRID_PX = 96
-
-/** A label box in world units, matching what the scene actually renders. */
-type LabelBox = {
-  left: number
-  right: number
-  top: number
-  bottom: number
-}
-
-type LabelGrid = Map<number, Map<number, LabelBox[]>>
+const PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT = 4
 
 export type AgentMapVisibleLabels = {
   /** Worktree ring ids whose name can render without colliding. */
@@ -45,53 +44,6 @@ export type AgentMapVisibleLabels = {
 
 function textWidth(text: string, fontPx: number, ratio = GLYPH_WIDTH_RATIO): number {
   return text.length * fontPx * ratio
-}
-
-function boxesOverlap(a: LabelBox, b: LabelBox): boolean {
-  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
-}
-
-function addBox(grid: LabelGrid, box: LabelBox): void {
-  const left = Math.floor(box.left / DECLUTTER_GRID_PX)
-  const right = Math.floor(box.right / DECLUTTER_GRID_PX)
-  const top = Math.floor(box.top / DECLUTTER_GRID_PX)
-  const bottom = Math.floor(box.bottom / DECLUTTER_GRID_PX)
-  for (let x = left; x <= right; x += 1) {
-    let column = grid.get(x)
-    if (!column) {
-      column = new Map()
-      grid.set(x, column)
-    }
-    for (let y = top; y <= bottom; y += 1) {
-      const cell = column.get(y)
-      if (cell) {
-        cell.push(box)
-      } else {
-        column.set(y, [box])
-      }
-    }
-  }
-}
-
-function collides(grid: LabelGrid, box: LabelBox): boolean {
-  const left = Math.floor(box.left / DECLUTTER_GRID_PX)
-  const right = Math.floor(box.right / DECLUTTER_GRID_PX)
-  const top = Math.floor(box.top / DECLUTTER_GRID_PX)
-  const bottom = Math.floor(box.bottom / DECLUTTER_GRID_PX)
-  for (let x = left; x <= right; x += 1) {
-    const column = grid.get(x)
-    if (!column) {
-      continue
-    }
-    for (let y = top; y <= bottom; y += 1) {
-      for (const placed of column.get(y) ?? []) {
-        if (boxesOverlap(box, placed)) {
-          return true
-        }
-      }
-    }
-  }
-  return false
 }
 
 /** Projects a centered label from its group's local units into world space
@@ -131,6 +83,85 @@ function baselineBox(
     baseline - fontPx * ASCENT_RATIO,
     baseline + fontPx * DESCENT_RATIO
   )
+}
+
+export function agentMapProjectLabelFrameWidth(radius: number, mapScale: number): number {
+  return radius * Math.min(1, mapScale) * 2
+}
+
+export function agentMapUniqueProjectHosts(project: AgentMapProjectRing): AgentMapWorktreeRing[] {
+  const hostsById = new Map<string, AgentMapWorktreeRing>()
+  for (const worktree of project.worktrees) {
+    if (worktree.hostKind === 'ssh' || worktree.hostKind === 'remote') {
+      hostsById.set(`${worktree.hostKind}:${worktree.executionHostId ?? ''}`, worktree)
+    }
+  }
+  return [...hostsById.values()]
+}
+
+function projectLabelContentWidth(project: AgentMapProjectRing, frameWidth: number): number {
+  const hostCount = agentMapUniqueProjectHosts(project).length
+  const fixedWidth =
+    PROJECT_LABEL_ICON_PX +
+    hostCount * PROJECT_HOST_BADGE_PX +
+    (hostCount + 1) * PROJECT_LABEL_ITEM_GAP_PX
+  const estimatedWidth =
+    fixedWidth +
+    textWidth(project.name.toUpperCase(), PROJECT_LABEL_FONT_PX, UPPERCASE_GLYPH_WIDTH_RATIO)
+  const constrainedWidth = Math.max(0, frameWidth - PROJECT_LABEL_FRAME_INSET_PX)
+  return Math.max(fixedWidth, Math.min(estimatedWidth, constrainedWidth))
+}
+
+export function agentMapProjectLabelBoxes(
+  layout: AgentMapLayout,
+  labelScale: number,
+  mapScale: number
+): LabelBox[] {
+  return layout.projects.map((project) => {
+    const frameWidth = agentMapProjectLabelFrameWidth(project.radius, mapScale)
+    return centeredBox(
+      project.x,
+      project.y - project.radius,
+      labelScale,
+      projectLabelContentWidth(project, frameWidth),
+      PROJECT_NAME_TOP,
+      PROJECT_NAME_BOTTOM
+    )
+  })
+}
+
+export function agentMapVisibleWorktreeLabelBoxes(
+  layout: AgentMapLayout,
+  labelScale: number,
+  mapScale: number,
+  visibleWorktreeIds: ReadonlySet<string>
+): LabelBox[] {
+  return layout.projects.flatMap((project) =>
+    project.worktrees
+      .filter(
+        (worktree) => visibleWorktreeIds.has(worktree.id) && isLabelCandidate(worktree, mapScale)
+      )
+      .map((worktree) =>
+        baselineBox(
+          worktree.x,
+          worktree.y - worktree.radius,
+          labelScale,
+          worktree.name,
+          WORKTREE_LABEL_FONT_PX,
+          WORKTREE_LABEL_BASELINE
+        )
+      )
+  )
+}
+
+export function agentMapPriorityWorktreeLabelIds(
+  layout: AgentMapLayout,
+  labelScale: number,
+  mapScale: number
+): Set<string> {
+  return layout.projects.length <= PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT
+    ? selectVisibleAgentMapLabels(layout, labelScale, mapScale).worktreeIds
+    : new Set()
 }
 
 /** Attention outranks volume: a blocked workspace keeps its name when a large
@@ -180,25 +211,18 @@ function addAgentExclusionBoxes(grid: LabelGrid, layout: AgentMapLayout, mapScal
 export function selectVisibleAgentMapLabels(
   layout: AgentMapLayout,
   labelScale: number,
-  mapScale: number
+  mapScale: number,
+  occupiedBoxes: readonly LabelBox[] = []
 ): AgentMapVisibleLabels {
   const agentGrid: LabelGrid = new Map()
   addAgentExclusionBoxes(agentGrid, layout, mapScale)
   const grid: LabelGrid = new Map()
   addAgentExclusionBoxes(grid, layout, mapScale)
-  for (const project of layout.projects) {
-    const name = project.name.toUpperCase()
-    addBox(
-      grid,
-      centeredBox(
-        project.x,
-        project.y - project.radius,
-        labelScale,
-        PROJECT_LABEL_ICON_PX + textWidth(name, PROJECT_LABEL_FONT_PX, UPPERCASE_GLYPH_WIDTH_RATIO),
-        PROJECT_NAME_TOP,
-        PROJECT_NAME_BOTTOM
-      )
-    )
+  for (const box of [
+    ...agentMapProjectLabelBoxes(layout, labelScale, mapScale),
+    ...occupiedBoxes
+  ]) {
+    addBox(grid, box)
   }
 
   const candidates: AgentMapWorktreeRing[] = []

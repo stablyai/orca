@@ -86,6 +86,8 @@ export type DashboardCard = {
   dotState: DashboardCardDotState
   /** One-line task/prompt text shown on the card. */
   task: string
+  /** Matching orchestration identity for map labels. Optional for older peers. */
+  orchestrationDisplayName?: string
   /** The most recent message the user sent this agent (its current prompt). */
   lastUserMessage?: string
   /** The most recent message the agent sent back. */
@@ -137,6 +139,9 @@ export type DashboardCard = {
   /** The tab's conversation name, resolved exactly as the sidebar's agent rows
    *  resolve it. Undefined when no usable name exists (status-only titles). */
   conversationName?: string
+  /** True only for explicit title metadata. Current peers publish false when
+   *  absent or implicit; undefined identifies legacy snapshots. */
+  conversationNameExplicit?: boolean
   /** Host-dependent input facts the preview terminal needs to encode keys the
    *  way this agent's real pane does. Null when the card has no live pty. Only
    *  the main renderer owns the store these derive from, so they ride the

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAgentRowConversationName,
+  resolveAgentRowConversationName,
   type ConversationNameTab
 } from './agent-row-conversation-name'
 
@@ -35,6 +36,40 @@ describe('getAgentRowConversationName', () => {
     const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' })
     expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
+  })
+
+  it('marks only manual names as explicit map identities', () => {
+    expect(
+      resolveAgentRowConversationName(
+        makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' }),
+        'claude',
+        true
+      )
+    ).toEqual({ name: 'Fix intake flow', explicit: false })
+    expect(
+      resolveAgentRowConversationName(makeTab({ customTitle: 'Intake reviewer' }), 'claude', true)
+    ).toEqual({ name: 'Intake reviewer', explicit: true })
+    expect(
+      resolveAgentRowConversationName(
+        makeTab({ quickCommandLabel: 'Run tests', title: '✳ Investigate replay bug' }),
+        'claude',
+        false
+      )
+    ).toEqual({ name: 'Run tests', explicit: false })
+    expect(
+      resolveAgentRowConversationName(
+        makeTab({ title: 'OC | build the release pipeline' }),
+        'opencode',
+        false
+      )
+    ).toEqual({ name: 'OC | build the release pipeline', explicit: false })
+    expect(
+      resolveAgentRowConversationName(
+        makeTab({ title: '✳ Investigate replay bug' }),
+        'claude',
+        false
+      )
+    ).toEqual({ name: 'Investigate replay bug', explicit: false })
   })
 
   it('strips leading status decoration from agent-set titles', () => {

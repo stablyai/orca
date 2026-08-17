@@ -1,3 +1,8 @@
+import {
+  getAgentRowOrchestrationDisplayName,
+  getAgentRowTaskText,
+  isCurrentOrchestrationPaneLineage
+} from '@/lib/agent-row-primary-text'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import {
   dashboardCardDisplayState,
@@ -50,16 +55,23 @@ export function patchDashboardSnapshotFromAgentStatus(
   const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
   const dotState = event.state
   const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
+  const parentPaneKey = isCurrentOrchestrationPaneLineage(event)
+    ? event.orchestration?.parentPaneKey
+    : undefined
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
-    ...(event.prompt ? { task: event.prompt, lastUserMessage: event.prompt } : {}),
+    ...(event.prompt
+      ? {
+          task: getAgentRowTaskText(event),
+          orchestrationDisplayName: getAgentRowOrchestrationDisplayName(event),
+          lastUserMessage: event.prompt
+        }
+      : {}),
     ...(event.lastAssistantMessage !== undefined
       ? { lastAgentMessage: event.lastAssistantMessage || undefined }
       : {}),
-    ...(event.orchestration?.parentPaneKey
-      ? { parentPaneKey: event.orchestration.parentPaneKey }
-      : {}),
+    parentPaneKey,
     bucket,
     dotState,
     unseen,
