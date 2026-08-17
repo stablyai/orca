@@ -2431,6 +2431,11 @@ function isGrokIdleNotification(message: string | undefined): boolean {
   )
 }
 
+// Why: the canonical per-provider turn-boundary table. Also gates whether a live hook
+// may reopen a retired-but-reusable pane, so every provider is judged by its own
+// vocabulary instead of Claude's (#12686).
+export { isNewTurnEvent as isAgentHookNewTurnEvent }
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {

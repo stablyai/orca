@@ -23,6 +23,7 @@ import {
   MAX_PANE_KEY_LEN,
   movePaneCacheState,
   canAcceptClaudeCompactTransition,
+  isAgentHookNewTurnEvent,
   normalizeClaudePromptId,
   normalizeHookPayload,
   parseFormEncodedBody,
@@ -1102,7 +1103,7 @@ export class AgentHookServer {
 
   private getAgentStatusDisposition(
     paneKey: string,
-    event?: { hookEventName?: string; isReplay?: boolean }
+    event?: { source?: AgentHookSource; hookEventName?: string; isReplay?: boolean }
   ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const paneRetired =
@@ -1116,12 +1117,19 @@ export class AgentHookServer {
       return 'accept'
     }
     // Why: command completion retires launch authority but leaves its shell pane reusable.
-    // A live SessionStart proves a new agent process owns the retired pane just like a
-    // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
-    if (
-      (event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart') &&
-      event.isReplay !== true
-    ) {
+    // A live turn boundary proves a new agent process owns the retired pane — without it, a
+    // session resumed in a reused pane stays rowless (STA-3386). Ask each provider's own
+    // boundary table: hardcoding Claude's names stranded Cursor's `beforeSubmitPrompt`, so its
+    // `stop` stayed suppressed and the pane never left Working (#12686).
+    const isLiveTurnBoundary =
+      event !== undefined &&
+      event.isReplay !== true &&
+      (event.source !== undefined
+        ? isAgentHookNewTurnEvent(event.source, event.hookEventName)
+        : // Why: a relay frame from an older client carries no `source`; keep the legacy
+          // Claude-vocabulary check so its panes reopen exactly as they did before.
+          event.hookEventName === 'UserPromptSubmit' || event.hookEventName === 'SessionStart')
+    if (isLiveTurnBoundary) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       return 'restart'
@@ -2191,6 +2199,7 @@ export class AgentHookServer {
         ? envelope.compactTrigger
         : undefined
     const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      ...(source ? { source } : {}),
       hookEventName,
       isReplay: envelope.isReplay === true
     })
@@ -2403,6 +2412,7 @@ export class AgentHookServer {
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+              source,
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay
             })
