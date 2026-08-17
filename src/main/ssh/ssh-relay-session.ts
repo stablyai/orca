@@ -27,8 +27,10 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_STATUS_POLICY_METHOD,
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
+import { resolveClaudeBackgroundShellIgnorePatterns } from '../../shared/claude-background-shell-patterns'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
@@ -304,6 +306,7 @@ export class SshRelaySession {
   private muxDisposeCleanup: (() => void) | null = null
   // Why: hold the notification-handler disposer so teardownProviders can release it on reconnect/shutdown (symmetric with muxDisposeCleanup).
   private muxNotificationCleanup: (() => void) | null = null
+  private agentHookStatusPolicyCleanup: (() => void) | null = null
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
   // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
@@ -1465,6 +1468,19 @@ export class SshRelaySession {
     }
   }
 
+  private sendAgentHookStatusPolicy(mux: SshChannelMultiplexer): void {
+    const store = this.store as { getSettings?: Store['getSettings'] }
+    void mux
+      .request(AGENT_HOOK_SET_STATUS_POLICY_METHOD, {
+        backgroundShellIgnorePatterns: resolveClaudeBackgroundShellIgnorePatterns(
+          store.getSettings?.()
+        )
+      })
+      .catch(() => {
+        // Why: a relay predating the handler answers -32601 and keeps the pre-setting behavior.
+      })
+  }
+
   private areAgentStatusHooksEnabled(): boolean {
     const store = this.store as { getSettings?: Store['getSettings'] }
     return isAgentStatusHooksEnabled(store.getSettings?.())
@@ -1551,6 +1567,21 @@ export class SshRelaySession {
       )
     })
 
+    // Why: the relay resolves pane status remotely and owns no settings store, so push the
+    // status settings now and on every later change — otherwise a toggle needs a reconnect.
+    this.agentHookStatusPolicyCleanup?.()
+    this.sendAgentHookStatusPolicy(mux)
+    const store = this.store as { onSettingsChanged?: Store['onSettingsChanged'] }
+    this.agentHookStatusPolicyCleanup =
+      store.onSettingsChanged?.((updates) => {
+        if (
+          'agentStatusIgnoresBackgroundShells' in updates ||
+          'agentStatusBackgroundShellIgnorePatterns' in updates
+        ) {
+          this.sendAgentHookStatusPolicy(mux)
+        }
+      }) ?? null
+
     // Why: request replay of cached paneKeys only after the handler is wired, so replayed events can't arrive before we subscribe. Best-effort.
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch((err) => {
       const code = (err as { code?: unknown })?.code
@@ -1579,6 +1610,8 @@ export class SshRelaySession {
     this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
+    this.agentHookStatusPolicyCleanup?.()
+    this.agentHookStatusPolicyCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
       cleanup()
     }

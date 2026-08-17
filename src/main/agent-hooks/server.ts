@@ -34,6 +34,7 @@ import {
   preparePendingGrokResultDiscovery,
   seedClaudeSubagentRosterFromSnapshots,
   seedCodexStateFromSnapshot,
+  setClaudeBackgroundShellIgnorePatterns,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -636,6 +637,11 @@ export class AgentHookServer {
   private connectionTimestampWatermarkById = new Map<string, number>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
+
+  /** Live user setting; index.ts owns the Store read so this class stays Electron-free. */
+  setClaudeBackgroundShellIgnorePatterns(patterns: readonly string[]): void {
+    setClaudeBackgroundShellIgnorePatterns(this.state, patterns)
+  }
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener

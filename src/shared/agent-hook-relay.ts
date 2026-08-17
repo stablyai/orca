@@ -204,6 +204,20 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
  *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 
+/** JSON-RPC request Orca issues at hook wire-up and on every later change, so the
+ *  relay's listener resolves pane status under the same user settings as the local
+ *  host. The relay owns no settings store, and the `agent.hook` envelope cannot carry
+ *  the answer: its `claudeRunningNonAgentTask` field is already the shell/cron OR, and
+ *  `payload.state` has collapsed "lead still working" into the same `working`. An older
+ *  relay rejects this with -32601 and simply keeps the pre-setting behavior. */
+export const AGENT_HOOK_SET_STATUS_POLICY_METHOD = 'agent_hook.setStatusPolicy' as const
+
+export type AgentHookStatusPolicyParams = {
+  /** Command tokens marking a never-terminating background shell, which therefore cannot
+   *  hold a finished Claude turn at `working`. Empty means every running shell holds it. */
+  backgroundShellIgnorePatterns: string[]
+}
+
 /** JSON-RPC request method that asks the remote relay to install every
  *  managed hook using its local filesystem instead of WAN-bound SFTP. */
 export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const

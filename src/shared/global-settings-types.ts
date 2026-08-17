@@ -419,6 +419,10 @@ export type GlobalSettings = {
   experimentalAgentHibernation?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
   agentHibernationIdleMs?: number
+  /** Background shells whose command never terminates (dev servers, watchers) stop holding an agent at "working" once its turn ends. */
+  agentStatusIgnoresBackgroundShells?: boolean
+  /** Command tokens marking a never-terminating shell. Undefined uses the built-in list; an explicit list replaces it. */
+  agentStatusBackgroundShellIgnorePatterns?: string[]
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */

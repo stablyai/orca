@@ -21,7 +21,8 @@ import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
 import { PreflightHandler } from './preflight-handler'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_STATUS_POLICY_METHOD
 } from '../shared/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
@@ -75,6 +76,14 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
     replayed: hookServer.replayCachedPayloadsForPanes()
   }))
+
+  // Why: the guest relay has no settings store; Orca pushes the status settings that shape hook normalization.
+  dispatcher.onRequest(AGENT_HOOK_SET_STATUS_POLICY_METHOD, async (params) => {
+    hookServer.setStatusPolicy({
+      backgroundShellIgnorePatterns: params.backgroundShellIgnorePatterns as string[]
+    })
+    return { applied: true }
+  })
 
   // Why: OpenCode reports status via a plugin (not a hooks.json script), so the
   // host ships its source over the wire and the guest materializes a config

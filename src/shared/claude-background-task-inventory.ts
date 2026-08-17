@@ -1,4 +1,5 @@
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { claudeBackgroundShellCommandMatches } from './claude-background-shell-patterns'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -37,8 +38,12 @@ export type ClaudeBackgroundAgentTask = {
 
 /** Read the agent-typed entries of a hook payload's `background_tasks` field.
  *  `present: false` means the field was absent/malformed (older Claude builds),
- *  so callers must keep their tracked roster instead of clearing it. */
-export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
+ *  so callers must keep their tracked roster instead of clearing it.
+ *  `ignoreCommandPatterns` retires typed non-agent rows whose command never terminates. */
+export function readClaudeBackgroundAgentTasks(
+  hookPayload: Record<string, unknown>,
+  ignoreCommandPatterns: readonly string[] = []
+): {
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
@@ -68,8 +73,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       continue
     }
     const isAgentTask = taskType === 'subagent' || taskType === 'teammate'
-    // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
-    if (!isAgentTask && !isTerminal) {
+    // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows, explicit terminal states, or a user-listed never-terminating command can safely retire work.
+    if (
+      !isAgentTask &&
+      !isTerminal &&
+      !claudeBackgroundShellCommandMatches(obj.command, ignoreCommandPatterns)
+    ) {
       hasRunningNonAgentTask = true
     }
     if (!isAgentTask) {

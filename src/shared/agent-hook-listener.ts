@@ -147,6 +147,8 @@ export type HookListenerState = {
   codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
   /** Root Codex state/model, kept separate from child hook traffic. */
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
+  /** User setting, not a cache: commands matching these never terminate on their own, so a running one is not work in flight and cannot hold a finished turn at `working`. Empty keeps every shell sticky. */
+  claudeBackgroundShellIgnorePatterns: readonly string[]
 }
 
 export type ClaudeLeadTurnState = {
@@ -181,7 +183,21 @@ export function createHookListenerState(): HookListenerState {
     claudeActiveSessionCronPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
-    codexLeadStateByPaneKey: new Map()
+    codexLeadStateByPaneKey: new Map(),
+    claudeBackgroundShellIgnorePatterns: []
+  }
+}
+
+/** Applies the live user setting. Retained evidence was computed under the old list, so
+ *  a newly non-empty one clears it to release panes a matching shell already pinned;
+ *  emptying it cannot re-pin without a fresh payload, so those pins are left alone. */
+export function setClaudeBackgroundShellIgnorePatterns(
+  state: HookListenerState,
+  patterns: readonly string[]
+): void {
+  state.claudeBackgroundShellIgnorePatterns = patterns
+  if (patterns.length > 0) {
+    state.claudeRunningNonAgentTaskPaneKeys.clear()
   }
 }
 
@@ -2859,7 +2875,11 @@ function normalizeClaudeEvent(
       previousLead?.interrupted === true)
       ? true
       : undefined
-  const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
+  // Why: filtering at the read keeps one source of truth — the pane gate, interrupt inference and the relay envelope all follow from the evidence it produces.
+  const backgroundTasks = readClaudeBackgroundAgentTasks(
+    hookPayload,
+    state.claudeBackgroundShellIgnorePatterns
+  )
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
   const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0

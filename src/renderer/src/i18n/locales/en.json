@@ -6194,6 +6194,15 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "backgroundShellStatus": {
+            "title": "Ignore background shells",
+            "description": "Background shells whose command never exits, such as dev servers and watchers, stop keeping an agent marked as working once its turn ends.",
+            "copy": "A background shell whose command never exits on its own — a dev server, a watcher — no longer keeps the agent marked as working once its turn ends. Anything not listed below still holds it, as do running subagents and scheduled jobs.",
+            "toggleLabel": "Toggle ignore background shells",
+            "patternsLabel": "Never-ending commands",
+            "restoreDefaults": "Restore defaults",
+            "patternsHelp": "One per line. Each matches a whole word in the command, so \"dev\" matches \"npm run dev\" but not \"dev-check.sh\". A test or build command you leave off this list keeps holding the turn."
           }
         },
         "FloatingWorkspacePane": {
@@ -8533,6 +8542,10 @@
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
+            },
+            "backgroundShellStatus": {
+              "title": "Ignore background shells",
+              "description": "Background shells whose command never exits, such as dev servers and watchers, stop keeping an agent marked as working once its turn ends."
             }
           }
         },

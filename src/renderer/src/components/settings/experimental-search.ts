@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getBackgroundShellStatusSearchEntry } from './background-shell-status-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -228,6 +229,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getBackgroundShellStatusSearchEntry(),
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry()
   ]
@@ -266,6 +268,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
         'Agent sleep'
+      )
+    ),
+    backgroundShellStatus: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.backgroundShellStatus.title',
+        'Ignore background shells'
       )
     ),
     newWorktreeCardStyle: findEntry(

@@ -50,7 +50,8 @@ import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_STATUS_POLICY_METHOD
 } from '../shared/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
@@ -883,6 +884,14 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
     const replayed = hookServer.replayCachedPayloadsForPanes()
     return { replayed }
+  })
+
+  // Why: the relay has no settings store of its own; Orca pushes the status settings that shape hook normalization.
+  dispatcher.onRequest(AGENT_HOOK_SET_STATUS_POLICY_METHOD, async (params) => {
+    hookServer.setStatusPolicy({
+      backgroundShellIgnorePatterns: params.backgroundShellIgnorePatterns as string[]
+    })
+    return { applied: true }
   })
 
   // Why: relay-local installers collapse hundreds of SFTP request/response RTTs to one RPC.

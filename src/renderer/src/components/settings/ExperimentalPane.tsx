@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { BackgroundShellStatusExperimentalSetting } from './BackgroundShellStatusExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -50,6 +51,9 @@ export function ExperimentalPane({
   ])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
+  ])
+  const showBackgroundShellStatus = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().backgroundShellStatus
   ])
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
@@ -257,6 +261,13 @@ export function ExperimentalPane({
             />
           ) : null}
         </SearchableSetting>
+      ) : null}
+
+      {showBackgroundShellStatus ? (
+        <BackgroundShellStatusExperimentalSetting
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {showNewWorktreeCardStyle ? (

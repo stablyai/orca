@@ -23,7 +23,11 @@ import { wireWslRelayLink } from './wsl-hook-relay-link'
 import { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
+import {
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_STATUS_POLICY_METHOD,
+  type AgentHookStatusPolicyParams
+} from '../../shared/agent-hook-relay'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
@@ -56,6 +60,8 @@ export class WslHookRelayManager {
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
+  /** Last host settings pushed; retained so a relay started (or restarted) later adopts them too. */
+  private statusPolicy: AgentHookStatusPolicyParams = { backgroundShellIgnorePatterns: [] }
 
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
@@ -78,6 +84,20 @@ export class WslHookRelayManager {
 
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
     this.deps.managedHookSettings = resolve
+  }
+
+  /** Guest relays own no settings store, so the host pushes the settings that shape hook normalization. */
+  pushAgentHookStatusPolicy(policy: AgentHookStatusPolicyParams): void {
+    this.statusPolicy = policy
+    for (const state of this.states.values()) {
+      this.sendAgentHookStatusPolicy(state.mux)
+    }
+  }
+
+  private sendAgentHookStatusPolicy(mux: SshChannelMultiplexer | undefined): void {
+    void mux?.request(AGENT_HOOK_SET_STATUS_POLICY_METHOD, this.statusPolicy).catch(() => {
+      // Why: a guest relay predating the handler answers -32601 and keeps the pre-setting behavior.
+    })
   }
 
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
@@ -295,6 +315,7 @@ export class WslHookRelayManager {
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch(() => {
       // Fresh relays have nothing to replay; tolerate.
     })
+    this.sendAgentHookStatusPolicy(mux)
   }
 
   /** Records + breadcrumbs the failure and always arms the restart timer —

@@ -7,6 +7,7 @@ import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
+import { DEFAULT_CLAUDE_BACKGROUND_SHELL_IGNORE_PATTERNS } from './claude-background-shell-patterns'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
@@ -364,6 +365,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
+    // Why: off keeps today's behavior — a running background shell still pins the pane 'working'.
+    agentStatusIgnoresBackgroundShells: false,
+    // Why: seeded (not left undefined) so the Experimental editor can show and edit the real list.
+    agentStatusBackgroundShellIgnorePatterns: [...DEFAULT_CLAUDE_BACKGROUND_SHELL_IGNORE_PATTERNS],
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
     compactWorktreeCards: false,

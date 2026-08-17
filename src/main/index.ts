@@ -72,6 +72,8 @@ import { triggerStartupNotificationRegistration } from './ipc/startup-notificati
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
 import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
+import { resolveClaudeBackgroundShellIgnorePatterns } from '../shared/claude-background-shell-patterns'
+import type { GlobalSettings } from '../shared/global-settings-types'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import {
   fingerprintOrchestrationPeer,
@@ -893,6 +895,14 @@ ipcMain.handle(
     logStartupMilestone(event, details && typeof details === 'object' ? details : {})
   }
 )
+
+/** Every hook host resolves Claude pane status itself, so the setting has to reach each
+ *  one. Live SSH sessions subscribe to the Store directly; local and WSL are pushed here. */
+function applyAgentStatusBackgroundShellSetting(settings: GlobalSettings): void {
+  const backgroundShellIgnorePatterns = resolveClaudeBackgroundShellIgnorePatterns(settings)
+  agentHookServer.setClaudeBackgroundShellIgnorePatterns(backgroundShellIgnorePatterns)
+  wslHookRelayManager.pushAgentHookStatusPolicy({ backgroundShellIgnorePatterns })
+}
 
 /** A PTY that dies while Orca is down never runs the teardown that clears pane
  *  state, so hydrate can rebuild a Claude subagent roster that no later hook can
@@ -2197,6 +2207,7 @@ void app.whenReady().then(async () => {
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  applyAgentStatusBackgroundShellSetting(store.getSettings())
   store.onSettingsChanged((updates, settings) => {
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
@@ -2221,6 +2232,12 @@ void app.whenReady().then(async () => {
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+    if (
+      'agentStatusIgnoresBackgroundShells' in updates ||
+      'agentStatusBackgroundShellIgnorePatterns' in updates
+    ) {
+      applyAgentStatusBackgroundShellSetting(settings)
     }
     if ('agentStatusHooksEnabled' in updates) {
       // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running

@@ -263,6 +263,58 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('lets Escape retire a working pane held only by a listed never-ending shell', async () => {
+    // Why: mid-turn is the case that strands users — a Stop already resolves to done once the command is listed.
+    const DEV_SERVER = { id: 'dev-1', type: 'shell', status: 'running', command: 'npm run dev' }
+    const inferEscapeDuringShell = async (
+      patterns: readonly string[],
+      extraPayload: Record<string, unknown> = {}
+    ): Promise<boolean> => {
+      const server = new AgentHookServer()
+      server.setClaudeBackgroundShellIgnorePatterns(patterns)
+      await server.start({ env: 'production' })
+      try {
+        const env = server.buildPtyEnv()
+        await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(
+            buildBody({
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'run in background',
+              background_tasks: [DEV_SERVER],
+              ...extraPayload
+            })
+          )
+        })
+        const baseline = server.getStatusSnapshot()[0]
+        expect(baseline).toMatchObject({ state: 'working' })
+        return server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      } finally {
+        server.stop()
+      }
+    }
+
+    await expect(inferEscapeDuringShell([])).resolves.toBe(false)
+    // Why: an unrelated pattern must not retire a shell the user never listed.
+    await expect(inferEscapeDuringShell(['ngrok'])).resolves.toBe(false)
+    await expect(inferEscapeDuringShell(['dev'])).resolves.toBe(true)
+    // Why: only the shell gate relaxes — a session cron still owns the pane.
+    await expect(inferEscapeDuringShell(['dev'], { session_crons: [{ id: 'c' }] })).resolves.toBe(
+      false
+    )
+  })
+
   it('uses replayed Claude background metadata only before a live observation', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

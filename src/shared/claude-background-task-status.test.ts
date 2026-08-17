@@ -7,6 +7,7 @@ import {
   movePaneCacheState,
   normalizeHookPayload,
   seedClaudeSubagentRosterFromSnapshots,
+  setClaudeBackgroundShellIgnorePatterns,
   type HookListenerState
 } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
@@ -571,5 +572,120 @@ describe('Claude background task status', () => {
 
     markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+  })
+})
+
+describe('background shell ignore patterns', () => {
+  const DEV_SERVER = {
+    id: 'dev-1',
+    type: 'shell',
+    status: 'running',
+    description: 'Start the dev server',
+    command: 'npm run dev'
+  }
+  const TEST_SCRIPT = {
+    id: 'test-1',
+    type: 'shell',
+    status: 'running',
+    description: 'Probe the API',
+    command: './scripts/api-smoke.sh --json'
+  }
+  const ignoring = (patterns: readonly string[]): HookListenerState => {
+    const state = createHookListenerState()
+    setClaudeBackgroundShellIgnorePatterns(state, patterns)
+    return state
+  }
+  const stopWith = (state: HookListenerState, tasks: unknown[]) => {
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+    return claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: tasks
+    })?.state
+  }
+
+  it('retires a turn whose only work left is a never-ending command', () => {
+    const state = ignoring(['dev'])
+
+    expect(stopWith(state, [DEV_SERVER])).toBe('done')
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+  })
+
+  it('keeps holding the turn for a command that is not listed', () => {
+    const state = ignoring(['dev'])
+
+    expect(stopWith(state, [TEST_SCRIPT])).toBe('working')
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+  })
+
+  it('holds the turn when any single running task is unlisted', () => {
+    expect(stopWith(ignoring(['dev']), [DEV_SERVER, TEST_SCRIPT])).toBe('working')
+  })
+
+  it('keeps every shell sticky while the list is empty', () => {
+    const state = createHookListenerState()
+
+    expect(stopWith(state, [DEV_SERVER])).toBe('working')
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+  })
+
+  it('matches whole words only, so a lookalike script still holds the turn', () => {
+    const state = ignoring(['dev'])
+
+    expect(
+      stopWith(state, [{ id: 's', type: 'shell', status: 'running', command: './dev-check.sh' }])
+    ).toBe('working')
+  })
+
+  it('still holds the turn for a working subagent', () => {
+    const state = ignoring(['dev'])
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [DEV_SERVER, { id: 'child-1', type: 'subagent', status: 'running' }]
+      })
+    ).toMatchObject({
+      state: 'working',
+      subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
+    })
+  })
+
+  it('still holds the turn for an active session cron, and reports it to the host', () => {
+    const state = ignoring(['dev'])
+
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: SOURCE_PANE,
+        payload: {
+          hook_event_name: 'Stop',
+          background_tasks: [DEV_SERVER],
+          session_crons: [{ id: 'cron-1' }]
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    // Why: the relay envelope keeps carrying cron evidence, so a remote host's interrupt inference still refuses to retire it.
+    expect(event?.claudeRunningNonAgentTask).toBe(true)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+  })
+
+  it('releases a pane an unlisted shell had already pinned once the list covers it', () => {
+    const state = createHookListenerState()
+    expect(stopWith(state, [DEV_SERVER])).toBe('working')
+
+    setClaudeBackgroundShellIgnorePatterns(state, ['dev'])
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe('done')
+  })
+
+  it('leaves malformed and untyped entries failing active regardless of the list', () => {
+    for (const task of [null, { id: 'x', status: 'running', command: 'npm run dev' }]) {
+      expect(stopWith(ignoring(['dev']), [task])).toBe('working')
+    }
   })
 })

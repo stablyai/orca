@@ -18,6 +18,7 @@ import {
   readRequestBody,
   resolveCachedClaudeCompactOwnership,
   resolveHookSource,
+  setClaudeBackgroundShellIgnorePatterns,
   writeEndpointFile,
   type AgentHookEventPayload,
   type HookListenerState
@@ -25,8 +26,10 @@ import {
 import {
   REMOTE_AGENT_HOOK_ENV,
   type AgentHookRelayEnvelope,
-  type AgentHookSource
+  type AgentHookSource,
+  type AgentHookStatusPolicyParams
 } from '../shared/agent-hook-relay'
+import { normalizeClaudeBackgroundShellIgnorePatterns } from '../shared/claude-background-shell-patterns'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -186,6 +189,14 @@ export class RelayAgentHookServer {
       count++
     }
     return count
+  }
+
+  /** Adopt the host's agent-status settings; survives stop()/start() since it is config, not cache. */
+  setStatusPolicy(policy: AgentHookStatusPolicyParams): void {
+    setClaudeBackgroundShellIgnorePatterns(
+      this.state,
+      normalizeClaudeBackgroundShellIgnorePatterns(policy.backgroundShellIgnorePatterns)
+    )
   }
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
