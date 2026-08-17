@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
@@ -54,8 +55,23 @@ describe('OpenCode hook plugin source', () => {
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('export const OrcaOpenCodeStatusPlugin = async (_ctx) => {')
+    expect(source).toContain('async function createOrcaOpenCodeStatusPlugin(_ctx) {')
+    expect(source).toContain(
+      'export const OrcaOpenCodeStatusPlugin = createOrcaOpenCodeStatusPlugin'
+    )
     expect(source).toContain('const client = _ctx?.client;')
+  })
+
+  it('emits an opencode V2 default export alongside the V1 factory', () => {
+    // Why: opencode 2.x reads the plugin module's default export (define() is
+    // identity); without it the generated orca-opencode-status.js fails to load.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('export default {')
+    expect(source).toContain('id: "orca-opencode-status"')
+    expect(source).toContain('server: createOrcaOpenCodeStatusPlugin')
+    expect(source).toContain('setup: async (ctx) => {')
+    expect(source).toContain('const subscribe = ctx?.event?.subscribe')
   })
 
   it('resolves hook coords from the endpoint file before falling back to process.env', () => {
@@ -129,6 +145,152 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('let warnedBadEndpoint = false;')
     expect(source).toContain('err.code !== "ENOENT"')
     expect(source).toContain('warnedBadEndpoint = true;')
+  })
+})
+
+describe('OpenCode plugin module default export (opencode V2 contract)', () => {
+  // Why: opencode 2.x loads plugins via the module default export (a define'd
+  // `{ id, setup }` object), while the V1 loader reads the named factory. The
+  // generated module is executed verbatim so both contracts stay loadable.
+  const ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN'] as const
+  const KNOWN_EVENT_TYPES = [
+    'session.status',
+    'session.idle',
+    'session.error',
+    'permission.asked',
+    'permission.replied',
+    'question.asked',
+    'question.replied',
+    'question.rejected',
+    'message.updated',
+    'message.part.updated',
+    'message.part.delta'
+  ]
+  let tempDir: string
+  let savedEnv: Record<string, string | undefined>
+  let savedFetch: typeof globalThis.fetch
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-v2-default-'))
+    savedEnv = {}
+    for (const key of ENV_KEYS) {
+      savedEnv[key] = process.env[key]
+    }
+    savedFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = savedFetch
+    for (const key of ENV_KEYS) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = savedEnv[key]
+      }
+    }
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  type PluginModule = {
+    default: {
+      id: string
+      server: (ctx: unknown) => Promise<{
+        event: (input: { event: unknown }) => Promise<void>
+        dispose: () => Promise<void>
+      }>
+      setup: (ctx: unknown) => Promise<void>
+    }
+    OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<{
+      event: (input: { event: unknown }) => Promise<void>
+      dispose: () => Promise<void>
+    }>
+  }
+
+  async function loadPluginModule(): Promise<PluginModule> {
+    const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
+    writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+    return (await import(pathToFileURL(pluginPath).href)) as PluginModule
+  }
+
+  it('exposes a default export with string id, callable server, and callable setup', async () => {
+    const module = await loadPluginModule()
+
+    expect(typeof module.default).toBe('object')
+    expect(module.default.id).toBe('orca-opencode-status')
+    expect(typeof module.default.server).toBe('function')
+    expect(typeof module.default.setup).toBe('function')
+  })
+
+  it('keeps the V1 factory contract callable via the default export server', async () => {
+    const module = await loadPluginModule()
+
+    const hooks = await module.default.server({})
+    expect(typeof hooks.event).toBe('function')
+    expect(typeof hooks.dispose).toBe('function')
+  })
+
+  it('setup resolves without invoking the engine when the V2 context has no event API', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      const module = await loadPluginModule()
+
+      await expect(module.default.setup({})).resolves.toBeUndefined()
+
+      const messages = debugSpy.mock.calls.map((call) => String(call[0]))
+      expect(messages.some((m) => m.includes('does not expose session events'))).toBe(true)
+      // If the engine had run, the subscribe loop would have logged failures
+      // for every type instead of hitting the early-return guard.
+      expect(messages.some((m) => m.includes('failed to subscribe to'))).toBe(false)
+    } finally {
+      debugSpy.mockRestore()
+    }
+  })
+
+  it('setup subscribes to every known event type and routes events into the engine', async () => {
+    const posts: { hook_event_name: string }[] = []
+    globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { payload: { hook_event_name: string } }
+      posts.push(body.payload)
+      return new Response(null, { status: 204 })
+    }) as typeof globalThis.fetch
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    process.env.ORCA_AGENT_HOOK_PORT = '45678'
+    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+
+    // Why: on a real opencode stream, onValue(handler) REGISTERS the handler
+    // for later events rather than invoking it directly; push() replays the
+    // arrivals the plugin subscribed to.
+    const streams = new Map<string, { push: (event: unknown) => void }>()
+    const subscribe = vi.fn((type: string) => {
+      const handlers: ((event: unknown) => void)[] = []
+      const stream = {
+        onValue: (handler: (event: unknown) => void) => {
+          handlers.push(handler)
+        }
+      }
+      streams.set(type, {
+        push: (event: unknown) => {
+          for (const handler of handlers) {
+            handler(event)
+          }
+        }
+      })
+      return stream
+    })
+    const module = await loadPluginModule()
+    await module.default.setup({ event: { subscribe } })
+
+    expect(subscribe.mock.calls.map((call) => call[0])).toEqual(KNOWN_EVENT_TYPES)
+    expect(subscribe).toHaveBeenCalledTimes(KNOWN_EVENT_TYPES.length)
+
+    streams.get('session.status')!.push({
+      type: 'session.status',
+      properties: { sessionID: 'session-1', status: { type: 'busy' } }
+    })
+
+    await vi.waitFor(() => {
+      expect(posts.at(-1)?.hook_event_name).toBe('SessionBusy')
+    })
   })
 })
 
