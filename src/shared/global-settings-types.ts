@@ -36,9 +36,25 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  ExternalWorktreeVisibility,
+  WorktreeVisibilitySourcePreferences
+} from './repo-types'
+
+export type WorktreeVisibilityDefaults = {
+  /** Default for worktrees outside a recognized source. */
+  external?: ExternalWorktreeVisibility
+  /** Host-owned roots applied to every repository on that host. */
+  customSources?: CustomWorktreeVisibilitySource[]
+  /** Defaults for built-in and host-owned custom sources. */
+  sourcePreferences?: WorktreeVisibilitySourcePreferences
+}
 
 export type GlobalSettings = {
   workspaceDir: string
+  /** Host-owned defaults used when a repository has no explicit visibility override. */
+  worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
@@ -214,8 +230,12 @@ export type GlobalSettings = {
   artifactsEnabled?: boolean
   /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
   artifactSharingEnabled?: boolean
+  /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
+  agentSkillSharingEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
+  /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
+  showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
@@ -256,7 +276,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
+  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
+   *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean

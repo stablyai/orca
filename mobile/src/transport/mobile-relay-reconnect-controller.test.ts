@@ -49,6 +49,17 @@ describe('relay reconnect controller', () => {
     expect(onRetry).not.toHaveBeenCalled()
   })
 
+  it('publishes consecutive failures and the direct-connection reset', () => {
+    const published: number[] = []
+    const reconnect = createController(vi.fn(), (count) => published.push(count))
+
+    reconnect.registerFailure(new RelayOuterError(4408), false)
+    reconnect.registerFailure(new RelayOuterError(4408), false)
+    reconnect.resetForDirectConnection()
+
+    expect(published).toEqual([0, 1, 2, 0])
+  })
+
   it('reprobes slowly after rejected E2EE authentication instead of parking forever', () => {
     // Why: on a relay-only phone a permanent gate is a permanent outage — the
     // desktop can commit pairing credentials moments after the first rejection.
@@ -267,8 +278,11 @@ describe('relay reconnect controller', () => {
   })
 })
 
-function createController(onRetry: () => void): RelayReconnectController {
-  return new RelayReconnectController(
+function createController(
+  onRetry: () => void,
+  reportFailureCount: (count: number) => void = () => {}
+): RelayReconnectController {
+  const controller = new RelayReconnectController(
     {
       now: Date.now,
       randomBytes: () => new Uint8Array([128, 0]),
@@ -277,4 +291,6 @@ function createController(onRetry: () => void): RelayReconnectController {
     },
     onRetry
   )
+  controller.reportFailureCountTo(reportFailureCount)
+  return controller
 }

@@ -4,6 +4,7 @@ import type { Repo } from '../repo-types'
 import type { WorktreeMeta } from './meta-types'
 import type { Worktree } from './types'
 import { createAgentScratchWorktreePathMatcher } from '../agent-scratch-worktrees'
+import { migrateExternalWorktreeVisibilityDefaults } from '../external-worktree-visibility'
 import {
   applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
@@ -341,6 +342,55 @@ describe('external worktree visibility policy', () => {
   it('defaults undefined visibility to hide for new repos and show for legacy repos', () => {
     expect(effectiveExternalWorktreeVisibility(makeRepo(), false)).toBe('hide')
     expect(effectiveExternalWorktreeVisibility(makeRepo(), true)).toBe('show')
+  })
+
+  it('resolves repo override before host default before the compatibility fallback', () => {
+    expect(
+      effectiveExternalWorktreeVisibility(makeRepo({ externalWorktreeVisibility: 'show' }), false, {
+        external: 'hide'
+      })
+    ).toBe('show')
+    expect(effectiveExternalWorktreeVisibility(makeRepo(), true, { external: 'hide' })).toBe('hide')
+    expect(effectiveExternalWorktreeVisibility(makeRepo(), true)).toBe('show')
+  })
+
+  it('materializes only implicit legacy visibility when adding the safe global default', () => {
+    const legacy = makeRepo({ externalWorktreeVisibilityLegacy: undefined })
+    const explicit = makeRepo({ id: 'explicit', externalWorktreeVisibility: 'hide' })
+    const inherited = makeRepo({ id: 'inherited', externalWorktreeVisibilityLegacy: false })
+
+    const migrated = migrateExternalWorktreeVisibilityDefaults(
+      [legacy, explicit, inherited],
+      undefined
+    )
+
+    expect(migrated.defaults).toEqual({ external: 'hide' })
+    expect(migrated.repos).toEqual([
+      expect.objectContaining({
+        id: legacy.id,
+        externalWorktreeVisibility: 'show',
+        externalWorktreeVisibilityLegacy: true
+      }),
+      explicit,
+      inherited
+    ])
+    expect(
+      migrateExternalWorktreeVisibilityDefaults(migrated.repos, migrated.defaults).changed
+    ).toBe(false)
+  })
+
+  it('does not materialize visibility on folder repositories', () => {
+    const folder = makeRepo({ kind: 'folder', externalWorktreeVisibilityLegacy: undefined })
+    const migrated = migrateExternalWorktreeVisibilityDefaults([folder], undefined)
+
+    expect(migrated.repos[0]?.externalWorktreeVisibility).toBeUndefined()
+  })
+
+  it('materializes legacy visibility on persisted repositories without a kind', () => {
+    const legacy = makeRepo({ kind: undefined, externalWorktreeVisibilityLegacy: undefined })
+    const migrated = migrateExternalWorktreeVisibilityDefaults([legacy], undefined)
+
+    expect(migrated.repos[0]?.externalWorktreeVisibility).toBe('show')
   })
 
   it('treats persisted repos without explicit visibility as legacy for upgrade safety', () => {

@@ -7,7 +7,7 @@ vi.mock('../wsl', async (importOriginal) => ({
 }))
 
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { resolveWslSessionContext } from './wsl-session-context'
 
 function createSubprocess(): SubprocessHandle {

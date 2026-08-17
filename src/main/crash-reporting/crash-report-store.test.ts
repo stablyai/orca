@@ -215,4 +215,51 @@ describe('CrashReportStore', () => {
     const entries = await fs.readdir(path.dirname(filePath))
     expect(entries.filter((entry) => entry.endsWith('.tmp'))).toEqual([])
   })
+
+  describe('attachDetails', () => {
+    it('merges late minidump details without dropping the originals', async () => {
+      const { store } = await createStore()
+      const report = await store.record(input())
+
+      const updated = await store.attachDetails(report.id, {
+        minidumpStatus: 'captured',
+        minidumpCheckFile: 'render_frame_impl.cc'
+      })
+
+      expect(updated?.details).toMatchObject({
+        code: 5,
+        minidumpStatus: 'captured',
+        minidumpCheckFile: 'render_frame_impl.cc'
+      })
+      expect((await store.getById(report.id))?.details.minidumpCheckFile).toBe(
+        'render_frame_impl.cc'
+      )
+    })
+
+    it('sanitizes attached details the same way recorded ones are', async () => {
+      const { store } = await createStore()
+      const report = await store.record(input())
+
+      const updated = await store.attachDetails(report.id, {
+        minidumpPath: '/Users/alice/Library/Application Support/Orca/reports/abc.dmp'
+      })
+
+      expect(updated?.details.minidumpPath).toBe('[redacted-path]')
+    })
+
+    it('leaves the report status untouched so the crash prompt still fires', async () => {
+      const { store } = await createStore()
+      const report = await store.record(input())
+
+      await store.attachDetails(report.id, { minidumpStatus: 'absent' })
+
+      expect((await store.getLatestPending())?.id).toBe(report.id)
+    })
+
+    it('returns null for a report that has already been evicted', async () => {
+      const { store } = await createStore()
+
+      expect(await store.attachDetails('missing-id', { minidumpStatus: 'absent' })).toBeNull()
+    })
+  })
 })

@@ -24,20 +24,6 @@ import {
 } from './mobile-diff-review-rpc'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
 
-const NODE_PLATFORMS = new Set<NodeJS.Platform>([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-])
-
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
     Partial<Pick<AiVaultSession, 'filePath'>>
@@ -235,16 +221,6 @@ export function createMobileAiVaultResumeMutationRegistry(
       bySessionId.delete(sessionId)
     }
   }
-}
-
-export function readMobileRuntimeHostPlatform(statusResult: unknown): NodeJS.Platform | null {
-  if (!statusResult || typeof statusResult !== 'object') {
-    return null
-  }
-  const hostPlatform = (statusResult as { hostPlatform?: unknown }).hostPlatform
-  return typeof hostPlatform === 'string' && NODE_PLATFORMS.has(hostPlatform as NodeJS.Platform)
-    ? (hostPlatform as NodeJS.Platform)
-    : null
 }
 
 export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): string | null {

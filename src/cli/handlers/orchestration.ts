@@ -32,6 +32,7 @@ import {
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
+import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -99,9 +100,23 @@ type LifecycleSendResult =
   | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
   | { action: 'rejected'; code: string; reason: string }
 
+type SendRecipientWarning = {
+  code: string
+  recipient: string
+  message: string
+}
+
 type OrchestrationSendResult =
-  | { message: { id: string; run_id?: string }; lifecycle?: LifecycleSendResult }
-  | { messages: { id: string }[]; recipients: number }
+  | {
+      message: { id: string; run_id?: string }
+      lifecycle?: LifecycleSendResult
+      warnings?: SendRecipientWarning[]
+    }
+  | {
+      messages: { id: string }[]
+      recipients: number
+      warnings?: SendRecipientWarning[]
+    }
   | {
       relay: {
         messageId: string
@@ -111,6 +126,7 @@ type OrchestrationSendResult =
         accepted: true
       }
       lifecycle?: LifecycleSendResult
+      warnings?: SendRecipientWarning[]
     }
 
 function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
@@ -397,14 +413,13 @@ function callMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
   const requestId = getOptionalStringFlag(flags, 'retry-request')
-  if (!requestId) {
-    return options
+  const result = requestId
+    ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
+    : options
       ? client.call<TResult>(method, params, options)
       : client.call<TResult>(method, params)
-  }
-  return client.call<TResult>(method, params, {
-    ...options,
-    orchestrationRequestId: requestId
+  return result.catch((error) => {
+    throw orchestrationMutationRecoveryError(error)
   })
 }
 
@@ -598,16 +613,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
     printResult(result, json, (r) => {
+      const warnings = 'warnings' in r ? (r.warnings ?? []) : []
+      const withWarnings = (line: string): string =>
+        warnings.length > 0
+          ? [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n')
+          : line
       if ('message' in r) {
-        return `Sent ${r.message.id}`
+        return withWarnings(`Sent ${r.message.id}`)
       }
       if ('relay' in r) {
         if (r.relay.destination === 'worker') {
-          return `Queued ${r.relay.messageId} for worker Dispatch ${r.relay.dispatchId}`
+          return withWarnings(
+            `Queued ${r.relay.messageId} for worker Dispatch ${r.relay.dispatchId}`
+          )
         }
-        return `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
+        return withWarnings(
+          `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
+        )
       }
-      return `Sent ${r.messages.length} messages to ${r.recipients} recipients`
+      return withWarnings(`Sent ${r.messages.length} messages to ${r.recipients} recipients`)
     })
   },
 

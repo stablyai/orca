@@ -79,7 +79,7 @@ import {
 } from '../../shared/worktree/ownership'
 import {
   createWorktreeVisibilitySourceMatcher,
-  normalizeCustomWorktreeVisibilitySources
+  resolveCustomWorktreeVisibilitySources
 } from '../../shared/worktree/visibility-sources'
 import {
   assertWorktreeCleanForRemoval,
@@ -100,19 +100,17 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  createIssueCommandRunnerScript,
   getEffectiveHooks,
-  getEffectiveHooksFromConfig,
-  getSetupRunnerEnvVars,
   loadHooks,
   parseOrcaYaml,
-  readIssueCommand,
-  resolveSetupRunnerShell,
   runHook,
   hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
-  writeIssueCommand
+  hasUnrecognizedOrcaYamlKeys
 } from '../hooks'
+import { createIssueCommandRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
+import { getEffectiveHooksFromConfig } from '../effective-hook-config'
+import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   mergeWorktree,
   parseWorktreeId,
@@ -121,6 +119,8 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from './worktree-logic'
+import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../shared/worktree/retired-name-registry'
 import { dedupeWorktreesByPath } from './worktree-path-comparison'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
@@ -131,11 +131,11 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
+import { isENOENT } from './filesystem-path-containment'
 import {
   invalidateAuthorizedRootsCache,
-  isENOENT,
   registerWorktreeRootsForRepo
-} from './filesystem-auth'
+} from './registered-worktree-roots-cache'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
@@ -265,6 +265,7 @@ import {
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
+import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 
 const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
 const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
@@ -881,7 +882,7 @@ function buildDetectedGitWorktrees(
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -1033,7 +1034,7 @@ function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktre
   const worktrees = listFolderWorkspaces(store, repo)
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   return worktrees.map((worktree) =>
     toDetectedWorktree({
@@ -1118,7 +1119,7 @@ function buildDisconnectedDetectedWorktrees(
   const settings = store.getSettings()
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
-    normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
+    resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults)
   )
   const detected = worktrees.map((worktree) => {
     const meta = store.getWorktreeMeta(worktree.id)
@@ -1846,6 +1847,7 @@ export function registerWorktreeHandlers(
   // Remove previously registered handlers so re-register works when macOS re-activates and creates a new window.
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
+  ipcMain.removeHandler('worktrees:listRetiredNames')
   ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:listKnownForExecutionHost')
   ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
@@ -1931,6 +1933,14 @@ export function registerWorktreeHandlers(
     })
 
     return results.flat()
+  })
+
+  ipcMain.handle('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    if (!repo) {
+      return EMPTY_RETIRED_NAME_REGISTRY
+    }
+    return getRetiredNameRegistryForRepo(store, repo, store.getRepos(), store.getSettings())
   })
 
   ipcMain.handle('worktrees:list', async (_event, args: { repoId: string }) => {
@@ -2484,15 +2494,15 @@ export function registerWorktreeHandlers(
                 'Cannot delete the project root workspace. Remove the folder project instead.'
               )
             }
+            const ownerHost = parseExecutionHostId(removalHostId)
+            const sshPtyProvider =
+              ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
             // Why: folder workspaces share one root, so there's no Git remove step to close shells; sweep PTYs before dropping metadata.
             await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
               // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
               // like the git paths — the local inventory must never reach a remote workspace's id.
               // The resolved repo is authoritative here: path-derived metadata is shared by
               // same-id host copies and can describe a different owner's workspace.
-              const ownerHost = parseExecutionHostId(removalHostId)
-              const sshPtyProvider =
-                ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
               const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
               await killAllProcessesForWorktree(args.worktreeId, {
                 runtime,
@@ -2515,6 +2525,7 @@ export function registerWorktreeHandlers(
               })
             })
             await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
+              await deleteRemoteWorktreeHistory(sshPtyProvider, args.worktreeId)
               removeWorktreeMetadataAndTransientState(
                 store,
                 args.worktreeId,
@@ -2603,6 +2614,14 @@ export function registerWorktreeHandlers(
                 } finally {
                   await removalGate.finish(removalCompleted)
                 }
+                // Why history first: the worktree is already gone from git and
+                // disk by here, so a rejecting push-target cleanup must not be
+                // able to skip history removal and leave the user's commands on
+                // the remote host.
+                await deleteRemoteWorktreeHistory(
+                  getSshPtyProvider(repo.connectionId),
+                  args.worktreeId
+                )
                 await cleanupUnusedWorktreePushTargetRemoteSsh(
                   provider!,
                   repo.path,
@@ -2711,6 +2730,14 @@ export function registerWorktreeHandlers(
               }
               // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
               if (repo.connectionId) {
+                // Why history first: the worktree is already gone from git and
+                // disk by here, so a rejecting push-target cleanup must not be
+                // able to skip history removal and leave the user's commands on
+                // the remote host.
+                await deleteRemoteWorktreeHistory(
+                  getSshPtyProvider(repo.connectionId),
+                  args.worktreeId
+                )
                 await cleanupUnusedWorktreePushTargetRemoteSsh(
                   provider!,
                   repo.path,
@@ -2888,6 +2915,10 @@ export function registerWorktreeHandlers(
               args.worktreeId,
               removedPushTarget,
               store
+            )
+            await deleteRemoteWorktreeHistory(
+              getSshPtyProvider(remoteConnectionId),
+              args.worktreeId
             )
             rememberPreservedBranchCleanupTarget(
               args.worktreeId,

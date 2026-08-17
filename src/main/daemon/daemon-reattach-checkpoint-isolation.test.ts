@@ -8,7 +8,7 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import type { DaemonFileLog } from './daemon-file-log'
 import { HistoryReader } from './history-reader'
 import type { HistoryCheckpointResult } from './terminal-history-manager-options'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
 const REATTACH_BUDGET_MS = 2_000
@@ -154,19 +154,71 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
   it('falls back to the live window when the session own checkpoint blows the deadline', async () => {
     const stalledId = await spawnWithOutput('deadline-session', 'DEADLINE_OUTPUT\r\n')
     const stall = await stallCheckpointFor(stalledId)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const reattach = await withinBudget(
-      adapter.spawn({ cols: 80, rows: 24, sessionId: stalledId, cwd: '/tmp' }),
-      DEADLINE_BUDGET_MS
-    )
+    try {
+      const reattach = await withinBudget(
+        adapter.spawn({ cols: 80, rows: 24, sessionId: stalledId, cwd: '/tmp' }),
+        DEADLINE_BUDGET_MS
+      )
 
-    expect(stall.entered()).toBeGreaterThan(0)
-    expect(reattach).not.toBe('timed-out')
-    expect(reattach).toMatchObject({ isReattach: true })
-    // Degraded to the daemon's live window, not empty: the deadline costs restore depth, not history.
-    expect((reattach as { snapshot: string }).snapshot).toContain('DEADLINE_OUTPUT')
-    stall.release()
+      expect(stall.entered()).toBeGreaterThan(0)
+      expect(reattach).not.toBe('timed-out')
+      expect(reattach).toMatchObject({ isReattach: true })
+      // Degraded to the daemon's live window, not empty: the deadline costs restore depth, not history.
+      expect((reattach as { snapshot: string }).snapshot).toContain('DEADLINE_OUTPUT')
+      expect(warn).toHaveBeenCalledWith(
+        '[history] durable snapshot overlay deadline exceeded:',
+        stalledId
+      )
+    } finally {
+      stall.release()
+      warn.mockRestore()
+    }
   }, 30_000)
+
+  it('bounds overlay compacts across distinct sessions without blocking reattach', async () => {
+    const stalledIds = ['fanout-a', 'fanout-b', 'fanout-c', 'fanout-d']
+    for (const sessionId of stalledIds) {
+      await spawnWithOutput(sessionId, `${sessionId.toUpperCase()}\r\n`)
+    }
+    const overflowId = await spawnWithOutput('fanout-overflow', 'FANOUT_OVERFLOW\r\n')
+    const manager = adapter.getHistoryManager()!
+    const original = manager.checkpoint.bind(manager)
+    const entered = new Set<string>()
+    const checkpointed: string[] = []
+    let release = (): void => {}
+    const stalled = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.spyOn(manager, 'checkpoint').mockImplementation(async (sessionId, snapshot, opts) => {
+      checkpointed.push(sessionId)
+      if (stalledIds.includes(sessionId)) {
+        entered.add(sessionId)
+        await stalled
+      }
+      return await original(sessionId, snapshot, opts)
+    })
+
+    const reattaches = stalledIds.map((sessionId) =>
+      adapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
+    )
+    try {
+      await vi.waitFor(() => expect(entered.size).toBe(stalledIds.length))
+
+      const overflowReattach = await withinBudget(
+        adapter.spawn({ cols: 80, rows: 24, sessionId: overflowId, cwd: '/tmp' }),
+        REATTACH_BUDGET_MS
+      )
+      expect(overflowReattach).not.toBe('timed-out')
+      expect(overflowReattach).toMatchObject({ isReattach: true })
+      expect((overflowReattach as { snapshot: string }).snapshot).toContain('FANOUT_OVERFLOW')
+      expect(checkpointed).not.toContain(overflowId)
+    } finally {
+      release()
+      await Promise.allSettled(reattaches)
+    }
+  })
 
   it('still commits the abandoned checkpoint once the history write completes', async () => {
     const stalledId = await spawnWithOutput('resumed-session', 'RESUMED_OUTPUT\r\n')

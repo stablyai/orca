@@ -92,13 +92,9 @@ import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-acti
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getFileBlame, getLineBlame } from '../git/line-blame'
 import { getRemoteCommitUrl, getRemoteFileUrl, isGitRepo } from '../git/repo'
-import {
-  resolveAuthorizedPath,
-  resolveRegisteredWorktreePath,
-  validateGitRelativeFilePath,
-  isENOENT,
-  authorizeExternalPath
-} from './filesystem-auth'
+import { resolveAuthorizedPath, authorizeExternalPath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { validateGitRelativeFilePath, isENOENT } from './filesystem-path-containment'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'

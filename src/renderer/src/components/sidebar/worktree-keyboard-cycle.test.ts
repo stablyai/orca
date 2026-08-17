@@ -132,9 +132,7 @@ describe('getCyclableWorktreeIds', () => {
 describe('WorktreeList keyboard cycling', () => {
   it('cycles over the rendered rows instead of rebuilding a parallel layout', () => {
     const source = readFileSync(
-      fileURLToPath(
-        new URL('./worktree-list/use-worktree-list-keyboard-navigation.ts', import.meta.url)
-      ),
+      fileURLToPath(new URL('./worktree-list/navigation/use-keyboard.ts', import.meta.url)),
       'utf8'
     )
     const navigateWorktree = source.slice(

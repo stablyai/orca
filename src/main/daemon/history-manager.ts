@@ -248,7 +248,7 @@ export class HistoryManager {
 
     try {
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
-      // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
+      // The adapter's per-session checkpoint queue prevents concurrent writes from colliding on the fixed .tmp path.
       const checkpoint = await writer.checkpoint(snapshot, opts)
       if (checkpoint.result === 'retryable') {
         this.onWriteError?.(sessionId, checkpoint.error)

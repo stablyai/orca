@@ -10,6 +10,7 @@ import {
 
 function createPane(withAddon = true): ManagedPaneInternal {
   return {
+    xtermContainer: { dataset: {} },
     terminal: { blur: vi.fn() },
     webglAddon: withAddon
       ? ({ dispose: vi.fn() } as unknown as ManagedPaneInternal['webglAddon'])

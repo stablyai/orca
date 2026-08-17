@@ -7,6 +7,28 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
   return [
     {
       title: translate(
+        'auto.components.settings.repository.search.externalWorktrees',
+        'External worktrees'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.externalWorktreesDescription',
+        'Override whether worktrees created outside Orca appear for this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.external',
+          'external'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.visibility',
+          'visibility'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.sidebar', 'sidebar')
+      ]
+    },
+    {
+      title: translate(
         'auto.components.settings.repository.search.094adbe930',
         'Default Worktree Base'
       ),

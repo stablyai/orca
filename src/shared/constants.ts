@@ -171,6 +171,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
+    worktreeVisibilityDefaults: { external: 'hide' },
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -277,7 +278,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showAutomationsButton: true,
     artifactsEnabled: true,
     artifactSharingEnabled: false,
+    agentSkillSharingEnabled: false,
     showArtifactsButton: false,
+    showSkillsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
@@ -428,6 +431,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     projectGroups: [],
     folderWorkspaces: [],
     sparsePresetsByRepo: {},
+    retiredWorktreeNamesByRepo: {},
+    retiredWorktreeNamesByNamespace: {},
     worktreeMeta: {},
     worktreeLineageById: {},
     workspaceLineageByChildKey: {},

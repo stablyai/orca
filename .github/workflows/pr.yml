@@ -50,6 +50,27 @@ jobs:
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
+      - name: Check VM runtime rollback compatibility
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet --merge-base "$BASE_SHA" "$HEAD_SHA" -- \
+            src/shared/ephemeral-vm-runtime-store.ts \
+            src/shared/ephemeral-vm-runtime-feature-store.ts \
+            src/shared/ephemeral-vm-runtime-rollback-projection.ts \
+            src/shared/ephemeral-vm-runtimes.ts \
+            src/shared/ephemeral-vm-recipes.ts \
+            src/shared/orca-yaml-hook-types.ts \
+            src/main/ephemeral-vm-runtime-service.ts \
+            src/main/ephemeral-vm-runtime-provisioning-persistence.ts \
+            src/main/ephemeral-vm-failed-start-cleanup.ts; then
+            echo "VM runtime persistence is unchanged."
+            exit 0
+          fi
+          node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
+            config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
+
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
@@ -243,10 +264,16 @@ jobs:
             src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
-            src/main/providers/local-pty-shell-ready.test.ts \
+            src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
+            src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
+            src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/main/terminal-history-fish-session.node-pty.test.ts \
+            src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
@@ -279,10 +306,16 @@ jobs:
             --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
             --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
@@ -479,6 +512,9 @@ jobs:
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
           TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
+          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
+            TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
+          fi
           TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then

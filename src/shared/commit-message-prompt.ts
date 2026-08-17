@@ -149,7 +149,23 @@ export type TokenizeCustomCommandResult =
 // "spawn this exact CLI" — adding shell semantics on top would create
 // surprising behavior across platforms (especially Windows) and a security
 // surface we don't need.
-export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
+/**
+ * `'escape'` (default) is POSIX: a backslash quotes the next byte, so `foo\ bar`
+ * is one token. `'literal'` is for a command that will run on native Windows,
+ * where `\` is the path separator — eating it turns
+ * `C:\Windows\System32\powershell.exe` into `C:WindowsSystem32powershell.exe`,
+ * a path that then "cannot be found" (#11375).
+ *
+ * Opt-in rather than sniffed from `process.platform` here, because the same
+ * template can be parsed on one host and executed on another.
+ */
+export type CommandTemplateBackslash = 'escape' | 'literal'
+
+export function tokenizeCustomCommandTemplate(
+  template: string,
+  backslash: CommandTemplateBackslash = 'escape'
+): TokenizeCustomCommandResult {
+  const backslashEscapes = backslash === 'escape'
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
   let current = ''
@@ -162,7 +178,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   while (i < template.length) {
     const ch = template[i]
     if (quote) {
-      if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+      if (backslashEscapes && ch === '\\' && quote === '"' && i + 1 < template.length) {
         // Why: inside double quotes the shell only consumes the backslash
         // before these; elsewhere it stays a literal byte this tokenizer drops.
         divergesFromShell ||= !'$`"\\'.includes(template[i + 1])
@@ -197,7 +213,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
       continue
     }
 
-    if (ch === '\\' && i + 1 < template.length) {
+    if (backslashEscapes && ch === '\\' && i + 1 < template.length) {
       // Why: an unquoted line continuation joins words the shell splits, so a
       // selector can hide inside the joined token and skip the gap check.
       divergesFromShell ||= template[i + 1] === '\n'
@@ -227,7 +243,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
     }
     // Why: a trailing unpaired escape swallows whatever a consumer appends
     // after the base, so the base is not safe to build on.
-    divergesFromShell ||= ch === '\\' && i + 1 >= template.length
+    divergesFromShell ||= backslashEscapes && ch === '\\' && i + 1 >= template.length
     divergesFromShell ||=
       ';&|<>`'.includes(ch) ||
       (ch === '#' && !inToken) ||
@@ -260,8 +276,12 @@ export type CustomCommandPlan =
  * substituted prompt is always passed as a single argument regardless of
  * whether the template wrote `{prompt}` or `"{prompt}"`.
  */
-export function planCustomCommand(template: string, prompt: string): CustomCommandPlan {
-  const tokenized = tokenizeCustomCommandTemplate(template)
+export function planCustomCommand(
+  template: string,
+  prompt: string,
+  backslash: CommandTemplateBackslash = 'escape'
+): CustomCommandPlan {
+  const tokenized = tokenizeCustomCommandTemplate(template, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: tokenized.error }
   }

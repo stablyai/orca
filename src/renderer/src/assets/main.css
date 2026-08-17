@@ -103,6 +103,9 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-workspace-status-done: var(--workspace-status-done);
+  --color-workspace-status-review: var(--workspace-status-review);
+  --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
   --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
   --color-git-graph-ref: var(--git-graph-ref);
@@ -180,6 +183,11 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Workspace PR-state tones: same hue in both themes so a status keeps its
+     identity when the theme flips. */
+  --workspace-status-done: #c7a594;
+  --workspace-status-review: #16a34a;
+  --workspace-status-progress: #d4a300;
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -285,6 +293,9 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --workspace-status-done: #c7a594;
+  --workspace-status-review: #16a34a;
+  --workspace-status-progress: #d4a300;
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -1712,6 +1723,13 @@ html.native-shell .app-layout {
 
 .collapsible-height-content[data-state='closed'] {
   animation: collapsible-up 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-height-content[data-state='open'],
+  .collapsible-height-content[data-state='closed'] {
+    animation: none;
+  }
 }
 
 @keyframes collapsible-down {

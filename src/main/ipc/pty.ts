@@ -11,13 +11,18 @@ import {
   app,
   powerMonitor
 } from 'electron'
-export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
+export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -72,6 +77,7 @@ import {
 } from '../../shared/pi-agent-kind'
 import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { normalizeWindowsTerminalCwd } from '../providers/windows-shell-args'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -206,6 +212,7 @@ import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
 } from '../codex-accounts/managed-codex-auth-readiness'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,
@@ -257,6 +264,39 @@ function registeredPtyProviders(): RegisteredPtyProvider[] {
     { provider: localProvider, connectionId: null },
     ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
   ]
+}
+
+async function listRegisteredPtyProcessesWithHostScope(
+  onSshInventoryUnavailable?: (connectionId: string, error: unknown) => void
+): Promise<{
+  processes: PtyProcessInfo[]
+  hostIds: ExecutionHostId[]
+}> {
+  const providers = registeredPtyProviders()
+  const providerSessions = await Promise.all(
+    providers.map(async ({ provider, connectionId }) => {
+      try {
+        const hostId: ExecutionHostId = connectionId
+          ? toSshExecutionHostId(connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+        return {
+          processes: await provider.listProcesses(),
+          hostId
+        }
+      } catch (error) {
+        if (!connectionId) {
+          throw error
+        }
+        onSshInventoryUnavailable?.(connectionId, error)
+        return null
+      }
+    })
+  )
+  const respondingSessions = providerSessions.filter((session) => session !== null)
+  return {
+    processes: respondingSessions.flatMap((session) => session.processes),
+    hostIds: respondingSessions.map((session) => session.hostId)
+  }
 }
 
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
@@ -1305,6 +1345,26 @@ const MANAGED_CODEX_AUTH_UNAVAILABLE_MESSAGE =
   'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
 const CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE =
   'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
+const MANAGED_CODEX_HOME_UNAVAILABLE_MESSAGE =
+  'Codex account files are temporarily locked. Retry in a moment.'
+
+/**
+ * Why: launch prep refuses an unreadable managed home by throwing instead of
+ * returning `null`, because `null` already means "launch the system default".
+ * Turn that refusal into the same shape as the auth-unavailable refusal above —
+ * a user-facing spawn rejection — so the pane never starts on another account's
+ * credentials (#STA-4422).
+ */
+function resolveSelectedCodexHomeOrRefuseSpawn(resolve: () => string | null): string | null {
+  try {
+    return resolve()
+  } catch (error) {
+    if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
+      throw new Error(MANAGED_CODEX_HOME_UNAVAILABLE_MESSAGE, { cause: error })
+    }
+    throw error
+  }
+}
 
 type ManagedCodexAuthResolutionArgs = {
   selectedCodexHomePath: string | null
@@ -1864,7 +1924,9 @@ export function buildPtyHostEnv(
       hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
       isPackaged: opts.isPackaged,
       isWsl: opts.isWsl,
-      managedHomePath: opts.selectedCodexHomePath
+      managedHomePath: opts.selectedCodexHomePath,
+      userDataPath: opts.userDataPath,
+      resourcesPath: opts.resourcesPath
     })
     if (preflightCommand) {
       baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
@@ -3907,7 +3969,9 @@ export function registerPtyHandlers(
       return release
     },
     finalizeExit: (event) => {
-      runtime?.onPtyExit(event.id, event.code, event.ptyIncarnation)
+      runtime?.onPtyExit(event.id, event.code, event.ptyIncarnation, {
+        hostExitConfirmed: true
+      })
       finalizePtyExitForRenderer(event)
     },
     pauseProvider: (generation, id) => {
@@ -4442,6 +4506,15 @@ export function registerPtyHandlers(
     }
   }
 
+  const markSshInventoryUnverifiable = (connectionId: string, error: unknown): void => {
+    const reason = error instanceof Error ? error.message : String(error)
+    for (const [ptyId, ownerConnectionId] of ptyOwnership) {
+      if (ownerConnectionId === connectionId) {
+        runtime?.markPtyLivenessUnverifiable?.(ptyId, reason)
+      }
+    }
+  }
+
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
@@ -4634,7 +4707,7 @@ export function registerPtyHandlers(
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
-      let selectedCodexHomePath =
+      let selectedCodexHomePath = resolveSelectedCodexHomeOrRefuseSpawn(() =>
         !preAdoptedStablePane && !args.connectionId
           ? getCompatibleSelectedCodexHomePath(
               codexSelectionTarget,
@@ -4654,6 +4727,7 @@ export function registerPtyHandlers(
                   }) ?? null)
             )
           : null
+      )
       if (
         !preAdoptedStablePane &&
         args.launchAgent === 'codex' &&
@@ -4665,21 +4739,25 @@ export function registerPtyHandlers(
           requiredCodexHomePath: codexResumeHome?.codexHomePath,
           target: codexSelectionTarget,
           resolveCurrent: () =>
-            getCompatibleSelectedCodexHomePath(
-              codexSelectionTarget,
-              getSelectedCodexHomePath?.(codexSelectionTarget, env, {
-                workspacePath: cwd,
-                launchAgent: 'codex'
-              }) ?? null
+            resolveSelectedCodexHomeOrRefuseSpawn(() =>
+              getCompatibleSelectedCodexHomePath(
+                codexSelectionTarget,
+                getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                  workspacePath: cwd,
+                  launchAgent: 'codex'
+                }) ?? null
+              )
             ),
           resolveAfterUnavailable: (unavailableManagedHomePath) =>
-            getCompatibleSelectedCodexHomePath(
-              codexSelectionTarget,
-              getSelectedCodexHomePath?.(codexSelectionTarget, env, {
-                workspacePath: cwd,
-                launchAgent: 'codex',
-                unavailableManagedHomePath
-              }) ?? null
+            resolveSelectedCodexHomeOrRefuseSpawn(() =>
+              getCompatibleSelectedCodexHomePath(
+                codexSelectionTarget,
+                getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                  workspacePath: cwd,
+                  launchAgent: 'codex',
+                  unavailableManagedHomePath
+                }) ?? null
+              )
             )
         })
         selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
@@ -4739,7 +4817,8 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env,
-        ...(isNewDaemonSession ? { isNewSession: true } : {})
+        ...(isNewDaemonSession ? { isNewSession: true } : {}),
+        historyIsolationEnabled: getSettings?.()?.terminalScopeHistoryByWorktree ?? true
       }
       if (!args.connectionId && !isDaemonHostSpawn) {
         spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
@@ -5428,8 +5507,17 @@ export function registerPtyHandlers(
     },
     write: (ptyId, data) => {
       try {
-        getProviderForPty(ptyId).write(ptyId, data)
-        return true
+        return getProviderForPty(ptyId).write(ptyId, data) !== false
+      } catch {
+        return false
+      }
+    },
+    writeWithSettlement: async (ptyId, data) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        return provider.writeWithSettlement
+          ? await provider.writeWithSettlement(ptyId, data)
+          : provider.write(ptyId, data) !== false
       } catch {
         return false
       }
@@ -5506,12 +5594,15 @@ export function registerPtyHandlers(
           if (connectionId) {
             // Why: runtime/CLI close can target a detached SSH PTY after its
             // provider was unregistered. Tombstone the lease so reconnect does
-            // not revive a terminal the user explicitly closed.
+            // not revive a terminal the user explicitly closed — but a detached
+            // relay PTY outlives its provider, so report an unconfirmed stop
+            // rather than a kill nobody performed.
             const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
             runtime?.onPtyExit(ptyId, -1, incarnationId)
             rememberSyntheticKillExit(ptyId)
             sendPtyExitToRenderer({ id: ptyId, code: -1 })
-            return true
+            runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
+            return false
           }
           return false
         }
@@ -5543,6 +5634,12 @@ export function registerPtyHandlers(
             // Why: close runtime tails without clearing provider ownership, so
             // a retry can still target a PTY that survived the failed shutdown.
             if (!retired) {
+              if (connectionId) {
+                runtime?.markPtyLivenessUnverifiable?.(
+                  ptyId,
+                  err instanceof Error ? err.message : String(err)
+                )
+              }
               runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
             }
           })
@@ -5556,6 +5653,12 @@ export function registerPtyHandlers(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
           if (!retiredRejectedPtyIds.has(ptyId)) {
+            if (connectionId) {
+              runtime?.markPtyLivenessUnverifiable?.(
+                ptyId,
+                err instanceof Error ? err.message : String(err)
+              )
+            }
             runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
           }
         })
@@ -5563,11 +5666,23 @@ export function registerPtyHandlers(
       }
       return killWithCurrentProvider()
     },
-    retireRejectedPty: (ptyId) => {
+    retireRejectedPty: (ptyId, stopConfirmed) => {
       rememberRetiredRejectedPty(ptyId)
+      if (!stopConfirmed) {
+        runtime?.markPtyLivenessUnverifiable?.(
+          ptyId,
+          'a follow-up stop was issued but its outcome could not be verified'
+        )
+        if (!ptyOwnership.has(ptyId)) {
+          return
+        }
+        runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+        rememberSyntheticKillExit(ptyId)
+        sendPtyExitToRenderer({ id: ptyId, code: -1 })
+        return
+      }
       // Why: a completed stop already cleared provider state, tombstoned the lease and told the
-      // renderer; repeating that double-fires the exit IPC. The runtime still needs code 0 so an
-      // SSH pane retires for good instead of staying preserved by the stop's negative exit.
+      // renderer; repeating that double-fires the exit IPC.
       if (!ptyOwnership.has(ptyId)) {
         runtime?.onPtyExit(ptyId, 0, ptyIncarnationById.get(ptyId))
         return
@@ -5636,13 +5751,14 @@ export function registerPtyHandlers(
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
-          // Why: an absent SSH provider means there is no live target left to
-          // await, but the relay lease must still be tombstoned.
+          // Why: the relay lease must still be tombstoned, but an absent SSH
+          // provider is lost contact — the remote PTY is designed to survive it,
+          // so nothing here observed an exit to report as a confirmed stop.
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1, incarnationId)
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({ id: ptyId, code: -1 })
-          return true
+          runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
         }
         return false
       }
@@ -5655,6 +5771,12 @@ export function registerPtyHandlers(
         })
       } catch (err) {
         if (!isPtyAlreadyGoneError(err)) {
+          if (connectionId) {
+            runtime?.markPtyLivenessUnverifiable?.(
+              ptyId,
+              err instanceof Error ? err.message : String(err)
+            )
+          }
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
@@ -5663,9 +5785,16 @@ export function registerPtyHandlers(
       }
       try {
         if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+          runtime?.markPtyLivenessLive?.(ptyId)
           return false
         }
       } catch (err) {
+        if (connectionId) {
+          runtime?.markPtyLivenessUnverifiable?.(
+            ptyId,
+            err instanceof Error ? err.message : String(err)
+          )
+        }
         console.warn(
           `[pty] Failed to verify PTY ${ptyId} stopped: ${
             err instanceof Error ? err.message : String(err)
@@ -5675,9 +5804,11 @@ export function registerPtyHandlers(
       }
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
       if (!providerExitObserved) {
-        runtime?.onPtyExit(ptyId, -1, incarnationId)
+        // The owning provider's fresh inventory observed absence, so this is a
+        // death certificate even when its exit event was missed.
+        runtime?.onPtyExit(ptyId, 0, incarnationId)
         rememberSyntheticKillExit(ptyId)
-        sendPtyExitToRenderer({ id: ptyId, code: -1 })
+        sendPtyExitToRenderer({ id: ptyId, code: 0 })
       }
       return true
     },
@@ -5734,14 +5865,17 @@ export function registerPtyHandlers(
         return localProvider.listProcesses()
       }
       if (connectionId !== undefined) {
-        return getProvider(connectionId).listProcesses()
+        try {
+          return await getProvider(connectionId).listProcesses()
+        } catch (error) {
+          markSshInventoryUnverifiable(connectionId, error)
+          throw error
+        }
       }
-      const providerSessions = await Promise.all([
-        localProvider.listProcesses(),
-        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
-      ])
-      return providerSessions.flat()
+      return (await listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable)).processes
     },
+    listProcessesWithHostScope: () =>
+      listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable),
     serializeBuffer: (ptyId, opts) => {
       // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
       return requestSerializedBuffer(ptyId, opts)
@@ -6309,7 +6443,7 @@ export function registerPtyHandlers(
         // Why: declared after the strip so a local-provider spawn cannot capture the
         // pre-strip env — only the daemon branch below re-derives this from baseEnv.
         let env: Record<string, string> | undefined = baseEnv
-        let selectedCodexHomePath =
+        let selectedCodexHomePath = resolveSelectedCodexHomeOrRefuseSpawn(() =>
           !preAdoptedStablePane && !args.connectionId
             ? getCompatibleSelectedCodexHomePath(
                 codexSelectionTarget,
@@ -6329,6 +6463,7 @@ export function registerPtyHandlers(
                     }) ?? null)
               )
             : null
+        )
         if (!preAdoptedStablePane && args.launchAgent === 'codex' && args.sessionId === undefined) {
           const resolution = resolveCodexHomeAfterManagedAuthReadiness({
             selectedCodexHomePath,
@@ -6336,21 +6471,25 @@ export function registerPtyHandlers(
             requiredCodexHomePath: codexResumeHome?.codexHomePath,
             target: codexSelectionTarget,
             resolveCurrent: () =>
-              getCompatibleSelectedCodexHomePath(
-                codexSelectionTarget,
-                getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-                  workspacePath: cwd,
-                  launchAgent: 'codex'
-                }) ?? null
+              resolveSelectedCodexHomeOrRefuseSpawn(() =>
+                getCompatibleSelectedCodexHomePath(
+                  codexSelectionTarget,
+                  getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                    workspacePath: cwd,
+                    launchAgent: 'codex'
+                  }) ?? null
+                )
               ),
             resolveAfterUnavailable: (unavailableManagedHomePath) =>
-              getCompatibleSelectedCodexHomePath(
-                codexSelectionTarget,
-                getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-                  workspacePath: cwd,
-                  launchAgent: 'codex',
-                  unavailableManagedHomePath
-                }) ?? null
+              resolveSelectedCodexHomeOrRefuseSpawn(() =>
+                getCompatibleSelectedCodexHomePath(
+                  codexSelectionTarget,
+                  getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                    workspacePath: cwd,
+                    launchAgent: 'codex',
+                    unavailableManagedHomePath
+                  }) ?? null
+                )
               )
           })
           selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
@@ -6450,7 +6589,8 @@ export function registerPtyHandlers(
           cwd,
           ...(prevalidatedCwd && !isDaemonHostSpawn ? { prevalidatedCwd } : {}),
           env: spawnEnv,
-          ...(isMintedSessionId ? { isNewSession: true } : {})
+          ...(isMintedSessionId ? { isNewSession: true } : {}),
+          historyIsolationEnabled: getSettings?.()?.terminalScopeHistoryByWorktree ?? true
         }
         if (!args.connectionId && !isDaemonHostSpawn) {
           spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
@@ -7573,6 +7713,7 @@ export function registerPtyHandlers(
       // provider is unregistered; hydrated app-scoped ids can also arrive
       // before ownership is rebuilt. Tombstone instead of falling back local.
       const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
       runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
