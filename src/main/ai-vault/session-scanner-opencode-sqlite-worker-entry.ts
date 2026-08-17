@@ -2,6 +2,11 @@ import { parentPort } from 'node:worker_threads'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import {
+  readOpenCodeTranscriptPage,
+  readOpenCodeTranscriptPageAfter,
+  readOpenCodeTranscriptSignal
+} from '../native-chat/transcript-opencode-sqlite-query'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -29,6 +34,33 @@ async function handleRequest(
         issues
       })
       return { id: request.id, ok: true, value: { candidates, issues } }
+    }
+    if (request.kind === 'native-chat-page') {
+      const page = readOpenCodeTranscriptPage({
+        dbPath: request.dbPath,
+        sessionId: request.sessionId,
+        limit: request.limit,
+        ...(request.beforeMessageRowId !== undefined
+          ? { beforeMessageRowId: request.beforeMessageRowId }
+          : {})
+      })
+      return { id: request.id, ok: true, value: page }
+    }
+    if (request.kind === 'native-chat-signal') {
+      const signal = readOpenCodeTranscriptSignal(request.dbPath, request.sessionId)
+      return { id: request.id, ok: true, value: signal }
+    }
+    if (request.kind === 'native-chat-page-after') {
+      const page = readOpenCodeTranscriptPageAfter({
+        dbPath: request.dbPath,
+        sessionId: request.sessionId,
+        afterMessageRowId: request.afterMessageRowId,
+        limit: request.limit,
+        ...(request.upToMessageRowId !== undefined
+          ? { upToMessageRowId: request.upToMessageRowId }
+          : {})
+      })
+      return { id: request.id, ok: true, value: page }
     }
     const session = await parseOpenCodeSqliteSession({
       dbPath: request.dbPath,

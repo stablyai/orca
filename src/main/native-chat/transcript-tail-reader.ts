@@ -6,6 +6,7 @@ import type {
 } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
@@ -258,6 +259,16 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
+  // Why: OpenCode's transcript is a SQLite DB, not a JSONL file — route to the
+  // SQLite-backed reader before the JSONL line-decoder lookup (which has no
+  // opencode entry and would report the transcript unavailable).
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptTail({
+      sessionId: args.sessionId,
+      limit: args.limit,
+      ...(args.beforeOffset !== undefined ? { beforeOffset: args.beforeOffset } : {})
+    })
+  }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {

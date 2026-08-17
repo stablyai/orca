@@ -17,6 +17,12 @@ vi.mock('./transcript-reader', async (importOriginal) => {
   }
 })
 
+// The opencode route must bypass the file resolver entirely (its transcript is a
+// SQLite DB), so stub the SQLite reader and assert the cached call returns it.
+vi.mock('./transcript-opencode', () => ({
+  readOpenCodeNativeChatTranscriptFull: vi.fn(async () => ({ error: 'opencode-routed' }))
+}))
+
 import { isTextBlock } from '../../shared/native-chat-types'
 import {
   clearNativeChatTranscriptCache,
@@ -76,6 +82,16 @@ afterEach(async () => {
 })
 
 describe('readNativeChatTranscriptCached', () => {
+  it('routes opencode to the SQLite reader instead of the file resolver', async () => {
+    // Why: resolving a file path for opencode always misses (no JSONL exists), so
+    // the cached read previously returned a false "No transcript found" before
+    // the agent-aware reader was ever consulted.
+    await expect(readNativeChatTranscriptCached('opencode', 'ses-oc')).resolves.toEqual({
+      error: 'opencode-routed'
+    })
+    expect(readSpy).not.toHaveBeenCalled()
+  })
+
   it('returns the same cached object on an mtime hit without re-reading', async () => {
     await seedSession('sess-hit', 3)
     const first = await readNativeChatTranscriptCached('claude', 'sess-hit')

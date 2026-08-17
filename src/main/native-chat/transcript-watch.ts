@@ -1,10 +1,12 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import {
   needsWslHostTranslation,
   toHostReadableTranscriptPath
 } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode'
 import { installTranscriptWatcher } from './transcript-watch-engine'
 import type {
   NativeChatTranscriptSubscription,
@@ -208,15 +210,20 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  // Why: a blank session id (and no explicit file) can never resolve — bail out
+  // instead of resolve-polling an unresolvable target forever.
+  if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+  // Why: OpenCode's transcript is a SQLite DB, not a JSONL file — its own
+  // signal-poll subscription replaces the line-decoder watch below.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return subscribeOpenCodeNativeChatTranscript(args, setupSignal)
+  }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.
-    return { unsubscribe: () => {}, watching: false }
-  }
-  // Why: a blank session id (and no explicit file) can never resolve — bail out
-  // instead of resolve-polling an unresolvable target forever.
-  if (!args.filePath && !args.sessionId.trim()) {
     return { unsubscribe: () => {}, watching: false }
   }
 

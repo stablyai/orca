@@ -1,5 +1,7 @@
 import type { AgentType } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath } from './session-file-resolver'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 import { wslGatedStat } from './wsl-transcript-fs-access'
 import {
@@ -100,6 +102,14 @@ export async function readNativeChatTranscriptCached(
   /** Hook-reported authoritative transcript path, preferred over the id glob. */
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
+  // Why: OpenCode's transcript is a SQLite DB, not a file — there is no path to
+  // resolve or mtime to invalidate against. The SQLite reader owns discovery,
+  // rides the shared worker, and pages by indexed rowid, so the file-parse cache
+  // would add nothing; routing through the resolver would only report a false
+  // "No transcript found" miss.
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(sessionId)
+  }
   let filePath: string | null
   try {
     filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })

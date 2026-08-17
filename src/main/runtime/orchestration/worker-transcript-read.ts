@@ -11,6 +11,10 @@ import {
 } from '../../native-chat/transcript-tail-reader'
 import { transcriptFallbackId } from '../../native-chat/transcript-fallback-id'
 import {
+  readOpenCodeWorkerTranscript,
+  type OpenCodeWorkerTranscriptDeps
+} from './worker-transcript-read-opencode'
+import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
@@ -34,17 +38,32 @@ type WorkerTranscriptReadSuccess = {
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
 
-export async function readWorkerTranscript(args: {
-  agent: AgentType
-  sessionId: string
-  transcriptPath?: string
-  offset?: number
-  endOffset?: number
-  limit?: number
-}): Promise<WorkerTranscriptReadResult> {
+/** Per-agent reader injection for tests. Namespaced so the agent-generic
+ *  signature never grows an agent-specific param — a future storage-format
+ *  agent adds its own key here, not a new positional leak. */
+export type WorkerTranscriptReadDeps = {
+  opencode?: OpenCodeWorkerTranscriptDeps
+}
+
+export async function readWorkerTranscript(
+  args: {
+    agent: AgentType
+    sessionId: string
+    transcriptPath?: string
+    offset?: number
+    endOffset?: number
+    limit?: number
+  },
+  deps?: WorkerTranscriptReadDeps
+): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
+  }
+  // Why: OpenCode's transcript is a SQLite DB, not a JSONL file — its own
+  // rowid-cursored reader owns the whole path (see worker-transcript-read-opencode).
+  if (transcriptAgent === 'opencode') {
+    return readOpenCodeWorkerTranscript(args, deps?.opencode)
   }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {

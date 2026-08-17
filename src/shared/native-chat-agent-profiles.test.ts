@@ -24,6 +24,14 @@ describe('native chat agent picker profiles', () => {
     })
   })
 
+  it('groups OpenCode skills under slash with opencode ownership', () => {
+    expect(getNativeChatAgentProfile('opencode')).toMatchObject({
+      skillPrefix: '/',
+      groupedSlash: true,
+      skillSourceOwner: 'opencode'
+    })
+  })
+
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })

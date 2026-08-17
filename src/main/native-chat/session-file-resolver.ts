@@ -158,6 +158,12 @@ async function resolveSessionFileById(
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
   }
+  if (transcriptAgent === 'opencode') {
+    // Why: OpenCode's transcript lives in a SQLite DB, not a JSONL file, so
+    // there is no per-session file to resolve here — transcript-opencode.ts
+    // owns its DB resolution and reads.
+    return null
+  }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.

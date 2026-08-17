@@ -26,6 +26,15 @@ describe('getAgentSlashCommands', () => {
     const names = getAgentSlashCommands('some-other-agent').map((c) => c.name)
     expect(names).toEqual(['clear', 'help'])
   })
+
+  it('returns OpenCode commands (e.g. /init, /sessions, /undo) for opencode', () => {
+    const names = getAgentSlashCommands('opencode').map((c) => c.name)
+    expect(names).toContain('init')
+    expect(names).toContain('sessions')
+    expect(names).toContain('undo')
+    expect(names).toContain('compact')
+    expect(names).not.toContain('model')
+  })
 })
 
 describe('isSlashCommandDraft', () => {

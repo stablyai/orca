@@ -1,8 +1,15 @@
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readWorkerTranscript } from './worker-transcript-read'
+import { readWorkerTranscript, type WorkerTranscriptReadDeps } from './worker-transcript-read'
+import Database from '../../sqlite/sync-database'
+import {
+  readOpenCodeTranscriptPage,
+  readOpenCodeTranscriptPageAfter,
+  readOpenCodeTranscriptSignal
+} from '../../native-chat/transcript-opencode-sqlite-query'
 
 function codexMessage(id: string, text: string): string {
   return JSON.stringify({
@@ -227,5 +234,275 @@ describe('worker transcript reads', () => {
       messages: [{ id: 'after', blocks: [{ type: 'text', text: 'after oversized' }] }],
       limited: false
     })
+  })
+})
+
+describe('worker transcript reads (opencode SQLite)', () => {
+  let tempDirs: string[] = []
+  let openDbs: Database.Database[] = []
+
+  afterEach(() => {
+    // Why: Windows keeps the file locked while the handle is open (EPERM on rm).
+    for (const db of openDbs) {
+      db.close()
+    }
+    openDbs = []
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    tempDirs = []
+  })
+
+  function createDb(): { db: Database.Database; path: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-worker-opencode-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'opencode.db')
+    const db = new Database(path)
+    openDbs.push(db)
+    db.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY);
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        time_updated INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        time_updated INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      INSERT INTO session (id) VALUES ('ses-1');
+    `)
+    return { db, path }
+  }
+
+  function insertMessage(db: Database.Database, id: string, time: number): void {
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)'
+    ).run(
+      id,
+      'ses-1',
+      time,
+      time,
+      JSON.stringify({ role: id.startsWith('user') ? 'user' : 'assistant' })
+    )
+  }
+
+  function insertTextPart(
+    db: Database.Database,
+    id: string,
+    messageId: string,
+    text: string
+  ): void {
+    db.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_updated, data) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, messageId, 'ses-1', 1_000, JSON.stringify({ type: 'text', text }))
+  }
+
+  function insertStepStart(db: Database.Database, id: string, messageId: string): void {
+    db.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_updated, data) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, messageId, 'ses-1', 1_000, JSON.stringify({ type: 'step-start' }))
+  }
+
+  function rawRowid(db: Database.Database, id: string): number {
+    return (db.prepare('SELECT rowid AS r FROM message WHERE id = ?').get(id) as { r: number }).r
+  }
+
+  function opencodeDeps(path: string): WorkerTranscriptReadDeps {
+    return {
+      opencode: {
+        resolveDbPath: async () => path,
+        readSignal: (dbPath, sessionId) =>
+          Promise.resolve(readOpenCodeTranscriptSignal(dbPath, sessionId)),
+        readPage: (args) => Promise.resolve(readOpenCodeTranscriptPage(args)),
+        readPageAfter: (args) => Promise.resolve(readOpenCodeTranscriptPageAfter(args))
+      }
+    }
+  }
+
+  it('returns the newest window with a cursor covering non-renderable rows', async () => {
+    const { db, path } = createDb()
+    for (const id of ['user-1', 'assistant-2', 'user-3']) {
+      insertMessage(db, id, 1_000)
+      insertTextPart(db, `prt-${id}`, id, `text ${id}`)
+    }
+    // Newest row never renders (step-start only) — the cursor must still cover it.
+    insertMessage(db, 'assistant-4', 2_000)
+    insertStepStart(db, 'prt-assistant-4', 'assistant-4')
+
+    const initial = await readWorkerTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        limit: 2
+      },
+      opencodeDeps(path)
+    )
+    expect(initial).toMatchObject({
+      ok: true,
+      filePath: path,
+      // limit counts renderable messages, so the non-renderable newest row
+      // (assistant-4) is walked past, not charged against the budget.
+      messages: [{ id: 'assistant-2' }, { id: 'user-3' }],
+      // The raw max rowid, not the last renderable item's.
+      nextOffset: rawRowid(db, 'assistant-4')
+    })
+  })
+
+  it('continues from the cursor with only rows appended after it', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'user-1', 1_000)
+    insertTextPart(db, 'prt-1', 'user-1', 'first')
+
+    const initial = await readWorkerTranscript(
+      { agent: 'opencode', sessionId: 'ses-1' },
+      opencodeDeps(path)
+    )
+    if (!initial.ok) {
+      throw new Error('Expected the initial opencode page')
+    }
+    expect(initial.messages.map((message) => message.id)).toEqual(['user-1'])
+
+    insertMessage(db, 'assistant-2', 2_000)
+    insertTextPart(db, 'prt-2', 'assistant-2', 'second')
+
+    const appended = await readWorkerTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        offset: initial.nextOffset
+      },
+      opencodeDeps(path)
+    )
+    expect(appended).toMatchObject({
+      ok: true,
+      messages: [{ id: 'assistant-2', blocks: [{ type: 'text', text: 'second' }] }],
+      limited: false
+    })
+
+    // At rest the cursor holds and the continuation is a no-op, like the JSONL path.
+    if (!appended.ok) {
+      throw new Error('Expected the appended opencode page')
+    }
+    const settled = await readWorkerTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        offset: appended.nextOffset
+      },
+      opencodeDeps(path)
+    )
+    expect(settled).toMatchObject({ ok: true, messages: [] })
+  })
+
+  it('freezes an archived boundary so neither read leaks newer rows', async () => {
+    const { db, path } = createDb()
+    for (const id of ['user-1', 'user-2', 'user-3']) {
+      insertMessage(db, id, 1_000)
+      insertTextPart(db, `prt-${id}`, id, `text ${id}`)
+    }
+    const endOffset = rawRowid(db, 'user-2')
+
+    const initial = await readWorkerTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        endOffset
+      },
+      opencodeDeps(path)
+    )
+    expect(initial).toMatchObject({
+      ok: true,
+      messages: [{ id: 'user-1' }, { id: 'user-2' }],
+      nextOffset: endOffset
+    })
+
+    insertMessage(db, 'user-after-pin', 2_000)
+    insertTextPart(db, 'prt-after-pin', 'user-after-pin', 'must not leak')
+
+    const forward = await readWorkerTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        offset: endOffset,
+        endOffset
+      },
+      opencodeDeps(path)
+    )
+    expect(forward).toMatchObject({ ok: true, messages: [] })
+  })
+
+  it('reports source_changed when the DB max rowid falls below the frozen boundary', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'user-1', 1_000)
+    insertTextPart(db, 'prt-1', 'user-1', 'first')
+    // A rebuilt DB resets rowids; a boundary above the current max can never be
+    // reached again — the pinned source changed.
+    const staleEndOffset = rawRowid(db, 'user-1') + 100
+
+    await expect(
+      readWorkerTranscript(
+        {
+          agent: 'opencode',
+          sessionId: 'ses-1',
+          endOffset: staleEndOffset
+        },
+        opencodeDeps(path)
+      )
+    ).resolves.toEqual({ ok: false, reason: 'source_changed', warnings: [] })
+  })
+
+  it('reports source_changed when an unpinned continuation cursor exceeds the max rowid', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'user-1', 1_000)
+    insertTextPart(db, 'prt-1', 'user-1', 'first')
+    // A rebuilt DB resets rowids; a cursor above the current max can never be
+    // reached again — the source changed, mirroring a shrunken JSONL file.
+    const staleOffset = rawRowid(db, 'user-1') + 100
+
+    await expect(
+      readWorkerTranscript(
+        {
+          agent: 'opencode',
+          sessionId: 'ses-1',
+          offset: staleOffset
+        },
+        opencodeDeps(path)
+      )
+    ).resolves.toEqual({ ok: false, reason: 'source_changed', warnings: [] })
+  })
+
+  it('reports transcript_missing for an absent session or DB', async () => {
+    const { path } = createDb()
+    await expect(
+      readWorkerTranscript({ agent: 'opencode', sessionId: 'missing-session' }, opencodeDeps(path))
+    ).resolves.toEqual({ ok: false, reason: 'transcript_missing', warnings: [] })
+
+    await expect(
+      readWorkerTranscript(
+        { agent: 'opencode', sessionId: 'ses-1' },
+        { opencode: { ...opencodeDeps(path).opencode!, resolveDbPath: async () => null } }
+      )
+    ).resolves.toEqual({ ok: false, reason: 'transcript_missing', warnings: [] })
+  })
+
+  it('maps a worker failure to transcript_unreadable without a parse verdict', async () => {
+    const { path } = createDb()
+    await expect(
+      readWorkerTranscript(
+        { agent: 'opencode', sessionId: 'ses-1' },
+        {
+          opencode: {
+            ...opencodeDeps(path).opencode!,
+            readSignal: () => Promise.reject(new Error('worker crashed'))
+          }
+        }
+      )
+    ).resolves.toEqual({ ok: false, reason: 'transcript_unreadable', warnings: [] })
   })
 })
