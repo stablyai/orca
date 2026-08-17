@@ -74,4 +74,48 @@ describeRealHerdr('stock Herdr runtime integration', () => {
       snapshot.panes.find((pane) => pane.pane_id === created.root_pane.pane_id)?.tokens
     ).toMatchObject({ orca_binding: 'pane-binding' })
   }, 30_000)
+
+  it('echoes input through pane.send_text and pane.read', async () => {
+    await transport.ensureSession(sessionName)
+    const created = unwrapHerdrResponse<{
+      root_pane: { pane_id: string }
+    }>(
+      await transport.request(sessionName, 'workspace.create', {
+        cwd: configHome,
+        label: 'Orca io',
+        focus: false
+      })
+    )
+    const marker = `STOCK_IO_${process.pid}`
+    unwrapHerdrResponse(
+      await transport.request(sessionName, 'pane.send_text', {
+        pane_id: created.root_pane.pane_id,
+        text: `echo ${marker}`
+      })
+    )
+    unwrapHerdrResponse(
+      await transport.request(sessionName, 'pane.send_keys', {
+        pane_id: created.root_pane.pane_id,
+        keys: ['Enter']
+      })
+    )
+
+    const deadline = Date.now() + 10_000
+    let text = ''
+    while (Date.now() < deadline) {
+      const read = unwrapHerdrResponse<{ read: { text: string } }>(
+        await transport.request(sessionName, 'pane.read', {
+          pane_id: created.root_pane.pane_id,
+          source: 'recent',
+          lines: 80
+        })
+      )
+      text = read.read.text
+      if (text.includes(marker)) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    expect(text).toContain(marker)
+  }, 30_000)
 })

@@ -41,6 +41,28 @@ function graphWithSessionName(herdrSessionName: string) {
   }
 }
 
+function singleLeafGraph() {
+  return {
+    project: project(),
+    worktrees: [
+      {
+        id: 'worktree-1',
+        instanceId: 'instance-1',
+        path: '/repo',
+        displayName: 'repo'
+      }
+    ],
+    tabsByWorktreeId: { 'worktree-1': [tab()] },
+    layoutsByTabId: {
+      'tab-1': {
+        root: { type: 'leaf' as const, leafId: 'leaf-1' },
+        activeLeafId: 'leaf-1',
+        expandedLeafId: null
+      }
+    }
+  }
+}
+
 function graph(repoPath?: string) {
   return {
     project: project(),
@@ -492,6 +514,39 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
       manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')
     ).not.toBeNull()
   })
+
+  it('imports an unbound sibling pane through surface sync persist and present', async () => {
+    const host = stockTransport()
+    const persist = vi.fn()
+    const present = vi.fn()
+    const manager = new HerdrRuntimeManager(host.transport, undefined, undefined, {
+      persist,
+      present
+    })
+    await manager.reconcileProjectHost(singleLeafGraph())
+    expect(persist).not.toHaveBeenCalled()
+    expect(present).not.toHaveBeenCalled()
+
+    const workspace = host.snapshot.workspaces[0]
+    const tab = host.snapshot.tabs[0]
+    expect(workspace).toBeTruthy()
+    expect(tab).toBeTruthy()
+    host.snapshot.panes.push({
+      pane_id: 'w1:p-imported',
+      tab_id: tab.tab_id,
+      workspace_id: workspace.workspace_id
+    })
+
+    await manager.reconcileProjectHost(singleLeafGraph())
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(present).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0]).toMatchObject({
+      paneId: 'w1:p-imported',
+      tabId: 'tab-1',
+      splitFromLeafId: 'leaf-1'
+    })
+    expect(present.mock.calls[0][0]).toEqual(persist.mock.calls[0][0])
+  })
 })
 
 describe('HerdrRuntimeManager event-driven reconcile', () => {
@@ -558,5 +613,32 @@ describe('HerdrRuntimeManager event-driven reconcile', () => {
     manager.dispose()
     expect(host.isSubscribed()).toBe(false)
     expect(host.disconnectSpy).toHaveBeenCalled()
+  })
+
+  it('renames the Orca tab when a later snapshot changes the Herdr tab label', async () => {
+    const host = eventfulTransport()
+    const presentAction = vi.fn()
+    const manager = new HerdrRuntimeManager(host.transport, undefined, undefined, {
+      persist: vi.fn(),
+      presentAction
+    })
+    await manager.reconcileProjectHost(graph())
+    expect(host.snapshot.tabs[0]).toBeTruthy()
+    const renamed = structuredClone(host.snapshot)
+    renamed.tabs[0] = { ...renamed.tabs[0], label: 'renamed-from-tui' }
+    const baseRequest = host.requestMock.getMockImplementation()!
+    host.requestMock.mockImplementation(async (session, method, params) => {
+      if (method === 'session.snapshot') {
+        return { id: 'snapshot', result: { snapshot: structuredClone(renamed) } }
+      }
+      return baseRequest(session, method, params)
+    })
+    host.emit('tab.renamed')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(presentAction).toHaveBeenCalledWith({
+      kind: 'rename',
+      tabId: 'tab-1',
+      title: 'renamed-from-tui'
+    })
   })
 })
