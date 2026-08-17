@@ -17,6 +17,7 @@ import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { ensureDevSafeStorageKeychainItem } from './dev-safe-storage-keychain.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -533,6 +534,16 @@ if (!userPassedPort && !isHelpOrVersion) {
   } else {
     console.error(
       '[orca-dev] No free debug port found in sweep; starting without --remote-debugging-port.'
+    )
+  }
+}
+if (!isHelpOrVersion) {
+  const keychain = ensureDevSafeStorageKeychainItem()
+  if (keychain.outcome === 'created') {
+    console.error(`[orca-dev] Provisioned Keychain key "${keychain.service}" (open ACL).`)
+  } else if (keychain.outcome === 'failed') {
+    console.warn(
+      `[orca-dev] Could not provision Keychain key "${keychain.service}" (macOS may prompt for a password on launch): ${keychain.error}`
     )
   }
 }
