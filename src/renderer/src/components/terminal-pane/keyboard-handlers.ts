@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: terminal keyboard routing keeps shortcut
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -56,6 +56,8 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import { isHTMLElement, isInputEvent } from '../../lib/cross-realm-dom-predicates'
+import { addEventListenerOnAllWindows } from '@/lib/aux-pane-window-registry'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -105,7 +107,7 @@ export function recordKeyboardCreatedTerminalPaneSplit(
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!isHTMLElement(target)) {
     return false
   }
 
@@ -266,7 +268,7 @@ export function useTerminalKeyboardShortcuts({
   keybindings,
   terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isActive) {
       return
     }
@@ -971,7 +973,7 @@ export function useTerminalKeyboardShortcuts({
     // Why: modern Chromium can skip keypress and insert via beforeinput; block
     // only this chord's text so an IME commit in the same window remains intact.
     const onNativeOnlyBeforeInput = (e: Event): void => {
-      if (!(e instanceof InputEvent) || !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(e)) {
+      if (!isInputEvent(e) || !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(e)) {
         return
       }
       e.preventDefault()
@@ -990,26 +992,27 @@ export function useTerminalKeyboardShortcuts({
       observedEnterKeydownTimeStamps.clear()
     }
 
-    window.addEventListener('keydown', onModifierDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
-    window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
-    window.addEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
-    window.addEventListener('blur', onNativeOnlyBlur)
+    // Why: a detached pane's keystrokes land in another window's document, and
+    // DOM events do not cross documents — binding only the opener leaves every
+    // terminal shortcut dead inside a detached window.
+    const disposers = [
+      addEventListenerOnAllWindows('keydown', onModifierDown, { capture: true }),
+      addEventListenerOnAllWindows('keyup', onKeyUp, { capture: true }),
+      addEventListenerOnAllWindows('keydown', onKeyDown, { capture: true }),
+      addEventListenerOnAllWindows('keypress', onNativeOnlyShortcutCompanion, { capture: true }),
+      addEventListenerOnAllWindows('keyup', onNativeOnlyShortcutCompanion, { capture: true }),
+      addEventListenerOnAllWindows('beforeinput', onNativeOnlyBeforeInput, { capture: true }),
+      addEventListenerOnAllWindows('blur', onNativeOnlyBlur)
+    ]
     return () => {
       optionKittyReleases.clear()
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
       deferredChordSender.cancelPending()
       observedEnterKeydownTimeStamps.clear()
-      window.removeEventListener('keydown', onModifierDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
-      window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
-      window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
-      window.removeEventListener('blur', onNativeOnlyBlur)
+      for (const dispose of disposers) {
+        dispose()
+      }
     }
   }, [
     isActive,

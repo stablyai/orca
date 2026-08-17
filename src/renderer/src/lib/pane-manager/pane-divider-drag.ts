@@ -90,17 +90,25 @@ export function attachDividerDrag(
     }
   })
 
+  // Why: a detached pane's divider lives in another window's document, and a
+  // listener on the opener never sees its pointer events — resizing would start
+  // on pointerdown and then never move.
+  const dividerWindow = (): (Window & typeof globalThis) | null =>
+    (divider.ownerDocument?.defaultView as (Window & typeof globalThis) | null) ??
+    (typeof window === 'undefined' ? null : window)
+
   const addWindowListeners = (): void => {
-    if (windowListenersAttached || typeof window === 'undefined') {
+    const view = dividerWindow()
+    if (windowListenersAttached || !view) {
       return
     }
     // Why: Chromium can transiently lose capture while the button remains held,
     // so window events keep ownership until pointerup, pointercancel, or blur.
     windowListenersAttached = true
-    window.addEventListener('pointermove', onPointerMove, true)
-    window.addEventListener('pointerup', onPointerUp, true)
-    window.addEventListener('pointercancel', onPointerCancel, true)
-    window.addEventListener('blur', onWindowBlur, true)
+    view.addEventListener('pointermove', onPointerMove, true)
+    view.addEventListener('pointerup', onPointerUp, true)
+    view.addEventListener('pointercancel', onPointerCancel, true)
+    view.addEventListener('blur', onWindowBlur, true)
   }
 
   const removeWindowListeners = (): void => {
@@ -108,10 +116,11 @@ export function attachDividerDrag(
       return
     }
     windowListenersAttached = false
-    window.removeEventListener('pointermove', onPointerMove, true)
-    window.removeEventListener('pointerup', onPointerUp, true)
-    window.removeEventListener('pointercancel', onPointerCancel, true)
-    window.removeEventListener('blur', onWindowBlur, true)
+    const view = dividerWindow()
+    view?.removeEventListener('pointermove', onPointerMove, true)
+    view?.removeEventListener('pointerup', onPointerUp, true)
+    view?.removeEventListener('pointercancel', onPointerCancel, true)
+    view?.removeEventListener('blur', onWindowBlur, true)
   }
 
   const releasePointerCaptureIfHeld = (pointerId: number | null): void => {

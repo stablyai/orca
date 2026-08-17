@@ -1,3 +1,5 @@
+import { activeElementFor } from '../../lib/cross-realm-dom-predicates'
+
 type TerminalPastePaneIdentity = {
   id: number
   leafId: string
@@ -49,7 +51,9 @@ export function isTerminalPanePasteFocusCurrent({
   requireSameFocusedElement,
   activeElementAtDispatch,
   paneContainer,
-  activeElement = typeof document === 'undefined' ? null : document.activeElement
+  // Why: paneContainer names the document that actually owns this pane's focus
+  // — the main document reports <body> while an aux window holds it.
+  activeElement = activeElementFor(paneContainer)
 }: TerminalPanePasteFocusState): boolean {
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true

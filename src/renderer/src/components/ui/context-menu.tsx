@@ -3,6 +3,7 @@ import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" modal={false} {...props} />
@@ -53,8 +54,9 @@ function ContextMenuSubContent({
   style,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={auxContainer ?? undefined}>
       <ContextMenuPrimitive.SubContent
         data-slot="context-menu-sub-content"
         className={cn(
@@ -75,8 +77,9 @@ function ContextMenuContent({
   style,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={auxContainer ?? undefined}>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(

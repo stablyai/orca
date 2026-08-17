@@ -1,3 +1,4 @@
+import { isElement } from '../cross-realm-dom-predicates'
 const APP_CONTROL_SELECTOR = [
   'input:not(.xterm-helper-textarea)',
   'textarea:not(.xterm-helper-textarea)',
@@ -11,7 +12,7 @@ const APP_CONTROL_SELECTOR = [
 ].join(',')
 
 export function shouldFocusTerminalFromPanePointerDown(target: EventTarget | null): boolean {
-  if (typeof Element === 'undefined' || !(target instanceof Element)) {
+  if (typeof Element === 'undefined' || !isElement(target)) {
     return true
   }
 

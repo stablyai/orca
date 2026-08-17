@@ -5,6 +5,11 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
+import { buildDetachedPaneSessionData } from './workspace-session-detached-panes'
+import {
+  buildPersistedBrowserPagesByWorkspace,
+  buildPersistedBrowserTabsByWorktree
+} from './workspace-session-persisted-browser-collections'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
@@ -45,6 +50,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'detachedGroupIds'
+  | 'auxWindowBoundsByGroupId'
   | 'sshConnectionStates'
   | 'repos'
   | 'worktreesByRepo'
@@ -80,6 +87,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'groupsByWorktree',
   'layoutByWorktree',
   'activeGroupIdByWorktree',
+  'detachedGroupIds',
+  'auxWindowBoundsByGroupId',
   'sshConnectionStates',
   'repos',
   'worktreesByRepo',
@@ -200,28 +209,6 @@ export function buildBrowserSessionData(
   }
 }
 
-export function buildPersistedBrowserTabsByWorktree(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>
-): WorkspaceSessionState['browserTabsByWorktree'] {
-  return Object.fromEntries(
-    Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => ({ ...tab, loading: false }))
-    ])
-  )
-}
-
-export function buildPersistedBrowserPagesByWorkspace(
-  browserPagesByWorkspace: Record<string, BrowserPage[]>
-): WorkspaceSessionState['browserPagesByWorkspace'] {
-  return Object.fromEntries(
-    Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
-      workspaceId,
-      pages.map((page) => ({ ...page, loading: false }))
-    ])
-  )
-}
-
 export function buildSanitizedTabsByWorktree(
   tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
 ): WorkspaceSessionState['tabsByWorktree'] {
@@ -327,6 +314,7 @@ export function buildWorkspaceSessionPayload(
       terminalSessionData.remoteSessionIdsByTabId ?? null
     ),
     remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
+    ...buildDetachedPaneSessionData(snapshot),
     // Why: omit when empty so builds that never stamped focus-recency don't bloat the payload. See docs/cmd-j-empty-query-ordering.md.
     lastVisitedAtByWorktreeId: buildLastVisitedAtByWorktreeId(snapshot),
     defaultTerminalTabsAppliedByWorktreeId:

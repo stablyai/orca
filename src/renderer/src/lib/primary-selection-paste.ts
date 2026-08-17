@@ -1,6 +1,7 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
+import { isElement, isHTMLElement } from './cross-realm-dom-predicates'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
@@ -25,15 +26,16 @@ type PrimarySelectionPasteOptions = {
 }
 
 function dispatchInputEvent(target: Element, text: string | null): void {
+  const view = target.ownerDocument.defaultView
   const event =
-    typeof InputEvent === 'function'
-      ? new InputEvent('input', {
+    typeof view?.InputEvent === 'function'
+      ? new view.InputEvent('input', {
           bubbles: true,
           cancelable: false,
           data: text,
           inputType: 'insertFromPaste'
         })
-      : new Event('input', { bubbles: true, cancelable: false })
+      : new (view?.Event ?? Event)('input', { bubbles: true, cancelable: false })
   target.dispatchEvent(event)
 }
 
@@ -203,7 +205,7 @@ async function pasteIntoContentEditable(
 export function findEditablePrimarySelectionPasteTarget(
   target: EventTarget | null
 ): EditablePrimarySelectionPasteTarget | null {
-  if (!(target instanceof Element)) {
+  if (!isElement(target)) {
     return null
   }
   if (target.closest('.xterm-helper-textarea')) {
@@ -218,7 +220,7 @@ export function findEditablePrimarySelectionPasteTarget(
     return textControl
   }
 
-  let element: HTMLElement | null = target instanceof HTMLElement ? target : target.parentElement
+  let element: HTMLElement | null = isHTMLElement(target) ? target : target.parentElement
   while (element) {
     if (element.getAttribute('contenteditable') === 'false') {
       return null

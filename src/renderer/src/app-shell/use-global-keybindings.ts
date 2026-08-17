@@ -40,13 +40,15 @@ import {
 } from './app-command-handlers'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { addEventListenerOnAllWindows } from '@/lib/aux-pane-window-registry'
+import { activeElementFor, isElement, isNode } from '@/lib/cross-realm-dom-predicates'
+import {
+  getTerminalShortcutPaneHandle,
+  resolveTerminalShortcutTabId,
+  resolveTerminalShortcutTarget
+} from '@/components/terminal/aux-pane-shortcut-target'
 
-/**
- * Registers the window-level shortcut listeners and the app command dispatcher.
- *
- * Window key listeners are global and long-lived: one registration, but the handler reads
- * current shortcut state each key event through a ref.
- */
+/** Registers long-lived window shortcuts that read current committed state through a ref. */
 export function useGlobalKeybindings(args: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
@@ -110,12 +112,13 @@ export function useGlobalKeybindings(args: {
       }
       // The Settings shortcut recorder captures existing shortcuts, so global handlers must not fire while its button has focus.
       if (
-        input.target instanceof Element &&
+        isElement(input.target) &&
         input.target.closest('[data-shortcut-recorder-active]') !== null
       ) {
         return
       }
       const context = getKeybindingContext(input.target)
+      const shortcutTarget = resolveTerminalShortcutTarget(input.target, useAppStore.getState())
 
       // Note: some shortcuts are also intercepted in createMainWindow.ts before-input-event (for browser-guest focus); the renderer keeps handlers for local focus.
 
@@ -135,14 +138,26 @@ export function useGlobalKeybindings(args: {
         })
       }
 
+      if (context === 'terminal' && shortcutTarget?.auxiliary && matchShortcut('tab.close')) {
+        const terminalTabId = resolveTerminalShortcutTabId(shortcutTarget, useAppStore.getState())
+        const pane = terminalTabId ? getTerminalShortcutPaneHandle(terminalTabId) : null
+        // Why: suppress Chromium aux-window close while its pane handle mounts.
+        input.preventDefault()
+        input.stopImmediatePropagation?.()
+        if (pane) {
+          notifyTerminalCapture('tab.close')
+          pane.closeActivePane()
+        }
+        return
+      }
       const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
         // With a folder selected in the explorer, Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern with it, not a text search.
-        const selectedFolderRelativePath =
-          document.activeElement instanceof Element
-            ? selectedExplorerFolderRelativePath(document.activeElement)
-            : null
+        const activeElement = activeElementFor(isNode(input.target) ? input.target : null)
+        const selectedFolderRelativePath = isElement(activeElement)
+          ? selectedExplorerFolderRelativePath(activeElement)
+          : null
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
@@ -235,7 +250,7 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      const handlers = createAppCommandHandlers(state, input, context)
+      const handlers = createAppCommandHandlers(state, input, context, shortcutTarget)
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
@@ -274,7 +289,8 @@ export function useGlobalKeybindings(args: {
           doubleTapModifier: detected.modifier,
           target: e.target,
           defaultPrevented: e.defaultPrevented,
-          preventDefault: () => e.preventDefault()
+          preventDefault: () => e.preventDefault(),
+          stopImmediatePropagation: () => e.stopImmediatePropagation()
         })
         return
       }
@@ -287,7 +303,8 @@ export function useGlobalKeybindings(args: {
         shiftKey: e.shiftKey,
         target: e.target,
         defaultPrevented: e.defaultPrevented,
-        preventDefault: () => e.preventDefault()
+        preventDefault: () => e.preventDefault(),
+        stopImmediatePropagation: () => e.stopImmediatePropagation()
       })
     }
 
@@ -309,14 +326,16 @@ export function useGlobalKeybindings(args: {
     // Why: a window blur mid-gesture must not leave the detector armed.
     const onBlur = (): void => doubleTapDetector.reset()
 
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
-    window.addEventListener('blur', onBlur)
+    const removeListeners = [
+      addEventListenerOnAllWindows('keydown', onKeyDown, { capture: true }),
+      addEventListenerOnAllWindows('keyup', onKeyUp, { capture: true }),
+      addEventListenerOnAllWindows('blur', onBlur)
+    ]
     return () => {
       unregisterAppCommandDispatcher()
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
-      window.removeEventListener('blur', onBlur)
+      for (const removeListener of removeListeners) {
+        removeListener()
+      }
     }
   }, [])
 }

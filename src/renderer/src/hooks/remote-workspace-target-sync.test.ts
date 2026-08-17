@@ -115,6 +115,8 @@ function appState(overrides: Record<string, unknown> = {}): AppState {
     sshConnectionStates: new Map(),
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
+    detachedGroupIds: [],
+    auxWindowBoundsByGroupId: {},
     hydrateWorkspaceSession: vi.fn(),
     hydrateTabsSession: vi.fn(),
     hydrateEditorSession: vi.fn(),

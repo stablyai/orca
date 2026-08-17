@@ -1,4 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { isElement, isNode } from '../../lib/cross-realm-dom-predicates'
 
 export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
 
@@ -55,12 +56,11 @@ export function getSessionRestoredBannerDismissPaneId(
   event: SessionRestoredBannerDismissEvent,
   panes: readonly SessionRestoredBannerPane[]
 ): number | null {
-  const targetElement =
-    event.target instanceof Element
-      ? event.target
-      : event.target instanceof Node
-        ? event.target.parentElement
-        : null
+  const targetElement = isElement(event.target)
+    ? event.target
+    : isNode(event.target)
+      ? event.target.parentElement
+      : null
   const paneElement = targetElement?.closest('.pane[data-leaf-id]')
   if (!paneElement) {
     return null

@@ -4,6 +4,7 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
+import { buildDetachedTabGroupIntegrityPatch } from '../../detached-tab-groups'
 
 export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
   const worktreeIdSet = new Set(worktreeIds)
@@ -51,6 +52,8 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     return next
   })()
   const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
+  const nextUnifiedTabsByWorktree = omitByWorktree(s.unifiedTabsByWorktree)
+  const nextGroupsByWorktree = omitByWorktree(s.groupsByWorktree)
 
   return {
     // Worktree-scoped terminal/tab state
@@ -131,10 +134,14 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
     // Split-tab / unified tab state
-    unifiedTabsByWorktree: omitByWorktree(s.unifiedTabsByWorktree),
-    groupsByWorktree: omitByWorktree(s.groupsByWorktree),
+    unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+    groupsByWorktree: nextGroupsByWorktree,
     layoutByWorktree: omitByWorktree(s.layoutByWorktree),
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
+    ...buildDetachedTabGroupIntegrityPatch(s, {
+      groupsByWorktree: nextGroupsByWorktree,
+      unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+    }),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (upstream-status entry).

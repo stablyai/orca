@@ -7,6 +7,7 @@ export type PinnedTabCloseConfirmRequest = {
   tabLabel: string
   onConfirm: () => void
   onCancel?: () => void
+  dialogContainer?: HTMLElement | null
 }
 
 export type PinnedTabCloseConfirmSlice = {

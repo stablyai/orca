@@ -311,4 +311,60 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(store.getState().groupsByWorktree).toBe(groupsByWorktree)
     expect(store.getState().layoutByWorktree).toBe(layoutByWorktree)
   })
+
+  it('atomically prunes detached ids and bounds during bulk worktree purge', () => {
+    const store = createTestStore()
+    store.setState({
+      groupsByWorktree: {
+        removed: [
+          {
+            id: 'removed-group',
+            worktreeId: 'removed',
+            activeTabId: 'removed-tab',
+            tabOrder: ['removed-tab']
+          }
+        ],
+        surviving: [
+          {
+            id: 'surviving-group',
+            worktreeId: 'surviving',
+            activeTabId: 'surviving-tab',
+            tabOrder: ['surviving-tab']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        removed: [
+          {
+            id: 'removed-tab',
+            entityId: 'removed-terminal',
+            groupId: 'removed-group',
+            worktreeId: 'removed',
+            contentType: 'terminal'
+          }
+        ],
+        surviving: [
+          {
+            id: 'surviving-tab',
+            entityId: 'surviving-terminal',
+            groupId: 'surviving-group',
+            worktreeId: 'surviving',
+            contentType: 'terminal'
+          }
+        ]
+      },
+      detachedGroupIds: ['removed-group', 'surviving-group'],
+      auxWindowBoundsByGroupId: {
+        'removed-group': { x: 1, y: 2, width: 300, height: 200 },
+        'surviving-group': { x: 3, y: 4, width: 500, height: 400 }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState(['removed'])
+
+    expect(store.getState().detachedGroupIds).toEqual(['surviving-group'])
+    expect(store.getState().auxWindowBoundsByGroupId).toEqual({
+      'surviving-group': { x: 3, y: 4, width: 500, height: 400 }
+    })
+  })
 })

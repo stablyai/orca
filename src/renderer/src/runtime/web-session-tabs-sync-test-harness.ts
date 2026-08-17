@@ -55,6 +55,7 @@ export function makeState(
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
+    detachedGroupIds: [],
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
@@ -65,6 +66,7 @@ export function makeState(
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
+    auxWindowBoundsByGroupId: {},
     sortEpoch: 0,
     ...overrides
   }

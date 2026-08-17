@@ -18,6 +18,7 @@ import {
   normalizeTerminalLayoutSnapshot,
   resolveRootlessTerminalLayoutLeafId
 } from './terminal-layout-leaf-ids'
+import { isHTMLElement } from '../../lib/cross-realm-dom-predicates'
 
 export {
   collectLeafIdsInOrder,
@@ -67,7 +68,7 @@ export function buildFontFamily(fontFamily: string): string {
 export function getLayoutChildNodes(split: HTMLElement): HTMLElement[] {
   return Array.from(split.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
+      isHTMLElement(child) &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
 }
@@ -126,7 +127,7 @@ export function serializeTerminalLayout(
   leafIdByPaneId?: ReadonlyMap<number, string>
 ): TerminalLayoutSnapshot {
   const rootNode = serializePaneTree(
-    root?.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
+    isHTMLElement(root?.firstElementChild) ? root.firstElementChild : null
   )
   const activeLeafId = activePaneId === null ? null : leafIdByPaneId?.get(activePaneId)
   const expandedLeafId = expandedPaneId === null ? null : leafIdByPaneId?.get(expandedPaneId)

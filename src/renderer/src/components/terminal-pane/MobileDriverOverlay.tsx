@@ -9,6 +9,7 @@ import {
   getMobileDriverOverlayCollapseState
 } from './mobile-driver-overlay-collapse'
 import { translate } from '@/i18n/i18n'
+import { activeElementFor } from '@/lib/cross-realm-dom-predicates'
 
 type Props = {
   driver: DriverState
@@ -218,7 +219,8 @@ function LoudOverlay({
   // the next Space/Enter into Take back / Restore. See PR #1899 follow-up.
   useEffect(() => {
     const paneScope = rootRef.current?.parentElement
-    if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
+    const paneDocument = paneScope?.ownerDocument ?? document
+    if (shouldFocusMobileDriverAction(activeElementFor(paneScope), paneDocument.body, paneScope)) {
       actionRef.current?.focus()
     }
   }, [])

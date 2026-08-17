@@ -12,6 +12,8 @@ import {
   type EditablePrimarySelectionPasteTarget
 } from '@/lib/primary-selection-paste'
 import { readCurrentPrimarySelectionText } from '@/lib/primary-selection-capture'
+import { addEventListenerOnAllDocuments } from '@/lib/aux-pane-window-registry'
+import { isDocument, isElement, isInputEvent, isNode } from '@/lib/cross-realm-dom-predicates'
 
 const PRIMARY_SELECTION_PENDING_TARGET_TTL_MS = 750
 
@@ -28,8 +30,8 @@ export function isDefaultPrimarySelectionMiddleClickPasteUserAgent(
   return isLinuxUserAgent(userAgent) || isMacUserAgent(userAgent)
 }
 
-function captureCurrentSelection(): void {
-  const text = readCurrentPrimarySelectionText()
+function captureCurrentSelection(sourceDocument: Document): void {
+  const text = readCurrentPrimarySelectionText(sourceDocument)
   if (text) {
     setPrimarySelectionText(text)
   }
@@ -45,7 +47,7 @@ function suppressEvent(event: Event): void {
 // scope terminal-armed suppression to that surface so unrelated document pastes
 // (right-click Paste, keyboard paste into another control) are never swallowed.
 function isTerminalNativePasteTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) {
+  if (!isElement(target)) {
     return false
   }
   return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
@@ -57,7 +59,7 @@ function isPrimarySelectionPasteTargetCurrent(
   const activeElement = target.ownerDocument.activeElement
   return (
     target.isConnected &&
-    activeElement instanceof Node &&
+    isNode(activeElement) &&
     (activeElement === target || target.contains(activeElement))
   )
 }
@@ -69,7 +71,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     let pendingMiddleUntil = 0
 
     const targetMatchesPending = (target: EventTarget | null): boolean => {
-      if (!pendingMiddleTarget || !(target instanceof Node)) {
+      if (!pendingMiddleTarget || !isNode(target)) {
         return false
       }
       return target === pendingMiddleTarget || pendingMiddleTarget.contains(target)
@@ -91,10 +93,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     }
 
     const suppressPendingPasteInput = (event: InputEvent | ClipboardEvent): void => {
-      const isPasteInputEvent =
-        typeof InputEvent !== 'function' ||
-        !(event instanceof InputEvent) ||
-        event.inputType === 'insertFromPaste'
+      const isPasteInputEvent = !isInputEvent(event) || event.inputType === 'insertFromPaste'
       if (!isPasteInputEvent) {
         return
       }
@@ -144,31 +143,39 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
 
       // Why: when users opt out on Linux, Chromium can still perform native
       // primary-selection paste unless the middle-click paste pipeline is stopped.
-      document.addEventListener('mousedown', onMouseDown, true)
-      document.addEventListener('beforeinput', suppressPendingPasteInput, true)
-      document.addEventListener('paste', suppressPendingPasteInput, true)
-      document.addEventListener('mouseup', onMouseUp, true)
-      document.addEventListener('auxclick', onAuxClick, true)
+      const removeListeners = [
+        addEventListenerOnAllDocuments('mousedown', onMouseDown as EventListener, true),
+        addEventListenerOnAllDocuments(
+          'beforeinput',
+          suppressPendingPasteInput as EventListener,
+          true
+        ),
+        addEventListenerOnAllDocuments('paste', suppressPendingPasteInput as EventListener, true),
+        addEventListenerOnAllDocuments('mouseup', onMouseUp as EventListener, true),
+        addEventListenerOnAllDocuments('auxclick', onAuxClick as EventListener, true)
+      ]
 
       return () => {
         setPrimarySelectionEnabled(false)
-        document.removeEventListener('mousedown', onMouseDown, true)
-        document.removeEventListener('beforeinput', suppressPendingPasteInput, true)
-        document.removeEventListener('paste', suppressPendingPasteInput, true)
-        document.removeEventListener('mouseup', onMouseUp, true)
-        document.removeEventListener('auxclick', onAuxClick, true)
+        for (const removeListener of removeListeners) {
+          removeListener()
+        }
       }
     }
 
     let captureTimer: number | null = null
 
-    const scheduleCapture = (): void => {
+    let captureDocument = document
+    const scheduleCapture = (event: Event): void => {
+      if (isDocument(event.currentTarget)) {
+        captureDocument = event.currentTarget
+      }
       if (captureTimer !== null) {
         window.clearTimeout(captureTimer)
       }
       captureTimer = window.setTimeout(() => {
         captureTimer = null
-        captureCurrentSelection()
+        captureCurrentSelection(captureDocument)
       }, 100)
     }
 
@@ -210,28 +217,29 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       suppressEvent(event)
     }
 
-    document.addEventListener('selectionchange', scheduleCapture)
-    document.addEventListener('mouseup', scheduleCapture, true)
-    document.addEventListener('keyup', scheduleCapture, true)
-    document.addEventListener('mousedown', onMouseDown, true)
-    document.addEventListener('beforeinput', suppressPendingPasteInput, true)
-    document.addEventListener('paste', suppressPendingPasteInput, true)
-    document.addEventListener('mouseup', onMouseUp, true)
-    document.addEventListener('auxclick', onAuxClick, true)
+    const removeListeners = [
+      addEventListenerOnAllDocuments('selectionchange', scheduleCapture, false),
+      addEventListenerOnAllDocuments('mouseup', scheduleCapture, true),
+      addEventListenerOnAllDocuments('keyup', scheduleCapture, true),
+      addEventListenerOnAllDocuments('mousedown', onMouseDown as EventListener, true),
+      addEventListenerOnAllDocuments(
+        'beforeinput',
+        suppressPendingPasteInput as EventListener,
+        true
+      ),
+      addEventListenerOnAllDocuments('paste', suppressPendingPasteInput as EventListener, true),
+      addEventListenerOnAllDocuments('mouseup', onMouseUp as EventListener, true),
+      addEventListenerOnAllDocuments('auxclick', onAuxClick as EventListener, true)
+    ]
 
     return () => {
       setPrimarySelectionEnabled(false)
       if (captureTimer !== null) {
         window.clearTimeout(captureTimer)
       }
-      document.removeEventListener('selectionchange', scheduleCapture)
-      document.removeEventListener('mouseup', scheduleCapture, true)
-      document.removeEventListener('keyup', scheduleCapture, true)
-      document.removeEventListener('mousedown', onMouseDown, true)
-      document.removeEventListener('beforeinput', suppressPendingPasteInput, true)
-      document.removeEventListener('paste', suppressPendingPasteInput, true)
-      document.removeEventListener('mouseup', onMouseUp, true)
-      document.removeEventListener('auxclick', onAuxClick, true)
+      for (const removeListener of removeListeners) {
+        removeListener()
+      }
     }
   }, [enabled])
 }

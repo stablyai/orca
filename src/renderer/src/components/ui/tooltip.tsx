@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function TooltipProvider({
   delayDuration = 0,
@@ -35,8 +36,9 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & { showArrow?: boolean }) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={auxContainer ?? undefined}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

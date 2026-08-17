@@ -1,4 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
+import { isCompositionEvent, isInputEvent } from '../../lib/cross-realm-dom-predicates'
 
 export type TerminalImeCompositionTracker = IDisposable & {
   isActive: () => boolean
@@ -62,7 +63,7 @@ export function installTerminalImeCompositionTracker(
     // Why: Sogou/fcitx can emit empty compositionupdate data while its
     // candidate popup is still open — empty data must not deactivate.
     // compositionend, non-composition input, and blur own deactivation.
-    if (!(event instanceof CompositionEvent)) {
+    if (!isCompositionEvent(event)) {
       return
     }
     if (event.data === '') {
@@ -79,7 +80,7 @@ export function installTerminalImeCompositionTracker(
     sawEmptyCompositionUpdate = false
   }
   const handleInput = (event: Event): void => {
-    if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
+    if (isInputEvent(event) && event.inputType === 'insertCompositionText') {
       return
     }
     active = false

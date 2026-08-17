@@ -15,10 +15,19 @@ import {
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
 import { translate } from '@/i18n/i18n'
+import { addEventListenerOnAllWindows } from '@/lib/aux-pane-window-registry'
+import {
+  auxiliaryTerminalShortcutTarget,
+  resolveTerminalShortcutTarget,
+  type TerminalShortcutTarget
+} from '../terminal/aux-pane-shortcut-target'
+import { isNode } from '@/lib/cross-realm-dom-predicates'
 
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
   selectedIndex: number
+  portalContainer: HTMLElement
+  target: TerminalShortcutTarget | null
 }
 
 function consumeKeyboardEvent(event: KeyboardEvent): void {
@@ -54,23 +63,32 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   }, [])
 
   const openOrAdvance = useCallback(
-    (direction: 1 | -1): void => {
+    (
+      direction: 1 | -1,
+      target: TerminalShortcutTarget | null = null,
+      portalContainer: HTMLElement = document.body
+    ): void => {
       const store = useAppStore.getState()
-      if (store.activeView !== 'terminal' || !store.activeWorktreeId) {
+      const worktreeId = target?.worktreeId ?? store.activeWorktreeId
+      if ((!target && store.activeView !== 'terminal') || !worktreeId) {
         return
       }
 
       const model = buildRecentTabSwitcherModel(
         store,
-        store.activeWorktreeId,
-        normalizeCtrlTabOrderMode(store.settings?.ctrlTabOrderMode)
+        worktreeId,
+        normalizeCtrlTabOrderMode(store.settings?.ctrlTabOrderMode),
+        target?.groupId
       )
       if (!model) {
         return
       }
 
       const current = switcherRef.current
-      const selectedKey = current?.items[current.selectedIndex]?.key ?? null
+      const sameTarget =
+        current?.target?.worktreeId === target?.worktreeId &&
+        current?.target?.groupId === target?.groupId
+      const selectedKey = sameTarget ? (current?.items[current.selectedIndex]?.key ?? null) : null
       const currentIndex =
         selectedKey == null
           ? model.activeIndex
@@ -80,7 +98,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         currentIndex,
         direction
       )
-      setSwitcherState({ items: model.items, selectedIndex })
+      setSwitcherState({ items: model.items, selectedIndex, portalContainer, target })
     },
     [setSwitcherState]
   )
@@ -118,7 +136,13 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         // CDP/test-dispatched keys can reach the renderer directly. Respect the
         // keybinding registry here too so tests do not bypass user customization.
         consumeKeyboardEvent(event)
-        openOrAdvance(event.shiftKey ? -1 : 1)
+        const target = auxiliaryTerminalShortcutTarget(
+          resolveTerminalShortcutTarget(event.target, store)
+        )
+        const portalContainer = isNode(event.target)
+          ? (event.target.ownerDocument?.body ?? document.body)
+          : document.body
+        openOrAdvance(event.shiftKey ? -1 : 1, target, portalContainer)
         return
       }
       if (!switcherRef.current) {
@@ -136,13 +160,15 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
       consumeKeyboardEvent(event)
       commit()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
-    window.addEventListener('blur', cancel)
+    const removeListeners = [
+      addEventListenerOnAllWindows('keydown', onKeyDown, { capture: true }),
+      addEventListenerOnAllWindows('keyup', onKeyUp, { capture: true }),
+      addEventListenerOnAllWindows('blur', cancel)
+    ]
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
-      window.removeEventListener('blur', cancel)
+      for (const removeListener of removeListeners) {
+        removeListener()
+      }
     }
   }, [cancel, commit, openOrAdvance])
 
@@ -186,6 +212,6 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         </div>
       </div>
     </div>,
-    document.body
+    switcher.portalContainer
   )
 }

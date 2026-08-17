@@ -93,8 +93,20 @@ vi.mock('@/lib/use-tab-agent', () => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { unreadTerminalTabs: Record<string, boolean> }) => unknown) =>
-    selector({ unreadTerminalTabs: {} })
+  useAppStore: (
+    selector: (state: {
+      unreadTerminalTabs: Record<string, boolean>
+      detachedGroupIds: string[]
+      detachTabGroup: () => void
+      reattachTabGroup: () => void
+    }) => unknown
+  ) =>
+    selector({
+      unreadTerminalTabs: {},
+      detachedGroupIds: [],
+      detachTabGroup: () => {},
+      reattachTabGroup: () => {}
+    })
 }))
 
 vi.mock('@/store', () => ({

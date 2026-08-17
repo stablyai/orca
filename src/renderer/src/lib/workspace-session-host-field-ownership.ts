@@ -31,6 +31,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   tabGroups: 'worktreeKeyed',
   tabGroupLayouts: 'worktreeKeyed',
   activeGroupIdByWorktree: 'worktreeKeyed',
+  // Why: aux windows are an app-level surface, not per-host state.
+  detachedGroupIds: 'global',
+  auxWindowBoundsByGroupId: 'global',
   lastVisitedAtByWorktreeId: 'worktreeKeyed',
   defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
   activeWorkspaceKey: 'global',

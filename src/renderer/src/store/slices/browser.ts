@@ -154,7 +154,10 @@ export type BrowserSlice = {
     url: string,
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
-  openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewBrowserTabInActiveWorkspace: (
+    groupId: string,
+    worktreeIdOverride?: string
+  ) => Promise<void>
   openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
@@ -718,9 +721,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     return browserTab
   },
 
-  openNewBrowserTabInActiveWorkspace: async (groupId) => {
+  openNewBrowserTabInActiveWorkspace: async (groupId, worktreeIdOverride) => {
     const state = get()
-    const worktreeId = state.activeWorktreeId
+    const worktreeId = worktreeIdOverride ?? state.activeWorktreeId
     if (!worktreeId) {
       return
     }

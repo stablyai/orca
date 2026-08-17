@@ -110,6 +110,30 @@ describe('buildRecentTabSwitcherModel', () => {
 
     expect(model).toBeNull()
   })
+
+  it('uses an explicitly targeted detached group instead of the main active group', () => {
+    const state = stateWithTabs(['tab-a'], ['tab-a'], 'tab-a')
+    const detachedTabs = [
+      { ...tab('detached-a', 'terminal-a', 'Detached A'), groupId: 'detached-group' },
+      { ...tab('detached-b', 'terminal-b', 'Detached B'), groupId: 'detached-group' }
+    ]
+    state.groupsByWorktree[WT].push({
+      id: 'detached-group',
+      worktreeId: WT,
+      activeTabId: 'detached-b',
+      tabOrder: ['detached-a', 'detached-b'],
+      recentTabIds: ['detached-a', 'detached-b']
+    })
+    state.unifiedTabsByWorktree[WT].push(...detachedTabs)
+    state.openFiles.push(
+      { id: 'terminal-a', worktreeId: WT } as AppState['openFiles'][number],
+      { id: 'terminal-b', worktreeId: WT } as AppState['openFiles'][number]
+    )
+
+    const model = buildRecentTabSwitcherModel(state, WT, 'mru', 'detached-group')
+
+    expect(model?.items.map((item) => item.label)).toEqual(['Detached B', 'Detached A'])
+  })
 })
 
 describe('getNextRecentTabSwitcherIndex', () => {

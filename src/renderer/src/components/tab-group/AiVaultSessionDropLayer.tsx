@@ -23,6 +23,7 @@ import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import { isNode } from '../../lib/cross-realm-dom-predicates'
 
 type PaneDropTarget = {
   groupId: string
@@ -382,7 +383,7 @@ export default function AiVaultSessionDropLayer({
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget
-    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+    if (isNode(relatedTarget) && event.currentTarget.contains(relatedTarget)) {
       return
     }
     setTarget(null)

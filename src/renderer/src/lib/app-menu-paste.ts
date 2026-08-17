@@ -8,6 +8,7 @@ import {
   findOwnedTextControlPasteTarget,
   shouldClaimTextControlPastePayload
 } from './text-control-paste-ownership'
+import { activeElementFor } from './cross-realm-dom-predicates'
 
 export const APP_MENU_PASTE_EVENT = 'orca-app-menu-paste'
 
@@ -39,7 +40,7 @@ export function dispatchAppMenuPasteEvent(target: Window = window): boolean {
 }
 
 export function findFocusedAppMenuTextControlPasteTarget(
-  activeElement: Element | null = typeof document === 'undefined' ? null : document.activeElement
+  activeElement: Element | null = activeElementFor(null)
 ): HTMLInputElement | HTMLTextAreaElement | null {
   return findOwnedTextControlPasteTarget(activeElement)
 }
@@ -67,7 +68,7 @@ export async function handleAppMenuPasteRequest({
   readClipboardText,
   performNativePaste,
   dispatchOwnedPasteEvent = dispatchAppMenuPasteEvent,
-  getActiveElement = () => document.activeElement,
+  getActiveElement = () => activeElementFor(null),
   nativePasteMode = 'paste'
 }: AppMenuPasteRequestDeps): Promise<AppMenuPasteRequestResult> {
   const startedAtMs = getNowMs()

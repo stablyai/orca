@@ -1,12 +1,27 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import {
+  getAuxPaneContainer,
+  getAuxPaneContainerForDocument,
+  subscribeToAuxPaneContainers
+} from '@/lib/aux-pane-window-registry'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { AuxWindowContainerProvider } from '../aux-window-container-context'
+import { getTerminalShortcutPaneRefCallback } from '../terminal/aux-pane-shortcut-target'
 
 const HAS_CSS_ANCHOR_POSITIONING =
   typeof CSS !== 'undefined' &&
@@ -63,6 +78,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const auxContainer = useSyncExternalStore(subscribeToAuxPaneContainers, () =>
+    getAuxPaneContainer(groupId)
+  )
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
@@ -81,7 +99,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
 
     const findBody = (): HTMLElement | null => {
-      for (const candidate of document.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
+      // Why: a detached group's body lives in the aux window's document.
+      const scope = auxContainer?.ownerDocument ?? document
+      for (const candidate of scope.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
         if (candidate.dataset.tabGroupBodyId === groupId) {
           return candidate
         }
@@ -132,7 +152,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateRect)
     }
-  }, [anchorName, groupId, isVisible])
+  }, [anchorName, auxContainer, groupId, isVisible])
 
   useLayoutEffect(() => {
     if (!isVisible || !anchorName) {
@@ -214,42 +234,56 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [groupId, onFocusOwningGroup])
 
+  const portalOwnerDocument = activityTerminalPortal?.target.ownerDocument
+  const paneAuxContainer = portalOwnerDocument
+    ? getAuxPaneContainerForDocument(portalOwnerDocument)
+    : auxContainer
+  const preserveOpenerSelection = paneAuxContainer !== null
   const terminalPane = (
-    <TerminalPane
-      key={`${terminalTabId}-${terminalGeneration ?? 0}`}
-      tabId={terminalTabId}
-      worktreeId={worktreeId}
-      cwd={startupCwd ?? worktreePath}
-      isActive={isActive || activityTerminalPortal?.active === true}
-      // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
-      // TerminalPane mounted here preserves alt-screen TUI state while this
-      // flag still lets hidden tabs throttle rendering.
-      isVisible={isVisible || activityTerminalPortal !== null}
-      isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
-      isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-      onPtyExit={(ptyId) => {
-        if (consumeSuppressedPtyExit(ptyId)) {
-          return
-        }
-        // Why: a parked multi-leaf tab has no PaneManager to promote split
-        // siblings, so closing the tab here would kill them; the reveal
-        // remount handles dead PTYs per leaf instead.
-        if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
-          return
-        }
-        closeTerminalTab(terminalTabId, {
-          reason: 'pty-exit',
-          lifecyclePtyId: ptyId,
-          onClosed: leaveWorktreeIfEmpty
-        })
-      }}
-      onCloseTab={() => {
-        // Why: route through closeTerminalTab (not the raw store closeTab) so a
-        // pinned tab hits the confirmation guard. The overlay's direct
-        // store.closeTab was the path that closed pinned terminals silently.
-        closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
-      }}
-    />
+    <AuxWindowContainerProvider value={paneAuxContainer}>
+      <TerminalPane
+        ref={getTerminalShortcutPaneRefCallback(terminalTabId)}
+        key={`${terminalTabId}-${terminalGeneration ?? 0}`}
+        tabId={terminalTabId}
+        worktreeId={worktreeId}
+        cwd={startupCwd ?? worktreePath}
+        isActive={isActive || activityTerminalPortal?.active === true}
+        // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
+        // TerminalPane mounted here preserves alt-screen TUI state while this
+        // flag still lets hidden tabs throttle rendering.
+        isVisible={isVisible || activityTerminalPortal !== null}
+        isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
+        isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+        onPtyExit={(ptyId) => {
+          if (consumeSuppressedPtyExit(ptyId)) {
+            return
+          }
+          // Why: a parked multi-leaf tab has no PaneManager to promote split
+          // siblings, so closing the tab here would kill them; the reveal
+          // remount handles dead PTYs per leaf instead.
+          if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
+            return
+          }
+          closeTerminalTab(terminalTabId, {
+            reason: 'pty-exit',
+            lifecyclePtyId: ptyId,
+            ...(preserveOpenerSelection ? {} : { onClosed: leaveWorktreeIfEmpty }),
+            dialogContainer: paneAuxContainer,
+            preserveOpenerSelection
+          })
+        }}
+        onCloseTab={() => {
+          // Why: route through closeTerminalTab (not the raw store closeTab) so a
+          // pinned tab hits the confirmation guard. The overlay's direct
+          // store.closeTab was the path that closed pinned terminals silently.
+          closeTerminalTab(terminalTabId, {
+            ...(preserveOpenerSelection ? {} : { onClosed: leaveWorktreeIfEmpty }),
+            dialogContainer: paneAuxContainer,
+            preserveOpenerSelection
+          })
+        }}
+      />
+    </AuxWindowContainerProvider>
   )
 
   if (activityTerminalPortal) {
@@ -260,7 +294,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     )
   }
 
-  return (
+  const overlay = (
     <div
       ref={overlayRef}
       style={style}
@@ -274,4 +308,11 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           floating overlay. */}
     </div>
   )
+
+  // Why: the pane must share a document with its group body — CSS anchor
+  // positioning cannot reach across windows.
+  if (auxContainer) {
+    return createPortal(overlay, auxContainer, `aux-terminal-${terminalTabId}`)
+  }
+  return overlay
 })

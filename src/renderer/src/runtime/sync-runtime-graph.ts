@@ -7,6 +7,7 @@ import {
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { isHTMLElement } from '@/lib/cross-realm-dom-predicates'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -748,8 +749,7 @@ async function syncRuntimeGraph(): Promise<void> {
     const manager = registeredTab.getManager()
     const container = registeredTab.getContainer()
     const activePaneId = manager?.getActivePane()?.id ?? null
-    const root =
-      container?.firstElementChild instanceof HTMLElement ? container.firstElementChild : null
+    const root = isHTMLElement(container?.firstElementChild) ? container.firstElementChild : null
 
     graph.tabs.push({
       tabId,
@@ -1108,9 +1108,7 @@ function captureMountedTerminalSurface(
     paneLeafIds,
     hasLiveActivePane: activePane !== null,
     liveActiveLeafId: activePane !== null ? (manager?.getLeafId(activePane.id) ?? null) : null,
-    liveLayoutRoot: serializePaneTree(
-      typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
-    ),
+    liveLayoutRoot: serializePaneTree(isHTMLElement(firstChild) ? firstChild : null),
     numericPaneIdByLeafId,
     ptyIdByNumericPaneId,
     tabWideAgentHintLeafId: registered.getTabWideAgentHintLeafId()

@@ -218,6 +218,7 @@ export default function SortableTab({
       ref={setNodeRef}
       data-testid="sortable-tab"
       data-tab-id={tab.id}
+      data-unified-tab-id={unifiedTabId}
       data-tab-title={tabTitle}
       data-pinned={isPinned ? 'true' : 'false'}
       // Why: DOM attribute lets E2E assert real selection state; a store-only check would miss render breaks (PR #1186 shipped in #1193).

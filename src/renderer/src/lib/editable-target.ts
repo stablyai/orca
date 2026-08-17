@@ -2,7 +2,7 @@
 // onboarding flow) so an in-progress text edit never gets hijacked by a
 // capture-phase keydown handler.
 export function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!isHTMLElement(target)) {
     return false
   }
 
@@ -21,3 +21,4 @@ export function isEditableTarget(target: EventTarget | null): boolean {
     null
   )
 }
+import { isHTMLElement } from './cross-realm-dom-predicates'

@@ -1,4 +1,5 @@
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
+import { activeElementFor, isElement, isNode } from './cross-realm-dom-predicates'
 import {
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
   TEXT_CONTROL_PASTE_MAX_BYTES,
@@ -25,9 +26,9 @@ export type TextControlPastePayloadOwnership =
     }
 
 export function findOwnedTextControlPasteTarget(
-  activeElement: Element | null = typeof document === 'undefined' ? null : document.activeElement
+  activeElement: Element | null = activeElementFor(null)
 ): HTMLInputElement | HTMLTextAreaElement | null {
-  if (!(activeElement instanceof Element)) {
+  if (!isElement(activeElement)) {
     return null
   }
   const textControl = activeElement.closest('input, textarea')
@@ -42,9 +43,9 @@ export function findOwnedTextControlPasteTarget(
 
 export function findOwnedPasteEventTextControlTarget(
   eventTarget: EventTarget | null,
-  activeElement: Element | null = typeof document === 'undefined' ? null : document.activeElement
+  activeElement: Element | null = activeElementFor(isNode(eventTarget) ? eventTarget : null)
 ): HTMLInputElement | HTMLTextAreaElement | null {
-  if (!(eventTarget instanceof Element)) {
+  if (!isElement(eventTarget)) {
     return null
   }
   if (eventTarget.closest('.xterm-helper-textarea')) {

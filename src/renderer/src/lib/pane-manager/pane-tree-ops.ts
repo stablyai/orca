@@ -8,6 +8,7 @@ import type {
 import { createDivider, disposeDivider } from './pane-divider'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
+import { isHTMLElement } from '../cross-realm-dom-predicates'
 
 export {
   cancelPendingSafeFitContinuations,
@@ -82,7 +83,7 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   // Find sibling (skip dividers)
   const children = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
+      isHTMLElement(child) &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
   const sibling = children.find((c) => c !== container) ?? null
@@ -234,7 +235,7 @@ export function applyPaneFlexStyle(el: HTMLElement): void {
 export function removeDividers(parent: HTMLElement): void {
   const dividers = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.classList.contains('pane-divider')
+      isHTMLElement(child) && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
     disposeDivider(d)
@@ -246,7 +247,7 @@ export function removeDividers(parent: HTMLElement): void {
 export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
   return Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
+      isHTMLElement(child) &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
 }

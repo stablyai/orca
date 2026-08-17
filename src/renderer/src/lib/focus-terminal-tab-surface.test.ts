@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { registerAuxPaneContainer, unregisterAuxPaneContainer } from './aux-pane-window-registry'
 
 const mocks = vi.hoisted(() => ({
   refreshTerminalImeInputContext: vi.fn()
@@ -11,6 +12,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => (
 
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
+    unregisterAuxPaneContainer('aux-group')
     mocks.refreshTerminalImeInputContext.mockClear()
     vi.unstubAllGlobals()
   })
@@ -35,6 +37,28 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1')
 
     expect(textarea.focus).toHaveBeenCalled()
+  })
+
+  it('focuses a terminal mounted in an auxiliary document', () => {
+    flushAnimationFrames()
+    const textarea = { focus: vi.fn() }
+    const auxDocument = {
+      activeElement: null,
+      body: {},
+      hasFocus: () => true,
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-aux"] .xterm-helper-textarea' ? textarea : null
+      )
+    } as unknown as Document
+    registerAuxPaneContainer('aux-group', { ownerDocument: auxDocument } as HTMLElement)
+    vi.stubGlobal('document', {
+      querySelector: vi.fn(() => null),
+      hasFocus: () => false
+    })
+
+    focusTerminalTabSurface('tab-aux')
+
+    expect(textarea.focus).toHaveBeenCalledOnce()
   })
 
   it('optionally refreshes the focused helper native input context', () => {

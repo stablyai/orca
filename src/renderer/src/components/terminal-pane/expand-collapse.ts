@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { isHTMLElement } from '../../lib/cross-realm-dom-predicates'
 
 type ExpandCollapseState = {
   expandedPaneIdRef: React.MutableRefObject<number | null>
@@ -64,7 +65,7 @@ export function applyExpandedLayoutTo(
       break
     }
     for (const child of Array.from(parent.children)) {
-      if (!(child instanceof HTMLElement)) {
+      if (!isHTMLElement(child)) {
         continue
       }
       rememberPaneStyle(snapshots, child)

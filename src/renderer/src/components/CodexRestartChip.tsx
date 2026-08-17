@@ -91,7 +91,8 @@ function LoudRestartOverlay({
       return
     }
     const paneScope = root.parentElement
-    if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
+    const paneDocument = root.ownerDocument
+    if (shouldFocusMobileDriverAction(paneDocument.activeElement, paneDocument.body, paneScope)) {
       root.focus()
     }
   }, [isVisible, noticeKey, shouldFocus])

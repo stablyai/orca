@@ -103,6 +103,7 @@ import {
   buildWebSessionExistingTabIndex,
   type WebSessionExistingTabIndex
 } from './web-session-existing-tab-index'
+import { buildDetachedTabGroupIntegrityPatch } from '@/store/slices/detached-tab-groups'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -232,7 +233,15 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
-  Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
+  Partial<
+    Pick<
+      AppState,
+      | 'automaticAgentResumeClaimsByTabId'
+      | 'auxWindowBoundsByGroupId'
+      | 'detachedGroupIds'
+      | 'pendingStartupByTabId'
+    >
+  >
 
 type WebSessionTabsBatchRecordKey =
   | 'activeBrowserTabIdByWorktree'
@@ -3258,9 +3267,22 @@ function applyWebSessionTabsSnapshotWithContext(
     now,
     batchContext
   )
+  const detachedGroupIntegrityPatch = buildDetachedTabGroupIntegrityPatch(
+    {
+      detachedGroupIds: state.detachedGroupIds ?? [],
+      auxWindowBoundsByGroupId: state.auxWindowBoundsByGroupId ?? {},
+      groupsByWorktree: state.groupsByWorktree,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree
+    },
+    {
+      groupsByWorktree: nextGroupsByWorktree,
+      unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+    }
+  )
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...agentStatusPatch,
+    ...detachedGroupIntegrityPatch,
     ...(nextOpenFiles !== state.openFiles ? { openFiles: nextOpenFiles } : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree

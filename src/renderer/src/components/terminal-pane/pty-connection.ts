@@ -340,6 +340,8 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
+import { activeElementFor, isElement } from '../../lib/cross-realm-dom-predicates'
+import { isAnyAuxPaneDocumentVisible } from '@/lib/aux-pane-window-registry'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -475,7 +477,9 @@ function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
   if (typeof document === 'undefined' || !terminal.textarea) {
     return false
   }
-  return document.activeElement === terminal.textarea
+  // Why: a detached pane's textarea lives in the aux window's document, where
+  // the main document's activeElement is <body> — resolve against its owner.
+  return activeElementFor(terminal.textarea) === terminal.textarea
 }
 
 const CURSOR_AGENT_REATTACH_HEADER = 'Cursor Agent'
@@ -924,6 +928,13 @@ function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   // backgrounded. Treat hidden documents like background tabs so Chromium
   // timer throttling cannot pin terminal writes on the renderer foreground path.
   if (document.visibilityState === 'visible') {
+    return true
+  }
+  // Why: a detached pane lives in another OS window. Chromium marks the main
+  // webContents hidden when it is minimized OR merely covered — including by
+  // that very window — so trusting the main document alone starves a terminal
+  // the user is actively watching.
+  if (isAnyAuxPaneDocumentVisible()) {
     return true
   }
   // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
@@ -4530,7 +4541,7 @@ export function connectPanePty(
   // moment connectPanePty runs (it's the .pane element). Both report the
   // same layout signal — when the outer pane resizes, the inner xterm
   // container resizes too — so this is the safe element to observe.
-  if (geometryReportObserver && pane.container instanceof Element) {
+  if (geometryReportObserver && isElement(pane.container)) {
     geometryReportObserver.observe(pane.container)
   }
 

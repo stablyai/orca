@@ -13,6 +13,7 @@ import {
   type SentinelRendererState,
   type SentinelRenderInternals
 } from './terminal-render-desync-frame'
+import { isNode } from '../../lib/cross-realm-dom-predicates'
 
 /**
  * Flag-gated render-desync sentinel for WebGL terminal panes.
@@ -175,7 +176,7 @@ export function maybeStartTerminalRenderDesyncSentinel(): void {
       return
     }
     const target = event.target
-    if (!(target instanceof Node)) {
+    if (!isNode(target)) {
       return
     }
     let clickedTerminal: unknown = null

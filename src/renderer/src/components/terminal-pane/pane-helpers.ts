@@ -1,21 +1,27 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { isHTMLElement } from '../../lib/cross-realm-dom-predicates'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
 }
 
 export function focusActivePane(manager: PaneManager): void {
-  // Why: tab rename focuses the input on the next frame. A queued terminal
-  // layout focus can land in between mount and focus, blurring rename closed.
-  if (typeof document !== 'undefined' && document.querySelector('[data-tab-rename-input="true"]')) {
-    return
-  }
-  const activeElement = typeof document === 'undefined' ? null : document.activeElement
-  if (shouldPreserveEditableFocus(activeElement)) {
-    return
-  }
   const panes = manager.getPanes()
   const activePane = manager.getActivePane() ?? panes[0]
+  // Why: a detached pane lives in an auxiliary window, so rename state and
+  // focus must be read from that pane's own document — the main one reports
+  // <body> while the aux window holds focus.
+  const paneDocument =
+    activePane?.terminal.element?.ownerDocument ??
+    (typeof document === 'undefined' ? null : document)
+  // Why: tab rename focuses the input on the next frame. A queued terminal
+  // layout focus can land in between mount and focus, blurring rename closed.
+  if (paneDocument?.querySelector('[data-tab-rename-input="true"]')) {
+    return
+  }
+  if (shouldPreserveEditableFocus(paneDocument?.activeElement ?? null)) {
+    return
+  }
   activePane?.terminal.focus()
 }
 
@@ -43,7 +49,7 @@ export function isLinuxUserAgent(
 }
 
 function shouldPreserveEditableFocus(element: Element | null): boolean {
-  if (!(element instanceof HTMLElement)) {
+  if (!isHTMLElement(element)) {
     return false
   }
   if (element.classList.contains('xterm-helper-textarea') || element.closest('.xterm')) {

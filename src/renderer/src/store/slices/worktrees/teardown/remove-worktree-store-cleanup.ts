@@ -1,5 +1,6 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
+import { buildDetachedTabGroupIntegrityPatch } from '../../detached-tab-groups'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -228,6 +229,10 @@ export function applyRemoveWorktreeSuccessState(
       groupsByWorktree: nextGroupsByWorktree,
       layoutByWorktree: nextLayoutByWorktree,
       activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+      ...buildDetachedTabGroupIntegrityPatch(s, {
+        groupsByWorktree: nextGroupsByWorktree,
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+      }),
       editorDrafts: nextEditorDrafts,
       markdownViewMode: nextMarkdownViewMode,
       editorViewMode: nextEditorViewMode,

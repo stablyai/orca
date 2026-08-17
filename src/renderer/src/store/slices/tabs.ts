@@ -44,6 +44,8 @@ import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
 } from './degraded-repo-worktree-validity'
+import { buildDetachedTabGroupIntegrityPatch } from './detached-tab-groups'
+import { mergePartialDetachedTabGroupHydration } from './partial-detached-tab-group-hydration'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -814,6 +816,13 @@ export function projectWorktreeTabModelReconciliation(
         ? buildOrphanTerminalCleanupPatch(state, worktreeId, orphanTerminalIds)
         : {})
     }
+    Object.assign(
+      patch,
+      buildDetachedTabGroupIntegrityPatch(state, {
+        groupsByWorktree: patch.groupsByWorktree,
+        unifiedTabsByWorktree: patch.unifiedTabsByWorktree
+      })
+    )
   }
 
   return {
@@ -888,25 +897,31 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const nextRecent = shouldActivate
         ? pushRecentTabId(sanitizedRecent, created.id)
         : sanitizedRecent
+      const nextUnifiedTabsByWorktree = {
+        ...state.unifiedTabsByWorktree,
+        [worktreeId]: [...nextTabs, created]
+      }
+      const nextGroupsByWorktree = {
+        ...groupsByWorktree,
+        [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
+          ...group,
+          activeTabId: nextActiveTabId,
+          tabOrder: nextOrder,
+          recentTabIds: nextRecent
+        })
+      }
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: [...nextTabs, created]
-        },
-        groupsByWorktree: {
-          ...groupsByWorktree,
-          [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-            ...group,
-            activeTabId: nextActiveTabId,
-            tabOrder: nextOrder,
-            recentTabIds: nextRecent
-          })
-        },
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        groupsByWorktree: nextGroupsByWorktree,
         activeGroupIdByWorktree,
         layoutByWorktree: {
           ...state.layoutByWorktree,
           [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-        }
+        },
+        ...buildDetachedTabGroupIntegrityPatch(state, {
+          groupsByWorktree: nextGroupsByWorktree,
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+        })
       }
     })
     if (init?.recordInteraction !== false) {
@@ -1235,7 +1250,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               nextActiveGroupIdByWorktree[worktreeId] ?? null
             )
-          : {})
+          : {}),
+        ...buildDetachedTabGroupIntegrityPatch(current, {
+          groupsByWorktree: {
+            ...current.groupsByWorktree,
+            [worktreeId]: nextGroups
+          },
+          unifiedTabsByWorktree: {
+            ...current.unifiedTabsByWorktree,
+            [worktreeId]: nextTabs
+          }
+        })
       }
     })
 
@@ -1626,7 +1651,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               collapsedState.activeGroupIdByWorktree[worktreeId] ?? null
             )
-          : {})
+          : {}),
+        ...buildDetachedTabGroupIntegrityPatch(current, {
+          groupsByWorktree: {
+            ...current.groupsByWorktree,
+            [worktreeId]: remainingGroups
+          }
+        })
       }
     })
     return true
@@ -1767,7 +1798,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               nextActiveGroupIdByWorktreeResolved[worktreeId] ?? null
             )
-          : {})
+          : {}),
+        ...buildDetachedTabGroupIntegrityPatch(state, {
+          groupsByWorktree: nextGroupsByWorktree,
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+        })
       }
     })
     if (moved && opts?.recordInteraction !== false) {
@@ -1938,7 +1973,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               resolvedTargetGroupId
             )
-          : {})
+          : {}),
+        ...buildDetachedTabGroupIntegrityPatch(state, {
+          groupsByWorktree: nextGroupsByWorktree,
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+        })
       }
     })
     if (moved) {
@@ -2049,32 +2088,55 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
     addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
     const hydrated = buildHydratedTabState(session, validWorktreeIds)
+    const detachedCandidate = {
+      detachedGroupIds: session.detachedGroupIds ?? [],
+      auxWindowBoundsByGroupId: session.auxWindowBoundsByGroupId ?? {},
+      groupsByWorktree: hydrated.groupsByWorktree,
+      unifiedTabsByWorktree: hydrated.unifiedTabsByWorktree
+    }
+    const detachedPatch = buildDetachedTabGroupIntegrityPatch(detachedCandidate)
+    const restoredDetachedState = {
+      detachedGroupIds: detachedPatch.detachedGroupIds ?? detachedCandidate.detachedGroupIds,
+      auxWindowBoundsByGroupId:
+        detachedPatch.auxWindowBoundsByGroupId ?? detachedCandidate.auxWindowBoundsByGroupId
+    }
     if (!options?.replaceWorkspaceKeys) {
-      set(hydrated)
+      set({ ...hydrated, ...restoredDetachedState })
       return
     }
     const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
-    set((current) => ({
-      unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
+    set((current) => {
+      const unifiedTabsByWorktree = replaceWorkspaceRecordKeys(
         current.unifiedTabsByWorktree,
         hydrated.unifiedTabsByWorktree,
         replaceWorkspaceKeys
-      ),
-      groupsByWorktree: replaceWorkspaceRecordKeys(
+      )
+      const groupsByWorktree = replaceWorkspaceRecordKeys(
         current.groupsByWorktree,
         hydrated.groupsByWorktree,
         replaceWorkspaceKeys
-      ),
-      activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
-        current.activeGroupIdByWorktree,
-        hydrated.activeGroupIdByWorktree,
-        replaceWorkspaceKeys
-      ),
-      layoutByWorktree: replaceWorkspaceRecordKeys(
-        current.layoutByWorktree,
-        hydrated.layoutByWorktree,
-        replaceWorkspaceKeys
       )
-    }))
+      return {
+        unifiedTabsByWorktree,
+        groupsByWorktree,
+        activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
+          current.activeGroupIdByWorktree,
+          hydrated.activeGroupIdByWorktree,
+          replaceWorkspaceKeys
+        ),
+        layoutByWorktree: replaceWorkspaceRecordKeys(
+          current.layoutByWorktree,
+          hydrated.layoutByWorktree,
+          replaceWorkspaceKeys
+        ),
+        ...mergePartialDetachedTabGroupHydration({
+          current,
+          incoming: restoredDetachedState,
+          nextGroupsByWorktree: groupsByWorktree,
+          nextUnifiedTabsByWorktree: unifiedTabsByWorktree,
+          replaceWorkspaceKeys
+        })
+      }
+    })
   }
 })

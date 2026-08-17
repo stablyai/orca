@@ -509,6 +509,40 @@ describe('closeTerminalTab', () => {
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
+  it('preserves opener selection when closing an auxiliary tab in the same worktree', () => {
+    const closeTab = vi.fn()
+    const setActiveTab = vi.fn()
+    const setActiveTabType = vi.fn()
+    const setActiveBrowserTab = vi.fn()
+    const setActiveFile = vi.fn()
+    const setActiveWorktree = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: { 'wt-1': [{ id: 'aux-terminal' }] },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'aux-terminal',
+      activeTabType: 'browser',
+      openFiles: [{ id: 'editor-1', worktreeId: 'wt-1' }],
+      browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
+      closeTab,
+      setActiveTab,
+      setActiveTabType,
+      setActiveBrowserTab,
+      setActiveFile,
+      setActiveWorktree
+    })
+
+    closeTerminalTab('aux-terminal', { preserveOpenerSelection: true })
+
+    expect(closeTab).toHaveBeenCalledWith('aux-terminal')
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveBrowserTab).not.toHaveBeenCalled()
+    expect(setActiveFile).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+  })
+
   it('routes closes on a remote worktree to the host even when the local→host map has no entry', () => {
     // Why: regression for the close-reappear bug. On a remote-owned worktree the
     // tab is host-authoritative; when the map has no entry (e.g. a plain-UUID host

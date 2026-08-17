@@ -15957,7 +15957,9 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "returnGroupToMainWindow": "Return Group to Main Window",
+          "moveGroupToNewWindow": "Move Group to New Window"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",
@@ -16174,6 +16176,15 @@
       "bar": {
         "workspaceSpace": {
           "otherTopLevelItems": "Other top-level items ({{value0}})"
+        }
+      }
+    },
+    "settings": {
+      "experimentalPane": {
+        "detachedPanes": {
+          "title": "Detached Panes",
+          "description": "Move a terminal tab group into its own window, for a second monitor.",
+          "copy": "Adds \"Move Group to New Window\" to the tab menu for terminal-only groups. Detached windows do not yet have a native right-click menu, and paste from the Edit menu does not reach them — use the keyboard inside the terminal."
         }
       }
     }

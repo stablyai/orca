@@ -46,7 +46,7 @@ export type EditorFilesSlice = {
       reopenId?: string
     }
   ) => string
-  openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewMarkdownInActiveWorkspace: (groupId: string, worktreeIdOverride?: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,

@@ -532,6 +532,66 @@ describe('removeWorktree state cleanup', () => {
     })
   })
 
+  it('removes detached ids and bounds owned by the removed worktree only', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const surviving = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      groupsByWorktree: {
+        [removed.id]: [
+          {
+            id: 'removed-group',
+            worktreeId: removed.id,
+            activeTabId: 'removed-tab',
+            tabOrder: ['removed-tab']
+          }
+        ],
+        [surviving.id]: [
+          {
+            id: 'surviving-group',
+            worktreeId: surviving.id,
+            activeTabId: 'surviving-tab',
+            tabOrder: ['surviving-tab']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [removed.id]: [
+          {
+            id: 'removed-tab',
+            entityId: 'removed-terminal',
+            groupId: 'removed-group',
+            worktreeId: removed.id,
+            contentType: 'terminal'
+          }
+        ],
+        [surviving.id]: [
+          {
+            id: 'surviving-tab',
+            entityId: 'surviving-terminal',
+            groupId: 'surviving-group',
+            worktreeId: surviving.id,
+            contentType: 'terminal'
+          }
+        ]
+      },
+      detachedGroupIds: ['removed-group', 'surviving-group'],
+      auxWindowBoundsByGroupId: {
+        'removed-group': { x: 1, y: 2, width: 300, height: 200 },
+        'surviving-group': { x: 3, y: 4, width: 500, height: 400 }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree(removed.id)
+
+    expect(store.getState().detachedGroupIds).toEqual(['surviving-group'])
+    expect(store.getState().auxWindowBoundsByGroupId).toEqual({
+      'surviving-group': { x: 3, y: 4, width: 500, height: 400 }
+    })
+  })
+
   it('cleans up git caches for the removed worktree', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

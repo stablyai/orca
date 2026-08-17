@@ -5,6 +5,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import { Select as SelectPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useAuxWindowContainer } from '@/components/aux-window-container-context'
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />
@@ -50,8 +51,9 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const auxContainer = useAuxWindowContainer()
   return (
-    <SelectPrimitive.Portal container={portalContainer ?? undefined}>
+    <SelectPrimitive.Portal container={portalContainer ?? auxContainer ?? undefined}>
       <SelectPrimitive.Content
         data-slot="select-content"
         // Why: matches the dropdown-menu recipe — translucent surface, solid

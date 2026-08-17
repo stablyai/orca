@@ -24,9 +24,9 @@ export function createMarkdownPreviewActions(
   | 'pinFile'
 > {
   return {
-    openNewMarkdownInActiveWorkspace: async (groupId) => {
+    openNewMarkdownInActiveWorkspace: async (groupId, worktreeIdOverride) => {
       const state = get()
-      const worktreeId = state.activeWorktreeId
+      const worktreeId = worktreeIdOverride ?? state.activeWorktreeId
       if (!worktreeId) {
         return
       }

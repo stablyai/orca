@@ -18,6 +18,7 @@ function createWebview(overrides: Partial<Electron.WebviewTag> = {}): Electron.W
     blur: vi.fn(),
     remove: vi.fn(),
     contains: vi.fn(() => false),
+    ownerDocument: document,
     ...overrides
   }) as unknown as Electron.WebviewTag
 }
@@ -297,7 +298,7 @@ describe('webview registry drag listeners', () => {
   it('moves focus back to the renderer before detaching the focused webview', async () => {
     const { moveFocusToRendererBeforeWebviewDetach } = await import('./webview-registry')
     const webview = createWebview()
-    vi.stubGlobal('document', { activeElement: webview })
+    Object.defineProperty(webview.ownerDocument, 'activeElement', { value: webview })
 
     moveFocusToRendererBeforeWebviewDetach(webview)
 
@@ -309,7 +310,7 @@ describe('webview registry drag listeners', () => {
     const { moveFocusToRendererBeforeWebviewDetach } = await import('./webview-registry')
     const activeElement = { blur: vi.fn() } as unknown as HTMLElement
     const webview = createWebview({ contains: vi.fn(() => true) })
-    vi.stubGlobal('document', { activeElement })
+    Object.defineProperty(webview.ownerDocument, 'activeElement', { value: activeElement })
 
     moveFocusToRendererBeforeWebviewDetach(webview)
 
@@ -322,7 +323,7 @@ describe('webview registry drag listeners', () => {
       await import('./webview-registry')
     const inactiveWebview = createWebview()
     const focusedWebview = createWebview()
-    vi.stubGlobal('document', { activeElement: focusedWebview })
+    Object.defineProperty(focusedWebview.ownerDocument, 'activeElement', { value: focusedWebview })
 
     registerPersistentWebview('page-1', inactiveWebview)
     registerPersistentWebview('page-2', focusedWebview)
@@ -338,11 +339,24 @@ describe('webview registry drag listeners', () => {
     const { moveFocusToRendererBeforeWebviewDetach } = await import('./webview-registry')
     const activeElement = { blur: vi.fn() } as unknown as HTMLElement
     const webview = createWebview()
-    vi.stubGlobal('document', { activeElement })
+    Object.defineProperty(webview.ownerDocument, 'activeElement', { value: activeElement })
 
     moveFocusToRendererBeforeWebviewDetach(webview)
 
     expect(activeElement.blur).not.toHaveBeenCalled()
     expect(window.focus).not.toHaveBeenCalled()
+  })
+
+  it('reads focus from the webview owning document', async () => {
+    const { moveFocusToRendererBeforeWebviewDetach } = await import('./webview-registry')
+    const foreignDocument = { activeElement: null } as unknown as Document
+    const webview = createWebview({ ownerDocument: foreignDocument })
+    Object.defineProperty(foreignDocument, 'activeElement', { value: webview })
+
+    moveFocusToRendererBeforeWebviewDetach(webview)
+
+    expect(document.activeElement).toBeNull()
+    expect(webview.blur).toHaveBeenCalledTimes(1)
+    expect(window.focus).toHaveBeenCalledTimes(1)
   })
 })

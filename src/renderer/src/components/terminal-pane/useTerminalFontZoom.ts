@@ -4,6 +4,7 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
+import { activeElementFor } from '@/lib/cross-realm-dom-predicates'
 
 type FontZoomDeps = {
   isActive: boolean
@@ -30,7 +31,7 @@ export function useTerminalFontZoom({
 
     return window.api.ui.onTerminalZoom((direction) => {
       const container = containerRef.current
-      if (!container || !getPaneOwnedActiveHelperTextarea(container, document.activeElement)) {
+      if (!container || !getPaneOwnedActiveHelperTextarea(container, activeElementFor(container))) {
         return
       }
       const manager = managerRef.current

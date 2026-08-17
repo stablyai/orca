@@ -9,11 +9,23 @@ const useAppStoreMock = vi.fn(
     selector: (state: {
       recordFeatureInteraction: typeof recordFeatureInteractionMock
       setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
+      detachedGroupIds: string[]
+      groupsByWorktree: Record<
+        string,
+        { id: string; activeTabId: string | null; tabOrder: string[] }[]
+      >
+      unifiedTabsByWorktree: Record<
+        string,
+        { id: string; groupId: string; label: string; customLabel: string | null }[]
+      >
     }) => unknown
   ) =>
     selector({
       recordFeatureInteraction: recordFeatureInteractionMock,
-      setTabGroupSplitRatio: setTabGroupSplitRatioMock
+      setTabGroupSplitRatio: setTabGroupSplitRatioMock,
+      detachedGroupIds: [],
+      groupsByWorktree: {},
+      unifiedTabsByWorktree: {}
     })
 )
 vi.mock('../../store', () => ({
@@ -21,6 +33,15 @@ vi.mock('../../store', () => ({
     selector: (state: {
       recordFeatureInteraction: typeof recordFeatureInteractionMock
       setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
+      detachedGroupIds: string[]
+      groupsByWorktree: Record<
+        string,
+        { id: string; activeTabId: string | null; tabOrder: string[] }[]
+      >
+      unifiedTabsByWorktree: Record<
+        string,
+        { id: string; groupId: string; label: string; customLabel: string | null }[]
+      >
     }) => unknown
   ) => useAppStoreMock(selector)
 }))
@@ -46,7 +67,7 @@ vi.mock('./useTabDragSplit', () => ({
   })
 }))
 
-import TabGroupSplitLayout from './TabGroupSplitLayout'
+import TabGroupSplitLayout, { detachedTabGroupWindowTitle } from './TabGroupSplitLayout'
 
 type ReactElementLike = {
   type: string | ((props: Record<string, unknown>) => unknown)
@@ -134,6 +155,45 @@ describe('TabGroupSplitLayout', () => {
         reserveCollapsedSidebarHeaderSpace: true
       })
     )
+  })
+
+  it('uses the detached group active tab for the window title', () => {
+    const groups = [
+      {
+        id: 'group-1',
+        worktreeId: 'wt-1',
+        activeTabId: 'tab-2',
+        tabOrder: ['tab-1', 'tab-2']
+      }
+    ]
+    const tabs = [
+      {
+        id: 'tab-1',
+        entityId: 'terminal-1',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        contentType: 'terminal' as const,
+        label: 'First',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      },
+      {
+        id: 'tab-2',
+        entityId: 'terminal-2',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        contentType: 'terminal' as const,
+        label: 'Second',
+        customLabel: 'Active title',
+        color: null,
+        sortOrder: 1,
+        createdAt: 2
+      }
+    ]
+
+    expect(detachedTabGroupWindowTitle('group-1', groups, tabs)).toBe('Active title')
   })
 
   it('wires the split layout root to drag cleanup ownership', () => {

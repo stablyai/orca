@@ -12,6 +12,9 @@ const storeMock = vi.hoisted(() => ({
   dropUnifiedTab: vi.fn(),
   state: {
     keybindings: {},
+    detachedGroupIds: [],
+    detachTabGroup: vi.fn(),
+    reattachTabGroup: vi.fn(),
     unifiedTabsByWorktree: {},
     groupsByWorktree: {}
   } as Record<string, unknown>
@@ -50,6 +53,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ExternalLink: () => null,
   ArrowDown: () => null,
   ArrowLeft: () => null,
   ArrowRight: () => null,
@@ -152,6 +156,9 @@ beforeEach(() => {
   storeMock.dropUnifiedTab.mockReset()
   storeMock.state = {
     keybindings: {},
+    detachedGroupIds: [],
+    detachTabGroup: vi.fn(),
+    reattachTabGroup: vi.fn(),
     dropUnifiedTab: storeMock.dropUnifiedTab,
     groupsByWorktree: {
       'wt-1': [

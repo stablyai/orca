@@ -428,6 +428,87 @@ describe('TabsSlice', () => {
       expect(store.getState().groupsByWorktree[siblingWorktreeId]).toBe(siblingGroups)
     })
 
+    it('merges detached state across partial SSH and folder hydration scopes', () => {
+      const siblingWorktreeId = 'folder::host-b::workspace-b'
+      const targetGroup = makeTabGroup({
+        id: 'group-host-a',
+        worktreeId: WT,
+        activeTabId: 'tab-host-a',
+        tabOrder: ['tab-host-a']
+      })
+      const siblingGroup = makeTabGroup({
+        id: 'group-host-b',
+        worktreeId: siblingWorktreeId,
+        activeTabId: 'tab-host-b',
+        tabOrder: ['tab-host-b']
+      })
+      const targetTab = makeUnifiedTab({
+        id: 'tab-host-a',
+        worktreeId: WT,
+        groupId: targetGroup.id
+      })
+      const siblingTab = makeUnifiedTab({
+        id: 'tab-host-b',
+        worktreeId: siblingWorktreeId,
+        groupId: siblingGroup.id
+      })
+      store.setState({
+        worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1' })] },
+        unifiedTabsByWorktree: { [WT]: [targetTab], [siblingWorktreeId]: [siblingTab] },
+        groupsByWorktree: { [WT]: [targetGroup], [siblingWorktreeId]: [siblingGroup] },
+        detachedGroupIds: [siblingGroup.id],
+        auxWindowBoundsByGroupId: {
+          [siblingGroup.id]: { x: 10, y: 20, width: 800, height: 600 }
+        }
+      })
+
+      store.getState().hydrateTabsSession(
+        {
+          activeRepoId: 'repo1',
+          activeWorktreeId: WT,
+          activeTabId: targetTab.id,
+          tabsByWorktree: {},
+          terminalLayoutsByTabId: {},
+          unifiedTabs: { [WT]: [targetTab] },
+          tabGroups: { [WT]: [targetGroup] },
+          detachedGroupIds: [targetGroup.id],
+          auxWindowBoundsByGroupId: {
+            [targetGroup.id]: { x: 30, y: 40, width: 900, height: 700 }
+          }
+        },
+        { replaceWorkspaceKeys: [WT] }
+      )
+
+      expect(store.getState().detachedGroupIds).toEqual([siblingGroup.id, targetGroup.id])
+      expect(store.getState().auxWindowBoundsByGroupId).toEqual({
+        [siblingGroup.id]: { x: 10, y: 20, width: 800, height: 600 },
+        [targetGroup.id]: { x: 30, y: 40, width: 900, height: 700 }
+      })
+
+      store.getState().hydrateTabsSession(
+        {
+          activeRepoId: 'repo1',
+          activeWorktreeId: WT,
+          activeTabId: targetTab.id,
+          tabsByWorktree: {},
+          terminalLayoutsByTabId: {},
+          unifiedTabs: { [WT]: [targetTab] },
+          tabGroups: { [WT]: [targetGroup] },
+          detachedGroupIds: [],
+          auxWindowBoundsByGroupId: {
+            [targetGroup.id]: { x: 50, y: 60, width: 1000, height: 800 }
+          }
+        },
+        { replaceWorkspaceKeys: [WT] }
+      )
+
+      expect(store.getState().detachedGroupIds).toEqual([siblingGroup.id])
+      expect(store.getState().auxWindowBoundsByGroupId).toEqual({
+        [siblingGroup.id]: { x: 10, y: 20, width: 800, height: 600 },
+        [targetGroup.id]: { x: 50, y: 60, width: 1000, height: 800 }
+      })
+    })
+
     it('deletes omitted target chrome while preserving sibling references', () => {
       const siblingWorktreeId = 'repo2::/tmp/sibling'
       const targetGroup = makeTabGroup({

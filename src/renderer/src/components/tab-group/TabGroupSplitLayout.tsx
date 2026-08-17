@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import TabGroupPanel from './TabGroupPanel'
+import DetachedTabGroupWindow from './DetachedTabGroupWindow'
 import TabDragPreview from '../tab-bar/TabDragPreview'
 import { TabDragProvider } from './tab-drag-context'
 import TabPaneColumnSplitDragOverlay from './TabPaneColumnSplitDragOverlay'
@@ -10,6 +11,17 @@ import { type HoveredTabInsertion, useTabDragSplit } from './useTabDragSplit'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
+
+export function detachedTabGroupWindowTitle(
+  groupId: string,
+  groups: readonly TabGroup[],
+  tabs: readonly Tab[]
+): string {
+  const group = groups.find((candidate) => candidate.id === groupId)
+  const titleTabId = group?.activeTabId ?? group?.tabOrder[0]
+  const titleTab = tabs.find((tab) => tab.id === titleTabId && tab.groupId === groupId)
+  return titleTab?.customLabel ?? titleTab?.label ?? 'Orca'
+}
 
 function ResizeHandle({
   direction,
@@ -141,6 +153,16 @@ function ResizeHandle({
   )
 }
 
+/** True when every leaf under `node` is detached, so it renders no DOM here. */
+function isNodeDetached(node: TabGroupLayoutNode, detachedGroupIds: string[]): boolean {
+  if (node.type === 'leaf') {
+    return detachedGroupIds.includes(node.groupId)
+  }
+  return (
+    isNodeDetached(node.first, detachedGroupIds) && isNodeDetached(node.second, detachedGroupIds)
+  )
+}
+
 function SplitNode({
   node,
   nodePath,
@@ -176,9 +198,22 @@ function SplitNode({
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
+  const leafGroupId = node.type === 'leaf' ? node.groupId : null
+  const detachedGroupIds = useAppStore((state) => state.detachedGroupIds)
+  const isDetached = leafGroupId !== null && detachedGroupIds.includes(leafGroupId)
+  const detachedWindowTitle = useAppStore((state) => {
+    if (leafGroupId === null) {
+      return 'Orca'
+    }
+    return detachedTabGroupWindowTitle(
+      leafGroupId,
+      state.groupsByWorktree[worktreeId] ?? [],
+      state.unifiedTabsByWorktree[worktreeId] ?? []
+    )
+  })
 
   if (node.type === 'leaf') {
-    return (
+    const panel = (
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
@@ -203,10 +238,27 @@ function SplitNode({
         }
       />
     )
+    if (isDetached) {
+      // Why: the pane keeps its place in the layout tree while it lives in the
+      // aux window, so reattaching is a no-op for every sibling and the PTY
+      // view is never unmounted.
+      return (
+        <DetachedTabGroupWindow groupId={node.groupId} title={detachedWindowTitle}>
+          {panel}
+        </DetachedTabGroupWindow>
+      )
+    }
+    return panel
   }
 
   const isHorizontal = node.direction === 'horizontal'
-  const ratio = node.ratio ?? 0.5
+  const rawRatio = node.ratio ?? 0.5
+  // Why: a detached child renders through a portal, so it contributes no DOM
+  // here. Its flex wrapper would still reserve its share and leave a permanent
+  // blank rectangle, so collapse it and give the space to the sibling.
+  const firstDetached = isNodeDetached(node.first, detachedGroupIds)
+  const secondDetached = isNodeDetached(node.second, detachedGroupIds)
+  const ratio = firstDetached ? 0 : secondDetached ? 1 : rawRatio
 
   return (
     <div
@@ -234,11 +286,13 @@ function SplitNode({
           hoveredTabInsertion={hoveredTabInsertion}
         />
       </div>
-      <ResizeHandle
-        direction={node.direction}
-        onResizeStart={() => recordFeatureInteraction('terminal-panes')}
-        onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
-      />
+      {firstDetached || secondDetached ? null : (
+        <ResizeHandle
+          direction={node.direction}
+          onResizeStart={() => recordFeatureInteraction('terminal-panes')}
+          onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
+        />
+      )}
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
         <SplitNode
           node={node.second}

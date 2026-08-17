@@ -7,7 +7,8 @@ import {
   Pencil,
   SquareTerminal,
   X,
-  ListX
+  ListX,
+  ExternalLink
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -142,6 +143,19 @@ export function SortableTabContextMenu({
   onToggleViewMode
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
+  const detachTabGroup = useAppStore((state) => state.detachTabGroup)
+  const reattachTabGroup = useAppStore((state) => state.reattachTabGroup)
+  const isGroupDetached = useAppStore((state) => state.detachedGroupIds.includes(groupId))
+  // Why: browser and editor panes still read focus from the main document, so
+  // only terminal-only groups are offered for detach until those are migrated.
+  const canDetachGroup = useAppStore((state) => {
+    if (state.settings?.experimentalDetachedPanes !== true) {
+      return false
+    }
+    const tabs = state.unifiedTabsByWorktree[tab.worktreeId] ?? []
+    const groupTabs = tabs.filter((entry) => entry.groupId === groupId)
+    return groupTabs.length > 0 && groupTabs.every((entry) => entry.contentType === 'terminal')
+  })
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
@@ -200,6 +214,27 @@ export function SortableTabContextMenu({
             ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
+        {canDetachGroup || isGroupDetached ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() =>
+                isGroupDetached ? reattachTabGroup(groupId) : detachTabGroup(groupId)
+              }
+            >
+              <ExternalLink className="size-3.5" />
+              {isGroupDetached
+                ? translate(
+                    'components.tab.bar.SortableTabContextMenu.returnGroupToMainWindow',
+                    'Return Group to Main Window'
+                  )
+                : translate(
+                    'components.tab.bar.SortableTabContextMenu.moveGroupToNewWindow',
+                    'Move Group to New Window'
+                  )}
+            </DropdownMenuItem>
+          </>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           <X className="size-3.5" />

@@ -1,6 +1,7 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { equalizePaneSplitSizes } from './pane-tree-ops'
 import { fitRevealedPane } from './pane-reveal-fit'
+import { isHTMLElement } from '../cross-realm-dom-predicates'
 
 // Why: a raw synchronous fit on reveal can apply a transient DOM<->WebGL
 // cell-metric grid and reflow-garble diff-painting inline TUIs; see fitRevealedPane.
@@ -32,7 +33,7 @@ export function equalizeManagedPaneSizes(
   }
 
   const changed = equalizePaneSplitSizes(
-    root.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
+    isHTMLElement(root.firstElementChild) ? root.firstElementChild : null
   )
   if (!changed) {
     return
