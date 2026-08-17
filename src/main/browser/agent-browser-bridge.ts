@@ -6,7 +6,17 @@ import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
-import { acquireElectronDebugger } from './electron-debugger-lease'
+import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import {
+  assertFinitePointerValues,
+  cdpPointerButtonMask,
+  cdpPointerStateFor,
+  dispatchCdpPointerEvent,
+  normalizeCdpPointerButton,
+  releaseLeaseAfterPointerDispatch,
+  trackCdpClickCount,
+  type CdpPointerState
+} from './cdp-pointer-input'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
 import type {
@@ -1079,25 +1089,81 @@ export class AgentBrowserBridge {
 
   // ── Mouse commands ──
 
+  // Why: coordinate pointer input needs no accessibility snapshot, so it dispatches over
+  // the Electron debugger directly instead of paying a subprocess spawn per event.
+  private resolvePointerDispatchTarget(target: ResolvedBrowserCommandTarget): {
+    webContents: Electron.WebContents
+    state: CdpPointerState
+    lease: ElectronDebuggerLease
+  } {
+    const wc = this.getWebContents(target.webContentsId)
+    if (!wc || wc.isDestroyed()) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${target.browserPageId} is no longer available`
+      )
+    }
+    return { webContents: wc, state: cdpPointerStateFor(wc), lease: acquireElectronDebugger(wc) }
+  }
+
   async mouseMove(
     x: number,
     y: number,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['mouse', 'move', String(x), String(y)])
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        assertFinitePointerValues({ x, y })
+        const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
+        try {
+          state.x = x
+          state.y = y
+          await dispatchCdpPointerEvent(state, wc, {
+            type: 'mouseMoved',
+            x,
+            y,
+            button: state.button,
+            buttons: state.buttons
+          })
+          return { moved: true }
+        } finally {
+          releaseLeaseAfterPointerDispatch(state, lease)
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'down']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
+        try {
+          wc.focus()
+          const cdpButton = normalizeCdpPointerButton(button)
+          state.button = cdpButton
+          state.buttons |= cdpPointerButtonMask(cdpButton)
+          state.clickCount = trackCdpClickCount(state, cdpButton)
+          await dispatchCdpPointerEvent(state, wc, {
+            type: 'mousePressed',
+            x: state.x,
+            y: state.y,
+            button: cdpButton,
+            buttons: state.buttons,
+            clickCount: state.clickCount
+          })
+          return { pressed: true }
+        } finally {
+          releaseLeaseAfterPointerDispatch(state, lease)
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async mouseClick(
@@ -1171,13 +1237,32 @@ export class AgentBrowserBridge {
   }
 
   async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'up']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
+        try {
+          const cdpButton = normalizeCdpPointerButton(
+            button ?? (state.button === 'none' ? undefined : state.button)
+          )
+          state.buttons &= ~cdpPointerButtonMask(cdpButton)
+          state.button = 'none'
+          await dispatchCdpPointerEvent(state, wc, {
+            type: 'mouseReleased',
+            x: state.x,
+            y: state.y,
+            button: cdpButton,
+            buttons: state.buttons,
+            clickCount: state.clickCount
+          })
+          return { released: true }
+        } finally {
+          releaseLeaseAfterPointerDispatch(state, lease)
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async mouseWheel(
@@ -1186,13 +1271,31 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'wheel', String(dy)]
-      if (dx != null) {
-        args.push(String(dx))
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        assertFinitePointerValues({ dy, ...(dx == null ? {} : { dx }) })
+        const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
+        try {
+          const deltaX = dx ?? 0
+          // Why: dispatch at the tracked pointer position so the scrollable under the
+          // cursor scrolls; the subprocess path always dispatched wheel at (0,0).
+          await dispatchCdpPointerEvent(state, wc, {
+            type: 'mouseWheel',
+            x: state.x,
+            y: state.y,
+            deltaX,
+            deltaY: dy,
+            buttons: state.buttons
+          })
+          return { scrolled: true, deltaX, deltaY: dy }
+        } finally {
+          releaseLeaseAfterPointerDispatch(state, lease)
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   // ── Find (semantic locators) ──
