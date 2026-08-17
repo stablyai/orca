@@ -25,8 +25,8 @@ describe('agent completion coordinator', () => {
       agentType: 'claude',
       stateStartedAt: 1_700_000_000_000
     })
-    // Why: NaN/Infinity identify nothing, so a `working` row carrying one is just a working row —
-    // announcing on it would raise a banner for a turn that has not ended.
+    // Why: NaN identifies no turn, so this stays an ordinary `working` row — announcing on it
+    // would raise a banner for a turn that has not ended.
     coordinator.observeHookStatus({
       state: 'working',
       prompt: 'review the PR',

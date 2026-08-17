@@ -94,9 +94,9 @@ function createClaudeHookReplay(): {
   }
 }
 
-/** Every completion banner, including one dispatched without a snapshot — an extra banner must
- *  never hide behind a missing snapshot. A `waiting`/`blocked` snapshot rides the same channel to
- *  raise "needs input" attention, which is a separate signal and not a turn completion. */
+/** Completion banners; a snapshot-less dispatch counts too, so an extra banner cannot hide behind
+ *  a missing snapshot. A `waiting`/`blocked` snapshot rides the same channel to raise "needs
+ *  input" attention, which is a separate signal and not a turn completion. */
 function completionSnapshots(): (
   | { lastAssistantMessage?: string; stateStartedAt?: number }
   | undefined
@@ -175,12 +175,9 @@ describe('claude turn completions while background work keeps the pane working',
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
-    // Why: the first turn's completion must not be able to swallow the next turn's — the
-    // background shell never produces an all-clear of its own, so a one-shot suppression flag
-    // would survive into turn N+1 and silence it (#13245).
+    // Why: a turn that ended while a background shell ran must not silence the next one (#13245).
     expect(completionBodies()).toEqual(['Build started in the background.', 'Lint is queued.'])
-    // Why: two bodies are only two banners if they also build two notification ids; the pane
-    // never left `working`, so both would otherwise be minted from the same pinned timestamp.
+    // Why: two bodies are only two banners if they also build two notification ids.
     expect(new Set(completionStateStartedAts()).size).toBe(2)
   })
 

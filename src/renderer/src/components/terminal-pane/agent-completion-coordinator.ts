@@ -33,10 +33,9 @@ type LastCompletionIdentity = {
   agentIdentity: string | null
   /** End time of the Claude lead turn already announced from a pane that stayed `working` for
    *  its background inventory (#13245); absent for every other completion. That turn's all-clear
-   *  `done` arrives carrying the same value and must not raise a second banner. Held here —
-   *  not in a coordinator-local flag — so the suppression is keyed by turn (a turn whose
-   *  all-clear never arrives cannot swallow the next turn) and survives the live remount this
-   *  map already outlives. */
+   *  `done` arrives carrying the same value and must not raise a second banner. Keyed by turn
+   *  rather than a boolean flag, so a turn whose all-clear never arrives cannot swallow the next
+   *  one; pane-scoped so it survives the live remount this map already outlives. */
   lastTurnCompletedAtNotified?: number | null
 }
 

@@ -689,8 +689,8 @@ describe('shared agent-hook-listener', () => {
       // Why: the lead already finished; the answer resumes the child, so the
       // emitted state is gated up to working only while that child still runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
-      // Why: the restored record also keeps the end time stamped on the gated Stop, so the
-      // drained all-clear below is recognizable as this same turn's tail (#13245).
+      // Why: the restored record still carries a turn end time, and the drain below repeats it —
+      // that pairing marks the all-clear as a turn's tail rather than a completion (#13245).
       expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
         state: 'done',
         turnCompletedAt: expect.any(Number)
