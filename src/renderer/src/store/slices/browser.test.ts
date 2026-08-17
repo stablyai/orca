@@ -149,7 +149,12 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
-  it('clears page annotations when the browser page URL changes', () => {
+  it('keeps page annotations when the browser page URL changes', () => {
+    // Why: annotations used to be deleted outright on any real navigation, silently discarding pending
+    // feedback for a user reviewing several pages before sending. They're page-scoped (browserPageId is
+    // stable across navigation within a tab), so there's no reason navigating should drop the data —
+    // only the on-page position marker becomes stale, which BrowserPane gates separately by comparing
+    // the annotation's captured URL against the currently loaded one.
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
@@ -162,7 +167,11 @@ describe('createBrowserSlice annotations', () => {
 
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+    const annotations = store.getState().browserAnnotationsByPageId[pageId]
+    expect(annotations).toHaveLength(1)
+    // Why: the stored annotation still records the URL it was captured on, not the page's current URL —
+    // that's what lets marker rendering tell "still on this document" apart from "page moved on".
+    expect(annotations?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
   })
 
   it('can commit a navigation URL without hiding an active recovery error', () => {

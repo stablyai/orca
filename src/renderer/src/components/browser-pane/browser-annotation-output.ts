@@ -159,14 +159,22 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
 
   const firstAnnotation = annotations[0]
   const first = firstAnnotation.payload
-  const lines: string[] = [
-    `## Design Feedback: ${formatPageHeading(first)}`,
-    '',
-    `**URL:** ${first.page.sanitizedUrl}`,
-    `**Browser tab id:** ${firstAnnotation.browserPageId}`,
-    `**Viewport:** ${first.page.viewportWidth}x${first.page.viewportHeight}`,
-    ''
-  ]
+  // Why: annotations used to always share one page (navigating away cleared them), so a single top-level
+  // URL/viewport was accurate. They now survive navigation, so a batch can span several pages — fall back
+  // to a per-item "Page:" line whenever that's the case instead of asserting one URL for everything.
+  const spansMultiplePages = annotations.some(
+    (annotation) => annotation.payload.page.sanitizedUrl !== first.page.sanitizedUrl
+  )
+  const lines: string[] = spansMultiplePages
+    ? [`## Design Feedback (${annotations.length} items across multiple pages)`, '']
+    : [
+        `## Design Feedback: ${formatPageHeading(first)}`,
+        '',
+        `**URL:** ${first.page.sanitizedUrl}`,
+        `**Browser tab id:** ${firstAnnotation.browserPageId}`,
+        `**Viewport:** ${first.page.viewportWidth}x${first.page.viewportHeight}`,
+        ''
+      ]
 
   annotations.forEach((annotation, index) => {
     const { payload } = annotation
@@ -175,6 +183,10 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
     const styleLines = formatStyles(target.computedStyles)
 
     lines.push(`### ${index + 1}. ${annotationElementLabel(payload)}`)
+    if (spansMultiplePages) {
+      lines.push(`**Page:** ${payload.page.sanitizedUrl}`)
+      lines.push(`**Viewport:** ${payload.page.viewportWidth}x${payload.page.viewportHeight}`)
+    }
     lines.push(`**Intent:** ${annotation.intent}`)
     lines.push(`**Selector:** ${inlineCode(target.selector)}`)
     if (target.elementPath) {

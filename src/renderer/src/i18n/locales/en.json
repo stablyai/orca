@@ -14841,7 +14841,8 @@
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
-            "2a4c4b8e1f": "Copy"
+            "2a4c4b8e1f": "Copy",
+            "annotationFromOtherPage": "· from {{title}}"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

@@ -2652,8 +2652,6 @@ function BrowserPagePane({
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
-  clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
@@ -3358,13 +3356,25 @@ function BrowserPagePane({
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const pendingAnnotationPayload = pendingAnnotationPayloadRef.current
     // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
-    const markers = browserAnnotationsRef.current.map((annotation, index) => ({
-      id: annotation.id,
-      index,
-      isFixed: annotation.payload.target.isFixed === true,
-      rectPage: annotation.payload.target.rectPage,
-      rectViewport: annotation.payload.target.rectViewport
-    }))
+    // Annotations are kept across navigation (see browser.ts setBrowserPageUrl) so a review pass across
+    // several pages doesn't lose earlier comments, but a rectPage/rectViewport captured on a different
+    // document is meaningless on the page that's loaded now — only draw markers for annotations whose
+    // captured URL still matches what's on screen; the rest stay in the tray/send payload, marker-free.
+    const currentUrl = browserTabUrlRef.current
+    // Why: `index` here must match the tray's numbering (which counts the full, unfiltered list) so the
+    // on-page badge and the tray row for the same annotation show the same number — filter after mapping,
+    // not before, or same-page annotations would renumber from 1 and drift from the tray.
+    const markers = browserAnnotationsRef.current
+      .map((annotation, index) => ({
+        id: annotation.id,
+        index,
+        isFixed: annotation.payload.target.isFixed === true,
+        rectPage: annotation.payload.target.rectPage,
+        rectViewport: annotation.payload.target.rectViewport,
+        sanitizedUrl: annotation.payload.page.sanitizedUrl
+      }))
+      .filter((marker) => marker.sanitizedUrl === currentUrl)
+      .map(({ sanitizedUrl: _sanitizedUrl, ...marker }) => marker)
     const enabled = isActiveRef.current && (pendingAnnotationPayload !== null || markers.length > 0)
     void window.api.browser
       .setAnnotationViewportBridge({
@@ -3599,8 +3609,12 @@ function BrowserPagePane({
     }
 
     const handleDidStartLoading = (): void => {
-      // Why: a reload replaces the document without changing the URL, invalidating captured element rects like a navigation does.
-      clearBrowserPageAnnotationsRef.current(browserTab.id)
+      // Why: a reload replaces the document without changing the URL, so a captured element rect can point
+      // at stale coordinates once the new DOM settles — the same-URL marker guard in
+      // syncBrowserAnnotationViewportBridge re-checks that on the next sync. This used to also delete every
+      // annotation for the whole tab outright (including ones from other pages, and the comment text itself,
+      // not just the position), which is exactly the kind of silent data loss a review-then-send workflow
+      // can't tolerate. Keep the data; only the pending in-progress annotation draft is reload-unsafe.
       setPendingAnnotationPayload(null)
       setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
       if (!trackNextLoadingEventRef.current) {
@@ -5555,8 +5569,24 @@ function BrowserPagePane({
                           <div className="mt-0.5 line-clamp-2 text-muted-foreground">
                             {annotation.comment}
                           </div>
-                          <div className="mt-1 text-[11px] text-muted-foreground">
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                             <span>{annotation.intent}</span>
+                            {annotation.payload.page.sanitizedUrl !== browserTab.url ? (
+                              <span
+                                className="truncate"
+                                title={annotation.payload.page.sanitizedUrl}
+                              >
+                                {translate(
+                                  'auto.components.browser.pane.BrowserPane.annotationFromOtherPage',
+                                  '· from {{title}}',
+                                  {
+                                    title:
+                                      annotation.payload.page.title ||
+                                      annotation.payload.page.sanitizedUrl
+                                  }
+                                )}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <Button
