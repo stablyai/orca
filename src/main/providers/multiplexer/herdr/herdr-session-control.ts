@@ -1,36 +1,46 @@
 import { spawn } from 'node:child_process'
 import type {
   HerdrTerminalClosed,
-  HerdrTerminalControlOptions,
   HerdrTerminalController,
+  HerdrTerminalControlOptions,
   HerdrTerminalFrame
 } from './herdr-runtime-contract'
-import { createHerdrSocketTerminalController } from './herdr-socket-terminal-control'
-import type { HerdrSocketEvent } from './herdr-socket-types'
-import {
-  createHerdrSessionControlController,
-  herdrSessionControlArgs
-} from './herdr-session-control'
 
-export type HerdrObserveCommand = {
+export type HerdrSessionControlCommand = {
   file: string
   args: string[]
   env?: NodeJS.ProcessEnv
 }
 
-export type HerdrObserveIo = {
-  write: (data: string) => void
-  resize: (cols: number, rows: number) => void
-  onClosed?: (listener: (event: HerdrTerminalClosed) => void) => () => void
+export function herdrSessionControlArgs(
+  sessionName: string,
+  target: string,
+  options: HerdrTerminalControlOptions
+): string[] {
+  const args = [
+    '--session',
+    sessionName,
+    'terminal',
+    'session',
+    'control',
+    target,
+    '--cols',
+    String(options.cols),
+    '--rows',
+    String(options.rows)
+  ]
+  if (options.takeover) {
+    args.push('--takeover')
+  }
+  return args
 }
 
-/** Read-only `terminal session observe` plus socket write/resize. Does not take exclusive control. */
-export function createHerdrObserveController(
-  command: HerdrObserveCommand,
-  io: HerdrObserveIo
+/** Exclusive stdin JSON: terminal.input, terminal.resize, terminal.release. */
+export function createHerdrSessionControlController(
+  command: HerdrSessionControlCommand
 ): HerdrTerminalController {
   const child = spawn(command.file, command.args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     ...(command.env ? { env: command.env } : {})
   })
@@ -85,7 +95,7 @@ export function createHerdrObserveController(
         released = true
         emitClosed({
           type: 'terminal.closed',
-          reason: `Invalid Herdr observe event: ${error instanceof Error ? error.message : String(error)}`
+          reason: `Invalid Herdr terminal event: ${error instanceof Error ? error.message : String(error)}`
         })
         child.kill()
         return
@@ -101,34 +111,28 @@ export function createHerdrObserveController(
     if (!released) {
       emitClosed({
         type: 'terminal.closed',
-        reason: `Herdr observe exited with code ${code ?? 'unknown'}`
+        reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
       })
     }
   })
-  const stopSocketClosed = io.onClosed?.((event) => {
-    if (!released) {
-      emitClosed(event)
-    }
-  })
 
+  const send = (message: unknown): void => {
+    if (!released && child.stdin.writable) {
+      child.stdin.write(`${JSON.stringify(message)}\n`)
+    }
+  }
   return {
-    write: (data) => {
-      if (!released) {
-        io.write(data)
-      }
-    },
-    resize: (cols, rows) => {
-      if (!released) {
-        io.resize(cols, rows)
-      }
-    },
+    write: (data) => send({ type: 'terminal.input', text: data }),
+    resize: (cols, rows) => send({ type: 'terminal.resize', cols, rows }),
     release: () => {
       if (released) {
         return
       }
+      send({ type: 'terminal.release' })
       released = true
-      stopSocketClosed?.()
-      child.kill()
+      child.stdin.end()
+      const killTimer = setTimeout(() => child.kill(), 2_000)
+      child.once('close', () => clearTimeout(killTimer))
     },
     onFrame: (listener) => {
       frameListeners.add(listener)
@@ -146,27 +150,4 @@ export function createHerdrObserveController(
       return () => closedListeners.delete(listener)
     }
   }
-}
-
-export function createStockHerdrTerminalController(
-  sessionName: string,
-  target: string,
-  options: HerdrTerminalControlOptions,
-  deps: {
-    commandFor?: (args: string[]) => HerdrObserveCommand
-    request<T>(method: string, params: unknown): Promise<T>
-    onEvent: (listener: (event: HerdrSocketEvent) => void) => () => void
-  }
-): HerdrTerminalController {
-  if (deps.commandFor) {
-    // Why: stock pane.resize is a split delta, not PTY cols/rows. Control stdin
-    // is the stream that accepts terminal.resize and raw terminal.input.
-    return createHerdrSessionControlController(
-      deps.commandFor(herdrSessionControlArgs(sessionName, target, options))
-    )
-  }
-  return createHerdrSocketTerminalController(target, options, {
-    request: deps.request,
-    subscribeEvents: deps.onEvent
-  })
 }
