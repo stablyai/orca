@@ -3,7 +3,7 @@ import React from 'react'
 import {
   getFlushWorktreeCardPaddingLeft,
   getNewCardStyleParentContentMarginLeft
-} from './worktree-list-indentation'
+} from './worktree-list/rows/indentation'
 import {
   hasWorktreeCardDetails,
   WorktreeCardDetailsHover,

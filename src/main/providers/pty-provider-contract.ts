@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -32,12 +32,18 @@ export type PtyProviderBufferSnapshot = {
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
   pendingEscapeTailAnsi?: string
+  /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
+   *  boundary. Absent means the source could not prove them; readers must not
+   *  rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
 }
 
 export type PtySpawnOptions = {
   cols: number
   rows: number
   cwd?: string
+  /** Exact per-spawn cwd already proven by main; providers validate any other resolved path. */
+  prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   /** Main-validated home provenance for an automatic Codex session resume. */
@@ -103,6 +109,11 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  requestHostRpc?: (
+    method: string,
+    params: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<unknown>
   /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
@@ -120,7 +131,8 @@ export type IPtyProvider = {
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): void
+  write(id: string, data: string): boolean | void
+  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a

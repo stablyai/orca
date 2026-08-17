@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { deriveGitRemoteIdentity, normalizeGitRemoteUrl } from './git-remote-identity'
+import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
+import {
+  deriveGitRemoteIdentity,
+  matchGitRemoteKeyParts,
+  normalizeGitRemoteUrl,
+  splitGitRemoteKey
+} from './git-remote-identity'
 
 describe('normalizeGitRemoteUrl', () => {
   it('normalizes HTTPS and SSH GitHub remotes to the same canonical key', () => {
@@ -74,5 +80,34 @@ describe('deriveGitRemoteIdentity', () => {
       canonicalKey: 'git.company.test/team/sample-app',
       remoteName: 'mirror'
     })
+  })
+})
+
+describe('splitGitRemoteKey / matchGitRemoteKeyParts', () => {
+  const github = (key: string | undefined) => splitGitRemoteKey(key, normalizeGitHubRemoteHost)
+
+  it('rejects keys without both a host and a path', () => {
+    expect(github('github.com')).toBeNull()
+    expect(github('github.com/')).toBeNull()
+    expect(github('/example/sample-app')).toBeNull()
+    expect(github(undefined)).toBeNull()
+  })
+
+  it('normalizes the host and lowercases the path tail', () => {
+    expect(github('SSH.GitHub.com:443/Example/Sample-App')).toEqual({
+      host: 'github.com',
+      tail: 'example/sample-app'
+    })
+  })
+
+  it('treats a dotless probed host as unknown but a real host as a mismatch', () => {
+    const target = { host: 'github.com', tail: 'example/sample-app' }
+    expect(matchGitRemoteKeyParts({ host: 'github-work', tail: target.tail }, target)).toBe(
+      'unknown'
+    )
+    expect(matchGitRemoteKeyParts({ host: 'ghe.example.com', tail: target.tail }, target)).toBe(
+      false
+    )
+    expect(matchGitRemoteKeyParts({ host: 'github-work', tail: 'other/repo' }, target)).toBe(false)
   })
 })

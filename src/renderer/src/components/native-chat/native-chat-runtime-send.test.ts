@@ -11,6 +11,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 import {
   sendNativeChatMessage,
+  sendNativeChatTypedCommand,
   sendNativeChatMessageVerified,
   typeNativeChatCommand,
   sendNativeChatMessageWithImageAttachments,
@@ -256,6 +257,7 @@ describe('sendNativeChatMessageVerified', () => {
 describe('typeNativeChatCommand', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    sendRuntimePtyInput.mockReset().mockReturnValue(true)
     sendRuntimePtyInputVerified.mockReset().mockResolvedValue(true)
     resetNativeChatPtySendQueuesForTests()
   })
@@ -277,6 +279,39 @@ describe('typeNativeChatCommand', () => {
       'd',
       'e',
       'l',
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('queues composer commands as the same paced key sequence', async () => {
+    const handle = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    await vi.runAllTimersAsync()
+    await handle.settled
+
+    expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '/',
+      's',
+      't',
+      'a',
+      't',
+      'u',
+      's',
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('does not clear into the next queued send after cancellation', async () => {
+    const command = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    command.cancel()
+    const next = sendNativeChatMessage(SETTINGS, PTY, 'next')
+    await vi.runAllTimersAsync()
+    await Promise.all([command.settled, next.settled])
+
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('next'),
       NATIVE_CHAT_SUBMIT
     ])
   })

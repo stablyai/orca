@@ -1,5 +1,15 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type ComponentType } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  type ComponentType,
+  type ForwardedRef
+} from 'react'
+import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import {
   Bold,
   Code2,
@@ -77,6 +87,10 @@ type Props = {
   onKeyboardInsetChange?: (bottom: number) => void
 }
 
+export type MobileRichMarkdownEditorHandle = {
+  dismissKeyboard: () => void
+}
+
 type EditorWebViewMessage =
   | { type: 'ready' }
   | { type: 'change'; markdown: string; generation: number }
@@ -107,12 +121,10 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
   { command: 'codeBlock', label: 'Code block', icon: FileCode2 }
 ]
 
-function MobileRichMarkdownEditorInner({
-  content,
-  editable,
-  onChange,
-  onKeyboardInsetChange
-}: Props) {
+function MobileRichMarkdownEditorInner(
+  { content, editable, onChange, onKeyboardInsetChange }: Props,
+  ref: ForwardedRef<MobileRichMarkdownEditorHandle>
+) {
   const webViewRef = useRef<WebView>(null)
   const readyRef = useRef(false)
   const documentGenerationRef = useRef(0)
@@ -227,6 +239,15 @@ function MobileRichMarkdownEditorInner({
     [inject]
   )
 
+  const dismissKeyboard = useCallback(() => {
+    // Why: the caret lives in the WebView, so the injected blur is what closes the keyboard;
+    // Keyboard.dismiss only clears a native TextInput that stole focus first.
+    inject('window.__orcaRichMarkdown && window.__orcaRichMarkdown.dismissKeyboard();')
+    Keyboard.dismiss()
+  }, [inject])
+
+  useImperativeHandle(ref, () => ({ dismissKeyboard }), [dismissKeyboard])
+
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
@@ -278,7 +299,7 @@ function MobileRichMarkdownEditorInner({
   )
 }
 
-export const MobileRichMarkdownEditor = memo(MobileRichMarkdownEditorInner)
+export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorInner))
 
 const styles = StyleSheet.create({
   container: {

@@ -4,7 +4,11 @@ import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import { runWslTranscriptFsTask } from './wsl-transcript-fs-gate'
+import {
+  runWslTranscriptFsTask,
+  wslTranscriptFsRefusal,
+  type WslTranscriptFsError
+} from './wsl-transcript-fs-gate'
 
 /**
  * True for guest-absolute Linux paths that Win32 cannot open as-is.
@@ -136,11 +140,21 @@ export async function toHostReadableTranscriptPath(
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
   // Sequential on purpose: the ranked order picks the owning distro, and probing
   // every distro at once would fan out 9P calls to ones the user left stopped.
+  let unavailable: WslTranscriptFsError | undefined
   for (const distro of rankDistrosForGuestPath(homeDirs, path)) {
     const uncPath = toWindowsWslPath(path, distro)
-    if (await pathExists(uncPath)) {
-      return uncPath
+    try {
+      if (await pathExists(uncPath)) {
+        return uncPath
+      }
+    } catch (error) {
+      // Why: one stalled distro must not hide another distro's hit.
+      unavailable = wslTranscriptFsRefusal(error)
     }
+  }
+  // No hit and at least one distro never probed: "couldn't look", not "absent".
+  if (unavailable) {
+    throw unavailable
   }
   return null
 }

@@ -19,12 +19,10 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type {
-  GitHubWorkItem,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
@@ -199,6 +197,7 @@ function QuickTabBody({
   // outcomes still navigate away and tear the whole modal down.)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
+  const [setLocationOpen, setSetLocationOpen] = useState(false)
   const handleOpenAddProject = useCallback((): void => {
     setAddProjectMounted(true)
     setAddProjectOpen(true)
@@ -240,10 +239,10 @@ function QuickTabBody({
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
-  const nestedDialogOpen = agentSettingsOpen || addProjectOpen
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
   useEffect(() => {
     if (!active || nestedDialogOpen) {
-      // Why: while a nested dialog (Add Project / Agents) is layered on top,
+      // Why: while a nested dialog (Add Project / Agents / Set location) is layered on top,
       // this capture-phase handler must not steal its Escape (which should
       // close only the nested dialog) or fire composer submit underneath it.
       return
@@ -326,6 +325,7 @@ function QuickTabBody({
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}
+        onNestedDialogOpenChange={setSetLocationOpen}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
       {addProjectMounted ? (

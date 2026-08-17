@@ -3,7 +3,7 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
 } from '../../../../shared/browser-guest-events'
-import type { BrowserLoadError } from '../../../../shared/types'
+import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { isChromiumCertificateErrorCode } from '../../../../shared/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'

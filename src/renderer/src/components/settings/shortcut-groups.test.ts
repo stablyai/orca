@@ -44,7 +44,8 @@ describe('shortcut groups', () => {
       disabledTuiAgents: [],
       pluginCommands: [command],
       keybindings: {},
-      platform: 'darwin'
+      platform: 'darwin',
+      missionControlConflictMessage: 'Blocked by Mission Control.'
     })
 
     expect(catalog.conflictByAction.get('plugin:orca-samples.tasks/open')).toEqual([

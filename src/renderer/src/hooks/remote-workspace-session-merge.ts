@@ -1,6 +1,7 @@
-import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { splitWorktreeId } from '../../../shared/worktree-id'
+import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '../store/types'
 
 function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTab): TerminalTab {

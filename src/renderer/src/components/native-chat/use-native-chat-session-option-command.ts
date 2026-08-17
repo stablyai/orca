@@ -87,7 +87,7 @@ export function useNativeChatSessionOptionCommand(args: {
           observer.arm()
         }
         const accepted =
-          options?.delivery === 'type'
+          agent === 'codex'
             ? await typeNativeChatCommand(
                 target.settings,
                 target.ptyId,

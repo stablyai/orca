@@ -182,6 +182,10 @@ describe('hydrateShellPath', () => {
 describe('mergePathSegments', () => {
   const originalPath = process.env.PATH
 
+  beforeEach(() => {
+    _resetHydrateShellPathCache()
+  })
+
   afterEach(() => {
     if (originalPath === undefined) {
       delete process.env.PATH

@@ -162,6 +162,12 @@ describe('DesktopScriptProviderClient action errors', () => {
       message: expect.stringContaining('Unsupported direction')
     })
     await expect(
+      client.action('click', { app: 'Text Editor', elementIndex: 0, mouseButton: 'wheel' })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Unsupported mouseButton')
+    })
+    await expect(
       client.action('drag', { app: 'Text Editor', fromX: 1, fromY: 2 })
     ).rejects.toMatchObject({
       code: 'invalid_argument',

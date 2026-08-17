@@ -1,9 +1,8 @@
-import { stripImagePromptMarker } from '../../../../shared/native-chat-image-transcript-markers'
 import {
-  isImageRefBlock,
-  isTextBlock,
-  type NativeChatMessage
-} from '../../../../shared/native-chat-types'
+  normalizeNativeChatUserText,
+  normalizedNativeChatUserMessageText
+} from '../../../../shared/native-chat-image-transcript-markers'
+import { isImageRefBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
 
 export type NativeChatPendingOccurrence = {
   text: string
@@ -16,7 +15,7 @@ export type NativeChatPendingOccurrence = {
 }
 
 export function normalizeNativeChatPendingText(text: string): string {
-  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
+  return normalizeNativeChatUserText(text)
 }
 
 export function nativeChatPendingContentKey(
@@ -34,15 +33,15 @@ function nativeChatUserMessageContentKey(message: NativeChatMessage): string | n
   if (message.role !== 'user') {
     return null
   }
-  const text = message.blocks
-    .filter(isTextBlock)
-    .map((block) => block.text)
-    .join(' ')
+  const text = normalizedNativeChatUserMessageText(message) ?? ''
+  if (text) {
+    return `text:${text}`
+  }
   const imagePaths = message.blocks
     .filter(isImageRefBlock)
     .map((block) => block.path)
     .filter((path): path is string => Boolean(path))
-  const key = nativeChatPendingContentKey({ text, imagePaths })
+  const key = nativeChatPendingContentKey({ text: '', imagePaths })
   return key === 'empty' ? null : key
 }
 
@@ -80,19 +79,6 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
-function nativeChatUserMessageNormalizedText(message: NativeChatMessage): string | null {
-  if (message.role !== 'user') {
-    return null
-  }
-  const text = normalizeNativeChatPendingText(
-    message.blocks
-      .filter(isTextBlock)
-      .map((block) => block.text)
-      .join(' ')
-  )
-  return text.length > 0 ? text : null
-}
-
 /** User texts that already have a later non-user turn (ready to prune echoes). */
 export function advancedNativeChatUserTexts(
   messages: readonly NativeChatMessage[]
@@ -101,7 +87,7 @@ export function advancedNativeChatUserTexts(
   const waiting: string[] = []
   for (const message of messages) {
     if (message.role === 'user') {
-      const text = nativeChatUserMessageNormalizedText(message)
+      const text = normalizedNativeChatUserMessageText(message)
       if (text) {
         waiting.push(text)
       }
@@ -119,7 +105,7 @@ export function matchingNativeChatUserTexts(
 ): readonly string[] {
   const texts: string[] = []
   for (const message of messages) {
-    const text = nativeChatUserMessageNormalizedText(message)
+    const text = normalizedNativeChatUserMessageText(message)
     if (text) {
       texts.push(text)
     }
@@ -128,9 +114,13 @@ export function matchingNativeChatUserTexts(
 }
 
 /**
- * How many leading pending texts concatenate exactly to `userText`.
- * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
- * unrelated prefixes ("hi" ↛ "history").
+ * How many leading pending texts concatenate to exactly `userText`, allowing at
+ * most one collapsed space at each send boundary. Covers rapid-send glue
+ * ("joke"+"continue" → "joke continue") while still requiring the whole row to
+ * be consumed, so unrelated prefixes never match ("hi" ↛ "history").
+ *
+ * Greedy is exact here: both sides are whitespace-normalized, so a piece never
+ * starts with a space and at most one of the two boundary forms can apply.
  */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
@@ -139,18 +129,21 @@ export function countLeadingPendingTextsGluedToUserText(
   if (pendingTexts.length === 0 || userText.length === 0) {
     return 0
   }
-  let combined = ''
+  let cursor = 0
   for (let index = 0; index < pendingTexts.length; index += 1) {
     const piece = pendingTexts[index]
     if (!piece) {
       return 0
     }
-    combined += piece
-    if (combined === userText) {
-      return index + 1
-    }
-    if (!userText.startsWith(combined)) {
+    if (userText.startsWith(piece, cursor)) {
+      cursor += piece.length
+    } else if (index > 0 && userText.startsWith(` ${piece}`, cursor)) {
+      cursor += piece.length + 1
+    } else {
       return 0
+    }
+    if (cursor === userText.length) {
+      return index + 1
     }
   }
   return 0
@@ -161,6 +154,9 @@ export function countLeadingPendingTextsGluedToUserText(
  * optimistic texts concatenated into one transcript user row). Exact single
  * matches stay in the content-key/occurrence path so repeated prompts and
  * send boundaries keep their existing semantics.
+ *
+ * `userTexts` must already be filtered to rows after the oldest entry's send
+ * boundary — this matcher has no clock of its own.
  */
 export function selectPendingIndicesRepresentedByUserTexts(
   pending: readonly NativeChatPendingOccurrence[],
@@ -191,7 +187,7 @@ export function selectPendingIndicesRepresentedByUserTexts(
       }
       represented.add(entry.index)
       const at = remaining.findIndex((candidate) => candidate.index === entry.index)
-      if (at >= 0) {
+      if (at !== -1) {
         remaining.splice(at, 1)
       }
     }

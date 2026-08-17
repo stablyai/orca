@@ -20,6 +20,7 @@ import {
   resetHostReadableTranscriptPathCacheForTests,
   toHostReadableTranscriptPath
 } from './host-readable-transcript-path'
+import { WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS } from './wsl-transcript-fs-gate'
 
 type AccessControl = {
   resolve: () => void
@@ -96,5 +97,28 @@ describe('WSL transcript filesystem gate', () => {
     expect(fsMocks.access).toHaveBeenCalledTimes(1)
     releaseWsl?.()
     await expect(wslProbe).resolves.toBe(firstUncPath)
+  })
+
+  // Last on purpose: the never-settling Ubuntu probe leaves its gate permit
+  // stuck for the rest of this module's lifetime.
+  it('falls through to the next distro when a probe exceeds the gate deadline', async () => {
+    vi.useFakeTimers()
+    const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\ada'
+    const debianUncPath = '\\\\wsl.localhost\\Debian\\home\\ada\\.codex\\sessions\\first.jsonl'
+    try {
+      fsMocks.access.mockImplementation((path) =>
+        path === firstUncPath ? new Promise<void>(() => {}) : Promise.resolve()
+      )
+      const resolved = toHostReadableTranscriptPath(firstGuestPath, {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME, DEBIAN_HOME]
+      })
+
+      await vi.waitFor(() => expect(fsMocks.access).toHaveBeenCalledWith(firstUncPath))
+      await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
+      await expect(resolved).resolves.toBe(debianUncPath)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

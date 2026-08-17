@@ -1,4 +1,4 @@
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import type { IntegrationStatusTone } from '@/components/integration-status-pill'
 
 export type TaskProviderReadiness = {

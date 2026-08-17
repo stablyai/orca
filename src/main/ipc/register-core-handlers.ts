@@ -14,6 +14,7 @@ import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
 import { registerJiraHandlers } from './jira'
+import { registerBitbucketHandlers } from './bitbucket'
 import { registerFeedbackHandlers } from './feedback'
 import { registerCrashReportingHandlers } from './crash-reporting'
 import { registerExportHandlers } from './export'
@@ -32,11 +33,8 @@ import { registerDashboardPopoutHandlers } from './dashboard-popout'
 import { registerTerminalPreviewHandlers } from './terminal-preview'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
-import {
-  setTrustedBrowserRendererWebContentsId,
-  setAgentBrowserBridgeRef,
-  registerBrowserHandlers
-} from './browser'
+import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -155,6 +153,7 @@ export function registerCoreHandlers(
   registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
   registerJiraHandlers()
+  registerBitbucketHandlers()
   registerFeedbackHandlers()
   if (crashReports) {
     registerCrashReportingHandlers(crashReports)
@@ -187,7 +186,7 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
-  registerSkillsHandlers(store)
+  registerSkillsHandlers(store, runtime)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }

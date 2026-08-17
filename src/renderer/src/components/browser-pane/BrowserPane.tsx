@@ -68,7 +68,7 @@ import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
-} from '../../../../shared/types'
+} from '../../../../shared/browser-workspace-types'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -135,6 +135,7 @@ import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
@@ -188,6 +189,7 @@ import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
 import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
@@ -934,7 +936,6 @@ function RemoteBrowserPagePane({
   const remotePageHandle = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
@@ -1459,29 +1460,15 @@ function RemoteBrowserPagePane({
     setReopenNonce((nonce) => nonce + 1)
   }, [])
 
-  useEffect(() => {
-    if (!isActive) {
-      return
-    }
-    const closeStream = lifecycle.open()
-    return () => {
-      closeStream()
-      clearPendingRemoteWheel()
-    }
-    // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
-    // pane's identity actually changes — not when an unrelated callback identity does.
-    //
-    // browserTab.id is load-bearing because lifecycle.open() reads tab identity through refs.
-    // reopenNonce re-runs the full open path for an explicit reconnect.
-  }, [
+  useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,
-    browserTab.id,
+    browserPageId: browserTab.id,
     clearPendingRemoteWheel,
     isActive,
     lifecycle,
     reopenNonce,
     runtimeWorktree
-  ])
+  })
 
   useEffect(() => {
     if (!isActive) {
@@ -2050,10 +2037,19 @@ function RemoteBrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                          title: contextMenu.linkUrl!
-                        })
+                        const linkUrl = contextMenu.linkUrl!
                         setContextMenu(null)
+                        void openWorkspaceBrowserTab({
+                          workspaceId: worktreeId,
+                          url: linkUrl,
+                          intent: { kind: 'url' },
+                          expectedRuntimeEnvironmentId: runtimeEnvironmentId
+                        }).catch((error) => {
+                          setPaneNotice({
+                            kind: 'direct',
+                            text: error instanceof Error ? error.message : String(error)
+                          })
+                        })
                       }}
                     >
                       {translate(
@@ -2896,7 +2892,7 @@ function BrowserPagePane({
         return
       }
       // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
-      const zoomFactor = Math.pow(1.2, window.api.ui.getZoomLevel())
+      const zoomFactor = 1.2 ** window.api.ui.getZoomLevel()
       const x = Math.round((event.screenX - window.screenX) / zoomFactor)
       const y = Math.round((event.screenY - window.screenY) / zoomFactor)
       console.debug(

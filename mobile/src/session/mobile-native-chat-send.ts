@@ -98,20 +98,28 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   client: RpcClient
   terminal: string
   command: string
+  resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
   deadline?: number
 }): Promise<MobileNativeChatSendOutcome> {
+  let writeIndex = 0
   return typeAgentTuiCommand({
     command: args.command,
-    write: (key) =>
-      sendMobileNativeChatMessageWithOutcome({
+    write: (key) => {
+      const isSubmit = writeIndex === args.command.length + 1
+      writeIndex += 1
+      return sendMobileNativeChatMessageWithOutcome({
         client: args.client,
         terminal: args.terminal,
         text: key,
         enter: false,
+        ...(isSubmit && args.resolvedLaunchDraft
+          ? { resolvedLaunchDraft: args.resolvedLaunchDraft }
+          : {}),
         ...(args.mobileClient ? { mobileClient: args.mobileClient } : {}),
         ...(args.deadline === undefined ? {} : { deadline: args.deadline })
       })
+    }
   })
 }
 

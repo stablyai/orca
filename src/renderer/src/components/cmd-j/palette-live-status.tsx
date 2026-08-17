@@ -26,7 +26,9 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import type { BrowserWorkspace, TerminalTab, Worktree } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -216,10 +218,11 @@ export function PaletteRecentTabStatusDot({
         className={cn(
           // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
           // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
-          // dark-mode row. Selected rows swap to accent so the cutout stays invisible there too.
+          // dark-mode row. Selected rows use --jump-palette-selection-surface so the cutout tracks
+          // the stronger keyboard highlight from main.css.
           'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
           'bg-popover ring-2 ring-popover',
-          'group-data-[selected=true]:bg-accent group-data-[selected=true]:ring-accent'
+          'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)] group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
         )}
         aria-hidden="true"
       >

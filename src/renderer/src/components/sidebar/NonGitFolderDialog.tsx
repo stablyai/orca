@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -86,7 +87,8 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             const startup = buildDismissedOnboardingFolderAgentStartup(
               useAppStore.getState().settings,
               onboarding,
-              hadProjectBeforeAdd
+              hadProjectBeforeAdd,
+              isNativeChatTranscriptLocalReadable(connectionId)
             )
             activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',

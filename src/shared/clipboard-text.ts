@@ -2,6 +2,7 @@ import { yieldToEventLoop } from './event-loop-yield'
 import {
   getUtf8ByteLengthForCodePoint,
   measureUtf8ByteLength,
+  readUtf8CodePointAt,
   type Utf8ByteLengthMeasurement
 } from './utf8-byte-limits'
 
@@ -50,7 +51,7 @@ export async function measureClipboardTextByteLengthWithYield(
   let byteLength = 0
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }

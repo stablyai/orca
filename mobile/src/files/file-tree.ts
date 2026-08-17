@@ -132,7 +132,7 @@ export function getDirectoryCacheState(
 ): DirectoryState | undefined {
   // Why: repository paths are arbitrary object keys; inherited keys like
   // "constructor" must not masquerade as loaded directory state.
-  return Object.prototype.hasOwnProperty.call(cache, relativePath) ? cache[relativePath] : undefined
+  return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
 }
 
 export function joinRelativePath(parentPath: string, name: string): string {

@@ -315,6 +315,28 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe('workspace-tab:tab-host')
   })
 
+  // Why: after typing, arrow moves must stick. Dropping onValueChange while cmdk already
+  // advanced its internal cursor made the next ArrowDown a no-op (Object.is short-circuit).
+  it('keeps arrow selection after the typed query ranking has committed', async () => {
+    await renderPalette(makeTypedRelevanceState())
+
+    await act(async () => {
+      setCommandQuery?.('perf')
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+
+    const rows = getRenderedRowIds().filter((id) => id.length > 0)
+    expect(rows.length).toBeGreaterThan(1)
+
+    await act(async () => {
+      setCommandSelection?.(rows[1])
+    })
+    await flushEffects()
+
+    expect(getCommandValue()).toBe(rows[1])
+  })
+
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
     await renderPalette({
       ...makeTypedRelevanceState(),
@@ -865,6 +887,35 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     expect(activateWorkspaceTabPaletteResult).not.toHaveBeenCalled()
+  })
+
+  it('keeps the agent badge on an Open Tabs row a query surfaced', async () => {
+    await renderPalette(
+      makeRecentTabState({
+        agentStatusByPaneKey: {
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
+        }
+      })
+    )
+
+    // Why not optional-call: a skipped setter would leave the empty-query Recent section standing
+    // and the assertions below would pass without the query path ever running.
+    const applyQuery = setCommandQuery
+    if (!applyQuery) {
+      throw new Error('CommandInput never installed a query setter')
+    }
+    await act(async () => {
+      applyQuery('Alpha')
+    })
+    await flushEffects()
+
+    // Why: searching for a tab is exactly when its status matters — the pip must survive the query.
+    expect(getTabRowIds()).toContain('tab-alpha')
+    expect(getTabRowIds()).not.toContain('tab-beta')
+    const alphaRow = testContainer.querySelector<HTMLElement>(
+      '[data-command-item="workspace-tab:tab-alpha"]'
+    )
+    expect(alphaRow?.querySelector('[title="Working"]')).not.toBeNull()
   })
 
   it('keeps create-worktree below the matches it would otherwise outrank', async () => {

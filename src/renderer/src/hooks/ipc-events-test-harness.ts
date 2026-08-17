@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -196,6 +196,7 @@ export async function loadIpcEventsHarness(
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
+          consumePendingSkillShare: () => Promise.resolve(null),
           set: vi.fn(),
           replyTabCreate: vi.fn(),
           replyTabClose: vi.fn(),

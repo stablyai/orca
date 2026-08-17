@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from './types'
+import type { PRComment } from './github/comment-types'
 import { createBotAuthorOverrideSet } from './pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,

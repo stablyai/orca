@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import {
   BROWSER_GUEST_HIDDEN_WORKTREE_RETENTION_LIMIT,
   browserTabVisibilityPageIds,

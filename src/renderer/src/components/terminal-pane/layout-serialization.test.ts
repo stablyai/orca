@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
 // ---------------------------------------------------------------------------
 // Provide a minimal HTMLElement so `instanceof HTMLElement` passes in Node env
@@ -37,6 +37,7 @@ import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   replayPayloadEndsWithCursorHidden,
+  RESET_GRAPHIC_RENDITION,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -456,7 +457,10 @@ describe('restoreScrollbackBuffers', () => {
       restoredViewportBlankingPanesRef
     )
 
-    expect(writes).toEqual(['restored output', '\r\n', POST_REPLAY_MODE_RESET])
+    expect(writes).toEqual([
+      `${RESET_GRAPHIC_RENDITION}restored output${RESET_GRAPHIC_RENDITION}\r\n`,
+      POST_REPLAY_MODE_RESET
+    ])
     expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
     expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
     expect(replayingPanesRef.current.size).toBe(0)

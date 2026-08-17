@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning must keep platform launch setup, preflight, and lifecycle guards in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
+import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { DaemonProtocolError } from './types'
 import {
-  getAttributionShellLaunchConfig,
+  getMarkerlessShellLaunchConfig,
   getShellReadyLaunchConfig,
   resolvePtyShellPath
 } from './shell-ready'
@@ -14,12 +15,16 @@ import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
   resolveUnixShellPath,
-  validateWorkingDirectory
+  validateWorkingDirectoryAsync,
+  WorkingDirectoryValidationAbortedError
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
+import {
+  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsShellLaunchArgs
+} from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -34,6 +39,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
@@ -63,11 +69,12 @@ import {
   type StartupCommandDelivery
 } from '../../shared/codex-startup-delivery'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { TerminalAttachCanceledError } from './daemon-errors'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
@@ -128,6 +135,9 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  isCanceled?: () => boolean
+  /** Aborts in-progress cwd validation; `isCanceled` is only polled between steps. */
+  cancelSignal?: AbortSignal
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
@@ -246,16 +256,25 @@ function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
   delete env.ELECTRON_RUN_AS_NODE
 }
 
+function daemonEnvironmentDiagSuffix(): string {
+  const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+  const systemVersion =
+    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
+    release()
+  const platform = `${process.platform} ${systemVersion}`
+  return ` (orca: ${orca}, arch: ${process.arch}, platform: ${platform})`
+}
+
 /**
  * Formats a daemon preflight failure with the same ENOENT details node-pty exposes.
  */
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  const missingTarget = kind === 'helper' ? 'node-pty install' : 'working directory'
+  const diag = daemonEnvironmentDiagSuffix()
   return new DaemonProtocolError(
-    `Daemon's ${kind === 'helper' ? 'node-pty install' : 'working directory'} is gone ` +
-      `(worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT ` +
-      `(errno 2, No such file or directory) - ${detailName}='${path}'`
+    `Daemon's ${missingTarget} is gone (worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT (errno 2, No such file or directory) - ${detailName}='${path}'${diag}`
   )
 }
 
@@ -369,10 +388,11 @@ function isNativeWindowsPath(path: string): boolean {
 /**
  * Validates explicit native Windows cwd paths before ConPTY launch.
  */
-function preflightWindowsPtySpawnEnvironment(args: {
+async function preflightWindowsPtySpawnEnvironment(args: {
   validationCwd: string
   cwdWasExplicit: boolean
-}): void {
+  signal?: AbortSignal
+}): Promise<void> {
   if (process.platform !== 'win32' || !args.cwdWasExplicit) {
     return
   }
@@ -381,17 +401,23 @@ function preflightWindowsPtySpawnEnvironment(args: {
     return
   }
 
-  validateWorkingDirectory(args.validationCwd)
+  await validateWorkingDirectoryAsync(
+    args.validationCwd,
+    args.signal ? { signal: args.signal } : {}
+  )
 }
 
 /**
  * Validates POSIX spawn cwd before node-pty can fail with an opaque ENOENT.
  */
-function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
+async function preflightPosixPtySpawnEnvironment(
+  validationCwd: string,
+  signal?: AbortSignal
+): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
-  validateWorkingDirectory(validationCwd)
+  await validateWorkingDirectoryAsync(validationCwd, signal ? { signal } : {})
 }
 
 /**
@@ -399,8 +425,9 @@ function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
  */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
+  const diag = daemonEnvironmentDiagSuffix()
   const formatted = new DaemonProtocolError(
-    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}`
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}${diag}`
   )
   if (err instanceof Error && err.stack) {
     formatted.stack = err.stack
@@ -606,7 +633,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
  * The returned handle records whether the startup command was already embedded
  * in Windows shell args so the daemon host does not write it a second time.
  */
-export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
+export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
@@ -618,6 +645,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: `supports-hyperlinks` gates OSC 8 on a TERM_PROGRAM allowlist excluding Orca; force it since xterm.js parses OSC 8 for clickable links.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  // Why: an older client may not ask a newly upgraded daemon to delete inherited shim state.
+  stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
   if (opts.env?.TERM) {
@@ -679,6 +708,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           }) ?? shellPath)
         : shellPath
     }
+    if (
+      pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
+      env.ORCA_CODEX_LAUNCH_PREFLIGHT
+    ) {
+      // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+      env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+    }
     // Why: a bare `pwsh.exe` resolves to the Store App Execution Alias stub whose launch fails with ERROR_ACCESS_DENIED (5).
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
@@ -700,7 +736,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         spawnCwd,
         getDefaultCwd(),
         resolvedWslContext,
-        opts.command
+        opts.command,
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -731,7 +768,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               {
                 distro: codexHomeWslInfo.distro
               },
-              opts.command
+              opts.command,
+              env.ORCA_CODEX_LAUNCH_PREFLIGHT
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
@@ -789,18 +827,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // Why: payload-bearing Codex startup text can be dropped by rc-file noise; plain Codex stays markerless for the startup-speed path.
       shellLaunch = shouldWaitForShellReady
         ? getShellReadyLaunchConfig(shellPath)
-        : getAttributionShellLaunchConfig(shellPath)
+        : getMarkerlessShellLaunchConfig(shellPath)
     } else if (opts.command) {
       shellLaunch = getShellReadyLaunchConfig(shellPath)
     } else {
       shellLaunch =
-        env.ORCA_ATTRIBUTION_SHIM_DIR ||
         env.ORCA_OPENCODE_CONFIG_DIR ||
         env.ORCA_MIMOCODE_HOME ||
         env.ORCA_OMP_STATUS_EXTENSION ||
         env.ORCA_CODEX_HOME ||
         env.ORCA_AGENT_TEAMS_SHIM_DIR
-          ? getAttributionShellLaunchConfig(shellPath)
+          ? getMarkerlessShellLaunchConfig(shellPath)
           : null
     }
     if (shellLaunch) {
@@ -824,15 +861,31 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)]
     : undefined
   promoteAgentTeamsShimPath(env, requestedPath)
+  // Why: raw requested PATH promotion runs after the inherited-env scrub.
+  stripLegacyTerminalShimEnv(env, process.platform)
 
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
-  preflightPosixPtySpawnEnvironment(validationCwd)
-  preflightWindowsPtySpawnEnvironment({
-    validationCwd,
-    cwdWasExplicit: opts.cwd !== undefined
-  })
+  try {
+    await preflightPosixPtySpawnEnvironment(validationCwd, opts.cancelSignal)
+    await preflightWindowsPtySpawnEnvironment({
+      validationCwd,
+      cwdWasExplicit: opts.cwd !== undefined,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
+    })
+  } catch (error) {
+    // Why: the wire must carry one cancellation identity. Clients key recovery
+    // off it, and an unrecognized message takes the rollback branch that closes
+    // a terminal the user still has (#7718).
+    if (error instanceof WorkingDirectoryValidationAbortedError) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
+    throw error
+  }
+  if (opts.isCanceled?.()) {
+    throw new TerminalAttachCanceledError(opts.sessionId)
+  }
 
   let proc: pty.IPty
   try {
@@ -1051,6 +1104,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   return {
     pid: proc.pid,
     shellPath,
+    shellCwd: spawnCwd,
+    shellPathEnv: env.PATH,
     ...(slavePath ? { slavePath } : {}),
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {

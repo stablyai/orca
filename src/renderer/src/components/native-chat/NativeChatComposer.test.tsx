@@ -30,9 +30,11 @@ const mocks = vi.hoisted(() => ({
   } | null,
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
   discoverCommitMessageModels: vi.fn(),
+  draft: 'hello',
   getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
+  sendNativeChatTypedCommand: vi.fn(),
   sendNativeChatMessageVerified: vi.fn(),
   typeNativeChatCommand: vi.fn(),
   trackPendingSend: vi.fn(),
@@ -64,6 +66,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: (...args: unknown[]) => mocks.sendNativeChatMessage(...args),
+  sendNativeChatTypedCommand: (...args: unknown[]) => mocks.sendNativeChatTypedCommand(...args),
   sendNativeChatMessageVerified: (...args: unknown[]) =>
     mocks.sendNativeChatMessageVerified(...args),
   typeNativeChatCommand: (...args: unknown[]) => mocks.typeNativeChatCommand(...args),
@@ -87,7 +90,7 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: (scopeKey: string) => {
     mocks.draftScopeKeys.push(scopeKey)
-    return { draft: 'hello', setDraft: mocks.setDraft }
+    return { draft: mocks.draft, setDraft: mocks.setDraft }
   }
 }))
 vi.mock('./native-chat-draft-cache', () => ({
@@ -144,6 +147,7 @@ describe('NativeChatComposer', () => {
     clearNativeChatModelEnrichmentForTests()
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
+    mocks.draft = 'hello'
     mocks.draftScopeKeys.length = 0
     mocks.confirmationObserver = null
     mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
@@ -182,6 +186,7 @@ describe('NativeChatComposer', () => {
       ]
     })
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
+    mocks.sendNativeChatTypedCommand.mockReturnValue(mocks.sendHandle)
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.typeNativeChatCommand.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
@@ -235,6 +240,57 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
+  })
+
+  it('types Codex slash composer sends instead of pasting them', () => {
+    mocks.draft = '/status'
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
+  it('keeps Codex skill sends pasted', () => {
+    mocks.draft = '$ref-oss'
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', undefined)
+    expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
+  })
+
+  it.each(['claude', 'openclaude'] as const)('keeps %s slash composer sends pasted', (agent) => {
+    mocks.draft = '/clear'
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent={agent}
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', undefined)
+    expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
   it('retires the launch-draft seed once a send clears the TUI input line', () => {

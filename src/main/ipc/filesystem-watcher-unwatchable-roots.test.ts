@@ -30,7 +30,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('filesystem watcher unwatchable root cache', () => {
   const handlers: HandlerMap = {}
