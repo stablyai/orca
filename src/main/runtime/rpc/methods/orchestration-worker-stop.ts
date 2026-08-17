@@ -138,12 +138,13 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         )
       }
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-      if (resource && resource.ownership_state !== 'owned') {
+      if (!resource || resource.ownership_state !== 'owned') {
+        const ownership = resource?.ownership_state ?? 'unproven'
         return unknownReceipt(
           params.dispatch,
           db.markWorkerStopUnknown(
             params.dispatch,
-            `The worker terminal is ${resource.ownership_state}; no terminal was closed.`
+            `The worker terminal is ${ownership}; no terminal was closed.`
           ),
           'none'
         )

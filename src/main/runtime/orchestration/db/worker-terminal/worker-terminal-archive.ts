@@ -154,7 +154,8 @@ export function retainWorkerTerminalResource(
     if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
-    if (!['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
+    const worker = this.getWorkerDispatch(dispatchId)
+    if (!worker && !['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can retain.`

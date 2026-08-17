@@ -176,6 +176,37 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('does not close a legacy worker terminal without an ownership record', async () => {
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
+      status: 'live',
+      ptyIds: ['runtime:pty:1']
+    })
+    const closeTerminal = vi.spyOn(runtime, 'closeTerminal')
+    const dispatch = createWorker()
+    const resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
+    if (!resource) {
+      throw new Error('Expected worker terminal resource')
+    }
+    ;(db as unknown as { db: { prepare: (sql: string) => { run: (id: string) => void } } }).db
+      .prepare('DELETE FROM worker_terminal_resources WHERE id = ?')
+      .run(resource.id)
+
+    await expect(
+      call('orchestration.workerStop', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      state: 'stop_unknown',
+      processAction: 'none',
+      lastError: 'The worker terminal is unproven; no terminal was closed.'
+    })
+    expect(closeTerminal).not.toHaveBeenCalled()
+  })
+
   it('linearizes stop before a concurrent user takeover', () => {
     const dispatch = createWorker()
     expect(db.beginWorkerStop(dispatch.id).disposition).toBe('stopping')

@@ -100,7 +100,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
-      'A Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
+      'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'Performs no process or filesystem action.'
     ]
   },
