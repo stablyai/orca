@@ -43,6 +43,7 @@
     "typecheck:node": "tsc --noEmit -p config/tsconfig.node.json",
     "typecheck:cli": "tsc --noEmit -p config/tsconfig.tc.cli.json",
     "typecheck:web": "tsc --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck:e2e": "tsc --noEmit -p config/tsconfig.e2e.json",
     "typecheck": "tsc --noEmit -p config/tsconfig.node.json && tsc --noEmit -p config/tsconfig.tc.cli.json && tsc --noEmit -p config/tsconfig.tc.web.json",
     "typecheck:tsc:node": "tsc --noEmit -p config/tsconfig.node.json --composite false",
     "typecheck:tsc:cli": "tsc --noEmit -p config/tsconfig.cli.json --composite false",

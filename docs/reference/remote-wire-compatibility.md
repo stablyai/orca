@@ -99,3 +99,21 @@ The harness covers the terminal stream only. It does **not** cover the session-t
 sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
 the relay transport. A change on those paths still needs its own reasoning against
 the three rules above.
+
+## Known debt: JSON-RPC errors drop Node's string code
+
+An error raised on an SSH host crosses the relay as JSON-RPC, and
+`ssh-channel-multiplexer` rebuilds it with the TRANSPORT's numeric `code`. Node's
+string code — `'ENOENT'`, `'EACCES'` — does not survive, so a caller on this side
+cannot ask what kind of failure it was.
+
+`isENOENT` in `src/main/ipc/filesystem-path-containment.ts` pays for that by also
+matching Node's canonical message text, which is what makes remote worktree creation
+work. The cost is that a host can make an unrelated failure read as "absent" by
+putting that sentence in a message.
+
+The exit is Rule 1: carry the original string code in a new optional field on the
+error payload and read that instead. An old host omits it and the message match still
+covers them; once hosts that send it are the floor, the message match can be deleted
+rather than lived with at its ~10 call sites. Narrowing `isENOENT` back to `.code`
+without doing this reinstates the bug — the transport has already overwritten it.

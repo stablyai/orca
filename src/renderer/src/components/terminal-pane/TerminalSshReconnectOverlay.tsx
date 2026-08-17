@@ -24,6 +24,10 @@ type TerminalSshReconnectOverlayProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
+  // The failure detail behind the status. Shown beneath the canned sentence rather than instead of
+  // it, because the sentence says what to do and this says what happened — a host key rejection
+  // names the remedy here and nowhere else in the terminal.
+  error?: string | null
   // The SSH target was removed entirely — reconnect is impossible, so offer to
   // remove the workspace instead of a Connect button that can only fail.
   targetRemoved?: boolean
@@ -75,6 +79,7 @@ export function TerminalSshReconnectOverlay({
   targetId,
   targetLabel,
   status,
+  error = null,
   targetRemoved = false,
   worktreeId,
   sshOwnerEnvironmentId = null
@@ -186,6 +191,13 @@ export function TerminalSshReconnectOverlay({
                 )
               : messageForStatus(status, targetLabel)}
           </div>
+          {/* Why not truncated: a host key failure ends in `ssh-keygen -R <host>`, and a removed
+              target already explains itself above. */}
+          {!targetRemoved && error ? (
+            <div className="mt-1 text-xs leading-5 text-red-400 [overflow-wrap:anywhere]">
+              {error}
+            </div>
+          ) : null}
         </div>
         {targetRemoved ? (
           <Button
