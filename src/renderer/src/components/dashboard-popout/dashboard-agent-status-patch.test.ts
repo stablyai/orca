@@ -95,6 +95,23 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
 
   it('keeps active pane lineage on hook pings that omit the cached prompt', () => {
     const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: dispatchPrompt('task-1', 'Current task') })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('keeps a fresh active direct parent before the prompt cache arrives', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
       snapshot(),
       event({
         prompt: '',
@@ -102,6 +119,39 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
           taskId: 'task-1',
           dispatchId: 'dispatch-1',
           dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('clears active lineage when an empty ping follows a standalone cached turn', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: 'Standalone task' })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBeUndefined()
+  })
+
+  it('keeps mixed-version lineage from the matching cached dispatch prompt', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: dispatchPrompt('task-1', 'Current task') })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
           parentPaneKey: 'tab-parent:leaf-parent'
         }
       })

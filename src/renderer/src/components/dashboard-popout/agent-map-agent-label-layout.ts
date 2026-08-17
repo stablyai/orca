@@ -26,12 +26,6 @@ export type AgentMapAgentLabelPlacement = {
   bounds: AgentMapAgentLabelBounds
 }
 
-export type AgentMapAgentLabelPlacementOptions = {
-  mapScale: number
-  viewportHeight: number
-  selectedPaneKey?: string | null
-}
-
 function compareAgents(a: AgentMapAgentNode, b: AgentMapAgentNode): number {
   return a.card.paneKey < b.card.paneKey ? -1 : a.card.paneKey > b.card.paneKey ? 1 : 0
 }
@@ -77,8 +71,7 @@ function placementsAtScale(
 export function agentMapAgentLabelPlacements(
   agents: readonly AgentMapAgentNode[],
   labelScale: number,
-  obstacles: readonly AgentMapLabelBox[] = [],
-  _options?: AgentMapAgentLabelPlacementOptions
+  obstacles: readonly AgentMapLabelBox[] = []
 ): ReadonlyMap<string, AgentMapAgentLabelPlacement> {
   const desired = placementsAtScale(agents, labelScale, obstacles)
   if (!desired.collision || labelScale <= 1) {

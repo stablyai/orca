@@ -16196,6 +16196,8 @@
       "noLaunchableAgents": "No enabled agents detected.",
       "sleepWorkspace": "Sleep",
       "projectCount": "{{agents}} agents · {{workspaces}} workspaces",
+      "agentUnreadDetail": ", unread",
+      "agentTaskDetail": ", task: {{task}}",
       "agentCount": "{{count}} agents",
       "agentCount_one": "{{count}} agent",
       "agentCount_other": "{{count}} agents",

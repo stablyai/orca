@@ -35,7 +35,6 @@ type AgentMapSceneProps = {
   labelScale: number
   agentLabelScale: number
   mapScale: number
-  viewportHeight: number
   /** Rings the pointer was pressed in; they stay lit for the whole pan drag. */
   heldProjectId: string | null
   heldWorktreeId: string | null
@@ -83,7 +82,6 @@ export const AgentMapScene = memo(function AgentMapScene({
   labelScale,
   agentLabelScale,
   mapScale,
-  viewportHeight,
   heldProjectId,
   heldWorktreeId,
   selectedPaneKey,
@@ -185,17 +183,9 @@ export const AgentMapScene = memo(function AgentMapScene({
       agentMapAgentLabelPlacements(
         [...visibleAgentsByPaneKey.values()].map(({ agent }) => agent),
         agentLabelScale,
-        agentLabelObstacles,
-        { mapScale, viewportHeight, selectedPaneKey }
+        agentLabelObstacles
       ),
-    [
-      agentLabelScale,
-      agentLabelObstacles,
-      mapScale,
-      selectedPaneKey,
-      viewportHeight,
-      visibleAgentsByPaneKey
-    ]
+    [agentLabelScale, agentLabelObstacles, visibleAgentsByPaneKey]
   )
   const agentLabelBoxes = useMemo(
     () => [...agentLabelPlacements.values()].map((placement) => placement.bounds),

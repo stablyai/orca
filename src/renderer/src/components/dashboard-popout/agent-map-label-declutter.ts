@@ -32,7 +32,7 @@ const PROJECT_NAME_BOTTOM = 21
 /** Past this many candidates the pass stops admitting labels; a map that dense
  *  is unreadable long before the cap, and this bounds the work. */
 const MAX_LABEL_CANDIDATES = 600
-const PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT = 4
+export const PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT = 4
 
 export type AgentMapVisibleLabels = {
   /** Worktree ring ids whose name can render without colliding. */

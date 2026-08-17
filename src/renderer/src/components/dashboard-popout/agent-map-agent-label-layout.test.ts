@@ -75,16 +75,14 @@ describe('agentMapAgentLabelPlacements', () => {
     expect(placement.height).toBeGreaterThanOrEqual(32)
   })
 
-  it('widens a maximum-length name enough to fit its viewport', () => {
+  it('widens a maximum-length name and caps it at twelve visible lines', () => {
     const placement = agentMapAgentLabelPlacements(
       [agent('long', 0, 0, undefined, 'W'.repeat(1_024))],
-      1,
-      [],
-      { mapScale: 1, viewportHeight: 900 }
+      1
     ).get('long')!
 
     expect(placement.width).toBeGreaterThan(AGENT_MAP_AGENT_LABEL_FRAME_WIDTH)
-    expect(placement.height).toBeLessThan(900)
+    expect(placement.height).toBe(162)
     expect(placement.bounds.right - placement.bounds.left).toBe(placement.width)
     expect(placement.x).toBe(-placement.width / 2)
   })

@@ -381,7 +381,6 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               labelScale={Math.max(1, 1 / mapScale)}
               agentLabelScale={mapZoom.agentMapAgentLabelScale(mapScale)}
               mapScale={mapScale}
-              viewportHeight={size.height}
               heldProjectId={held?.projectId ?? null}
               heldWorktreeId={held?.worktreeId ?? null}
               selectedPaneKey={selectedPaneKey}

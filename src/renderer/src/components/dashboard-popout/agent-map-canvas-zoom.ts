@@ -11,6 +11,7 @@ import {
 } from './agent-map-layout'
 import { agentName } from './agent-map-agent-name'
 import {
+  PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT,
   agentMapProjectLabelBoxes,
   agentMapPriorityWorktreeLabelIds,
   agentMapVisibleWorktreeLabelBoxes
@@ -38,7 +39,6 @@ export function clamp(value: number, minimum: number, maximum: number): number {
 function labelFitAtScale(
   layout: AgentMapLayout,
   agents: readonly AgentMapAgentNode[],
-  selectedPaneKey: string | null,
   mapScale: number,
   width: number,
   height: number
@@ -52,11 +52,7 @@ function labelFitAtScale(
     ...agentMapVisibleWorktreeLabelBoxes(layout, projectLabelScale, mapScale, visibleWorktreeIds)
   ]
   const bounds = agentMapAgentLabelBounds(
-    agentMapAgentLabelPlacements(agents, agentLabelScale, obstacles, {
-      mapScale,
-      viewportHeight: height,
-      selectedPaneKey
-    })
+    agentMapAgentLabelPlacements(agents, agentLabelScale, obstacles)
   )
   if (!bounds) {
     return { fits: true, overflow: 0 }
@@ -80,12 +76,11 @@ function labelFitAtScale(
 function fittingLabelScale(
   layout: AgentMapLayout,
   agents: readonly AgentMapAgentNode[],
-  selectedPaneKey: string | null,
   geometryScale: number,
   width: number,
   height: number
 ): number {
-  if (labelFitAtScale(layout, agents, selectedPaneKey, geometryScale, width, height).fits) {
+  if (labelFitAtScale(layout, agents, geometryScale, width, height).fits) {
     return geometryScale
   }
 
@@ -96,7 +91,7 @@ function fittingLabelScale(
   for (let step = 1; step <= LABEL_FIT_SCAN_STEPS; step += 1) {
     const remaining = 1 - step / LABEL_FIT_SCAN_STEPS
     const candidate = minimumScale + (geometryScale - minimumScale) * remaining * remaining
-    const result = labelFitAtScale(layout, agents, selectedPaneKey, candidate, width, height)
+    const result = labelFitAtScale(layout, agents, candidate, width, height)
     if (result.overflow < bestOverflow) {
       bestScale = candidate
       bestOverflow = result.overflow
@@ -109,7 +104,7 @@ function fittingLabelScale(
     let fittingScale = candidate
     for (let refinement = 0; refinement < LABEL_FIT_REFINEMENT_STEPS; refinement += 1) {
       const midpoint = (fittingScale + clippedScale) / 2
-      if (labelFitAtScale(layout, agents, selectedPaneKey, midpoint, width, height).fits) {
+      if (labelFitAtScale(layout, agents, midpoint, width, height).fits) {
         fittingScale = midpoint
       } else {
         clippedScale = midpoint
@@ -127,7 +122,7 @@ function agentMapFitGeometryKey(
   allowAggregation: boolean,
   selectedPaneKey: string | null
 ): string {
-  const includeWorktreePriority = layout.projects.length <= 4
+  const includeWorktreePriority = layout.projects.length <= PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT
   return JSON.stringify([
     layout.topologyKey,
     layout.width,
@@ -206,14 +201,7 @@ export function agentMapBaseWidth(
   const agents = navigableAgentMapAgents(layout, 1, allowAggregation, selectedPaneKey)
   const geometryBaseWidth = Math.max(layout.width, layout.height * aspect)
   const geometryScale = safeWidth / geometryBaseWidth
-  const fittingScale = fittingLabelScale(
-    layout,
-    agents,
-    selectedPaneKey,
-    geometryScale,
-    safeWidth,
-    safeHeight
-  )
+  const fittingScale = fittingLabelScale(layout, agents, geometryScale, safeWidth, safeHeight)
   const baseWidth = safeWidth / fittingScale
   cacheBaseWidth(cacheKey, baseWidth)
   return baseWidth
@@ -260,8 +248,7 @@ export function agentFocusViewport(
           mapScale,
           visibleWorktreeIds
         )
-      ],
-      { mapScale, viewportHeight: safeHeight, selectedPaneKey: selected.card.paneKey }
+      ]
     ).get(selected.card.paneKey)
     if (!placement) {
       break

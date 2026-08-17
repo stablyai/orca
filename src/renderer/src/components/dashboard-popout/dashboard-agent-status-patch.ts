@@ -55,7 +55,9 @@ export function patchDashboardSnapshotFromAgentStatus(
   const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
   const dotState = event.state
   const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
-  const parentPaneKey = isCurrentOrchestrationPaneLineage(event)
+  const lineageEvent =
+    event.prompt === '' ? { ...event, prompt: card.lastUserMessage ?? '' } : event
+  const parentPaneKey = isCurrentOrchestrationPaneLineage(lineageEvent)
     ? event.orchestration?.parentPaneKey
     : undefined
   const nextCard: DashboardCard = {

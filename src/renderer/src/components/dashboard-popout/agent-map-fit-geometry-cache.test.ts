@@ -18,6 +18,7 @@ vi.mock('./agent-map-agent-label-layout', async (importOriginal) => {
 
 import type { AgentMapLayout } from './agent-map-layout'
 import { agentMapBaseWidth } from './agent-map-canvas-zoom'
+import { PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT } from './agent-map-label-declutter'
 
 function layout(agentCount: number, key: string): AgentMapLayout {
   const agents = Array.from({ length: agentCount }, (_, index) => ({
@@ -85,6 +86,40 @@ function metadataRefresh(source: AgentMapLayout): AgentMapLayout {
           durationMinutes: agent.durationMinutes + 1
         }))
       }))
+    }))
+  }
+}
+
+function withProjectCount(source: AgentMapLayout, projectCount: number): AgentMapLayout {
+  return {
+    ...source,
+    projects: Array.from({ length: projectCount }, (_, index) => {
+      const project = source.projects[0]
+      return {
+        ...project,
+        id: `${project.id}-${index}`,
+        worktrees: project.worktrees.map((worktree) => ({
+          ...worktree,
+          id: `${worktree.id}-${index}`
+        }))
+      }
+    })
+  }
+}
+
+function changeFirstWorktreePriority(source: AgentMapLayout): AgentMapLayout {
+  return {
+    ...source,
+    projects: source.projects.map((project, projectIndex) => ({
+      ...project,
+      worktrees: project.worktrees.map((worktree, worktreeIndex) =>
+        projectIndex === 0 && worktreeIndex === 0
+          ? {
+              ...worktree,
+              statusCounts: { ...worktree.statusCounts, blocked: 1, working: 0 }
+            }
+          : worktree
+      )
     }))
   }
 }
@@ -181,4 +216,20 @@ describe('agent map fit geometry cache', () => {
 
     expect(labelPlacementCall.mock.calls.length).toBeGreaterThan(fitCalls)
   })
+
+  it.each([
+    [PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT, true],
+    [PRIORITY_WORKTREE_LABEL_PROJECT_LIMIT + 1, false]
+  ])(
+    'tracks worktree priority for %s projects only when labels use it',
+    (projectCount, invalidates) => {
+      const initial = withProjectCount(layout(1, `priority-boundary-${projectCount}`), projectCount)
+      agentMapBaseWidth(initial, 480, 360, true, null)
+      const fitCalls = labelPlacementCall.mock.calls.length
+
+      agentMapBaseWidth(changeFirstWorktreePriority(initial), 480, 360, true, null)
+
+      expect(labelPlacementCall.mock.calls.length > fitCalls).toBe(invalidates)
+    }
+  )
 })

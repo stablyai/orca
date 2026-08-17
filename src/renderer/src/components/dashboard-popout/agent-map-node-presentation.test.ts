@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
-import { agentMapStatusLabel, agentName } from './agent-map-node-presentation'
+import {
+  agentMapAgentAriaLabel,
+  agentMapStatusLabel,
+  agentName
+} from './agent-map-node-presentation'
+import type { AgentMapAgentNode } from './agent-map-layout'
 import { agentMapCardTopologyIdentity } from './agent-map-workspace-identity'
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (key: string, fallback: string) => `${key}:${fallback}`
+  translate: (key: string, fallback: string, options?: Record<string, unknown>) =>
+    `${key}:${fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ''))}`
 }))
 
 describe('agentName', () => {
@@ -79,5 +85,33 @@ describe('agentMapStatusLabel', () => {
   it('keeps shared agent states on their existing labels', () => {
     expect(agentMapStatusLabel('working')).toBe('Working')
     expect(agentMapStatusLabel('done')).toBe('Done')
+  })
+})
+
+describe('agentMapAgentAriaLabel', () => {
+  it('localizes unread and task details', () => {
+    const card = {
+      agentType: 'codex',
+      paneKey: 'pane',
+      conversationName: 'Reviewer',
+      conversationNameExplicit: true,
+      task: 'Review map',
+      unseen: true
+    } as DashboardCard
+    const agent = {
+      card,
+      status: 'done',
+      durationMinutes: 2,
+      x: 0,
+      y: 0,
+      radius: 20
+    } as AgentMapAgentNode
+
+    expect(agentMapAgentAriaLabel(agent, 'Worktree', 'Project')).toContain(
+      'dashboardPopout.map.agentUnreadDetail:, unread'
+    )
+    expect(agentMapAgentAriaLabel(agent, 'Worktree', 'Project')).toContain(
+      'dashboardPopout.map.agentTaskDetail:, task: Review map'
+    )
   })
 })

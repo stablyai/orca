@@ -75,10 +75,7 @@ function expectLabelsFit(layout: AgentMapLayout, canvasWidth: number, canvasHeig
   const agents = layout.projects[0].worktrees[0].agents
   const projectBoxes = agentMapProjectLabelBoxes(layout, projectLabelScale, mapScale)
   const bounds = agentMapAgentLabelBounds(
-    agentMapAgentLabelPlacements(agents, agentLabelScale, projectBoxes, {
-      mapScale,
-      viewportHeight: canvasHeight
-    })
+    agentMapAgentLabelPlacements(agents, agentLabelScale, projectBoxes)
   )!
   const baseHeight = baseWidth / (canvasWidth / canvasHeight)
   const viewLeft = layout.width / 2 - baseWidth / 2
@@ -142,8 +139,7 @@ describe('agentMapBaseWidth', () => {
     const placements = agentMapAgentLabelPlacements(
       layout.projects[0].worktrees[0].agents,
       agentLabelScale,
-      agentMapProjectLabelBoxes(layout, projectLabelScale, mapScale),
-      { mapScale, viewportHeight: height, selectedPaneKey: selected.card.paneKey }
+      agentMapProjectLabelBoxes(layout, projectLabelScale, mapScale)
     )
     const placement = placements.get(selected.card.paneKey)!
     const screenLeft = (placement.bounds.left - target.center.x) * mapScale + width / 2

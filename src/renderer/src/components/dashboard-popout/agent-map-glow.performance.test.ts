@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES } from './agent-map-node-metadata'
 
 function source(file: string): string {
   return readFileSync(
@@ -92,5 +93,6 @@ describe('Agent Map glow performance boundary', () => {
 
     expect(map).toMatch(/selectAgentMapRecentFlareStatuses\(visibleCards\)/)
     expect(scene).not.toContain('selectAgentMapRecentFlareStatuses')
+    expect(AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES).toBe(4)
   })
 })

@@ -32,6 +32,23 @@ export function formatDuration(minutes: number): string {
   })
 }
 
+export function agentMapAgentAriaLabel(
+  agent: AgentMapAgentNode,
+  worktreeName: string,
+  projectName: string
+): string {
+  const name = agentName(agent.card)
+  const task = agent.card.task.trim()
+  const unread = agent.card.unseen
+    ? translate('dashboardPopout.map.agentUnreadDetail', ', unread')
+    : ''
+  const taskDetail =
+    task && task !== name
+      ? translate('dashboardPopout.map.agentTaskDetail', ', task: {{task}}', { task })
+      : ''
+  return `${name}, ${agentMapStatusLabel(agent.status)}${unread}, ${formatDuration(agent.durationMinutes)}${taskDetail}, ${worktreeName}, ${projectName}`
+}
+
 export function lineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
   return agentMapDirectLineageChevronPath(parent, child)
 }

@@ -7,10 +7,9 @@ import type { AgentMapAgentNode } from './agent-map-layout'
 import { AgentMapQuestionMarker } from './AgentMapQuestionMarker'
 import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import {
+  agentMapAgentAriaLabel,
   agentMapAttentionMarkerScale,
-  agentMapStatusLabel,
-  agentName,
-  formatDuration
+  agentName
 } from './agent-map-node-presentation'
 
 type AgentMapAgentNodeViewProps = {
@@ -46,8 +45,6 @@ export function AgentMapAgentNodeView({
 }: AgentMapAgentNodeViewProps): React.JSX.Element {
   const iconSize = Math.max(12, Math.min(22, agent.radius * 1.05))
   const name = agentName(agent.card)
-  const task = agent.card.task.trim()
-  const taskDetail = task && task !== name ? `, task: ${task}` : ''
   const agentExiting = exiting || agent.motionState === 'exiting'
   // `done` here is the unread finish only — `done-seen` demotes to a bare
   // emerald ring so the halo keeps meaning "this one is still unread".
@@ -72,7 +69,7 @@ export function AgentMapAgentNodeView({
       tabIndex={agentExiting ? -1 : 0}
       aria-hidden={agentExiting || undefined}
       aria-pressed={selectedPaneKey === agent.card.paneKey}
-      aria-label={`${name}, ${agentMapStatusLabel(agent.status)}${agent.card.unseen ? ', unread' : ''}, ${formatDuration(agent.durationMinutes)}${taskDetail}, ${worktreeName}, ${projectName}`}
+      aria-label={agentMapAgentAriaLabel(agent, worktreeName, projectName)}
       className={`agent-map-agent-node fleet-status-${agent.status}${selectedPaneKey === agent.card.paneKey ? ' is-selected' : ''}${agent.motionState ? ` is-${agent.motionState}` : ''}`}
       transform={`translate(${agent.x} ${agent.y})`}
       onPointerEnter={() => {
