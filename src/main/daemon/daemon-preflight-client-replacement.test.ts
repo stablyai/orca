@@ -7,7 +7,7 @@ import { DaemonClient } from './client'
 import { DaemonServer } from './daemon-server'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 type DaemonServerPrivate = {
   pendingPtySpawnPreparations: Map<string, Set<unknown>>

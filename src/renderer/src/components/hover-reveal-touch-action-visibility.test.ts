@@ -10,7 +10,7 @@ const MAIN_CSS = resolve(__dirname, '../assets/main.css')
 
 const HOVER_REVEAL_FILES = [
   resolve(__dirname, 'activity/ActivityPrototypePage.tsx'),
-  resolve(__dirname, 'browser-pane/BrowserPane.tsx'),
+  resolve(__dirname, 'browser-pane/annotate/browser-page-annotation-tray.tsx'),
   resolve(__dirname, 'dashboard/DashboardAgentRow.tsx'),
   resolve(__dirname, 'dashboard/DashboardAgentRowTrailingControls.tsx'),
   resolve(__dirname, 'editor/CombinedDiffViewer.tsx'),

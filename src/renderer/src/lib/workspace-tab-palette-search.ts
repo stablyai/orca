@@ -1,5 +1,11 @@
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import type { OpenFile } from '@/store/slices/editor'
+import { buildPaletteTabDocument } from './palette-match/tab-document'
+import type { PaletteDocument } from './palette-match/palette-document'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
@@ -41,6 +47,8 @@ export type SearchableWorkspaceTab = {
    * the row secondary — the content icon already conveys type.
    */
   typeSearchAliases?: readonly string[]
+  /** Normalized field index, built once per entry rather than per keystroke. */
+  document: PaletteDocument
   agentMetadata: AgentMetadata[]
   isCurrentTab: boolean
   isCurrentWorktree: boolean
@@ -174,6 +182,8 @@ export function buildSearchableWorkspaceTabs({
 
   for (const worktree of worktrees) {
     const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
+    const worktreeName = resolveWorktreeDisplayName(worktree)
+    const branch = resolveWorktreeBranchLabel(worktree)
     const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
@@ -244,6 +254,15 @@ export function buildSearchableWorkspaceTabs({
           titleSearchText: title,
           secondarySearchTexts: [],
           typeSearchAliases: TERMINAL_TYPE_SEARCH_ALIASES,
+          document: buildPaletteTabDocument({
+            id: tab.id,
+            title,
+            secondaryTexts: [],
+            worktreeName,
+            branch,
+            repoName,
+            typeAliases: TERMINAL_TYPE_SEARCH_ALIASES
+          }),
           agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id)
         })
         continue
@@ -260,6 +279,14 @@ export function buildSearchableWorkspaceTabs({
         secondaryText: file.relativePath,
         titleSearchText: title,
         secondarySearchTexts: [file.relativePath, file.filePath],
+        document: buildPaletteTabDocument({
+          id: tab.id,
+          title,
+          secondaryTexts: [file.relativePath, file.filePath],
+          worktreeName,
+          branch,
+          repoName
+        }),
         agentMetadata: []
       })
     }

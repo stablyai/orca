@@ -1,5 +1,5 @@
 import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
-import { searchWorktrees, type PaletteMatchedField } from '@/lib/worktree-palette-search'
+import { searchWorktrees } from '@/lib/worktree-palette-search'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 
@@ -7,15 +7,6 @@ export type WorkspaceKanbanLaneView = {
   items: readonly Worktree[]
   totalCount: number
 }
-
-// Why: the board is a drag surface for named workspaces, so a card may only be
-// hidden by fields the user can read on it. PR/issue/port matches are palette-only.
-const BOARD_MATCHED_FIELDS: ReadonlySet<PaletteMatchedField> = new Set<PaletteMatchedField>([
-  'displayName',
-  'branch',
-  'repo',
-  'comment'
-])
 
 /**
  * Returns `null` when no filtering is active — distinct from an empty set, which
@@ -36,8 +27,12 @@ export function matchWorkspaceBoardWorktrees(args: {
   }
 
   const matched = new Set<string>()
-  for (const result of searchWorktrees(args.worktrees, args.query, args.repoMap, null, null)) {
-    if (result.matchedField && BOARD_MATCHED_FIELDS.has(result.matchedField)) {
+  // Why the board policy: a card may only be hidden by text printed on it, so
+  // palette-only evidence such as ports, reviews, and automation runs is excluded.
+  for (const result of searchWorktrees(args.worktrees, args.query, args.repoMap, {
+    evidencePolicy: 'board'
+  })) {
+    if (result.matchedFields.length) {
       matched.add(result.worktreeId)
     }
   }

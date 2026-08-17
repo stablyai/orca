@@ -29,24 +29,27 @@ export function buildPendingCreationRow(
 }
 
 export function emitPinnedGroup(
-  worktrees: Worktree[],
+  pinnedSectionWorktrees: Worktree[],
   repoMap: Map<string, Repo>,
   defaultHostId: ExecutionHostId,
   collapsedGroups: Set<string>,
   renderedNaturalAnchorRepoIds: ReadonlySet<string>,
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   allowImportedFallback: boolean,
-  result: Row[]
+  result: Row[],
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>,
+  nestLineage: boolean,
+  cyclicLineageIds: ReadonlySet<string>
 ): void {
-  const pinned = worktrees.filter((w) => w.isPinned)
-  if (pinned.length === 0) {
+  if (pinnedSectionWorktrees.length === 0) {
     return
   }
   const hostWorktreeCounts = new Map<ExecutionHostId, number>()
   const hostWorktreeIds = new Map<ExecutionHostId, string[]>()
   const pinnedRepoOrder: string[] = []
   const seenPinnedRepoIds = new Set<string>()
-  for (const worktree of pinned) {
+  for (const worktree of pinnedSectionWorktrees) {
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + 1)
     const hostIds = hostWorktreeIds.get(hostId) ?? []
@@ -62,12 +65,12 @@ export function emitPinnedGroup(
     type: 'header',
     key: PINNED_GROUP_KEY,
     label: PINNED_GROUP_META.label,
-    count: pinned.length,
+    count: pinnedSectionWorktrees.length,
     tone: PINNED_GROUP_META.tone,
     icon: PINNED_GROUP_META.icon,
     hostWorktreeCounts,
     hostWorktreeIds,
-    worktreeIds: pinned.map((worktree) => worktree.id)
+    worktreeIds: pinnedSectionWorktrees.map((worktree) => worktree.id)
   })
   if (collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const repoId of pinnedRepoOrder) {
@@ -76,31 +79,34 @@ export function emitPinnedGroup(
         result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
       }
     }
-  } else {
-    const lastPinnedIndexByRepoId = new Map<string, number>()
-    pinned.forEach((worktree, index) => lastPinnedIndexByRepoId.set(worktree.repoId, index))
-    for (const [index, worktree] of pinned.entries()) {
-      result.push(
-        buildWorktreeRow(worktree, repoMap, {
-          rowKey: `${PINNED_GROUP_KEY}:${worktree.id}`,
-          sectionKey: PINNED_GROUP_KEY,
-          depth: 0,
-          groupDepth: 0,
-          lineageTrail: [],
-          isLastLineageChild: false,
-          lineageChildCount: 0,
-          lineageCollapsed: false
-        })
-      )
-      const candidate = importedWorktreesByRepo.get(worktree.repoId)
-      if (
-        allowImportedFallback &&
-        candidate &&
-        !renderedNaturalAnchorRepoIds.has(worktree.repoId) &&
-        lastPinnedIndexByRepoId.get(worktree.repoId) === index
-      ) {
-        result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
-      }
+    return
+  }
+
+  const firstItemIndex = result.length
+  appendWorktreeRows(result, pinnedSectionWorktrees, repoMap, lineageById, worktreeMap, {
+    nestLineage,
+    collapsedGroups,
+    groupDepth: 0,
+    sectionKey: PINNED_GROUP_KEY,
+    cyclicLineageIds
+  })
+  if (!allowImportedFallback) {
+    return
+  }
+  // Why: imported fallback sits after the last row of that repo; splice from the
+  // end so earlier inserts do not shift later targets.
+  const lastResultIndexByRepoId = new Map<string, number>()
+  for (let index = firstItemIndex; index < result.length; index++) {
+    const row = result[index]
+    if (row?.type === 'item') {
+      lastResultIndexByRepoId.set(row.worktree.repoId, index)
+    }
+  }
+  const inserts = [...lastResultIndexByRepoId.entries()].sort((left, right) => right[1] - left[1])
+  for (const [repoId, index] of inserts) {
+    const candidate = importedWorktreesByRepo.get(repoId)
+    if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
+      result.splice(index + 1, 0, buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
     }
   }
 }
@@ -222,6 +228,51 @@ export function appendWorktreeRows(
   }
 
   const emitted = new Set<string>()
+  const pending: {
+    worktree: Worktree
+    depth: number
+    lineageTrail: boolean[]
+    isLastChild: boolean
+  }[] = []
+  const emitPending = (): void => {
+    while (pending.length > 0) {
+      const next = pending.pop()
+      if (!next || emitted.has(next.worktree.id)) {
+        continue
+      }
+      const { worktree, depth, lineageTrail, isLastChild } = next
+      const children = childrenByParentId.get(worktree.id) ?? []
+      const lineageGroupKey = getLineageGroupKey(worktree.id)
+      const lineageCollapsed = collapsedGroups.has(lineageGroupKey)
+      emitted.add(worktree.id)
+      result.push(
+        buildWorktreeRow(worktree, repoMap, {
+          rowKey: `${sectionKey}:${worktree.id}`,
+          sectionKey,
+          depth,
+          groupDepth,
+          lineageTrail,
+          isLastLineageChild: isLastChild,
+          lineageChildCount: children.length,
+          lineageCollapsed,
+          hostContextLabel:
+            hostContextLabelByWorktreeId?.get(worktree.id) ??
+            hostContextLabelByRepoId?.get(worktree.repoId)
+        })
+      )
+      if (lineageCollapsed) {
+        continue
+      }
+      for (let index = children.length - 1; index >= 0; index -= 1) {
+        pending.push({
+          worktree: children[index],
+          depth: depth + 1,
+          lineageTrail: [...lineageTrail, index < children.length - 1],
+          isLastChild: index === children.length - 1
+        })
+      }
+    }
+  }
   const emit = (
     worktree: Worktree,
     depth: number,
@@ -231,36 +282,8 @@ export function appendWorktreeRows(
     if (emitted.has(worktree.id)) {
       return
     }
-    const children = childrenByParentId.get(worktree.id) ?? []
-    const lineageGroupKey = getLineageGroupKey(worktree.id)
-    const lineageCollapsed = collapsedGroups.has(lineageGroupKey)
-    emitted.add(worktree.id)
-    result.push(
-      buildWorktreeRow(worktree, repoMap, {
-        rowKey: `${sectionKey}:${worktree.id}`,
-        sectionKey,
-        depth,
-        groupDepth,
-        lineageTrail,
-        isLastLineageChild: isLastChild,
-        lineageChildCount: children.length,
-        lineageCollapsed,
-        hostContextLabel:
-          hostContextLabelByWorktreeId?.get(worktree.id) ??
-          hostContextLabelByRepoId?.get(worktree.repoId)
-      })
-    )
-    if (lineageCollapsed) {
-      return
-    }
-    children.forEach((child, index) => {
-      emit(
-        child,
-        depth + 1,
-        [...lineageTrail, index < children.length - 1],
-        index === children.length - 1
-      )
-    })
+    pending.push({ worktree, depth, lineageTrail, isLastChild })
+    emitPending()
   }
 
   const roots = worktrees.filter((worktree) => !childIds.has(worktree.id))

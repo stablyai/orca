@@ -1,6 +1,7 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,
@@ -35,7 +36,8 @@ export function createPruneLastVisitedTimestamps(
       // Only drop for repos with a populated/authoritative list; a missing repoId means not-yet-hydrated (defer).
       const validIdsByRepo = new Map<string, Set<string>>()
       for (const [repoId, list] of Object.entries(s.worktreesByRepo)) {
-        if (s.detectedWorktreesByRepo[repoId]) {
+        // An empty list is the not-yet-hydrated shape, not an authoritative "no worktrees".
+        if (s.detectedWorktreesByRepo[repoId] || list.length === 0) {
           continue
         }
         validIdsByRepo.set(repoId, new Set(list.map((worktree) => worktree.id)))
@@ -64,6 +66,7 @@ export function createPruneLastVisitedTimestamps(
       const patch: {
         lastVisitedAtByWorktreeId?: Record<string, number>
         activeWorktreeId?: null
+        activeWorkspaceKey?: null
         activeWorkspaceExecutionHostId?: null
       } = {}
       if (changed) {
@@ -82,6 +85,16 @@ export function createPruneLastVisitedTimestamps(
         const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
         if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
           patch.activeWorktreeId = null
+          // Leaving the derived workspace key behind would keep the phantom workspace selected.
+          // Only the stale worktree's own key is dropped (same equality check as the rename path),
+          // so a folder key or a key pointing at another live worktree survives. The bare-id form
+          // predates the `worktree:` prefix and is cleared too, matching the purge path.
+          if (
+            s.activeWorkspaceKey === worktreeWorkspaceKey(activeId) ||
+            s.activeWorkspaceKey === activeId
+          ) {
+            patch.activeWorkspaceKey = null
+          }
           patch.activeWorkspaceExecutionHostId = null
         }
       }

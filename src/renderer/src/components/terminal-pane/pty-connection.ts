@@ -125,6 +125,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_AFTER_BYTE_GAP,
+  RESET_GRAPHIC_RENDITION,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -2424,6 +2425,7 @@ export function connectPanePty(
 
   const agentCompletionCoordinator = createAgentCompletionCoordinator({
     paneKey: cacheKey,
+    statusLane: 'pty',
     getPtyId: () => transport.getPtyId(),
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
@@ -3009,6 +3011,10 @@ export function connectPanePty(
     registerSideEffectFactConsumerForPty(ptyId)
     syncHiddenRendererPtyDelivery()
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
+    // Why: binding a live PTY here is the proof that this pane is current again, so
+    // lift any retirement fence left by a detach/reattach cycle before hooks arrive.
+    // Waiting for a new turn would strand a pane re-attached mid-turn or idle (STA-4114).
+    useAppStore.getState().restoreAgentPaneAuthority?.(cacheKey)
     notifyCodexPaneBoundForStaleSweep(ptyId)
     const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[deps.tabId] ?? []
     const directSshRetryAttemptId =
@@ -8195,6 +8201,9 @@ export function connectPanePty(
       registerSideEffectFactConsumerForPty(ptyId)
       syncHiddenRendererPtyDelivery()
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
+      // Why: this is the daemon-backed reattach path — the live PTY outlived the
+      // renderer, so the pane is current the moment it binds (STA-4114).
+      useAppStore.getState().restoreAgentPaneAuthority?.(cacheKey)
       notifyCodexPaneBoundForStaleSweep(ptyId)
       if (capturedDirectSshRetryPtyAccepted && directSshRetryAttempt) {
         deps.updateTabPtyId(deps.tabId, ptyId, undefined, directSshRetryAttempt.attemptId)
@@ -8280,7 +8289,7 @@ export function connectPanePty(
               suppressStructuralReplayPtyResize = false
             }
           }
-          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           applySnapshotKittyKeyboardModes(daemonSnapshotReplay, {
             kittyKeyboardFlags: connectResult.snapshotKittyKeyboardFlags,
@@ -8296,10 +8305,16 @@ export function connectPanePty(
               connectResult.snapshotCols,
               readProposedTerminalCols(pane)
             )
+          const groundDaemonSnapshot =
+            Boolean(connectResult.coldRestore) ||
+            (!shouldPreserveAgentReattachModes() &&
+              !(connectResult.isAlternateScreen ?? kittyKeyboardModes.isAlternateScreen))
           writeReplayData(
-            daemonAltFrameSkippable
-              ? snapshotPrefixAnsi + snapshotFrameRestoreAnsi
-              : daemonSnapshotReplay
+            `${groundDaemonSnapshot ? RESET_GRAPHIC_RENDITION : ''}${
+              daemonAltFrameSkippable
+                ? snapshotPrefixAnsi + snapshotFrameRestoreAnsi
+                : daemonSnapshotReplay
+            }`
           )
           writeReplayData(
             reattachReplayResetSequence(
@@ -8392,7 +8407,7 @@ export function connectPanePty(
           } else if (connectResult?.replay) {
             rememberReattachPayloadAgentSignal(connectResult.replay, { fullScreenReplay: true })
             // Relay replay may overlap xterm's pre-disconnect content; clear first to avoid duplication.
-            writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+            writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             // A constructor-fresh mirror (window reload) first demotes to unproven:
             // the replay window proves nothing about negotiations that predate it.
@@ -8400,7 +8415,9 @@ export function connectPanePty(
               kittyKeyboardModes.resetForSnapshot()
             }
             kittyKeyboardModes.scanReplay(connectResult.replay)
-            writeReplayData(connectResult.replay)
+            writeReplayData(
+              `${connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${connectResult.replay}`
+            )
             writeReplayData(
               reattachReplayResetSequence(
                 connectResult.replay,
@@ -8431,7 +8448,7 @@ export function connectPanePty(
             // The current xterm grid remains a safe lower bound for blanking.
           }
           // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
-          writeReplayData('\x1b[2J\x1b[H')
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`)
           await waitForTerminalReplayWritesParsed(pane.terminal)
           if (!isCurrentReattachPayload()) {
             return
@@ -8454,7 +8471,7 @@ export function connectPanePty(
             }
           }
           // Why: recorded scrollback is raw PTY output that may hold query sequences; xterm.write would auto-reply into the new shell's stdin. See replay-guard.ts.
-          writeReplayData(connectResult.coldRestore.scrollback)
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}${connectResult.coldRestore.scrollback}`)
           const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
           const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
           if (didPrepareResume) {

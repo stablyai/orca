@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
-import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-health'
+import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-process-start-time'
 import type {
   LinuxStatEvidence,
   ProcessSignalEvidence,
@@ -117,7 +117,7 @@ export async function queryWindowsProcess(
   }
 }
 
-// Why: the sync procfs helper in daemon-health spawns getconf per call; CLK_TCK is fixed for
+// Why: the sync procfs helper in daemon-process-start-time spawns getconf per call; CLK_TCK is fixed for
 // the kernel's lifetime, so cache one async spawn and only retry after a failure. The cache is
 // keyed by runner because CLK_TCK belongs to the host that executes the command, not the module.
 const clockTicksPerSecondByRunner = new WeakMap<InspectionCommandRunner, Promise<number | null>>()

@@ -100,19 +100,17 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  createIssueCommandRunnerScript,
   getEffectiveHooks,
-  getEffectiveHooksFromConfig,
-  getSetupRunnerEnvVars,
   loadHooks,
   parseOrcaYaml,
-  readIssueCommand,
-  resolveSetupRunnerShell,
   runHook,
   hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
-  writeIssueCommand
+  hasUnrecognizedOrcaYamlKeys
 } from '../hooks'
+import { createIssueCommandRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
+import { getEffectiveHooksFromConfig } from '../effective-hook-config'
+import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   mergeWorktree,
   parseWorktreeId,
@@ -133,11 +131,11 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
+import { isENOENT } from './filesystem-path-containment'
 import {
   invalidateAuthorizedRootsCache,
-  isENOENT,
   registerWorktreeRootsForRepo
-} from './filesystem-auth'
+} from './registered-worktree-roots-cache'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
@@ -267,6 +265,7 @@ import {
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
+import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 
 const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
 const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
@@ -2495,15 +2494,15 @@ export function registerWorktreeHandlers(
                 'Cannot delete the project root workspace. Remove the folder project instead.'
               )
             }
+            const ownerHost = parseExecutionHostId(removalHostId)
+            const sshPtyProvider =
+              ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
             // Why: folder workspaces share one root, so there's no Git remove step to close shells; sweep PTYs before dropping metadata.
             await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
               // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
               // like the git paths — the local inventory must never reach a remote workspace's id.
               // The resolved repo is authoritative here: path-derived metadata is shared by
               // same-id host copies and can describe a different owner's workspace.
-              const ownerHost = parseExecutionHostId(removalHostId)
-              const sshPtyProvider =
-                ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
               const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
               await killAllProcessesForWorktree(args.worktreeId, {
                 runtime,
@@ -2526,6 +2525,7 @@ export function registerWorktreeHandlers(
               })
             })
             await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
+              await deleteRemoteWorktreeHistory(sshPtyProvider, args.worktreeId)
               removeWorktreeMetadataAndTransientState(
                 store,
                 args.worktreeId,
@@ -2614,6 +2614,14 @@ export function registerWorktreeHandlers(
                 } finally {
                   await removalGate.finish(removalCompleted)
                 }
+                // Why history first: the worktree is already gone from git and
+                // disk by here, so a rejecting push-target cleanup must not be
+                // able to skip history removal and leave the user's commands on
+                // the remote host.
+                await deleteRemoteWorktreeHistory(
+                  getSshPtyProvider(repo.connectionId),
+                  args.worktreeId
+                )
                 await cleanupUnusedWorktreePushTargetRemoteSsh(
                   provider!,
                   repo.path,
@@ -2722,6 +2730,14 @@ export function registerWorktreeHandlers(
               }
               // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
               if (repo.connectionId) {
+                // Why history first: the worktree is already gone from git and
+                // disk by here, so a rejecting push-target cleanup must not be
+                // able to skip history removal and leave the user's commands on
+                // the remote host.
+                await deleteRemoteWorktreeHistory(
+                  getSshPtyProvider(repo.connectionId),
+                  args.worktreeId
+                )
                 await cleanupUnusedWorktreePushTargetRemoteSsh(
                   provider!,
                   repo.path,
@@ -2899,6 +2915,10 @@ export function registerWorktreeHandlers(
               args.worktreeId,
               removedPushTarget,
               store
+            )
+            await deleteRemoteWorktreeHistory(
+              getSshPtyProvider(remoteConnectionId),
+              args.worktreeId
             )
             rememberPreservedBranchCleanupTarget(
               args.worktreeId,

@@ -56,6 +56,7 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree, gitStatusReadOptionsForWorktree } from './git-runtime-options'
 import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import { invalidateGitUpstreamStatusReads } from './upstream'
 import {
   computeGitBranchLineTotal,
   invalidateGitBranchLineTotalInFlight,
@@ -110,6 +111,7 @@ export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   statusReadLeaseOwner.invalidate()
   invalidateGitBranchLineTotalInFlight()
+  invalidateGitUpstreamStatusReads()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()

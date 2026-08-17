@@ -14,6 +14,7 @@ import { getLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
@@ -90,10 +91,17 @@ export function expandGroupsForWorktreeReveal(
   }
 
   const groupKeys =
-    targetWorktree.isPinned && args.pinnedDisplayPolicy === 'single-location'
+    args.pinnedDisplayPolicy === 'single-location' &&
+    isPinnedSectionWorktree(
+      targetWorktree,
+      args.worktrees,
+      args.worktreeLineageById,
+      args.worktreeMap
+    )
       ? getPinnedWorktreeRevealCollapsedGroupKeys({
           worktree: targetWorktree,
-          collapsedGroups: args.collapsedGroups
+          collapsedGroups: args.collapsedGroups,
+          inPinnedSection: true
         })
       : getGroupKeysForWorktree(
           args.groupBy,

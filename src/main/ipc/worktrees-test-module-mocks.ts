@@ -184,20 +184,38 @@ export const sshModuleMock = () => ({
 })
 
 export const hooksModuleMock = () => ({
-  buildPosixRunnerScript: buildPosixRunnerScriptMock,
-  buildWindowsRunnerScript: buildWindowsRunnerScriptMock,
-  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
-  createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
-  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
-  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
-  getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock,
   loadHooks: loadHooksMock,
   parseOrcaYaml: parseOrcaYamlMock,
-  resolveSetupRunnerShell: resolveSetupRunnerShellMock,
   runHook: runHookMock,
-  hasHooksFile: hasHooksFileMock,
+  hasHooksFile: hasHooksFileMock
+})
+
+// Why: the runner-script/hook-config surface moved out of hooks.ts, so each home
+// module needs its own mock or the worktree handlers run the real implementations.
+export const setupRunnerScriptTextModuleMock = (actual: Record<string, unknown>) => ({
+  ...actual,
+  buildPosixRunnerScript: buildPosixRunnerScriptMock,
+  buildWindowsRunnerScript: buildWindowsRunnerScriptMock
+})
+
+export const worktreeRunnerScriptModuleMock = (actual: Record<string, unknown>) => ({
+  ...actual,
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
+  createSetupRunnerScript: createSetupRunnerScriptMock,
+  resolveSetupRunnerShell: resolveSetupRunnerShellMock
+})
+
+export const effectiveHookConfigModuleMock = (actual: Record<string, unknown>) => ({
+  ...actual,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
+})
+
+export const setupHookEnvVarsModuleMock = (actual: Record<string, unknown>) => ({
+  ...actual,
+  getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock
 })
 
 export const worktreeLogicModuleMock = (actual: Record<string, unknown>) => ({

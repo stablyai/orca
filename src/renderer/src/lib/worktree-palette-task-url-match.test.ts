@@ -129,7 +129,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
       })
     ).toMatchObject({
       worktreeId: 'wt-1',
-      matchedField: 'issue',
+      matchedFields: ['issue'],
       supportingText: { labelKind: 'issue', text: 'Issue #14198' }
     })
     expect(
@@ -157,7 +157,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: orcaRepo
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('matches a GitHub pull URL via the stored work-item URL', () => {
@@ -176,7 +176,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: { ...orcaRepo, displayName: 'Repo 1' }
       })
-    ).toMatchObject({ matchedField: 'pr', supportingText: { text: 'PR #12789' } })
+    ).toMatchObject({ matchedFields: ['pr'], supportingText: { text: 'PR #12789' } })
   })
 
   it('gates a stored GitHub number on the repo remote identity', () => {
@@ -194,7 +194,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: gitHubRepo('github.com/stablyai/orca')
       })
-    ).toMatchObject({ matchedField: 'pr', supportingText: { text: 'PR #12789' } })
+    ).toMatchObject({ matchedFields: ['pr'], supportingText: { text: 'PR #12789' } })
   })
 
   it('gates a stored GitHub work item with no URL on the repo remote identity', () => {
@@ -215,7 +215,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: gitHubRepo('github.com/stablyai/orca')
       })
-    ).toMatchObject({ matchedField: 'issue' })
+    ).toMatchObject({ matchedFields: ['issue'] })
   })
 
   it('does not match a GitHub URL on a different host for the same owner/repo', () => {
@@ -233,7 +233,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: gitHubRepo('ghe.example.com/stablyai/orca')
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('matches GitHub remotes whose host is an SSH alias or www form of github.com', () => {
@@ -251,7 +251,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           intent: intent!,
           repo: gitHubRepo(canonicalKey)
         })
-      ).toMatchObject({ matchedField: 'pr' })
+      ).toMatchObject({ matchedFields: ['pr'] })
     }
     // A real, resolvable host is evidence of a different forge, not an alias.
     expect(
@@ -271,7 +271,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: gitHubRepo('ghe.example.com/stablyai/orca')
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('stays permissive for GitHub numbers when the repo remote identity is unknown', () => {
@@ -282,10 +282,10 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: { ...orcaRepo, displayName: 'orca' }
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
     expect(
       matchWorktreePaletteTaskUrl({ worktree: makeWorktree({ linkedPR: 12789 }), intent: intent! })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('stays permissive for a GitHub fork whose identity resolved to the upstream remote', () => {
@@ -305,7 +305,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: forkRepo
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
     // An `origin`-derived identity is authoritative, so a different repo still loses.
     expect(
       matchWorktreePaletteTaskUrl({
@@ -339,7 +339,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: issueIntent!,
         repo: gitHubRepo('github.com/stablyai/orca')
       })
-    ).toMatchObject({ matchedField: 'issue', supportingText: { text: 'Issue #12789' } })
+    ).toMatchObject({ matchedFields: ['issue'], supportingText: { text: 'Issue #12789' } })
   })
 
   it('keeps an owner/repo displayName authoritative over a host-alias remote', () => {
@@ -357,7 +357,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           }
         }
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('matches a GitHub PR URL via the linked review URL regardless of remote identity', () => {
@@ -378,7 +378,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           mergeable: 'UNKNOWN'
         }
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('rejects a GitLab MR URL from a different project than the stored URL', () => {
@@ -419,7 +419,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         repo: gitLabRepo('gitlab.example.com/other/project')
       })
     ).toMatchObject({
-      matchedField: 'pr',
+      matchedFields: ['mr'],
       supportingText: { labelKind: 'mr', text: 'MR #17' }
     })
   })
@@ -478,7 +478,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: gitLabRepo('gitlab.com/acme/orca')
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['mr'] })
   })
 
   it('matches GitLab remotes whose host is an SSH alias or www form of gitlab.com', () => {
@@ -495,7 +495,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           intent: intent!,
           repo: gitLabRepo(canonicalKey)
         })
-      ).toMatchObject({ matchedField: 'pr' })
+      ).toMatchObject({ matchedFields: ['mr'] })
     }
     expect(
       matchWorktreePaletteTaskUrl({
@@ -514,13 +514,13 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: intent!,
         repo: orcaRepo
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['mr'] })
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
         intent: intent!
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['mr'] })
   })
 
   it('stays permissive for a fork whose identity resolved to the upstream remote', () => {
@@ -539,7 +539,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         intent: parseCmdJTaskSourceUrl('https://gitlab.com/me/orca/-/merge_requests/17')!,
         repo: forkRepo
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['mr'] })
     // An `origin`-derived identity is authoritative, so a different project still loses.
     expect(
       matchWorktreePaletteTaskUrl({
@@ -564,7 +564,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           repo: gitLabRepo('gitlab.com/acme/orca')
         })
       ).toMatchObject({
-        matchedField: 'issue',
+        matchedFields: ['issue'],
         supportingText: { labelKind: 'issue', text: 'Issue #17' }
       })
       expect(
@@ -595,7 +595,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           mergeable: 'UNKNOWN'
         }
       })
-    ).toMatchObject({ matchedField: 'pr' })
+    ).toMatchObject({ matchedFields: ['mr'] })
   })
 
   it('matches a Linear issue URL and rejects a different organization', () => {

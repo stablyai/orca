@@ -53,7 +53,7 @@ describe('readIssueCommand', () => {
       return ''
     })
 
-    const { readIssueCommand } = await import('./hooks')
+    const { readIssueCommand } = await import('./issue-command-file')
     expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
       localContent: 'local command',
       sharedContent: 'shared command',
@@ -73,7 +73,7 @@ describe('readIssueCommand', () => {
       return ''
     })
 
-    const { readIssueCommand } = await import('./hooks')
+    const { readIssueCommand } = await import('./issue-command-file')
     expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
       localContent: null,
       sharedContent: 'shared command',
@@ -97,7 +97,7 @@ describe('writeIssueCommand', () => {
       return ''
     })
 
-    const { writeIssueCommand } = await import('./hooks')
+    const { writeIssueCommand } = await import('./issue-command-file')
     writeIssueCommand(TEST_REPO_PATH, 'local command')
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
@@ -113,7 +113,7 @@ describe('writeIssueCommand', () => {
   })
 
   it('deletes the local override when the override is cleared', async () => {
-    const { writeIssueCommand } = await import('./hooks')
+    const { writeIssueCommand } = await import('./issue-command-file')
     const fs = await import('node:fs')
     writeIssueCommand(TEST_REPO_PATH, '   ')
 
@@ -136,7 +136,7 @@ describe('createIssueCommandRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -167,7 +167,7 @@ describe('createIssueCommandRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -194,7 +194,7 @@ describe('createIssueCommandRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',

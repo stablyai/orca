@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "Este archivo está en conflicto, pero no hay una copia editable en el worktree.",
+          "conflictPlaceholderGuidance": "Resuelve el conflicto en Git o restaura uno de los lados antes de volver a abrirlo.",
           "51f15c37d3": "No se puede abrir la carpeta: {{value0}}",
           "f2e00db373": "No se encontró el archivo: {{value0}}",
           "checkRunDetailsUnavailable": "No hay detalles disponibles para este check.",
@@ -903,7 +904,7 @@
         "e52bed9264": "Aún no se reportaron checks",
         "90020cc1f3": "Este pull request aún no tiene checks reportados.",
         "ecffebc251": "No se encontraron checks",
-        "5dddefdf58": "Abrir en GitHub",
+        "checkOpenInBrowser": "Abrir en el navegador",
         "744197c84d": "No hay output inline disponible para este check.",
         "08d072664d": "Jobs",
         "96d8f36798": "Anotaciones",
@@ -1439,7 +1440,6 @@
         "c57873d721": "Pull request mergeado",
         "a63b3c159c": "Esto actualizará el pull request en GitHub.",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "No se pudo {{value0}} PR",
         "710e47aa06": "Pull request reabierto",
         "7aa3b5f706": "Pull request cerrado",
         "3d77438c92": "Esto reabrirá el pull request en GitHub.",
@@ -1538,7 +1538,13 @@
         "dd5d9a4f17": "actualizado {{value0}}",
         "71a3c0f9d2": "Iniciar espacio de trabajo",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Reintentar",
+        "77482513f8": "Cerrar",
+        "2f5195c6a0": "Reabrir",
+        "4b8ae7303f": "No se pudo cargar la diferencia.",
+        "closePullRequestFailed": "No se pudo cerrar el pull request",
+        "reopenPullRequestFailed": "No se pudo reabrir el pull request",
+        "diffLoadTimedOut": "Se agotó el tiempo de espera al cargar esta diferencia."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -2640,7 +2646,7 @@
               "346d409ab2": "Elige agente",
               "0adba8fa0c": "Agente",
               "ec8f081919": "Acción",
-              "ed04233b3e": "Guarda comandos de terminal o prompts de agente para acceso rápido.",
+              "ed04233b3e": "Los elementos guardados aparecen en el menú de la barra de pestañas para ejecutarlos con un clic.",
               "ca414324ee": "Texto de comando",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Agregar comando rápido",
@@ -3270,7 +3276,9 @@
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
             "grokUsageMenu": "Uso de Grok",
-            "floatingTerminalNewActivity": "{{label}}, nueva actividad"
+            "floatingTerminalNewActivity": "{{label}}, nueva actividad",
+            "codexSignInSuccess": "Sesión iniciada en Codex",
+            "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -5332,6 +5340,7 @@
           "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "Orca no pudo leer los archivos de Codex de esta cuenta en este momento, por lo que es posible que la configuración no se esté sincronizando. Normalmente se resuelve solo: un antivirus o una herramienta de copia de seguridad puede bloquearlos brevemente.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {

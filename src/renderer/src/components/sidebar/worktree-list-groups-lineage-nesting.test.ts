@@ -464,6 +464,123 @@ describe('buildRows workspace lineage nesting', () => {
     expect(info).toMatchObject({ state: 'missing' })
   })
 
+  it('nests unpinned children under a pinned parent in Pinned', () => {
+    const pinnedParent = { ...parent, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [child, pinnedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [pinnedParent.id, pinnedParent],
+        [child.id, child]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', count: 2 })
+    expect(items.map((row) => [row.worktree.id, row.depth, row.sectionKey])).toEqual([
+      [pinnedParent.id, 0, 'pinned'],
+      [child.id, 1, 'pinned']
+    ])
+    expect(rows.some((row) => row.type === 'header' && row.key === 'all')).toBe(false)
+  })
+
+  it('nests grandchildren under a pinned ancestor in Pinned', () => {
+    const pinnedParent = { ...parent, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [grandchild, child, pinnedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage, [grandchild.id]: grandchildLineage },
+      new Map([
+        [pinnedParent.id, pinnedParent],
+        [child.id, child],
+        [grandchild.id, grandchild]
+      ]),
+      true
+    )
+
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [pinnedParent.id, 0],
+      [child.id, 1],
+      [grandchild.id, 2]
+    ])
+  })
+
+  it('duplicates a pinned parent tree into All when the policy allows it', () => {
+    const pinnedParent = { ...parent, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [child, pinnedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [pinnedParent.id, pinnedParent],
+        [child.id, child]
+      ]),
+      true,
+      { showPinnedWorktreesInGroups: true } as never
+    )
+
+    expect(
+      rows
+        .filter((row) => row.type === 'item')
+        .map((row) => [row.sectionKey, row.worktree.id, row.depth])
+    ).toEqual([
+      ['pinned', pinnedParent.id, 0],
+      ['pinned', child.id, 1],
+      ['all', pinnedParent.id, 0],
+      ['all', child.id, 1]
+    ])
+  })
+
+  it('nests a pinned child under its pinned parent in Pinned', () => {
+    const pinnedParent = { ...parent, isPinned: true }
+    const pinnedChild = { ...child, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [pinnedChild, pinnedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [pinnedParent.id, pinnedParent],
+        [pinnedChild.id, pinnedChild]
+      ]),
+      true
+    )
+
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [pinnedParent.id, 0],
+      [pinnedChild.id, 1]
+    ])
+  })
+
   it('keeps pinned children in Pinned without a parent badge', () => {
     const pinnedChild = { ...child, isPinned: true }
     const rows = buildRows(

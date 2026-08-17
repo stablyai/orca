@@ -3,9 +3,14 @@ import type { CmdJQuickAction } from './quick-actions'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   cmdJPaletteTokenScore,
+  isCmdJPaletteQueryOverTokenLimit,
   normalizeCmdJPaletteQuery,
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
+import {
+  paletteResultQualityClassRank,
+  type PaletteResultQualityClass
+} from '@/lib/palette-match/match-quality'
 
 export type CmdJSettingsResult = {
   id: string
@@ -25,10 +30,39 @@ export type CmdJActionResult = CmdJQuickAction & {
 
 export type CmdJMiddleResult = CmdJSettingsResult | CmdJActionResult
 
+/** Ranked row plus the cross-section class that decides which palette section leads. */
+export type CmdJRankedMiddleResult = CmdJMiddleResult & {
+  qualityClass: PaletteResultQualityClass
+}
+
 type RankedResult = {
   result: CmdJMiddleResult
   rule: number
   score: number
+}
+
+/** Rules 1-3 need an exact keyword hit, 4-5 only a prefix, 6 is the token-score fallback. */
+function middleRuleQualityClass(rule: number): PaletteResultQualityClass {
+  if (rule <= 3) {
+    return 'exact-intent'
+  }
+  return rule <= 5 ? 'visible-prefix' : 'partial-evidence'
+}
+
+/** Strongest class in an already-ranked section, or null when the section is empty. */
+export function bestCmdJPaletteSectionQualityClass(
+  results: readonly { qualityClass: PaletteResultQualityClass }[]
+): PaletteResultQualityClass | null {
+  let best: PaletteResultQualityClass | null = null
+  for (const { qualityClass } of results) {
+    if (
+      best === null ||
+      paletteResultQualityClassRank(qualityClass) < paletteResultQualityClassRank(best)
+    ) {
+      best = qualityClass
+    }
+  }
+  return best
 }
 
 const SETTINGS_ALIASES: Record<string, string[]> = {
@@ -203,12 +237,12 @@ export function rankCmdJMiddleResults({
   query: string
   settingsResults: readonly CmdJSettingsResult[]
   actionResults: readonly CmdJActionResult[]
-}): CmdJMiddleResult[] {
+}): CmdJRankedMiddleResult[] {
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
   const normalizedQuery = normalizeCmdJPaletteQuery(query)
-  if (normalizedQuery.length < 2) {
+  if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }
   const settings = settingsResults
@@ -222,5 +256,5 @@ export function rankCmdJMiddleResults({
     )
     .filter((entry): entry is RankedResult => entry !== null)
     .sort(compareRanked)
-    .map((entry) => entry.result)
+    .map((entry) => ({ ...entry.result, qualityClass: middleRuleQualityClass(entry.rule) }))
 }

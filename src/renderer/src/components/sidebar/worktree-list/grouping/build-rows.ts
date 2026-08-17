@@ -20,6 +20,7 @@ import {
 import { buildProjectGroupingIndex } from './project-grouping'
 import type { ProjectGroupingModel } from './project-grouping'
 import { appendProjectGroupSections } from './project-group-sections'
+import { getPinnedSectionWorktrees } from '../../pinned-section-worktrees'
 import { appendWorktreeRows, buildPendingCreationRow, emitPinnedGroup } from './row-builders'
 import { getPinnedWorktreeDisplayPolicy } from './row-types'
 import type {
@@ -82,10 +83,14 @@ export function buildRows(
     }
   }
 
+  const pinnedSectionWorktrees = nestLineage
+    ? getPinnedSectionWorktrees(worktrees, lineageById, worktreeMap)
+    : worktrees.filter((worktree) => worktree.isPinned)
+  const pinnedSectionIds = new Set(pinnedSectionWorktrees.map((worktree) => worktree.id))
   const naturalWorktrees =
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
-      : worktrees.filter((worktree) => !worktree.isPinned)
+      : worktrees.filter((worktree) => !pinnedSectionIds.has(worktree.id))
   const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
     naturalWorktrees,
     repoMap,
@@ -103,14 +108,18 @@ export function buildRows(
     projectGrouping
   })
   emitPinnedGroup(
-    worktrees,
+    pinnedSectionWorktrees,
     repoMap,
     defaultHostId,
     collapsedGroups,
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
-    result
+    result,
+    lineageById,
+    worktreeMap,
+    nestLineage,
+    cyclicLineageIds
   )
   if (groupBy === 'none') {
     if (naturalWorktrees.length > 0) {

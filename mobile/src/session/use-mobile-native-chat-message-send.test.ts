@@ -4,6 +4,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Type-only, so it is erased before the `./mobile-native-chat-send` mock below applies.
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
@@ -37,6 +39,8 @@ describe('useMobileNativeChatMessageSend', () => {
   let api: Send | null = null
   const acceptSend = vi.fn()
   const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  const clearDraftForSend = vi.fn()
+  const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
   const onCommandSend = vi.fn()
   const commandSendRef = { current: onCommandSend }
@@ -58,8 +62,8 @@ describe('useMobileNativeChatMessageSend', () => {
         commandSendRef,
         captureSendOrigin,
         readSeededLaunchDraftSeed,
-        clearDraftForSend: () => {},
-        restoreRejectedDraft: () => {},
+        clearDraftForSend,
+        restoreRejectedDraft,
         acceptSend,
         holdUnconfirmedSend,
         onSendError
@@ -93,6 +97,8 @@ describe('useMobileNativeChatMessageSend', () => {
     typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
     captureSendOrigin.mockClear()
+    clearDraftForSend.mockReset()
+    restoreRejectedDraft.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
     commandSendRef.current = onCommandSend
@@ -406,23 +412,32 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().text).toBe('\n 1')
   })
 
-  it('keeps a leading-whitespace slash draft as prose', async () => {
-    mount(() => null, 'codex')
+  // #14819: the trim is a wire concern only. A rejected send hands the composer
+  // back to the user, and it has to be the draft they typed, blank lines included.
+  it('restores the untrimmed draft when the send is rejected', async () => {
+    const draft = 'first line\n\nsecond line\n\n'
+    sendWithOutcome.mockResolvedValue('rejected')
+    mount(() => null)
+
     await act(async () => {
-      await api!.send(' /delete ')
+      await api!.send(draft)
     })
-    expect(sentArgs().text).toBe(' /delete')
-    expect(sendWithOutcome).toHaveBeenCalledOnce()
-    expect(typeCommandWithOutcome).not.toHaveBeenCalled()
-    expect(acceptSend).toHaveBeenCalledWith(expect.anything(), ' /delete', undefined)
-    expect(onCommandSend).not.toHaveBeenCalled()
+
+    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
+    expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
   })
 
-  it('keeps interior newlines of a multi-line prompt', async () => {
-    mount(() => null)
+  it('restores the untrimmed draft when the launch-draft pre-clear is rejected', async () => {
+    const draft = 'ship it   '
+    clearInputWrite.mockResolvedValue(false)
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+
     await act(async () => {
-      await api!.send('first line\nsecond line\n')
+      await api!.send(draft)
     })
-    expect(sentArgs().text).toBe('first line\nsecond line')
+
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
   })
 })

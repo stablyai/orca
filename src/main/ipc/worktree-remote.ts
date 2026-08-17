@@ -48,19 +48,15 @@ import type {
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
+import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
+import { buildPosixRunnerScript, buildWindowsRunnerScript } from '../setup-runner-script-text'
+import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
 import {
-  buildPosixRunnerScript,
-  buildWindowsRunnerScript,
-  createSetupRunnerScript,
   getDefaultTabsLaunch,
-  getEffectiveHooks,
   getEffectiveHooksFromConfig,
-  getSetupRunnerEnvVars,
-  loadHooks,
-  parseOrcaYaml,
-  resolveSetupRunnerShell,
   shouldRunSetupForCreate
-} from '../hooks'
+} from '../effective-hook-config'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -106,7 +102,8 @@ import {
   findRemoteForUrl,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
-import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
+import { isENOENT } from './filesystem-path-containment'
+import { registerWorktreeRootsForRepo } from './registered-worktree-roots-cache'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
