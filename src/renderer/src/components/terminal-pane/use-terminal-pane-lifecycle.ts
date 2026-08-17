@@ -146,7 +146,7 @@ import {
   type CloseTerminalPaneDetail,
   type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
-import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import {

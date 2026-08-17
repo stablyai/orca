@@ -62,7 +62,7 @@ vi.mock('@/lib/simulator-tab-palette-activation', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: activationMocks.focusTerminalTabSurface
 }))
-vi.mock('@/components/browser-pane/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
   requestBrowserFocus: activationMocks.requestBrowserFocus
 }))
 

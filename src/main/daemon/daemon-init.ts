@@ -27,16 +27,15 @@ import {
   PROTOCOL_VERSION,
   type ListSessionsResult
 } from './types'
+import { getMacDaemonSystemResolverHealth, checkDaemonHealth } from './daemon-health'
 import {
-  getMacDaemonSystemResolverHealth,
   getMacDaemonTccAttributionHealth,
-  getDaemonLaunchIdentity,
-  checkDaemonHealth,
-  isDaemonStaleForCurrentBundle,
-  killStaleDaemon,
-  parseDaemonPidFile,
   type MacDaemonTccAttributionHealth
-} from './daemon-health'
+} from './daemon-tcc-attribution'
+import { getDaemonLaunchIdentity } from './daemon-pid-identity'
+import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
+import { killStaleDaemon } from './daemon-stale-kill'
+import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
   materializeRelocatedDaemonHost,

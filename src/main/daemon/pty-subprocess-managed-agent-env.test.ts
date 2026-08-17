@@ -51,7 +51,8 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
-    validateWorkingDirectory: validateWorkingDirectoryMock
+    validateWorkingDirectory: validateWorkingDirectoryMock,
+    validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
 })
 
@@ -86,14 +87,14 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('uses shell wrapper when managed env must survive shell startup', () => {
+  it('uses shell wrapper when managed env must survive shell startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -114,14 +115,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when OpenCode config must survive shell startup', () => {
+  it('uses shell wrapper when OpenCode config must survive shell startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -143,14 +144,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when MiMo home must survive shell startup', () => {
+  it('uses shell wrapper when MiMo home must survive shell startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -172,14 +173,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when typed OMP commands need the status extension', () => {
+  it('uses shell wrapper when typed OMP commands need the status extension', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -200,14 +201,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when Codex home must survive shell startup', () => {
+  it('uses shell wrapper when Codex home must survive shell startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -229,14 +230,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when Agent Teams shim path must survive shell startup', () => {
+  it('uses shell wrapper when Agent Teams shim path must survive shell startup', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -259,14 +260,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('keeps plain Codex startup commands on the no-marker wrapper', () => {
+  it('keeps plain Codex startup commands on the no-marker wrapper', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -286,14 +287,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell-ready wrapper for delivery-hinted Codex startup commands', () => {
+  it('uses shell-ready wrapper for delivery-hinted Codex startup commands', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -314,14 +315,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
   })
 
-  it('uses shell-ready wrapper for Codex native prefill flags', () => {
+  it('uses shell-ready wrapper for Codex native prefill flags', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -341,14 +342,14 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
   })
 
-  it('deletes requested env keys after merging daemon process env', () => {
+  it('deletes requested env keys after merging daemon process env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previousCodexHome = process.env.CODEX_HOME
     process.env.CODEX_HOME = '/host/codex-home'
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -367,7 +368,7 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.CODEX_HOME).toBeUndefined()
   })
 
-  it('deletes daemon-owned Codex overlay pairs when the private marker is requested', () => {
+  it('deletes daemon-owned Codex overlay pairs when the private marker is requested', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previousCodexHome = process.env.CODEX_HOME
@@ -376,7 +377,7 @@ describe('createPtySubprocess', () => {
     process.env.ORCA_CODEX_HOME = '/daemon/managed/codex-home'
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -401,7 +402,7 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_CODEX_HOME).toBeUndefined()
   })
 
-  it('strips an inherited per-account self-contained CODEX_HOME overlay in a nested Orca (#5370)', () => {
+  it('strips an inherited per-account self-contained CODEX_HOME overlay in a nested Orca (#5370)', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previousCodexHome = process.env.CODEX_HOME
@@ -413,7 +414,7 @@ describe('createPtySubprocess', () => {
     process.env.ORCA_CODEX_HOME = perAccountHome
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,
@@ -438,7 +439,7 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_CODEX_HOME).toBeUndefined()
   })
 
-  it('preserves a daemon-owned custom Codex home while deleting a stale private marker', () => {
+  it('preserves a daemon-owned custom Codex home while deleting a stale private marker', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -449,7 +450,7 @@ describe('createPtySubprocess', () => {
     process.env.ORCA_CODEX_HOME = '/daemon/stale/managed-home'
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'test',
         cols: 80,
         rows: 24,

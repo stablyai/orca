@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useAnyBrowserGuestNeedsPaint } from './browser-pane/browser-guest-paint-retention'
+import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 
 // Why: the outermost ancestor of every browser <webview>. Parking it with `hidden` whenever
 // the user leaves the workspace view also stops the guest compositing, which silently kills

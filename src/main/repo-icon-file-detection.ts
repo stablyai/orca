@@ -260,7 +260,18 @@ async function detectRemoteImageIcon(
 
 export function detectRepoFileIcon(
   repoPath: string,
-  fsProvider?: IFilesystemProvider
+  {
+    connectionId,
+    fsProvider
+  }: { connectionId?: string | null; fsProvider?: IFilesystemProvider } = {}
 ): Promise<RepoIcon | null> {
-  return fsProvider ? detectRemoteImageIcon(repoPath, fsProvider) : detectLocalImageIcon(repoPath)
+  if (fsProvider) {
+    return detectRemoteImageIcon(repoPath, fsProvider)
+  }
+  if (connectionId) {
+    // Why: repoPath lives on the SSH host, so a dropped provider must fail closed —
+    // a same-named local path would hand back another repository's icon.
+    return Promise.resolve(null)
+  }
+  return detectLocalImageIcon(repoPath)
 }

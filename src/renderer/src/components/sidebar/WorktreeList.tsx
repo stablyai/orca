@@ -117,6 +117,8 @@ const WorktreeList = React.memo(function WorktreeList({
     collapsedGroups,
     agentSendTargetWorktreeId,
     groupBy,
+    pinnedDisplayPolicy,
+    visibleWorktrees,
     repoMap,
     worktreeMap,
     worktreeLineageById,

@@ -2,8 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
-import type { SearchableSimulatorTab } from '@/lib/simulator-palette-search'
+import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import {
+  buildSearchableBrowserPageDocument,
+  type SearchableBrowserPage
+} from '@/lib/browser-palette-search'
+import {
+  SIMULATOR_TYPE_SEARCH_ALIASES,
+  simulatorPaletteTabTitle,
+  type SearchableSimulatorTab
+} from '@/lib/simulator-palette-search'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import {
   OPEN_TAB_SEARCH_QUERY_MAX_BYTES,
@@ -34,6 +43,8 @@ const worktree: Worktree = {
 }
 
 const REPO_NAME = 'octo/rocket'
+const WORKTREE_NAME = worktree.displayName
+const BRANCH_NAME = 'main'
 
 function makeTab(id: string, contentType: TabContentType, sortOrder = 0): Tab {
   return {
@@ -71,6 +82,7 @@ function makeWorkspaceTab({
   groupSortIndex?: number
   isCurrentTab?: boolean
 }): SearchableWorkspaceTab {
+  const searchTexts = secondarySearchTexts ?? (secondaryText ? [secondaryText] : [])
   return {
     tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -81,7 +93,15 @@ function makeWorkspaceTab({
     title,
     secondaryText,
     titleSearchText: title,
-    secondarySearchTexts: secondarySearchTexts ?? (secondaryText ? [secondaryText] : []),
+    secondarySearchTexts: searchTexts,
+    document: buildPaletteTabDocument({
+      id,
+      title,
+      secondaryTexts: searchTexts,
+      worktreeName: WORKTREE_NAME,
+      branch: BRANCH_NAME,
+      repoName: REPO_NAME
+    }),
     agentMetadata: agentSnippets.length
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
@@ -138,7 +158,13 @@ function makeBrowserPage({
     repoName: REPO_NAME,
     worktreeSortIndex: 0,
     isCurrentPage,
-    isCurrentWorktree: true
+    isCurrentWorktree: true,
+    document: buildSearchableBrowserPageDocument({
+      page,
+      workspace,
+      worktree,
+      repoName: REPO_NAME
+    })
   }
 }
 
@@ -151,13 +177,23 @@ function makeSimulatorTab({
   label: string
   isCurrentTab?: boolean
 }): SearchableSimulatorTab {
+  const tab = { ...makeTab(id, 'simulator'), label }
   return {
-    tab: { ...makeTab(id, 'simulator'), label },
+    tab,
     worktree,
     repoName: REPO_NAME,
     worktreeSortIndex: 0,
     isCurrentTab,
-    isCurrentWorktree: true
+    isCurrentWorktree: true,
+    document: buildPaletteTabDocument({
+      id: tab.id,
+      title: simulatorPaletteTabTitle(tab),
+      secondaryTexts: [],
+      worktreeName: WORKTREE_NAME,
+      branch: BRANCH_NAME,
+      repoName: REPO_NAME,
+      typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
+    })
   }
 }
 
@@ -204,6 +240,8 @@ describe('searchOpenTabs ranking', () => {
     ])
   })
 
+  // Both land in the secondary tier, so match rank has to beat tab position: the
+  // agent tab sits earlier in the group and would win a position-only tie-break.
   it('ranks a path match above an agent-snippet match on tabs in the same group', () => {
     const results = search({
       query: 'zebra',
@@ -328,7 +366,9 @@ describe('searchOpenTabs filtering', () => {
     ])
   })
 
-  it('keeps the simulator "ios simulator" alias match, which carries no ranges', () => {
+  // Both tokens land on the "ios simulator" alias, so the row fills no title or
+  // secondary range — the inverse test would drop it.
+  it('keeps a simulator alias match that spans two keywords', () => {
     const results = search({
       query: 'ios sim',
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Pixel 8' })]
@@ -422,6 +462,19 @@ describe('searchOpenTabs query guards', () => {
 
     expect(search({ query: '', workspaceTabs })).toEqual([])
     expect(search({ query: '   ', workspaceTabs })).toEqual([])
+  })
+
+  it('returns nothing once the query passes the matcher token limit', () => {
+    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+
+    expect(
+      search({
+        query,
+        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Zebra tab' })],
+        browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra page' })],
+        simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
+      })
+    ).toEqual([])
   })
 
   it('returns nothing for an oversized query instead of searching', () => {

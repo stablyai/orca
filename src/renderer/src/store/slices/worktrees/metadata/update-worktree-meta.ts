@@ -23,7 +23,10 @@ import {
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
+import {
+  settingsForWorktreeOwner,
+  trySettingsForWorktreeOwner
+} from '../listing/worktree-owner-settings'
 
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
@@ -69,13 +72,18 @@ export function createUpdateWorktreeMeta(
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
-    const resolvedPushTarget =
+    // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
+    const pushTargetOwnerSettings =
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
       !existingWorktree.pushTarget
+        ? trySettingsForWorktreeOwner(get(), worktreeId)
+        : null
+    const resolvedPushTarget =
+      pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
         ? await resolveGitHubReviewPushTarget(
-            settingsForWorktreeOwner(get(), worktreeId),
+            pushTargetOwnerSettings,
             existingWorktree.repoId,
             linkedPrForPushTarget
           )
@@ -98,7 +106,7 @@ export function createUpdateWorktreeMeta(
       return { ok: true }
     }
     const shouldRefreshHostedReview =
-      (normalizedUpdates.linkedPR === null && worktreeForUpdate?.linkedPR !== null) ||
+      (normalizedUpdates.linkedPR === null && (worktreeForUpdate?.linkedPR ?? null) !== null) ||
       (normalizedUpdates.linkedGitLabMR === null &&
         (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
       (normalizedUpdates.linkedBitbucketPR === null &&

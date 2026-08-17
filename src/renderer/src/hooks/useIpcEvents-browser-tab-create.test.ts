@@ -109,7 +109,7 @@ describe('useIpcEvents browser tab create routing', () => {
         getState: () => state
       }
     }))
-    vi.doMock('@/components/browser-pane/browser-automation-visibility', () => ({
+    vi.doMock('@/components/browser-pane/host-guest/browser-automation-visibility', () => ({
       acquireBrowserAutomationVisibility,
       releaseBrowserAutomationVisibility
     }))

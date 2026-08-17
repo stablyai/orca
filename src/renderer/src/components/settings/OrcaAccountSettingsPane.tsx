@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
+import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { OrcaProfileSignOutConfirmDialog } from '../orca-profiles/OrcaProfileSignOutConfirmDialog'
@@ -32,6 +33,28 @@ function accountStatusCopy(
     )
   }
   return translate('auto.components.settings.orcaAccount.checking', 'Checking account status…')
+}
+
+function AccountBenefit({
+  icon: Icon,
+  title,
+  description,
+  className
+}: {
+  icon: typeof Files
+  title: string
+  description: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div className={cn('flex items-start gap-3', className)}>
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  )
 }
 
 export function OrcaAccountSettingsPane(): React.JSX.Element {
@@ -120,38 +143,41 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               'Included with your account'
             )}
           </p>
-          <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
-            <div className="flex items-start gap-3 md:pr-6">
-              <Files className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  {translate(
-                    'auto.components.settings.orcaAccount.artifactsTitle',
-                    'Artifact sharing'
-                  )}
-                </p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.orcaAccount.artifactsDescription',
-                    'Publish HTML and Markdown files, then manage every shared link from Orca.'
-                  )}
-                </p>
-              </div>
+          <div className="space-y-5">
+            <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+              <AccountBenefit
+                icon={Files}
+                className="md:pr-6"
+                title={translate(
+                  'auto.components.settings.orcaAccount.artifactsTitle',
+                  'Artifact sharing'
+                )}
+                description={translate(
+                  'auto.components.settings.orcaAccount.artifactsDescription',
+                  'Publish HTML and Markdown files, then manage every shared link from Orca.'
+                )}
+              />
+              <AccountBenefit
+                icon={Smartphone}
+                className="md:pl-6"
+                title={translate('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
+                description={translate(
+                  'auto.components.settings.orcaAccount.relayDescription',
+                  'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
+                )}
+              />
             </div>
-            <div className="flex items-start gap-3 md:pl-6">
-              <Smartphone className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  {translate('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
-                </p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.orcaAccount.relayDescription',
-                    'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
-                  )}
-                </p>
-              </div>
-            </div>
+            {/* Why: a third column would squeeze all three; a full-width row
+                below keeps the pair's divider and reads as one list. */}
+            <AccountBenefit
+              icon={BookOpen}
+              className="border-t border-border/60 pt-5"
+              title={translate('auto.components.settings.orcaAccount.skillsTitle', 'Skill sharing')}
+              description={translate(
+                'auto.components.settings.orcaAccount.skillsDescription',
+                'Share one skill or a whole set behind an unlisted link, and install them on any machine you use.'
+              )}
+            />
           </div>
         </div>
       </div>

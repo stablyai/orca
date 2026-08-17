@@ -4,7 +4,7 @@ import {
   shouldOpenSourceControlRowAsPreview,
   toPermanentSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
-} from './source-control-split-open'
+} from './source-control/listing/split-open'
 
 function event(overrides: Partial<SourceControlRowOpenEvent> = {}): SourceControlRowOpenEvent {
   return {

@@ -8,7 +8,7 @@ import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { ListSessionsResult } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 // Why: terminals were lost after app updates because a busy machine could
 // time out the 3s startup health check against a daemon that was alive and

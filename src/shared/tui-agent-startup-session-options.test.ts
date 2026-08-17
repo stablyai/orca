@@ -125,7 +125,7 @@ describe('tui agent startup session options', () => {
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: "team's-model", effort: 'high' }
     })
-    expect(plan?.launchCommand).toContain("'team'\\''s-model'")
+    expect(plan?.launchCommand).toContain(`'team'"'"'s-model'`)
   })
 
   it('threads options through native draft launches', () => {

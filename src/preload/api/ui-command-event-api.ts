@@ -36,6 +36,8 @@ export type UiCommandEventApi = {
   onOpenSettings: (callback: () => void) => () => void
   /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
+  onOpenSkillShare: (callback: (shareId: string) => void) => () => void
+  consumePendingSkillShare: () => Promise<string | null>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void

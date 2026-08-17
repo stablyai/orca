@@ -30,10 +30,8 @@ vi.mock('../tray/system-tray', async () =>
   (await import('./notifications-test-harness')).createSystemTrayModuleMock()
 )
 
-import {
-  registerNotificationHandlers,
-  triggerStartupNotificationRegistration
-} from './notifications'
+import { registerNotificationHandlers } from './notifications'
+import { triggerStartupNotificationRegistration } from './startup-notification-registration'
 
 describe('notifications:probeDelivery', () => {
   const originalPlatform = process.platform

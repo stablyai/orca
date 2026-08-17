@@ -17,7 +17,7 @@ describe('browser navigation updates', () => {
     })
     const harness = await loadIpcEventsHarness(storeState)
     const { clearLiveBrowserUrl, getLiveBrowserUrl } =
-      await import('@/components/browser-pane/browser-runtime')
+      await import('@/components/browser-pane/describe-page/live-browser-url-registry')
     readLiveUrl = getLiveBrowserUrl
     harness.useIpcEvents()
 

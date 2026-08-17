@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
-import { getDaemonBashShellReadyRcfileContent } from '../daemon/shell-ready'
+import { getDaemonBashShellReadyRcfileContent } from '../daemon/daemon-bash-shell-ready-rcfile'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 
 // Why (STA-4270): the generated rcfile sources /etc/profile and the user's profile

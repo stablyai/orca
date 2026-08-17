@@ -68,6 +68,9 @@ function createHarness(): Harness {
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : handle === WORKER_HANDLE ? WORKER_PANE : null
   )
+  vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+    runtime.getTerminalPaneKey(handle)
+  )
   vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation(
     (compatibilityEvidence) => {
       const coordinator =
@@ -199,7 +202,7 @@ describe('legacy coordinator takeover races', () => {
         result: {
           message: {
             run_id: harness.adoptedRunId,
-            to_handle: WORKER_HANDLE,
+            to_handle: `dispatch:${harness.dispatchId}`,
             delivery_contract: 'legacy_direct'
           }
         }
@@ -310,6 +313,15 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
+    vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === COORDINATOR_HANDLE
+        ? COORDINATOR_PANE
+        : handle === WORKER_HANDLE
+          ? WORKER_PANE
+          : handle === 'term_current_worker'
+            ? 'tab_current_worker:leaf_current_worker'
+            : null
+    )
     vi.spyOn(harness.runtime, 'listTerminals').mockResolvedValue({
       terminals: [
         { handle: COORDINATOR_HANDLE },
@@ -336,7 +348,7 @@ describe('legacy coordinator takeover races', () => {
       expect.arrayContaining([
         expect.objectContaining({
           run_id: harness.adoptedRunId,
-          to_handle: WORKER_HANDLE,
+          to_handle: `dispatch:${harness.dispatchId}`,
           delivery_contract: 'legacy_direct'
         }),
         expect.objectContaining({

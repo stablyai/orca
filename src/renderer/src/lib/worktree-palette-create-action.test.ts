@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   CREATE_WORKTREE_ITEM_ID,
+  WORKTREE_PALETTE_SELECTION_MOVE_KEYS,
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
   getWorktreePaletteSelectionItemIds,
-  getWorktreePaletteCreateActionState
+  getWorktreePaletteCreateActionState,
+  isWorktreePaletteCreateActivationAllowed
 } from './worktree-palette-create-action'
 import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from './worktree-palette-query-bounds'
 
@@ -29,7 +31,7 @@ describe('worktree-palette-create-action', () => {
     ).toBe('worktree:one')
   })
 
-  it('selects create when it appears before actions, settings, and browser rows', () => {
+  it('skips create for free text even when it is listed before every other row', () => {
     const state = getWorktreePaletteCreateActionState({
       canCreateWorktree: true,
       query: 'opencode-issue'
@@ -48,21 +50,32 @@ describe('worktree-palette-create-action', () => {
         ],
         showCreateAction: state.showCreateAction
       })
-    ).toBe(CREATE_WORKTREE_ITEM_ID)
+    ).toBe('settings:ai-provider-accounts')
   })
 
-  it('selects create when it appears before a browser-only match', () => {
+  it('selects create ahead of other rows only for a recognized task URL', () => {
+    const selectableItemIds = [CREATE_WORKTREE_ITEM_ID, 'browser-page:one']
+
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
-        selectableItemIds: [CREATE_WORKTREE_ITEM_ID, 'browser-page:one'],
+        selectableItemIds,
         showCreateAction: true
+      })
+    ).toBe('browser-page:one')
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds,
+        showCreateAction: true,
+        autoSelectCreateAction: true
       })
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('defaults to create for typed queries with no real matches', () => {
+  it('leaves Enter unarmed for typed queries with no real matches', () => {
     const state = getWorktreePaletteCreateActionState({
       canCreateWorktree: true,
       query: 'new-workspace'
@@ -75,6 +88,15 @@ describe('worktree-palette-create-action', () => {
         queryChanged: true,
         selectableItemIds: [],
         showCreateAction: state.showCreateAction
+      })
+    ).toBe('')
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds: [],
+        showCreateAction: state.showCreateAction,
+        autoSelectCreateAction: true
       })
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
@@ -134,13 +156,13 @@ describe('worktree-palette-create-action', () => {
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('shows create even when no project is available so the composer can guide setup', () => {
+  it('hides create when no project is available to create a workspace in', () => {
     expect(
       getWorktreePaletteCreateActionState({
         canCreateWorktree: false,
         query: 'new-workspace'
-      }).showCreateAction
-    ).toBe(true)
+      })
+    ).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: false })
   })
 
   it('hides create for an empty query', () => {
@@ -197,6 +219,42 @@ describe('worktree-palette-create-action', () => {
         showCreateAction: true
       })
     ).toBe('browser-page:first')
+  })
+
+  it('leaves create unarmed for free text until the user moves the selection', () => {
+    // Why: cmdk auto-selects the first row once the controlled value empties, so
+    // with Create alone on screen Enter would fire without any user gesture.
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        selectionMovedByUser: false
+      })
+    ).toBe(false)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        selectionMovedByUser: true
+      })
+    ).toBe(true)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: true,
+        selectionMovedByUser: false
+      })
+    ).toBe(true)
+  })
+
+  it('counts only navigation keys as a user selection move', () => {
+    expect([...WORKTREE_PALETTE_SELECTION_MOVE_KEYS].sort()).toEqual([
+      'ArrowDown',
+      'ArrowUp',
+      'End',
+      'Home',
+      'PageDown',
+      'PageUp'
+    ])
+    // Enter is the activation itself, so it must never count as the gesture that arms it.
+    expect(WORKTREE_PALETTE_SELECTION_MOVE_KEYS.has('Enter')).toBe(false)
   })
 
   it('invalidates stale async create lookups', () => {

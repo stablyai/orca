@@ -42,7 +42,7 @@ vi.mock('../git/repo', () => ({
   filterBaseRefSearchOutput: vi.fn().mockReturnValue([])
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
 

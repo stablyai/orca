@@ -9,6 +9,18 @@ import {
 } from './worktree-lineage-refresh'
 import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
 
+// Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
+async function refreshWorktreeLineageBestEffort(
+  ownerSettings: AppState['settings'],
+  set: WorktreeSliceSet
+): Promise<void> {
+  try {
+    await refreshWorktreeLineageForSettings(ownerSettings, set)
+  } catch (err) {
+    console.error('Failed to refresh worktree lineage after a failed write:', err)
+  }
+}
+
 export function createFetchWorktreeLineage(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -43,6 +55,8 @@ export function createUpdateWorktreeLineage(
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeLineage'] {
   return async (worktreeId, args) => {
+    // Why: an unresolvable owner route (ambiguous or missing) rejects rather than skipping — this is a
+    // user-initiated action, and both callers toast the failure. Don't swallow it into a silent no-op.
     const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
     try {
       applyWorktreeLineageUpdate(
@@ -52,7 +66,8 @@ export function createUpdateWorktreeLineage(
       )
     } catch (err) {
       console.error('Failed to update worktree lineage:', err)
-      await refreshWorktreeLineageForSettings(ownerSettings, set)
+      await refreshWorktreeLineageBestEffort(ownerSettings, set)
+      throw err
     }
   }
 }
@@ -71,7 +86,8 @@ export function createAssignWorktreeParent(
       )
     } catch (err) {
       console.error('Failed to assign worktree parent:', err)
-      await refreshWorktreeLineageForSettings(ownerSettings, set)
+      // Unlike the update path this rethrows, so the recovery refresh must not mask the original cause.
+      await refreshWorktreeLineageBestEffort(ownerSettings, set)
       throw err
     }
   }

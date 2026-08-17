@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DaemonServer } from './daemon-server'
 import { checkDaemonHealth } from './daemon-health'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
   return {

@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 
 vi.mock('qrcode', () => ({
   default: {
+    create: vi.fn().mockReturnValue({ modules: { size: 21 } }),
     toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr')
   }
 }))
@@ -344,6 +345,7 @@ describe('registerMobileHandlers', () => {
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
+      qrSize: 58,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
@@ -422,6 +424,7 @@ describe('registerMobileHandlers', () => {
     ).resolves.toEqual({
       available: true,
       qrDataUrl: null,
+      qrSize: null,
       qrError: 'encoding_failed',
       pairingUrl: 'orca://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',

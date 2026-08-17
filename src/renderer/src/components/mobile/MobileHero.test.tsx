@@ -218,6 +218,15 @@ describe('HeroFlow height', () => {
     expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
   })
 
+  it('renders a pairing QR at its natural integer-scaled bitmap size', () => {
+    renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr', pairQrSize: 218 })
+
+    const image = screen.getByRole('img', { name: 'Pairing QR' })
+    const layout = image.closest('.mp-pairing-layout') as HTMLElement
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-image-size')).toBe('218px')
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-frame-size')).toBe('238px')
+  })
+
   it('shows an encoder error while keeping the copy fallback enabled', () => {
     renderFlow(1, {
       pairingQrError: true,
