@@ -4944,7 +4944,9 @@ export default function SessionScreen() {
                       ref={liveInputRef}
                       style={styles.liveInputCapture}
                       value={liveInputCapture}
-                      onChangeText={handleLiveInputChange}
+                      // Why onChange, not onChangeText: only the raw native event carries the
+                      // marked-text report that says whether this text is still preedit.
+                      onChange={handleLiveInputChange}
                       onKeyPress={handleLiveInputKeyPress}
                       onSubmitEditing={handleLiveInputSubmit}
                       placeholder=""
