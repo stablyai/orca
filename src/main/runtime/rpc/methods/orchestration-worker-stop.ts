@@ -27,7 +27,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           )
         }
         const server = resolvePinnedFederatedServer(runtime, federated)
-        const begun = db.beginWorkerStop(params.dispatch)
+        const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
         if (begun.disposition === 'already_settled') {
           return settledReceipt(params.dispatch, begun.worker.state)
         }
@@ -97,7 +97,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         }
       }
 
-      const begun = db.beginWorkerStop(params.dispatch)
+      const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
       if (begun.disposition === 'already_settled') {
         return settledReceipt(params.dispatch, begun.worker.state)
       }

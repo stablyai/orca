@@ -260,7 +260,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
     d.markWorkerDispatchReady(started.dispatch.id)
 
-    expect(d.beginWorkerStop(started.dispatch.id).disposition).toBe('stopping')
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test').disposition).toBe('stopping')
     expect(
       d.settleWorkerReport({
         taskId: task.id,
@@ -279,7 +279,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
     d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
 
-    expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
       disposition: 'stopping',
       worker: { state: 'stopping' }
     })
@@ -379,7 +379,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       })
     ).toMatchObject({ action: 'settled' })
 
-    expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
       disposition: 'already_settled',
       worker: { state: 'succeeded' }
     })

@@ -209,7 +209,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
 
   it('linearizes stop before a concurrent user takeover', () => {
     const dispatch = createWorker()
-    expect(db.beginWorkerStop(dispatch.id).disposition).toBe('stopping')
+    expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
 
     expect(db.markWorkerTerminalUserOwned('tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toBe(
       0
@@ -222,7 +222,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
 
   it('does not let abandon overwrite a stop in progress', () => {
     const dispatch = createWorker()
-    expect(db.beginWorkerStop(dispatch.id).disposition).toBe('stopping')
+    expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
 
     expect(() => db.abandonWorkerDispatch(dispatch.id)).toThrow(
       'is stopping; wait for worker-stop to settle before abandoning'
