@@ -79,10 +79,8 @@ describe('buildDispatchPreamble', () => {
 
   it('offers status as the content-bearing way to report mid-run progress', () => {
     const result = buildDispatchPreamble(baseParams())
-    // Why: status is the only worker message that carries a body without
-    // settling anything. Without it in the preamble the sole content-bearing
-    // command a worker has been taught is worker_done, so a progress update
-    // becomes a completion and revokes the dispatch capability.
+    // Why: without status in the preamble, a worker reporting progress reaches
+    // for worker_done, which settles the task and revokes the capability.
     expect(result).toContain('--type status')
     expect(result).toMatch(/--subject "<short progress headline>"/)
     expect(result).toContain('--body "<what just finished, what you are starting next>"')
