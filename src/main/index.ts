@@ -198,6 +198,7 @@ import {
 } from './startup/serve-desktop-activation'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
+import { readMiniMaxApiKey } from './minimax/minimax-api-key-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
@@ -2493,7 +2494,11 @@ void app.whenReady().then(async () => {
     return {
       sessionCookie: readMiniMaxSessionCookie() ?? '',
       groupId: settings.minimaxGroupId,
-      models: settings.minimaxUsageModels
+      models: settings.minimaxUsageModels,
+      endpoint: settings.minimaxEndpoint,
+      // Why: the API key lives in safeStorage on disk; read it on every fetch
+      // so save/clear take effect on the next poll without a service restart.
+      apiKey: readMiniMaxApiKey() ?? ''
     }
   })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)

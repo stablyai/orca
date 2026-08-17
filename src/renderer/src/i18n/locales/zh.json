@@ -5298,6 +5298,7 @@
           "f38b9cc4bd": "替换",
           "590a3130f9": "保存",
           "79418c782a": "在浏览器中打开 platform.minimax.io/console/usage 并登录，然后从 DevTools(网络 → 任一 remains 请求 → Cookie)复制 Cookie 请求头。",
+          "c9e2a4b7d1": "如果同时配置了 MiniMax API Key，API Key 优先，Cookie 将被忽略。",
           "9dd50d3f75": "高级",
           "174fb408f9": "除非 MiniMax 使用量刷新指向了错误的工作区或模型，否则请保持这些默认值。",
           "bf160bb6c0": "Group ID 覆盖",
@@ -5338,7 +5339,17 @@
           "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置。请恢复该文件以恢复同步。",
           "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置。同步文件夹完成下载前出现这种情况是正常的。",
           "codexConfigSyncManagedHomeUnavailable": "Orca 暂时无法读取此账户的 Codex 文件，因此设置可能尚未同步。这通常会自行恢复——防病毒软件或备份工具可能只是短暂锁定了这些文件。",
-          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。"
+          "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。",
+          "d6f1b9b6a2": "请填写 MiniMax API 密钥。",
+          "7c5d8a4e1b": "MiniMax API 密钥未保存。",
+          "4d2c7b9e83": "MiniMax API 密钥已保存。",
+          "f8a4b9d210": "MiniMax 端点",
+          "0b3a9f6c2e": "选择匹配你账号的端点。海外 (platform.minimax.io) 和国内 (www.minimaxi.com) 都支持 session cookie 或 API 密钥。",
+          "83b6a1f7c4": "MiniMax API 密钥",
+          "5d7e1a0c93": "从你的 MiniMax 控制台 → API 密钥 粘贴。海外和国内端点都支持。密钥不会离开本设备，使用 safeStorage 加密保存。",
+          "4f2c8a7e1b": "粘贴你的 MiniMax API 密钥",
+          "a7b1e3c5d2": "忘记密钥",
+          "2c8d4b6a91": "如果你的账号使用 session cookie 流程，请留空并在上方配置 cookie。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",

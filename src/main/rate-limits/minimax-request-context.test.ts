@@ -22,8 +22,10 @@ vi.mock('electron', () => ({
 import {
   clearMiniMaxSessionCookieJar,
   extractMiniMaxCookieValue,
+  fetchMiniMaxWithApiKey,
   fetchMiniMaxWithManualCookieHeader,
   fetchMiniMaxWithSessionCookieJar,
+  getMiniMaxEndpointUrl,
   getUniqueMiniMaxCookieNames,
   logMiniMaxFetchFailure,
   makeMiniMaxRequestHeaders,
@@ -137,7 +139,7 @@ describe('redactMiniMaxSecret', () => {
 
 describe('makeMiniMaxRequestHeaders', () => {
   it('always includes browser-like Accept, Accept-Language, Referer, and User-Agent', () => {
-    const headers = makeMiniMaxRequestHeaders(null)
+    const headers = makeMiniMaxRequestHeaders(null, 'overseas')
     expect(headers.Accept).toMatch(/application\/json/)
     expect(headers['Accept-Language']).toBe('en-US,en;q=0.9')
     expect(headers.Referer).toBe('https://platform.minimax.io/console/usage')
@@ -145,18 +147,23 @@ describe('makeMiniMaxRequestHeaders', () => {
     expect(headers['User-Agent']).not.toContain('orca-minimax-usage')
   })
 
+  it('switches the Referer to the CN console when endpointMode is "cn" (#14264)', () => {
+    const headers = makeMiniMaxRequestHeaders(null, 'cn')
+    expect(headers.Referer).toBe('https://www.minimaxi.com/console/usage')
+  })
+
   it('omits X-Group-Id when groupId is null', () => {
-    const headers = makeMiniMaxRequestHeaders(null)
+    const headers = makeMiniMaxRequestHeaders(null, 'overseas')
     expect(headers['X-Group-Id']).toBeUndefined()
   })
 
   it('omits X-Group-Id when groupId is empty string', () => {
-    const headers = makeMiniMaxRequestHeaders('')
+    const headers = makeMiniMaxRequestHeaders('', 'overseas')
     expect(headers['X-Group-Id']).toBeUndefined()
   })
 
   it('includes X-Group-Id when groupId is provided', () => {
-    const headers = makeMiniMaxRequestHeaders('2034972027806299092')
+    const headers = makeMiniMaxRequestHeaders('2034972027806299092', 'overseas')
     expect(headers['X-Group-Id']).toBe('2034972027806299092')
   })
 })
@@ -189,7 +196,8 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: '12345',
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
@@ -215,7 +223,8 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
         cookie: FULL_COOKIE,
         endpoint: MINIMAX_USAGE_ENDPOINT,
         groupId: '12345',
-        signal: controller.signal
+        signal: controller.signal,
+        endpointMode: 'overseas'
       })
     ).rejects.toThrow('pre-clear boom')
 
@@ -242,6 +251,18 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
     })
   })
 
+  it('clears both overseas and CN origins on demand (#14264)', async () => {
+    await clearMiniMaxSessionCookieJar()
+    expect(clearStorageDataMock).toHaveBeenNthCalledWith(1, {
+      origin: 'https://platform.minimax.io',
+      storages: ['cookies']
+    })
+    expect(clearStorageDataMock).toHaveBeenNthCalledWith(2, {
+      origin: 'https://www.minimaxi.com',
+      storages: ['cookies']
+    })
+  })
+
   it('sets every cookie pair onto the session jar with secure + path /', async () => {
     netFetchMock.mockResolvedValueOnce({
       ok: true,
@@ -253,7 +274,8 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       cookie: '_token=tok; ak_bmsc=ak; minimax_group_id_v2=42',
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: null,
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     expect(cookiesSetMock).toHaveBeenCalledTimes(3)
     const setDetails = cookiesSetMock.mock.calls.map((call) => {
@@ -287,7 +309,8 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: '12345',
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     expect(result.transport).toBe('session-cookie-jar')
     expect(result.cookieNames).toEqual([
@@ -328,7 +351,8 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: '12345',
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     expect(result.transport).toBe('manual-cookie-header')
     expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
@@ -353,7 +377,8 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: null,
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     const [, init] = netFetchMock.mock.calls[0]
     expect(init.headers['X-Group-Id']).toBeUndefined()
@@ -370,7 +395,8 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       cookie: 'Cookie: _token=tok; minimax_group_id_v2=42; _twpid:"tw"',
       endpoint: MINIMAX_USAGE_ENDPOINT,
       groupId: null,
-      signal: controller.signal
+      signal: controller.signal,
+      endpointMode: 'overseas'
     })
     const [, init] = netFetchMock.mock.calls[0]
     expect(init.headers.Cookie).toBe('_token=tok; minimax_group_id_v2=42; _twpid=tw')
@@ -388,13 +414,91 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
         cookie: FULL_COOKIE,
         endpoint: MINIMAX_USAGE_ENDPOINT,
         groupId: '12345',
-        signal: controller.signal
+        signal: controller.signal,
+        endpointMode: 'overseas'
       })
     ).rejects.toThrow('manual pre-clear boom')
 
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
     expect(netFetchMock).not.toHaveBeenCalled()
     expect(warn).not.toHaveBeenCalled()
+  })
+})
+
+describe('getMiniMaxEndpointUrl', () => {
+  it('returns the overseas .io endpoint by default', () => {
+    expect(getMiniMaxEndpointUrl('overseas')).toBe(MINIMAX_USAGE_ENDPOINT)
+    expect(getMiniMaxEndpointUrl('overseas')).toBe(
+      'https://platform.minimax.io/v1/api/openplatform/coding_plan/remains'
+    )
+  })
+
+  it('returns the CN www.minimaxi.com endpoint when requested', () => {
+    expect(getMiniMaxEndpointUrl('cn')).toBe(
+      'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains'
+    )
+  })
+
+  it('uses the same usage path on both endpoints so response parsing stays uniform', () => {
+    const overseas = new URL(getMiniMaxEndpointUrl('overseas'))
+    const cn = new URL(getMiniMaxEndpointUrl('cn'))
+    expect(overseas.pathname).toBe(cn.pathname)
+  })
+})
+
+describe('fetchMiniMaxWithApiKey', () => {
+  beforeEach(() => {
+    clearStorageDataMock.mockClear()
+    cookiesSetMock.mockClear()
+    netFetchMock.mockReset()
+    sessionFromPartitionMock.mockClear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sends only the Authorization Bearer header and accepts JSON', async () => {
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
+    })
+    const controller = new AbortController()
+    const result = await fetchMiniMaxWithApiKey({
+      apiKey: 'sk-test-1234567890',
+      endpoint: 'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains',
+      signal: controller.signal
+    })
+    expect(result.transport).toBe('api-key')
+    expect(result.cookieNames).toEqual([])
+    expect(result.requestHeaderNames).toEqual(['Authorization', 'Accept'])
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = netFetchMock.mock.calls[0]
+    expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
+    expect(init.method).toBe('GET')
+    expect(init.headers.Authorization).toBe('Bearer sk-test-1234567890')
+    expect(init.headers.Accept).toBe('application/json')
+    expect(init.headers.Cookie).toBeUndefined()
+    expect(init.headers.Referer).toBeUndefined()
+    expect(init.headers['User-Agent']).toBeUndefined()
+  })
+
+  it('does not touch the session cookie jar', async () => {
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
+    })
+    const controller = new AbortController()
+    await fetchMiniMaxWithApiKey({
+      apiKey: 'sk-test',
+      endpoint: 'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains',
+      signal: controller.signal
+    })
+    expect(sessionFromPartitionMock).not.toHaveBeenCalled()
+    expect(clearStorageDataMock).not.toHaveBeenCalled()
+    expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 })
 
@@ -449,5 +553,35 @@ describe('logMiniMaxFetchFailure', () => {
         baseRespStatusMsg: undefined
       })
     )
+  })
+
+  it('stores cookies under the CN origin when endpointMode is "cn" (#14264 repro)', async () => {
+    // Why: the previous hardcoded origin (platform.minimax.io) caused CN
+    // users' cookies to be sent against the wrong host, so Electron's
+    // session never attached them. Cookies must be stored under
+    // www.minimaxi.com for a CN fetch to actually carry the auth.
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
+    })
+    await fetchMiniMaxWithSessionCookieJar({
+      cookie: FULL_COOKIE,
+      endpoint: 'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains',
+      groupId: '12345',
+      signal: new AbortController().signal,
+      endpointMode: 'cn'
+    })
+    // The cookies must be stored under the CN origin, not overseas.
+    const cnWrites = cookiesSetMock.mock.calls.filter((call) => {
+      const [details] = call as unknown as [{ url: string }]
+      return details.url === 'https://www.minimaxi.com'
+    })
+    expect(cnWrites.length).toBeGreaterThan(0)
+    const overseasWrites = cookiesSetMock.mock.calls.filter((call) => {
+      const [details] = call as unknown as [{ url: string }]
+      return details.url === 'https://platform.minimax.io'
+    })
+    expect(overseasWrites.length).toBe(0)
   })
 })

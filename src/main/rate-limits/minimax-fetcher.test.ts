@@ -116,7 +116,7 @@ describe('fetchMiniMaxRateLimits', () => {
     const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('stale-token')
-    expect(result.error).toMatch(/session expired/i)
+    expect(result.error).toMatch(/session cookie expired/i)
   })
 
   it('classifies 403 as stale-token', async () => {
@@ -449,6 +449,146 @@ describe('fetchMiniMaxRateLimits', () => {
         cookieNames: ['_token', '_twpid', 'minimax_group_id_v2', 'platform_cookie_consent']
       })
     )
+  })
+
+  it('routes CN + API key to the bearer transport and hits www.minimaxi.com', async () => {
+    netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(72)))
+    const result = await fetchMiniMaxRateLimits({
+      cookie: FULL_COOKIE,
+      apiKey: 'sk-test-1234567890',
+      endpointMode: 'cn'
+    })
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(28)
+    const [url, init] = netFetchMock.mock.calls[0]
+    expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
+    expect(init.headers.Authorization).toBe('Bearer sk-test-1234567890')
+    // Why: the API key path must not set browser-shaped headers — they're
+    // there to defeat hotlink protection on the cookie path and would only
+    // look like scraping on the API key path.
+    expect(init.headers.Referer).toBeUndefined()
+    expect(init.headers['User-Agent']).toBeUndefined()
+    expect(init.headers.Cookie).toBeUndefined()
+    // Why: cookie jar / session partition must not be touched on the bearer
+    // path, since the user is not using cookies for this endpoint mode.
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(sessionFromPartitionMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the cookie transport when no API key is provided', async () => {
+    netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(60)))
+    const result = await fetchMiniMaxRateLimits({
+      cookie: FULL_COOKIE,
+      endpointMode: 'cn'
+    })
+    expect(result.status).toBe('ok')
+    const [url, init] = netFetchMock.mock.calls[0]
+    expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
+    expect(init.headers.Authorization).toBeUndefined()
+    expect(init.headers.Cookie).toBeUndefined()
+    // Why: cookie transport relies on the session jar — verify it was
+    // populated for the CN host so the .io-only Referer mock doesn't crash.
+    expect(cookiesSetMock).toHaveBeenCalled()
+  })
+
+  it('routes to API key on the overseas endpoint when both are configured', async () => {
+    // Why: the API key path is a Bearer header — endpoint-agnostic, the
+    // endpoint only picks the host URL. Either auth works on either endpoint.
+    netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(50)))
+    const result = await fetchMiniMaxRateLimits({
+      cookie: FULL_COOKIE,
+      apiKey: 'sk-overseas-key',
+      endpointMode: 'overseas'
+    })
+    expect(result.status).toBe('ok')
+    const [url, init] = netFetchMock.mock.calls[0]
+    expect(url).toBe('https://platform.minimax.io/v1/api/openplatform/coding_plan/remains')
+    expect(init.headers.Authorization).toBe('Bearer sk-overseas-key')
+    // Why: API key path skips the cookie jar — cookiesSetMock is never called.
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+
+  it('classifies a 401 on the API key path as a stale API key error', async () => {
+    netFetchMock.mockResolvedValueOnce(makeResponse({}, 401))
+    const result = await fetchMiniMaxRateLimits({
+      apiKey: 'sk-stale',
+      endpointMode: 'cn'
+    })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('stale-token')
+    expect(result.error).toMatch(/API key expired/i)
+  })
+
+  it('parses the 7-day weekly window alongside the 5-hour session', async () => {
+    const now = Date.now()
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({
+        base_resp: { status_code: 0, status_msg: 'ok' },
+        model_remains: [
+          {
+            model_name: 'general',
+            current_interval_remaining_percent: 80,
+            start_time: now - 60_000,
+            end_time: now + 5 * 60 * 60 * 1000,
+            remains_time: 5 * 60 * 60 * 1000,
+            current_weekly_remaining_percent: 45,
+            weekly_remains_time: 3 * 24 * 60 * 60 * 1000,
+            weekly_boost_permille: 1500
+          }
+        ]
+      })
+    )
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(20)
+    expect(result.session?.windowMinutes).toBe(300)
+    expect(result.weekly).not.toBeNull()
+    expect(result.weekly?.usedPercent).toBe(55)
+    expect(result.weekly?.windowMinutes).toBe(10080)
+    // Why: resetsAt is anchored to now + the API's reported duration, so the
+    // status-bar countdown stays consistent with the session shape.
+    const weeklyResets = result.weekly?.resetsAt ?? 0
+    expect(weeklyResets).toBeGreaterThan(now + 3 * 24 * 60 * 60 * 1000 - 5_000)
+    expect(weeklyResets).toBeLessThan(now + 3 * 24 * 60 * 60 * 1000 + 5_000)
+  })
+
+  it('returns weekly = null when the API omits weekly fields', async () => {
+    // Why: matches the existing makeOkPayload (no weekly fields) — guards
+    // against the case where the upstream rolls back to the 5h-only schema.
+    netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(50)))
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(50)
+    expect(result.weekly).toBeNull()
+  })
+
+  it('parses weekly usedPercent when weekly_remains_time is missing', async () => {
+    // Why: some accounts report the percent without a reset duration; the
+    // status bar falls back to the "wk" label via formatWindowLabel in that
+    // case. Don't drop the percent just because resetsAt is unknown.
+    const now = Date.now()
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({
+        base_resp: { status_code: 0, status_msg: 'ok' },
+        model_remains: [
+          {
+            model_name: 'general',
+            current_interval_remaining_percent: 90,
+            start_time: now - 60_000,
+            end_time: now + 5 * 60 * 60 * 1000,
+            remains_time: 5 * 60 * 60 * 1000,
+            current_weekly_remaining_percent: 70
+          }
+        ]
+      })
+    )
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+    expect(result.status).toBe('ok')
+    expect(result.weekly).toMatchObject({
+      usedPercent: 30,
+      windowMinutes: 10080,
+      resetsAt: null
+    })
   })
 })
 

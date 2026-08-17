@@ -6088,6 +6088,7 @@
           "f38b9cc4bd": "Replace",
           "590a3130f9": "Save",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "c9e2a4b7d1": "If a MiniMax API key is also configured, the API key takes priority and the cookie will be ignored.",
           "9dd50d3f75": "Advanced",
           "174fb408f9": "Leave these defaults alone unless MiniMax usage refresh points at the wrong workspace or model.",
           "bf160bb6c0": "Group ID override",
@@ -6128,7 +6129,17 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "d6f1b9b6a2": "MiniMax API key is required.",
+          "7c5d8a4e1b": "MiniMax API key was not saved.",
+          "4d2c7b9e83": "MiniMax API key saved.",
+          "f8a4b9d210": "MiniMax endpoint",
+          "0b3a9f6c2e": "Pick the host that matches your account. Both overseas (platform.minimax.io) and China (www.minimaxi.com) accept either a session cookie or an API key.",
+          "83b6a1f7c4": "MiniMax API key",
+          "5d7e1a0c93": "Paste the API key from your MiniMax console → API keys. Works on both the overseas and China endpoints. The key never leaves this device; it is encrypted with safeStorage.",
+          "4f2c8a7e1b": "Paste your MiniMax API key",
+          "a7b1e3c5d2": "Forget key",
+          "2c8d4b6a91": "If your account uses the session cookie flow instead, leave this blank and configure the cookie above."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
