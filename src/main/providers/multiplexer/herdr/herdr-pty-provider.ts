@@ -39,7 +39,12 @@ import {
   getRuntime,
   releaseBinding,
   awaitFirstFrame,
-  disposeAll
+  disposeAll,
+  retireMissingHerdrPanes,
+  emitHerdrPtyData,
+  emitHerdrPtyExit,
+  emitHerdrPtyReplay,
+  killAllHerdrBindings
 } from './herdr-pty-provider-runtime'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import type { HerdrRuntimeManager } from './herdr-runtime-manager'
@@ -228,7 +233,7 @@ export class HerdrPtyProvider implements IPtyProvider {
       return
     }
     if (opts.keepHistory) {
-      this.detachBinding(binding)
+      releaseBinding(binding, this.bindings)
       return
     }
     try {
@@ -238,7 +243,7 @@ export class HerdrPtyProvider implements IPtyProvider {
         })
       )
     } catch {}
-    this.detachBinding(binding)
+    releaseBinding(binding, this.bindings)
     this.emitExit({ id, code: 0 })
   }
 
@@ -436,7 +441,20 @@ export class HerdrPtyProvider implements IPtyProvider {
   }
 
   private runtimeFor(target: HerdrPtyTarget) {
-    return getRuntime(target, this.managers, this.transportForTarget, this.sharedName)
+    return getRuntime(
+      target,
+      this.managers,
+      this.transportForTarget,
+      this.sharedName,
+      this.livePaneListener
+    )
+  }
+
+  private readonly livePaneListener = (sessionName: string, livePaneIds: ReadonlySet<string>) => {
+    retireMissingHerdrPanes(this.bindings, sessionName, livePaneIds, (binding) => {
+      releaseBinding(binding, this.bindings)
+      this.emitExit({ id: binding.id, code: 0 })
+    })
   }
 
   private bindController(
@@ -445,7 +463,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     return createBinding(input, this.bindings)
   }
 
-  private async waitForFirstFrame(binding: HerdrPtyBinding) {
+  private waitForFirstFrame(binding: HerdrPtyBinding) {
     return awaitFirstFrame(
       binding,
       (payload) => this.emitData(payload),
@@ -454,28 +472,16 @@ export class HerdrPtyProvider implements IPtyProvider {
     )
   }
 
-  private detachBinding(binding: HerdrPtyBinding): void {
-    releaseBinding(binding, this.bindings)
-  }
-
   private emitData(payload: PtyDataEvent): void {
-    for (const listener of this.dataListeners) {
-      listener(payload)
-    }
+    emitHerdrPtyData(this.dataListeners, payload)
   }
 
   private emitExit(payload: { id: string; code: number; incarnationId?: string }): void {
-    const incarnationId = payload.incarnationId ?? this.bindings.get(payload.id)?.incarnationId
-    const event = incarnationId ? { ...payload, incarnationId } : payload
-    for (const listener of this.exitListeners) {
-      listener(event)
-    }
+    emitHerdrPtyExit(this.exitListeners, this.bindings, payload)
   }
 
   private emitReplay(payload: { id: string; data: string }): void {
-    for (const listener of this.replayListeners) {
-      listener(payload)
-    }
+    emitHerdrPtyReplay(this.replayListeners, payload)
   }
 
   advanceGeneration(): number {
@@ -485,12 +491,7 @@ export class HerdrPtyProvider implements IPtyProvider {
   killOrphanedPtys(_generation: number): void {}
 
   killAll(): void {
-    for (const [, binding] of this.bindings) {
-      binding.transport
-        .request(binding.sessionName, 'pane.close', { pane_id: binding.paneId })
-        .catch(() => {})
-    }
-    this.bindings.clear()
+    killAllHerdrBindings(this.bindings)
   }
 
   dispose(): void {

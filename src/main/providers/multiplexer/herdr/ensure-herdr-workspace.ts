@@ -9,7 +9,7 @@ import {
   orcaWorkspaceBinding,
   reportOrcaWorkspaceBinding
 } from './herdr-binding-metadata'
-import type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
+import { isLinkedHerdrWorktree, type HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
 import type {
   HerdrHostTransport,
   HerdrPane,
@@ -58,7 +58,7 @@ export async function ensureStockHerdrWorkspace(
     return adoptable
   }
 
-  if (worktree.repoPath) {
+  if (isLinkedHerdrWorktree(worktree)) {
     const opened = await openStockWorktree(
       transport,
       sessionName,
@@ -81,7 +81,7 @@ export async function ensureStockHerdrWorkspace(
     await transport.request(sessionName, 'workspace.create', {
       cwd: worktree.path,
       label: worktree.displayName || basename(worktree.path),
-      focus: true
+      focus: false
     })
   )
   await reportOrcaWorkspaceBinding(transport, sessionName, created.workspace.workspace_id, binding)
@@ -127,7 +127,7 @@ async function openStockWorktree(
         cwd: worktree.repoPath,
         path: worktree.path,
         label: worktree.displayName || basename(worktree.path),
-        focus: true
+        focus: false
       })
     )
   } catch (error) {

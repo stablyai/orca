@@ -35,9 +35,14 @@ test('herdr terminal opens, is visible, accepts input, and reattaches after rest
     app = first.app
     await waitForSessionReady(first.page)
 
-    // Activate the in-app daemon backend before opening the terminal.
+    // Activate the in-app daemon fallback so this suite does not need a stock
+    // herdr binary. Stock from PATH is the product path and is covered by the
+    // pinned-binary integration tests.
     await first.page.evaluate(() => {
-      window.__store?.getState().updateSettings({ terminalBackendDefault: 'herdr' })
+      window.__store?.getState().updateSettings({
+        terminalBackendDefault: 'herdr',
+        herdrRuntimeSource: 'daemon'
+      })
     })
 
     await attachRepoAndOpenTerminal(first.page, testRepoPath)

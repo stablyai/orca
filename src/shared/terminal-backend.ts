@@ -35,7 +35,7 @@ export function normalizeTerminalBackend(value: unknown): TerminalBackend {
 }
 
 export function normalizeHerdrRuntimeSource(value: unknown): HerdrRuntimeSource {
-  return value === 'stock' ? 'stock' : 'daemon'
+  return value === 'daemon' ? 'daemon' : 'stock'
 }
 
 export function normalizeHerdrBinarySource(value: unknown): HerdrBinarySource {

@@ -99,8 +99,8 @@ describe('TerminalBackendSection', () => {
       (button) => button.textContent?.trim() === 'Stock from PATH'
     )
     expect(stock).toBeTruthy()
-    act(() => stock?.click())
-    expect(updateSettings).toHaveBeenCalledWith({ herdrRuntimeSource: 'stock' })
+    act(() => daemon?.click())
+    expect(updateSettings).toHaveBeenCalledWith({ herdrRuntimeSource: 'daemon' })
 
     act(() => root.unmount())
   })

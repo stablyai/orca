@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import { basename } from 'node:path'
 import { resolveDesiredTerminalBackend } from '../../../../shared/terminal-backend'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Store } from '../../../persistence'
 import type { HerdrPtyTargetResolver } from './herdr-pty-provider'
 import type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
@@ -13,6 +14,61 @@ import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import type { PtySpawnOptions } from '../../pty-provider-contract'
 import type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+
+function repoPathForWorktree(
+  store: Pick<Store, 'getRepo'>,
+  worktreeId: string
+): string | undefined {
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  if (!parsed) {
+    return undefined
+  }
+  const repo = store.getRepo(parsed.repoId)
+  if (!repo?.path || !isGitRepoKind(repo)) {
+    return undefined
+  }
+  return repo.path
+}
+
+function collectProjectWorktrees(
+  store: Pick<Store, 'getRepo' | 'getAllWorktreeMeta'>,
+  project: Project,
+  current: HerdrWorktreeDescriptor
+): HerdrWorktreeDescriptor[] {
+  const byId = new Map<string, HerdrWorktreeDescriptor>()
+  const add = (worktree: HerdrWorktreeDescriptor): void => {
+    if (!byId.has(worktree.id)) {
+      byId.set(worktree.id, worktree)
+    }
+  }
+  add(current)
+  for (const repoId of project.sourceRepoIds ?? []) {
+    const repo = store.getRepo(repoId)
+    if (!repo?.path) {
+      continue
+    }
+    const repoPath = isGitRepoKind(repo) ? repo.path : undefined
+    add({
+      id: `${repo.id}::${repo.path}`,
+      path: repo.path,
+      displayName: repo.displayName || basename(repo.path),
+      ...(repoPath ? { repoPath } : {})
+    })
+    for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      if (!parsed || parsed.repoId !== repo.id) {
+        continue
+      }
+      add({
+        id: worktreeId,
+        path: parsed.worktreePath,
+        displayName: meta.displayName || basename(parsed.worktreePath),
+        ...(repoPath ? { repoPath } : {})
+      })
+    }
+  }
+  return [...byId.values()]
+}
 
 function extractLeafIdFromPaneKey(paneKey: string): string | null {
   const colonIndex = paneKey.lastIndexOf(':')
@@ -168,13 +224,13 @@ function projectHerdrActivation(store: Store, _project: Project): HerdrPtyTarget
         return null
       }
       project = resolveProject(store, worktreeId, persistedIdentity)
-      worktrees = [
-        {
-          id: worktreeId,
-          path: parsed.worktreePath,
-          displayName: basename(parsed.worktreePath)
-        }
-      ]
+      const repoPath = repoPathForWorktree(store, worktreeId)
+      worktrees = collectProjectWorktrees(store, project, {
+        id: worktreeId,
+        path: parsed.worktreePath,
+        displayName: basename(parsed.worktreePath),
+        ...(repoPath ? { repoPath } : {})
+      })
     }
 
     const persistedLayout = session.terminalLayoutsByTabId[tabId]

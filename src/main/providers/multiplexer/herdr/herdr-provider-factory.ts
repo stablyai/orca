@@ -67,10 +67,7 @@ export function createLocalHerdrPtyProvider(
             }
           }
         })
-      } else if (
-        store.getSettings().terminalBackendDefault === 'herdr' &&
-        (store.getSettings().herdrRuntimeSource ?? 'daemon') === 'daemon'
-      ) {
+      } else if (store.getSettings().herdrRuntimeSource === 'daemon') {
         transport = new HerdrDaemonHostTransport()
       } else if (resolveLocalTransportKind() === 'socket') {
         const executable = resolveHerdrExecutable(source)

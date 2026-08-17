@@ -29,10 +29,19 @@ describe('createLocalHerdrPtyProvider runtime source routing', () => {
     delete process.env.HERDR_TEST_LEAK
   })
 
-  it('routes the herdr backend to the built-in daemon by default', () => {
+  it('routes the herdr backend to the stock socket transport by default', () => {
     const settings: TestSettings = {
       ...getDefaultSettings('/tmp'),
       terminalBackendDefault: 'herdr'
+    }
+    expect(localTransport(settings)).toBeInstanceOf(HerdrSocketTransport)
+  })
+
+  it('routes the herdr backend to the built-in daemon when the runtime is daemon', () => {
+    const settings: TestSettings = {
+      ...getDefaultSettings('/tmp'),
+      terminalBackendDefault: 'herdr',
+      herdrRuntimeSource: 'daemon'
     }
     expect(localTransport(settings)).toBeInstanceOf(HerdrDaemonHostTransport)
   })

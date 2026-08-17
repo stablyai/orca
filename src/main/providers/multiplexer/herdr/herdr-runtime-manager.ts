@@ -16,6 +16,8 @@ import {
   paneBindingMapKey,
   rememberOrcaPaneBindings,
   orcaPaneBinding,
+  orcaWorkspaceBinding,
+  ORCA_BINDING_TOKEN,
   ORCA_METADATA_SOURCE
 } from './herdr-binding-metadata'
 import { ensureTabLayout } from './herdr-tab-layout'
@@ -55,17 +57,24 @@ const RECONCILE_EVENT_KINDS = new Set([
   'layout.updated'
 ])
 
+export type HerdrLivePaneListener = (sessionName: string, paneIds: ReadonlySet<string>) => void
+
+function graphKey(sessionName: string, projectId: string): string {
+  return `${sessionName}\n${projectId}`
+}
+
 export class HerdrRuntimeManager {
   private readonly paneIdsBySessionAndBinding = new Map<string, string>()
   private readonly reconcileQueues = new Map<string, Promise<void>>()
-  private readonly graphsBySession = new Map<string, HerdrProjectHostGraph>()
+  private readonly graphsByKey = new Map<string, HerdrProjectHostGraph>()
   private readonly eventRefreshTimers = new Map<string, NodeJS.Timeout>()
   private eventUnsubscribe: (() => void) | null = null
 
   constructor(
     private readonly transport: HerdrHostTransport,
     // Live store-backed shared session name; read per call because settings can change while the manager is cached.
-    private readonly sharedName?: () => string | undefined
+    private readonly sharedName?: () => string | undefined,
+    private readonly onLivePaneIds?: HerdrLivePaneListener
   ) {}
 
   getPaneId(sessionName: string, projectId: string, leafId: string): string | null {
@@ -80,7 +89,7 @@ export class HerdrRuntimeManager {
     const sessionName = herdrSessionNameForProject(graph.project, this.sharedName?.())
     return runKeyedSerializedOperation(this.reconcileQueues, sessionName, async () => {
       await this.transport.ensureSession(sessionName)
-      this.graphsBySession.set(sessionName, graph)
+      this.graphsByKey.set(graphKey(sessionName, graph.project.id), graph)
       this.ensureEventSubscription()
       let snapshot = await this.snapshot(sessionName)
 
@@ -120,6 +129,7 @@ export class HerdrRuntimeManager {
         graph.project.id,
         snapshot
       )
+      this.publishLivePaneIds(sessionName, snapshot)
       return snapshot
     })
   }
@@ -134,7 +144,10 @@ export class HerdrRuntimeManager {
       if (!RECONCILE_EVENT_KINDS.has(event.event)) {
         return
       }
-      for (const sessionName of this.graphsBySession.keys()) {
+      const sessionNames = new Set(
+        [...this.graphsByKey.keys()].map((key) => key.slice(0, key.indexOf('\n')))
+      )
+      for (const sessionName of sessionNames) {
         this.scheduleEventRefresh(sessionName)
       }
     })
@@ -157,19 +170,33 @@ export class HerdrRuntimeManager {
     this.eventRefreshTimers.set(sessionName, timer)
   }
 
+  private graphsForSession(sessionName: string): HerdrProjectHostGraph[] {
+    const prefix = `${sessionName}\n`
+    return [...this.graphsByKey.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([, graph]) => graph)
+  }
+
+  private publishLivePaneIds(sessionName: string, snapshot: HerdrSessionSnapshot): void {
+    this.onLivePaneIds?.(sessionName, new Set(snapshot.panes.map((pane) => pane.pane_id)))
+  }
+
   private async refreshFromEvent(sessionName: string): Promise<void> {
-    const graph = this.graphsBySession.get(sessionName)
-    if (!graph) {
+    const graphs = this.graphsForSession(sessionName)
+    if (graphs.length === 0) {
       return
     }
     await runKeyedSerializedOperation(this.reconcileQueues, sessionName, async () => {
       const snapshot = await this.snapshot(sessionName)
-      rememberOrcaPaneBindings(
-        this.paneIdsBySessionAndBinding,
-        sessionName,
-        graph.project.id,
-        snapshot
-      )
+      for (const graph of graphs) {
+        rememberOrcaPaneBindings(
+          this.paneIdsBySessionAndBinding,
+          sessionName,
+          graph.project.id,
+          snapshot
+        )
+      }
+      this.publishLivePaneIds(sessionName, snapshot)
     })
   }
 
@@ -182,7 +209,7 @@ export class HerdrRuntimeManager {
       this.eventUnsubscribe()
       this.eventUnsubscribe = null
     }
-    this.graphsBySession.clear()
+    this.graphsByKey.clear()
     this.paneIdsBySessionAndBinding.clear()
     void this.transport.disconnect?.()
   }
@@ -196,7 +223,7 @@ export class HerdrRuntimeManager {
 
   /** Session names this manager has reconciled, for per-session agent scans. */
   listSessionNames(): string[] {
-    return [...this.graphsBySession.keys()]
+    return [...new Set([...this.graphsByKey.keys()].map((key) => key.slice(0, key.indexOf('\n'))))]
   }
 
   async controlProjectPane(
@@ -229,19 +256,28 @@ export class HerdrRuntimeManager {
     workspaceLabel: string
   ): Promise<string | null> {
     const sessionName = herdrSessionNameForProject(project, this.sharedName?.())
+    const graph = this.graphsByKey.get(graphKey(sessionName, project.id))
+    const snapshot = await this.snapshot(sessionName)
+    const boundWorkspaceId = graph?.worktrees
+      .map((worktree) => orcaWorkspaceBinding(project.id, worktree))
+      .map((binding) =>
+        snapshot.workspaces.find((workspace) => workspace.tokens?.[ORCA_BINDING_TOKEN] === binding)
+      )
+      .find((workspace) => workspace)?.workspace_id
     const applied = unwrapHerdrResponse<{
       layout: { root?: LayoutNode }
       workspace_id: string
       tab_id: string
     }>(
       await this.transport.request(sessionName, 'layout.apply', {
-        // Why: reuse the same workspace label the reconcile used so
-        // ensureWorkspace is idempotent and no phantom unbound workspace is
-        // minted under the project display name.
-        workspace_label: workspaceLabel || project.displayName || 'project',
+        ...(boundWorkspaceId
+          ? { workspace_id: boundWorkspaceId }
+          : {
+              workspace_label: workspaceLabel || project.displayName || 'project'
+            }),
         tab_label: `leaf-${leafId}`,
         root: { type: 'pane', pane_id: leafId, cwd },
-        focus: true
+        focus: false
       })
     )
     const paneIds: string[] = []

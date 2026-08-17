@@ -69,7 +69,7 @@ export function TerminalBackendSection({
             )}
             description={translate(
               'auto.components.settings.TerminalBackendSection.runtimeDescription',
-              "Built-in daemon runs Orca's private herdr runtime. Stock from PATH spawns or attaches to the stock Herdr binary, so its sessions appear in the stock Herdr client."
+              'Stock from PATH starts or attaches to herdr --session orca so Ghostty and other Herdr clients see the same session. Built-in daemon is a private fallback that those clients cannot attach to.'
             )}
             control={
               <SettingsSegmentedControl
@@ -77,7 +77,7 @@ export function TerminalBackendSection({
                   'auto.components.settings.TerminalBackendSection.runtimeAria',
                   'Herdr runtime source'
                 )}
-                value={settings.herdrRuntimeSource ?? 'daemon'}
+                value={settings.herdrRuntimeSource ?? 'stock'}
                 onChange={(value) =>
                   updateSettings({ herdrRuntimeSource: value as 'daemon' | 'stock' })
                 }

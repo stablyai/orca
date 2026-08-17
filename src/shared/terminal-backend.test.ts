@@ -80,17 +80,17 @@ describe('normalizeHerdrSessionName', () => {
 })
 
 describe('normalizeHerdrRuntimeSource', () => {
-  it('keeps the built-in daemon as the default runtime source', () => {
-    expect(normalizeHerdrRuntimeSource(undefined)).toBe('daemon')
-    expect(normalizeHerdrRuntimeSource('daemon')).toBe('daemon')
-  })
-
-  it('accepts the explicit stock-from-PATH source', () => {
+  it('keeps stock from PATH as the default runtime source', () => {
+    expect(normalizeHerdrRuntimeSource(undefined)).toBe('stock')
     expect(normalizeHerdrRuntimeSource('stock')).toBe('stock')
   })
 
-  it('rejects unknown values as the daemon runtime', () => {
-    expect(normalizeHerdrRuntimeSource('custom')).toBe('daemon')
-    expect(normalizeHerdrRuntimeSource(42)).toBe('daemon')
+  it('accepts the explicit built-in daemon source', () => {
+    expect(normalizeHerdrRuntimeSource('daemon')).toBe('daemon')
+  })
+
+  it('rejects unknown values as the stock runtime', () => {
+    expect(normalizeHerdrRuntimeSource('custom')).toBe('stock')
+    expect(normalizeHerdrRuntimeSource(42)).toBe('stock')
   })
 })

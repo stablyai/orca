@@ -294,4 +294,97 @@ describe('Herdr PTY target resolution', () => {
     expect(target?.graph.tabsByWorktreeId['repo-1::/tmp/wt']).toHaveLength(1)
     expect(target?.graph.tabsByWorktreeId['repo-1::/tmp/wt'][0].id).toBe('tab-9')
   })
+
+  it('sets repoPath from the git repo root and includes sibling worktrees', async () => {
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [
+        {
+          id: 'project-1',
+          displayName: 'Project',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getRepo: (id: string) =>
+        id === 'repo-1'
+          ? { id: 'repo-1', path: '/repo', displayName: 'repo', kind: 'git' }
+          : undefined,
+      getWorktreeMeta: () => ({ projectId: 'project-1', hostId: 'local' }),
+      getAllWorktreeMeta: () => ({
+        'repo-1::/repo/feature': { displayName: 'feature' }
+      }),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/feature',
+        worktreeId: 'repo-1::/repo/feature',
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      null
+    )
+
+    expect(target?.graph.worktrees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'repo-1::/repo/feature',
+          path: '/repo/feature',
+          repoPath: '/repo'
+        }),
+        expect.objectContaining({
+          id: 'repo-1::/repo',
+          path: '/repo',
+          repoPath: '/repo'
+        })
+      ])
+    )
+  })
+
+  it('omits repoPath for folder repos so reconcile uses workspace.create', async () => {
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [
+        {
+          id: 'project-folder',
+          displayName: 'Folder',
+          badgeColor: '#000000',
+          sourceRepoIds: ['folder-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getRepo: (id: string) =>
+        id === 'folder-1'
+          ? { id: 'folder-1', path: '/notes', displayName: 'notes', kind: 'folder' }
+          : undefined,
+      getWorktreeMeta: () => ({ projectId: 'project-folder', hostId: 'local' }),
+      getAllWorktreeMeta: () => ({}),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/notes',
+        worktreeId: 'folder-1::/notes',
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      null
+    )
+
+    expect(target?.graph.worktrees[0]).toMatchObject({
+      id: 'folder-1::/notes',
+      path: '/notes'
+    })
+    expect(target?.graph.worktrees[0].repoPath).toBeUndefined()
+  })
 })

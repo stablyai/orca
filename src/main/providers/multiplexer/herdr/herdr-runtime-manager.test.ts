@@ -249,7 +249,7 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     const openParams = host.requestMock.mock.calls.find(
       ([, method]) => method === 'worktree.open'
     )?.[2] as { cwd: string; path: string; focus: boolean }
-    expect(openParams).toMatchObject({ cwd: '/repo-root', path: '/repo', focus: true })
+    expect(openParams).toMatchObject({ cwd: '/repo-root', path: '/repo', focus: false })
     expect(host.snapshot.workspaces).toHaveLength(1)
     expect(host.snapshot.panes).toHaveLength(2)
     expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-1')).toBe(
@@ -258,6 +258,54 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', 'leaf-2')).toBe(
       'w1:p2'
     )
+  })
+
+  it('creates the project root with workspace.create even when repoPath is set', async () => {
+    const host = stockTransport()
+    const manager = new HerdrRuntimeManager(host.transport)
+    await manager.reconcileProjectHost({
+      ...graph('/repo'),
+      worktrees: [
+        {
+          id: 'worktree-1',
+          instanceId: 'instance-1',
+          path: '/repo',
+          displayName: 'repo',
+          repoPath: '/repo'
+        }
+      ]
+    })
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'worktree.open')
+    ).toHaveLength(0)
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'workspace.create')
+    ).toHaveLength(1)
+  })
+
+  it('keeps both project graphs when they share the orca session', async () => {
+    const host = stockTransport()
+    const manager = new HerdrRuntimeManager(host.transport, () => 'orca')
+    const second = {
+      ...graph(),
+      project: { ...project(), id: 'project-2', displayName: 'Other' },
+      worktrees: [
+        {
+          id: 'worktree-2',
+          instanceId: 'instance-2',
+          path: '/other',
+          displayName: 'other'
+        }
+      ],
+      tabsByWorktreeId: { 'worktree-2': [] },
+      layoutsByTabId: {}
+    }
+    await manager.reconcileProjectHost(graph())
+    await manager.reconcileProjectHost(second)
+
+    expect(manager.listSessionNames()).toEqual(['orca'])
+    expect(manager.getPaneId('orca', 'project-1', 'leaf-1')).toBe('w1:p1')
   })
 
   it('adopts an already-open worktree without duplicating the workspace', async () => {

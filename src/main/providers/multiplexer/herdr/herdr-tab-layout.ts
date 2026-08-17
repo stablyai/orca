@@ -107,7 +107,7 @@ export async function ensureTabLayout(
         workspace_id: workspaceId,
         cwd: tab.startupCwd,
         label: tab.customTitle ?? tab.title,
-        focus: true
+        focus: false
       })
     )
     herdrTab = created.tab

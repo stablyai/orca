@@ -126,14 +126,12 @@ export function createHerdrSocketTerminalController(
 
   void readFrame()
 
-  void deps.request('pane.focus', { pane_id: paneId }).catch(() => undefined)
-
   return {
     write: (data) => {
       if (released) {
         return
       }
-      void deps.request('pane.send_text', { pane_id: paneId, text: data }).catch(() => undefined)
+      void deps.request('pane.send_input', { pane_id: paneId, text: data }).catch(() => undefined)
     },
     resize,
     release: () => {
