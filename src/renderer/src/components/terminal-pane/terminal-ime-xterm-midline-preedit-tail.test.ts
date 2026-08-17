@@ -162,6 +162,26 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(spans[1]!.textContent).toBe('하세요')
   })
 
+  // The view is `white-space: nowrap`, which collapses runs of spaces exactly like `normal`.
+  // Without `pre` on the tail, an agent TUI's padded input row — `> text …spaces… |` — renders its
+  // right border a cell after the preedit while the real border stays put. xterm sets `pre` on its
+  // grid rows for the same reason.
+  it('preserves the tail spacing of a padded row so its trailing glyph stays on the grid', async () => {
+    const rig = openTerminal()
+    // A TUI input row: text, padding, then a real border glyph the trim cannot drop.
+    await rig.write('> hi          |\x1b[13D')
+
+    rig.compose('가')
+
+    const spans = Array.from(rig.compositionView.children) as HTMLElement[]
+    expect(spans).toHaveLength(2)
+    expect(spans[1]!.textContent, 'the tail must keep every padding cell').toBe('hi          |')
+    expect(
+      spans[1]!.style.whiteSpace,
+      'nowrap collapses the padding, so the border lands left of its grid column'
+    ).toBe('pre')
+  })
+
   it('keeps the plain single-text overlay when composing at the end of the row', async () => {
     const rig = openTerminal()
     await rig.write('안녕하세요')
