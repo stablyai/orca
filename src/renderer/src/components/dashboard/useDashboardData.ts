@@ -21,6 +21,9 @@ export type DashboardAgentRow = {
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */
   startedAt: number
+  /** When the pane's live cwd maps to a different known sibling worktree than
+   *  the row's parent card. Attribution stays put; compact secondary shows this. */
+  liveWorktreeMismatchLabel?: string
   lineage?: {
     depth: 0 | 1
     parentPaneKey?: string

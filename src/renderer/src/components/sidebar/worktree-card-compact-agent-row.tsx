@@ -11,6 +11,7 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import { getCompactAgentSecondary } from './worktree-card-compact-agent-secondary'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -34,31 +35,6 @@ function getCompactAgentPrimary(
 ): string {
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   return prompt || agentStateLabel(getAgentDotState(agent))
-}
-
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
-  if (agent.entry.interrupted === true) {
-    return 'Interrupted by user'
-  }
-  if (agent.state === 'working') {
-    const toolName = agent.entry.toolName?.trim() ?? ''
-    const toolInput = agent.entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
-  }
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
-  if (lastAssistantMessage) {
-    return lastAssistantMessage
-  }
-  // Why: child rows without descriptions use their role as primary text; repeating its formatted label adds no information.
-  if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
-    return ''
-  }
-  return formatAgentTypeLabel(agent.agentType)
 }
 
 function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
