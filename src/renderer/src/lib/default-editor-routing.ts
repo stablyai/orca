@@ -2,7 +2,7 @@ import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 
 export const DEFAULT_EDITOR_MODES = ['builtin', 'system', 'custom'] as const
 export type DefaultEditorMode = (typeof DEFAULT_EDITOR_MODES)[number]

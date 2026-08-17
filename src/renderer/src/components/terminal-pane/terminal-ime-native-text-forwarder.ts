@@ -5,6 +5,7 @@ import {
   type ImeCommitReleaseObligation,
   type ImeReleaseKeyEvent
 } from './terminal-ime-kitty-commit-encoding'
+import { getLayoutCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 
 // Why: a plain printable keydown never produces terminal bytes. Bytes for
 // printable characters come only from the `input` event, which on macOS *is*
@@ -21,6 +22,8 @@ type ClaimedKeyPress = {
   code?: string
   shiftKey: boolean
   repeat?: boolean
+  capsLock?: boolean
+  numLock?: boolean
 }
 
 /** A claimed press waiting for its `insertText`, plus an early keyup if one already landed. */
@@ -65,6 +68,7 @@ export type ImeNativeTextKeyEvent = {
   shiftKey?: boolean
   repeat?: boolean
   isComposing?: boolean
+  getModifierState?: (key: string) => boolean
 }
 
 export const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT = 'xterm-composition-transaction-accepted'
@@ -176,7 +180,8 @@ export function installTerminalImeNativeTextForwarder(args: {
     }
     const report = encodeImeReleaseForKitty(record.obligation, release, {
       press: { key: record.key, code: record.code },
-      currentKittyKeyboardFlags: args.getKittyKeyboardFlags?.() ?? 0
+      currentKittyKeyboardFlags: args.getKittyKeyboardFlags?.() ?? 0,
+      layoutCharacterForCode: getLayoutCharacterForCode
     })
     if (report) {
       args.sendInput(report)
@@ -242,7 +247,9 @@ export function installTerminalImeNativeTextForwarder(args: {
             shiftKey: event.shiftKey === true,
             ctrlKey: event.ctrlKey,
             altKey: event.altKey,
-            metaKey: event.metaKey
+            metaKey: event.metaKey,
+            capsLock: event.getModifierState?.('CapsLock') === true,
+            numLock: event.getModifierState?.('NumLock') === true
           })
         }
       }
@@ -254,7 +261,9 @@ export function installTerminalImeNativeTextForwarder(args: {
           key: event.key,
           code: event.code,
           shiftKey: event.shiftKey === true,
-          repeat: event.repeat === true
+          repeat: event.repeat === true,
+          capsLock: event.getModifierState?.('CapsLock') === true,
+          numLock: event.getModifierState?.('NumLock') === true
         },
         keyup: null
       }
@@ -270,7 +279,9 @@ export function installTerminalImeNativeTextForwarder(args: {
           shiftKey: event.shiftKey === true,
           ctrlKey: event.ctrlKey,
           altKey: event.altKey,
-          metaKey: event.metaKey
+          metaKey: event.metaKey,
+          capsLock: event.getModifierState?.('CapsLock') === true,
+          numLock: event.getModifierState?.('NumLock') === true
         }
         return true
       }
@@ -288,7 +299,9 @@ export function installTerminalImeNativeTextForwarder(args: {
         shiftKey: event.shiftKey === true,
         ctrlKey: event.ctrlKey,
         altKey: event.altKey,
-        metaKey: event.metaKey
+        metaKey: event.metaKey,
+        capsLock: event.getModifierState?.('CapsLock') === true,
+        numLock: event.getModifierState?.('NumLock') === true
       })
       return true
     }
@@ -326,7 +339,10 @@ export function installTerminalImeNativeTextForwarder(args: {
       // Read the mutable flags EXACTLY once, here: kitty state can change
       // between keydown and commit, and the release must describe the same
       // negotiation the press was encoded under.
-      const encoding = encodeImeCommitForKitty(commit.press, args.getKittyKeyboardFlags?.() ?? 0)
+      const encoding = encodeImeCommitForKitty(commit.press, args.getKittyKeyboardFlags?.() ?? 0, {
+        committedText: event.data,
+        layoutCharacterForCode: getLayoutCharacterForCode
+      })
       args.sendInput(encoding.report ?? event.data)
       settleCommit(commit, encoding.release)
     } else {

@@ -1,5 +1,5 @@
 import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
-import type { MemorySnapshot, StatsSummary } from '../../shared/types'
+import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
 
 export type StatsApi = {
   getSummary: () => Promise<StatsSummary>

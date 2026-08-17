@@ -28,9 +28,9 @@ import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-fon
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  UpdateStatus
-} from '../../../shared/types'
+  TerminalPaneLayoutNode
+} from '../../../shared/terminal-tab-types'
+import type { UpdateStatus } from '../../../shared/update-status-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
 import {
@@ -940,14 +940,20 @@ export function useIpcEvents(): void {
         // Why: the host emits one reposChanged for group/folder-workspace edits too, so those
         // catalogs go stale without this; groups first because folder workspaces resolve owners from them.
         const runtimeOwner = { runtimeEnvironmentId: environmentId }
-        await useAppStore.getState().fetchProjectGroups(runtimeOwner)
-        await useAppStore.getState().fetchFolderWorkspaces(runtimeOwner)
-        await refreshRuntimeProjectWorktreesAndLineage(
-          environmentId,
-          repos,
-          (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
-          (options) => useAppStore.getState().fetchWorktreeLineage(options)
-        )
+        // Why: catalogs and worktrees are independent; serializing them put two 15s RPC
+        // timeouts ahead of worktree/lineage convergence on a wedged host.
+        await Promise.all([
+          (async () => {
+            await useAppStore.getState().fetchProjectGroups(runtimeOwner)
+            await useAppStore.getState().fetchFolderWorkspaces(runtimeOwner)
+          })(),
+          refreshRuntimeProjectWorktreesAndLineage(
+            environmentId,
+            repos,
+            (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+            (options) => useAppStore.getState().fetchWorktreeLineage(options)
+          )
+        ])
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)
@@ -1192,6 +1198,13 @@ export function useIpcEvents(): void {
       })
     )
 
+    const unsubscribeOpenSkillShare = window.api.ui.onOpenSkillShare?.((shareId) => {
+      useAppStore.getState().openSkillShare(shareId)
+    })
+    if (unsubscribeOpenSkillShare) {
+      unsubs.push(unsubscribeOpenSkillShare)
+    }
+
     // Why: a tray "Settings…" click can fire before this attaches; consume any queued intent (?. guards stale preload).
     void window.api.ui
       .consumePendingOpenSettings?.()
@@ -1201,6 +1214,17 @@ export function useIpcEvents(): void {
         }
       })
       .catch(() => {})
+
+    const pendingSkillShare = window.api.ui.consumePendingSkillShare?.()
+    if (pendingSkillShare && typeof pendingSkillShare.then === 'function') {
+      void pendingSkillShare
+        .then((shareId) => {
+          if (shareId) {
+            useAppStore.getState().openSkillShare(shareId)
+          }
+        })
+        .catch(() => {})
+    }
 
     unsubs.push(
       window.api.ui.onOpenSetupGuide?.(() => {
@@ -1251,16 +1275,31 @@ export function useIpcEvents(): void {
         if (!store.settings) {
           return
         }
+        const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
+        const settingsUpdates = store.settings.activeRuntimeEnvironmentId
+          ? activeOwnerUpdates
+          : updates
         useAppStore.setState({
           settings: {
             ...store.settings,
-            ...updates,
+            ...settingsUpdates,
             notifications: {
               ...store.settings.notifications,
               ...updates.notifications
             }
-          }
+          },
+          ...(worktreeVisibilityDefaults
+            ? {
+                worktreeVisibilityDefaultsByHost: {
+                  ...store.worktreeVisibilityDefaultsByHost,
+                  local: worktreeVisibilityDefaults
+                }
+              }
+            : {})
         })
+        if ('worktreeVisibilityDefaults' in updates) {
+          void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
+        }
       })
     )
 
@@ -2024,33 +2063,36 @@ export function useIpcEvents(): void {
     // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
     if (window.api.ui.onTerminalTabCloseRequest) {
       unsubs.push(
-        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
-          let responded = false
-          const respond = (error?: string): void => {
-            if (responded) {
-              return
+        window.api.ui.onTerminalTabCloseRequest(
+          ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
+            let responded = false
+            const respond = (error?: string): void => {
+              if (responded) {
+                return
+              }
+              responded = true
+              window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
             }
-            responded = true
-            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+            closeTerminalTab(tabId, {
+              rejectPinned: true,
+              ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+              onCancel: () => respond('terminal_tab_pinned'),
+              onClosed: () => {
+                void (async () => {
+                  const state = useAppStore.getState()
+                  await persistWorkspaceSessionByHost(
+                    window.api.session,
+                    buildWorkspaceSessionPayload(state),
+                    state
+                  )
+                  respond()
+                })().catch((error: unknown) => {
+                  respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                })
+              }
+            })
           }
-          closeTerminalTab(tabId, {
-            rejectPinned: true,
-            onCancel: () => respond('terminal_tab_pinned'),
-            onClosed: () => {
-              void (async () => {
-                const state = useAppStore.getState()
-                await persistWorkspaceSessionByHost(
-                  window.api.session,
-                  buildWorkspaceSessionPayload(state),
-                  state
-                )
-                respond()
-              })().catch((error: unknown) => {
-                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
-              })
-            }
-          })
-        })
+        )
       )
     }
 
@@ -2316,6 +2358,7 @@ export function useIpcEvents(): void {
           // Agent/automation opens stay in the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
+            browserPageId: data.browserPageId,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
             sessionPartition: data.sessionPartition,
@@ -2404,6 +2447,17 @@ export function useIpcEvents(): void {
           }
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
+          const replyBrowserTabNotFound = (tabId: string): void => {
+            window.api.ui.replyTabClose({
+              requestId: data.requestId,
+              code: 'browser_tab_not_found',
+              error: translate(
+                'auto.hooks.useIpcEvents.0e3cf53060',
+                'Browser tab {{value0}} not found',
+                { value0: tabId }
+              )
+            })
+          }
           const replyPinnedBrowserCloseCanceled = (tabId: string): void => {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
@@ -2455,11 +2509,15 @@ export function useIpcEvents(): void {
             )
             if (owningWorkspace) {
               const [workspaceId, pages] = owningWorkspace
+              const owningWorktreeId =
+                Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
+                  tabs.some((tab) => tab.id === workspaceId)
+                )?.[0] ?? null
+              if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
+                replyBrowserTabNotFound(tabToClose)
+                return
+              }
               if (pages.length <= 1) {
-                const owningWorktreeId =
-                  Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
-                    tabs.some((tab) => tab.id === workspaceId)
-                  )?.[0] ?? null
                 if (owningWorktreeId) {
                   closeBrowserWorkspaceWithReply(owningWorktreeId, workspaceId)
                   return
@@ -2477,18 +2535,15 @@ export function useIpcEvents(): void {
               tabs.some((tab) => tab.id === tabToClose)
             )?.[0] ?? null
           if (owningWorktreeId) {
+            if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
+              replyBrowserTabNotFound(tabToClose)
+              return
+            }
             closeBrowserWorkspaceWithReply(owningWorktreeId, tabToClose)
             return
           }
           if (explicitTargetId) {
-            window.api.ui.replyTabClose({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.0e3cf53060',
-                'Browser tab {{value0}} not found',
-                { value0: explicitTargetId }
-              )
-            })
+            replyBrowserTabNotFound(explicitTargetId)
             return
           }
           store.closeBrowserTab(tabToClose)
@@ -3148,6 +3203,7 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         sessionBoundary: data.sessionBoundary,
+        turnCompletedAt: data.turnCompletedAt,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })
@@ -3351,7 +3407,7 @@ export function useIpcEvents(): void {
             : undefined
       }
       const applyPostCommitNotification = (): void => {
-        if (options?.replay !== true && statusWorktreeId) {
+        if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
           // Why: local Codex/Claude hooks arrive via this main-process IPC path, not the PTY OSC fallback, so task-complete notifications must observe accepted hook state here too.
           const notificationPayload =
             typeof data.stateStartedAt === 'number'
@@ -3360,7 +3416,8 @@ export function useIpcEvents(): void {
           observeAgentHookCompletionForNotification({
             paneKey,
             worktreeId: statusWorktreeId,
-            payload: notificationPayload
+            payload: notificationPayload,
+            ...(options?.replay === true ? { seedOnly: true } : {})
           })
         }
       }

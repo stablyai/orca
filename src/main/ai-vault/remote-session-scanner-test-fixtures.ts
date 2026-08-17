@@ -1,4 +1,4 @@
-import type { DirEntry } from '../../shared/types'
+import type { DirEntry } from '../../shared/filesystem-entry-types'
 import type { FileReadResult, FileStat, IFilesystemProvider } from '../providers/types'
 
 // Shared by the remote AI Vault scanner suites: an in-memory filesystem whose

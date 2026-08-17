@@ -1,9 +1,6 @@
-import type {
-  DetectedWorktreeListResult,
-  Repo,
-  WorkspaceSessionState,
-  Worktree
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 

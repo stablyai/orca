@@ -37,6 +37,22 @@ describe('sendTerminalInputAfterComposition', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
+  // #12871: a newline arriving late still arrives, so the fallback timer is right for it. A
+  // cursor chord arriving mid-preedit is the corruption the wait exists to prevent, and a
+  // conversion can hold its candidate window open for seconds — far past the fallback.
+  it('never fires on a timer when the caller opts out of the fallback', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    vi.advanceTimersByTime(60_000)
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to sending when no compositionend arrives', () => {
     const el = document.createElement('div')
     const send = vi.fn()

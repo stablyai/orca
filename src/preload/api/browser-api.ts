@@ -1,5 +1,9 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserWebAuthnAccountRequest,
+  BrowserWebAuthnAccountResponse
+} from '../../shared/browser-webauthn-account'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -20,16 +24,16 @@ import type {
   BrowserPopupEvent
 } from '../../shared/browser-guest-events'
 import type {
-  BrowserCookieImportResult,
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
+  BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -48,6 +52,11 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+  onWebAuthnAccountRequest: (
+    callback: (request: BrowserWebAuthnAccountRequest) => void
+  ) => () => void
+  onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string

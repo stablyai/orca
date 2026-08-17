@@ -1,6 +1,6 @@
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
   GetGitLabRateLimitResult,
   GitLabAssignableUser,
   GitLabAuthDiagnostic,
@@ -21,7 +21,7 @@ import type {
   ListMergeRequestsResult,
   MRInfo,
   MRListState
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
 
 export type GitLabRepoSelectorArgs = {
   repoPath: string

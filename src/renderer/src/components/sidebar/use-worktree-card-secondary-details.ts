@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 
-import type { GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'

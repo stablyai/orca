@@ -125,6 +125,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_AFTER_BYTE_GAP,
+  RESET_GRAPHIC_RENDITION,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -310,8 +311,10 @@ import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../../../shared/agent-process-recognition'
-import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
@@ -350,7 +353,6 @@ const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 // contain private repo/user names; the terminal itself shows where it opened.
 export const STARTUP_CWD_FALLBACK_NOTICE =
   '\r\n[Orca opened this terminal at the workspace root because its saved start folder no longer exists.]\r\n'
-const STARTUP_DRAFT_PASTE_TIMEOUT_MS = 8000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
@@ -2423,6 +2425,7 @@ export function connectPanePty(
 
   const agentCompletionCoordinator = createAgentCompletionCoordinator({
     paneKey: cacheKey,
+    statusLane: 'pty',
     getPtyId: () => transport.getPtyId(),
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
@@ -4936,7 +4939,7 @@ export function connectPanePty(
       startupDraftHardTimer = setTimeout(() => {
         startupDraftHardTimer = null
         void deliverStartupDraftIfAgentOwnsPty()
-      }, STARTUP_DRAFT_PASTE_TIMEOUT_MS)
+      }, resolveDraftPasteReadyTimeoutMs(startupDraftAgent))
     }
     const armStartupDraftQuietTimer = (): void => {
       if (!startupDraftReadyScanner || startupDraftPasteSettled) {
@@ -6375,6 +6378,20 @@ export function connectPanePty(
     liveScrollbackRestore?.dispose()
     liveScrollbackRestore = installTerminalLiveScrollbackRestore(pane.terminal)
 
+    // Why read it live: `?1049` is not a no-op when the pane is already on the
+    // target buffer — xterm still runs restoreCursor and swaps the kitty flag
+    // registers — so the replay prologue must only switch when it truly differs.
+    //
+    // Best-effort by design. xterm parses asynchronously, so this sees only
+    // PARSED writes; a `?1049` transition still queued reads stale. Draining
+    // first with a write sentinel was tried and reverted: it puts the repaint
+    // behind xterm's queue, so a wedged terminal stalls recovery, and it breaks
+    // the disposal/cancellation ordering the restore paths rely on. A stale read
+    // costs one mis-scoped buffer switch; the barrier costs the repaint.
+    function isPaneOnAlternateScreen(): boolean {
+      return pane.terminal.buffer.active.type === 'alternate'
+    }
+
     function writePtyOutputToXterm(
       data: string,
       foreground: boolean,
@@ -7075,11 +7092,11 @@ export function connectPanePty(
         clearHiddenOutputRestoreFloodRepaintTimer()
         writeRestoreUnavailableWarning()
       }
-      // Why not an else: the unavailable warning is plain text and carries no SGR
-      // of its own, so folding the reset into the other branch skipped it on the
-      // primary abandon path — the one that declares the bytes unrecoverable.
-      // Guarded only against the remote re-arm, which writes its own reset.
-      if (!rearmedRemoteRestore) {
+      // Why an else: the branch above already grounds the gap inside
+      // writeRestoreUnavailableWarning, and the remote re-arm grounds it in
+      // rearmRemoteHiddenOutputRestoreInsteadOfWarning. Only the quiet
+      // flood-abandon reaches neither, and it still drains chunks below.
+      else if (!rearmedRemoteRestore) {
         writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
       }
       if (hadPendingOverflow) {
@@ -7311,9 +7328,16 @@ export function connectPanePty(
             // Why: an imageless success is not proof the pane is empty; normal replay clears screen and scrollback.
             const snapshotCarriesNoImage =
               snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
-            if (!snapshotCarriesNoImage) {
+            if (snapshotCarriesNoImage) {
+              // Why still ground: a restore only runs because bytes were dropped, so
+              // the gap's pen outlives a snapshot that cannot repaint over it. The
+              // live-path constant, not the replay baseline — nothing repaints here,
+              // so the pane is handed back to whatever is still running.
+              writeReplayData(RESET_AFTER_BYTE_GAP)
+            } else {
               for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
-                skipAltFrame: skippedAltFrame
+                skipAltFrame: skippedAltFrame,
+                paneOnAlternateScreen: isPaneOnAlternateScreen()
               })) {
                 writeReplayData(replayChunk)
               }
@@ -7636,6 +7660,12 @@ export function connectPanePty(
       trackedHiddenOutputRestore = hiddenOutputRestoreTask.finally(() => {
         if (hiddenOutputRestoreInFlight === trackedHiddenOutputRestore) {
           hiddenOutputRestoreInFlight = null
+        }
+        // Why: after dispose the task body exits immediately, so re-arming here
+        // resolves instantly and re-enters this handler — an unbounded promise
+        // chain that eats the heap. The pane is gone; there is nothing to restore.
+        if (disposed) {
+          return
         }
         if (hiddenOutputRestorePendingChunks.length > 0 || hiddenOutputRestorePendingOverflow) {
           hiddenOutputRestoreNeeded = true
@@ -8025,7 +8055,9 @@ export function connectPanePty(
                 snapshotSeq: snapshot.seq
               })
               // Why keep a too-wide frame: preconnect SSH has no live repaint owner or post-restore fit.
-              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot)) {
+              for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
+                paneOnAlternateScreen: isPaneOnAlternateScreen()
+              })) {
                 writeReplayData(replayChunk)
               }
               writeReplayData(reattachReplayResetSequence(modelData))
@@ -8242,7 +8274,7 @@ export function connectPanePty(
               suppressStructuralReplayPtyResize = false
             }
           }
-          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           applySnapshotKittyKeyboardModes(daemonSnapshotReplay, {
             kittyKeyboardFlags: connectResult.snapshotKittyKeyboardFlags,
@@ -8258,10 +8290,16 @@ export function connectPanePty(
               connectResult.snapshotCols,
               readProposedTerminalCols(pane)
             )
+          const groundDaemonSnapshot =
+            Boolean(connectResult.coldRestore) ||
+            (!shouldPreserveAgentReattachModes() &&
+              !(connectResult.isAlternateScreen ?? kittyKeyboardModes.isAlternateScreen))
           writeReplayData(
-            daemonAltFrameSkippable
-              ? snapshotPrefixAnsi + snapshotFrameRestoreAnsi
-              : daemonSnapshotReplay
+            `${groundDaemonSnapshot ? RESET_GRAPHIC_RENDITION : ''}${
+              daemonAltFrameSkippable
+                ? snapshotPrefixAnsi + snapshotFrameRestoreAnsi
+                : daemonSnapshotReplay
+            }`
           )
           writeReplayData(
             reattachReplayResetSequence(
@@ -8326,7 +8364,8 @@ export function connectPanePty(
               skipAltFrame: shouldSkipAltFrameForWidthMismatch(
                 modelCols,
                 readProposedTerminalCols(pane)
-              )
+              ),
+              paneOnAlternateScreen: isPaneOnAlternateScreen()
             })) {
               writeReplayData(replayChunk)
             }
@@ -8351,7 +8390,7 @@ export function connectPanePty(
           } else if (connectResult?.replay) {
             rememberReattachPayloadAgentSignal(connectResult.replay, { fullScreenReplay: true })
             // Relay replay may overlap xterm's pre-disconnect content; clear first to avoid duplication.
-            writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+            writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             // A constructor-fresh mirror (window reload) first demotes to unproven:
             // the replay window proves nothing about negotiations that predate it.
@@ -8359,7 +8398,9 @@ export function connectPanePty(
               kittyKeyboardModes.resetForSnapshot()
             }
             kittyKeyboardModes.scanReplay(connectResult.replay)
-            writeReplayData(connectResult.replay)
+            writeReplayData(
+              `${connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${connectResult.replay}`
+            )
             writeReplayData(
               reattachReplayResetSequence(
                 connectResult.replay,
@@ -8389,7 +8430,7 @@ export function connectPanePty(
             // The current xterm grid remains a safe lower bound for blanking.
           }
           // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
-          writeReplayData('\x1b[2J\x1b[H')
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`)
           await waitForTerminalReplayWritesParsed(pane.terminal)
           if (!isCurrentReattachPayload()) {
             return
@@ -8412,7 +8453,7 @@ export function connectPanePty(
             }
           }
           // Why: recorded scrollback is raw PTY output that may hold query sequences; xterm.write would auto-reply into the new shell's stdin. See replay-guard.ts.
-          writeReplayData(connectResult.coldRestore.scrollback)
+          writeReplayData(`${RESET_GRAPHIC_RENDITION}${connectResult.coldRestore.scrollback}`)
           const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
           const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
           if (didPrepareResume) {

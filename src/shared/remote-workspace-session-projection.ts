@@ -1,6 +1,7 @@
 import { getDefaultWorkspaceSession } from './constants'
 import type { RemoteWorkspaceSession, RemoteWorkspaceTerminalTab } from './remote-workspace-types'
-import type { TerminalTab, WorkspaceSessionState } from './types'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { splitWorktreeId } from './worktree/id'
 
 type ExportOptions = {

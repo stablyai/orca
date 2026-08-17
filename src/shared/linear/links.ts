@@ -1,4 +1,5 @@
-import type { LinearConnectionStatus, LinearIssue, LinearWorkspace } from '../types'
+import type { LinearIssue } from './issue-types'
+import type { LinearConnectionStatus, LinearWorkspace } from './workspace-types'
 
 export function buildLinearTeamUrl(args: {
   organizationUrlKey?: string | null

@@ -27,7 +27,12 @@ import {
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
 import { app } from 'electron'
-import type { AppMemory, MemorySnapshot, SessionMemory, WorktreeMemory } from '../../shared/types'
+import type {
+  AppMemory,
+  MemorySnapshot,
+  SessionMemory,
+  WorktreeMemory
+} from '../../shared/process-stats-types'
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'

@@ -10,7 +10,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  isRuntimeOwnedSshTargetId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 
 // Why: interpolated into the sentence so locales control where the name sits;
 // U+0000 cannot appear in a real project name, so the split is unambiguous.
@@ -31,34 +35,43 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   // user's — "still on your disk" would be misleading. Name the host (using the
   // removed-target label when it's a ghost) so the user knows where it remains
   // and that re-adding that host recovers it.
+  const sshConnectionId = useAppStore(
+    (s) =>
+      s.repos
+        .find((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
+        ?.connectionId?.trim() ?? null
+  )
   const sshHostLabel = useAppStore((s) => {
-    const connectionId = s.repos
-      .find((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
-      ?.connectionId?.trim()
-    if (!connectionId) {
+    if (!sshConnectionId) {
       return null
     }
     return (
-      s.sshTargetLabels.get(connectionId) ??
-      s.removedSshTargetLabels.get(connectionId) ??
-      connectionId
+      s.sshTargetLabels.get(sshConnectionId) ??
+      s.removedSshTargetLabels.get(sshConnectionId) ??
+      sshConnectionId
     )
   })
 
   // Why: fragment concatenation around the styled name cannot be reordered by
   // SOV locales (#9294). Translate one full sentence with the name as a
   // sentinel token, then split on it to re-apply the inline emphasis.
-  const description = sshHostLabel
+  const description = isRuntimeOwnedSshTargetId(sshConnectionId)
     ? translate(
-        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
-        'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
-        { name: NAME_TOKEN, host: sshHostLabel }
-      )
-    : translate(
-        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
-        'This only removes {{name}} from Orca. It is still on your disk.',
+        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
+        'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
         { name: NAME_TOKEN }
       )
+    : sshHostLabel
+      ? translate(
+          'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
+          'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
+          { name: NAME_TOKEN, host: sshHostLabel }
+        )
+      : translate(
+          'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
+          'This only removes {{name}} from Orca. It is still on your disk.',
+          { name: NAME_TOKEN }
+        )
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {

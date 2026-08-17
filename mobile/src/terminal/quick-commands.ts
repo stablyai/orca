@@ -1,4 +1,5 @@
-import type { TerminalQuickCommand, TuiAgent } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   applyTerminalQuickCommandMutation,
   flattenTerminalQuickCommand,

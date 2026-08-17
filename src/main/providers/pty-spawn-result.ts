@@ -1,5 +1,5 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'

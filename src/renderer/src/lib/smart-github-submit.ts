@@ -1,4 +1,5 @@
-import type { GitHubWorkItem, GitPushTarget } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitPushTarget } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'

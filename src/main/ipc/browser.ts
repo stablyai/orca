@@ -1,92 +1,27 @@
-/* eslint-disable max-lines -- Why: browser IPC handlers must be registered together so the
-   trust boundary (isTrustedBrowserRenderer) and handler teardown stay consistent. */
-import { BrowserWindow, ipcMain, webContents } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
-  pickCookieFile,
-  importCookiesFromFile,
-  detectInstalledBrowsers,
-  selectBrowserProfile,
-  importCookiesFromBrowser
-} from '../browser/browser-cookie-import'
-import type {
-  BrowserSetGrabModeArgs,
-  BrowserSetGrabModeResult,
-  BrowserAwaitGrabSelectionArgs,
-  BrowserGrabResult,
-  BrowserCancelGrabArgs,
-  BrowserCaptureSelectionScreenshotArgs,
-  BrowserCaptureSelectionScreenshotResult,
-  BrowserExtractHoverArgs,
-  BrowserExtractHoverResult
-} from '../../shared/browser-grab-types'
-import type {
-  BrowserCookieImportResult,
-  BrowserCertificateProceedResult,
-  BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
-  BrowserSessionProfileScope,
-  BrowserViewportOverride
-} from '../../shared/types'
+  isLiveBrowserWebContentsId,
+  resolveTabRegistrationWaiters
+} from './browser-tab-registration-wait'
+import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
 import {
-  isValidBrowserAnnotationViewportBridgeMarkers,
-  isValidBrowserAnnotationViewportBridgeToken,
-  type BrowserSetAnnotationViewportBridgeArgs
-} from '../../shared/browser-annotation-viewport-bridge'
+  disposeGrabModeStateForPage,
+  registerBrowserGrabHandlers,
+  resetGrabModeState
+} from './browser-grab-ipc'
+import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
+import type { BrowserCertificateProceedResult } from '../../shared/browser-workspace-types'
+import {
+  cancelBrowserWebAuthnAccountRequests,
+  respondToBrowserWebAuthnAccountRequest
+} from '../browser/browser-webauthn-account-picker'
+import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
 
-let trustedBrowserRendererWebContentsId: number | null = null
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
-
-// Why: CLI-driven tab creation must wait until the renderer mounts the webview
-// and calls registerGuest, so the tab has a webContentsId and is operable by
-// subsequent commands. Multiple commands can wait for the same page during
-// startup, so keep all one-shot resolvers keyed by browserPageId.
-const pendingTabRegistrations = new Map<string, Set<() => void>>()
-const pendingWorktreeTabRegistrations = new Map<string, Set<() => void>>()
-const pendingAnyTabRegistrations = new Set<() => void>()
-const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
-const GRAB_REGISTRATION_WAIT_MS = 1_000
-
-function waitForRegistrationSet(
-  registrationResolvers: Set<() => void>,
-  timeoutMs: number,
-  onEmpty: () => void
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const resolveRegistration = (): void => {
-      clearTimeout(timer)
-      resolve()
-    }
-    const timer = setTimeout(() => {
-      registrationResolvers.delete(resolveRegistration)
-      if (registrationResolvers.size === 0) {
-        onEmpty()
-      }
-      reject(new Error('Tab registration timed out'))
-    }, timeoutMs)
-    registrationResolvers.add(resolveRegistration)
-  })
-}
-
-function resolvePendingRegistrations(registrationResolvers: Set<() => void> | undefined): void {
-  if (!registrationResolvers) {
-    return
-  }
-  for (const pendingResolve of registrationResolvers) {
-    pendingResolve()
-  }
-}
-
-function isLiveBrowserWebContentsId(webContentsId: number | null | undefined): boolean {
-  if (webContentsId == null) {
-    return false
-  }
-  const guest = webContents.fromId(webContentsId)
-  return Boolean(guest && !guest.isDestroyed())
-}
 
 type BrowserGuestRegistrationArgs = {
   browserPageId: string
@@ -96,131 +31,19 @@ type BrowserGuestRegistrationArgs = {
   webContentsId: number
 }
 
-function hasRegisteredTabForWorktree(worktreeId: string): boolean {
-  for (const [browserPageId, webContentsId] of browserManager.getWebContentsIdByTabId()) {
-    if (
-      browserManager.getWorktreeIdForTab(browserPageId) === worktreeId &&
-      isLiveBrowserWebContentsId(webContentsId)
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
-export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000): Promise<void> {
-  if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
-    return Promise.resolve()
-  }
-  return waitForNextTabRegistration(browserPageId, timeoutMs)
-}
-
-function waitForNextTabRegistration(browserPageId: string, timeoutMs: number): Promise<void> {
-  let registrationResolvers = pendingTabRegistrations.get(browserPageId)
-  if (!registrationResolvers) {
-    registrationResolvers = new Set()
-    pendingTabRegistrations.set(browserPageId, registrationResolvers)
-  }
-  return waitForRegistrationSet(registrationResolvers, timeoutMs, () => {
-    pendingTabRegistrations.delete(browserPageId)
-  })
-}
-
-function queueGrabModeOperation(
-  browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
-): Promise<BrowserSetGrabModeResult> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
-    }
-  })
-}
-
-export function waitForWorktreeTabRegistration(
-  worktreeId: string | undefined,
-  timeoutMs = 8_000
-): Promise<void> {
-  if (!worktreeId) {
-    return waitForAnyTabRegistration(timeoutMs)
-  }
-  if (hasRegisteredTabForWorktree(worktreeId)) {
-    return Promise.resolve()
-  }
-  let registrationResolvers = pendingWorktreeTabRegistrations.get(worktreeId)
-  if (!registrationResolvers) {
-    registrationResolvers = new Set()
-    pendingWorktreeTabRegistrations.set(worktreeId, registrationResolvers)
-  }
-  return waitForRegistrationSet(registrationResolvers, timeoutMs, () => {
-    pendingWorktreeTabRegistrations.delete(worktreeId)
-  })
-}
-
-export function waitForAnyTabRegistration(timeoutMs = 8_000): Promise<void> {
-  for (const webContentsId of browserManager.getWebContentsIdByTabId().values()) {
-    if (isLiveBrowserWebContentsId(webContentsId)) {
-      return Promise.resolve()
-    }
-  }
-  return waitForRegistrationSet(pendingAnyTabRegistrations, timeoutMs, () => {})
-}
-
-export function setTrustedBrowserRendererWebContentsId(webContentsId: number | null): void {
-  trustedBrowserRendererWebContentsId = webContentsId
-}
-
 export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): void {
   agentBrowserBridgeRef = bridge
 }
 
-function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedBrowserRendererWebContentsId != null) {
-    return sender.id === trustedBrowserRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
-}
-
 export function registerBrowserHandlers(): void {
-  grabModeIntentByPageId.clear()
-  // Why: a stale in-flight chain from a prior registration would block new operations forever.
-  grabModeOperationByPageId.clear()
+  resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
   ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
-  ipcMain.removeHandler('browser:openDevTools')
-  ipcMain.removeHandler('browser:setViewportOverride')
-  ipcMain.removeHandler('browser:setAnnotationViewportBridge')
-  ipcMain.removeHandler('browser:acceptDownload')
-  ipcMain.removeHandler('browser:cancelDownload')
-  ipcMain.removeHandler('browser:setGrabMode')
-  ipcMain.removeHandler('browser:awaitGrabSelection')
-  ipcMain.removeHandler('browser:cancelGrab')
-  ipcMain.removeHandler('browser:captureSelectionScreenshot')
-  ipcMain.removeHandler('browser:extractHoverPayload')
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
+  ipcMain.removeHandler('browser:respondWebAuthnAccount')
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,
@@ -268,15 +91,7 @@ export function registerBrowserHandlers(): void {
     if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
-    const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
-    pendingTabRegistrations.delete(args.browserPageId)
-    resolvePendingRegistrations(pendingResolves)
-    const pendingWorktreeResolves = pendingWorktreeTabRegistrations.get(args.worktreeId)
-    pendingWorktreeTabRegistrations.delete(args.worktreeId)
-    resolvePendingRegistrations(pendingWorktreeResolves)
-    const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
-    pendingAnyTabRegistrations.clear()
-    resolvePendingRegistrations(pendingAnyResolves)
+    resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
     return true
   }
 
@@ -315,12 +130,21 @@ export function registerBrowserHandlers(): void {
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
+    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
     browserManager.unregisterGuest(args.browserPageId)
-    grabModeIntentByPageId.delete(args.browserPageId)
-    // Why: don't let a reused browserPageId queue behind the destroyed guest's pending chain.
-    grabModeOperationByPageId.delete(args.browserPageId)
+    disposeGrabModeStateForPage(args.browserPageId)
     return true
   })
+
+  ipcMain.handle(
+    'browser:respondWebAuthnAccount',
+    (event, response: BrowserWebAuthnAccountResponse): boolean => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return respondToBrowserWebAuthnAccountRequest(event.sender, response)
+    }
+  )
 
   ipcMain.handle(
     'browser:proceedCertificate',
@@ -362,387 +186,13 @@ export function registerBrowserHandlers(): void {
     return true
   })
 
-  ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    return browserManager.openDevTools(args.browserPageId)
-  })
-
-  ipcMain.handle(
-    'browser:setViewportOverride',
-    (
-      event,
-      args: {
-        browserPageId: string
-        override: BrowserViewportOverride | null
-      }
-    ) => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return false
-      }
-      // Why: CDP misbehaves on non-finite/negative metrics (NaN/Infinity can
-      // wedge Emulation.setDeviceMetricsOverride and leave the page in a
-      // broken state). Validate at the main-process trust boundary so a buggy
-      // or compromised renderer cannot corrupt CDP state.
-      if (args.override !== null) {
-        const { width, height, deviceScaleFactor, mobile } = args.override
-        const isFinitePositive = (n: unknown): n is number =>
-          typeof n === 'number' && Number.isFinite(n) && n > 0
-        if (!isFinitePositive(width) || width < 1 || width > 10000) {
-          return false
-        }
-        if (!isFinitePositive(height) || height < 1 || height > 10000) {
-          return false
-        }
-        if (
-          !isFinitePositive(deviceScaleFactor) ||
-          deviceScaleFactor < 0.1 ||
-          deviceScaleFactor > 5
-        ) {
-          return false
-        }
-        if (typeof mobile !== 'boolean') {
-          return false
-        }
-      }
-      return browserManager.setViewportOverride(args.browserPageId, args.override)
-    }
-  )
-
-  ipcMain.handle(
-    'browser:setAnnotationViewportBridge',
-    (event, args: BrowserSetAnnotationViewportBridgeArgs): Promise<boolean> | boolean => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return false
-      }
-      if (
-        typeof args?.browserPageId !== 'string' ||
-        typeof args.enabled !== 'boolean' ||
-        typeof args.emitViewport !== 'boolean' ||
-        !isValidBrowserAnnotationViewportBridgeMarkers(args.markers) ||
-        !isValidBrowserAnnotationViewportBridgeToken(args.token)
-      ) {
-        return false
-      }
-      return browserManager.setAnnotationViewportBridge(args.browserPageId, {
-        enabled: args.enabled,
-        emitViewport: args.emitViewport,
-        markers: args.markers,
-        token: args.token
-      })
-    }
-  )
-
-  ipcMain.handle('browser:cancelDownload', (event, args: { downloadId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    return browserManager.cancelDownload({
-      downloadId: args.downloadId,
-      senderWebContentsId: event.sender.id
-    })
-  })
+  registerBrowserGuestViewHandlers()
 
   // --- Browser Context Grab IPC ---
 
-  ipcMain.handle(
-    'browser:setGrabMode',
-    async (event, args: BrowserSetGrabModeArgs): Promise<BrowserSetGrabModeResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { ok: false, reason: 'not-authorized' }
-      }
-      const intent = {
-        generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
-        enabled: args.enabled
-      }
-      grabModeIntentByPageId.set(args.browserPageId, intent)
-      const isCurrentIntent = (): boolean =>
-        grabModeIntentByPageId.get(args.browserPageId) === intent
-      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest && args.enabled) {
-        // Why: fast file:// pages can expose the toolbar before did-attach registration reaches main.
-        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
-          () => {}
-        )
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      }
-      if (!guest) {
-        if (!args.enabled) {
-          return { ok: true }
-        }
-        return { ok: false, reason: 'not-ready' }
-      }
-      return queueGrabModeOperation(args.browserPageId, async () => {
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-        if (!guest) {
-          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
-        }
-        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
-      })
-    }
-  )
-
-  ipcMain.handle(
-    'browser:awaitGrabSelection',
-    async (event, args: BrowserAwaitGrabSelectionArgs): Promise<BrowserGrabResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { opId: args.opId, kind: 'error', reason: 'Not authorized' }
-      }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest) {
-        return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
-      }
-      // Why: no hasActiveGrabOp guard here — awaitGrabSelection already handles
-      // the conflict by cancelling the previous op. Blocking at the IPC layer
-      // would create a race window where rearm() fails if the previous IPC call
-      // hasn't fully resolved yet.
-      return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)
-    }
-  )
-
-  ipcMain.handle('browser:cancelGrab', (event, args: BrowserCancelGrabArgs): boolean => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    // Why: verify the sender actually owns this tab, consistent with the
-    // authorization check in setGrabMode/awaitGrabSelection/captureScreenshot.
-    const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-    if (!guest) {
-      return false
-    }
-    browserManager.cancelGrabOp(args.browserPageId, 'user')
-    return true
-  })
-
-  ipcMain.handle(
-    'browser:captureSelectionScreenshot',
-    async (
-      event,
-      args: BrowserCaptureSelectionScreenshotArgs
-    ): Promise<BrowserCaptureSelectionScreenshotResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { ok: false, reason: 'Not authorized' }
-      }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest) {
-        return { ok: false, reason: 'Guest not ready' }
-      }
-      const screenshot = await browserManager.captureSelectionScreenshot(
-        args.browserPageId,
-        args.rect,
-        guest
-      )
-      if (!screenshot) {
-        return { ok: false, reason: 'Screenshot capture failed' }
-      }
-      return { ok: true, screenshot }
-    }
-  )
-
-  ipcMain.handle(
-    'browser:extractHoverPayload',
-    async (event, args: BrowserExtractHoverArgs): Promise<BrowserExtractHoverResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { ok: false, reason: 'Not authorized' }
-      }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest) {
-        return { ok: false, reason: 'Guest not ready' }
-      }
-      const payload = await browserManager.extractHoverPayload(args.browserPageId, guest)
-      if (!payload) {
-        return { ok: false, reason: 'No element hovered' }
-      }
-      return { ok: true, payload }
-    }
-  )
+  registerBrowserGrabHandlers()
 
   // --- Browser Session Profile IPC ---
 
-  ipcMain.removeHandler('browser:session:listProfiles')
-  ipcMain.removeHandler('browser:session:createProfile')
-  ipcMain.removeHandler('browser:session:deleteProfile')
-  ipcMain.removeHandler('browser:session:importCookies')
-  ipcMain.removeHandler('browser:session:resolvePartition')
-
-  ipcMain.handle('browser:session:listProfiles', (event): BrowserSessionProfile[] => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return []
-    }
-    return browserSessionRegistry.listProfiles()
-  })
-
-  ipcMain.handle(
-    'browser:session:createProfile',
-    (
-      event,
-      args: {
-        scope: BrowserSessionProfileScope
-        label: string
-      } & BrowserSessionProfileCreateOptions
-    ): BrowserSessionProfile | null => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return null
-      }
-      return browserSessionRegistry.createProfile(args.scope, args.label, {
-        userAgentMode: args.userAgentMode
-      })
-    }
-  )
-
-  ipcMain.handle(
-    'browser:session:deleteProfile',
-    async (event, args: { profileId: string }): Promise<boolean> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return false
-      }
-      return browserSessionRegistry.deleteProfile(args.profileId)
-    }
-  )
-
-  ipcMain.handle(
-    'browser:session:importCookies',
-    async (event, args: { profileId: string }): Promise<BrowserCookieImportResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { ok: false, reason: 'Not authorized' }
-      }
-      const profile = browserSessionRegistry.getProfile(args.profileId)
-      if (!profile) {
-        return { ok: false, reason: 'Session profile not found.' }
-      }
-
-      const parent = BrowserWindow.fromWebContents(event.sender)
-      const filePath = await pickCookieFile(parent)
-      if (!filePath) {
-        return { ok: false, reason: 'canceled' }
-      }
-
-      const result = await importCookiesFromFile(filePath, profile.partition)
-      if (result.ok) {
-        browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: 'manual',
-          importedAt: Date.now()
-        })
-        return { ...result, profileId: args.profileId }
-      }
-      return result
-    }
-  )
-
-  ipcMain.handle(
-    'browser:session:resolvePartition',
-    (event, args: { profileId: string | null }): string | null => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return null
-      }
-      return browserSessionRegistry.resolvePartition(args.profileId)
-    }
-  )
-
-  ipcMain.removeHandler('browser:session:clearDefaultCookies')
-
-  ipcMain.handle('browser:session:clearDefaultCookies', async (event): Promise<boolean> => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    return browserSessionRegistry.clearDefaultSessionCookies()
-  })
-
-  ipcMain.removeHandler('browser:session:detectBrowsers')
-  ipcMain.removeHandler('browser:session:importFromBrowser')
-
-  ipcMain.handle(
-    'browser:session:detectBrowsers',
-    (
-      event
-    ): {
-      family: string
-      label: string
-      profiles: { name: string; directory: string }[]
-      selectedProfile: string
-    }[] => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return []
-      }
-      // Why: the renderer only needs family/label/profiles for the UI picker.
-      // Strip cookiesPath, keychainService, and keychainAccount to avoid
-      // exposing filesystem paths and credential store identifiers to the renderer.
-      return detectInstalledBrowsers().map((b) => ({
-        family: b.family,
-        label: b.label,
-        profiles: b.profiles,
-        selectedProfile: b.selectedProfile
-      }))
-    }
-  )
-
-  ipcMain.handle(
-    'browser:session:importFromBrowser',
-    async (
-      event,
-      args: { profileId: string; browserFamily: string; browserProfile?: string }
-    ): Promise<BrowserCookieImportResult> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { ok: false, reason: 'Not authorized' }
-      }
-      const profile = browserSessionRegistry.getProfile(args.profileId)
-      if (!profile) {
-        return { ok: false, reason: 'Session profile not found.' }
-      }
-
-      // Why: browserProfile comes from the renderer and is used to construct
-      // a filesystem path. Reject traversal characters to prevent a compromised
-      // renderer from reading arbitrary files via the cookie import pipeline.
-      if (
-        args.browserProfile &&
-        (/[/\\]/.test(args.browserProfile) || args.browserProfile.includes('..'))
-      ) {
-        return { ok: false, reason: 'Invalid browser profile name.' }
-      }
-
-      const browsers = detectInstalledBrowsers()
-      let browser = browsers.find((b) => b.family === args.browserFamily)
-      if (!browser) {
-        return { ok: false, reason: 'Browser not found on this system.' }
-      }
-
-      // Why: if the user selected a non-default profile from the picker,
-      // resolve the cookies path for that specific profile.
-      if (args.browserProfile && args.browserProfile !== browser.selectedProfile) {
-        const reselected = selectBrowserProfile(browser, args.browserProfile)
-        if (!reselected) {
-          return {
-            ok: false,
-            reason: `No cookies database found for profile "${args.browserProfile}".`
-          }
-        }
-        browser = reselected
-      }
-
-      const result = await importCookiesFromBrowser(browser, profile.partition)
-      if (result.ok) {
-        const profileName =
-          browser.profiles.find((p) => p.directory === browser.selectedProfile)?.name ??
-          browser.selectedProfile
-        browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: browser.family,
-          profileName,
-          importedAt: Date.now()
-        })
-        return { ...result, profileId: args.profileId }
-      }
-      return result
-    }
-  )
+  registerBrowserSessionProfileHandlers()
 }

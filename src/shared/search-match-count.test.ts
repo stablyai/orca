@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSearchFileMatchCount, normalizeSearchResult } from './search-match-count'
-import type { SearchFileResult } from './types'
+import type { SearchFileResult } from './code-search-types'
 
 const match = { line: 1, column: 1, matchLength: 3, lineContent: 'foo' }
 

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 
@@ -79,6 +79,9 @@ export async function prepareRequestForCreate(
       : getEphemeralVmPortableBaseSelection(request)),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
     ephemeralVmCheckoutMode: preparedTarget.checkoutMode,
+    ...(preparedTarget.expectedRefHead
+      ? { ephemeralVmExpectedRefHead: preparedTarget.expectedRefHead }
+      : {}),
     ...(preparedTarget.environmentId
       ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
       : {}),

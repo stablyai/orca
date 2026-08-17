@@ -4,7 +4,7 @@
 // the multi-fork cleanup matrix is unit-testable without a real repo.
 
 import type { Store } from '../persistence'
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'

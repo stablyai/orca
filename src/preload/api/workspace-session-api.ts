@@ -1,9 +1,8 @@
+import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import type {
-  IssueInfo,
-  PRInfo,
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/types'
+} from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   RemoteWorkspaceChangedEvent,

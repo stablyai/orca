@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 
 const {

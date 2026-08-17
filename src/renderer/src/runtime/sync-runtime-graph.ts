@@ -20,20 +20,18 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileTerminalTheme,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeSyncWindowGraph
+  RuntimeRendererSyncWindowGraph
 } from '../../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/types'
+} from '../../../shared/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -730,9 +728,10 @@ async function syncRuntimeGraph(): Promise<void> {
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const mobileSessionTabs = buildMobileSessionTabSnapshots(state, systemPrefersDark)
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
-  const graph: RuntimeSyncWindowGraph = {
+  const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
+    rendererGeneration: mobileSessionPublicationEpoch,
     mobileSessionTabs: publication.changed,
     unchangedMobileSessionWorktrees: publication.unchangedWorktrees
   }

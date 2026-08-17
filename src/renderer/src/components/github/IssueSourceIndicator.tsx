@@ -1,5 +1,5 @@
 import React from 'react'
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import {

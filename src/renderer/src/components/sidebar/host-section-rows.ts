@@ -11,8 +11,10 @@ import {
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
-import type { Row } from './worktree-list-groups'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Row } from './worktree-list/grouping/row-types'
 
 export type HostHeaderRow = {
   type: 'host-header'

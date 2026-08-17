@@ -1,10 +1,10 @@
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type {
-  PersistedUIState,
-  TuiAgent,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from '../../shared/types'
+} from '../../shared/worktree/launch-types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { BrowserFindSource } from '../../shared/browser-find-source'
@@ -36,6 +36,8 @@ export type UiCommandEventApi = {
   onOpenSettings: (callback: () => void) => () => void
   /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
+  onOpenSkillShare: (callback: (shareId: string) => void) => () => void
+  consumePendingSkillShare: () => Promise<string | null>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void
@@ -63,6 +65,7 @@ export type UiCommandEventApi = {
       requestId: string
       url: string
       worktreeId?: string
+      browserPageId?: string
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
@@ -81,7 +84,11 @@ export type UiCommandEventApi = {
   onRequestTabClose: (
     callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
   ) => () => void
-  replyTabClose: (reply: { requestId: string; error?: string }) => void
+  replyTabClose: (reply: {
+    requestId: string
+    error?: string
+    code?: 'browser_tab_not_found'
+  }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: () => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void

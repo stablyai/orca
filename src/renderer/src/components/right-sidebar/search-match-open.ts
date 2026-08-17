@@ -3,7 +3,7 @@ import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
-import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
+import type { SearchFileResult, SearchMatch } from '../../../../shared/code-search-types'
 
 export function cancelRevealFrame(frameRef: React.RefObject<number | null>): void {
   if (frameRef.current !== null) {

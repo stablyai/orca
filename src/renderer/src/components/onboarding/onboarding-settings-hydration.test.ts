@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const settings = {
   theme: 'light',

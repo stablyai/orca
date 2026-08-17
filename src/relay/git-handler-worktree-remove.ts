@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import type { RemoveWorktreeResult } from '../shared/types'
+import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree/submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'

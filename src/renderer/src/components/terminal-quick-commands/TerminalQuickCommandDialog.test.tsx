@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
 const mountedRoots: Root[] = []

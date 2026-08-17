@@ -6,12 +6,12 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import type {
-  GitBranchChangeEntry,
   GitFileStatus,
   GitStagingArea,
   GitStatusEntry
-} from '../../../../shared/types'
+} from '../../../../shared/git-status-types'
 import {
   getCombinedDiffFileTreeSectionKey,
   type CombinedDiffBranchTreeArea,

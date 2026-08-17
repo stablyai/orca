@@ -1,4 +1,9 @@
-import type { LinearLabel, LinearMember, LinearTeam, LinearWorkflowState } from '../../shared/types'
+import type {
+  LinearLabel,
+  LinearMember,
+  LinearTeam,
+  LinearWorkflowState
+} from '../../shared/linear/workspace-types'
 import { buildLinearTeamUrl } from '../../shared/linear/links'
 import type { LinearClientForWorkspace } from './client'
 

@@ -16,7 +16,7 @@ import { HistoryReader } from './history-reader'
 import { TerminalHost } from './terminal-host'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
 const OLDEST_WRITTEN_LINE = 'LINE_00001'
@@ -484,6 +484,55 @@ describe('STA-4091 previously recoverable restore depth', () => {
         '[history] durable continuity unproven; using live snapshot:',
         id
       )
+    })
+
+    // Assert durable depth, not the sequence that merely enables it.
+    it('preserves durable depth when an empty incremental take precedes a warm reattach', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'empty-take-depth',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const oldInternals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
+      await oldInternals.checkpointDirtySessions()
+      const beforeReattach = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(beforeReattach ?? {})).toContain(OLDEST_WRITTEN_LINE)
+
+      // The trigger: a dirty mark with no new PTY records (the mock swallows the write, nothing echoes back).
+      adapter.write(id, 'noop')
+      await oldInternals.checkpointDirtySessions()
+
+      simulateAdapterCrash(adapter)
+      adapter = new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        historyPath: historyDir
+      })
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+
+      // First post-reattach compact runs the continuity proof; it must not flatten the deep checkpoint.
+      const newInternals = adapter as unknown as {
+        checkpointDirtySessions: () => Promise<void>
+      }
+      adapter.write(id, 'noop')
+      await newInternals.checkpointDirtySessions()
+
+      const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restored ?? {})).toContain(OLDEST_WRITTEN_LINE)
+      expect(snapshotText(restored ?? {})).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+      expect(restored?.scrollbackLines).toBeGreaterThan(DAEMON_SESSION_SCROLLBACK_ROWS)
     })
 
     it('falls back to the live window when durable history cannot be read', async () => {

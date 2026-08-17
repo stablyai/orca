@@ -1,4 +1,4 @@
-import type { Project } from './types'
+import type { Project } from './project-types'
 
 export type ProjectIdentitySuccession = {
   /** Projected projects with user-set state carried forward from their predecessor row. */
