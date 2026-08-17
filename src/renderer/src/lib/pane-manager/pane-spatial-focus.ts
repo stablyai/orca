@@ -101,6 +101,39 @@ export function findSpatiallyAdjacentPaneId(
   )
 }
 
+export type SpatialFocusKeyEvent = {
+  preventDefault(): void
+  stopImmediatePropagation(): void
+}
+
+export type SpatialFocusPaneManager = {
+  getPanes(): readonly SpatialPaneSource[]
+  getActivePane(): { id: number } | null
+  setActivePane(paneId: number, opts: { focus: boolean }): void
+}
+
+// Why: claim the chord only when a neighbor exists so Mod+Alt+ArrowLeft/Right
+// can still reach worktree history at a layout edge.
+export function applySpatialPaneFocusKey(
+  event: SpatialFocusKeyEvent,
+  manager: SpatialFocusPaneManager,
+  direction: SpatialFocusDirection
+): boolean {
+  const panes = manager.getPanes()
+  const activeId = manager.getActivePane()?.id ?? panes[0]?.id
+  if (activeId === undefined) {
+    return false
+  }
+  const neighborId = findSpatiallyAdjacentPaneId(activeId, panes, direction)
+  if (neighborId === null) {
+    return false
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  manager.setActivePane(neighborId, { focus: true })
+  return true
+}
+
 function hasPositiveArea(pane: SpatialPaneRect): boolean {
   return pane.width > 0 && pane.height > 0
 }

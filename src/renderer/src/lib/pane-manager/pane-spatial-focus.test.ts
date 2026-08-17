@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  applySpatialPaneFocusKey,
   collectPaneRectsInTreeOrder,
   findAdjacentPaneId,
   findSpatiallyAdjacentPaneId,
@@ -206,6 +207,53 @@ describe('findSpatiallyAdjacentPaneId', () => {
     expect(findSpatiallyAdjacentPaneId(3, panes, 'left')).toBe(1)
     expect(findSpatiallyAdjacentPaneId(2, panes, 'down')).toBe(3)
     expect(findSpatiallyAdjacentPaneId(1, panes, 'left')).toBeNull()
+    root.remove()
+  })
+})
+
+describe('applySpatialPaneFocusKey', () => {
+  it('claims the chord only when a neighbor exists', () => {
+    const root = document.createElement('div')
+    root.className = 'pane-split is-vertical'
+    const paneA = document.createElement('div')
+    paneA.className = 'pane'
+    const divider = document.createElement('div')
+    divider.className = 'pane-divider is-vertical'
+    const paneB = document.createElement('div')
+    paneB.className = 'pane'
+    root.append(paneA, divider, paneB)
+    document.body.append(root)
+
+    paneA.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 100 }) as DOMRect
+    paneB.getBoundingClientRect = () => ({ x: 110, y: 0, width: 100, height: 100 }) as DOMRect
+
+    const setActivePane = vi.fn()
+    const event = {
+      preventDefault: vi.fn(),
+      stopImmediatePropagation: vi.fn()
+    }
+    const manager = {
+      getPanes: () => [
+        { id: 1, container: paneA },
+        { id: 2, container: paneB }
+      ],
+      getActivePane: () => ({ id: 1 }),
+      setActivePane
+    }
+
+    expect(applySpatialPaneFocusKey(event, manager, 'right')).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1)
+    expect(setActivePane).toHaveBeenCalledWith(2, { focus: true })
+
+    event.preventDefault.mockClear()
+    event.stopImmediatePropagation.mockClear()
+    setActivePane.mockClear()
+
+    expect(applySpatialPaneFocusKey(event, manager, 'left')).toBe(false)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopImmediatePropagation).not.toHaveBeenCalled()
+    expect(setActivePane).not.toHaveBeenCalled()
     root.remove()
   })
 })

@@ -57,7 +57,7 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import {
-  findSpatiallyAdjacentPaneId,
+  applySpatialPaneFocusKey,
   isSpatialFocusDirection
 } from '@/lib/pane-manager/pane-spatial-focus'
 
@@ -749,10 +749,23 @@ export function useTerminalKeyboardShortcuts({
         if (panes.length < 2) {
           return
         }
+
+        if (isSpatialFocusDirection(action.direction)) {
+          // Restore expanded geometry before measuring; do not claim the chord
+          // until a neighbor exists so worktree history can still run at an edge.
+          if (expandedPaneIdRef.current !== null) {
+            setExpandedPane(null)
+            restoreExpandedLayout()
+            refreshPaneSizes(true)
+            persistLayoutSnapshot()
+          }
+          applySpatialPaneFocusKey(e, manager, action.direction)
+          return
+        }
+
         e.preventDefault()
         e.stopImmediatePropagation()
 
-        // Collapse expanded pane before switching
         if (expandedPaneIdRef.current !== null) {
           setExpandedPane(null)
           restoreExpandedLayout()
@@ -761,14 +774,6 @@ export function useTerminalKeyboardShortcuts({
         }
 
         const activeId = manager.getActivePane()?.id ?? panes[0].id
-        if (isSpatialFocusDirection(action.direction)) {
-          const neighborId = findSpatiallyAdjacentPaneId(activeId, panes, action.direction)
-          if (neighborId !== null) {
-            manager.setActivePane(neighborId, { focus: true })
-          }
-          return
-        }
-
         const currentIdx = panes.findIndex((p) => p.id === activeId)
         if (currentIdx === -1) {
           return
