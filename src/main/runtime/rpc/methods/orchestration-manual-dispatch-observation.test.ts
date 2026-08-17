@@ -8,6 +8,85 @@ describe('manual Dispatch observation', () => {
 
   afterEach(() => db?.close())
 
+  it('covers the real dispatch --inject entry path before observing the lane', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const coordinatorPaneKey = 'tab_coord:leaf_coord'
+    const workerPaneKey = 'tab_worker:leaf_worker'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_coord' ? coordinatorPaneKey : workerPaneKey
+    )
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: 'term_worker',
+      paneKey: workerPaneKey,
+      processIncarnation: 'runtime_test:term_worker:1'
+    } as never)
+    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1
+    })
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('runtime_test:term_worker:1')
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
+      status: 'live',
+      ptyIds: ['runtime_test:term_worker:1']
+    })
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    const run = db.createRun({
+      objective: 'STA-3848 repro',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey
+    })
+    const task = db.createTask({ spec: 'injected lane', runId: run.id })
+    const dispatchMethod = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.dispatch'
+    )
+    if (!dispatchMethod) {
+      throw new Error('Missing method orchestration.dispatch')
+    }
+
+    const result = (await dispatchMethod.handler(
+      dispatchMethod.params?.parse({
+        task: task.id,
+        to: 'term_worker',
+        from: 'term_coord',
+        run: run.id,
+        inject: true
+      }),
+      { runtime, legacyCoordinatorRunId: run.id }
+    )) as { dispatch: { id: string } }
+
+    expect(db.getWorkerDispatch(result.dispatch.id)).toBeUndefined()
+    expect(db.getDispatchContextById(result.dispatch.id)).toMatchObject({
+      assignee_handle: 'term_worker',
+      assignee_pane_key: workerPaneKey,
+      process_incarnation: 'runtime_test:term_worker:1',
+      capability_hash: expect.any(String)
+    })
+
+    const workerShowMethod = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerShow'
+    )
+    if (!workerShowMethod) {
+      throw new Error('Missing method orchestration.workerShow')
+    }
+    await expect(
+      workerShowMethod.handler(workerShowMethod.params?.parse({ dispatch: result.dispatch.id }), {
+        runtime
+      })
+    ).resolves.toMatchObject({
+      worker: { state: 'unsupervised', stage: 'injected' },
+      observation: { status: 'live', exactWorker: true }
+    })
+  })
+
   it('keeps context-only reads truthful without supervising the operator pane', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
@@ -99,6 +178,10 @@ describe('manual Dispatch observation', () => {
       status: { worker: 'unsupervised' },
       terminal: { tail: ['injected output'] }
     })
+
+    await expect(call('orchestration.workerRetain', { dispatch: dispatch.id })).rejects.toThrow(
+      /only a settled dispatch can retain/
+    )
 
     expect(
       db.settleWorkerReport({

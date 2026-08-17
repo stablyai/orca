@@ -137,6 +137,17 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           'none'
         )
       }
+      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+      if (resource && resource.ownership_state !== 'owned') {
+        return unknownReceipt(
+          params.dispatch,
+          db.markWorkerStopUnknown(
+            params.dispatch,
+            `The worker terminal is ${resource.ownership_state}; no terminal was closed.`
+          ),
+          'none'
+        )
+      }
       try {
         const close = await runtime.closeTerminal(handle)
         if (!close.ptyKilled) {
