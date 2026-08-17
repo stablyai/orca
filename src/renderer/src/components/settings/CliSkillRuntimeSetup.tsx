@@ -229,9 +229,8 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 }
 
 function isPosixFamilyWindowsShellConfigured(): boolean {
-  return (
-    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
-    'posix'
+  return ['posix', 'unix'].includes(
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
 }
 

@@ -4,9 +4,14 @@ import {
   registerPersistentWebview,
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
-import { createWebview, makeFolderWorkspace, makeWorktree } from './worktrees-slice-test-fixtures'
+import {
+  createWebview,
+  makeFolderWorkspace,
+  makeLineage,
+  makeWorktree
+} from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -209,6 +214,92 @@ describe('markWorktreeVisited', () => {
 
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
   })
+
+  it('pruneLastVisitedTimestamps defers an empty list with no detected record (unhydrated shape)', () => {
+    const store = createTestStore()
+    store.setState({
+      worktreesByRepo: { repo1: [] },
+      lastVisitedAtByWorktreeId: { 'repo1::/hidden': 100 }
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    // An empty list is the not-yet-hydrated shape, not an authoritative "no worktrees",
+    // so focus-recency is kept until an authoritative scan lands.
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+
+  it('pruneLastVisitedTimestamps clears the derived worktree-scoped active workspace key with a stale active worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/gone'),
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // The derived workspace key would keep the phantom workspace selected, so it goes too.
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+    expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves a folder-scoped active workspace key when the active worktree is stale', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // Folder-scoped keys are never dropped here (matches the removal paths).
+    expect(store.getState().activeWorkspaceKey).toBe(folderWorkspaceKey('folder-1'))
+    expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves an active workspace key pointing at a different live worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/a'),
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    // Only the stale worktree's own derived key is dropped.
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey('repo1::/a'))
+  })
+
+  it('pruneLastVisitedTimestamps clears a legacy unprefixed active workspace key for the stale worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      // Sessions predating the `worktree:` prefix stored the bare id (see the purge path).
+      activeWorkspaceKey: 'repo1::/gone',
+      lastVisitedAtByWorktreeId: {}
+    } as unknown as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+  })
 })
 
 describe('setRenamingWorktreeId', () => {
@@ -295,6 +386,160 @@ describe('setWorktreesPinnedAndReveal', () => {
     store.getState().setWorktreesPinnedAndReveal([other.id], true)
 
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { previousPinned: false, nextPinned: true },
+    { previousPinned: true, nextPinned: false }
+  ])(
+    'reveals the focused descendant when changing its unfocused ancestor from $previousPinned to $nextPinned',
+    ({ previousPinned, nextPinned }) => {
+      const store = createTestStore()
+      const parent = makeWorktree({
+        id: 'repo1::/parent',
+        instanceId: 'parent-instance',
+        repoId: 'repo1',
+        isPinned: previousPinned
+      })
+      const child = makeWorktree({
+        id: 'repo1::/child',
+        instanceId: 'child-instance',
+        repoId: 'repo1'
+      })
+      const reveal = vi.fn()
+      store.setState({
+        worktreesByRepo: { repo1: [parent, child] },
+        worktreeLineageById: {
+          [child.id]: makeLineage({ worktreeId: child.id, parentWorktreeId: parent.id })
+        },
+        activeWorktreeId: child.id,
+        revealWorktreeInSidebar: reveal
+      } as Partial<AppState>)
+
+      store.getState().setWorktreesPinnedAndReveal([parent.id], nextPinned)
+
+      expect(reveal).toHaveBeenCalledWith(child.id, { behavior: 'smooth', highlight: true })
+    }
+  )
+
+  it('reveals the focused descendant from embedded legacy lineage', () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repo1::/parent',
+      instanceId: 'parent-instance',
+      repoId: 'repo1'
+    })
+    const child = {
+      ...makeWorktree({
+        id: 'repo1::/child',
+        instanceId: 'child-instance',
+        repoId: 'repo1'
+      }),
+      lineage: makeLineage({ worktreeId: 'repo1::/child', parentWorktreeId: parent.id })
+    }
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [parent, child] },
+      activeWorktreeId: child.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+
+    expect(reveal).toHaveBeenCalledWith(child.id, { behavior: 'smooth', highlight: true })
+  })
+
+  it('does not reveal through cyclic lineage rejected by rendering', () => {
+    const store = createTestStore()
+    const first = makeWorktree({
+      id: 'repo1::/first',
+      instanceId: 'first-instance',
+      repoId: 'repo1'
+    })
+    const second = makeWorktree({
+      id: 'repo1::/second',
+      instanceId: 'second-instance',
+      repoId: 'repo1'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [first, second] },
+      worktreeLineageById: {
+        [first.id]: makeLineage({
+          worktreeId: first.id,
+          worktreeInstanceId: first.instanceId,
+          parentWorktreeId: second.id,
+          parentWorktreeInstanceId: second.instanceId
+        }),
+        [second.id]: makeLineage({
+          worktreeId: second.id,
+          worktreeInstanceId: second.instanceId,
+          parentWorktreeId: first.id,
+          parentWorktreeInstanceId: first.instanceId
+        })
+      },
+      activeWorktreeId: second.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([first.id], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it('does not reveal a focused descendant for duplicate pinned rows', () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repo1::/parent',
+      instanceId: 'parent-instance',
+      repoId: 'repo1'
+    })
+    const child = makeWorktree({
+      id: 'repo1::/child',
+      instanceId: 'child-instance',
+      repoId: 'repo1'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [parent, child] },
+      worktreeLineageById: {
+        [child.id]: makeLineage({ worktreeId: child.id, parentWorktreeId: parent.id })
+      },
+      activeWorktreeId: child.id,
+      settings: { ...store.getState().settings, showPinnedWorktreesInGroups: true },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it('does not reveal through stale lineage', () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repo1::/parent',
+      instanceId: 'replacement-parent-instance',
+      repoId: 'repo1'
+    })
+    const child = makeWorktree({
+      id: 'repo1::/child',
+      instanceId: 'child-instance',
+      repoId: 'repo1'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [parent, child] },
+      worktreeLineageById: {
+        [child.id]: makeLineage({ worktreeId: child.id, parentWorktreeId: parent.id })
+      },
+      activeWorktreeId: child.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+
     expect(reveal).not.toHaveBeenCalled()
   })
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -102,11 +103,16 @@ describe('registerPtyHandlers', () => {
     })
     registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
     registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
-    const runtime = { setPtyController: vi.fn() }
+    setPtyOwnership('ssh-b-pty', 'ssh-b')
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyLivenessUnverifiable: vi.fn()
+    }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       listProcesses(connectionId?: string | null): Promise<{ id: string }[]>
+      listProcessesWithHostScope(): Promise<{ processes: { id: string }[]; hostIds: string[] }>
     }
 
     await expect(controller.listProcesses(null)).resolves.toEqual([
@@ -120,7 +126,22 @@ describe('registerPtyHandlers', () => {
     expect(sshAList).toHaveBeenCalledOnce()
     expect(sshBList).not.toHaveBeenCalled()
 
-    await expect(controller.listProcesses()).rejects.toThrow('ssh-b unavailable')
+    await expect(controller.listProcesses()).resolves.toEqual([
+      { id: 'local-pty', title: 'Local', cwd: '/local' },
+      { id: 'ssh-a-pty' }
+    ])
+    expect(sshBList).toHaveBeenCalledOnce()
+    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
+      'ssh-b-pty',
+      'ssh-b unavailable'
+    )
+
+    await expect(controller.listProcessesWithHostScope()).resolves.toEqual({
+      processes: [{ id: 'local-pty', title: 'Local', cwd: '/local' }, { id: 'ssh-a-pty' }],
+      hostIds: [LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId('ssh-a')]
+    })
+    expect(sshBList).toHaveBeenCalledTimes(2)
+    deletePtyOwnership('ssh-b-pty')
   })
   it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
     registerSshPtyProvider('ssh-1', {} as never)

@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import {
   getHistoryRoot,
   listWslHistoryRoots,
@@ -9,6 +9,9 @@ import {
   schedulePendingHistoryTreeRemovals,
   scheduleWorktreeHistoryTreeDeletion
 } from './terminal-history-deletion'
+import { readHistoryMeta } from './terminal-history'
+import { resolveFishHistoryDir, sweepOrphanedFishHistoryFiles } from './fish-history-session'
+import { hashWorktreeId } from './terminal-history-id'
 
 // Why 5 minutes: GC runs ~10s after startup, and the live-worktree snapshot is
 // taken just before. A worktree created between the snapshot and GC execution
@@ -25,8 +28,21 @@ let historyGcRunning = false
 function gcScanRoot(
   root: string,
   liveWorktreeIds: Set<string>
-): { totalDirs: number; orphaned: number; pruned: number; totalSizeKB: number } {
-  const result = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
+): {
+  totalDirs: number
+  orphaned: number
+  pruned: number
+  totalSizeKB: number
+  /** Every fish data dir a meta.json in this root names, for the orphan sweep. */
+  fishHistoryDirs: Set<string>
+} {
+  const result = {
+    totalDirs: 0,
+    orphaned: 0,
+    pruned: 0,
+    totalSizeKB: 0,
+    fishHistoryDirs: new Set<string>()
+  }
   if (!existsSync(root)) {
     return result
   }
@@ -61,11 +77,11 @@ function gcScanRoot(
         continue
       }
 
-      const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
-        worktreeId?: string
-        createdAt?: string
+      const meta = readHistoryMeta(entryPath)
+      if (meta?.fishHistoryDir) {
+        result.fishHistoryDirs.add(meta.fishHistoryDir)
       }
-      if (!meta.worktreeId) {
+      if (!meta?.worktreeId) {
         continue
       }
 
@@ -100,11 +116,25 @@ function gcScanRoot(
 export function runHistoryGc(liveWorktreeIds: Set<string>): void {
   try {
     // Why: finish tombstones left by quit mid-rm before scanning live worktree hashes.
+    // Safe ahead of the guard below: these entries were already condemned by a
+    // completed GC, and leaving them renamed-but-present strands disk forever.
     schedulePendingHistoryTreeRemovals(getHistoryRoot())
+    // Why refuse rather than treat every entry as orphaned: an empty live set is
+    // what a store that fell back to default state looks like, and it cannot be
+    // told apart from a user who genuinely has no worktrees — who also has no
+    // history to collect. So refusing costs nothing, and it is the difference
+    // between a recoverable bad load and every worktree's shell history being
+    // deleted. `sweepOrphanedFishHistoryFiles` refuses it for the same reason;
+    // this is the path that deletes more.
+    if (liveWorktreeIds.size === 0) {
+      console.log('[pty:history:gc] Skipped: live worktree set is empty')
+      return
+    }
     const main = gcScanRoot(getHistoryRoot(), liveWorktreeIds)
 
     // Also scan WSL history directories (each distro has its own subdirectory).
     const wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
+    const liveFishHistoryDirs = new Set(main.fishHistoryDirs)
     for (const distroRoot of listWslHistoryRoots()) {
       schedulePendingHistoryTreeRemovals(distroRoot)
       const r = gcScanRoot(distroRoot, liveWorktreeIds)
@@ -112,6 +142,27 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): void {
       wslTotals.orphaned += r.orphaned
       wslTotals.pruned += r.pruned
       wslTotals.totalSizeKB += r.totalSizeKB
+      for (const dir of r.fishHistoryDirs) {
+        liveFishHistoryDirs.add(dir)
+      }
+    }
+
+    // Why a sweep on top of per-worktree deletion: a fish history file lives in
+    // the user's fish data dir, so it outlives the directory that names it. A
+    // crash between tombstone and removal, or a hand-deleted history dir, leaves
+    // one with nothing left to point at it. Collecting the dirs the live meta
+    // files name covers a machine whose XDG_DATA_HOME changed between runs.
+    const fishDirs = new Set([resolveFishHistoryDir()])
+    for (const dir of liveFishHistoryDirs) {
+      fishDirs.add(dir)
+    }
+    const fishOrphans = sweepOrphanedFishHistoryFiles(
+      new Set([...liveWorktreeIds].map(hashWorktreeId)),
+      fishDirs,
+      GC_MIN_AGE_MS
+    )
+    if (fishOrphans > 0) {
+      console.log(`[pty:history:gc] Swept ${fishOrphans} orphaned fish history file(s)`)
     }
 
     const totalDirs = main.totalDirs + wslTotals.totalDirs

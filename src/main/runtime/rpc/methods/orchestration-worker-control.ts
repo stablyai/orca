@@ -99,7 +99,11 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           server: { environmentId: server.environmentId, name: server.name },
           remoteRuntimeEpoch: remote.runtimeEpoch,
           terminal: remote.terminal,
-          observation: remote.observation
+          observation: {
+            ...remote.observation,
+            // Legacy servers published `running`; normalize at the compatibility boundary.
+            status: remote.observation.status === 'running' ? 'live' : remote.observation.status
+          }
         }
       }
       if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
@@ -122,7 +126,12 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         dispatch,
         worker: exposeWorker(worker),
         terminal: observation.exact ? observation.terminal : null,
-        observation: { status: observation.status, exactWorker: observation.exact },
+        observation: {
+          status: observation.status,
+          exactWorker: observation.exact,
+          // Why: a bare `unverifiable` is not actionable without naming what we lost.
+          ...(observation.reason ? { reason: observation.reason } : {})
+        },
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
       }
     }
@@ -176,7 +185,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         )
       }
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-      if (resource && ['releasing', 'released'].includes(resource.release_state)) {
+      if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
         return readArchivedWorkerOutput({
           db,
           dispatchId: params.dispatch,
@@ -199,7 +208,18 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         dispatchId: params.dispatch,
         terminalHandle: worker.agent_terminal_handle,
         workerState: worker.state,
-        terminalStatus: observation.status === 'exited' ? 'exited' : 'running',
+        terminalStatus:
+          observation.status === 'exited'
+            ? 'exited'
+            : observation.status === 'unverifiable'
+              ? 'unknown'
+              : 'running',
+        terminalLiveness:
+          observation.status === 'unverifiable'
+            ? 'unverifiable'
+            : observation.status === 'exited'
+              ? 'exited'
+              : 'live',
         attachedAt: worker.created_at,
         source: params.source,
         cursor: params.cursor,

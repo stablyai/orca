@@ -577,6 +577,104 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
 
+  it('skips the push-target lookup for a genuinely ambiguous owner instead of throwing past the { ok, error } contract', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    const result = await store.getState().updateWorktreeMeta(worktreeId, { linkedPR: 123 })
+
+    // The ambiguous owner must surface as a graceful { ok: false }, not an uncaught rejection.
+    expect(result.ok).toBe(false)
+    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('cleans up the in-flight lookup when restore is skipped for a genuinely ambiguous owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const pushTarget = { remoteName: 'fork', branchName: 'feature/disambiguated' }
+    const ownedWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'ssh:ssh-a',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      linkedPR: 123
+    })
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
+      if (method === 'worktree.resolvePrBase') {
+        return Promise.resolve({
+          id: 'rpc-ambiguous-resolve-pr-base',
+          ok: true,
+          result: { baseBranch: 'fork-head', pushTarget },
+          _meta: { runtimeId: 'hub-a' }
+        })
+      }
+      if (method === 'worktree.set') {
+        return Promise.resolve({
+          id: 'rpc-ambiguous-set-worktree',
+          ok: true,
+          result: { worktree: { ...ownedWorktree, pushTarget } },
+          _meta: { runtimeId: 'hub-a' }
+        })
+      }
+      throw new Error(`Unexpected runtime method ${method}`)
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          ownedWorktree,
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b',
+            linkedPR: 123
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    await expect(store.getState().ensureHostedReviewPushTarget(worktreeId)).resolves.toBeUndefined()
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+
+    // Drop the rival host row so the same lookup key now has one owner: a second call must run the
+    // lookup for real, not silently no-op on a stale in-flight marker left by the skipped first call.
+    store.setState({ worktreesByRepo: { 'repo-shared': [ownedWorktree] } } as Partial<AppState>)
+
+    await store.getState().ensureHostedReviewPushTarget(worktreeId)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'hub-a',
+      method: 'worktree.resolvePrBase',
+      params: { repo: 'repo-shared', prNumber: 123 },
+      timeoutMs: 30_000
+    })
+    expect(store.getState().worktreesByRepo['repo-shared'][0]?.pushTarget).toEqual(pushTarget)
+  })
+
   it('hydrates a missing push target for an existing linked GitLab MR when supported', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'upstream', branchName: 'feature/mr' }

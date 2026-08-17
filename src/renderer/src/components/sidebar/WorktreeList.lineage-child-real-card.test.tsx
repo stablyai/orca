@@ -14,7 +14,7 @@ import {
   LINEAGE_IMMEDIATE_PARENT_STEP,
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN
-} from './worktree-list-indentation'
+} from './worktree-list/rows/indentation'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 

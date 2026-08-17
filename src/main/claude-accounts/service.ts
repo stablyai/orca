@@ -148,6 +148,10 @@ export class ClaudeAccountService {
     return this.cancelPendingClaudeLogin?.() ?? false
   }
 
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.runtimeAuth.getRuntimeConfigDir(target)
+  }
+
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(fn, fn)
     this.mutationQueue = next.catch(() => {})

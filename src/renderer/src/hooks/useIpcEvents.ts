@@ -1198,6 +1198,13 @@ export function useIpcEvents(): void {
       })
     )
 
+    const unsubscribeOpenSkillShare = window.api.ui.onOpenSkillShare?.((shareId) => {
+      useAppStore.getState().openSkillShare(shareId)
+    })
+    if (unsubscribeOpenSkillShare) {
+      unsubs.push(unsubscribeOpenSkillShare)
+    }
+
     // Why: a tray "Settings…" click can fire before this attaches; consume any queued intent (?. guards stale preload).
     void window.api.ui
       .consumePendingOpenSettings?.()
@@ -1207,6 +1214,17 @@ export function useIpcEvents(): void {
         }
       })
       .catch(() => {})
+
+    const pendingSkillShare = window.api.ui.consumePendingSkillShare?.()
+    if (pendingSkillShare && typeof pendingSkillShare.then === 'function') {
+      void pendingSkillShare
+        .then((shareId) => {
+          if (shareId) {
+            useAppStore.getState().openSkillShare(shareId)
+          }
+        })
+        .catch(() => {})
+    }
 
     unsubs.push(
       window.api.ui.onOpenSetupGuide?.(() => {
@@ -3185,6 +3203,7 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         sessionBoundary: data.sessionBoundary,
+        turnCompletedAt: data.turnCompletedAt,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })
@@ -3388,7 +3407,7 @@ export function useIpcEvents(): void {
             : undefined
       }
       const applyPostCommitNotification = (): void => {
-        if (options?.replay !== true && statusWorktreeId) {
+        if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
           // Why: local Codex/Claude hooks arrive via this main-process IPC path, not the PTY OSC fallback, so task-complete notifications must observe accepted hook state here too.
           const notificationPayload =
             typeof data.stateStartedAt === 'number'
@@ -3397,7 +3416,8 @@ export function useIpcEvents(): void {
           observeAgentHookCompletionForNotification({
             paneKey,
             worktreeId: statusWorktreeId,
-            payload: notificationPayload
+            payload: notificationPayload,
+            ...(options?.replay === true ? { seedOnly: true } : {})
           })
         }
       }

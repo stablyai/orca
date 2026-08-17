@@ -62,7 +62,10 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
+    const resolver = vi.fn((target) => ({
+      kind: 'ready' as const,
+      codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
+    }))
     service.setCodexHomePathResolver(resolver)
 
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -75,10 +78,62 @@ describe('RateLimitService', () => {
     )
   })
 
+  it.each([
+    [
+      'account-change refresh',
+      (service: RateLimitService) => service.refreshForCodexAccountChange(null, { runtime: 'host' })
+    ],
+    [
+      'target refresh',
+      (service: RateLimitService) => service.refreshCodexForTarget({ runtime: 'host' })
+    ]
+  ])('settles %s when managed-home resolution skips before the fetch', async (_label, refresh) => {
+    const service = new RateLimitService()
+    service.setCodexHomePathResolver(() => ({ kind: 'skip' }))
+
+    await refresh(service)
+
+    expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().codex).toBeNull()
+  })
+
+  it('settles without applying a result when the managed home becomes unavailable mid-fetch', async () => {
+    const service = new RateLimitService()
+    const resolver = vi
+      .fn()
+      .mockReturnValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
+      .mockReturnValue({ kind: 'skip' })
+    service.setCodexHomePathResolver(resolver)
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refreshForCodexAccountChange(null, { runtime: 'host' })
+
+    expect(resolver).toHaveBeenCalledTimes(2)
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+    expect(service.getState().codex).toBeNull()
+  })
+
+  it('settles the Codex slot when its home becomes unavailable during a full refresh', async () => {
+    const service = new RateLimitService()
+    service.setCodexHomePathResolver(
+      vi
+        .fn()
+        .mockReturnValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
+        .mockReturnValue({ kind: 'skip' })
+    )
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+    expect(service.getState().codex).toBeNull()
+  })
+
   it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
     const service = new RateLimitService()
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'
-    service.setCodexHomePathResolver(() => '/tmp/codex-home')
+    service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/codex-home' }))
     vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
 
@@ -108,7 +163,7 @@ describe('RateLimitService', () => {
     )
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
 
-    service.setCodexHomePathResolver(() => '/tmp/new-selection')
+    service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/new-selection' }))
     const pending = service.consumeCodexRateLimitResetCredit({
       idempotencyKey,
       target: { runtime: 'host', wslDistro: null },
@@ -143,9 +198,10 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const idempotencyKey = '33333333-3333-4333-8333-333333333333'
     const hostRefresh = deferred<ProviderRateLimits>()
-    service.setCodexHomePathResolver((target) =>
-      target?.runtime === 'wsl' ? '/tmp/wsl-selection' : '/tmp/approved-selection'
-    )
+    service.setCodexHomePathResolver((target) => ({
+      kind: 'ready',
+      codexHomePath: target?.runtime === 'wsl' ? '/tmp/wsl-selection' : '/tmp/approved-selection'
+    }))
     vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
     vi.mocked(fetchCodexRateLimits)
       .mockReturnValueOnce(hostRefresh.promise)
@@ -177,7 +233,10 @@ describe('RateLimitService', () => {
   it('does not let an older full refresh overwrite the post-reset Codex state', async () => {
     const service = new RateLimitService()
     const slowClaude = deferred<ProviderRateLimits>()
-    service.setCodexHomePathResolver(() => '/tmp/approved-selection')
+    service.setCodexHomePathResolver(() => ({
+      kind: 'ready',
+      codexHomePath: '/tmp/approved-selection'
+    }))
     vi.mocked(fetchClaudeRateLimits).mockReturnValueOnce(slowClaude.promise)
     vi.mocked(fetchCodexRateLimits)
       .mockResolvedValueOnce(okProvider('codex', 100, Date.now()))
@@ -205,7 +264,10 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
+    const resolver = vi.fn((target) => ({
+      kind: 'ready' as const,
+      codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
+    }))
     service.setCodexHomePathResolver(resolver)
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
@@ -222,7 +284,7 @@ describe('RateLimitService', () => {
 
   it('does not fetch host Codex usage when WSL home resolution fails', async () => {
     const service = new RateLimitService()
-    const resolver = vi.fn(() => null)
+    const resolver = vi.fn(() => ({ kind: 'ready' as const, codexHomePath: null }))
     service.setCodexHomePathResolver(resolver)
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
@@ -356,9 +418,10 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    service.setCodexHomePathResolver((target) =>
-      target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
-    )
+    service.setCodexHomePathResolver((target) => ({
+      kind: 'ready',
+      codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
+    }))
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits)
@@ -379,7 +442,7 @@ describe('RateLimitService', () => {
   it('caches an outgoing weekly-only Codex account so the switcher keeps its inline bars', async () => {
     const service = new RateLimitService()
     service.setInactiveCodexAccountsResolver(() => [
-      { id: 'account-weekly', managedHomePath: '/tmp/account-weekly/home' }
+      inactiveCodexAccount('account-weekly', '/tmp/account-weekly/home')
     ])
 
     const weeklyOnly: ProviderRateLimits = {
@@ -414,7 +477,7 @@ describe('RateLimitService', () => {
   it('does not cache an outgoing Codex account that has no usage windows', async () => {
     const service = new RateLimitService()
     service.setInactiveCodexAccountsResolver(() => [
-      { id: 'account-empty', managedHomePath: '/tmp/account-empty/home' }
+      inactiveCodexAccount('account-empty', '/tmp/account-empty/home')
     ])
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -468,3 +531,10 @@ describe('RateLimitService', () => {
     )
   })
 })
+
+function inactiveCodexAccount(id: string, managedHomePath: string) {
+  return {
+    id,
+    resolveHome: () => ({ kind: 'ready' as const, managedHomePath })
+  }
+}

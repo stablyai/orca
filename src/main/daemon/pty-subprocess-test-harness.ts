@@ -15,6 +15,32 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
+/**
+ * Makes the daemon look like it is sitting in a deleted cwd, without moving the
+ * test process there.
+ *
+ * Why: `process.cwd()` and `process.chdir()` are process-global. The previous
+ * version of these tests really did chdir into a temp dir and delete it, so every
+ * other test file sharing the worker saw a missing cwd for that window — an
+ * intermittent failure that got likelier once this suite was split across files.
+ * Stubbing keeps the cwd-repair assertion exact and the process untouched.
+ */
+export function stubMissingDaemonCwd(): {
+  chdirSpy: Mock<(directory: string) => void>
+  restoreCwdStubs: () => void
+} {
+  const missingDaemonCwd = join(tmpdir(), 'orca-daemon-cwd-that-does-not-exist')
+  const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(missingDaemonCwd)
+  const chdirSpy = vi.spyOn(process, 'chdir').mockImplementation(() => {})
+  return {
+    chdirSpy: chdirSpy as unknown as Mock<(directory: string) => void>,
+    restoreCwdStubs: () => {
+      cwdSpy.mockRestore()
+      chdirSpy.mockRestore()
+    }
+  }
+}
+
 /** Annotated so declaration emit never has to name @vitest/spy internals. */
 export type MockPtyProcess = {
   pid: number

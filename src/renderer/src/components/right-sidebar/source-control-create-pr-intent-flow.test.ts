@@ -12,7 +12,7 @@ import {
   resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent
-} from './source-control-create-pr-intent-flow'
+} from './source-control/review/create-pr-intent-flow'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 describe('source-control Create PR intent flow helpers', () => {

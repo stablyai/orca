@@ -896,6 +896,8 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  // Why: older hosts strip this optional intent and retain their direct-send behavior.
+  agentPrompt: z.literal(true).optional(),
   resolvedLaunchDraft: z
     .object({
       text: z.string(),
@@ -1224,7 +1226,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId }) => {
+    handler: async (params, { runtime, clientId, signal }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
@@ -1234,6 +1236,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           !isTerminalQueryReply(params.text) ||
           params.enter === true ||
           params.interrupt === true ||
+          params.agentPrompt === true ||
           params.requireAgentStatus !== undefined ||
           params.client?.type !== 'mobile' ||
           !queryReplyClientId ||
@@ -1351,6 +1354,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
+      const useSettledAgentPrompt =
+        params.agentPrompt === true &&
+        hasText &&
+        params.enter === true &&
+        params.interrupt !== true &&
+        params.client?.type === 'desktop' &&
+        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -1363,21 +1373,26 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = await runtime.sendTerminal(
-          params.terminal,
-          {
-            text: params.text,
-            enter: params.enter === true,
-            interrupt: params.interrupt === true
-          },
-          {
-            beforeWrite,
-            ...(reserveWrite ? { reserveWrite } : {}),
-            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
-              : {})
-          }
-        )
+        result = useSettledAgentPrompt
+          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              beforeWrite,
+              signal
+            })
+          : await runtime.sendTerminal(
+              params.terminal,
+              {
+                text: params.text,
+                enter: params.enter === true,
+                interrupt: params.interrupt === true
+              },
+              {
+                beforeWrite,
+                ...(reserveWrite ? { reserveWrite } : {}),
+                ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+                  ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+                  : {})
+              }
+            )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)

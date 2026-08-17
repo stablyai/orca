@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultTabsLaunch } from './hooks'
+import { getDefaultTabsLaunch } from './effective-hook-config'
 import {
   makeHookTestRepo,
   TEST_REPO_ORCA_YAML_PATH,
@@ -326,7 +326,7 @@ describe('shouldRunSetupForCreate', () => {
     })
 
   it('requires an explicit decision when the repo policy is ask', async () => {
-    const { shouldRunSetupForCreate } = await import('./hooks')
+    const { shouldRunSetupForCreate } = await import('./effective-hook-config')
 
     expect(() => shouldRunSetupForCreate(makeRepo('ask'))).toThrow(
       'Setup decision required for this repository'
@@ -334,14 +334,14 @@ describe('shouldRunSetupForCreate', () => {
   })
 
   it('uses the repo default when the caller inherits', async () => {
-    const { shouldRunSetupForCreate } = await import('./hooks')
+    const { shouldRunSetupForCreate } = await import('./effective-hook-config')
 
     expect(shouldRunSetupForCreate(makeRepo('run-by-default'))).toBe(true)
     expect(shouldRunSetupForCreate(makeRepo('skip-by-default'))).toBe(false)
   })
 
   it('lets the caller override the repo default per create', async () => {
-    const { shouldRunSetupForCreate } = await import('./hooks')
+    const { shouldRunSetupForCreate } = await import('./effective-hook-config')
 
     expect(shouldRunSetupForCreate(makeRepo('skip-by-default'), 'run')).toBe(true)
     expect(shouldRunSetupForCreate(makeRepo('run-by-default'), 'skip')).toBe(false)

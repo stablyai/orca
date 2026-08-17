@@ -128,9 +128,12 @@ describe('SshGitProvider', () => {
       expect(mux.request).toHaveBeenNthCalledWith(1, 'git.worktreeIsClean', {
         worktreePath: '/home/user/feat'
       })
-      expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
-        worktreePath: '/home/user/feat'
-      })
+      expect(mux.request).toHaveBeenNthCalledWith(
+        2,
+        'git.status',
+        { worktreePath: '/home/user/feat' },
+        { signal: expect.any(AbortSignal) }
+      )
       expect(result).toEqual({ clean: false, stdout: 'untracked untracked: scratch.txt' })
     } finally {
       warnSpy.mockRestore()
@@ -151,9 +154,12 @@ describe('SshGitProvider', () => {
       await expect(
         provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
       ).resolves.toEqual({ clean: true })
-      expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
-        worktreePath: '/home/user/feat'
-      })
+      expect(mux.request).toHaveBeenNthCalledWith(
+        2,
+        'git.status',
+        { worktreePath: '/home/user/feat' },
+        { signal: expect.any(AbortSignal) }
+      )
     } finally {
       warnSpy.mockRestore()
     }

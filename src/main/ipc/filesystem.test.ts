@@ -69,7 +69,10 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { registerWorktreeRootsForRepo, invalidateAuthorizedRootsCache } from './filesystem-auth'
+import {
+  registerWorktreeRootsForRepo,
+  invalidateAuthorizedRootsCache
+} from './registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {

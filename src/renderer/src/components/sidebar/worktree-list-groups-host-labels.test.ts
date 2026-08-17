@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
+import { buildRows } from './worktree-list/grouping/build-rows'
+import { getGroupKeyForWorktree } from './worktree-list/grouping/worktree-group-keys'
 import {
   LOCAL_HOST_LABEL,
   repo,

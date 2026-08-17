@@ -28,13 +28,11 @@ import { clampGrabPayload } from './browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from './browser-grab-screenshot'
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
-import {
-  resolveRendererWebContents,
-  setupGrabShortcutForwarding,
-  setupGuestContextMenu,
-  setupGuestMouseWheelZoomForwarding,
-  setupGuestShortcutForwarding
-} from './browser-guest-ui'
+import { resolveRendererWebContents } from './browser-guest-renderer-target'
+import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
+import { setupGuestContextMenu } from './browser-guest-context-menu'
+import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
+import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import {
@@ -1334,6 +1332,17 @@ export class BrowserManager {
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
     return this.worktreeIdByTabId.get(browserTabId)
+  }
+
+  getRendererContextForGuest(
+    guestWebContentsId: number
+  ): { browserPageId: string; renderer: Electron.WebContents } | null {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return null
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    return renderer ? { browserPageId, renderer } : null
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {

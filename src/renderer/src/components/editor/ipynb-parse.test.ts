@@ -1,15 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  concatIpynbMultilineString,
   deleteIpynbCell,
   insertIpynbCell,
   moveIpynbCell,
-  parseIpynb,
-  translateKernelLanguageToMonaco,
   updateIpynbCellKind,
   updateIpynbCellOutputs,
   updateIpynbCellSource,
   updateIpynbCellSources
+} from './ipynb-cell-mutations'
+import {
+  concatIpynbMultilineString,
+  parseIpynb,
+  translateKernelLanguageToMonaco
 } from './ipynb-parse'
 
 afterEach(() => {

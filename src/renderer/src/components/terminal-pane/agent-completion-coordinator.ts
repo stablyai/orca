@@ -31,10 +31,29 @@ type LastCompletionIdentity = {
   source: CompletionIdentitySource
   identity: string
   agentIdentity: string | null
+  /** End time of the Claude lead turn already announced while the pane stayed `working` for background inventory. The later all-clear `done` repeats this value and must not raise a second banner. */
+  lastTurnCompletedAtNotified?: number
 }
 
 // Why: worktree switches remount a pane while the PTY/hook stream stays live, so stale completion replays must outlive one coordinator.
 const lastCompletionIdentityByPaneKey = new Map<string, LastCompletionIdentity>()
+// Why: a late-pair stamped tail must suppress its replayed all-clear even though no banner was eligible.
+const handledTurnCompletedAtsByPaneKey = new Map<string, number[]>()
+// Why: title fallback stays blocked only until the stamped background tail reaches its all-clear.
+const pendingStampedTailByPaneKey = new Map<
+  string,
+  {
+    turnCompletedAt: number
+    originLane: string
+    eligibleWorkingBoundaryByLane: Map<string, number>
+    consumedIdentityByLane: Map<string, string>
+    tailOpen: boolean
+  }
+>()
+// Why: a sibling all-clear belongs to the stamped tail only while its exact working interval is still current.
+const workingBoundaryByPaneKey = new Map<string, Map<string, number>>()
+const coordinatorCountByPaneKey = new Map<string, number>()
+let nextCoordinatorId = 1
 
 const IDLE_POLL_INTERVAL_MS = 2_000
 const ACTIVE_POLL_INTERVAL_MS = 750
@@ -51,12 +70,17 @@ const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
 // Why: under "Approve for me" Codex resumes almost immediately, so debounce the OS attention notification so a self-resolving pause raises no false banner (#8387).
 const CODEX_ATTENTION_QUIET_MS = 1_500
+const HANDLED_TURN_STAMP_LIMIT = 16
 
 const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
   active: ACTIVE_POLL_INTERVAL_MS,
   idle: IDLE_POLL_INTERVAL_MS,
   hidden: HIDDEN_POLL_INTERVAL_MS,
   'no-evidence': NO_EVIDENCE_POLL_INTERVAL_MS
+}
+
+function isFiniteTurnCompletedAt(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isCompletionHookState(state: ParsedAgentStatusPayload['state']): boolean {
@@ -72,6 +96,15 @@ function isAttentionHookState(state: ParsedAgentStatusPayload['state']): boolean
 export function createAgentCompletionCoordinator(
   options: AgentCompletionCoordinatorOptions
 ): AgentCompletionCoordinator {
+  const coordinatorId = nextCoordinatorId++
+  const coordinatorLane = options.statusLane ?? `coordinator:${coordinatorId}`
+  let inheritedWorkingBoundary = pendingStampedTailByPaneKey
+    .get(options.paneKey)
+    ?.eligibleWorkingBoundaryByLane.get(coordinatorLane)
+  coordinatorCountByPaneKey.set(
+    options.paneKey,
+    (coordinatorCountByPaneKey.get(options.paneKey) ?? 0) + 1
+  )
   let disposed = false
   let agentIdentityEstablished = false
   let hasAgentRunEvidence = false
@@ -169,15 +202,113 @@ export function createAgentCompletionCoordinator(
     return `${source}:${currentTurn}:${processSession}`
   }
 
+  function completionIdentityFor(
+    state: string,
+    agentType: string | undefined,
+    timestamp: number
+  ): string {
+    return [state, agentType ?? '', String(Math.trunc(timestamp))].join(':')
+  }
+
   function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
-    if (typeof payload.stateStartedAt !== 'number' || !Number.isFinite(payload.stateStartedAt)) {
+    // Why: `stateStartedAt` is pinned while the reported state does not change. A Claude pane held at `working` by background inventory would otherwise give every turn in the run the same identity.
+    const timestamp = isFiniteTurnCompletedAt(payload.turnCompletedAt)
+      ? payload.turnCompletedAt
+      : payload.stateStartedAt
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
       return null
     }
-    return [
-      payload.state,
-      payload.agentType ?? '',
-      String(Math.trunc(payload.stateStartedAt))
-    ].join(':')
+    return completionIdentityFor(payload.state, payload.agentType, timestamp)
+  }
+
+  function turnCompletedAtAlreadyHandled(turnCompletedAt: number): boolean {
+    return (
+      handledTurnCompletedAtsByPaneKey.get(options.paneKey)?.includes(turnCompletedAt) === true ||
+      lastCompletionIdentityByPaneKey.get(options.paneKey)?.lastTurnCompletedAtNotified ===
+        turnCompletedAt
+    )
+  }
+
+  function rememberHandledTurnCompletedAt(turnCompletedAt: number): void {
+    const handled = handledTurnCompletedAtsByPaneKey.get(options.paneKey) ?? []
+    if (handled.includes(turnCompletedAt)) {
+      return
+    }
+    handled.push(turnCompletedAt)
+    if (handled.length > HANDLED_TURN_STAMP_LIMIT) {
+      handled.shift()
+    }
+    handledTurnCompletedAtsByPaneKey.set(options.paneKey, handled)
+  }
+
+  function recordWorkingBoundary(stateStartedAt: number | undefined): void {
+    let boundaries = workingBoundaryByPaneKey.get(options.paneKey)
+    if (!isFiniteTurnCompletedAt(stateStartedAt)) {
+      boundaries?.delete(coordinatorLane)
+      if (boundaries?.size === 0) {
+        workingBoundaryByPaneKey.delete(options.paneKey)
+      }
+      return
+    }
+    if (!boundaries) {
+      boundaries = new Map()
+      workingBoundaryByPaneKey.set(options.paneKey, boundaries)
+    }
+    inheritedWorkingBoundary = undefined
+    boundaries.set(coordinatorLane, stateStartedAt)
+  }
+
+  function clearWorkingBoundary(): void {
+    inheritedWorkingBoundary = undefined
+    const boundaries = workingBoundaryByPaneKey.get(options.paneKey)
+    boundaries?.delete(coordinatorLane)
+    if (boundaries?.size === 0) {
+      workingBoundaryByPaneKey.delete(options.paneKey)
+    }
+  }
+
+  function consumePendingStampedTailForAgent(
+    agentIdentity: string | null,
+    completionIdentity: string | null
+  ): boolean {
+    const pendingStampedTail = pendingStampedTailByPaneKey.get(options.paneKey)
+    const stampedCompletion = lastCompletionIdentityByPaneKey.get(options.paneKey)
+    const currentWorkingBoundary = workingBoundaryByPaneKey
+      .get(options.paneKey)
+      ?.get(coordinatorLane)
+    const eligibleWorkingBoundary =
+      pendingStampedTail?.eligibleWorkingBoundaryByLane.get(coordinatorLane)
+    if (
+      pendingStampedTail === undefined ||
+      stampedCompletion?.lastTurnCompletedAtNotified !== pendingStampedTail.turnCompletedAt ||
+      agentIdentity === null ||
+      stampedCompletion.agentIdentity !== agentIdentity ||
+      eligibleWorkingBoundary === undefined ||
+      (currentWorkingBoundary !== eligibleWorkingBoundary &&
+        inheritedWorkingBoundary !== eligibleWorkingBoundary)
+    ) {
+      return false
+    }
+    pendingStampedTail.eligibleWorkingBoundaryByLane.delete(coordinatorLane)
+    inheritedWorkingBoundary = undefined
+    if (completionIdentity) {
+      pendingStampedTail.consumedIdentityByLane.set(coordinatorLane, completionIdentity)
+    }
+    pendingStampedTail.tailOpen = pendingStampedTail.eligibleWorkingBoundaryByLane.size > 0
+    return true
+  }
+
+  function consumeStampedTailForCurrentCoordinator(turnCompletedAt: number): void {
+    const pendingStampedTail = pendingStampedTailByPaneKey.get(options.paneKey)
+    if (pendingStampedTail?.turnCompletedAt !== turnCompletedAt) {
+      return
+    }
+    pendingStampedTail.eligibleWorkingBoundaryByLane.delete(coordinatorLane)
+    pendingStampedTail.tailOpen = pendingStampedTail.eligibleWorkingBoundaryByLane.size > 0
+  }
+
+  function hasUnconsumedStampedTail(): boolean {
+    return pendingStampedTailByPaneKey.get(options.paneKey)?.tailOpen === true
   }
 
   function hookCompletionAgentIdentity(payload: AgentCompletionStatusSnapshot): string | null {
@@ -247,12 +378,27 @@ export function createAgentCompletionCoordinator(
     if (!completionIdentity) {
       return false
     }
+    if (
+      completionIdentity.source === 'hook' &&
+      pendingStampedTailByPaneKey
+        .get(options.paneKey)
+        ?.consumedIdentityByLane.get(coordinatorLane) === completionIdentity.identity
+    ) {
+      return true
+    }
     const previous = lastCompletionIdentityByPaneKey.get(options.paneKey)
     if (!previous) {
       return false
     }
     if (previous.source === completionIdentity.source) {
-      return previous.identity === completionIdentity.identity
+      return (
+        previous.identity === completionIdentity.identity ||
+        (completionIdentity.source === 'hook' &&
+          consumePendingStampedTailForAgent(
+            completionIdentity.agentIdentity,
+            completionIdentity.identity
+          ))
+      )
     }
     return (
       previous.agentIdentity !== null &&
@@ -269,24 +415,26 @@ export function createAgentCompletionCoordinator(
       terminalIdleConfirmed?: boolean
       agentStatus?: AgentCompletionStatusSnapshot
       completionIdentity?: LastCompletionIdentity | null
+      /** Announce only. The pane is still genuinely `working` (Claude background inventory), so the synthetic `done` must not run pane lifecycle. */
+      notifyWithoutLifecycle?: boolean
     } = {}
-  ): void {
+  ): boolean {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
-      return
+      return false
     }
     if (requiresFreshWorking || lastCompletedTurn === currentTurn) {
-      return
+      return false
     }
     if (!options.isLive() || !hasAgentRunEvidence) {
-      return
+      return false
     }
     const now = Date.now()
     const token = completionToken(source)
     if (token === lastCompletionToken && now - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS) {
-      return
+      return false
     }
     if (completionIdentityAlreadyNotified(optionsOverride.completionIdentity)) {
-      return
+      return false
     }
     lastCompletionToken = token
     lastCompletionAt = now
@@ -297,8 +445,19 @@ export function createAgentCompletionCoordinator(
     clearPendingCodexAttention()
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
+      if (optionsOverride.completionIdentity.lastTurnCompletedAtNotified !== undefined) {
+        rememberHandledTurnCompletedAt(
+          optionsOverride.completionIdentity.lastTurnCompletedAtNotified
+        )
+      } else {
+        pendingStampedTailByPaneKey.delete(options.paneKey)
+      }
     }
-    if (source === 'hook' && optionsOverride.agentStatus) {
+    if (
+      source === 'hook' &&
+      optionsOverride.agentStatus &&
+      optionsOverride.notifyWithoutLifecycle !== true
+    ) {
       options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
     }
     if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
@@ -309,9 +468,17 @@ export function createAgentCompletionCoordinator(
         ...(optionsOverride.terminalIdleConfirmed === true ? { terminalIdleConfirmed: true } : {}),
         ...(optionsOverride.agentStatus ? { agentStatus: optionsOverride.agentStatus } : {})
       })
+    } else if (optionsOverride.notifyWithoutLifecycle === true && optionsOverride.agentStatus) {
+      // Why: the pane is still `working`; the synthetic done must carry its own snapshot or the notification would read the pinned working row.
+      options.dispatchCompletion(title, {
+        source,
+        quietedHookDone: false,
+        agentStatus: optionsOverride.agentStatus
+      })
     } else {
       options.dispatchCompletion(title)
     }
+    return true
   }
 
   function dispatchAttentionNotification(payload: AgentCompletionStatusSnapshot): void {
@@ -449,6 +616,17 @@ export function createAgentCompletionCoordinator(
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     pendingProcessExitAgent = null
+    const replayIdentity = lastCompletionIdentityByPaneKey.get(options.paneKey)
+    if (
+      !lastForegroundAgent &&
+      processSession > 0 &&
+      !hasUnconsumedStampedTail() &&
+      replayIdentity?.source === 'hook' &&
+      replayIdentity.agentIdentity === process.agent
+    ) {
+      // Why: the prior observed process exited and this is a new same-agent process session, so its fallback completion cannot replay the old hook turn.
+      lastCompletionIdentityByPaneKey.delete(options.paneKey)
+    }
     if (lastForegroundAgent?.agent !== process.agent) {
       if (lastForegroundAgent && hasAgentRunEvidence) {
         if (
@@ -509,7 +687,8 @@ export function createAgentCompletionCoordinator(
       const exited = lastForegroundAgent
       pendingProcessExitAgent = null
       if (options.shouldSuppressConfirmedProcessExitCompletion?.(exited) !== true) {
-        dispatchCompletion('process-exit', exited.processName, {
+        const replayIdentityBeforeExit = lastCompletionIdentityByPaneKey.get(options.paneKey)
+        const committed = dispatchCompletion('process-exit', exited.processName, {
           terminalIdleConfirmed: true,
           completionIdentity: {
             source: 'process-exit',
@@ -517,6 +696,15 @@ export function createAgentCompletionCoordinator(
             agentIdentity: exited.agent
           }
         })
+        if (
+          !committed &&
+          !hasUnconsumedStampedTail() &&
+          replayIdentityBeforeExit?.source === 'hook' &&
+          replayIdentityBeforeExit.agentIdentity === exited.agent
+        ) {
+          // Why: this confirmed exit consumed the hook turn's process backstop; a later process instance must be allowed to complete independently.
+          lastCompletionIdentityByPaneKey.delete(options.paneKey)
+        }
       }
       lastForegroundAgent = null
       clearAgentRunEvidence()
@@ -697,7 +885,9 @@ export function createAgentCompletionCoordinator(
     clearPendingCodexAttention()
     workingStatusObserved = true
     requiresFreshWorking = false
-    lastCompletionIdentityByPaneKey.delete(options.paneKey)
+    if (!hasUnconsumedStampedTail()) {
+      lastCompletionIdentityByPaneKey.delete(options.paneKey)
+    }
     currentTurn += 1
     dropPendingTitle()
     return true
@@ -792,6 +982,67 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (payload.state === 'working') {
+      const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
+        ? payload.turnCompletedAt
+        : undefined
+      if (turnCompletedAt !== undefined) {
+        const alreadyHandled = turnCompletedAtAlreadyHandled(turnCompletedAt)
+        if (!alreadyHandled) {
+          const eligibleWorkingBoundaryByLane = new Map(
+            workingBoundaryByPaneKey.get(options.paneKey)
+          )
+          eligibleWorkingBoundaryByLane.delete(coordinatorLane)
+          pendingStampedTailByPaneKey.set(options.paneKey, {
+            turnCompletedAt,
+            originLane: coordinatorLane,
+            eligibleWorkingBoundaryByLane,
+            consumedIdentityByLane: new Map(),
+            tailOpen: true
+          })
+        }
+        // Why: Claude's lead Stop already ended the turn; the pane stays `working` only for background inventory. Announce now, keep lifecycle on the reported working row.
+        if (
+          workingStatusObserved &&
+          !alreadyHandled &&
+          lastCompletionIdentity?.lastTurnCompletedAtNotified !== turnCompletedAt
+        ) {
+          const completionSnapshot: AgentCompletionStatusSnapshot = {
+            ...payload,
+            state: 'done',
+            stateStartedAt: turnCompletedAt,
+            turnCompletedAt
+          }
+          const completionIdentity: LastCompletionIdentity = {
+            source: 'hook',
+            identity: completionIdentityFor('done', payload.agentType, turnCompletedAt),
+            agentIdentity: hookCompletionAgentIdentity(payload),
+            lastTurnCompletedAtNotified: turnCompletedAt
+          }
+          const committed = dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+            notifyWithoutLifecycle: true,
+            agentStatus: completionSnapshot,
+            completionIdentity
+          })
+          if (committed) {
+            lastCompletionIdentity = completionIdentity
+          }
+        } else if (!workingStatusObserved) {
+          rememberHandledTurnCompletedAt(turnCompletedAt)
+        }
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
+      const pendingStampedTail = pendingStampedTailByPaneKey.get(options.paneKey)
+      if (pendingStampedTail?.originLane === coordinatorLane) {
+        pendingStampedTailByPaneKey.delete(options.paneKey)
+        if (
+          lastCompletionIdentityByPaneKey.get(options.paneKey)?.lastTurnCompletedAtNotified ===
+          pendingStampedTail.turnCompletedAt
+        ) {
+          lastCompletionIdentityByPaneKey.delete(options.paneKey)
+        }
+      }
+      recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
       // Why: resumed work cancels the debounced attention so a self-resolving pause never notifies.
       clearPendingCodexAttention()
@@ -824,6 +1075,35 @@ export function createAgentCompletionCoordinator(
         establishAgentEvidence()
       }
       const hookIdentity = hookCompletionIdentity(payload)
+      const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
+        ? payload.turnCompletedAt
+        : undefined
+      if (
+        turnCompletedAt === undefined &&
+        consumePendingStampedTailForAgent(hookCompletionAgentIdentity(payload), hookIdentity)
+      ) {
+        // Why: paired host hooks carry the stamp while the sibling OSC coordinator sees only the matching all-clear.
+        lastCompletionIdentity = hookIdentity
+          ? {
+              source: 'hook',
+              identity: hookIdentity,
+              agentIdentity: hookCompletionAgentIdentity(payload)
+            }
+          : null
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
+      if (
+        turnCompletedAt !== undefined &&
+        (turnCompletedAtAlreadyHandled(turnCompletedAt) ||
+          lastCompletionIdentity?.lastTurnCompletedAtNotified === turnCompletedAt ||
+          lastCompletedTurn === currentTurn)
+      ) {
+        // Why: this `done` is the background all-clear of a turn already announced (or completed from another source). Keep pane lifecycle; do not raise a second banner.
+        consumeStampedTailForCurrentCoordinator(turnCompletedAt)
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
       if (
         hookIdentity &&
         lastCompletionIdentity?.source === 'hook' &&
@@ -869,6 +1149,14 @@ export function createAgentCompletionCoordinator(
     }
   }
 
+  function seedHookStatus(payload: AgentCompletionStatusSnapshot): void {
+    const { turnCompletedAt, ...unstampedPayload } = payload
+    if (isFiniteTurnCompletedAt(turnCompletedAt)) {
+      rememberHandledTurnCompletedAt(turnCompletedAt)
+    }
+    observeHookStatus(unstampedPayload)
+  }
+
   function markTitleCompletionNotified(title: string): void {
     lastCompletionIdentity = {
       source: 'title',
@@ -903,17 +1191,31 @@ export function createAgentCompletionCoordinator(
     lastForegroundAgent = null
     requiresFreshWorking = options.requireFreshWorking ?? false
     inspectionGeneration += 1
+    clearWorkingBoundary()
   }
 
   function dispose(): void {
+    if (disposed) {
+      return
+    }
     disposed = true
     clearPollTimer()
     clearPendingHookDone()
     clearPendingCodexAttention()
     dropPendingTitle()
-    // Why: module-scoped identity survives a live-stream remount; evict only on genuine teardown (isLive() false) so it can't leak per closed pane.
-    if (!options.isLive()) {
+    clearWorkingBoundary()
+    const remainingCoordinators = (coordinatorCountByPaneKey.get(options.paneKey) ?? 1) - 1
+    if (remainingCoordinators > 0) {
+      coordinatorCountByPaneKey.set(options.paneKey, remainingCoordinators)
+    } else {
+      coordinatorCountByPaneKey.delete(options.paneKey)
+    }
+    // Why: one pane can have hook and mounted coordinators; a remount disposal must not erase replay state still owned by its live sibling.
+    if (remainingCoordinators <= 0 && !options.isLive()) {
       lastCompletionIdentityByPaneKey.delete(options.paneKey)
+      handledTurnCompletedAtsByPaneKey.delete(options.paneKey)
+      pendingStampedTailByPaneKey.delete(options.paneKey)
+      workingBoundaryByPaneKey.delete(options.paneKey)
     }
   }
 
@@ -923,6 +1225,7 @@ export function createAgentCompletionCoordinator(
     observeTitleWorking,
     observeOutputActivity,
     observeHookStatus,
+    seedHookStatus,
     startProcessTracking,
     hasPendingHookDoneCompletion,
     resetCompletionState,
@@ -932,8 +1235,18 @@ export function createAgentCompletionCoordinator(
 
 export function resetAgentCompletionCoordinatorIdentitiesForTest(): void {
   lastCompletionIdentityByPaneKey.clear()
+  handledTurnCompletedAtsByPaneKey.clear()
+  pendingStampedTailByPaneKey.clear()
+  workingBoundaryByPaneKey.clear()
+  coordinatorCountByPaneKey.clear()
+  nextCoordinatorId = 1
 }
 
 export function getAgentCompletionCoordinatorIdentityCountForTest(): number {
-  return lastCompletionIdentityByPaneKey.size
+  return new Set([
+    ...lastCompletionIdentityByPaneKey.keys(),
+    ...handledTurnCompletedAtsByPaneKey.keys(),
+    ...pendingStampedTailByPaneKey.keys(),
+    ...workingBoundaryByPaneKey.keys()
+  ]).size
 }
