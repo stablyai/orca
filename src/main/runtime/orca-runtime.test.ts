@@ -15724,6 +15724,56 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('reports the trampoline pane-exit status when login(1) exits 0', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 1000 })
+    runtime.onPtyData('pty-bg', '\x1b]777;orca-pane-exit:42\x07', 100)
+    runtime.onPtyExit('pty-bg', 0)
+
+    await expect(waiting).resolves.toMatchObject({
+      handle,
+      condition: 'exit',
+      satisfied: true,
+      status: 'exited',
+      exitCode: 42
+    })
+  })
+
+  it('does not treat a malformed pane-exit marker as a command status', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 1000 })
+    runtime.onPtyData('pty-bg', '\x1b]777;orca-pane-exit:42junk\x07', 100)
+    runtime.onPtyExit('pty-bg', 0)
+
+    await expect(waiting).resolves.toMatchObject({
+      handle,
+      condition: 'exit',
+      satisfied: true,
+      status: 'exited',
+      exitCode: 0
+    })
+  })
+
   it('observes setup command completion without waiting for its interactive shell to exit', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

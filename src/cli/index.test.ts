@@ -498,6 +498,15 @@ describe('orca root help', () => {
     expect(terminalHelp).toContain(
       'orca terminal create --worktree active --command "codex" --json'
     )
+    expect(terminalHelp).toContain('prefix --command with exec')
+    expect(callMock).not.toHaveBeenCalled()
+
+    logSpy.mockClear()
+    await main(['terminal', 'wait', '--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      'Prefix terminal create --command with exec so the command replaces the shell'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 })

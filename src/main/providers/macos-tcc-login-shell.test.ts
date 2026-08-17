@@ -25,6 +25,7 @@ vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
 }))
 
 import {
+  MACOS_TCC_SHELL_TRAMPOLINE,
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive,
   resetMacosLoginShellPreflightForTests,
@@ -86,7 +87,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -362,7 +363,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/bin/bash',
         '/bin/bash',
@@ -387,7 +388,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/opt/homebrew/bin/fish',
         '/bin/zsh',
@@ -409,7 +410,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -437,7 +438,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/Applications/Custom Shell/bin/fish=debug',
         '/Applications/Custom Shell/bin/fish=debug',
@@ -447,13 +448,37 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     })
   })
 
-  it('terminates exec option parsing before a dash-prefixed shell name', async () => {
+  it('terminates command option parsing before a dash-prefixed shell name', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()
     const wrapped = wrapShellSpawnForMacosTccAttribution('-custom-shell', ['-l'])
 
-    expect(wrapped.args).toContain('export SHELL="$1"; shift; exec -l -- "$@"')
+    expect(wrapped.args).toContain(
+      'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"'
+    )
     expect(wrapped.args.slice(-2)).toEqual(['-custom-shell', '-l'])
+  })
+
+  itOnPosixHost('reports a non-zero inner command status through the pane-exit OSC', () => {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '--noprofile',
+        '--norc',
+        '-p',
+        '-c',
+        MACOS_TCC_SHELL_TRAMPOLINE,
+        'orca-tcc-login',
+        '/bin/sh',
+        '/bin/sh',
+        '-c',
+        'exit 42'
+      ],
+      { encoding: 'utf8' }
+    )
+
+    expect(result.status).toBe(42)
+    expect(result.stdout).toContain('\x1b]777;orca-pane-exit:42\x07')
   })
 
   itOnPosixHost('ignores inherited BASH_ENV before evaluating the trampoline', () => {

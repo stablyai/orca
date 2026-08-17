@@ -21,6 +21,12 @@ import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
+import {
+  createPaneExitScanState,
+  resolvePaneProcessExitCode,
+  scanPaneExitMarker,
+  type PaneExitScanState
+} from '../shell-pane-exit-scanner'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
@@ -2992,6 +2998,9 @@ export class OrcaRuntimeService {
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
+  // Why: macOS login(1) exits 0; the TCC trampoline publishes the inner status here.
+  private lastReportedPaneExitCodeByPtyId = new Map<string, number>()
+  private paneExitScanStateByPtyId = new Map<string, PaneExitScanState>()
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
@@ -10509,10 +10518,14 @@ export class OrcaRuntimeService {
       }
       pty.connected = true
       pty.disconnectedAt = null
+      pty.lastExitCode = null
     }
+    this.lastReportedPaneExitCodeByPtyId.delete(ptyId)
+    this.paneExitScanStateByPtyId.delete(ptyId)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
+      leaf.lastExitCode = null
       this.adoptPreAllocatedHandle(leaf)
     }
   }
@@ -10748,6 +10761,23 @@ export class OrcaRuntimeService {
     captureModelReceipt?: (completion: Promise<void>) => void,
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): number {
+    const paneExitScan =
+      this.paneExitScanStateByPtyId.get(ptyId) ??
+      this.paneExitScanStateByPtyId.set(ptyId, createPaneExitScanState()).get(ptyId)
+    if (paneExitScan) {
+      const scanned = scanPaneExitMarker(paneExitScan, data)
+      if (scanned.output.length !== data.length) {
+        // Why: stripped marker bytes must not keep the longer rawLength/sourceRanges.
+        sourceRanges = undefined
+        if (!transformed) {
+          sequenceChars = scanned.output.length
+        }
+      }
+      data = scanned.output
+      if (scanned.exitCode !== null) {
+        this.lastReportedPaneExitCodeByPtyId.set(ptyId, scanned.exitCode)
+      }
+    }
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
@@ -14877,12 +14907,18 @@ export class OrcaRuntimeService {
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
     this.agentDetector?.onExit(ptyId)
+    const resolvedExitCode = resolvePaneProcessExitCode(
+      exitCode,
+      this.lastReportedPaneExitCodeByPtyId.get(ptyId) ?? null
+    )
+    this.lastReportedPaneExitCodeByPtyId.delete(ptyId)
+    this.paneExitScanStateByPtyId.delete(ptyId)
     if (pty) {
       pty.connected = false
       pty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(pty.ptyId, false)
       pty.disconnectedAt = Date.now()
-      pty.lastExitCode = exitCode
+      pty.lastExitCode = resolvedExitCode
       // Why: the exited process's live frames say nothing about a replacement.
       // A same-id respawn makes the leaf writable again before any new title,
       // so leaving this true would let push delivery type into the new process
@@ -14904,11 +14940,11 @@ export class OrcaRuntimeService {
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
-      leaf.lastExitCode = exitCode
+      leaf.lastExitCode = resolvedExitCode
       leaf.lastAgentStatusObservedLive = false
       this.resolveExitWaiters(leaf)
       if (!preservesAbnormalSshSurface) {
-        this.failActiveDispatchOnExit(leaf, exitCode)
+        this.failActiveDispatchOnExit(leaf, resolvedExitCode)
       }
     }
     this.pruneDisconnectedPtyRecords()

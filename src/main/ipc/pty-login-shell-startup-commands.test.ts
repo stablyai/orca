@@ -86,7 +86,7 @@ describe('registerPtyHandlers', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'export SHELL="$1"; shift; command -- "$@"; code=$?; printf "\\033]777;orca-pane-exit:%s\\007" "$code"; exit "$code"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',

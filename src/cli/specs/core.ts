@@ -221,7 +221,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Wait for a terminal condition',
     usage:
       'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms'],
+    notes: [
+      "--for exit tracks the pane process, not a foreground command that returns to the shell. Prefix terminal create --command with exec so the command replaces the shell and its exitCode is reported (e.g. exec zsh -c 'exit 42')."
+    ]
   },
   {
     path: ['terminal', 'stop'],
@@ -237,7 +240,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      "To use terminal wait --for exit, prefix --command with exec so the command replaces the pane shell (e.g. exec zsh -c 'exit 42')."
     ],
     examples: [
       'orca terminal create --json',
