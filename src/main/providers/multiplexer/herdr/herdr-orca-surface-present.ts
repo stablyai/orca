@@ -1,12 +1,18 @@
 import { BrowserWindow } from 'electron'
 import type { HerdrImportedSurface } from './herdr-orca-surface-import'
+import type { HerdrOrcaSurfaceAction } from './herdr-orca-surface-sync'
+
+function eachWindow(send: (contents: Electron.WebContents) => void): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      send(win.webContents)
+    }
+  }
+}
 
 export function presentHerdrImportedSurface(surface: HerdrImportedSurface): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) {
-      continue
-    }
-    win.webContents.send('ui:createTerminal', {
+  eachWindow((contents) => {
+    contents.send('ui:createTerminal', {
       worktreeId: surface.worktreeId,
       ptyId: surface.ptyId,
       tabId: surface.tabId,
@@ -23,5 +29,27 @@ export function presentHerdrImportedSurface(surface: HerdrImportedSurface): void
           }
         : {})
     })
-  }
+  })
+}
+
+export function presentHerdrSurfaceAction(action: HerdrOrcaSurfaceAction): void {
+  eachWindow((contents) => {
+    if (action.kind === 'rename') {
+      contents.send('ui:renameTerminal', { tabId: action.tabId, title: action.title })
+      return
+    }
+    if (action.kind === 'focus') {
+      contents.send('ui:focusTerminal', {
+        tabId: action.tabId,
+        worktreeId: action.worktreeId,
+        leafId: action.leafId
+      })
+      return
+    }
+    if (action.kind === 'close') {
+      contents.send('ui:closeTerminal', { tabId: action.tabId })
+      return
+    }
+    contents.send('ui:applyTerminalLayout', { tabId: action.tabId, layout: action.layout })
+  })
 }

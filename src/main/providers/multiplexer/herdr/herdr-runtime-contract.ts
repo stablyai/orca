@@ -33,6 +33,7 @@ export type HerdrPane = {
   agent_status?: HerdrAgentStatus
   tokens?: Record<string, string>
   revision?: number
+  focused?: boolean
 }
 
 export type HerdrAgentStatus = 'idle' | 'working' | 'blocked' | 'done' | 'unknown'

@@ -30,6 +30,11 @@ import {
   type HerdrImportedSurface,
   type HerdrSurfacePresenter
 } from './herdr-orca-surface-import'
+import {
+  collectHerdrSurfaceActions,
+  resolveHerdrPaneIdentities,
+  type HerdrOrcaSurfaceAction
+} from './herdr-orca-surface-sync'
 
 export type HerdrAgentRollup = {
   agents: HerdrBindingAgentState[]
@@ -68,6 +73,7 @@ export type HerdrLivePaneListener = (sessionName: string, paneIds: ReadonlySet<s
 export type HerdrSurfaceSync = {
   persist: (surface: HerdrImportedSurface) => void
   present?: HerdrSurfacePresenter
+  presentAction?: (action: HerdrOrcaSurfaceAction) => void
 }
 
 function graphKey(sessionName: string, projectId: string): string {
@@ -79,6 +85,7 @@ export class HerdrRuntimeManager {
   private readonly reconcileQueues = new Map<string, Promise<void>>()
   private readonly graphsByKey = new Map<string, HerdrProjectHostGraph>()
   private readonly eventRefreshTimers = new Map<string, NodeJS.Timeout>()
+  private readonly lastSnapshots = new Map<string, HerdrSessionSnapshot>()
   private eventUnsubscribe: (() => void) | null = null
 
   constructor(
@@ -143,6 +150,7 @@ export class HerdrRuntimeManager {
       )
       this.publishLivePaneIds(sessionName, snapshot)
       await this.importUnboundSurfaces(sessionName, [graph], snapshot)
+      this.lastSnapshots.set(sessionName, snapshot)
       return snapshot
     })
   }
@@ -211,7 +219,28 @@ export class HerdrRuntimeManager {
       }
       this.publishLivePaneIds(sessionName, snapshot)
       await this.importUnboundSurfaces(sessionName, graphs, snapshot)
+      this.applyHerdrSurfaceActions(sessionName, graphs, snapshot)
+      this.lastSnapshots.set(sessionName, snapshot)
     })
+  }
+
+  private applyHerdrSurfaceActions(
+    sessionName: string,
+    graphs: HerdrProjectHostGraph[],
+    snapshot: HerdrSessionSnapshot
+  ): void {
+    if (!this.surfaceSync?.presentAction) {
+      this.lastSnapshots.set(sessionName, snapshot)
+      return
+    }
+    const actions = collectHerdrSurfaceActions(
+      this.lastSnapshots.get(sessionName) ?? null,
+      snapshot,
+      resolveHerdrPaneIdentities(sessionName, graphs, this.paneIdsBySessionAndBinding)
+    )
+    for (const action of actions) {
+      this.surfaceSync.presentAction(action)
+    }
   }
 
   private async importUnboundSurfaces(
@@ -261,6 +290,7 @@ export class HerdrRuntimeManager {
     }
     this.graphsByKey.clear()
     this.paneIdsBySessionAndBinding.clear()
+    this.lastSnapshots.clear()
     void this.transport.disconnect?.()
   }
 

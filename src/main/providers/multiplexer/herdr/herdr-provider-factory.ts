@@ -17,7 +17,10 @@ import { herdrServerEnvironment } from './herdr-session-process'
 import { resolveHerdrBinarySource, resolveHerdrExecutable } from './herdr-binary-source'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import { DEFAULT_HERDR_SESSION_NAME } from './herdr-transport-factory'
-import { presentHerdrImportedSurface } from './herdr-orca-surface-present'
+import {
+  presentHerdrImportedSurface,
+  presentHerdrSurfaceAction
+} from './herdr-orca-surface-present'
 import type { HerdrImportedSurface } from './herdr-orca-surface-import'
 
 export type HerdrLocalTransportKind = 'socket' | 'cli'
@@ -105,7 +108,8 @@ export function createLocalHerdrPtyProvider(
           ...(surface.cwd ? { startupCwd: surface.cwd } : {})
         })
       },
-      present: presentHerdrImportedSurface
+      present: presentHerdrImportedSurface,
+      presentAction: presentHerdrSurfaceAction
     }
   )
 }
