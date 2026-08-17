@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
-    showTurnStatus?: boolean
+    subagentSourceKey?: string
     runtimeContext?: unknown
   },
   composerProps: null as null | {
@@ -221,7 +221,7 @@ describe('NativeChatStructuredSession', () => {
         />
       )
 
-      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
+      expect(mocks.messageListProps?.subagentSourceKey).toBe('session-parity')
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )

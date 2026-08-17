@@ -1,13 +1,14 @@
 import type { AgentSessionContextSnapshot } from '../../shared/agent-session-context'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredProviderConfiguration } from '../../shared/structured-agent-provider'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { HarnessConversationDriverEvent, HarnessConversationDriverSink } from './driver'
-import { messageIdentity, promptIdentity } from './machine-structured-session-values'
+import {
+  messageIdentity,
+  promptIdentity,
+  type MachineStructuredMessage
+} from './machine-structured-session-values'
 
 type DriverState = {
   processId: number
@@ -19,6 +20,7 @@ type DriverState = {
 }
 
 type LiveSessionState = {
+  activeTurn: string | null
   providerSessionId: string
   context: AgentSessionContextSnapshot | null
   configuration: StructuredProviderConfiguration | null
@@ -36,19 +38,26 @@ export function createMachineStructuredSessionDriverSink(input: {
   identity: AgentSessionJournalIdentity
   events?: StructuredAgentSessionEventSink
   state: DriverState
-  messages: Map<string, AgentJournalMessageItem>
+  messages: Map<string, MachineStructuredMessage>
   prompts: Map<string, { kind: 'approval' | 'question'; requestId: string }>
   sessionRef: { current: LiveSessionState | null }
   onEnd: (reason: string) => void
 }): HarnessConversationDriverSink {
   const appendMessage = (messageId: string): void => {
-    const body = input.messages.get(messageId)
-    if (!body || !input.events) {
+    const message = input.messages.get(messageId)
+    if (!message || !input.events) {
       return
     }
-    input.events.appendItem(messageIdentity(input.identity, messageId), body, {
-      coalescingKey: `message:${messageId}`
-    })
+    input.events.appendItem(
+      {
+        ...messageIdentity(input.identity, messageId),
+        ...(message.turn ? { turn: message.turn } : {})
+      },
+      message.body,
+      {
+        coalescingKey: `message:${messageId}`
+      }
+    )
     input.events.publish({ coalescingKey: 'provider-message-publish' })
   }
   return {
@@ -94,21 +103,27 @@ function emitProviderEvent(
   appendMessage: (messageId: string) => void
 ): void {
   if (event.type === 'message.started' || event.type === 'message.completed') {
+    const previous = input.messages.get(event.message.id)
+    const turnId = input.sessionRef.current?.activeTurn
     input.messages.set(event.message.id, {
-      kind: 'message',
-      role: event.message.role,
-      blocks: event.message.blocks
+      ...(previous?.turn ? { turn: previous.turn } : turnId ? { turn: { turnId } } : {}),
+      body: {
+        kind: 'message',
+        role: event.message.role,
+        blocks: event.message.blocks,
+        ...(event.message.assistantPhase ? { assistantPhase: event.message.assistantPhase } : {})
+      }
     })
     appendMessage(event.message.id)
     return
   }
   if (event.type === 'message.delta') {
     const current = input.messages.get(event.messageId)
-    const block = current?.blocks[event.blockIndex]
+    const block = current?.body.blocks[event.blockIndex]
     if (current && block?.type === 'text' && block.text.length === event.offset) {
-      const blocks = [...current.blocks]
+      const blocks = [...current.body.blocks]
       blocks[event.blockIndex] = { ...block, text: block.text + event.text }
-      input.messages.set(event.messageId, { ...current, blocks })
+      input.messages.set(event.messageId, { ...current, body: { ...current.body, blocks } })
       appendMessage(event.messageId)
     }
     return
@@ -121,7 +136,12 @@ function emitProviderEvent(
     if (!request) {
       return
     }
-    const identity = promptIdentity(input.identity, request.id)
+    const identity = {
+      ...promptIdentity(input.identity, request.id),
+      ...(input.sessionRef.current?.activeTurn
+        ? { turn: { turnId: input.sessionRef.current.activeTurn } }
+        : {})
+    }
     const itemId = agentJournalItemKey(identity)
     input.prompts.set(itemId, { kind: 'approval', requestId: request.id })
     input.events.appendItem(identity, {
@@ -138,7 +158,12 @@ function emitProviderEvent(
   if (!request) {
     return
   }
-  const identity = promptIdentity(input.identity, request.id)
+  const identity = {
+    ...promptIdentity(input.identity, request.id),
+    ...(input.sessionRef.current?.activeTurn
+      ? { turn: { turnId: input.sessionRef.current.activeTurn } }
+      : {})
+  }
   const itemId = agentJournalItemKey(identity)
   const first = request.questions[0]
   input.prompts.set(itemId, { kind: 'question', requestId: request.id })

@@ -44,9 +44,8 @@ describe('ClaudeConversationActivity', () => {
     } as unknown as SDKMessage)
     activity.observe({
       type: 'assistant',
-      effort: 'high',
       message: {
-        model: 'claude-opus',
+        model: 'claude-opus-5',
         usage: {
           input_tokens: 2,
           cache_creation_input_tokens: 20,
@@ -54,9 +53,21 @@ describe('ClaudeConversationActivity', () => {
         }
       }
     } as unknown as SDKMessage)
+    activity.setTranscriptMetadata({ effort: 'high' })
     activity.observe({
       type: 'result',
-      modelUsage: { 'claude-opus': { contextWindow: 1_000_000 } }
+      modelUsage: {
+        'provider-model-id': {
+          inputTokens: 2,
+          outputTokens: 1,
+          cacheReadInputTokens: 100,
+          cacheCreationInputTokens: 20,
+          webSearchRequests: 0,
+          costUSD: 0,
+          contextWindow: 1_000_000,
+          maxOutputTokens: 32_000
+        }
+      }
     } as unknown as SDKMessage)
     activity.observe({
       type: 'system',
@@ -68,7 +79,7 @@ describe('ClaudeConversationActivity', () => {
 
     expect(sink.setContext).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        model: 'claude-opus',
+        model: 'claude-opus-5',
         effort: 'high',
         fastMode: true,
         usedTokens: 122,

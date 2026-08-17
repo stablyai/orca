@@ -1,13 +1,36 @@
 /* @vitest-environment happy-dom */
 
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import type { RoomCompletedActivity } from '../../../../shared/rooms'
-import { RoomCompletedActivityTimeline } from './RoomActivityTimeline'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { RoomSettledActivity } from '../../../../shared/rooms'
+import { RoomActivityDetails, RoomSettledActivityTimeline } from './RoomActivityTimeline'
 
-describe('RoomCompletedActivityTimeline', () => {
+afterEach(cleanup)
+
+describe('RoomSettledActivityTimeline', () => {
+  it.each([
+    ['TaskOutput', 'Read task output'],
+    ['TaskStop', 'Stop task']
+  ])('does not call a background command a subagent for %s', (name, label) => {
+    render(
+      <RoomActivityDetails
+        messages={[
+          {
+            id: 'background-task',
+            role: 'assistant',
+            source: 'transcript',
+            timestamp: 1,
+            blocks: [{ type: 'tool-call', name, input: { task_id: 'background-sleep' } }]
+          }
+        ]}
+      />
+    )
+    expect(screen.queryByText('Coordinated subagents')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Used tools' }))
+    expect(screen.getByText(label!)).toBeTruthy()
+  })
   it('keeps completed work expandable and opens captured file diffs', () => {
-    const activity: RoomCompletedActivity = {
+    const activity: RoomSettledActivity = {
       state: 'completed',
       startedAt: 1_000,
       completedAt: 129_000,
@@ -37,7 +60,7 @@ describe('RoomCompletedActivityTimeline', () => {
       ]
     }
 
-    render(<RoomCompletedActivityTimeline activity={activity} />)
+    render(<RoomSettledActivityTimeline activity={activity} />)
     fireEvent.click(screen.getByRole('button', { name: 'Worked for 2m 8s' }))
     expect(screen.getByText('Inspecting the implementation.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Edited files' }))
@@ -49,8 +72,8 @@ describe('RoomCompletedActivityTimeline', () => {
   })
 
   it('shows provider-independent tool labels', () => {
-    const activity: RoomCompletedActivity = {
-      state: 'completed',
+    const activity: RoomSettledActivity = {
+      state: 'interrupted',
       startedAt: 1_000,
       completedAt: 2_000,
       messages: [
@@ -64,7 +87,7 @@ describe('RoomCompletedActivityTimeline', () => {
       ]
     }
 
-    render(<RoomCompletedActivityTimeline activity={activity} />)
+    render(<RoomSettledActivityTimeline activity={activity} />)
     fireEvent.click(screen.getByRole('button', { name: 'Worked for 1s' }))
     fireEvent.click(screen.getByRole('button', { name: 'Searched the web' }))
     expect(screen.getByText('Search the web')).toBeTruthy()

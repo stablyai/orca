@@ -87,6 +87,36 @@ describe('structured agent session launch', () => {
     )
   })
 
+  it.each(['codex', 'claude', 'openclaude', 'grok', 'omp'] as const)(
+    'probes and creates %s on the selected remote host, never locally',
+    async (agent) => {
+      const target = { kind: 'environment' as const, environmentId: 'ssh-host' }
+      vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
+        method === 'agentSession.createSupport'
+          ? { supported: true }
+          : { ok: true, value: { sessionId: 'remote-session', fence: 3 } }
+      )
+      const intent = createStructuredAgentSessionLaunchIntent(
+        'folder-workspace',
+        agent,
+        target,
+        'group-1'
+      )
+      await expect(launchStructuredAgentSession(intent)).resolves.toEqual({
+        sessionId: 'remote-session',
+        fence: 3
+      })
+      expect(
+        vi
+          .mocked(callStructuredAgentSession)
+          .mock.calls.map(([executing, method]) => [executing, method])
+      ).toEqual([
+        [target, 'agentSession.createSupport'],
+        [target, 'agentSession.create']
+      ])
+    }
+  )
+
   it('asks the executing host for create support before creating a Claude session', async () => {
     vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
       method === 'agentSession.createSupport'

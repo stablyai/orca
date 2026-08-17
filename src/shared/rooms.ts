@@ -34,8 +34,8 @@ export type RoomAgentActivity = {
   updatedAt: number
   anchorSequence: number | null
 }
-export type RoomCompletedActivity = {
-  state: 'completed'
+export type RoomSettledActivity = {
+  state: 'completed' | 'interrupted'
   messages: NativeChatMessage[]
   startedAt: number
   completedAt: number
@@ -141,6 +141,9 @@ export type RoomMessage = {
   rootMessageId: string | null
   hopCount: number
   metadata: Record<string, unknown>
+  /** Permanently true after any delivery has been claimed. */
+  deliveryAttempted?: boolean
+  queueEditing?: boolean
   mentions: string[]
   attachments: RoomAttachment[]
   createdAt: number
@@ -174,6 +177,14 @@ export type RoomSnapshot = {
   unread: RoomUnread
   /** Absent when connected to a host that predates room Stop/Resume. */
   workState?: RoomWorkState
+  /** Absent when connected to a host that predates per-agent delivery queues. */
+  deliveryQueueVersion?: 1
+  /** Absent when the host predates safe queue mutations and atomic group Steer. */
+  deliveryQueueMutationVersion?: 1
+  /** Absent when the host cannot atomically place a directed row in the room queue. */
+  broadcastQueuePlacementVersion?: 1
+  /** Absent when the host cannot reserve queue rows for composer editing. */
+  queueComposerEditVersion?: 1
 }
 
 export type RoomMessagePage = {
@@ -195,6 +206,8 @@ export type RoomDelivery = {
   providerTurnId: string | null
   responseMessageId: string | null
   respondedAt: number | null
+  intent?: 'next' | 'steer'
+  queuePosition?: number
   phase?: 'waking' | 'submitting' | 'awaiting-turn' | null
   attemptHistory?: RoomDeliveryAttempt[]
 }
@@ -223,7 +236,7 @@ export type RoomEvent =
   | { type: 'message.updated'; message: RoomMessage }
   | { type: 'message.deleted'; messageId: string }
   | { type: 'delivery.updated'; delivery: RoomDelivery; workState?: RoomWorkState }
-  | { type: 'room.updated'; room: Room }
+  | { type: 'room.updated'; room: Room; workState?: RoomWorkState }
   | { type: 'role.updated'; role: RoomRole }
   | { type: 'role.removed'; roleId: string }
   | { type: 'participant.updated'; participant: RoomParticipant }

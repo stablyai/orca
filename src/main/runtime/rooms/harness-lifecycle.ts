@@ -97,11 +97,13 @@ export function currentTurnMessages(messages: NativeChatMessage[]): NativeChatMe
 /** The latest real user prompt in a batch — tool-result and harness-noise user
  *  rows are turn continuations, not new user-authored generations. */
 export function turnUserMessage(
-  messages: NativeChatMessage[]
+  messages: NativeChatMessage[],
+  turnId?: string
 ): RoomHarnessTurnUserMessage | undefined {
   const user = messages.findLast(
     (message) =>
       message.role === 'user' &&
+      (!turnId || message.turnId === turnId) &&
       !message.blocks.some((block) => block.type === 'tool-result') &&
       !isNoiseMessage(message)
   )
@@ -113,7 +115,7 @@ export function turnUserMessage(
     .map((block) => block.text)
     .join('\n')
     .trim()
-  return text ? { id: user.id, text } : undefined
+  return text ? { id: user.turnId ?? user.id, text } : undefined
 }
 
 function statusEvent(
@@ -161,17 +163,57 @@ export function activityFromMessages(messages: NativeChatMessage[]): {
   kind: RoomHarnessActivityKind
   detail?: string
 } {
+  const activeTool = activeToolFromMessages(messages)
+  if (activeTool) {
+    return activityFromTool(activeTool.name, activeTool.input, briefToolArg(activeTool.input))
+  }
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
-    const tool = message?.blocks.findLast((block) => block.type === 'tool-call')
-    if (tool?.type === 'tool-call') {
-      return activityFromTool(tool.name, tool.input, briefToolArg(tool.input))
+    if (
+      message?.role === 'assistant' &&
+      message.blocks.some((block) => block.type === 'text' && block.text.trim())
+    ) {
+      return { kind: 'working' }
     }
     if (message?.role === 'reasoning') {
       return { kind: 'thinking' }
     }
   }
-  return { kind: messages.length > 0 ? 'thinking' : 'working' }
+  return { kind: 'working' }
+}
+
+function activeToolFromMessages(messages: NativeChatMessage[]) {
+  const completedIds = new Set<string>()
+  let completedWithoutId = 0
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (block.type !== 'tool-result' || block.isPartial) {
+        continue
+      }
+      if (block.toolCallId) {
+        completedIds.add(block.toolCallId)
+      } else {
+        completedWithoutId += 1
+      }
+    }
+  }
+  let matchedWithoutId = 0
+  return messages
+    .flatMap((message) => message.blocks)
+    .filter((block) => {
+      if (block.type !== 'tool-call') {
+        return false
+      }
+      if (block.state !== undefined) {
+        return block.state === 'running'
+      }
+      if (block.toolCallId) {
+        return !completedIds.has(block.toolCallId)
+      }
+      matchedWithoutId += 1
+      return matchedWithoutId > completedWithoutId
+    })
+    .findLast((block) => block.type === 'tool-call')
 }
 
 function activityFromTool(

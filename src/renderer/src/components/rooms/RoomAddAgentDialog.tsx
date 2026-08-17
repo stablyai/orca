@@ -27,7 +27,10 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import { showRoomActionError } from './room-action-error'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isStructuredMachineAgent } from '../../../../shared/structured-agent-provider'
+import {
+  isStructuredMachineAgentEnabled,
+  type StructuredMachineAgent
+} from '../../../../shared/structured-agent-provider'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   ROOM_EXISTING_STRUCTURED_SESSION_RUNTIME_CAPABILITY,
@@ -55,7 +58,8 @@ export function RoomAddAgentDialog({
   worktreeId,
   worktrees,
   target,
-  machineStreaming
+  machineStreaming,
+  enabledStreamingAgents
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -64,6 +68,7 @@ export function RoomAddAgentDialog({
   worktrees: Worktree[]
   target: RuntimeClientTarget
   machineStreaming: boolean
+  enabledStreamingAgents?: StructuredMachineAgent[]
 }): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const [agent, setAgent] = useState<RoomHarnessAgent>('claude')
@@ -90,7 +95,7 @@ export function RoomAddAgentDialog({
     const load = async (): Promise<void> => {
       const machineSupported =
         machineStreaming &&
-        isStructuredMachineAgent(agent) &&
+        isStructuredMachineAgentEnabled(agent, enabledStreamingAgents) &&
         (target.kind === 'local' ||
           (await runtimeEnvironmentSupportsCapability(
             target.environmentId,
@@ -121,7 +126,7 @@ export function RoomAddAgentDialog({
     return () => {
       disposed = true
     }
-  }, [agent, machineStreaming, mode, open, target, worktree?.id])
+  }, [agent, enabledStreamingAgents, machineStreaming, mode, open, target, worktree?.id])
 
   const add = async (): Promise<void> => {
     if (!roomId || !worktree || !identity.trim()) {
@@ -132,7 +137,7 @@ export function RoomAddAgentDialog({
       mode === 'existing'
         ? existingMachineSupported
         : machineStreaming &&
-          isStructuredMachineAgent(agent) &&
+          isStructuredMachineAgentEnabled(agent, enabledStreamingAgents) &&
           (target.kind === 'local' ||
             (await runtimeEnvironmentSupportsCapability(
               target.environmentId,

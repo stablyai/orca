@@ -24,3 +24,9 @@ export type { RuntimePtyController } from './runtime-pty-controller-contract'
 export { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export type { IpcMainEvent } from 'electron'
+
+export function throwIfTerminalCreateAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error('client_disconnected')
+  }
+}

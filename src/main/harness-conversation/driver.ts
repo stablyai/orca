@@ -29,7 +29,17 @@ export type HarnessConversationDriverEvent =
 
 export type HarnessConversationDriver = {
   ready?(): Promise<void>
-  send(text: string, imagePaths?: readonly string[]): Promise<void>
+  send(
+    text: string,
+    imagePaths?: readonly string[],
+    submission?: HarnessConversationSubmission
+  ): Promise<void>
+  steer?(
+    text: string,
+    imagePaths: readonly string[] | undefined,
+    clientMessageId: string,
+    accept: (result: HarnessConversationSteerAcceptance) => Promise<void>
+  ): Promise<void>
   interrupt(): Promise<void>
   answerPermission(requestId: string, optionId: string): void
   answerInput(requestId: string, answers: Record<string, string[]>): void
@@ -37,6 +47,15 @@ export type HarnessConversationDriver = {
   compact?(): Promise<void>
   close(): Promise<void>
 }
+
+export type HarnessConversationSubmission = {
+  clientMessageId: string
+  accepted: () => void
+}
+
+export type HarnessConversationSteerAcceptance =
+  | { placement: 'current' }
+  | { placement: 'next'; completion: Promise<void> }
 
 export type HarnessConversationDriverFactory = (input: {
   conversationId: string

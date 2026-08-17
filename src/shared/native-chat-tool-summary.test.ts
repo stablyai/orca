@@ -177,9 +177,10 @@ describe('Codex JSON-string tool arguments', () => {
     expect(isStructuredToolInput('{"cmd":"ls"}')).toBe(true)
   })
 
-  it('joins an argv-array command into one label', () => {
-    expect(describeToolInput('{"command":["bash","-lc","make"]}')).toBe('bash -lc make')
-    expect(briefToolArg({ command: ['bash', '-lc', 'make'] })).toBe('bash -lc make')
+  it('collapses shell wrappers in command labels', () => {
+    expect(describeToolInput('{"command":["bash","-lc","make"]}')).toBe('make')
+    expect(briefToolArg({ command: ['bash', '-lc', 'make'] })).toBe('make')
+    expect(describeToolInput({ command: "/bin/zsh -lc 'sleep 300'" })).toBe('sleep 300')
   })
 
   it('leaves prose and malformed JSON as plain strings', () => {

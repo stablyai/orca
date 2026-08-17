@@ -20,6 +20,8 @@ function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1
   return {
     sessionId,
     worktreeId,
+    agent: 'codex',
+    target: { kind: 'local' },
     params: {
       envelope: {
         sessionId,
@@ -43,6 +45,7 @@ const store = {
     activeRuntimeEnvironmentId: null,
     experimentalNativeChat: true,
     experimentalStructuredNativeChat: true,
+    enabledHarnessStreamingAgents: ['codex', 'claude', 'openclaude', 'grok', 'omp'],
     openAgentTabsInChatByDefault: true,
     nativeChatSessionOptions: undefined as
       | Record<
@@ -174,7 +177,12 @@ describe('structured chat adoption guard on the launch path', () => {
       focusAfterMenuClose: 'structured-session'
     })
     expect(shouldQueueTerminalFocusAfterMenuClose(result!)).toBe(false)
-    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'codex')
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith(
+      'wt-1',
+      'codex',
+      { kind: 'local' },
+      undefined
+    )
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1' })
     )
@@ -195,7 +203,12 @@ describe('structured chat adoption guard on the launch path', () => {
     const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(result).toMatchObject({ tabId: null, focusAfterMenuClose: 'structured-session' })
-    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'codex')
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith(
+      'wt-1',
+      'codex',
+      { kind: 'local' },
+      undefined
+    )
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
@@ -205,14 +218,19 @@ describe('structured chat adoption guard on the launch path', () => {
     const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
 
     expect(result).toMatchObject({ tabId: null, focusAfterMenuClose: 'structured-session' })
-    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'claude')
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith(
+      'wt-1',
+      'claude',
+      { kind: 'local' },
+      undefined
+    )
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
   it('keeps a native-chat agent with no structured adapter on the terminal-backed path', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'openclaude', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'gemini', worktreeId: 'wt-1' })
 
     expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
     expect(mockCreateTab).toHaveBeenCalled()

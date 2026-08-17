@@ -220,44 +220,6 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('keeps prompted Codex launches on the ordinary terminal path', async () => {
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'large generated prompt',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex',
-      viewMode: 'chat'
-    })
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: expect.not.stringContaining('large generated prompt')
-      })
-    )
-    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'codex',
-      text: 'large generated prompt',
-      createdAt: expect.any(Number)
-    })
-    expect(mockSetTabViewMode).not.toHaveBeenCalled()
-  })
-
   it('opens local Grok submit-after-ready launches in native chat', async () => {
     store.settings = {
       agentCmdOverrides: {},
@@ -439,7 +401,8 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       prompt: 'Review this diff',
       launchSource: 'quick_command',
-      quickCommandLabel: 'Review'
+      quickCommandLabel: 'Review',
+      disableStructuredStreaming: true
     })
 
     const launch = mockQueueTabStartupCommand.mock.calls[0]?.[1]
@@ -511,7 +474,11 @@ describe('launchAgentInNewTab', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      disableStructuredStreaming: true
+    })
 
     expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
       expect.objectContaining({

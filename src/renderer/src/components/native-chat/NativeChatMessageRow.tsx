@@ -17,13 +17,14 @@ import {
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { literalRoomTransportText } from './native-chat-room-transport'
 import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
+import { NativeChatCopyButton } from './NativeChatCopyButton'
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized.
  *  Memoized: a stream frame republishes the whole transcript, but settled rows
  *  keep their block identity, so only the changed row re-renders. */
-export const MessageRow = memo(function MessageRow({
+export const NativeChatMessageRow = memo(function NativeChatMessageRow({
   message,
   expandSignal,
   activeTurnIsWorking,
@@ -65,8 +66,8 @@ export const MessageRow = memo(function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
-  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
   const isSubagentTask = message.subagentEvent?.kind === 'task'
+  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
   const literalTransport = literalRoomTransportText(markdown)
   const renderedText = literalTransport ?? markdown
 
@@ -93,39 +94,42 @@ export const MessageRow = memo(function MessageRow({
 
   if (isUser) {
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {renderedText ? (
-            <>
+      <div ref={rowRef} className="group flex w-full flex-col items-end justify-end gap-1">
+        <div className="flex w-full items-center justify-end gap-1">
+          <div className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <NativeChatCopyButton text={renderedText} />
+          </div>
+          <div className="max-w-[77%] rounded-2xl bg-muted px-3 py-2 text-sm text-foreground">
+            {renderedText ? (
+              <>
+                <NativeChatImageAttachments
+                  blocks={prose}
+                  loadContext={imageLoadContext}
+                  runtimeContext={runtimeContext}
+                />
+                {literalTransport !== null ? (
+                  <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+                ) : (
+                  <CommentMarkdown
+                    content={renderedText}
+                    variant="document"
+                    className="text-sm"
+                    onLinkClick={onLinkClick}
+                    allowFileUriLinks={allowFileUriLinks}
+                  />
+                )}
+              </>
+            ) : (
               <NativeChatImageAttachments
                 blocks={prose}
+                loadContext={imageLoadContext}
                 runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-               loadContext={imageLoadContext} />
-              {literalTransport !== null ? (
-                <div className="whitespace-pre-wrap break-words">{renderedText}</div>
-              ) : (
-                <CommentMarkdown
-                  content={renderedText}
-                  variant="document"
-                  className="text-sm"
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={allowFileUriLinks}
-                />
-              )}
-            </>
-          ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-             loadContext={imageLoadContext} />
-          )}
+              />
+            )}
+          </div>
         </div>
         {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
+          <div className="max-w-[77%] text-[11px] text-destructive/80">
             {translate(
               'components.native-chat.launchPromptNotDelivered',
               'Not delivered — check the terminal'
@@ -153,8 +157,7 @@ export const MessageRow = memo(function MessageRow({
     <div
       ref={rowRef}
       className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
+        'group flex max-w-full select-text flex-col text-sm leading-relaxed text-foreground',
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
@@ -162,21 +165,21 @@ export const MessageRow = memo(function MessageRow({
       <NativeChatImageAttachments
         blocks={prose}
         runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
-       loadContext={imageLoadContext} />
+        loadContext={imageLoadContext}
+      />
       {renderedText ? (
         literalTransport !== null ? (
           <div className="whitespace-pre-wrap break-words">{renderedText}</div>
         ) : (
-        <CommentMarkdown
-          content={renderedText}
-          variant="document"
-          className="text-sm"
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-          streamingFade={streamingFade}
-          linkifyFilePaths={onLinkClick !== undefined}
-        />
+          <CommentMarkdown
+            content={renderedText}
+            variant="document"
+            className="text-sm"
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+            streamingFade={streamingFade}
+            linkifyFilePaths={onLinkClick !== undefined}
+          />
         )
       ) : null}
       {tools.length > 0 ? (
@@ -192,7 +195,7 @@ export const MessageRow = memo(function MessageRow({
         <NativeChatAgentControls
           markdown={renderedText}
           onScrollToTop={scrollToTop}
-          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="mt-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         />
       ) : null}
     </div>

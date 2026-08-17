@@ -120,6 +120,8 @@ export function messageFromRow(
     rootMessageId: nullableString(row.root_message_id),
     hopCount: number(row.hop_count),
     metadata: parseRoomJson<Record<string, unknown>>(row.metadata_json, {}),
+    deliveryAttempted: number(row.delivery_attempted) === 1,
+    queueEditing: nullableString(row.queue_edit_token) !== null,
     mentions,
     attachments,
     createdAt: number(row.created_at),
@@ -141,6 +143,8 @@ export function deliveryFromRow(row: RoomRow): RoomDelivery {
     providerTurnId: nullableString(row.provider_turn_id),
     responseMessageId: nullableString(row.response_message_id),
     respondedAt: nullableNumber(row.responded_at),
+    intent: row.intent === 'steer' ? 'steer' : 'next',
+    queuePosition: nullableNumber(row.queue_position) ?? undefined,
     phase: nullableString(row.phase) as RoomDelivery['phase'],
     attemptHistory: parseRoomJson(row.attempt_history_json, [])
   }

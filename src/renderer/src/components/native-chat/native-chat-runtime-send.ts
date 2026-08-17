@@ -25,6 +25,8 @@ import {
   resetNativeChatPtySendQueuesForTests,
   waitForNativeChatPtyIdle
 } from './native-chat-pty-send-queue'
+import type { NativeChatSendHandle } from './native-chat-send-handle'
+export type { NativeChatSendHandle } from './native-chat-send-handle'
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }
@@ -53,16 +55,6 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
-}
-
-/** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
- *  later question bodies/Enters). Safe to call after the send completes. */
-export type NativeChatSendHandle = {
-  cancel: () => void
-  /** Time after which every scheduled write has fired and the handle can drop. */
-  settleAfterMs: number
-  /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
-  settled?: Promise<void>
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>

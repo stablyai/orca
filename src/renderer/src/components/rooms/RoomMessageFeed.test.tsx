@@ -9,7 +9,12 @@ import type {
 } from '../../../../shared/rooms'
 import { useAppStore } from '@/store'
 import type { RoomData } from './use-room-data'
-import { buildRoomFeedItems, pendingDeliveryActivities, RoomMessageFeed } from './RoomMessageFeed'
+import {
+  buildRoomFeedItems,
+  orderRoomActivities,
+  pendingDeliveryActivities,
+  RoomMessageFeed
+} from './RoomMessageFeed'
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = []
@@ -35,46 +40,35 @@ describe('RoomMessageFeed', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('pins live activities below the whole feed in stable start order', () => {
-    const activity = (
-      participantId: string,
-      startedAt: number,
-      anchorSequence: number | null
-    ): RoomAgentActivity => ({
-      participantId,
-      identity: participantId,
-      state: 'working',
-      kind: 'thinking',
-      messages: [],
-      startedAt,
-      updatedAt: startedAt + 100,
-      anchorSequence
-    })
+  it('publishes user messages only after claim while keeping agent and untargeted messages', () => {
+    const messages = [
+      { id: 'queued', actorKind: 'user' },
+      { id: 'claimed', actorKind: 'user', deliveryAttempted: true },
+      { id: 'legacy-claimed', actorKind: 'user' },
+      { id: 'agent', actorKind: 'agent' },
+      { id: 'untargeted', actorKind: 'user' }
+    ] as RoomMessage[]
+    const deliveries = [
+      { id: 'queued-delivery', messageId: 'queued', attempts: 0 },
+      { id: 'claimed-delivery', messageId: 'claimed', attempts: 1 },
+      { id: 'legacy-delivery', messageId: 'legacy-claimed', attempts: 1 },
+      { id: 'agent-delivery', messageId: 'agent', attempts: 0 }
+    ] as RoomDelivery[]
 
-    // 'first' answers an older message (its queue lags behind the tail); the
-    // pill must still pin below every message, ordered by who started earlier.
-    const items = buildRoomFeedItems(
-      [{ id: 'prompt', sequence: 7 } as RoomMessage, { id: 'later', sequence: 8 } as RoomMessage],
-      [activity('second', 20, 8), activity('first', 10, 7)]
-    )
-
-    expect(items.map((item) => item.key)).toEqual(['message:prompt', 'message:later', 'activities'])
-    expect(items.at(-1)).toMatchObject({
-      kind: 'activities',
-      activities: [{ participantId: 'first' }, { participantId: 'second' }]
-    })
+    expect(buildRoomFeedItems(messages, deliveries).map((item) => item.message.id)).toEqual([
+      'claimed',
+      'legacy-claimed',
+      'agent',
+      'untargeted'
+    ])
   })
 
-  it('puts directed activities first in mention order', () => {
-    const message = {
-      id: 'prompt',
-      sequence: 7,
-      mentions: ['claude', 'codex']
-    } as RoomMessage
+  it('orders activities by start, with directed ones first in mention order', () => {
     const activity = (
       participantId: string,
       identity: string,
-      startedAt: number
+      startedAt: number,
+      anchorSequence: number | null = 7
     ): RoomAgentActivity => ({
       participantId,
       identity,
@@ -83,26 +77,28 @@ describe('RoomMessageFeed', () => {
       messages: [],
       startedAt,
       updatedAt: startedAt,
-      anchorSequence: 7
+      anchorSequence
     })
 
-    const items = buildRoomFeedItems(
-      [message],
-      [
-        activity('optional', 'omp', 1),
-        activity('codex', 'codex', 2),
-        activity('claude', 'claude', 3)
-      ]
-    )
+    const message = { id: 'prompt', sequence: 7, mentions: ['claude', 'codex'] } as RoomMessage
+    expect(
+      orderRoomActivities(
+        [message],
+        [
+          activity('optional', 'omp', 1),
+          activity('codex', 'codex', 2),
+          activity('claude', 'claude', 3)
+        ]
+      ).map(({ participantId }) => participantId)
+    ).toEqual(['claude', 'codex', 'optional'])
 
-    expect(items.at(-1)).toMatchObject({
-      kind: 'activities',
-      activities: [
-        { participantId: 'claude' },
-        { participantId: 'codex' },
-        { participantId: 'optional' }
-      ]
-    })
+    // No mention anchor: stable order by who started earlier.
+    expect(
+      orderRoomActivities(
+        [{ id: 'prompt', sequence: 7 } as RoomMessage],
+        [activity('second', 'second', 20, null), activity('first', 'first', 10, null)]
+      ).map(({ participantId }) => participantId)
+    ).toEqual(['first', 'second'])
   })
 
   it('shows one standard working activity until provider activity arrives', () => {
@@ -128,6 +124,19 @@ describe('RoomMessageFeed', () => {
     ).toEqual([])
   })
 
+  it('does not show queued deliveries as active work before claim', () => {
+    const message = { id: 'message', sequence: 7, createdAt: 10 } as RoomMessage
+    const participant = { id: 'codex', identity: 'codex' } as RoomParticipant
+    const delivery = {
+      id: 'delivery',
+      messageId: message.id,
+      participantId: participant.id,
+      state: 'pending'
+    } as RoomDelivery
+
+    expect(pendingDeliveryActivities([delivery], [message], [participant], [])).toEqual([])
+  })
+
   it('keeps an expanded activity pinned only while the reader is at the bottom', () => {
     const { container } = render(
       <RoomMessageFeed
@@ -141,7 +150,6 @@ describe('RoomMessageFeed', () => {
             readerKey: 'user'
           } as unknown as RoomData
         }
-        onReply={() => {}}
       />
     )
     const scroller = container.firstElementChild as HTMLDivElement
@@ -192,7 +200,6 @@ describe('RoomMessageFeed', () => {
               readerKey: 'user'
             } as unknown as RoomData
           }
-          onReply={() => {}}
         />
       )
     ).not.toThrow()

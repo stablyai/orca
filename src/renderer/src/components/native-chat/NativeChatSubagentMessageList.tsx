@@ -23,6 +23,7 @@ export function NativeChatSubagentMessageList({
         {
           key: subagents.structuredSessionId,
           identity: agent,
+          showIdentity: false,
           agent,
           sessionId: subagents.structuredSessionId,
           ...subagents,
@@ -40,6 +41,7 @@ export function NativeChatSubagentMessageList({
       {
         key: 'native-chat',
         identity: agent,
+        showIdentity: false,
         agent,
         paneKey,
         sessionId: messageListProps.session.sessionId,

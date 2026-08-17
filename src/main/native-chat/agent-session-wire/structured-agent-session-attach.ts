@@ -128,7 +128,7 @@ export function journalIdentityFor(
           }
         : head?.handle.provider === 'acp'
           ? { kind: 'acp', agent: head.handle.agent, sessionId: head.handle.sessionId }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+          : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,

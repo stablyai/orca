@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ProviderFrameRow } from '../native-chat/NativeChatTranscriptChrome'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { NativeChatFileDiff } from '../native-chat/native-chat-diff'
@@ -20,7 +21,7 @@ import type {
   NativeChatMessage,
   NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
-import type { RoomActivityKind, RoomCompletedActivity } from '../../../../shared/rooms'
+import type { RoomActivityKind, RoomSettledActivity } from '../../../../shared/rooms'
 import {
   buildRoomActivitySections,
   formatRoomActivityDuration,
@@ -29,10 +30,10 @@ import {
 
 const MAX_DETAIL_CHARS = 8_000
 
-export function RoomCompletedActivityTimeline({
+export function RoomSettledActivityTimeline({
   activity
 }: {
-  activity: RoomCompletedActivity
+  activity: RoomSettledActivity
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const hasDetails = activity.messages.length > 0
@@ -64,7 +65,7 @@ export function RoomCompletedActivityTimeline({
             ) : null}
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="room-activity-disclosure-content">
+        <CollapsibleContent className="chat-activity-disclosure-content">
           <RoomActivityDetails messages={activity.messages} />
         </CollapsibleContent>
       </div>
@@ -91,6 +92,8 @@ export function RoomActivityDetails({
             className="text-xs text-muted-foreground"
             allowFileUriLinks
           />
+        ) : section.kind === 'diagnostic' ? (
+          <ProviderFrameRow key={section.id} block={section.block} />
         ) : (
           <RoomActivityToolGroup key={section.id} tools={section.tools} />
         )
@@ -109,7 +112,7 @@ export function hasRoomActivityDetails(
   messages: NativeChatMessage[],
   fallbackDetail?: string
 ): boolean {
-  return messages.length > 0 || Boolean(fallbackDetail)
+  return buildRoomActivitySections(messages).length > 0 || Boolean(fallbackDetail)
 }
 
 function RoomActivityToolGroup({ tools }: { tools: RoomActivityToolStep[] }): React.JSX.Element {
@@ -135,7 +138,7 @@ function RoomActivityToolGroup({ tools }: { tools: RoomActivityToolStep[] }): Re
             />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="room-activity-disclosure-content">
+        <CollapsibleContent className="chat-activity-disclosure-content">
           <div className="mt-1.5 space-y-1.5 pl-5">
             {tools.flatMap((tool) => {
               const diffs = fileDiffsFromToolCall(tool.call.name, tool.call.input)
@@ -239,7 +242,7 @@ function ActivityToolRow({ tool }: { tool: RoomActivityToolStep }): React.JSX.El
             ) : null}
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="room-activity-disclosure-content">
+        <CollapsibleContent className="chat-activity-disclosure-content">
           <ToolDetails input={input} result={tool.result} />
         </CollapsibleContent>
       </div>

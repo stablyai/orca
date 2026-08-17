@@ -5,7 +5,7 @@ import {
   getExactRoomMentionSuggestion,
   getRoomComposerQuery,
   getRoomComposerSuggestions,
-  resolveSelectedRoomRecipients
+  resolveRoomComposerMentions
 } from './RoomComposerSuggestions'
 
 describe('room composer suggestions', () => {
@@ -66,13 +66,13 @@ describe('room composer suggestions', () => {
         getRoomComposerSuggestions(getRoomComposerQuery('@al', 3), participants)
       )
     ).toBeNull()
-    expect(resolveSelectedRoomRecipients(['@all'], participants)).toEqual(['codex', 'claude'])
-    expect(resolveSelectedRoomRecipients(['@codex'], participants)).toEqual(['codex'])
-    expect(resolveSelectedRoomRecipients(['@claude', '@codex'], participants)).toEqual([
+    expect(resolveRoomComposerMentions('@all please', participants)).toEqual(['codex', 'claude'])
+    expect(resolveRoomComposerMentions('ask @codex', participants)).toEqual(['codex'])
+    expect(resolveRoomComposerMentions('@claude and @codex', participants)).toEqual([
       'claude',
       'codex'
     ])
-    expect(resolveSelectedRoomRecipients(['@gemini'], participants)).toEqual([])
-    expect(resolveSelectedRoomRecipients([], participants)).toEqual([])
+    expect(resolveRoomComposerMentions('mail@example.com @gemini', participants)).toEqual([])
+    expect(resolveRoomComposerMentions('hello', participants)).toEqual([])
   })
 })

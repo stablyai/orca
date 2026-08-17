@@ -9,6 +9,7 @@
 // path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
 
 import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_MACHINE_PROVIDERS_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -36,6 +37,10 @@ export function requireStructuredAgentCapability(ctx: RpcContext, agent: string)
   if (
     agent !== 'codex' &&
     ctx.clientKind !== undefined &&
+    !(
+      agent === 'claude' &&
+      ctx.clientCapabilities?.includes(CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+    ) &&
     !ctx.clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_MACHINE_PROVIDERS_CAPABILITY)
   ) {
     throw new Error('structured_agent_session_unsupported')

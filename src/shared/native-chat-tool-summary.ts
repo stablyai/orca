@@ -229,7 +229,7 @@ function firstPrimaryToolArg(
   keys: readonly string[]
 ): string | null {
   for (const key of keys) {
-    const summary = summarizePrimaryToolArg(value[key])
+    const summary = summarizePrimaryToolArg(value[key], key === 'command' || key === 'cmd')
     if (summary) {
       return summary
     }
@@ -251,14 +251,29 @@ function summarizeToolPath(path: string): string {
 }
 
 /** A label-worthy primary argument: a non-blank string, or an argv array. */
-function summarizePrimaryToolArg(input: unknown): string | null {
+function summarizePrimaryToolArg(input: unknown, unwrapShell = false): string | null {
   if (typeof input === 'string' && input.trim()) {
-    return summarizeToolInput(input)
+    return summarizeToolInput(unwrapShell ? unwrapShellCommand(input) : input)
   }
   if (Array.isArray(input) && input.length > 0 && input.every((part) => typeof part === 'string')) {
-    return summarizeToolInput(input.join(' '))
+    const command =
+      unwrapShell && input.length >= 3 && isShellCommand(input[0]!, input[1]!)
+        ? input.slice(2).join(' ')
+        : input.join(' ')
+    return summarizeToolInput(command)
   }
   return null
+}
+
+function unwrapShellCommand(command: string): string {
+  const match = command.match(
+    /^\s*(?:\/[^\s]+\/)?(?:zsh|bash|sh|dash)\s+-(?:lc|cl|c)\s+(['"])([\s\S]*)\1\s*$/
+  )
+  return match?.[2] ?? command
+}
+
+function isShellCommand(executable: string, flag: string): boolean {
+  return /(?:^|[\\/])(zsh|bash|sh|dash)$/.test(executable) && /^-(?:lc|cl|c)$/.test(flag)
 }
 
 export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {

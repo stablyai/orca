@@ -1,6 +1,7 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -17,7 +18,7 @@ export type StructuredAgentSessionCaller = { callerKey: string }
 export type StructuredAgentSessionReveal = {
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  agent: StructuredMachineAgent
   readable: boolean
 }
 

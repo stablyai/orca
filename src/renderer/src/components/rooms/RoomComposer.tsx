@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { roomRpc } from '@/runtime/runtime-rooms-client'
-import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
 import { RoomComposerActions } from './RoomComposerActions'
 import { cancelRoomAttachmentUpload, uploadRoomAttachment } from './room-attachment-transfer'
@@ -17,26 +14,32 @@ import {
 } from './RoomAttachments'
 import { getRoomComposerClipboardFiles } from './room-composer-clipboard-files'
 import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
-import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
 import { useRoomComposerWorkControl } from './use-room-composer-work-control'
+import { ComposerPromptTextarea } from '@/components/ComposerPromptTextarea'
+import { RoomComposerQueueTargets } from './RoomComposerQueueTargets'
+import { showRoomActionError } from './room-action-error'
+import type { RoomQueueComposerEdit } from './room-queue-composer-edit'
+import { useRoomQueueComposerEdit } from './use-room-queue-composer-edit'
 import {
   applyRoomComposerSuggestion,
   getExactRoomMentionSuggestion,
   getRoomComposerQuery,
   getRoomComposerSuggestions,
-  resolveSelectedRoomRecipients,
   RoomComposerSuggestions,
   type RoomComposerSuggestion
 } from './RoomComposerSuggestions'
+import { submitRoomComposer } from './submit-room-composer'
+
+const NOOP = (): void => {}
 
 export function RoomComposer({
   data,
-  reply,
-  onReplyChange
+  editing = null,
+  onEditComplete = NOOP
 }: {
   data: RoomData
-  reply: RoomMessage | null
-  onReplyChange: (message: RoomMessage | null) => void
+  editing?: RoomQueueComposerEdit | null
+  onEditComplete?: () => void
 }): React.JSX.Element {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<RoomComposerAttachment[]>([])
@@ -45,7 +48,7 @@ export function RoomComposer({
   )
   const [uploading, setUploading] = useState(false)
   const [sending, setSending] = useState(false)
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
+  const [targetParticipantIds, setTargetParticipantIds] = useState<string[] | null>(null)
   const [cursor, setCursor] = useState(0)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   const [suggestionsOpen, setSuggestionsOpen] = useState(true)
@@ -58,6 +61,7 @@ export function RoomComposer({
   uploadingAttachmentRef.current = uploadingAttachment
   const uploadAbortRef = useRef<AbortController | null>(null)
   const roomIdRef = useRef<string | null>(null)
+  const supportsDeliveryQueue = data.snapshot?.deliveryQueueVersion === 1
   const composerQuery = suggestionsOpen ? getRoomComposerQuery(text, cursor) : null
   const suggestions = getRoomComposerSuggestions(composerQuery, data.snapshot?.participants ?? [])
   const selectSuggestion = (suggestion: RoomComposerSuggestion): void => {
@@ -66,8 +70,16 @@ export function RoomComposer({
     }
     const next = applyRoomComposerSuggestion(text, composerQuery, suggestion.value)
     setText(next.text)
-    if (composerQuery.kind === 'mention') {
-      setSelectedRecipients((current) => [...new Set([...current, suggestion.value])])
+    if (composerQuery.kind === 'mention' && !editing) {
+      if (suggestion.identity === 'all') {
+        setTargetParticipantIds(null)
+      } else if (suggestion.participant) {
+        setTargetParticipantIds((current) =>
+          current === null
+            ? [suggestion.participant!.id]
+            : [...new Set([...current, suggestion.participant!.id])]
+        )
+      }
     }
     setCursor(next.cursor)
     setSuggestionsOpen(false)
@@ -84,74 +96,67 @@ export function RoomComposer({
     releaseRoomAttachmentPreview(uploadingAttachmentRef.current?.previewUrl ?? null)
     setAttachments([])
     setUploadingAttachment(null)
-    setSelectedRecipients([])
+    setTargetParticipantIds(null)
     return () => {
       roomIdRef.current = null
       uploadAbortRef.current?.abort()
       releaseRoomAttachmentPreviews(attachmentsRef.current)
       releaseRoomAttachmentPreview(uploadingAttachmentRef.current?.previewUrl ?? null)
       for (const attachment of attachmentsRef.current) {
-        void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+        if (attachment.source === 'upload') {
+          void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+        }
       }
     }
   }, [data.roomId, data.target])
+
+  useRoomQueueComposerEdit({
+    data,
+    editing,
+    onEditComplete,
+    textareaRef,
+    attachmentsRef,
+    setText,
+    setTargetParticipantIds,
+    setAttachments
+  })
 
   const send = async (): Promise<void> => {
     if (!data.roomId || (!text.trim() && attachments.length === 0) || sending || uploading) {
       return
     }
-    const isContinue = text.trim().toLocaleLowerCase() === '/continue' && attachments.length === 0
-    const supportsRoomWork = data.snapshot?.workState !== undefined
-    const continueDeliveryIds =
-      isContinue && !supportsRoomWork
-        ? getRoomContinueDeliveryIds(data.messages, Object.values(data.deliveries))
-        : []
-    if (isContinue && !supportsRoomWork && continueDeliveryIds.length === 0) {
-      toast.error(translate('rooms.composer.noPausedLoop', 'No paused agent loop in this room'))
-      return
-    }
     setSending(true)
     try {
-      await (isContinue
-        ? supportsRoomWork
-          ? roomRpc<{ resumed: number }>(data.target, 'rooms.work.resume', {
-              roomId: data.roomId
-            }).then(({ resumed }) => {
-              if (resumed === 0) {
-                throw new Error(
-                  translate('rooms.composer.noPausedLoop', 'No paused agent loop in this room')
-                )
-              }
-            })
-          : Promise.all(
-              continueDeliveryIds.map((deliveryId) =>
-                roomRpc(data.target, 'rooms.deliveries.retry', { deliveryId })
-              )
-            )
-        : roomRpc(data.target, 'rooms.messages.send', {
-            roomId: data.roomId,
-            body: text.trim(),
-            replyToId: reply?.id ?? null,
-            mentions: resolveSelectedRoomRecipients(
-              selectedRecipients,
-              data.snapshot?.participants ?? []
-            ),
-            attachmentUploadIds: attachments.map((attachment) => attachment.uploadId)
-          }))
+      const submitted = await submitRoomComposer({
+        data,
+        text,
+        attachments,
+        editing,
+        targetParticipantIds
+      })
+      if (!submitted) {
+        return
+      }
       releaseRoomAttachmentPreviews(attachments)
       setText('')
-      setSelectedRecipients([])
+      setTargetParticipantIds(null)
       setAttachments([])
-      onReplyChange(null)
+      if (editing) {
+        onEditComplete()
+      }
     } catch (error) {
-      await Promise.all(
-        attachments.map((attachment) =>
-          cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+      if (!editing) {
+        await Promise.all(
+          attachments.flatMap((attachment) =>
+            attachment.source === 'upload'
+              ? [cancelRoomAttachmentUpload(data.target, attachment.uploadId)]
+              : []
+          )
         )
-      )
-      releaseRoomAttachmentPreviews(attachments)
-      setAttachments([])
-      toast.error(error instanceof Error ? error.message : String(error))
+        releaseRoomAttachmentPreviews(attachments)
+        setAttachments([])
+      }
+      showRoomActionError(error)
     } finally {
       setSending(false)
     }
@@ -200,7 +205,7 @@ export function RoomComposer({
           }
           setAttachments((current) => [
             ...current,
-            { ...uploaded, mimeType: file.type, previewUrl }
+            { ...uploaded, source: 'upload', mimeType: file.type, previewUrl }
           ])
         } catch (error) {
           releaseRoomAttachmentPreview(previewUrl)
@@ -229,12 +234,7 @@ export function RoomComposer({
 
   useRoomComposerClipboardPaste(composerRootRef, attach)
 
-  const hasDraft =
-    Boolean(text.trim()) ||
-    attachments.length > 0 ||
-    uploading ||
-    Boolean(reply) ||
-    selectedRecipients.length > 0
+  const hasDraft = Boolean(text.trim()) || attachments.length > 0 || uploading
   const workControl = useRoomComposerWorkControl({
     data,
     hasDraft,
@@ -279,61 +279,27 @@ export function RoomComposer({
           void attach(Array.from(event.dataTransfer.files))
         }}
       >
-        {reply ? (
-          <div className="mb-1 flex items-center gap-2 rounded bg-background/70 px-2 py-1 text-xs text-muted-foreground">
-            <span className="min-w-0 flex-1 truncate">
-              {translate('rooms.composer.replyingTo', 'Replying to @{{identity}}: {{body}}', {
-                identity: reply.senderIdentity,
-                body: reply.body
-              })}
-            </span>
-            <button
-              type="button"
-              onClick={() => onReplyChange(null)}
-              aria-label={translate('rooms.composer.cancelReply', 'Cancel reply')}
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ) : null}
-        {selectedRecipients.length > 0 ? (
-          <div className="mb-1 flex flex-wrap gap-1">
-            {selectedRecipients.map((recipient) => (
-              <span
-                key={recipient}
-                className="inline-flex items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
-              >
-                {recipient}
-                <button
-                  type="button"
-                  aria-label={translate('rooms.composer.removeRecipient', 'Remove {{recipient}}', {
-                    recipient
-                  })}
-                  onClick={() =>
-                    setSelectedRecipients((current) =>
-                      current.filter((value) => value !== recipient)
-                    )
-                  }
-                >
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
-          </div>
+        {supportsDeliveryQueue ? (
+          <RoomComposerQueueTargets
+            participants={data.snapshot?.participants ?? []}
+            value={targetParticipantIds}
+            onChange={setTargetParticipantIds}
+            disabled={Boolean(editing)}
+          />
         ) : null}
         <RoomComposerAttachments
           attachments={attachments}
           uploading={uploadingAttachment}
           onCancelUpload={() => uploadAbortRef.current?.abort()}
           onRemove={(attachment) => {
-            setAttachments((current) =>
-              current.filter((item) => item.uploadId !== attachment.uploadId)
-            )
+            setAttachments((current) => current.filter((item) => item !== attachment))
             releaseRoomAttachmentPreview(attachment.previewUrl)
-            void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+            if (attachment.source === 'upload') {
+              void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+            }
           }}
         />
-        <textarea
+        <ComposerPromptTextarea
           ref={textareaRef}
           value={text}
           onChange={(event) => {
@@ -374,12 +340,10 @@ export function RoomComposer({
               void send()
             }
           }}
-          rows={2}
           placeholder={translate(
             'rooms.composer.placeholder',
             'Message the room — use @agent to invite a response'
           )}
-          className="block max-h-48 min-h-14 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none"
         />
         <input
           ref={fileInputRef}
@@ -393,10 +357,13 @@ export function RoomComposer({
           onAttach={() => fileInputRef.current?.click()}
           textareaRef={textareaRef}
           run={{
-            mode: workControl.mode,
-            label: workControl.label,
-            disabled: workControl.disabled,
-            invoke: () => void workControl.run()
+            mode: editing ? 'send' : workControl.mode,
+            label: editing ? translate('rooms.common.send', 'Send') : workControl.label,
+            disabled: editing
+              ? sending || uploading || (!text.trim() && attachments.length === 0)
+              : workControl.disabled,
+            loading: !editing && workControl.loading,
+            invoke: () => void (editing ? send() : workControl.run())
           }}
         />
       </div>

@@ -9,6 +9,10 @@ import {
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-schema'
 import type { TaskProvider } from '../../../../shared/task-providers'
+import {
+  normalizeEnabledStructuredMachineAgents,
+  STRUCTURED_MACHINE_AGENTS
+} from '../../../../shared/structured-agent-provider'
 
 const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -66,6 +70,12 @@ export const SettingsUpdate = z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
+    experimentalStructuredNativeChat: z.boolean().optional(),
+    experimentalRoomLiveSteering: z.boolean().optional(),
+    enabledHarnessStreamingAgents: z
+      .array(z.enum(STRUCTURED_MACHINE_AGENTS))
+      .transform(normalizeEnabledStructuredMachineAgents)
+      .optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

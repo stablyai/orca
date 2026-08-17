@@ -15,7 +15,7 @@ export class RoomWorkController {
   ) {}
 
   async stop(roomId: string): Promise<number> {
-    const blocked = this.deliveries.blockRoom(roomId)
+    const fence = this.deliveries.requestRoomFence(roomId, { discardConfirmations: true })
     try {
       const result = this.db.transaction(() => this.db.messages.deliveries.stopRoom(roomId))
       result.deliveries.forEach((delivery) =>
@@ -23,25 +23,43 @@ export class RoomWorkController {
       )
       const stopping = result.deliveries.filter((delivery) => delivery.error === 'room_stopping')
       const participantIds = [...new Set(stopping.map((delivery) => delivery.participantId))]
-      this.transcript.clearStoppedDeliveries(participantIds)
-      await blocked
-
-      const interrupts = await Promise.allSettled(
+      const interrupting = Promise.allSettled(
         participantIds.map(async (participantId): Promise<string[]> => {
           const ids = stopping
             .filter((delivery) => delivery.participantId === participantId)
             .map((delivery) => delivery.id)
-          const participant = this.db.participants.get(participantId)
+          const participant = this.db.participants
+            .list(roomId)
+            .find((candidate) => candidate.id === participantId)
+          if (!participant) {
+            return ids
+          }
           const adapter = participant.agent ? this.adapters[participant.agent] : undefined
           const binding = roomParticipantHarnessBinding(participant)
           if (adapter && binding && participant.state !== 'sleeping') {
-            await adapter.interrupt(binding)
+            try {
+              await adapter.interrupt(binding)
+            } catch (error) {
+              if (
+                this.db.participants
+                  .list(roomId)
+                  .some((candidate) => candidate.id === participantId)
+              ) {
+                throw error
+              }
+            }
           }
           return ids
         })
       )
+      await fence.ready
+      const interrupts = await interrupting
       const stoppedIds = interrupts.flatMap((result) =>
         result.status === 'fulfilled' ? result.value : []
+      )
+      const stoppedSet = new Set(stoppedIds)
+      this.transcript.finalizeStoppedDeliveries(
+        result.stopped.filter((delivery) => stoppedSet.has(delivery.id))
       )
       const finished = this.db.transaction(() =>
         this.db.messages.deliveries.finishRoomStop(stoppedIds)
@@ -53,22 +71,23 @@ export class RoomWorkController {
       }
       return result.deliveries.length
     } finally {
-      this.deliveries.unblockRoom(roomId)
+      fence.release()
     }
   }
 
   async resume(roomId: string): Promise<number> {
-    const resumed = this.db.transaction(() => this.db.messages.deliveries.resumeRoom(roomId))
-    resumed.forEach((delivery) => this.emit(roomId, { type: 'delivery.updated', delivery }))
-    if (resumed.length > 0) {
-      this.deliveries.wake()
-    }
-    return resumed.length
+    const result = this.db.transaction(() => this.db.messages.deliveries.resumeRoom(roomId))
+    result.deliveries.forEach((delivery) =>
+      this.emit(roomId, { type: 'delivery.updated', delivery })
+    )
+    this.emit(roomId, { type: 'room.updated', room: this.db.core.get(roomId) })
+    this.deliveries.wake()
+    return result.resumed.length
   }
 
   async stopMessage(messageId: string): Promise<void> {
     const roomId = this.db.messages.get(messageId).roomId
-    const blocked = this.deliveries.blockRoom(roomId)
+    const fence = this.deliveries.requestRoomFence(roomId, { discardConfirmations: true })
     try {
       const result = this.db.transaction(() => this.db.messages.deliveries.stopMessage(messageId))
       result.deliveries.forEach((delivery) =>
@@ -88,7 +107,7 @@ export class RoomWorkController {
         )
       ]
       this.transcript.clearStoppedDeliveries(interruptIds)
-      await blocked
+      await fence.ready
       await Promise.allSettled(
         interruptIds.map(async (participantId) => {
           const participant = this.db.participants.get(participantId)
@@ -100,7 +119,7 @@ export class RoomWorkController {
         })
       )
     } finally {
-      this.deliveries.unblockRoom(roomId)
+      fence.release()
     }
   }
 }

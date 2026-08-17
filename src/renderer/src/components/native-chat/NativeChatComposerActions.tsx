@@ -17,6 +17,7 @@ export type NativeChatComposerActionsProps = {
   dictationDisabled: boolean
   sendDisabled: boolean
   isWorking: boolean
+  sendWhileWorking?: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -38,6 +39,7 @@ export function NativeChatComposerActions({
   dictationDisabled,
   sendDisabled,
   isWorking,
+  sendWhileWorking = false,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -59,12 +61,13 @@ export function NativeChatComposerActions({
     if (event.detail > 1) {
       return
     }
-    if (isWorking) {
+    if (isWorking && !sendWhileWorking) {
       onStop?.()
     } else {
       onSend()
     }
   }
+  const stopMode = isWorking && !sendWhileWorking
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
@@ -147,11 +150,13 @@ export function NativeChatComposerActions({
           </TooltipContent>
         </Tooltip>
         <ComposerRunButton
-          mode={isWorking ? 'stop' : 'send'}
+          mode={stopMode ? 'stop' : 'send'}
           label={
-            isWorking
+            stopMode
               ? translate('components.native-chat.stop', 'Stop the agent')
-              : translate('components.native-chat.composer.send', 'Send')
+              : isWorking
+                ? translate('components.native-chat.queue.add', 'Add to queue')
+                : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}
           onClick={handleCriticalAction}

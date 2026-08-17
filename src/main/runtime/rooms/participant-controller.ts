@@ -19,6 +19,7 @@ import { waitForRoomParticipantReady } from './participant-readiness'
 import { RoomParticipantSessionControls } from './participant-session-controls'
 import { RoomParticipantMembership } from './participant-membership'
 import { stopRoomParticipants } from './participant-room-stop'
+import { beginParticipantRemoval, waitForParticipantRemoval } from './participant-removal'
 import {
   ingestRoomParticipantClaudeStatusLine,
   ingestRoomParticipantStatus,
@@ -31,10 +32,9 @@ export { ROOM_AGENT_IDLE_SLEEP_MS } from './participant-hibernation'
 
 const HIBERNATION_SWEEP_MS = 5 * 60 * 1000
 
-export type { RoomParticipantConnection } from './participant-membership'
-
 export class RoomParticipantController {
   private readonly restoring = new Map<string, Promise<RoomParticipant>>()
+  private readonly removing = new Map<string, Promise<void>>()
   private readonly blockedRooms = new Set<string>()
   private readonly membership: RoomParticipantMembership
   private readonly sessionControls: RoomParticipantSessionControls
@@ -86,16 +86,18 @@ export class RoomParticipantController {
     return this.membership.add(input)
   }
 
-  async remove(id: string): Promise<void> {
-    return this.membership.remove(id)
-  }
+  remove = (id: string): Promise<void> =>
+    beginParticipantRemoval(id, this.removing, this.restoring.get(id), this.membership)
 
-  async restore(participant: RoomParticipant, requireReady = false): Promise<RoomParticipant> {
+  restore(participant: RoomParticipant, requireReady = false): Promise<RoomParticipant> {
     this.assertAvailable(participant.roomId)
+    const removal = this.removing.get(participant.id)
+    if (removal) {
+      return waitForParticipantRemoval(removal)
+    }
     const active = this.restoring.get(participant.id)
     if (active) {
-      const restored = await active
-      return requireReady ? this.waitUntilReady(restored) : restored
+      return requireReady ? active.then((restored) => this.waitUntilReady(restored)) : active
     }
     const restore = this.restoreParticipant(participant, requireReady).finally(() => {
       this.restoring.delete(participant.id)
@@ -190,7 +192,10 @@ export class RoomParticipantController {
         }
       }
     }
-    return markRoomParticipantSleeping(this.db, this.emit, participant)
+    return binding.transport === 'machine' &&
+      this.db.activities.get(participant.id)?.state === 'working'
+      ? participant
+      : markRoomParticipantSleeping(this.db, this.emit, participant)
   }
 
   /** Stops harness processes of provably idle participants; only a live agent
@@ -219,9 +224,10 @@ export class RoomParticipantController {
   async blockRoom(roomId: string): Promise<() => void> {
     this.blockedRooms.add(roomId)
     await this.hibernating
-    const participants = this.db.participants.list(roomId)
     await Promise.allSettled(
-      participants.map((participant) => this.restoring.get(participant.id)).filter(Boolean)
+      this.db.participants
+        .list(roomId)
+        .flatMap((participant) => this.restoring.get(participant.id) ?? [])
     )
     return stopRoomParticipants(roomId, this.db, this.adapters, this.transcriptBridge)
   }
@@ -290,17 +296,13 @@ export class RoomParticipantController {
     }
   }
 
-  async compact(id: string): Promise<RoomParticipant> {
-    return this.sessionControls.compact(id)
-  }
+  compact = (id: string): Promise<RoomParticipant> => this.sessionControls.compact(id)
 
-  async control(id: string, command: string): Promise<RoomParticipant> {
-    return this.sessionControls.control(id, command)
-  }
+  control = (id: string, command: string): Promise<RoomParticipant> =>
+    this.sessionControls.control(id, command)
 
-  async reconfigure(id: string, preferences: AgentLaunchPreferences): Promise<RoomParticipant> {
-    return this.sessionControls.reconfigure(id, preferences)
-  }
+  reconfigure = (id: string, preferences: AgentLaunchPreferences): Promise<RoomParticipant> =>
+    this.sessionControls.reconfigure(id, preferences)
 
   ingestStatus(event: AgentHookEventPayload & { receivedAt: number }): void {
     ingestRoomParticipantStatus(this.db, this.adapters, this.transcriptBridge, this.emit, event)

@@ -660,7 +660,18 @@ describe('a structured codex session over agentSession.*', () => {
     expect(older.page.hasOlder).toBe(false)
     // Every step of the conversation, in order, from the durable journal alone —
     // no page overlaps another, and nothing the live stream showed is missing.
-    expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
+    const historyItems = [...older.page.items, ...tail.page.items]
+    const lifecycleItems = historyItems.filter(
+      (item) => item.body.kind === 'status' && item.body.turnLifecycle
+    )
+    expect(lifecycleItems).toHaveLength(1)
+    expect(lifecycleItems[0]?.body).toMatchObject({
+      turnLifecycle: { turnId: TURN, state: 'completed' }
+    })
+    const contentItems = historyItems.filter(
+      (item) => item.body.kind !== 'status' || !item.body.turnLifecycle
+    )
+    expect(contentItems.map((item) => item.body?.kind)).toEqual([
       'message',
       'message',
       'tool-call',
@@ -668,14 +679,7 @@ describe('a structured codex session over agentSession.*', () => {
       'status',
       'message'
     ])
-    expect([...older.page.items, ...tail.page.items].map(textOf)).toEqual([
-      'list files',
-      'Two files.',
-      '',
-      '',
-      '',
-      'Stopped.'
-    ])
+    expect(contentItems.map(textOf)).toEqual(['list files', 'Two files.', '', '', '', 'Stopped.'])
   })
 
   it('caches shell exports but re-reads configured overrides for a resume', async () => {

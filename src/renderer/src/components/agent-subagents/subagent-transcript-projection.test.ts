@@ -12,7 +12,7 @@ const message = (overrides: Partial<NativeChatMessage>): NativeChatMessage => ({
 })
 
 describe('projectSubagentTranscript', () => {
-  it('removes bootstrap and renders the parent task before real subagent activity', () => {
+  it.each([true, false])('projects parent tasks with showIdentity=%s', (showIdentity) => {
     const result = projectSubagentTranscript(
       [
         message({
@@ -43,13 +43,16 @@ describe('projectSubagentTranscript', () => {
           blocks: [{ type: 'text', text: 'Done' }]
         })
       ],
-      'codex'
+      'codex',
+      showIdentity
     )
 
     expect(result.map((entry) => entry.id)).toEqual(['task', 'reasoning', 'answer'])
     expect(result[0]).toMatchObject({
       role: 'user',
-      blocks: [{ type: 'text', text: 'Task from @codex' }],
+      blocks: [
+        { type: 'text', text: showIdentity ? 'Task from @codex' : 'Task from parent agent' }
+      ],
       subagentEvent: { kind: 'task', parentIdentity: 'codex' }
     })
   })

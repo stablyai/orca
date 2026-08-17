@@ -164,7 +164,11 @@ describe('codex item identity', () => {
       ordinals
     })
 
-    expect(command).toEqual({ provider: 'orca', clientMessageId: 'codex-item:thread-abc:item-2' })
+    expect(command).toEqual({
+      provider: 'orca',
+      clientMessageId: 'codex-item:thread-abc:item-2',
+      turn: { turnId: 'turn-1' }
+    })
     expect(orphan).toEqual({ provider: 'orca', clientMessageId: 'codex-item:thread-abc:item-1' })
   })
 })
@@ -576,10 +580,11 @@ describe('codex item bodies', () => {
     })
   })
 
-  it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
+  it('renders reasoning distinctly and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -818,7 +823,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'first\nsecond' }]
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {

@@ -31,7 +31,7 @@ describe('acpTextMessageId', () => {
     })
   })
 
-  it('streams thought while buffering an unconfirmed agent message', () => {
+  it('streams both visible text and thought without guessing a final phase', () => {
     const emit = vi.fn()
     const sink = {
       emit,
@@ -49,7 +49,10 @@ describe('acpTextMessageId', () => {
       { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'candidate' } },
       'turn'
     )
-    expect(emit).not.toHaveBeenCalled()
+    expect(emit.mock.calls.map(([event]) => event.type)).toEqual([
+      'message.started',
+      'message.delta'
+    ])
 
     emitAcpTextChunk(
       sink,
@@ -58,6 +61,8 @@ describe('acpTextMessageId', () => {
       'turn'
     )
     expect(emit.mock.calls.map(([event]) => event.type)).toEqual([
+      'message.started',
+      'message.delta',
       'message.started',
       'message.delta'
     ])

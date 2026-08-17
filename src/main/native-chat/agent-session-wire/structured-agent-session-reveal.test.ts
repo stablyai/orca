@@ -125,6 +125,28 @@ describe('revealing one structured session on demand', () => {
 
     await expect(restorer.restoreOne('session-absent')).resolves.toBe(false)
   })
+
+  it.each(['openclaude', 'grok', 'omp'])(
+    'reveals %s without substituting its provider',
+    async (agent) => {
+      vi.spyOn(providerSupport, 'adapterSupportsRecord').mockReturnValue(true)
+      const base = recordFor('claude', 'session-answered')
+      const stored = {
+        ...base,
+        location: { ...base.location, workspaceId: 'workspace-1' },
+        provider: 'acp' as const,
+        agent
+      }
+      await expect(
+        revealStructuredAgentSession(
+          { store: { getRecord: () => stored } as never, adapter: {} as never },
+          'session-answered',
+          () => true,
+          async () => true
+        )
+      ).resolves.toMatchObject({ agent, workspaceId: 'workspace-1', readable: true })
+    }
+  )
 })
 
 describe('a record whose journal cannot be read', () => {

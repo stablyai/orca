@@ -1,5 +1,5 @@
 import type SyncDatabase from '../../sqlite/sync-database'
-import type { RoomDelivery, RoomDeliveryAttempt, RoomWorkState } from '../../../shared/rooms'
+import type { RoomDelivery, RoomWorkState } from '../../../shared/rooms'
 import { deliveryFromRow, type RoomRow } from './rows'
 import {
   finishRoomStop,
@@ -9,121 +9,84 @@ import {
   stopRoomDeliveries,
   supersedeRoomStop
 } from './delivery-work-control'
+import { listRoomAutoSteerDue, listRoomDue, nextRoomDueAt } from './delivery-due-queries'
+import { claimRoomDelivery } from './delivery-claim-operations'
+import type { RoomReadyTarget } from './delivery-readiness-evidence'
+import { deferPausedRoomDelivery } from './delivery-paused-claim'
+import {
+  assertRoomMessageDeliveryMutable,
+  claimRoomBroadcastDeliveries,
+  claimRoomBroadcastSteer,
+  isInitialBroadcastDispatch,
+  isBroadcastMessage,
+  reorderRoomBroadcastQueue,
+  reorderRoomDeliveryQueue,
+  retryRoomDelivery,
+  returnRoomSteerToNext,
+  suppressRoomParticipantQueuedDeliveries,
+  retargetRoomMessageDeliveries
+} from './delivery-queue-operations'
+import {
+  awaitingRoomDeliveryResponseGroup,
+  failRoomDeliveryResponseGroup,
+  listRoomDeliveriesForTurn,
+  markRoomDeliveryResponseGroup
+} from './delivery-turn-groups'
+import { recoverRoomDeliveries, suppressDeletedRoomMessageDeliveries } from './delivery-recovery'
+import { listMutableRoomBroadcastIds, normalizeNewRoomBroadcasts } from './delivery-broadcast-order'
+import { removeDormantRoomMessageTarget } from './delivery-dormant-target'
+import { finishRoomDelivery } from './delivery-completion'
 
 export class RoomDeliveryStore {
   constructor(private readonly db: SyncDatabase.Database) {}
 
   listForMessage(messageId: string): RoomDelivery[] {
-    return (
-      this.db
-        .prepare('SELECT * FROM room_deliveries WHERE message_id = ? ORDER BY participant_id')
-        .all(messageId) as RoomRow[]
-    ).map(deliveryFromRow)
+    const rows = this.db
+      .prepare('SELECT * FROM room_deliveries WHERE message_id = ? ORDER BY participant_id')
+      .all(messageId) as RoomRow[]
+    return rows.map(deliveryFromRow)
   }
 
   listForMessages(messageIds: string[]): RoomDelivery[] {
-    if (messageIds.length === 0) {
-      return []
-    }
-    const placeholders = messageIds.map(() => '?').join(', ')
-    return (
-      this.db
-        .prepare(
-          `SELECT * FROM room_deliveries WHERE message_id IN (${placeholders})
-           ORDER BY message_id, participant_id`
-        )
-        .all(...messageIds) as RoomRow[]
-    ).map(deliveryFromRow)
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM room_deliveries WHERE message_id IN (${messageIds.map(() => '?').join(', ')})
+         ORDER BY message_id, participant_id`
+      )
+      .all(...messageIds) as RoomRow[]
+    return rows.map(deliveryFromRow)
   }
 
   listDue(now = Date.now(), limit = 100, excludedRoomIds: readonly string[] = []): RoomDelivery[] {
-    const excluded = excludedRoomIds.map(() => '?').join(', ')
-    return (
-      this.db
-        .prepare(
-          `SELECT d.* FROM room_deliveries d JOIN room_messages message ON message.id = d.message_id
-         WHERE d.state = 'pending' AND d.next_attempt_at <= ?
-           ${excluded ? `AND message.room_id NOT IN (${excluded})` : ''}
-           AND NOT EXISTS (
-             SELECT 1 FROM room_deliveries blocked
-             JOIN room_messages blocked_message ON blocked_message.id = blocked.message_id
-             WHERE blocked.participant_id = d.participant_id AND blocked.id <> d.id AND (
-               blocked.state = 'delivering' OR
-               (blocked.state = 'delivered' AND blocked.responded_at IS NULL) OR
-               (blocked.state = 'failed' AND blocked.error = 'room_delivery_uncertain') OR
-               (blocked.state = 'suppressed' AND blocked.error = 'room_stopping') OR
-               (blocked_message.sequence < message.sequence AND blocked.state = 'pending')
-             )
-           )
-         ORDER BY d.next_attempt_at, message.sequence LIMIT ?`
-        )
-        .all(now, ...excludedRoomIds, Math.min(Math.max(limit, 1), 500)) as RoomRow[]
-    ).map(deliveryFromRow)
+    return listRoomDue(this.db, now, limit, excludedRoomIds)
+  }
+
+  listAutoSteerDue(
+    now = Date.now(),
+    limit = 100,
+    excludedRoomIds: readonly string[] = []
+  ): RoomDelivery[] {
+    return listRoomAutoSteerDue(this.db, now, limit, excludedRoomIds)
   }
 
   nextDueAt(excludedRoomIds: readonly string[] = []): number | null {
-    const excluded = excludedRoomIds.map(() => '?').join(', ')
-    const row = this.db
-      .prepare(
-        `SELECT min(d.next_attempt_at) AS next_due_at
-         FROM room_deliveries d JOIN room_messages message ON message.id = d.message_id
-         WHERE d.state = 'pending'
-           ${excluded ? `AND message.room_id NOT IN (${excluded})` : ''}
-           AND NOT EXISTS (
-             SELECT 1 FROM room_deliveries blocked
-             JOIN room_messages blocked_message ON blocked_message.id = blocked.message_id
-             WHERE blocked.participant_id = d.participant_id AND blocked.id <> d.id AND (
-               blocked.state = 'delivering' OR
-               (blocked.state = 'delivered' AND blocked.responded_at IS NULL) OR
-               (blocked.state = 'failed' AND blocked.error = 'room_delivery_uncertain') OR
-               (blocked.state = 'suppressed' AND blocked.error = 'room_stopping') OR
-               (blocked_message.sequence < message.sequence AND blocked.state = 'pending')
-             )
-           )
-         `
-      )
-      .get(...excludedRoomIds) as RoomRow
-    return row.next_due_at === null ? null : Number(row.next_due_at)
+    return nextRoomDueAt(this.db, excludedRoomIds)
   }
 
   recoverInterrupted(now = Date.now()): void {
-    const interrupted = (
-      this.db
-        .prepare(
-          `SELECT * FROM room_deliveries WHERE state = 'delivering' OR (
-             state = 'delivered' AND provider_turn_id IS NULL AND responded_at IS NULL
-           )`
-        )
-        .all() as RoomRow[]
-    ).map(deliveryFromRow)
-    for (const delivery of interrupted) {
-      const uncertain = delivery.phase !== 'waking'
-      this.finish(
-        delivery,
-        uncertain ? 'failed' : 'pending',
-        uncertain ? 'room_delivery_uncertain' : 'delivery_interrupted',
-        uncertain ? Number.MAX_SAFE_INTEGER : now,
-        now
-      )
-    }
+    recoverRoomDeliveries(this.db, now, (...args) => finishRoomDelivery(this.db, ...args))
   }
 
   suppressDeletedMessages(): void {
-    this.db
-      .prepare(
-        `UPDATE room_deliveries SET state = 'suppressed', phase = NULL,
-         error = 'room_message_deleted', next_attempt_at = ?
-         WHERE message_id IN (SELECT id FROM room_messages WHERE deleted_at IS NOT NULL) AND (
-           state IN ('pending', 'delivering') OR
-           (state = 'delivered' AND responded_at IS NULL) OR
-           (state = 'failed' AND error = 'room_delivery_uncertain')
-         )`
-      )
-      .run(Number.MAX_SAFE_INTEGER)
+    suppressDeletedRoomMessageDeliveries(this.db)
   }
 
   workState(roomId: string): RoomWorkState {
     return roomDeliveryWorkState(this.db, roomId)
+  }
+
+  supersedeRoomStop(roomId: string): RoomDelivery[] {
+    return supersedeRoomStop(this.db, roomId)
   }
 
   stopRoom(roomId: string): { stopped: RoomDelivery[]; deliveries: RoomDelivery[] } {
@@ -134,12 +97,11 @@ export class RoomDeliveryStore {
     return stopMessageDeliveries(this.db, messageId)
   }
 
-  resumeRoom(roomId: string, now = Date.now()): RoomDelivery[] {
+  resumeRoom(
+    roomId: string,
+    now = Date.now()
+  ): { resumed: RoomDelivery[]; deliveries: RoomDelivery[] } {
     return resumeRoomDeliveries(this.db, roomId, now)
-  }
-
-  supersedeRoomStop(roomId: string): RoomDelivery[] {
-    return supersedeRoomStop(this.db, roomId)
   }
 
   finishRoomStop(deliveryIds: readonly string[]): RoomDelivery[] {
@@ -147,27 +109,99 @@ export class RoomDeliveryStore {
   }
 
   retry(id: string, now = Date.now()): RoomDelivery {
-    this.db
-      .prepare(
-        `UPDATE room_deliveries SET state = 'pending', error = NULL, next_attempt_at = ?
-         WHERE id = ? AND (
-           state = 'failed' OR
-           (state = 'suppressed' AND error IS NULL)
-         )`
-      )
-      .run(now, id)
-    return this.get(id)
+    return retryRoomDelivery(this.db, id, now)
+  }
+
+  reorder(
+    participantId: string,
+    deliveryIds: readonly string[],
+    movedDeliveryId?: string,
+    retargetMessageId?: string
+  ): RoomDelivery[] {
+    return reorderRoomDeliveryQueue(
+      this.db,
+      participantId,
+      deliveryIds,
+      movedDeliveryId,
+      retargetMessageId
+    )
+  }
+
+  reorderAll(
+    roomId: string,
+    messageIds: readonly string[],
+    movedMessageId?: string,
+    retargetMessageId?: string
+  ): RoomDelivery[] {
+    return reorderRoomBroadcastQueue(this.db, roomId, messageIds, movedMessageId, retargetMessageId)
+  }
+
+  retarget(messageId: string, participantIds: readonly string[], now = Date.now()): RoomDelivery[] {
+    return retargetRoomMessageDeliveries(this.db, messageId, participantIds, now)
+  }
+
+  removeDormantTarget(
+    messageId: string,
+    participantId: string
+  ): ReturnType<typeof removeDormantRoomMessageTarget> {
+    return removeDormantRoomMessageTarget(this.db, messageId, participantId)
+  }
+
+  assertMessageMutable(messageId: string): void {
+    assertRoomMessageDeliveryMutable(this.db, messageId)
   }
 
   claim(id: string): RoomDelivery | null {
-    const changed = this.db
-      .prepare(
-        `UPDATE room_deliveries SET state = 'delivering', phase = 'waking', error = NULL,
-         attempts = attempts + 1
-         WHERE id = ? AND state IN ('pending', 'failed')`
-      )
-      .run(id).changes
-    return changed === 1 ? this.get(id) : null
+    return claimRoomDelivery(this.db, id)
+  }
+
+  claimBroadcast(messageId: string, readiness: readonly RoomReadyTarget[]): RoomDelivery[] | null {
+    return claimRoomBroadcastDeliveries(this.db, messageId, readiness)
+  }
+
+  claimBroadcastSteer(
+    messageId: string,
+    expectedTargets: Parameters<typeof claimRoomBroadcastSteer>[2],
+    steerParticipantIds: readonly string[]
+  ): RoomDelivery[] | null {
+    return claimRoomBroadcastSteer(this.db, messageId, expectedTargets, steerParticipantIds)
+  }
+
+  isBroadcastMessage(messageId: string): boolean {
+    return isBroadcastMessage(this.db, messageId)
+  }
+
+  isInitialBroadcastDispatch(messageId: string): boolean {
+    return isInitialBroadcastDispatch(this.db, messageId)
+  }
+
+  listMutableBroadcastIds(roomId: string): string[] {
+    return listMutableRoomBroadcastIds(this.db, roomId)
+  }
+
+  normalizeNewBroadcasts(roomId: string, previousIds: readonly string[]): RoomDelivery[] {
+    return normalizeNewRoomBroadcasts(this.db, roomId, previousIds)
+  }
+
+  suppressParticipantQueue(participantId: string): RoomDelivery[] {
+    return suppressRoomParticipantQueuedDeliveries(this.db, participantId)
+  }
+
+  claimSteer(id: string): RoomDelivery | null {
+    return claimRoomDelivery(this.db, id, true)
+  }
+
+  returnSteerToNext(
+    id: string,
+    error: string | null,
+    now = Date.now(),
+    moveToHead = true
+  ): RoomDelivery {
+    return returnRoomSteerToNext(this.db, id, error, now, moveToHead)
+  }
+
+  deferPaused(delivery: RoomDelivery, now = Date.now()): RoomDelivery | null {
+    return deferPausedRoomDelivery(this.db, delivery, now)
   }
 
   complete(
@@ -178,7 +212,7 @@ export class RoomDeliveryStore {
   ): RoomDelivery {
     const delivery = this.get(id)
     return delivery.state === 'delivering'
-      ? this.finish(delivery, state, error, nextAttemptAt)
+      ? finishRoomDelivery(this.db, delivery, state, error, nextAttemptAt)
       : delivery
   }
 
@@ -189,13 +223,14 @@ export class RoomDeliveryStore {
     return this.get(id)
   }
 
-  delivering(participantId: string): RoomDelivery | null {
+  delivering(participantId: string, intent?: RoomDelivery['intent']): RoomDelivery | null {
     const row = this.db
       .prepare(
         `SELECT * FROM room_deliveries WHERE participant_id = ? AND state = 'delivering'
+         ${intent ? 'AND intent = ?' : ''}
          ORDER BY next_attempt_at, id LIMIT 1`
       )
-      .get(participantId) as RoomRow | undefined
+      .get(...(intent ? [participantId, intent] : [participantId])) as RoomRow | undefined
     return row ? deliveryFromRow(row) : null
   }
 
@@ -225,27 +260,65 @@ export class RoomDeliveryStore {
     const row = this.db
       .prepare(
         `SELECT * FROM room_deliveries WHERE participant_id = ? AND provider_turn_id = ?
-         AND state = 'delivered' AND responded_at IS NULL LIMIT 1`
+         AND state = 'delivered' AND responded_at IS NULL
+         ORDER BY queue_position DESC, delivered_at DESC LIMIT 1`
       )
       .get(participantId, providerTurnId) as RoomRow | undefined
     return row ? deliveryFromRow(row) : null
   }
 
+  awaitingResponseGroup(participantId: string, providerTurnId: string): RoomDelivery[] {
+    return awaitingRoomDeliveryResponseGroup(this.db, participantId, providerTurnId)
+  }
+
+  listForTurn(participantId: string, providerTurnId: string): RoomDelivery[] {
+    return listRoomDeliveriesForTurn(this.db, participantId, providerTurnId)
+  }
+
   markResponded(id: string, responseMessageId: string | null, respondedAt: number): RoomDelivery {
     this.db
       .prepare(
-        `UPDATE room_deliveries SET response_message_id = ?, responded_at = ?
-         WHERE id = ? AND state = 'delivered' AND responded_at IS NULL`
+        `UPDATE room_deliveries SET response_message_id = ?, responded_at = ?,
+         state = 'delivered', error = NULL
+         WHERE id = ? AND responded_at IS NULL AND (
+           state = 'delivered' OR (state = 'suppressed' AND error = 'room_stopping')
+         )`
       )
       .run(responseMessageId, respondedAt, id)
     return this.get(id)
   }
 
+  markRespondedGroup(
+    participantId: string,
+    providerTurnId: string,
+    responseMessageId: string | null,
+    respondedAt: number
+  ): RoomDelivery[] {
+    return markRoomDeliveryResponseGroup(
+      this.db,
+      participantId,
+      providerTurnId,
+      responseMessageId,
+      respondedAt
+    )
+  }
+
   failResponse(id: string, error: string, now = Date.now()): RoomDelivery {
     const delivery = this.get(id)
     return delivery.state === 'delivered'
-      ? this.finish(delivery, 'failed', error, Number.MAX_SAFE_INTEGER, now)
+      ? finishRoomDelivery(this.db, delivery, 'failed', error, Number.MAX_SAFE_INTEGER, now)
       : delivery
+  }
+
+  failResponseGroup(
+    participantId: string,
+    providerTurnId: string,
+    error: string,
+    now = Date.now()
+  ): RoomDelivery[] {
+    return failRoomDeliveryResponseGroup(this.db, participantId, providerTurnId, (id) =>
+      this.failResponse(id, error, now)
+    )
   }
 
   get(id: string): RoomDelivery {
@@ -256,40 +329,5 @@ export class RoomDeliveryStore {
       throw new Error('room_delivery_not_found')
     }
     return deliveryFromRow(row)
-  }
-
-  private finish(
-    delivery: RoomDelivery,
-    state: RoomDelivery['state'],
-    error: string | null,
-    nextAttemptAt: number,
-    now = Date.now()
-  ): RoomDelivery {
-    const history = [...(delivery.attemptHistory ?? [])]
-    if (error && delivery.phase) {
-      const attempt: RoomDeliveryAttempt = {
-        attempt: delivery.attempts,
-        phase: delivery.phase,
-        error,
-        at: now
-      }
-      history.push(attempt)
-    }
-    this.db
-      .prepare(
-        `UPDATE room_deliveries SET state = ?, phase = NULL, error = ?, next_attempt_at = ?,
-         delivered_at = ?, provider_turn_id = NULL, attempt_history_json = ?
-         WHERE id = ? AND state = ?`
-      )
-      .run(
-        state,
-        error,
-        nextAttemptAt,
-        state === 'delivered' ? now : null,
-        JSON.stringify(history.slice(-5)),
-        delivery.id,
-        delivery.state
-      )
-    return this.get(delivery.id)
   }
 }

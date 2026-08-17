@@ -105,6 +105,13 @@ export type RoomHarnessRuntime = {
     providerSession: RoomProviderSession,
     force?: boolean
   ): void
+  publishStructuredAgentSessionTab?(input: {
+    workspaceId: string
+    sessionId: string
+    agent: StructuredMachineAgent
+    activate: boolean
+    notify?: boolean
+  }): Promise<void>
   emitRoomEvent?(roomId: string, event: RoomEvent): void
   listRoomRunningAgents(worktreeId: string): Promise<RoomRunningAgent[]>
   listRoomExistingAgents(
@@ -124,6 +131,8 @@ export type RoomHarnessRuntime = {
   ): Promise<string>
   cleanupDeletedRoomResources?(manifest: RoomDeletionManifest): Promise<void>
   ensureStructuredAgentSessionHost?(): Promise<void>
+  structuredAgentStreamingEnabled?(agent: StructuredMachineAgent): boolean
+  roomLiveSteeringEnabled?(): boolean
   resolveStructuredAgentSessionCreateIntent?(input: {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
@@ -165,6 +174,11 @@ export type RoomHarnessAdapter = {
       clearInput?: boolean
       imagePaths?: readonly string[]
     }
+  ): Promise<RuntimeTerminalSend>
+  steer?(
+    binding: RoomHarnessBinding,
+    prompt: string,
+    options?: { imagePaths?: readonly string[] }
   ): Promise<RuntimeTerminalSend>
   interrupt(binding: RoomHarnessBinding): Promise<void>
   prepareControl?(binding: RoomHarnessBinding, command: string): Promise<void>

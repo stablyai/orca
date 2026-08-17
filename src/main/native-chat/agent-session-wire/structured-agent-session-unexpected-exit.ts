@@ -193,18 +193,14 @@ function unexpectedExitFallbackMutations(
   stableSettlementId: string
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
-  const tombstones: JournalLifecycleMutationInput[] = []
   for (const item of session.journal.snapshot().items) {
     const identity = parseAgentJournalItemKey(item.itemId)
     if (!identity) {
       continue
     }
-    const terminal = terminalExitBody(item)
+    const terminal = terminalExitBody(item, event.reason)
     if (terminal) {
       mutations.push({ kind: 'item', identity, body: terminal })
-    }
-    if (item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running') {
-      tombstones.push({ kind: 'tombstone', identity })
     }
   }
   mutations.push({
@@ -212,16 +208,25 @@ function unexpectedExitFallbackMutations(
     identity: { provider: 'orca', clientMessageId: stableSettlementId },
     body: { kind: 'status', text: boundJournalStatusText(`Provider exited: ${event.reason}`) }
   })
-  mutations.push(...tombstones)
   return mutations
 }
 
-function terminalExitBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {
+function terminalExitBody(
+  item: AgentJournalRenderItem,
+  reason: string
+): AgentJournalItemBody | null {
   if (item.body.kind === 'tool-call' && item.body.state === 'running') {
     return { ...item.body, state: 'failed' }
   }
   if (item.body.kind === 'approval' || item.body.kind === 'question') {
     return item.body.resolution.state === 'pending' ? cancelledJournalPromptBody(item.body) : null
+  }
+  if (item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running') {
+    return {
+      ...item.body,
+      text: boundJournalStatusText(`Provider exited: ${reason}`),
+      turnLifecycle: { ...item.body.turnLifecycle, state: 'completed', outcome: 'failed' }
+    }
   }
   return null
 }

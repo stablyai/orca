@@ -538,6 +538,82 @@
   min-height: 28px;
 }
 
+@property --queued-message-top-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --queued-message-bottom-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes queued-message-edge-fade {
+  0%,
+  1% {
+    --queued-message-top-fade: 0;
+    --queued-message-bottom-fade: 1rem;
+  }
+
+  99%,
+  100% {
+    --queued-message-top-fade: 1rem;
+    --queued-message-bottom-fade: 0;
+  }
+}
+
+.queued-message-scroll-fade {
+  scrollbar-width: none;
+  mask: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--queued-message-top-fade),
+    #000 calc(100% - var(--queued-message-bottom-fade)),
+    transparent
+  );
+  animation: queued-message-edge-fade linear both;
+  animation-timeline: scroll(self y);
+}
+
+.queued-message-scroll-fade::-webkit-scrollbar {
+  display: none;
+}
+
+@property --room-queue-preview-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.room-queue-preview-mask {
+  --room-queue-preview-fade: 0;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--room-queue-preview-fade),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--room-queue-preview-fade),
+    #000 100%
+  );
+  transition: --room-queue-preview-fade 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.room-queue-preview-mask--active {
+  --room-queue-preview-fade: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-queue-preview-mask {
+    transition: none;
+  }
+}
+
 /* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
 .scrollbar-sleek-lg {
   scrollbar-width: auto;
@@ -1545,7 +1621,9 @@ html.native-shell .app-layout {
     opacity: 1;
     animation: none;
   }
+}
 
+@media (prefers-reduced-motion: reduce) {
   .agent-working-spinner {
     animation: none;
   }
@@ -1760,15 +1838,15 @@ html.native-shell .app-layout {
   animation: collapsible-up 180ms ease-out;
 }
 
-.room-activity-disclosure-content {
+.chat-activity-disclosure-content {
   overflow: hidden;
 }
 
-.room-activity-disclosure-content[data-state='open'] {
+.chat-activity-disclosure-content[data-state='open'] {
   animation: collapsible-down 200ms ease;
 }
 
-.room-activity-disclosure-content[data-state='closed'] {
+.chat-activity-disclosure-content[data-state='closed'] {
   animation: collapsible-up 200ms ease;
 }
 
@@ -1792,7 +1870,7 @@ html.native-shell .app-layout {
 @media (prefers-reduced-motion: reduce) {
   .collapsible-height-content[data-state='open'],
   .collapsible-height-content[data-state='closed'],
-  .room-activity-disclosure-content[data-state],
+  .chat-activity-disclosure-content[data-state],
   .room-activity-stack-sheet {
     animation: none;
     transition: none;

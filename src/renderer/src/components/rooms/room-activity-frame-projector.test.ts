@@ -88,6 +88,20 @@ describe('RoomActivityFrameProjector', () => {
     expect(events.at(-1)).toEqual({ type: 'activity.cleared', participantId: 'participant' })
   })
 
+  it('hides room recipient transport from active structured replies', () => {
+    installFrameClock()
+    const events: RoomEvent[] = []
+    const projector = new RoomActivityFrameProjector((event) => events.push(event))
+
+    projector.push({ type: 'snapshot', snapshot: snapshot(ptyParticipant()) })
+    projector.push({
+      type: 'activity.updated',
+      activity: activity('Still working.\n<orca-room-recipients>["codex2"]</orca-room-recipients>')
+    })
+
+    expect(latestActivityText(events)).toBe('Still working.')
+  })
+
   it('shows a disabled harness final only as the completed room message', () => {
     installFrameClock()
     const events: RoomEvent[] = []

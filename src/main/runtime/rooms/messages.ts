@@ -10,6 +10,7 @@ import { attachmentFromRow, type RoomRow } from './rows'
 import { RoomDeliveryStore } from './deliveries'
 import { getRoomUnread, hydrateRoomMessages } from './message-queries'
 import type { CreateRoomMessage } from './message-input'
+import { createRoomMessageDeliveries } from './message-delivery-creation'
 
 export class RoomMessageStore {
   readonly deliveries: RoomDeliveryStore
@@ -119,34 +120,7 @@ export class RoomMessageStore {
         )
       }
 
-      const deliveryStatement = this.db.prepare(
-        `INSERT OR IGNORE INTO room_deliveries
-         (id, message_id, participant_id, state, next_attempt_at) VALUES (?, ?, ?, ?, ?)`
-      )
-      const targets =
-        input.enqueueDeliveries !== false
-          ? (this.db
-              .prepare(
-                `SELECT id FROM room_participants
-                 WHERE room_id = ? AND actor_kind = 'agent' AND participation = 'active'`
-              )
-              .all(input.roomId) as RoomRow[])
-          : []
-      const loopLimit = Number(room.loop_limit)
-      const suppressed =
-        input.actorKind === 'agent' && loopLimit > 0 && hopCount > 0 && hopCount % loopLimit === 0
-      for (const target of targets) {
-        if (target.id === input.senderId) {
-          continue
-        }
-        deliveryStatement.run(
-          randomUUID(),
-          id,
-          String(target.id),
-          suppressed ? 'suppressed' : 'pending',
-          now
-        )
-      }
+      createRoomMessageDeliveries(this.db, input, id, hopCount, Number(room.loop_limit), now)
       this.db.exec('RELEASE room_message_create')
     } catch (error) {
       this.db.exec('ROLLBACK TO room_message_create')
@@ -248,12 +222,28 @@ export class RoomMessageStore {
     }
   }
 
+  listQueued(roomId: string): Pick<RoomMessagePage, 'messages' | 'deliveries'> {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT m.* FROM room_messages m
+         JOIN room_deliveries d ON d.message_id = m.id
+         WHERE m.room_id = ? AND m.deleted_at IS NULL AND m.queue_edit_token IS NULL AND (
+           d.state IN ('pending', 'failed') OR
+           (d.state = 'suppressed' AND d.error = 'room_stopped' AND d.attempts = 0 AND d.intent = 'next') OR
+           (d.state = 'suppressed' AND d.error = 'room_participant_paused' AND d.attempts = 0 AND d.intent = 'next' AND m.actor_kind = 'user' AND m.delivery_attempted = 0 AND NOT EXISTS (SELECT 1 FROM room_deliveries invalid WHERE invalid.message_id = m.id AND NOT (invalid.attempts = 0 AND (invalid.state = 'pending' OR (invalid.state = 'suppressed' AND (invalid.error IN ('room_delivery_retargeted', 'room_participant_paused') OR (invalid.error = 'room_stopped' AND invalid.intent = 'next')))))))
+         )
+         ORDER BY m.sequence`
+      )
+      .all(roomId) as RoomRow[]
+    const messages = hydrateRoomMessages(this.db, rows)
+    return { messages, deliveries: this.deliveries.listForMessages(messages.map(({ id }) => id)) }
+  }
+
   update(id: string, body: string, metadata?: Record<string, unknown>): RoomMessage {
     const current = this.get(id)
-    const editedAt = Date.now()
     this.db
-      .prepare('UPDATE room_messages SET body = ?, metadata_json = ?, edited_at = ? WHERE id = ?')
-      .run(body, JSON.stringify(metadata ?? current.metadata), editedAt, id)
+      .prepare('UPDATE room_messages SET body = ?, metadata_json = ? WHERE id = ?')
+      .run(body, JSON.stringify(metadata ?? current.metadata), id)
     return this.get(id)
   }
 

@@ -1,3 +1,5 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   settleStructuredAgentLaunchPrompt,
@@ -11,8 +13,11 @@ export type StructuredRefusalFallback = () =>
   | Promise<void | StructuredPromptDeliveryResult>
 
 export type StructuredAgentLaunchOptions = {
+  target?: RuntimeClientTarget
+  groupId?: string
+  sessionOptions?: Record<string, SessionOptionValue>
   prompt?: string
-  promptDelivery?: 'auto-submit' | 'submit-after-ready'
+  promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   onPromptDelivered?: () => void
 }
 

@@ -228,9 +228,34 @@ describe('codex journal translation', () => {
           text: 'Codex is working…',
           turnLifecycle: { turnId: TURN_ID, state: 'running' }
         }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-1',
+        body: {
+          kind: 'status',
+          text: 'Completed',
+          turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'completed' }
+        }
       }
     ])
-    expect(tap.tombstones).toEqual(['legacy:codex:session-1:turn-lifecycle%3Aturn-1'])
+    expect(tap.tombstones).toEqual([])
+  })
+
+  it('persists an interrupted turn outcome for room lifecycle observers', () => {
+    const tap = recorder()
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID
+    })
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'interrupted' }
+    })
   })
 
   it('closes every active turn when the provider session ends after a later turn starts', () => {
@@ -244,29 +269,27 @@ describe('codex journal translation', () => {
     translator.handle(notification('turn/started', { turn: { id: 'turn-later' } }))
     translator.handle({ type: 'ended', sessionId: SESSION_ID, reason: 'app-server exited' })
 
-    expect(tap.rows.filter((row) => row.body.kind === 'status')).toHaveLength(3)
+    expect(tap.tombstones).toEqual([])
     expect(tap.rows.map((row) => row.body)).toEqual([
       expect.objectContaining({ turnLifecycle: { turnId: 'turn-stale', state: 'running' } }),
       expect.objectContaining({ turnLifecycle: { turnId: 'turn-later', state: 'running' } }),
-      expect.objectContaining({ text: 'Provider exited: app-server exited' })
+      expect.objectContaining({ text: 'Provider exited: app-server exited' }),
+      expect.objectContaining({
+        turnLifecycle: { turnId: 'turn-stale', state: 'completed', outcome: 'failed' }
+      }),
+      expect.objectContaining({
+        turnLifecycle: { turnId: 'turn-later', state: 'completed', outcome: 'failed' }
+      })
     ])
-    expect(tap.tombstones).toEqual([
-      'legacy:codex:session-1:turn-lifecycle%3Aturn-stale',
-      'legacy:codex:session-1:turn-lifecycle%3Aturn-later'
-    ])
-    // The tombstones remove both running rows from the reduced journal; no
-    // lifecycle identity remains live after a session end.
     expect(
       projectStructuredAgentSessionStatus(
-        tap.rows
-          .filter((row) => !tap.tombstones.includes(row.key))
-          .map((row, sequence) => ({
-            itemId: row.key,
-            revision: 1,
-            sequence: sequence + 1,
-            observedAt: sequence + 1,
-            body: row.body
-          }))
+        tap.rows.map((row, sequence) => ({
+          itemId: row.key,
+          revision: sequence + 1,
+          sequence: sequence + 1,
+          observedAt: sequence + 1,
+          body: row.body
+        }))
       )
     ).toBe('idle')
   })
@@ -283,21 +306,16 @@ describe('codex journal translation', () => {
     translator.handle(notification('turn/completed', { turn: { id: 'turn-stale' } }))
     translator.handle(notification('turn/completed', { turn: { id: 'turn-later' } }))
 
-    expect(tap.tombstones).toEqual([
-      'legacy:codex:session-1:turn-lifecycle%3Aturn-stale',
-      'legacy:codex:session-1:turn-lifecycle%3Aturn-later'
-    ])
+    expect(tap.tombstones).toEqual([])
     expect(
       projectStructuredAgentSessionStatus(
-        tap.rows
-          .filter((row) => !tap.tombstones.includes(row.key))
-          .map((row, sequence) => ({
-            itemId: row.key,
-            revision: 1,
-            sequence: sequence + 1,
-            observedAt: sequence + 1,
-            body: row.body
-          }))
+        tap.rows.map((row, sequence) => ({
+          itemId: row.key,
+          revision: 1,
+          sequence: sequence + 1,
+          observedAt: sequence + 1,
+          body: row.body
+        }))
       )
     ).toBe('idle')
   })
@@ -411,7 +429,7 @@ describe('codex journal translation', () => {
     expect(window.idle()).toBe(true)
   })
 
-  it('settles tools, prompts, exit status, and turn tombstone in one ordered batch', () => {
+  it('settles tools, prompts, exit status, and turn outcome in one ordered batch', () => {
     const tap = recorder()
     const batches: { settlementId: string; mutations: unknown[] }[] = []
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
@@ -468,7 +486,12 @@ describe('codex journal translation', () => {
         kind: 'item',
         body: { kind: 'status', text: 'Provider exited: lost child' }
       }),
-      expect.objectContaining({ kind: 'tombstone' })
+      expect.objectContaining({
+        kind: 'item',
+        body: expect.objectContaining({
+          turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'failed' }
+        })
+      })
     ])
   })
 

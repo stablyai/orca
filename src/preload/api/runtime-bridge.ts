@@ -109,9 +109,7 @@ export const runtimeApi = {
     ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
     return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
   },
-  onRoomEvent: (
-    callback: (event: { roomId: string; event: RoomEvent }) => void
-  ): (() => void) => {
+  onRoomEvent: (callback: (event: { roomId: string; event: RoomEvent }) => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
       data: { roomId: string; event: RoomEvent }

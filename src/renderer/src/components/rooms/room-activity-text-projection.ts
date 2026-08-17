@@ -9,7 +9,7 @@ export function activityWithVisibleRoomText(activity: RoomAgentActivity): RoomAg
   return {
     ...activity,
     messages: activity.messages.map((message) =>
-      message.assistantPhase === 'final'
+      message.role === 'assistant'
         ? {
             ...message,
             blocks: message.blocks.map((block) =>

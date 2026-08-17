@@ -123,6 +123,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   })
   state.runtime = runtime
   runtime.getRoomService()
+  store.onSettingsChanged((updates) => {
+    if (
+      'experimentalStructuredNativeChat' in updates ||
+      'experimentalRoomLiveSteering' in updates ||
+      'enabledHarnessStreamingAgents' in updates
+    ) {
+      runtime.getRoomService().wakeDeliveries()
+    }
+  })
   runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.

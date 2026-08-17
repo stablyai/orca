@@ -9,6 +9,7 @@ import { RoomProviderMessageStore } from './provider-messages'
 import { RoomActivityStore } from './activities'
 import { RoomDeliveryConfigurationStore } from './delivery-configuration'
 import { RoomNotificationReplayStore } from './notification-replay'
+import { RoomQueueEditStore } from './queue-edit-store'
 
 export type RoomDeletionManifest = {
   roomId: string
@@ -27,18 +28,23 @@ export class RoomDatabase {
   readonly activities: RoomActivityStore
   readonly deliveryConfiguration: RoomDeliveryConfigurationStore
   readonly notificationReplay: RoomNotificationReplayStore
+  readonly queueEdits: RoomQueueEditStore
 
-  constructor(path: string) {
+  constructor(
+    path: string,
+    readSessionOptions?: ConstructorParameters<typeof RoomParticipantStore>[1]
+  ) {
     this.db = new SyncDatabase(path)
     initializeRoomSchema(this.db)
     this.core = new RoomCoreStore(this.db)
-    this.participants = new RoomParticipantStore(this.db)
+    this.participants = new RoomParticipantStore(this.db, readSessionOptions)
     this.messages = new RoomMessageStore(this.db)
     this.pins = new RoomPinStore(this.db)
     this.providerMessages = new RoomProviderMessageStore(this.db, this.messages)
     this.activities = new RoomActivityStore(this.db)
     this.deliveryConfiguration = new RoomDeliveryConfigurationStore(this.db)
     this.notificationReplay = new RoomNotificationReplayStore(this.db)
+    this.queueEdits = new RoomQueueEditStore(this.db)
   }
 
   close(): void {
@@ -70,7 +76,11 @@ export class RoomDatabase {
       roles: this.core.listRoles(roomId),
       pins: this.pins.list(roomId),
       unread: this.messages.getUnread(roomId, readerKey),
-      workState: this.messages.deliveries.workState(roomId)
+      workState: this.messages.deliveries.workState(roomId),
+      deliveryQueueVersion: 1,
+      deliveryQueueMutationVersion: 1,
+      broadcastQueuePlacementVersion: 1,
+      queueComposerEditVersion: 1
     }
   }
 

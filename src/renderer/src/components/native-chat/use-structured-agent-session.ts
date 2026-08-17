@@ -1,3 +1,4 @@
+import { patchStructuredAgentSessionOptionSnapshot } from '../../../../shared/structured-agent-session-options'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -13,7 +14,6 @@ import { agentSessionRefusalOperationState } from '../../../../shared/agent-sess
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import {
   applyStructuredAgentSessionOptions,
-  canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
@@ -59,13 +59,23 @@ export function useStructuredAgentSession(args: {
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
   )
+  const [providerOptionSnapshot, setProviderOptionSnapshot] =
+    useState<AgentSessionOptionsResult['descriptors']>()
+  const optionSnapshotRef = useRef<NonNullable<AgentSessionOptionsResult['descriptors']>>([])
+  const pendingOptionRef = useRef<string | null>(null)
+  const [canSteer, setCanSteer] = useState(agent === 'codex')
   const activeOptionRecordRef = useRef(optionState.record)
-  const optionCatalog = useMemo(() => getAgentSessionOptionCatalog(agent), [agent])
+  const optionCatalog = useMemo(
+    () => getAgentSessionOptionCatalog(agent === 'openclaude' ? 'claude' : agent),
+    [agent]
+  )
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
     fence: state.fence,
-    submissions: state.submissions
+    submissions: state.submissions,
+    isWorking: turnId !== null
   })
 
   useEffect(() => {
@@ -76,6 +86,10 @@ export function useStructuredAgentSession(args: {
     const next = createStructuredAgentSessionOptionState(agent)
     activeOptionRecordRef.current = next.record
     setOptionState(next)
+    optionSnapshotRef.current = []
+    setProviderOptionSnapshot(undefined)
+    pendingOptionRef.current = null
+    setCanSteer(agent === 'codex')
   }, [agent, sessionId, state.fence])
 
   const mutate = useCallback(
@@ -139,12 +153,11 @@ export function useStructuredAgentSession(args: {
   // Turns are what confirm an option: the provider names the model it is running
   // on the frame that opens each one, so re-read the options as a turn changes
   // rather than leaving the last write unconfirmed for the life of the session.
-  const turnId = activeStructuredAgentSessionTurnId(state.items)
   const isMonitoringBackgroundTasks =
     turnId === null && state.backgroundTasks?.state === 'monitoring'
 
   useEffect(() => {
-    if (!isVisible || !optionCatalog) {
+    if (!isVisible) {
       return
     }
     let stale = false
@@ -153,11 +166,18 @@ export function useStructuredAgentSession(args: {
     })
       .then((result) => {
         if (!stale) {
-          setOptionState((current) =>
-            current.record === activeOptionRecordRef.current
-              ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
-              : current
-          )
+          setCanSteer(result.canSteer === true)
+          if (result.descriptors) {
+            optionSnapshotRef.current = result.descriptors
+            setProviderOptionSnapshot(result.descriptors)
+          }
+          if (optionCatalog) {
+            setOptionState((current) =>
+              current.record === activeOptionRecordRef.current
+                ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
+                : current
+            )
+          }
         }
       })
       .catch(() => {})
@@ -166,35 +186,57 @@ export function useStructuredAgentSession(args: {
     }
   }, [isVisible, optionCatalog, sessionId, state.fence, target, turnId])
 
-  const optionSnapshot = useMemo(
-    () => structuredAgentSessionOptionSnapshot(optionState),
-    [optionState]
-  )
+  const optionSnapshot = useMemo(() => {
+    const next = providerOptionSnapshot ?? structuredAgentSessionOptionSnapshot(optionState)
+    optionSnapshotRef.current = next
+    return next
+  }, [optionState, providerOptionSnapshot])
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
-      if (
-        !canSetStructuredAgentSessionOption(optionState, id, value) ||
-        typeof value !== 'string'
-      ) {
+      const descriptor = optionSnapshotRef.current.find((entry) => entry.id === id)
+      const valid =
+        descriptor?.settable === true &&
+        (descriptor.kind.type === 'boolean'
+          ? typeof value === 'boolean'
+          : typeof value === 'string' &&
+            descriptor.kind.choices.some((choice) => choice.value === value))
+      if (!valid || pendingOptionRef.current !== null) {
         return false
       }
+      pendingOptionRef.current = id
       const targetRecord = optionState.record
       setOptionState((current) => ({ ...current, pendingId: id }))
       try {
+        const wireValue = String(value)
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
-          { key: id, value }
+          { key: id, value: wireValue }
         )
         if (result && activeOptionRecordRef.current === targetRecord) {
+          const values = result.options ?? { [id]: wireValue }
+          const reported = await callStructuredAgentSession<AgentSessionOptionsResult>(
+            target,
+            'agentSession.options',
+            { sessionId }
+          ).catch(() => null)
+          if (activeOptionRecordRef.current !== targetRecord) {
+            return Boolean(result)
+          }
+          const next =
+            reported?.descriptors ??
+            patchStructuredAgentSessionOptionSnapshot(optionSnapshotRef.current, values)
+          optionSnapshotRef.current = next
+          setProviderOptionSnapshot(next)
           setOptionState((current) =>
             current.record === targetRecord
-              ? commitStructuredAgentSessionOptionValues(current, result.options ?? { [id]: value })
+              ? commitStructuredAgentSessionOptionValues(current, values)
               : current
           )
         }
         return Boolean(result)
       } finally {
+        pendingOptionRef.current = null
         setOptionState((current) =>
           current.record === targetRecord && current.pendingId === id
             ? { ...current, pendingId: null }
@@ -202,23 +244,23 @@ export function useStructuredAgentSession(args: {
         )
       }
     },
-    [mutate, optionState]
+    [mutate, optionState.record, target, sessionId]
   )
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
       await setStructuredOption(id, value)
-      return { snapshot: optionSnapshot }
+      return { snapshot: optionSnapshotRef.current }
     },
-    [optionSnapshot, setStructuredOption]
+    [setStructuredOption]
   )
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
-      getSnapshot: () => optionSnapshot,
+      getSnapshot: () => optionSnapshotRef.current,
       setOption,
-      invokeAction: async () => ({ snapshot: optionSnapshot }),
+      invokeAction: async () => ({ snapshot: optionSnapshotRef.current }),
       subscribe: () => () => {}
     }),
-    [optionSnapshot, setOption]
+    [setOption]
   )
 
   const prompts = state.items.filter(
@@ -241,7 +283,12 @@ export function useStructuredAgentSession(args: {
     outbox: outboxController.outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: outboxController.send,
+    edit: outboxController.edit,
+    remove: outboxController.remove,
+    reorder: outboxController.reorder,
+    steer: outboxController.steer,
     retry: outboxController.retry,
+    canSteer,
     isWorking: turnId !== null,
     isMonitoringBackgroundTasks,
     backgroundTasks: state.backgroundTasks?.tasks ?? [],

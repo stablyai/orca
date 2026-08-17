@@ -17,7 +17,12 @@ import type { AgentSubagentSnapshot } from '../../../../shared/agent-status-type
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 import { useNativeChatLiveSession } from '../native-chat/use-native-chat-live-session'
-import { subagentDisplayName, type AgentSubagentSourceData } from './AgentSubagentContext'
+import {
+  subagentDisplayName,
+  subagentStatusDot,
+  type AgentSubagentSourceData,
+  type SubagentSelection
+} from './AgentSubagentContext'
 import { projectSubagentTranscript } from './subagent-transcript-projection'
 import { useAgentSubagentSessions } from './use-agent-subagent-sessions'
 import {
@@ -87,11 +92,6 @@ export function AgentSubagentSheet({
   )
 }
 
-type SubagentSelection = {
-  sourceData: AgentSubagentSourceData
-  session: AiVaultSession
-}
-
 function reconcileSelection(
   selection: SubagentSelection,
   data: AgentSubagentSourceData[]
@@ -121,7 +121,8 @@ function SubagentList({
       ),
     [sourceDatas]
   )
-  const identity = sourceDatas.length === 1 ? sourceDatas[0]!.source.identity : null
+  const source = sourceDatas.length === 1 ? sourceDatas[0]?.source : null
+  const identity = source?.showIdentity === false ? null : source?.identity
   return (
     <>
       <SheetHeader className="border-b border-border pr-12">
@@ -255,9 +256,13 @@ function SubagentTranscript({
   const visibleTranscript = useMemo(
     () => ({
       ...transcript,
-      messages: projectSubagentTranscript(transcript.messages, sourceData.source.identity)
+      messages: projectSubagentTranscript(
+        transcript.messages,
+        sourceData.source.identity,
+        sourceData.source.showIdentity
+      )
     }),
-    [transcript, sourceData.source.identity]
+    [transcript, sourceData.source.identity, sourceData.source.showIdentity]
   )
   const liveSubagent = sourceData.source.liveSubagents.find(
     (subagent) => subagent.id === session.sessionId
@@ -274,11 +279,16 @@ function SubagentTranscript({
           <div className="min-w-0 flex-1">
             <SheetTitle className="truncate">{displayName}</SheetTitle>
             <SheetDescription className="truncate">
-              {translate(
-                'agentSubagents.transcriptDescription',
-                '@{{identity}} · Read-only subagent transcript',
-                { identity: sourceData.source.identity }
-              )}
+              {sourceData.source.showIdentity === false
+                ? translate(
+                    'agentSubagents.transcriptDescriptionAnonymous',
+                    'Read-only subagent transcript'
+                  )
+                : translate(
+                    'agentSubagents.transcriptDescription',
+                    '@{{identity}} · Read-only subagent transcript',
+                    { identity: sourceData.source.identity }
+                  )}
             </SheetDescription>
           </div>
           <Badge variant="outline">
@@ -349,7 +359,7 @@ function splitRows(
   }
   const done = data.sessions
     .filter((session) => !activeIds.has(session.sessionId))
-    .map((session) => sessionRow(data, session, statusDot(session), showIdentity))
+    .map((session) => sessionRow(data, session, subagentStatusDot(session), showIdentity))
   return { active, done }
 }
 
@@ -372,7 +382,7 @@ function liveRow(
     title: session
       ? subagentDisplayName(session.title, subagent.agentType)
       : subagentDisplayName(subagent.description, subagent.agentType),
-    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${agentStateLabel(state)}`,
+    subtitle: `${showIdentity && sourceData.source.showIdentity !== false ? `@${sourceData.source.identity} · ` : ''}${agentStateLabel(state)}`,
     state,
     session,
     sourceData
@@ -388,7 +398,7 @@ function sessionRow(
   return {
     id: session.sessionId,
     title: subagentDisplayName(session.title, session.subagent?.agentType),
-    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${translate(
+    subtitle: `${showIdentity && sourceData.source.showIdentity !== false ? `@${sourceData.source.identity} · ` : ''}${translate(
       'agentSubagents.messageCount',
       '{{count}} messages',
       { count: session.messageCount }
@@ -397,14 +407,4 @@ function sessionRow(
     session,
     sourceData
   }
-}
-
-function statusDot(session: AiVaultSession): AgentDotState {
-  if (session.subagent?.status === 'failed') {
-    return 'failed'
-  }
-  if (session.subagent?.status === 'stopped') {
-    return 'interrupted'
-  }
-  return 'done'
 }

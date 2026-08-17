@@ -83,6 +83,8 @@ export type NativeChatToolResultBlock = {
   isError?: boolean
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
+  /** Provider output received before the tool itself completed. */
+  isPartial?: boolean
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field

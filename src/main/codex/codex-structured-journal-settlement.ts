@@ -20,6 +20,7 @@ import {
 } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { codexTerminalTurnLifecycle } from './codex-structured-journal-translation-turns'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -34,7 +35,6 @@ export type CodexPendingJournalPrompt = {
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
-
 export function settleCodexJournalSession(input: {
   event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>
   sink: StructuredAgentSessionEventSink
@@ -81,15 +81,18 @@ export function settleCodexJournalSession(input: {
     if (input.primaryThreadId !== threadId) {
       continue
     }
+    const outcome =
+      'cause' in input.event && input.event.cause === 'requested-close' ? 'interrupted' : 'failed'
     for (const turnId of turnIds) {
       mutations.push({
-        kind: 'tombstone',
+        kind: 'item',
         identity: {
           provider: 'legacy',
           agent: 'codex',
           sessionId: input.event.sessionId,
           recordId: `turn-lifecycle:${turnId}`
-        }
+        },
+        body: codexTerminalTurnLifecycle(turnId, outcome)
       })
       turnOrdinalsToForget.push({ threadId, turnId })
     }
@@ -108,6 +111,8 @@ export function settleCodexJournalTurn(input: {
   sessionId: string
   threadId: string
   turnId: string
+  primaryThreadId: string | null
+  outcome: 'completed' | 'failed' | 'interrupted'
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
@@ -128,15 +133,18 @@ export function settleCodexJournalTurn(input: {
     }
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
-  mutations.push({
-    kind: 'tombstone',
-    identity: {
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: input.sessionId,
-      recordId: `turn-lifecycle:${input.turnId}`
-    }
-  })
+  if (input.primaryThreadId === input.threadId) {
+    mutations.push({
+      kind: 'item',
+      identity: {
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: input.sessionId,
+        recordId: `turn-lifecycle:${input.turnId}`
+      },
+      body: codexTerminalTurnLifecycle(input.turnId, input.outcome)
+    })
+  }
   const admission = appendLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,

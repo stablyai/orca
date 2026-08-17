@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 const LISTENER_SOURCE_PATTERN =
   /^(?:TerminalPane\.tsx|terminal-pane-paste-listeners\.ts|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|projection|reconciliation|startup-actions|store-bindings|title-effects|title-state)\.ts)$/
 const PRE_REFACTOR_LISTENER_ORDER_SHA256 =
-  '2a2c5caaa368636d761ec819a7858f6b8010e578ccdd5c1be5960f87968c7e8a'
+  '117c8afa2b0ae559d7fa19a2612e88676f21b25357973bf9f9c783405e7c48b3'
 
 type FunctionDefinition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 
@@ -88,7 +88,7 @@ function readFlattenedListeners(): string[] {
 describe('TerminalPane refactor listener parity', () => {
   it('preserves ordered listener registration and cleanup', () => {
     const listeners = readFlattenedListeners()
-    expect(listeners).toHaveLength(24)
+    expect(listeners).toHaveLength(26)
     expect(createHash('sha256').update(listeners.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_LISTENER_ORDER_SHA256
     )

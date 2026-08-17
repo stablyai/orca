@@ -17888,7 +17888,8 @@
   },
   "agentSubagents": {
     "turn": {
-      "count": "{{count}} subagents"
+      "count": "{{count}} subagents",
+      "count_one": "{{count}} subagent"
     },
     "description": "Open a child transcript without leaving the parent conversation.",
     "label": "Subagents",
@@ -17900,8 +17901,12 @@
     "loading": "Loading…",
     "none": "None",
     "transcriptDescription": "@{{identity}} · Read-only subagent transcript",
+    "transcriptDescriptionAnonymous": "Read-only subagent transcript",
+    "taskFromIdentity": "Task from @{{identity}}",
+    "taskFromParent": "Task from parent agent",
     "nested": "Nested agents",
-    "messageCount": "{{count}} messages"
+    "messageCount": "{{count}} messages",
+    "messageCount_one": "{{count}} message"
   },
   "agentSessionControls": {
     "customModel": {

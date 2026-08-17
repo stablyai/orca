@@ -38,6 +38,7 @@ import { resolveLoginShellEnvironment } from '../startup/login-shell-environment
 import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import { canStartEmptyClaudeSession } from '../claude/claude-empty-session'
 
 /** Sibling of the journal tree rather than inside it: one file adjudicates every
  *  session's lease, while a journal is per session. */
@@ -221,7 +222,9 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       fence: number
       acquisitionGeneration: string
     }): void => {
-      if (event.cause !== 'unexpected-exit') return
+      if (event.cause !== 'unexpected-exit') {
+        return
+      }
       recoveryChain = recoveryChain.then(async () => {
         try {
           await host?.handleAdapterEvent(event)
@@ -246,8 +249,11 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         recoverUnexpectedExit(event)
       }
     })
+    const canStartEmpty = (sessionId: string) =>
+      canStartEmptyClaudeSession(store.getRecord(sessionId), deps.stateDirectory)
     const claude = createStructuredClaudeRuntimeAdapter({
       store,
+      canStartEmptySession: canStartEmpty,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
       ...(deps.resolveClaudeLaunchEnv
@@ -275,6 +281,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })
     const machine = new MachineStructuredSessionAdapter({
+      canStartEmptyClaudeSession: canStartEmpty,
       createDriver:
         deps.createMachineDriver ??
         (() => Promise.reject(new Error('structured machine providers are unavailable'))),
@@ -286,9 +293,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onEvent: recoverUnexpectedExit
     })
-    const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude, openclaude: machine, grok: machine, omp: machine }, async () => {
-      await Promise.all([codex.closeAll(), claude.closeAll(), machine.closeAll()])
-    })
+    const adapter = new StructuredAgentSessionAdapterRouter(
+      { codex, claude, openclaude: machine, grok: machine, omp: machine },
+      async () => {
+        await Promise.all([codex.closeAll(), claude.closeAll(), machine.closeAll()])
+      }
+    )
     host = new StructuredAgentSessionHost({
       store,
       adapter,

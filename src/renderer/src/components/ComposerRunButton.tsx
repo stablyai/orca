@@ -1,5 +1,5 @@
 import type { MouseEventHandler, ReactNode } from 'react'
-import { ArrowUp, Play, Square } from 'lucide-react'
+import { ArrowUp, LoaderCircle, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export type ComposerRunMode = 'send' | 'stop' | 'resume'
@@ -8,6 +8,7 @@ export function ComposerRunButton({
   mode,
   label,
   disabled,
+  loading = false,
   onClick,
   sendIcon
 }: {
@@ -15,6 +16,7 @@ export function ComposerRunButton({
   label: string
   disabled: boolean
   onClick?: MouseEventHandler<HTMLButtonElement>
+  loading?: boolean
   sendIcon?: ReactNode
 }): React.JSX.Element {
   return (
@@ -28,7 +30,9 @@ export function ComposerRunButton({
       size="icon-sm"
       className="rounded-full pointer-coarse:size-10"
     >
-      {mode === 'stop' ? (
+      {loading ? (
+        <LoaderCircle className="size-4 animate-spin" />
+      ) : mode === 'stop' ? (
         <Square className="size-3.5 fill-current" />
       ) : mode === 'resume' ? (
         <Play className="size-4 fill-current" />

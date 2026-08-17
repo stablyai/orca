@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RoomEvent } from '../../../shared/rooms'
 import type { RoomHarnessRuntime } from './harness-adapter'
 import { RoomService } from './service'
+import { claimRoomBroadcastForTest } from './delivery-test-claim'
 
 function line(type: string, payload: Record<string, unknown>, timestamp: number): string {
   return `${JSON.stringify({ type, timestamp: new Date(timestamp).toISOString(), payload })}\n`
@@ -50,11 +51,11 @@ function runtimeStub(
 
 describe('room transcript bridge lifecycle', () => {
   it.each([
-    ['task_complete', 'room_empty_response'],
-    ['turn_aborted', 'room_turn_interrupted']
+    ['task_complete', 'room_empty_response', false],
+    ['turn_aborted', 'room_turn_interrupted', true]
   ])(
     'settles a transcript %s without leaving the participant queue blocked',
-    async (type, error) => {
+    async (type, error, interrupted) => {
       const root = await mkdtemp(join(tmpdir(), 'orca-room-terminal-'))
       const transcriptPath = join(root, 'rollout.jsonl')
       await writeFile(
@@ -83,11 +84,20 @@ describe('room transcript bridge lifecycle', () => {
           actorKind: 'user',
           body: 'room event'
         }).deliveries[0]!
-        service.db.messages.deliveries.claim(delivery.id)
+        claimRoomBroadcastForTest(service.db, delivery.messageId)
         service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
         await service.activateRoom(room.id)
 
-        await appendFile(transcriptPath, line('event_msg', { type, turn_id: 'turn-1' }, 120))
+        await appendFile(
+          transcriptPath,
+          (interrupted
+            ? line(
+                'event_msg',
+                { type: 'agent_message', id: 'partial', message: 'Partial answer.' },
+                115
+              )
+            : '') + line('event_msg', { type, turn_id: 'turn-1' }, 120)
+        )
 
         await vi.waitFor(() =>
           expect(service.db.messages.deliveries.get(delivery.id)).toMatchObject({
@@ -96,6 +106,17 @@ describe('room transcript bridge lifecycle', () => {
           })
         )
         expect(service.db.participants.get(agent.id).state).not.toBe('busy')
+        const replies = service
+          .listMessages(room.id, null)
+          .messages.filter((message) => message.actorKind === 'agent')
+        expect(replies).toHaveLength(interrupted ? 1 : 0)
+        if (interrupted) {
+          expect(replies[0]).toMatchObject({
+            body: 'Partial answer.',
+            replyToId: delivery.messageId
+          })
+          expect(replies[0]?.metadata.activity).toMatchObject({ state: 'interrupted' })
+        }
       } finally {
         service.close()
         await rm(root, { recursive: true, force: true })
@@ -103,7 +124,7 @@ describe('room transcript bridge lifecycle', () => {
     }
   )
 
-  it('drops a final that arrives after the room was stopped', async () => {
+  it('keeps the stopped turn history and drops a final that arrives after Stop settled', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-room-stopped-final-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeFile(
@@ -133,7 +154,7 @@ describe('room transcript bridge lifecycle', () => {
         actorKind: 'user',
         body: 'room event'
       }).deliveries[0]!
-      service.db.messages.deliveries.claim(delivery.id)
+      claimRoomBroadcastForTest(service.db, delivery.messageId)
       service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
       await service.activateRoom(room.id)
       await vi.waitFor(() => expect(service.db.participants.get(agent.id).state).toBe('busy'))
@@ -147,15 +168,16 @@ describe('room transcript bridge lifecycle', () => {
       await vi.waitFor(() => expect(service.db.participants.get(agent.id).lastSeenAt).toBe(130))
 
       expect(service.db.messages.deliveries.get(delivery.id)).toMatchObject({
-        state: 'suppressed',
-        error: 'room_stopped',
-        responseMessageId: null
+        state: 'delivered',
+        error: null,
+        responseMessageId: expect.any(String)
       })
-      expect(
-        service
-          .listMessages(room.id, null)
-          .messages.filter((message) => message.actorKind === 'agent')
-      ).toEqual([])
+      const replies = service
+        .listMessages(room.id, null)
+        .messages.filter((message) => message.actorKind === 'agent')
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({ body: '', replyToId: delivery.messageId })
+      expect(replies[0]?.metadata.activity).toMatchObject({ state: 'interrupted' })
     } finally {
       service.close()
       await rm(root, { recursive: true, force: true })
@@ -197,7 +219,7 @@ describe('room transcript bridge lifecycle', () => {
         mentions: [agent.identity]
       })
       const delivery = trigger.deliveries[0]!
-      service.db.messages.deliveries.claim(delivery.id)
+      claimRoomBroadcastForTest(service.db, delivery.messageId)
       // The delivery was bound to the transcript's 'prompt-1' user turn.
       service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1', 1_799_999_999_995)
 
@@ -309,7 +331,7 @@ describe('room transcript bridge lifecycle', () => {
         body: 'room event'
       })
       const delivery = trigger.deliveries[0]!
-      service.db.messages.deliveries.claim(delivery.id)
+      claimRoomBroadcastForTest(service.db, delivery.messageId)
       service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
       const queued = service.db.messages.create({
         roomId: room.id,
@@ -411,7 +433,7 @@ describe('room transcript bridge lifecycle', () => {
         body: 'room event'
       })
       const delivery = trigger.deliveries[0]!
-      service.db.messages.deliveries.claim(delivery.id)
+      claimRoomBroadcastForTest(service.db, delivery.messageId)
       service.db.messages.deliveries.confirmTurn(delivery.id, 'prompt-1')
 
       await service.activateRoom(room.id)
@@ -550,9 +572,9 @@ describe('room transcript bridge lifecycle', () => {
         body: '@alpha @beta go',
         mentions: agents.map((item) => item.identity)
       })
+      claimRoomBroadcastForTest(service.db, trigger.message.id)
       for (const delivery of trigger.deliveries) {
         const participant = agents.find((item) => item.id === delivery.participantId)!
-        service.db.messages.deliveries.claim(delivery.id)
         service.db.messages.deliveries.confirmTurn(delivery.id, `${participant.identity}-prompt`)
       }
       await service.activateRoom(room.id)

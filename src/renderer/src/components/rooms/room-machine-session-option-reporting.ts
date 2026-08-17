@@ -29,11 +29,18 @@ export function reportRoomMachineContext(
     if (
       option.id === 'model' &&
       option.kind.type === 'select' &&
-      values.contextWindow === '1m' &&
-      typeof value === 'string' &&
-      option.kind.choices.some((choice) => choice.value === `${value}[1m]`)
+      claude &&
+      typeof value === 'string'
     ) {
-      value = `${value}[1m]`
+      const normalized = normalizeClaudeSessionOptionValues({ model: value }).model
+      const choice = option.kind.choices.find((candidate) => {
+        const candidateValues = normalizeClaudeSessionOptionValues({ model: candidate.value })
+        return (
+          candidateValues.model === normalized &&
+          (values.contextWindow !== '1m' || candidateValues.contextWindow === '1m')
+        )
+      })
+      value = choice?.value ?? value
     }
     if (
       option.kind.type === 'select' &&

@@ -12,6 +12,7 @@
 
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -27,7 +28,11 @@ export type StructuredAgentSessionStatusSubscriber = {
 
 type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
+  params: {
+    location: { workspaceId: string }
+    provider: AgentSessionRecord['provider']
+    agent: AgentType
+  }
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -99,13 +104,12 @@ export class StructuredAgentSessionStatusFeed {
   ): AgentSessionStatusSummary {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
     const items = journal.isReadOnly ? [] : journal.snapshot().items
-    const providerSession = structuredAgentSessionProviderSessionMetadata(
-      this.deps.getRecord(sessionId)
-    )
+    const record = this.deps.getRecord(sessionId)
+    const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
-      agent: session.params.provider,
+      agent: session.params.agent,
       ...projectStructuredAgentSessionStatusSummary(items),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: this.deps.now()

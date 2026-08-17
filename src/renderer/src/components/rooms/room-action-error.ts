@@ -27,5 +27,5 @@ export function roomErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function showRoomActionError(error: unknown): void {
-  toast.error(extractIpcErrorMessage(error, 'Room action failed.'))
+  toast.error(roomErrorMessage(error, 'Room action failed.'))
 }

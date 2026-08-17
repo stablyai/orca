@@ -14,6 +14,7 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import type { RecentPtyOutputMark } from '../../../runtime/recent-pty-output-buffer'
 
 export type StablePaneOwner = {
   handle?: string
@@ -28,6 +29,7 @@ export type StablePaneOwner = {
 export type StablePaneAdoption = {
   result: PtySpawnResult
   owner: StablePaneOwner
+  outputBoundary?: PtyOutputBoundary
   materialized?: true
 } | null
 export const stablePaneAdoptionsByOwnerKey = new Map<string, Promise<StablePaneAdoption>>()
@@ -162,11 +164,29 @@ export type StablePaneSpawnContext = {
   store?: Store
   provider: IPtyProvider
   spawnOptions: PtySpawnOptions
+  expectedPtyId?: string | null
   owner: StablePaneOwner | null
   worktreeId?: string
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
+}
+
+export type PtyOutputBoundary = {
+  ptyId: string | null
+  sequence: number
+  recentOutputMark: RecentPtyOutputMark | null
+}
+
+export function capturePtyOutputBoundary(
+  runtime: OrcaRuntimeService | undefined,
+  ptyId: string | null | undefined
+): PtyOutputBoundary {
+  return {
+    ptyId: ptyId ?? null,
+    sequence: ptyId ? (runtime?.getPtyOutputSequence?.(ptyId) ?? 0) : 0,
+    recentOutputMark: ptyId ? (runtime?.markRecentPtyOutput?.(ptyId) ?? null) : null
+  }
 }
 
 export function stablePanePersistenceFence(
@@ -212,9 +232,14 @@ export function persistAdmittedStablePaneBinding(args: {
 
 export async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
+): Promise<{
+  result: PtySpawnResult
+  owner: StablePaneOwner
+  outputBoundary: PtyOutputBoundary
+} | null> {
   const { owner, provider, runtime, spawnOptions } = args
   let result: PtySpawnResult
+  const outputBoundary = capturePtyOutputBoundary(runtime, owner.ptyId)
   try {
     result = await provider.spawn({
       ...spawnOptions,
@@ -286,19 +311,5 @@ export async function attachStablePaneOwner(
   ) {
     throw new Error('terminal_pane_owner_changed')
   }
-  return { result, owner }
-}
-
-export async function spawnForStablePane(
-  args: StablePaneSpawnContext
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
-  if (args.owner) {
-    const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
-    if (attached) {
-      return attached
-    }
-  }
-  const result = await args.provider.spawn(args.spawnOptions)
-  args.onFreshSpawn?.(result)
-  return { result, owner: null }
+  return { result, owner, outputBoundary }
 }

@@ -105,10 +105,11 @@ export function getExactRoomMentionSuggestion(
   return suggestions.find((suggestion) => suggestion.value.toLocaleLowerCase() === value) ?? null
 }
 
-export function resolveSelectedRoomRecipients(
-  selected: string[],
+export function resolveRoomComposerMentions(
+  text: string,
   participants: RoomParticipant[]
 ): string[] {
+  const selected = [...text.matchAll(/(?:^|\s)@([\p{L}\p{N}_-]+)/gu)].map((match) => `@${match[1]}`)
   const agents = participants.filter(
     (participant) => participant.actorKind === 'agent' && participant.participation !== 'paused'
   )

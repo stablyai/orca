@@ -7,16 +7,18 @@ import { useShallow } from 'zustand/react/shallow'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import type { RoomMessage } from '../../../../shared/rooms'
 import { getActiveSidebarWorkspaceId, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import { selectRepoByIdForActiveWorkspace, useWorktreesForRepo } from '@/store/selectors'
 import { useRoomData } from './use-room-data'
 import { RoomParticipantBar } from './RoomParticipantBar'
-import { RoomMessageFeed } from './RoomMessageFeed'
+import { orderRoomActivities, pendingDeliveryActivities, RoomMessageFeed } from './RoomMessageFeed'
+import { RoomActivityStack } from './RoomActivityStack'
+import { RoomDeliveryQueues } from './RoomDeliveryQueues'
 import { RoomComposer } from './RoomComposer'
 import { RoomInspector } from './RoomInspector'
 import { RoomAddAgentDialog } from './RoomAddAgentDialog'
+import type { RoomQueueComposerEdit } from './room-queue-composer-edit'
 import { RoomSettingsDialog } from './RoomSettingsDialog'
 import { exportRoomArchive, importRoomArchive } from './room-archive-transfer'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -77,6 +79,19 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
   const participants = useMemo(
     () => data.snapshot?.participants ?? [],
     [data.snapshot?.participants]
+  )
+  const activities = useMemo(
+    () =>
+      orderRoomActivities(data.messages, [
+        ...Object.values(data.activities),
+        ...pendingDeliveryActivities(
+          Object.values(data.deliveries ?? {}),
+          data.messages,
+          participants,
+          Object.values(data.activities)
+        )
+      ]),
+    [data.activities, data.deliveries, data.messages, participants]
   )
   const liveSubagentsByPaneKey = useAppStore(
     useShallow((state) =>
@@ -160,7 +175,12 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [transferring, setTransferring] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [reply, setReply] = useState<RoomMessage | null>(null)
+  const [queueEdit, setQueueEdit] = useState<RoomQueueComposerEdit | null>(null)
+  const [queueEditRoomId, setQueueEditRoomId] = useState(data.roomId)
+  if (data.roomId !== queueEditRoomId) {
+    setQueueEditRoomId(data.roomId)
+    setQueueEdit(null)
+  }
   const archiveInputRef = useRef<HTMLInputElement>(null)
 
   const exportArchive = async (): Promise<void> => {
@@ -272,13 +292,26 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
               {data.error}
             </div>
           ) : null}
-          <RoomMessageFeed key={data.roomId ?? 'none'} data={data} onReply={setReply} />
+          <RoomMessageFeed key={data.roomId ?? 'none'} data={data} />
           {deleting ? (
             <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
               {translate('rooms.delete.deleting', 'Deleting room…')}
             </div>
           ) : (
-            <RoomComposer data={data} reply={reply} onReplyChange={setReply} />
+            <>
+              <RoomActivityStack
+                activities={activities}
+                lastSteeredParticipantId={data.lastSteeredParticipantId}
+                participants={participants}
+                target={data.target}
+              />
+              <RoomDeliveryQueues data={data} editing={queueEdit} onEdit={setQueueEdit} />
+              <RoomComposer
+                data={data}
+                editing={queueEdit}
+                onEditComplete={() => setQueueEdit(null)}
+              />
+            </>
           )}
         </section>
         {inspectorTarget
@@ -299,6 +332,7 @@ export default function RoomsPage({ roomId }: { roomId: string }): React.JSX.Ele
           worktrees={worktrees}
           target={target}
           machineStreaming={settings?.experimentalStructuredNativeChat === true}
+          enabledStreamingAgents={settings?.enabledHarnessStreamingAgents}
         />
         {settingsOpen ? (
           <RoomSettingsDialog

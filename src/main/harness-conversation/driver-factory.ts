@@ -8,7 +8,7 @@ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import type { HarnessConversationDriverFactory } from './driver'
 import { AcpConversationDriver } from './acp-driver'
-import { ClaudeConversationDriver } from './claude-driver'
+import { OmpRpcConversationDriver } from './omp-rpc-driver'
 
 type DriverSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
@@ -52,18 +52,65 @@ export function createHarnessConversationDriverFactory(
       env,
       sink
     }
-    if (agent === 'claude') {
-      return new ClaudeConversationDriver({ ...base, commandArgs: invocation.args })
+    if (agent === 'claude' || agent === 'openclaude') {
+      const { ClaudeConversationDriver } = await import('./claude-driver')
+      return new ClaudeConversationDriver({ ...base, agent, commandArgs: invocation.args })
     }
-    if (agent === 'codex') throw new Error('codex uses the app-server structured adapter')
-    const subcommand = agent === 'grok' ? ['agent', 'stdio'] : ['acp']
+    if (agent === 'codex') {
+      throw new Error('codex uses the app-server structured adapter')
+    }
+    if (agent === 'omp') {
+      const configuredArgs = [...invocation.args, ...resolveArgs(agentArgs)]
+      const sessionArgs = forkFromProviderSessionId
+        ? ['--fork', forkFromProviderSessionId]
+        : providerSessionId
+          ? ['--resume', providerSessionId]
+          : []
+      return new OmpRpcConversationDriver({
+        ...base,
+        args: ensureOmpRpcMode([
+          ...(configuredArgs.includes('--yolo')
+            ? configuredArgs
+            : ensureOmpManualApproval(configuredArgs)),
+          ...sessionArgs
+        ])
+      })
+    }
+    const subcommand = ['agent', 'stdio']
     return new AcpConversationDriver({
       ...base,
+      agent: 'grok',
       args: endsWith(invocation.args, subcommand)
         ? invocation.args
         : [...invocation.args, ...resolveArgs(agentArgs), ...subcommand]
     })
   }
+}
+
+function ensureOmpManualApproval(args: string[]): string[] {
+  const filtered: string[] = []
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--approval-mode') {
+      index += 1
+    } else if (!args[index].startsWith('--approval-mode=')) {
+      filtered.push(args[index])
+    }
+  }
+  return [...filtered, '--approval-mode', 'always-ask']
+}
+
+function ensureOmpRpcMode(args: string[]): string[] {
+  const modes = args.flatMap((arg, index) =>
+    arg === '--mode'
+      ? [args[index + 1]]
+      : arg.startsWith('--mode=')
+        ? [arg.slice('--mode='.length)]
+        : []
+  )
+  if (modes.some((mode) => mode !== 'rpc-ui')) {
+    throw new Error('omp_machine_mode_conflict')
+  }
+  return modes.length ? args : [...args, '--mode', 'rpc-ui']
 }
 
 function resolveArgs(args: string): string[] {

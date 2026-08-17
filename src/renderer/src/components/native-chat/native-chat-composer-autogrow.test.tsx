@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-/** The composer grows with the draft up to 8 lines, then scrolls internally.
- *  Sizing is layout-driven (field-sizing + an lh-relative cap) rather than a JS
+/** The composer grows with the draft up to 25dvh, then scrolls internally.
+ *  Sizing is layout-driven (field-sizing + a viewport-relative cap) rather than a JS
  *  measure pass, so these assert the class contract that produces it. happy-dom
- *  has no layout engine, so real pixel growth is covered by app validation. */
+ *  has no layout engine, so real pixel growth is covered by Electron validation. */
 
 import { createRef } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -93,16 +93,15 @@ describe('native chat composer autogrow', () => {
     expect(renderField('').className).toContain('[field-sizing:content]')
   })
 
-  it('caps growth at 8 lines plus the py-1 padding box', () => {
-    // 8lh tracks the rendered line-height, so the cap follows the text tokens
-    // instead of a hardcoded pixel value like the old max-h-28 (112px).
+  it('caps growth at one quarter of the viewport', () => {
     const textarea = renderField('a\n'.repeat(20))
-    expect(textarea.className).toContain('max-h-[calc(8lh+0.5rem)]')
-    expect(textarea.className).not.toContain('max-h-28')
+    expect(textarea.className).toContain('max-h-[25dvh]')
   })
 
   it('keeps the sleek scrollbar for the overflow past the cap', () => {
-    expect(renderField('a\n'.repeat(20)).className).toContain('scrollbar-sleek')
+    const textarea = renderField('a\n'.repeat(20))
+    expect(textarea.className).toContain('scrollbar-sleek')
+    expect(textarea.className).toContain('overflow-y-auto')
   })
 
   it('keeps the touch-target minimum heights', () => {

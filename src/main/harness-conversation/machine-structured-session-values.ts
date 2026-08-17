@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentSessionJournalIdentity
+  AgentSessionJournalIdentity,
+  AgentJournalTurn
 } from '../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
@@ -16,6 +17,8 @@ import { readProcessStartTimeMs } from '../runtime/agent-session-process-identit
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { HarnessConversationDriver } from './driver'
 
+export type MachineStructuredMessage = { body: AgentJournalMessageItem; turn?: AgentJournalTurn }
+
 export type MachineStructuredSession = {
   agent: StructuredMachineAgent
   driver: HarnessConversationDriver
@@ -24,7 +27,7 @@ export type MachineStructuredSession = {
   acquisitionGeneration: string
   process: AgentSessionProcessIdentity
   providerSessionId: string
-  messages: Map<string, AgentJournalMessageItem>
+  messages: Map<string, MachineStructuredMessage>
   prompts: Map<string, { kind: 'approval' | 'question'; requestId: string }>
   activeTurn: string | null
   requestedClose: boolean
@@ -34,7 +37,13 @@ export type MachineStructuredSession = {
 }
 
 export function machineAgent(agent: string): StructuredMachineAgent {
-  if (agent === 'claude' || agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (
+    agent === 'claude' ||
+    agent === 'openclaude' ||
+    agent === 'codex' ||
+    agent === 'grok' ||
+    agent === 'omp'
+  ) {
     return agent
   }
   throw new Error(`unsupported structured machine agent ${agent}`)
@@ -58,7 +67,7 @@ export function providerHandleLink(
   return {
     linkId: `${agent}-${fence}-${randomUUID()}`.slice(0, 128),
     handle:
-      agent === 'claude'
+      agent === 'claude' || agent === 'openclaude'
         ? { provider: 'claude', sessionId, leafUuid: null }
         : { provider: 'acp', agent, sessionId },
     origin: sessionId === providerSessionId(identity) ? 'resumed' : 'created',
@@ -168,7 +177,8 @@ export function providerOptions(
         : {})
     },
     descriptors: configuration?.options ?? [],
-    canCompact: configuration?.canCompact === true
+    canCompact: configuration?.canCompact === true,
+    canSteer: configuration?.canSteer === true
   }
 }
 

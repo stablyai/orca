@@ -16,7 +16,7 @@ export async function waitForRoomParticipantReady(
   if (!adapter || !binding) {
     throw new Error('room_agent_not_attached')
   }
-  const inputReady = !requireInputReady || (await adapter.awaitInputReady(binding))
+  let inputReady = !requireInputReady || (await adapter.awaitInputReady(binding))
   const current = await adapter.status(binding).catch(() => null)
   if (current?.isRunningAgent) {
     if (current.status === 'permission') {
@@ -28,7 +28,11 @@ export async function waitForRoomParticipantReady(
       }
       return updateRoomParticipantStatus(db, adapters, emit, participant, true, current.status)
     }
-    if (current.status === null && (inputReady || (await adapter.awaitInputReady(binding)))) {
+    if (
+      requireInputReady &&
+      current.status === null &&
+      (inputReady || (await adapter.awaitInputReady(binding)))
+    ) {
       return updateRoomParticipantStatus(db, adapters, emit, participant, true, current.status)
     }
   }
@@ -36,16 +40,16 @@ export async function waitForRoomParticipantReady(
   if (!wait.satisfied) {
     throw new Error(wait.blockedReason ? 'room_agent_permission' : 'room_agent_not_ready')
   }
-  if (!inputReady && !(await adapter.awaitInputReady(binding))) {
-    throw new Error('room_agent_not_ready')
+  if (!inputReady) {
+    inputReady = await adapter.awaitInputReady(binding)
+    if (!inputReady) {
+      throw new Error('room_agent_not_ready')
+    }
   }
   const status = await adapter.status(binding)
-  if (
-    !status.isRunningAgent ||
-    (status.status !== null &&
-      status.status !== 'idle' &&
-      !(requireInputReady && status.status === 'working'))
-  ) {
+  const startupComposerReady =
+    requireInputReady && inputReady && (status.status === null || status.status === 'working')
+  if (!status.isRunningAgent || (status.status !== 'idle' && !startupComposerReady)) {
     if (status.status === 'permission') {
       throw new Error('room_agent_permission')
     }

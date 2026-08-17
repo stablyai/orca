@@ -13,11 +13,8 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import type { SessionOptionDescriptor } from './native-chat-session-options'
-import type {
-  AgentSessionHandoffStage,
-  AgentSessionOwnerRuntimeKind,
-  AgentSessionRecord
-} from './agent-session-record'
+import type { AgentType } from './agent-status-types'
+import type { AgentSessionHandoffStage, AgentSessionOwnerRuntimeKind } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
@@ -175,7 +172,7 @@ export type AgentSessionSubscribeEvent =
 export type AgentSessionStatusSummary = {
   sessionId: string
   workspaceId: string
-  agent: AgentSessionRecord['provider']
+  agent: AgentType
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string

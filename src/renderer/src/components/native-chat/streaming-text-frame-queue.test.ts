@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BUFFERED_FINAL_CHARS_PER_SECOND, StreamingTextFrameQueue } from './streaming-text-frame-queue'
+import {
+  BUFFERED_FINAL_CHARS_PER_SECOND,
+  StreamingTextFrameQueue
+} from './streaming-text-frame-queue'
 
 afterEach(() => vi.restoreAllMocks())
 

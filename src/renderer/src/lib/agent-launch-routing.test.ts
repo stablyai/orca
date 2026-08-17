@@ -7,9 +7,10 @@ import {
   resolveAgentLaunchRoute
 } from './agent-launch-routing'
 
-const settings = {
+const settings: NonNullable<Parameters<typeof resolveAgentLaunchRoute>[0]['settings']> = {
   experimentalNativeChat: true,
   experimentalStructuredNativeChat: true,
+  enabledHarnessStreamingAgents: ['codex', 'claude'],
   openAgentTabsInChatByDefault: true
 }
 
@@ -99,9 +100,9 @@ describe('resolveAgentLaunchRoute', () => {
     )
   })
 
-  it('keeps editable drafts on the terminal-backed native chat path', () => {
+  it('keeps a mirrorable editable draft on the structured chat path', () => {
     expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
-      'legacy-native-chat'
+      'structured-native-chat'
     )
   })
 
@@ -117,17 +118,32 @@ describe('resolveAgentLaunchRoute', () => {
 
   it('fails closed for missing capability, unsupported providers, and explicit TUI options', () => {
     expect(route({ hostCapabilities: [] })).toBe('legacy-native-chat')
-    // openclaude and grok render native chat but have no structured adapter.
+    // These supported harnesses were not enabled in this fixture.
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
     expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
   })
 
   it.each([
-    ['SSH', 'ssh:host-a'],
-    ['paired runtime', 'runtime:environment-a']
-  ])('preserves execution ownership on %s', (_name, executionHostId) => {
-    expect(route({ executionHostId })).toBe('legacy-native-chat')
+    ['SSH', 'ssh:host-a', 'legacy-native-chat'],
+    ['paired runtime', 'runtime:environment-a', 'structured-native-chat']
+  ])('preserves execution ownership on %s', (_name, executionHostId, expected) => {
+    expect(route({ executionHostId })).toBe(expected)
+  })
+
+  it('requires each harness to be enabled, with Codex as the default selection', () => {
+    expect(
+      route({
+        agent: 'claude',
+        settings: { ...settings, enabledHarnessStreamingAgents: undefined }
+      })
+    ).toBe('legacy-native-chat')
+    expect(route({ settings: { ...settings, enabledHarnessStreamingAgents: undefined } })).toBe(
+      'structured-native-chat'
+    )
+    expect(route({ settings: { ...settings, enabledHarnessStreamingAgents: [] } })).toBe(
+      'legacy-native-chat'
+    )
   })
 
   it.each(['git-worktree', 'folder'] as const)(

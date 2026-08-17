@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { RoomEvent } from '../../../shared/rooms'
 import type { RoomAttachmentManager } from './attachments'
 import { RoomDatabase } from './database'
+import { claimRoomBroadcastForTest } from './delivery-test-claim'
 import { RoomMessageController } from './message-controller'
 
 describe('room message recipients', () => {
@@ -113,7 +115,7 @@ describe('room message recipients', () => {
         body: 'Start'
       })
       const delivery = database.messages.deliveries.listForMessage(first.id)[0]
-      database.messages.deliveries.claim(delivery.id)
+      claimRoomBroadcastForTest(database, delivery.messageId)
       database.messages.deliveries.setPhase(delivery.id, 'awaiting-turn')
       const stopped = database.transaction(() =>
         database.messages.deliveries.stopRoom(snapshot.room.id)
@@ -143,7 +145,54 @@ describe('room message recipients', () => {
         error: 'room_stopped_superseded'
       })
       expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('idle')
-      expect(database.messages.deliveries.resumeRoom(snapshot.room.id)).toEqual([])
+      expect(database.messages.deliveries.resumeRoom(snapshot.room.id)).toEqual({
+        resumed: [],
+        deliveries: []
+      })
+    } finally {
+      database.close()
+    }
+  })
+
+  it('publishes work state when Send supersedes an empty paused room', async () => {
+    const database = new RoomDatabase(':memory:')
+    try {
+      const snapshot = database.createRoom({ projectId: 'project-1', name: 'Research' })
+      const agent = database.participants.add({
+        roomId: snapshot.room.id,
+        identity: 'codex',
+        displayName: 'Codex',
+        agent: 'codex'
+      })
+      const events: RoomEvent[] = []
+      const controller = new RoomMessageController(
+        database,
+        {
+          consumeUploads: async () => [],
+          remove: async () => {}
+        } as unknown as RoomAttachmentManager,
+        (_roomId, event) => events.push(event),
+        () => {}
+      )
+      const queued = await controller.send({
+        roomId: snapshot.room.id,
+        senderIdentity: snapshot.participants[0].identity,
+        body: 'Pause this'
+      })
+      database.transaction(() => database.messages.deliveries.stopRoom(snapshot.room.id))
+      database.participants.remove(agent.id)
+      expect(database.messages.deliveries.listForMessage(queued.id)).toEqual([])
+      expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('stopped')
+      events.length = 0
+
+      await controller.send({
+        roomId: snapshot.room.id,
+        senderIdentity: snapshot.participants[0].identity,
+        body: 'Continue without agents'
+      })
+
+      expect(database.messages.deliveries.workState(snapshot.room.id)).toBe('idle')
+      expect(events.at(-1)).toMatchObject({ type: 'room.updated' })
     } finally {
       database.close()
     }

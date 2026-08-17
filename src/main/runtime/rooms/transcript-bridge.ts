@@ -5,12 +5,13 @@ import type { RoomHarnessAdapter, RoomHarnessLifecycleEvent } from './harness-ad
 import type { RoomHarnessTurnUserMessage } from './harness-lifecycle'
 import { roomParticipantHarnessBinding } from './participant-harness-binding'
 import { providerMessageId, RoomTranscriptTurnState } from './transcript-turn-state'
+import {
+  clearStoppedRoomTranscripts,
+  finalizeStoppedRoomTranscripts
+} from './transcript-stop-settlement'
+import { currentRoomTurnDeliveryIdForConversation } from './transcript-current-delivery'
 
-type ActiveWatcher = {
-  providerSessionId: string
-  transcriptPath: string | null
-  unsubscribe: () => void
-}
+type ActiveWatcher = { sessionId: string; path: string | null; unsubscribe: () => void }
 
 export class RoomTranscriptBridge {
   private readonly watchers = new Map<string, ActiveWatcher>()
@@ -44,7 +45,7 @@ export class RoomTranscriptBridge {
     this.turnState.restore(participant)
     const transcriptPath = session.transcriptPath ?? null
     const current = this.watchers.get(participant.id)
-    if (current?.providerSessionId === session.id && current.transcriptPath === transcriptPath) {
+    if (current?.sessionId === session.id && current.path === transcriptPath) {
       return
     }
     if (current) {
@@ -65,8 +66,8 @@ export class RoomTranscriptBridge {
       return
     }
     this.watchers.set(participant.id, {
-      providerSessionId: session.id,
-      transcriptPath,
+      sessionId: session.id,
+      path: transcriptPath,
       unsubscribe: subscription.unsubscribe
     })
   }
@@ -107,10 +108,25 @@ export class RoomTranscriptBridge {
   }
 
   clearStoppedDeliveries(participantIds: readonly string[]): void {
-    for (const participantId of participantIds) {
-      this.activeDeliveries.delete(participantId)
-      this.turnState.clearParticipant(this.db.participants.get(participantId))
-    }
+    clearStoppedRoomTranscripts({
+      db: this.db,
+      participantIds,
+      activeDeliveries: this.activeDeliveries,
+      turnState: this.turnState,
+      emit: this.emit
+    })
+  }
+
+  finalizeStoppedDeliveries(deliveries: readonly RoomDelivery[], timestamp = Date.now()): void {
+    finalizeStoppedRoomTranscripts({
+      db: this.db,
+      deliveries,
+      activeDeliveries: this.activeDeliveries,
+      turnState: this.turnState,
+      emit: this.emit,
+      onSettled: this.onSettled,
+      timestamp
+    })
   }
 
   currentTurnDeliveryId(participantId: string): string | null {
@@ -118,24 +134,12 @@ export class RoomTranscriptBridge {
   }
 
   currentTurnDeliveryIdForConversation(conversationId: string): string | null {
-    let current: RoomDelivery | null = null
-    for (const [participantId, watcher] of this.watchers) {
-      if (watcher.providerSessionId === conversationId) {
-        const deliveryId = this.activeDeliveries.get(participantId)
-        if (!deliveryId) {
-          continue
-        }
-        try {
-          const delivery = this.db.messages.deliveries.get(deliveryId)
-          if ((delivery.deliveredAt ?? 0) > (current?.deliveredAt ?? 0)) {
-            current = delivery
-          }
-        } catch {
-          continue
-        }
-      }
-    }
-    return current?.id ?? null
+    return currentRoomTurnDeliveryIdForConversation(
+      this.db,
+      this.watchers,
+      this.activeDeliveries,
+      conversationId
+    )
   }
 
   ingestStatus(participantId: string, event: RoomHarnessLifecycleEvent | null): void {
@@ -218,8 +222,8 @@ export class RoomTranscriptBridge {
         return
       }
       this.turnState.remember(participantId, event.messages, !event.replay)
+      this.turnState.rememberStart(participant, delivery, event)
       if (event.type === 'activity') {
-        this.turnState.rememberStart(participant, delivery, event)
         participant = this.updateParticipant(participant, 'busy', event.timestamp)
         this.turnState.emitActivity(participant, event)
         return
@@ -248,35 +252,29 @@ export class RoomTranscriptBridge {
           event.type === 'failed' ? 'error' : 'online',
           event.timestamp
         )
-        const retainPartial =
+        const published =
           event.type === 'interrupted' &&
-          event.messages.some(
-            (message) =>
-              message.role === 'assistant' &&
-              message.blocks.some((block) => block.type === 'text' && block.text.trim())
+          this.turnState.publishInterrupted(
+            participant,
+            delivery,
+            session.id,
+            event,
+            this.onSettled
           )
-        if (retainPartial) {
-          this.turnState.emitActivity(participant, event)
-        } else {
-          this.turnState.removeActivity(participant.id)
+        if (!published) {
+          this.turnState.ignorePending(participant.id, session.id)
         }
-        this.turnState.ignorePending(participant.id, session.id)
-        if (retainPartial) {
-          this.turnState.disposeParticipant(participant.id)
+        this.turnState.removeActivity(participant.id)
+        const error = event.type === 'failed' ? 'room_turn_failed' : 'room_turn_interrupted'
+        this.turnState.failResponse(participant, delivery, error, event.timestamp)
+        this.activeDeliveries.delete(participant.id)
+        this.emit(participant.roomId, {
+          type: 'activity.cleared',
+          participantId: participant.id
+        })
+        if (!published) {
+          this.onSettled()
         }
-        const failed = this.db.messages.deliveries.failResponse(
-          delivery.id,
-          event.type === 'failed' ? 'room_turn_failed' : 'room_turn_interrupted',
-          event.timestamp
-        )
-        this.emit(participant.roomId, { type: 'delivery.updated', delivery: failed })
-        if (!retainPartial) {
-          this.emit(participant.roomId, {
-            type: 'activity.cleared',
-            participantId: participant.id
-          })
-        }
-        this.onSettled()
       }
       void this.refreshContext(participant).catch(() => {})
     })
@@ -291,7 +289,11 @@ export class RoomTranscriptBridge {
     }
     try {
       const delivery = this.db.messages.deliveries.get(deliveryId)
-      return delivery.state === 'delivered' && !delivery.respondedAt ? delivery : null
+      return !delivery.respondedAt &&
+        (delivery.state === 'delivered' ||
+          (delivery.state === 'suppressed' && delivery.error === 'room_stopping'))
+        ? delivery
+        : null
     } catch {
       return null
     }
