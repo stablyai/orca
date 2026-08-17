@@ -21,7 +21,7 @@ import { useOpenMobileHostEdit } from '../src/transport/use-open-mobile-host-edi
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { fetchHomeHostWorktreeInfo } from '../src/worktree/home-host-worktree-fetch'
 import { totalHomeStats, type HomeStatsSummary } from '../src/stats/home-stats-total'
-import type { HomeWorktreeSummary, HostWorktreeInfo } from '../src/worktree/home-worktree-info'
+import type { HostWorktreeInfo } from '../src/worktree/home-worktree-info'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { createHostConnectRefetchGate } from '../src/transport/host-connect-refetch-gate'
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
@@ -29,7 +29,8 @@ import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient,
-  usePrimeHosts
+  usePrimeHosts,
+  useRpcClientContext
 } from '../src/transport/client-context'
 import { useAllHostClients } from '../src/transport/use-all-host-clients'
 import {
@@ -46,6 +47,9 @@ import type { ConnectionState, HostCatalogEntry, HostProfile } from '../src/tran
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { MobileHostCard } from '../src/components/MobileHostCard'
+import { ProjectsHomeList } from '../src/components/ProjectsHomeList'
+import type { DesktopClient } from '../src/worktree/use-merged-desktop-catalogs'
+import { loadProjectsHomeEnabled } from '../src/storage/preferences'
 import { MobileHomeQuickActions } from '../src/components/MobileHomeQuickActions'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
@@ -79,6 +83,8 @@ import {
 import { hostRouteWithNotice } from '../src/host-route-notice'
 import { hostNewWorktreeRoute } from '../src/host-route-action-state'
 import { hostEndpointLabel } from '../src/transport/host-endpoint-label'
+import { acquireTransientHostClient } from '../src/transport/transient-host-client'
+import { buildProjectsHomeDesktopRoster } from '../src/worktree/projects-home-desktop-roster'
 
 type HomeTaskSettings = {
   visibleTaskProviders?: unknown
@@ -244,6 +250,8 @@ export default function HomeScreen() {
   // Why: focus can fire repeatedly while an async gate is pending; one probe per
   // mount avoids duplicate storage/permission reads and competing navigation.
   const onboardingOptInCheckedRef = useRef(false)
+  // Experimental: swaps the desktop cards for one merged workspace list.
+  const [projectsHomeEnabled, setProjectsHomeEnabled] = useState(false)
 
   // Why: shared clients from the per-host store, not N independent WebSockets. See docs/mobile-shared-client-per-host.md.
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
@@ -263,6 +271,12 @@ export default function HomeScreen() {
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
+  const rpcClientContext = useRpcClientContext()
+  const acquireProjectsHomeClient = useCallback(
+    (profile: HostProfile, signal?: AbortSignal, onClientOwned?: (client: RpcClient) => void) =>
+      acquireTransientHostClient(rpcClientContext, profile, { signal, onClientOwned }),
+    [rpcClientContext]
+  )
   // Why: prime the cache with loaded HostProfiles to avoid a second serialized Keychain pass (multi-second connect latency) on cold start.
   useEffect(() => {
     if (hosts.length > 0) {
@@ -333,6 +347,12 @@ export default function HomeScreen() {
         }
         if (onboardingSteps.length > 0) {
           router.replace(mobileOnboardingDestination(onboardingSteps))
+        }
+      })
+      // Re-read on focus so returning from Settings applies the toggle immediately.
+      void loadProjectsHomeEnabled().then((enabled) => {
+        if (!stale) {
+          setProjectsHomeEnabled(enabled)
         }
       })
       void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
@@ -524,7 +544,7 @@ export default function HomeScreen() {
         hostStates,
         worktreeInfo,
         lastVisited,
-        cachedWorktrees: (hostId) => getCachedWorktrees(hostId) as HomeWorktreeSummary[] | null
+        cachedWorktrees: (hostId) => getCachedWorktrees(hostId)
       }),
     [sortedHosts, hostStates, worktreeInfo, lastVisited]
   )
@@ -535,12 +555,7 @@ export default function HomeScreen() {
   // through and the session screen bounces once the host answers (F7).
   const openResume = useCallback(
     (card: HomeResumeCard) => {
-      if (
-        isResumeTargetConfirmedMissing(
-          card,
-          getProvenCachedWorktrees(card.hostId) as HomeWorktreeSummary[] | null
-        )
-      ) {
+      if (isResumeTargetConfirmedMissing(card, getProvenCachedWorktrees(card.hostId))) {
         router.push(hostRouteWithNotice(card.hostId, 'worktree-missing'))
         return
       }
@@ -657,6 +672,23 @@ export default function HomeScreen() {
       setConfirmRemove(hostToRemove)
       Alert.alert('Could not remove host', 'Please try again.')
     }
+  }
+
+  const desktops = useMemo<DesktopClient[]>(() => {
+    return buildProjectsHomeDesktopRoster(
+      hostCatalog,
+      allClients,
+      autoConnectHostIds,
+      acquireProjectsHomeClient
+    )
+  }, [acquireProjectsHomeClient, allClients, autoConnectHostIds, hostCatalog])
+
+  // Experimental Projects home replaces the desktop cards outright. It needs at
+  // least one connectable desktop: onboarding owns the unpaired state, and a
+  // catalog of only unpaired hosts must keep the cards, whose repair tap is the
+  // sole route back to pairing.
+  if (projectsHomeEnabled && hosts.length > 0) {
+    return <ProjectsHomeList desktops={desktops} onOpenSettings={() => router.push('/settings')} />
   }
 
   return (

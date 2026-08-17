@@ -5,16 +5,10 @@ import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'ex
 import {
   Search,
   X,
-  Pin,
   List,
-  SlidersHorizontal,
-  Layers,
-  ChevronDown,
-  ChevronRight,
   ChevronLeft,
   Plus,
   Moon,
-  Filter,
   Check,
   UserCircle,
   PanelLeftClose,
@@ -42,7 +36,8 @@ import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
 import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
-import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
+import { WorkspaceListControls } from '../../../src/components/WorkspaceListControls'
+import { WorkspaceSectionHeader } from '../../../src/components/WorkspaceSectionHeader'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
@@ -59,7 +54,7 @@ import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBa
 import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { getCachedWorkspaceCatalog, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
@@ -131,9 +126,7 @@ export function HostScreen({
   const insets = useSafeAreaInsets()
   // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  const [initialCache] = useState(() =>
-    hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
-  )
+  const [initialCache] = useState(() => (hostId ? getCachedWorkspaceCatalog(hostId) : null))
   // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
@@ -333,7 +326,7 @@ export function HostScreen({
     setRepoIconsByName(new Map())
     repoMetadataFetchedAtRef.current = 0
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
-    const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
+    const freshCache = hostId ? getCachedWorkspaceCatalog(hostId) : null
     setCatalogError(null)
     if (freshCache) {
       setWorktrees(freshCache)
@@ -884,60 +877,15 @@ export function HostScreen({
         {embedded ? (
           <View style={styles.embeddedToolbar}>
             <View style={styles.embeddedToolbarRow}>
-              <Pressable
-                style={[
-                  styles.filterChip,
-                  styles.embeddedFilterChip,
-                  activeFilterCount > 0 && styles.filterChipActive
-                ]}
-                onPress={() => setShowFilterModal(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter workspaces${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
-              >
-                <Filter
-                  size={12}
-                  color={activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    activeFilterCount > 0 && styles.filterChipTextActive
-                  ]}
-                  numberOfLines={1}
-                >
-                  Filter{activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.modeButton, styles.embeddedModeButton]}
-                onPress={() => setShowSortPicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Sort by ${selectedSortLabel}`}
-              >
-                <SlidersHorizontal size={14} color={colors.textSecondary} />
-                <Text style={styles.sortLabel} numberOfLines={1}>
-                  {selectedSortLabel}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.modeButton, styles.embeddedModeButton]}
-                onPress={() => setShowGroupPicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Group workspaces"
-              >
-                <Layers size={14} color={colors.textSecondary} />
-                <Text style={styles.sortLabel} numberOfLines={1}>
-                  {groupMode === 'none'
-                    ? 'Group'
-                    : groupMode === 'workspaceStatus'
-                      ? 'Status'
-                      : groupMode === 'repo'
-                        ? 'Repo'
-                        : 'PR'}
-                </Text>
-              </Pressable>
+              <WorkspaceListControls
+                layout="compact"
+                activeFilterCount={activeFilterCount}
+                sortLabel={selectedSortLabel}
+                groupMode={groupMode}
+                onOpenFilter={() => setShowFilterModal(true)}
+                onOpenSort={() => setShowSortPicker(true)}
+                onOpenGroup={() => setShowGroupPicker(true)}
+              />
             </View>
 
             <View style={styles.embeddedToolbarRow}>
@@ -1023,43 +971,15 @@ export function HostScreen({
           </View>
         ) : (
           <View style={styles.toolbar}>
-            <Pressable
-              style={[styles.filterChip, activeFilterCount > 0 && styles.filterChipActive]}
-              onPress={() => setShowFilterModal(true)}
-            >
-              <Filter
-                size={12}
-                color={activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilterCount > 0 && styles.filterChipTextActive
-                ]}
-              >
-                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-              </Text>
-            </Pressable>
-
-            <Pressable style={styles.modeButton} onPress={() => setShowSortPicker(true)}>
-              <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {selectedSortLabel}
-              </Text>
-            </Pressable>
-
-            <Pressable style={styles.modeButton} onPress={() => setShowGroupPicker(true)}>
-              <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {groupMode === 'none'
-                  ? 'Group'
-                  : groupMode === 'workspaceStatus'
-                    ? 'Status'
-                    : groupMode === 'repo'
-                      ? 'Repo'
-                      : 'PR'}
-              </Text>
-            </Pressable>
+            <WorkspaceListControls
+              layout="row"
+              activeFilterCount={activeFilterCount}
+              sortLabel={selectedSortLabel}
+              groupMode={groupMode}
+              onOpenFilter={() => setShowFilterModal(true)}
+              onOpenSort={() => setShowSortPicker(true)}
+              onOpenGroup={() => setShowGroupPicker(true)}
+            />
 
             <View style={styles.toolbarSpacer} />
 
@@ -1161,34 +1081,17 @@ export function HostScreen({
             if (!section.title) {
               return null
             }
-            const isCollapsed = collapsedGroups.has(section.key)
-            const rawSection = rawSections.find((s) => s.key === section.key)
-            const count = rawSection?.data.length ?? 0
-            const repoSectionColor =
-              groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
-            const repoSectionIcon = groupMode === 'repo' ? repoIconsByName.get(section.title) : null
+            const byRepo = groupMode === 'repo'
             return (
-              <Pressable style={styles.sectionHeader} onPress={() => toggleCollapsed(section.key)}>
-                {isCollapsed ? (
-                  <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                ) : (
-                  <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {section.icon === 'pin' && (
-                  <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {groupMode === 'repo' ? (
-                  <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon
-                      repoIcon={repoSectionIcon}
-                      size={14}
-                      color={repoSectionColor ?? colors.textSecondary}
-                    />
-                  </View>
-                ) : null}
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{count}</Text>
-              </Pressable>
+              <WorkspaceSectionHeader
+                title={section.title}
+                count={rawSections.find((s) => s.key === section.key)?.data.length ?? 0}
+                collapsed={collapsedGroups.has(section.key)}
+                pinnedGroup={section.icon === 'pin'}
+                repoIcon={byRepo ? (repoIconsByName.get(section.title) ?? null) : undefined}
+                repoColor={byRepo ? (uniqueRepoColors.get(section.title) ?? null) : null}
+                onToggle={() => toggleCollapsed(section.key)}
+              />
             )
           }}
           ItemSeparatorComponent={ListSeparator}
@@ -1505,58 +1408,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   },
-  embeddedFilterChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  embeddedModeButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.bgRaised
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  filterChipTextActive: {
-    color: colors.textPrimary
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sortLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: colors.textSecondary
-  },
   toolbarSpacer: {
     flex: 1
   },
@@ -1602,31 +1453,6 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: spacing.lg
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: spacing.xs
   },
   separator: {
     height: 1,

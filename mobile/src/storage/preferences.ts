@@ -192,6 +192,22 @@ export async function saveHostDockWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
 }
 
+const PROJECTS_HOME_KEY = 'orca:experimental:projectsHome'
+
+// Why default-off: this replaces Home's desktop list with one merged workspace
+// list, so it changes the app's entry screen. Opt in from Settings > Experimental.
+export async function loadProjectsHomeEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(PROJECTS_HOME_KEY)) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveProjectsHomeEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(PROJECTS_HOME_KEY, String(enabled))
+}
+
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'

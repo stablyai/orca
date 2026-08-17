@@ -9,6 +9,7 @@ import {
   sortWorktrees
 } from './workspace-list-sections'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -547,11 +548,11 @@ describe('buildSections', () => {
 
     expect(withoutSectionListKeys(sections)).toEqual([
       {
-        key: 'repo:repo-1',
+        key: '["repo","repo-1"]',
         title: 'orca',
         data: [worktree({ repoId: 'repo-1', repo: 'orca' })]
       },
-      { key: 'repo:repo-missing', title: 'zoom-img', data: [] }
+      { key: '["repo","repo-missing"]', title: 'zoom-img', data: [] }
     ])
   })
 
@@ -589,7 +590,7 @@ describe('buildSections', () => {
     )
 
     expect(withoutSectionListKeys(sections)).toEqual([
-      { key: 'repo:repo-matching', title: 'zoom-img', data: [] }
+      { key: '["repo","repo-matching"]', title: 'zoom-img', data: [] }
     ])
   })
 
@@ -613,7 +614,7 @@ describe('buildSections', () => {
     )
 
     expect(withoutSectionListKeys(sections)).toEqual([
-      { key: 'repo:repo-empty', title: 'empty-repo', data: [] }
+      { key: '["repo","repo-empty"]', title: 'empty-repo', data: [] }
     ])
   })
 
@@ -776,7 +777,7 @@ describe('buildSections', () => {
       new Set(),
       new Map(),
       DEFAULT_MOBILE_WORKSPACE_STATUSES,
-      new Set(['workspace-lineage:parent'])
+      new Set([getMobileWorkspaceLineageGroupKey('parent')])
     )
 
     expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent'])

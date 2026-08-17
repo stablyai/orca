@@ -16,6 +16,7 @@ import {
   Info,
   Bell,
   Wrench,
+  FlaskConical,
   Shield,
   LifeBuoy,
   Mic,
@@ -148,6 +149,15 @@ export default function SettingsScreen() {
           >
             <Bell size={16} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>Notifications</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/experimental-settings')}
+          >
+            <FlaskConical size={16} color={colors.textSecondary} />
+            <Text style={styles.rowLabel}>Experimental</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />

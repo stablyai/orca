@@ -42,7 +42,7 @@ import {
   resolveNewWorktreeAgentSelection,
   type NewWorktreeAgentOption as AgentOption
 } from './new-worktree-agent-selection'
-import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import { getCachedRepos, readMobileRepoCatalog, setCachedRepos } from '../cache/repo-cache'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
 import {
   getMobileNewWorkspaceDialogEligibleRepos,
@@ -87,6 +87,14 @@ type Repo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
       | 'gitRemoteIdentity'
     >
   >
+
+function readNewWorktreeRepos(value: unknown): Repo[] | null {
+  const repos = readMobileRepoCatalog(value)
+  if (!repos) {
+    return null
+  }
+  return repos.filter((repo): repo is Repo => typeof repo.path === 'string')
+}
 
 type SetupDecision = 'inherit' | 'run' | 'skip'
 type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -196,7 +204,9 @@ function NewWorktreeModalContent({
   onCreated,
   onClose
 }: Props) {
-  const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
+  const [initialRepos] = useState(() =>
+    hostId ? readNewWorktreeRepos(getCachedRepos(hostId, { allowStale: true })) : null
+  )
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   // Why: a deleted workspace's directory can still hold agent conversation state keyed by cwd, so
@@ -338,15 +348,19 @@ function NewWorktreeModalContent({
           return
         }
         if (repoResponse.ok) {
-          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
-          setRepos(result.repos)
+          const result = (repoResponse as RpcSuccess).result as { repos?: unknown }
+          const receivedRepos = readNewWorktreeRepos(result.repos)
+          if (!receivedRepos) {
+            return
+          }
+          setRepos(receivedRepos)
           if (hostId) {
-            setCachedRepos(hostId, result.repos)
+            setCachedRepos(hostId, receivedRepos)
           }
           setSelectedRepo((current) => {
             // Why: the optimistic cache can include repos removed before the
             // fresh repo.list returns; never create against a stale repo id.
-            return refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
+            return refreshMobileNewWorkspaceDialogSelectedRepo(receivedRepos, current)
           })
         }
       })

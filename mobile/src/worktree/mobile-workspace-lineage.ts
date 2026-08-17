@@ -1,7 +1,7 @@
 import type { Worktree } from './workspace-list-types'
 
 export function getMobileWorkspaceLineageGroupKey(worktreeId: string): string {
-  return `workspace-lineage:${encodeURIComponent(worktreeId)}`
+  return JSON.stringify(['workspace-lineage', worktreeId])
 }
 
 function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
@@ -19,13 +19,13 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   )
 }
 
-export function applyMobileWorkspaceLineage(
-  worktrees: readonly Worktree[],
+export function applyMobileWorkspaceLineage<T extends Worktree>(
+  worktrees: readonly T[],
   collapsedGroups: ReadonlySet<string> = new Set()
-): Worktree[] {
+): T[] {
   const visibleIds = new Set(worktrees.map((worktree) => worktree.worktreeId))
   const worktreeById = new Map(worktrees.map((worktree) => [worktree.worktreeId, worktree]))
-  const childrenByParentId = new Map<string, Worktree[]>()
+  const childrenByParentId = new Map<string, T[]>()
   const childIds = new Set<string>()
 
   for (const worktree of worktrees) {
@@ -46,9 +46,9 @@ export function applyMobileWorkspaceLineage(
     childrenByParentId.set(parentId, children)
   }
 
-  const result: Worktree[] = []
+  const result: T[] = []
   const emitted = new Set<string>()
-  const markDescendantsEmitted = (worktree: Worktree): void => {
+  const markDescendantsEmitted = (worktree: T): void => {
     for (const child of childrenByParentId.get(worktree.worktreeId) ?? []) {
       if (!emitted.has(child.worktreeId)) {
         emitted.add(child.worktreeId)
@@ -56,7 +56,7 @@ export function applyMobileWorkspaceLineage(
       }
     }
   }
-  const emit = (worktree: Worktree, depth: number, isLastChild: boolean): void => {
+  const emit = (worktree: T, depth: number, isLastChild: boolean): void => {
     if (emitted.has(worktree.worktreeId)) {
       return
     }
