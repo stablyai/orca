@@ -14,7 +14,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'grok',
   'devin',
   'omp',
-  'prime-agent'
+  'prime-agent',
+  'kimi'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -276,5 +277,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    // Why: Kimi sessions are work-dir-scoped, so this only resumes from the pane's
+    // own cwd — which is where restore relaunches it.
+    case 'kimi':
+      return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
   }
 }
