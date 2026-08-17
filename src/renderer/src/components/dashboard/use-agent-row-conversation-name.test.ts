@@ -4,9 +4,10 @@ import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import type { DashboardAgentRow } from './useDashboardData'
 
 const storeState = vi.hoisted(() => ({
-  current: { settings: {}, tabsByWorktree: {} } as {
+  current: { settings: {}, tabsByWorktree: {}, terminalLayoutsByTabId: {} } as {
     settings: Record<string, unknown>
     tabsByWorktree: Record<string, unknown[]>
+    terminalLayoutsByTabId: Record<string, unknown>
   }
 }))
 
@@ -30,7 +31,7 @@ function makeAgent(overrides: Partial<DashboardAgentRow> = {}): DashboardAgentRo
 }
 
 beforeEach(() => {
-  storeState.current = { settings: {}, tabsByWorktree: {} }
+  storeState.current = { settings: {}, tabsByWorktree: {}, terminalLayoutsByTabId: {} }
 })
 
 describe('useAgentRowConversationName', () => {
@@ -39,7 +40,11 @@ describe('useAgentRowConversationName', () => {
   })
 
   it('ignores a retired stored opt-out value', () => {
-    storeState.current = { settings: { agentRowsUseConversationName: false }, tabsByWorktree: {} }
+    storeState.current = {
+      settings: { agentRowsUseConversationName: false },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
     expect(useAgentRowConversationName(makeAgent())).toBe('Patient sync spike')
   })
 
@@ -52,7 +57,7 @@ describe('useAgentRowConversationName', () => {
         }
       }
     )
-    storeState.current = { settings: {}, tabsByWorktree }
+    storeState.current = { settings: {}, tabsByWorktree, terminalLayoutsByTabId: {} }
     expect(useAgentRowConversationName(makeAgent({ rowSource: 'subagent' }))).toBeNull()
   })
 
@@ -65,7 +70,7 @@ describe('useAgentRowConversationName', () => {
         }
       }
     )
-    storeState.current = { settings: {}, tabsByWorktree }
+    storeState.current = { settings: {}, tabsByWorktree, terminalLayoutsByTabId: {} }
     expect(
       useAgentRowConversationName(
         makeAgent({
@@ -112,7 +117,8 @@ describe('useAgentRowConversationName', () => {
     )
     storeState.current = {
       settings: {},
-      tabsByWorktree: { 'wt-1': tabs }
+      tabsByWorktree: { 'wt-1': tabs },
+      terminalLayoutsByTabId: {}
     }
 
     expect(useAgentRowConversationName(makeAgent())).toBe('First name')
@@ -136,20 +142,61 @@ describe('useAgentRowConversationName', () => {
       // snapshot; a rename landing after that must still surface.
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', customTitle: 'Renamed later', title: '' }]
-      }
+      },
+      terminalLayoutsByTabId: {}
     }
     expect(useAgentRowConversationName(makeAgent())).toBe('Renamed later')
+  })
+
+  it('gives split-pane rows no shared name, so each keeps its own per-pane label', () => {
+    const splitTab = { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Redis cache' }
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: { 'wt-1': [splitTab] },
+      // Why: a split root means tab.title is only the focused pane's title.
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'leaf-1' },
+            second: { type: 'leaf', leafId: 'leaf-2' },
+            ratio: 0.5
+          }
+        }
+      }
+    }
+    const paneA = makeAgent({ tab: splitTab } as Partial<DashboardAgentRow>)
+    const paneB = makeAgent({
+      paneKey: 'tab-1:leaf-2',
+      tab: splitTab
+    } as Partial<DashboardAgentRow>)
+    expect(useAgentRowConversationName(paneA)).toBeNull()
+    expect(useAgentRowConversationName(paneB)).toBeNull()
+  })
+
+  it('keeps the live title on a single-pane tab', () => {
+    const tab = { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Redis cache' }
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: { 'wt-1': [tab] },
+      terminalLayoutsByTabId: { 'tab-1': { root: { type: 'leaf', leafId: 'leaf-1' } } }
+    }
+    expect(useAgentRowConversationName(makeAgent({ tab } as Partial<DashboardAgentRow>))).toBe(
+      'Redis cache'
+    )
   })
 
   it('honors the generated-titles setting for generated names', () => {
     const agent = makeAgent({
       tab: { customTitle: null, title: '', generatedTitle: 'Fix intake flow' }
     } as Partial<DashboardAgentRow>)
-    storeState.current = { settings: {}, tabsByWorktree: {} }
+    storeState.current = { settings: {}, tabsByWorktree: {}, terminalLayoutsByTabId: {} }
     expect(useAgentRowConversationName(agent)).toBeNull()
     storeState.current = {
       settings: { tabAutoGenerateTitle: true },
-      tabsByWorktree: {}
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
     }
     expect(useAgentRowConversationName(agent)).toBe('Fix intake flow')
   })

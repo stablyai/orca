@@ -113,7 +113,8 @@ function conversationNameFromLiveTitle(
 export function getAgentRowConversationName(
   tab: ConversationNameTab,
   agentType: AgentType | null | undefined,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  tabHasSplitPanes = false
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -123,7 +124,9 @@ export function getAgentRowConversationName(
   if (quickCommandLabel) {
     return quickCommandLabel
   }
-  const liveTitle = tab.title?.trim() ?? ''
+  // Why: pty-connection only propagates the focused pane's title to the tab
+  // (deliberately, to stop split agents flickering), so in a split it mislabels siblings.
+  const liveTitle = tabHasSplitPanes ? '' : (tab.title?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }

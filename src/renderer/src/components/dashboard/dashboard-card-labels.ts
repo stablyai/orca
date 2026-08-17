@@ -28,7 +28,8 @@ export function boundedLabelOrUndefined(value: string | undefined): string | und
  *  same agent with the same name. */
 export function rowConversationName(
   row: DashboardAgentRow,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  tabHasSplitPanes: boolean
 ): string | undefined {
   const parentPaneKey = row.entry.orchestration?.parentPaneKey
   // Why: a child row rendered on its parent's tab does not own that tab's name.
@@ -39,5 +40,8 @@ export function rowConversationName(
   ) {
     return undefined
   }
-  return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined
+  return (
+    getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled, tabHasSplitPanes) ??
+    undefined
+  )
 }

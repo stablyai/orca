@@ -37,6 +37,43 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
   })
 
+  it('drops the live title in a split tab, where it names only the focused pane', () => {
+    const tab = makeTab({ title: '✳ Investigate replay bug' })
+    expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
+    expect(getAgentRowConversationName(tab, 'claude', false, true)).toBeNull()
+    // OpenCode semantic titles are live titles too, so they go with it.
+    const openCodeTab = makeTab({ title: 'OC | build the release pipeline' })
+    expect(getAgentRowConversationName(openCodeTab, 'opencode', false, true)).toBeNull()
+  })
+
+  it('keeps tab-owned names in a split tab', () => {
+    // Why: the user gave these to the whole tab, so every pane in it may show them.
+    expect(
+      getAgentRowConversationName(
+        makeTab({ customTitle: 'Patient sync spike' }),
+        'claude',
+        false,
+        true
+      )
+    ).toBe('Patient sync spike')
+    expect(
+      getAgentRowConversationName(
+        makeTab({ quickCommandLabel: 'Run tests' }),
+        'claude',
+        false,
+        true
+      )
+    ).toBe('Run tests')
+    expect(
+      getAgentRowConversationName(
+        makeTab({ generatedTitle: 'Fix intake flow' }),
+        'claude',
+        true,
+        true
+      )
+    ).toBe('Fix intake flow')
+  })
+
   it('strips leading status decoration from agent-set titles', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '✳ Fix patient intake flow' }), 'claude', false)
