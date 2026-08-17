@@ -79,12 +79,14 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resu
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES,
-  TERMINAL_INPUT_TOO_LARGE_ERROR
+  TERMINAL_INPUT_TOO_LARGE_ERROR,
+  TERMINAL_SEND_SUBMIT_DELAY_MS
 } from '../../shared/terminal-input'
 import { MAX_QUICK_COMMANDS } from '../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  AGENT_PROMPT_SUBMIT,
   AGENT_PROMPT_SUBMIT_DELAY_MS,
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
@@ -17111,6 +17113,144 @@ describe('OrcaRuntimeService', () => {
       expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_START)
       expect(writes.at(-1)).toBe(AGENT_PROMPT_BRACKETED_PASTE_END)
       expect(writes).not.toContain('\r')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: these four cover the glue window at the seam that creates it. The flow
+  // is ~500ms wide, roughly 10x finer than a device automation step, so it is
+  // only reachable deterministically here — fake timers park a send inside its
+  // own submit gap and start the next one by hand.
+  function submittedLines(writes: string[]): string[] {
+    return writes.join('').split(AGENT_PROMPT_SUBMIT).slice(0, -1)
+  }
+
+  it('does not glue two overlapping agent prompt sends into one submitted line', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      const first = runtime.sendTerminalAgentPrompt(handle, 'first prompt')
+      // Park the first send one tick short of its submit, then start the second.
+      await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_DELAY_MS - 1)
+      const second = runtime.sendTerminalAgentPrompt(handle, 'second prompt')
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.runAllTimersAsync()
+      await Promise.all([first, second])
+
+      const submitted = submittedLines(writes)
+      expect(submitted).toHaveLength(2)
+      expect(submitted[0]).toContain('first prompt')
+      expect(submitted[0]).not.toContain('second prompt')
+      expect(submitted[1]).toContain('second prompt')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not glue two overlapping terminal.send submits into one submitted line', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      const first = runtime.sendTerminal(handle, { text: 'first message', enter: true })
+      await vi.advanceTimersByTimeAsync(TERMINAL_SEND_SUBMIT_DELAY_MS - 1)
+      const second = runtime.sendTerminal(handle, { text: 'second message', enter: true })
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.runAllTimersAsync()
+      await Promise.all([first, second])
+
+      expect(submittedLines(writes)).toEqual(['first message', 'second message'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a bare interrupt through while a submit holds the per-PTY queue', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      const submit = runtime.sendTerminal(handle, { text: 'long running', enter: true })
+      await vi.advanceTimersByTimeAsync(1)
+      await runtime.sendTerminal(handle, { interrupt: true })
+
+      // Cancelling must not wait out the in-flight submit's gap.
+      expect(writes).toContain('\x03')
+      expect(writes).not.toContain(AGENT_PROMPT_SUBMIT)
+
+      await vi.runAllTimersAsync()
+      await submit
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases the per-PTY submit queue when a send fails mid-sequence', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      let acceptWrites = false
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          if (!acceptWrites) {
+            return false
+          }
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      const doomed = runtime.sendTerminal(handle, { text: 'doomed', enter: true })
+      const doomedRejection = expect(doomed).rejects.toThrow('terminal_not_writable')
+      await vi.runAllTimersAsync()
+      await doomedRejection
+
+      acceptWrites = true
+      const recovered = runtime.sendTerminal(handle, { text: 'after', enter: true })
+      await vi.runAllTimersAsync()
+
+      expect(await recovered).toMatchObject({ accepted: true })
+      expect(submittedLines(writes)).toEqual(['after'])
     } finally {
       vi.useRealTimers()
     }

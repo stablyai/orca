@@ -125,7 +125,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('ping')
   })
 
-  it('does not clobber newer edits when restoring a rejected send', async () => {
+  it('merges a rejected send with newer edits instead of dropping either', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -140,7 +140,21 @@ describe('useMobileNativeChatDrafts', () => {
         state?.restoreRejectedDraft(origin, 'ping')
       }
     })
-    expect(state?.composerText).toBe('newer edit')
+    // The rejected text has no other surviving copy — skipping it loses the
+    // message. Authoring order: the rejected send was composed first.
+    expect(state?.composerText).toBe('ping\nnewer edit')
+  })
+
+  it('does not duplicate a rejected send the composer already holds', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('ping')
   })
 
   it('restores a rejected send onto its originating tab only', async () => {

@@ -19,6 +19,7 @@ import {
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
+import { mergeRejectedDraftInto } from './mobile-native-chat-rejected-draft-merge'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
@@ -156,10 +157,7 @@ export function useMobileNativeChatDrafts(args: {
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    // Why: never clobber text the user typed while the rejection was in flight.
-    setDrafts((previous) =>
-      (previous[origin.draftKey] ?? '') === '' ? { ...previous, [origin.draftKey]: text } : previous
-    )
+    setDrafts((previous) => mergeRejectedDraftInto(previous, origin.draftKey, text))
   }, [])
 
   const acceptSend = useCallback(

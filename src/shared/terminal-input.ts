@@ -6,6 +6,10 @@ import {
 import { getUtf8ChunkEndIndex } from './utf8-byte-limits'
 
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = 16 * 1024
+// Why: a text send that also submits separates body from Enter so the TUI has a
+// frame to render the paste first. That gap is what two overlapping sends to one
+// PTY would otherwise interleave across.
+export const TERMINAL_SEND_SUBMIT_DELAY_MS = 500
 export const TERMINAL_INPUT_MAX_BYTES = 16 * 1024 * 1024
 export const TERMINAL_INPUT_TOO_LARGE_ERROR =
   'Terminal input is too large for a safe terminal send.'

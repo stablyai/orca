@@ -92,6 +92,7 @@ import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestratio
 import {
   isTerminalInputTooLargeWithYield,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
+  TERMINAL_SEND_SUBMIT_DELAY_MS,
   iterateTerminalInputChunks
 } from '../../shared/terminal-input'
 import {
@@ -18345,7 +18346,59 @@ export class OrcaRuntimeService {
     return bestStatus ? { status: bestStatus, updatedAt: bestUpdatedAt } : null
   }
 
-  private async writeTerminalAction(
+  // Why: a submit writes its body, waits a frame for the TUI to render it, then
+  // writes Enter. That wait is not atomic, so two overlapping sends to one PTY
+  // interleave across it and their bytes land on ONE agent input line — Orca
+  // manufacturing the merged transcript row the pending-send matchers then have
+  // to recognize. Serialize submits per PTY. Same shape as `enqueueLayout`
+  // without the coalescing: every prompt must be delivered, none may be dropped.
+  private terminalSubmitQueues = new Map<string, Promise<void>>()
+
+  private enqueueTerminalSubmit(ptyId: string, run: () => Promise<void>): Promise<void> {
+    const previous = this.terminalSubmitQueues.get(ptyId) ?? Promise.resolve()
+    const slot = previous.then(run)
+    // The stored tail absorbs the rejection so one failed send cannot jam the
+    // queue; the caller still sees its own error via `slot`.
+    const tail = slot.then(
+      () => undefined,
+      () => undefined
+    )
+    this.terminalSubmitQueues.set(ptyId, tail)
+    void tail.then(() => {
+      // Drop the entry once drained so the map does not grow across short-lived PTYs.
+      if (this.terminalSubmitQueues.get(ptyId) === tail) {
+        this.terminalSubmitQueues.delete(ptyId)
+      }
+    })
+    return slot
+  }
+
+  private writeTerminalAction(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
+  ): Promise<void> {
+    const isSubmit =
+      typeof action.text === 'string' && action.text.length > 0 && Boolean(action.enter)
+    // Why: only a body→delay→suffix sequence owns a gap to interleave across.
+    // Single-write actions — a bare interrupt, a bare Enter, keystrokes with no
+    // submit — stay unqueued so Ctrl+C and live typing are never held behind a
+    // queued send.
+    if (!isSubmit) {
+      return this.runTerminalAction(ptyId, action, payload, options)
+    }
+    return this.enqueueTerminalSubmit(ptyId, () =>
+      this.runTerminalAction(ptyId, action, payload, options)
+    )
+  }
+
+  private async runTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
@@ -18366,7 +18419,7 @@ export class OrcaRuntimeService {
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       if (hasText) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, TERMINAL_SEND_SUBMIT_DELAY_MS))
       }
       try {
         await options.beforeWrite?.(ptyId)
@@ -18423,7 +18476,21 @@ export class OrcaRuntimeService {
     }
   }
 
-  private async writeTerminalAgentPrompt(
+  private writeTerminalAgentPrompt(
+    ptyId: string,
+    pastePayload: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
+  ): Promise<void> {
+    // Always a submit: paste body, render gate (or fixed delay), then Enter.
+    return this.enqueueTerminalSubmit(ptyId, () =>
+      this.writeAgentPromptFrame(ptyId, pastePayload, options)
+    )
+  }
+
+  private async writeAgentPromptFrame(
     ptyId: string,
     pastePayload: string,
     options: {
