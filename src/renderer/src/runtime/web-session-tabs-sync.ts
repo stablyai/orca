@@ -3433,7 +3433,7 @@ export function applyWebSessionTabsStorePatch(
     seedOnly?: true
     payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
       stateStartedAt: number
-      localStateStartedAt?: number
+      localStateStartedAt: number
     }
   }[] = []
   useAppStore.setState((state) => {
@@ -3535,11 +3535,9 @@ export function applyWebSessionTabsStorePatch(
                 ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
               }),
               stateStartedAt: notificationStatus.stateStartedAt,
-              ...(clientOwnedNotification
-                ? {
-                    localStateStartedAt
-                  }
-                : {})
+              // Why: staleness must compare one clock — the retained client
+              // boundary when the client owns the row, else the mirrored host one.
+              localStateStartedAt: localStateStartedAt ?? notificationStatus.stateStartedAt
             }
           })
         }

@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { resetAnnouncedAgentNotificationIdsForTest } from '@/lib/announced-agent-notification-ids'
 
 type MockState = {
   activeWorktreeId: string | null
@@ -99,6 +100,7 @@ describe('dispatchTerminalNotification', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetAnnouncedAgentNotificationIdsForTest()
     mockState = {
       activeWorktreeId: 'wt-secondary',
       activeTabId: 'tab-1',

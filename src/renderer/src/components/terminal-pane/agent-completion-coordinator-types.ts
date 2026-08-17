@@ -5,7 +5,10 @@ import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-termina
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
-  /** Renderer-local boundary used only to reject a delayed cross-host completion. */
+  /**
+   * The turn's working boundary in the same clock as the mirrored status row.
+   * Used only to reject a delayed completion; never sent over the wire.
+   */
   localStateStartedAt?: number
 }
 

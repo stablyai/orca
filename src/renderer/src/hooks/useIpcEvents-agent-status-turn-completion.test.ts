@@ -84,6 +84,8 @@ describe('useIpcEvents agent status turn completion', () => {
           state: 'working',
           agentType: 'claude',
           turnCompletedAt: 1_700_000_005_000,
+          stateStartedAt: 1_700_000_000_000,
+          localStateStartedAt: 1_700_000_000_000,
           lastAssistantMessage: 'Which cells need hand-verification?'
         })
       })

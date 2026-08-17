@@ -40,6 +40,7 @@ import {
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
+import { transferAnnouncedAgentNotificationClaim } from '@/lib/announced-agent-notification-ids'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -1552,6 +1553,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
+      const supersededNotificationId = transferAnnouncedAgentNotificationClaim(from, to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
       set((s) => ({
@@ -1604,6 +1606,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
       }))
       if (typeof window !== 'undefined') {
+        if (supersededNotificationId) {
+          void window.api?.notifications?.dismiss?.([supersededNotificationId])
+        }
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,
           toPaneKey: to,

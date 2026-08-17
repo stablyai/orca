@@ -3409,9 +3409,16 @@ export function useIpcEvents(): void {
       const applyPostCommitNotification = (): void => {
         if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
           // Why: local Codex/Claude hooks arrive via this main-process IPC path, not the PTY OSC fallback, so task-complete notifications must observe accepted hook state here too.
+          // Why: a stamped background turn rewrites stateStartedAt to the agent's
+          // turn-complete stamp; carry the boundary this row was written from so
+          // staleness keeps comparing one clock.
           const notificationPayload =
             typeof data.stateStartedAt === 'number'
-              ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
+              ? {
+                  ...resolvedPayload,
+                  stateStartedAt: data.stateStartedAt,
+                  localStateStartedAt: data.stateStartedAt
+                }
               : resolvedPayload
           observeAgentHookCompletionForNotification({
             paneKey,

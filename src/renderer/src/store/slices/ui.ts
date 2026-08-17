@@ -130,6 +130,7 @@ import {
   resolveRunningAgentSendTarget
 } from '../../lib/running-agent-targets'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { takeAnnouncedAgentNotificationIds } from '../../lib/announced-agent-notification-ids'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
@@ -1197,7 +1198,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   acknowledgedAgentsByPaneKey: {},
   acknowledgeAgents: (paneKeys) => {
-    const notificationIdsToDismiss = new Set<string>()
+    const fallbackIdsByPaneKey = new Map<string, Set<string>>()
     set((s) => {
       if (paneKeys.length === 0) {
         return s
@@ -1207,10 +1208,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       let next: Record<string, number> | null = null
       for (const key of paneKeys) {
         const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        const fallbackIds = fallbackIdsByPaneKey.get(key) ?? new Set<string>()
+        fallbackIdsByPaneKey.set(key, fallbackIds)
         const liveEntry = s.agentStatusByPaneKey?.[key]
         if (liveEntry) {
           collectAcknowledgedAgentNotificationId({
-            ids: notificationIdsToDismiss,
+            ids: fallbackIds,
             worktreeId: resolvePaneKeyWorktreeIdFromTabs(s, key) ?? liveEntry.worktreeId,
             paneKey: key,
             stateStartedAt: liveEntry.stateStartedAt,
@@ -1220,7 +1223,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         const retained = s.retainedAgentsByPaneKey?.[key]
         if (retained) {
           collectAcknowledgedAgentNotificationId({
-            ids: notificationIdsToDismiss,
+            ids: fallbackIds,
             worktreeId: retained.worktreeId,
             paneKey: key,
             stateStartedAt: retained.entry.stateStartedAt,
@@ -1236,9 +1239,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
     })
-    const notificationIds = [...notificationIdsToDismiss]
-    if (notificationIds.length > 0 && typeof window !== 'undefined') {
-      void window.api?.notifications?.dismiss?.(notificationIds)
+    if (typeof window !== 'undefined' && typeof window.api?.notifications?.dismiss === 'function') {
+      const notificationIdsToDismiss = new Set<string>()
+      for (const key of paneKeys) {
+        const announced = takeAnnouncedAgentNotificationIds(key)
+        const ids = announced.length > 0 ? announced : fallbackIdsByPaneKey.get(key)
+        for (const id of ids ?? []) {
+          notificationIdsToDismiss.add(id)
+        }
+      }
+      if (notificationIdsToDismiss.size > 0) {
+        void window.api.notifications.dismiss([...notificationIdsToDismiss])
+      }
     }
   },
   unacknowledgeAgents: (paneKeys) =>

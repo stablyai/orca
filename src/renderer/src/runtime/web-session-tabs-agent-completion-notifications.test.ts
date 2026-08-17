@@ -117,9 +117,15 @@ describe('paired session-tab agent completion notifications', () => {
       payload: expect.objectContaining({
         state: 'working',
         stateStartedAt: NOW,
+        localStateStartedAt: NOW,
         turnCompletedAt
       })
     })
+    expect(
+      useAppStore.getState().agentStatusByPaneKey[
+        makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      ]?.stateStartedAt
+    ).toBe(NOW)
 
     applySnapshot(makeAgentSnapshot(4, NOW + 3_000, turnCompletedAt + 1_000), false)
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
