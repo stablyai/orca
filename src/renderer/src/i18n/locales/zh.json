@@ -3839,7 +3839,7 @@
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
             "caa0f39811": "支持：",
-            "97957ad3a3": "连接 AI 提供商账户，即可实时查看使用量并在账户间快速切换。",
+            "97957ad3a3": "连接 AI 提供商账户，即可实时查看使用量并在账户间快速切换",
             "9a542f46c7": "从状态栏隐藏",
             "84c3b15dca": "代理用量限制",
             "d663430cf9": "设置用量跟踪"
@@ -3848,26 +3848,26 @@
             "runningLabel": "正在更新 Skills",
             "runningOne": "正在更新 {{value0}}…",
             "runningMany": "正在更新 {{value0}} 个 Skills…",
-            "runningAria": "技能正在更新。点击查看详情。",
+            "runningAria": "技能正在更新。点击查看详情",
             "successLabel": "Skills 已更新",
             "successOne": "已更新 {{value0}}",
             "successMany": "已更新 {{value0}} 个 Skills",
-            "successAria": "技能已更新。点击查看详情。",
+            "successAria": "技能已更新，点击查看详情",
             "errorLabel": "更新失败",
             "errorTooltip": "技能更新失败 — 点击查看详情",
             "errorAria": "技能更新失败。点击查看详情。",
             "stoppingLabel": "正在停止更新",
             "stoppingTooltip": "正在停止技能更新…",
-            "stoppingAria": "正在停止技能更新。点击查看详情。"
+            "stoppingAria": "正在停止技能更新，点击查看详情"
           },
           "UpdateStatusSegment": {
-            "5cd13105a3": "更新失败。单击以展开。",
-            "2201df6987": "更新失败——点击查看详情",
+            "5cd13105a3": "更新失败，单击以展开",
+            "2201df6987": "更新失败 — 点击查看详情",
             "8533c12c3c": "更新失败",
-            "962404f68e": "更新准备安装。单击以展开。",
+            "962404f68e": "更新准备安装，单击以展开",
             "248ee5d8ef": "Orca v{{value0}} 正在下载... {{value1}}%",
             "57a29c3b0e": "更新准备就绪",
-            "fd1d3b3a1d": "更新下载，{{value0}}%。单击以展开。",
+            "fd1d3b3a1d": "更新下载，{{value0}}%，单击以展开",
             "9d13213a56": "Orca v{{value0}} 已准备好安装"
           },
           "WorkspaceSpaceCompactPanel": {
