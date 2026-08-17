@@ -6,14 +6,12 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shar
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
-import type {
-  PersistedState,
-  Project,
-  ProjectHostSetup,
-  Repo,
-  SparsePreset,
-  WorkspaceSessionState
-} from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Project, ProjectHostSetup } from '../../shared/project-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { SparsePreset } from '../../shared/worktree/create-types'
+import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { getOrcaProfileDataFile } from './profile-index-store'
 
 export type TransferProfileState = PersistedState
@@ -46,6 +44,12 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
     projectGroups: arrayOrEmpty(parsed.projectGroups),
     folderWorkspaces: arrayOrEmpty(parsed.folderWorkspaces),
     sparsePresetsByRepo: recordOrEmpty<SparsePreset[]>(parsed.sparsePresetsByRepo),
+    retiredWorktreeNamesByRepo: recordOrEmpty<RetiredNameRegistry>(
+      parsed.retiredWorktreeNamesByRepo
+    ),
+    retiredWorktreeNamesByNamespace: recordOrEmpty<RetiredNameRegistry>(
+      parsed.retiredWorktreeNamesByNamespace
+    ),
     worktreeMeta: recordOrEmpty(parsed.worktreeMeta),
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),

@@ -10,7 +10,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectTable
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 /** Fields managed by the dialog itself — not re-rendered as project fields. */
 const DIALOG_OWNED_DATA_TYPES = new Set([

@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../shared/types'
+import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
@@ -45,6 +45,7 @@ export type EphemeralVmApi = {
         connectionType: 'ssh'
         runtime: EphemeralVmRuntimeRecord
         sshTargetId: string
+        expectedRefHead?: string
         stderr: string
         warnings: EphemeralVmRecipeResultWarning[]
       }
@@ -62,6 +63,7 @@ export type EphemeralVmApi = {
   suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+  stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   getCleanupCommand: (args: { runtimeId: string }) => Promise<{
     runtimeId: string
     command: string | null

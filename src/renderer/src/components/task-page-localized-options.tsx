@@ -15,7 +15,8 @@ import {
   type LinearViewMode
 } from '../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
-import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
+import type { TaskProvider } from '../../../shared/task-providers'
+import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'

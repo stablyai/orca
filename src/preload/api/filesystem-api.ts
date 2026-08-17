@@ -1,10 +1,9 @@
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DirEntry,
   FsChangedPayload,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult
-} from '../../shared/types'
+  MarkdownDocument
+} from '../../shared/filesystem-entry-types'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,

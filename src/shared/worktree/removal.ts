@@ -1,4 +1,4 @@
-import type { GitWorktreeInfo } from '../types'
+import type { GitWorktreeInfo } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 

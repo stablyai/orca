@@ -54,9 +54,7 @@ function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boole
   if (keys.length !== Object.keys(b).length) {
     return false
   }
-  return keys.every(
-    (key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy)
-  )
+  return keys.every((key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy))
 }
 
 /**

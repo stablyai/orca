@@ -90,17 +90,21 @@ describe('Electron runtime package contract', () => {
     }
   })
 
-  it('keeps Windows and Linux package builds off the macOS native helper build', () => {
+  it('keeps Windows and Linux package builds off macOS native helper builds', () => {
     const scripts = packageJson.scripts
 
     expect(scripts['build:desktop']).not.toContain('build:computer-macos')
+    expect(scripts['build:desktop']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:win']).toContain('pnpm run build:desktop')
     expect(scripts['build:win']).not.toContain('pnpm run build ')
     expect(scripts['build:win']).not.toContain('build:computer-macos')
+    expect(scripts['build:win']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:linux']).toContain('pnpm run build:desktop')
     expect(scripts['build:linux']).not.toContain('pnpm run build ')
     expect(scripts['build:linux']).not.toContain('build:computer-macos')
+    expect(scripts['build:linux']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:keyboard-layout-macos')
     expect(scripts['build:release']).toContain('pnpm run build:native')
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })

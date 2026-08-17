@@ -1,7 +1,7 @@
 import type {
   RuntimeBrowserDriverState,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
@@ -16,7 +16,9 @@ export type RuntimeEnvironmentSubscriptionHandle = {
 
 export type RuntimeApi = {
   runtime: {
-    syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeSyncWindowGraphResult>
+    syncWindowGraph: (
+      graph: RuntimeRendererSyncWindowGraph
+    ) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
     call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
     getTerminalFitOverrides: () => Promise<

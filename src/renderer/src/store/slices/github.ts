@@ -4,39 +4,42 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
+import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
-  ClassifiedError,
-  GitHubOwnerRepo,
+  GitHubCommentResult,
+  GitHubReactionContent,
+  PRComment
+} from '../../../../shared/github/comment-types'
+import type {
   GitHubPRRefreshAlias,
-  IssueSourcePreference,
-  PRInfo,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
   PRRefreshErrorType,
-  PRRefreshOutcome,
-  GitHubCommentResult,
-  GitHubReactionContent,
-  IssueInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  Repo,
-  Worktree,
-  GitHubWorkItem,
-  ListWorkItemsResult,
-  GlobalSettings
-} from '../../../../shared/types'
+  PRRefreshOutcome
+} from '../../../../shared/github/pull-request-refresh-types'
 import type {
-  GetProjectViewTableArgs,
-  GetProjectViewTableResult,
+  GitHubOwnerRepo,
+  IssueInfo,
+  PRInfo
+} from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { IssueSourcePreference, Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type {
   GitHubProjectFieldMutationValue,
-  GitHubProjectMutationResult,
   GitHubProjectRow,
-  GitHubProjectTable,
-  GitHubProjectViewError
+  GitHubProjectTable
 } from '../../../../shared/github/project-types'
+import type {
+  GetProjectViewTableResult,
+  GitHubProjectMutationResult,
+  GitHubProjectViewError
+} from '../../../../shared/github/project-result-types'
+import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,

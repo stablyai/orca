@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { PersistedState, Project, ProjectHostSetup, Repo } from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Project, ProjectHostSetup } from '../../shared/project-types'
+import type { Repo } from '../../shared/repo-types'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
 
 const upstreamIdentity = {

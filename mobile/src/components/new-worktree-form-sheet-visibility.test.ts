@@ -30,7 +30,7 @@ describe('resolveNewWorktreeFormSheetVisible', () => {
     expect(
       resolveNewWorktreeFormSheetVisible({
         modalVisible: true,
-        drawerView: 'repo',
+        drawerView: 'project',
         formPinnedUnderSource: false
       })
     ).toBe(false)

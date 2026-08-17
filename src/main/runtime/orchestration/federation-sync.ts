@@ -129,7 +129,9 @@ async function syncFederatedDispatchPages(
       })
     }
     cursor = item.sequence
-    runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    if (stored.message.read === 0) {
+      runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    }
     imported += stored.duplicate ? 0 : 1
   }
 

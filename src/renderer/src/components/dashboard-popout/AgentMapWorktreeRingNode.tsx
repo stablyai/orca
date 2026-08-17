@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import type { DashboardCard, DashboardSpawnAgentArgs } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentMapAgentNode,
   AgentMapProjectRing,

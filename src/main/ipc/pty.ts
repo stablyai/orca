@@ -11,12 +11,17 @@ import {
   app,
   powerMonitor
 } from 'electron'
-export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
+export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -71,6 +76,7 @@ import {
 } from '../../shared/pi-agent-kind'
 import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { normalizeWindowsTerminalCwd } from '../providers/windows-shell-args'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -256,6 +262,22 @@ function registeredPtyProviders(): RegisteredPtyProvider[] {
     { provider: localProvider, connectionId: null },
     ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
   ]
+}
+
+async function listRegisteredPtyProcessesWithHostScope(): Promise<{
+  processes: PtyProcessInfo[]
+  hostIds: ExecutionHostId[]
+}> {
+  const providers = registeredPtyProviders()
+  const providerSessions = await Promise.all(
+    providers.map(({ provider }) => provider.listProcesses())
+  )
+  return {
+    processes: providerSessions.flat(),
+    hostIds: providers.map(({ connectionId }) =>
+      connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+    )
+  }
 }
 
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
@@ -1863,7 +1885,9 @@ export function buildPtyHostEnv(
       hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
       isPackaged: opts.isPackaged,
       isWsl: opts.isWsl,
-      managedHomePath: opts.selectedCodexHomePath
+      managedHomePath: opts.selectedCodexHomePath,
+      userDataPath: opts.userDataPath,
+      resourcesPath: opts.resourcesPath
     })
     if (preflightCommand) {
       baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
@@ -5427,8 +5451,17 @@ export function registerPtyHandlers(
     },
     write: (ptyId, data) => {
       try {
-        getProviderForPty(ptyId).write(ptyId, data)
-        return true
+        return getProviderForPty(ptyId).write(ptyId, data) !== false
+      } catch {
+        return false
+      }
+    },
+    writeWithSettlement: async (ptyId, data) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        return provider.writeWithSettlement
+          ? await provider.writeWithSettlement(ptyId, data)
+          : provider.write(ptyId, data) !== false
       } catch {
         return false
       }
@@ -5735,12 +5768,9 @@ export function registerPtyHandlers(
       if (connectionId !== undefined) {
         return getProvider(connectionId).listProcesses()
       }
-      const providerSessions = await Promise.all([
-        localProvider.listProcesses(),
-        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
-      ])
-      return providerSessions.flat()
+      return (await listRegisteredPtyProcessesWithHostScope()).processes
     },
+    listProcessesWithHostScope: listRegisteredPtyProcessesWithHostScope,
     serializeBuffer: (ptyId, opts) => {
       // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
       return requestSerializedBuffer(ptyId, opts)

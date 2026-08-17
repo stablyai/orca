@@ -1,4 +1,4 @@
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 
 function normalizedPRRepoIdentity(prRepo?: GitHubOwnerRepo | null): string {

@@ -10,7 +10,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type ResolvedAgentLaunchCommand =
   | {

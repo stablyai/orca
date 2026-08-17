@@ -12,7 +12,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin

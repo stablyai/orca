@@ -351,34 +351,38 @@ import {
   resolveGitHubPRMergeMethods
 } from '../../../shared/github/pull-request-merge-methods'
 import type {
-  GitHubOwnerRepo,
   GitHubAssignableUser,
-  GitHubPRMergeMethod,
-  GitHubIssueUpdate,
-  GitHubWorkItem,
-  GitLabTodo,
-  GitLabWorkItem,
+  GitHubOwnerRepo,
+  GitHubPRMergeMethod
+} from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabProjectRef, GitLabTodo, GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { GitHubIssueUpdate } from '../../../shared/issue-mutation-types'
+import type {
   JiraCreateField,
-  LinearCollectionResult,
-  LinearCustomViewModel,
-  LinearCustomViewSummary,
   JiraIssue,
   JiraIssueType,
-  JiraProject,
-  JiraProjectStatusOrder,
   JiraPriority,
-  LinearIssue,
+  JiraProject,
+  JiraProjectStatusOrder
+} from '../../../shared/jira-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type {
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearProjectDetail,
-  LinearProjectSummary,
+  LinearProjectSummary
+} from '../../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
   LinearTeam,
-  LinearWorkspaceSelection,
   LinearWorkflowState,
-  Repo,
-  TaskProvider,
-  TaskViewPresetId
-} from '../../../shared/types'
+  LinearWorkspaceSelection
+} from '../../../shared/linear/workspace-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TaskProvider } from '../../../shared/task-providers'
+import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import type { PreflightStatus } from '../../../preload/api-types'
-import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import {
   LINEAR_ISSUE_LIST_MAX,
   clampLinearIssueListLimit

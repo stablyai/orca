@@ -4,16 +4,17 @@ of reimplementing local-vs-environment branching per operation. */
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
   GitStagingArea,
   GitStatusResult,
-  GitUpstreamStatus,
-  GlobalSettings
-} from '../../../shared/types'
+  GitUpstreamStatus
+} from '../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GitPushTarget } from '../../../shared/worktree/types'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability

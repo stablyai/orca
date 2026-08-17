@@ -1,4 +1,5 @@
-import type { Repo, WorkspaceSessionState } from './types'
+import type { Repo } from './repo-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { getRepoIdFromWorktreeId } from './worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'

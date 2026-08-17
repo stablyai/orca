@@ -1,4 +1,8 @@
-import type { Repo, WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

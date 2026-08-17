@@ -19,6 +19,7 @@ import type { ProjectGroup } from './project-group-types'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
+import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
@@ -63,6 +64,16 @@ export type PersistedState = {
   folderWorkspaceDiffComments?: Record<string, DiffComment[]>
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
+  /** Generated workspace names already issued, keyed by repoId. Suppresses reissuing a name so a
+   *  recreated workspace never lands on a prior occupant's path and inherits agent state keyed to
+   *  that cwd. Grows monotonically within a repo — entries are never removed on workspace deletion
+   *  — and the repo-keyed copy is dropped when the repo is removed. Readers union across repos
+   *  that create into the same cwd namespace; remote namespaces also retain a compact tombstone.
+   *
+   *  Stored compacted, not as a flat list: a fully spent tier collapses into the row's watermark. */
+  retiredWorktreeNamesByRepo?: Record<string, RetiredNameRegistry>
+  /** Compacted remote cwd tombstones outlive repo ids, so remove/re-add cannot reissue a path. */
+  retiredWorktreeNamesByNamespace?: Record<string, RetiredNameRegistry>
   /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */
   mobileClientTabSelectionsByDeviceId?: PersistedMobileClientTabSelections
   worktreeMeta: Record<string, WorktreeMeta>

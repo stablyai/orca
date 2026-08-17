@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/types'
+import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import { classifyPrSidebarFailure } from './mobile-pr-sidebar-state'
 import { createOptimisticField, type OptimisticField } from './optimistic-write-sequence'

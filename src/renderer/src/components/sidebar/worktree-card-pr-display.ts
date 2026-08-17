@@ -1,5 +1,6 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type LinkedReviewMetadataProvider = Exclude<HostedReviewInfo['provider'], 'unsupported'>
 

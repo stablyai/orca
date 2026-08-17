@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
-import { app, type BrowserWindow, type Cookie, dialog, session } from 'electron'
+import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
@@ -72,7 +72,7 @@ import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
   BrowserSessionProfileSource
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import { browserSessionRegistry } from './browser-session-registry'
 import {
   isGoogleSourceBoundCookie,
@@ -81,8 +81,8 @@ import {
   normalizeCookieDomain,
   normalizeCookieImportDomain,
   replaceCookiesForImportedDomains,
-  restoreImportedDomainCookies,
-  type CookieImportMode
+  type CookieImportMode,
+  type ReplacedImportedDomainCookies
 } from './browser-cookie-import-policy'
 import { removeTransplantableCookies, withCookieClearLock } from './browser-cookie-import-clear'
 import { openCookieClearStore } from './browser-cookie-clear-store'
@@ -594,97 +594,112 @@ async function importValidatedCookies(
   let importedCount = 0
   let skipped = totalInput - importableCookies.length
   const domainSet = new Set<string>()
-  let replacedCookies: Cookie[] | null = null
+  let replaced: ReplacedImportedDomainCookies | null = null
+  // Why (STA-4097): the rollback below has to put back cookies this import already deleted, and
+  // only CDP identities carry partitionKey — rebuilding them with cookies.set drops it silently.
+  const cookieClearStore =
+    mode === 'replace-imported-domains' && importableCookies.length > 0
+      ? openCookieClearStore(targetSession)
+      : null
 
-  if (mode === 'replace-imported-domains' && importableCookies.length > 0) {
-    try {
-      replacedCookies = await replaceCookiesForImportedDomains(
-        targetSession.cookies,
-        importableCookies.map((cookie) => cookie.domain)
-      )
-      diag(`  removed ${replacedCookies.length} existing cookies in imported domain scopes`)
-    } catch (err) {
-      diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+  try {
+    if (cookieClearStore) {
+      try {
+        replaced = await replaceCookiesForImportedDomains(
+          cookieClearStore,
+          importableCookies.map((cookie) => cookie.domain)
+        )
+        diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
+      } catch (err) {
+        diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+        return {
+          ok: false,
+          reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+        }
+      }
+    }
+
+    // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
+    const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+    const importedCookieKeys: { url: string; name: string }[] = []
+    let setFailure: unknown = null
+
+    for (const cookie of importableCookies) {
+      try {
+        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
+        const isHostPrefixed = cookie.name.startsWith('__Host-')
+        const path = isHostPrefixed ? '/' : cookie.path
+        await targetSession.cookies.set({
+          url: cookie.url,
+          name: cookie.name,
+          value: stripNonPrintable(cookie.value),
+          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+          path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+          expirationDate: cookie.expirationDate
+        })
+        const removalUrl = new URL(cookie.url)
+        removalUrl.pathname = path.startsWith('/') ? path : '/'
+        importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
+        importedCount++
+        // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
+        const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
+        domainSet.add(cleanDomain)
+      } catch (err) {
+        skipped++
+        setFailure = err
+        if (skipped <= 5) {
+          // Find the exact offending character position and code
+          const val = cookie.value
+          let badInfo = 'none found'
+          for (let i = 0; i < val.length; i++) {
+            const code = val.charCodeAt(i)
+            if (code < 0x20 || code > 0x7e) {
+              badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
+              break
+            }
+          }
+          diag(
+            `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
+          )
+        }
+        if (replaced) {
+          break
+        }
+      }
+    }
+
+    // Why: replaced is only ever set alongside cookieClearStore, which owns the CDP restore.
+    if (setFailure && replaced && cookieClearStore) {
+      const rollbackFailures: unknown[] = []
+      for (const cookie of importedCookieKeys.toReversed()) {
+        try {
+          await targetSession.cookies.remove(cookie.url, cookie.name)
+        } catch (err) {
+          rollbackFailures.push(err)
+        }
+      }
+      // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
+      // restore set would spin up a hidden BrowserWindow to put nothing back.
+      if (replaced.identities.length > 0) {
+        try {
+          await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
+        } catch (err) {
+          rollbackFailures.push(err)
+        }
+      }
+      if (rollbackFailures.length > 0) {
+        diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+      }
       return {
         ok: false,
-        reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+        reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
       }
     }
-  }
-
-  // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
-  const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
-  const importedCookieKeys: { url: string; name: string }[] = []
-  let setFailure: unknown = null
-
-  for (const cookie of importableCookies) {
-    try {
-      // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-      const isHostPrefixed = cookie.name.startsWith('__Host-')
-      const path = isHostPrefixed ? '/' : cookie.path
-      await targetSession.cookies.set({
-        url: cookie.url,
-        name: cookie.name,
-        value: stripNonPrintable(cookie.value),
-        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-        path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        expirationDate: cookie.expirationDate
-      })
-      const removalUrl = new URL(cookie.url)
-      removalUrl.pathname = path.startsWith('/') ? path : '/'
-      importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
-      importedCount++
-      // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
-      const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
-      domainSet.add(cleanDomain)
-    } catch (err) {
-      skipped++
-      setFailure = err
-      if (skipped <= 5) {
-        // Find the exact offending character position and code
-        const val = cookie.value
-        let badInfo = 'none found'
-        for (let i = 0; i < val.length; i++) {
-          const code = val.charCodeAt(i)
-          if (code < 0x20 || code > 0x7e) {
-            badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
-            break
-          }
-        }
-        diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
-        )
-      }
-      if (replacedCookies) {
-        break
-      }
-    }
-  }
-
-  if (setFailure && replacedCookies) {
-    const rollbackFailures: unknown[] = []
-    for (const cookie of importedCookieKeys.toReversed()) {
-      try {
-        await targetSession.cookies.remove(cookie.url, cookie.name)
-      } catch (err) {
-        rollbackFailures.push(err)
-      }
-    }
-    try {
-      await restoreImportedDomainCookies(targetSession.cookies, replacedCookies)
-    } catch (err) {
-      rollbackFailures.push(err)
-    }
-    if (rollbackFailures.length > 0) {
-      diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
-    }
-    return {
-      ok: false,
-      reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
-    }
+  } finally {
+    cookieClearStore?.dispose()
   }
 
   diag(
@@ -808,12 +823,13 @@ function chromiumTimestampToUnix(chromiumTs: bigint | number | string): number {
 
 // Why: each platform protects the Chromium key differently: macOS/Linux PBKDF2→AES-128-CBC, Windows DPAPI→AES-256-GCM.
 
-type EncryptionKeyResult = {
-  key: Buffer
-  mode: 'aes-128-cbc' | 'aes-256-gcm'
-  // Why: Linux v10 cookies use "peanuts" and v11 the keyring password; both keys are needed to decrypt the full set.
-  fallbackKey?: Buffer
-}
+type EncryptionKeyResult =
+  | {
+      mode: 'aes-128-cbc'
+      keysByVersion: Partial<Record<'v10' | 'v11', Buffer>>
+      keyringUnavailable?: boolean
+    }
+  | { mode: 'aes-256-gcm'; key: Buffer }
 
 export type ChromiumCookieColumnInfo = {
   name: string
@@ -956,8 +972,10 @@ function getMacEncryptionKey(
       { encoding: 'utf-8', timeout: 30_000 }
     ).trim()
     return {
-      key: pbkdf2Sync(raw, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, 'sha1'),
-      mode: 'aes-128-cbc'
+      mode: 'aes-128-cbc',
+      keysByVersion: {
+        v10: pbkdf2Sync(raw, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, 'sha1')
+      }
     }
   } catch {
     return null
@@ -968,7 +986,8 @@ function getLinuxEncryptionKey(
   keychainService: string,
   keychainAccount: string
 ): EncryptionKeyResult | null {
-  // Why: v10 cookies use hardcoded "peanuts", v11 the keyring password; derive both so decrypt can pick by version prefix.
+  // Chromium uses v11 only with OS key storage; without it, Linux writes v10 with hardcoded
+  // "peanuts". Keep eligibility explicit because CBC cannot authenticate a wrong-key result.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
@@ -988,12 +1007,20 @@ function getLinuxEncryptionKey(
         timeout: 5_000
       }).trim()
     } catch {
-      diag('  Linux keyring unavailable — v11 cookies may fail to decrypt')
+      diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
+    }
+  }
+
+  if (!keyringPassword) {
+    return {
+      mode: 'aes-128-cbc',
+      keysByVersion: { v10: v10Key },
+      keyringUnavailable: true
     }
   }
 
   const v11Key = pbkdf2Sync(keyringPassword, PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
-  return { key: v11Key, mode: 'aes-128-cbc', fallbackKey: v10Key }
+  return { mode: 'aes-128-cbc', keysByVersion: { v10: v10Key, v11: v11Key } }
 }
 
 function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult | null {
@@ -1069,6 +1096,53 @@ function stripHmac(buf: Buffer): Buffer {
   return hasHmacPrefix(buf) ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN) : buf
 }
 
+// Why: the version prefix is the only thing that survives a failed decrypt, so read it once and
+// share it between the decrypt path and the failure attribution.
+function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null {
+  if (encryptedBuffer.length < 3) {
+    return null
+  }
+  const version = encryptedBuffer.subarray(0, 3).toString('utf-8')
+  return /^v\d\d$/.test(version) ? version : null
+}
+
+// Why: Chrome/Edge 140+ on Windows prefix every cookie with `v20` (app-bound encryption), which
+// only the writing browser can unwrap. Classify it before decrypt so it is not folded into corruption.
+export function isAppBoundEncryptedCookie(encryptedBuffer: Buffer): boolean {
+  return cookieEncryptionVersion(encryptedBuffer) === 'v20'
+}
+
+// Why: a named cause must carry only its exact count; tied causes fall back to unknown.
+function buildUndecryptableWarning(counts: {
+  decryptFailed: number
+  appBoundFailed: number
+  keyringUnavailableFailed: number
+}): BrowserCookieImportSummary['warning'] {
+  if (counts.decryptFailed === 0) {
+    return undefined
+  }
+  const unknownFailed =
+    counts.decryptFailed - counts.appBoundFailed - counts.keyringUnavailableFailed
+  const rankedCauses = [
+    { reason: 'app-bound-encryption' as const, count: counts.appBoundFailed },
+    { reason: 'linux-keyring-unavailable' as const, count: counts.keyringUnavailableFailed },
+    { reason: 'unknown' as const, count: unknownFailed }
+  ].sort((left, right) => right.count - left.count)
+  const [dominant, runnerUp] = rankedCauses
+
+  if (dominant.reason === 'unknown' || dominant.count === runnerUp.count) {
+    return { code: 'cookies-undecryptable', failedCookies: counts.decryptFailed, reason: 'unknown' }
+  }
+
+  const otherFailedCookies = counts.decryptFailed - dominant.count
+  return {
+    code: 'cookies-undecryptable',
+    failedCookies: dominant.count,
+    reason: dominant.reason,
+    ...(otherFailedCookies > 0 ? { otherFailedCookies } : {})
+  }
+}
+
 function decryptCookieValueRaw(
   encryptedBuffer: Buffer,
   keyResult: EncryptionKeyResult
@@ -1086,29 +1160,25 @@ function decryptCookieValueRaw(
   }
 
   // AES-128-CBC (macOS and Linux)
+  const key = version === 'v10' || version === 'v11' ? keyResult.keysByVersion[version] : undefined
+  if (!key) {
+    return null
+  }
+
   const ciphertext = encryptedBuffer.subarray(3)
   if (!ciphertext.length) {
-    return Buffer.alloc(0)
+    return null
   }
 
-  // Why: Linux v10 uses the "peanuts" key, v11 the keyring key; try primary then fallback (macOS uses one key).
-  const keysToTry =
-    version === 'v10' && keyResult.fallbackKey
-      ? [keyResult.fallbackKey, keyResult.key]
-      : [keyResult.key, ...(keyResult.fallbackKey ? [keyResult.fallbackKey] : [])]
-
-  for (const key of keysToTry) {
-    try {
-      const iv = Buffer.alloc(16, ' ')
-      const decipher = createDecipheriv('aes-128-cbc', key, iv)
-      decipher.setAutoPadding(true)
-      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-      return stripHmac(decrypted)
-    } catch {
-      continue
-    }
+  try {
+    const iv = Buffer.alloc(16, ' ')
+    const decipher = createDecipheriv('aes-128-cbc', key, iv)
+    decipher.setAutoPadding(true)
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+    return stripHmac(decrypted)
+  } catch {
+    return null
   }
-  return null
 }
 
 function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
@@ -1615,6 +1685,9 @@ export async function importCookiesFromBrowser(
 
     let imported = 0
     let skipped = 0
+    let decryptFailed = 0
+    let appBoundFailed = 0
+    let keyringUnavailableFailed = 0
     let integritySkipped = 0
     let nonTransplantableSkipped = 0
     let memoryLoaded = 0
@@ -1682,8 +1755,26 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
-        const raw = sourceKey ? decryptCookieValueRaw(encBuf, sourceKey) : null
+        const version = cookieEncryptionVersion(encBuf)
+        const appBoundIneligible = version === 'v20'
+        const keyringIneligible =
+          version === 'v11' &&
+          sourceKey?.mode === 'aes-128-cbc' &&
+          sourceKey.keyringUnavailable === true
+        const raw =
+          sourceKey && !appBoundIneligible && !keyringIneligible
+            ? decryptCookieValueRaw(encBuf, sourceKey)
+            : null
         if (!raw) {
+          // Why: once decrypt returns null every failure looks identical, so attribute the cause
+          // here while the version prefix is still in hand. Without this an undecryptable profile
+          // is indistinguishable from an empty one and reports success.
+          decryptFailed++
+          if (appBoundIneligible) {
+            appBoundFailed++
+          } else if (keyringIneligible) {
+            keyringUnavailableFailed++
+          }
           skipped++
           continue
         }
@@ -1750,7 +1841,14 @@ export async function importCookiesFromBrowser(
     )
     const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
 
+    const undecryptableWarning = buildUndecryptableWarning({
+      decryptFailed,
+      appBoundFailed,
+      keyringUnavailableFailed
+    })
+
     if (decryptedCookies.length === 0) {
+      const zeroPathWarning = undecryptableWarning
       closeStagingDb()
       discardStagingFile()
       return {
@@ -1761,7 +1859,10 @@ export async function importCookiesFromBrowser(
           importedCookies: 0,
           skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
           ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-          domains: []
+          domains: [],
+          // Why: a profile whose rows cannot be decrypted returns here, and without this it is
+          // reported as a successful empty import.
+          ...(zeroPathWarning ? { warning: zeroPathWarning } : {})
         }
       }
     }
@@ -1858,6 +1959,13 @@ export async function importCookiesFromBrowser(
     // sessions to the re-import, not the UA (#12884), so it bought nothing.
     // Google-bound integrity cookies are already excluded by
     // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
+
+    // Why: a partial import still drops every undecryptable row, so silence here would report it
+    // as an unqualified success. The restart-fallback warning describes a lossier outcome and
+    // keeps precedence.
+    if (!warning && undecryptableWarning) {
+      warning = undecryptableWarning
+    }
 
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,

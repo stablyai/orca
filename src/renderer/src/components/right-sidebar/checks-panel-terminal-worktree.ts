@@ -5,7 +5,8 @@ import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { TerminalLayoutSnapshot, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type TerminalPtyContext = {
   activeTabId: string | null

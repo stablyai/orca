@@ -45,7 +45,7 @@ describe('creator authority lookup performance', () => {
     const taskDetails = taskPlan.map((row) => row.detail).join(' | ')
     const paneDetails = panePlan.map((row) => row.detail).join(' | ')
 
-    expect(taskDetails).toContain('idx_dispatch_active_assignee_handle')
+    expect(taskDetails).toContain('idx_dispatch_active_run_assignee_handle')
     expect(taskDetails).not.toMatch(/SCAN (?:runs|rebound)/)
     expect(paneDetails).toContain('idx_dispatch_assignee_pane_leaf')
   })

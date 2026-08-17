@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { FolderWorkspacePathStatusReason } from '../../../shared/folder-workspace-path-status'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { resolveWindowShortcutAction } from '../../../shared/window-shortcut-policy'
