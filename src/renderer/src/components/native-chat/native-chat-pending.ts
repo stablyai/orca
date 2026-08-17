@@ -43,6 +43,10 @@ export type NativeChatPendingSend = {
 export type NativeChatPendingSendScope = {
   paneKey: string
   agent: string
+  /** The conversation the echo belongs to (the agent's provider session id), or
+   *  null before the agent has reported one. Replacing the conversation moves
+   *  the pane to a different key, so a predecessor's echoes are unreachable. */
+  conversationId: string | null
 }
 
 const PENDING_SEND_LIMIT = 8
@@ -50,7 +54,9 @@ const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
 let pendingSendCounter = 0
 
 function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
-  return `${scope.paneKey}\0${scope.agent}`
+  // Why: the pre-identity bucket's sentinel carries a NUL so no provider session
+  // id — however malformed, including the empty string — can collide with it.
+  return `${scope.paneKey}\0${scope.agent}\0${scope.conversationId ?? '\0bootstrap'}`
 }
 
 export function readPendingSendCache(scope: NativeChatPendingSendScope): NativeChatPendingSend[] {
@@ -360,7 +366,7 @@ function isClearCommand(command: string): boolean {
   return command.trim().toLowerCase().split(/\s+/)[0] === '/clear'
 }
 
-function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
+export function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
   let latest: number | null = null
   for (const marker of markers) {
     if (isClearCommand(marker.command) && (latest === null || marker.sentAt > latest)) {

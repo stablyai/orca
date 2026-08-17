@@ -556,7 +556,7 @@ describe('launchPromptAsMessage', () => {
 describe('pending send cache', () => {
   it('persists optimistic sends for the same pane and agent', () => {
     clearPendingSendCacheForTests()
-    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', conversationId: 'session-a' }
 
     const appended = appendPendingSendCache(scope, pendingOf('p1', 'first prompt'))
 
@@ -574,12 +574,32 @@ describe('pending send cache', () => {
 
   it('clears cached pending sends when pruning removes all entries', () => {
     clearPendingSendCacheForTests()
-    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', conversationId: 'session-a' }
     appendPendingSendCache(scope, pendingOf('p1', 'first prompt'))
 
     writePendingSendCache(scope, [])
 
     expect(readPendingSendCache(scope)).toEqual([])
+  })
+
+  it('keeps only the latest eight sends within a conversation', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', conversationId: 'session-a' }
+
+    for (let index = 0; index < 10; index += 1) {
+      appendPendingSendCache(scope, pendingOf(`p${index}`, `prompt ${index}`))
+    }
+
+    expect(readPendingSendCache(scope).map((entry) => entry.id)).toEqual([
+      'p2',
+      'p3',
+      'p4',
+      'p5',
+      'p6',
+      'p7',
+      'p8',
+      'p9'
+    ])
   })
 })
 
@@ -720,11 +740,15 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
     clearPendingSendCacheForTests()
     const send = (id: string): NativeChatPendingSend => ({ id, text: id, sentAt: 1 })
     for (let i = 0; i < CAP + 5; i++) {
-      writePendingSendCache({ paneKey: `tab-${i}:leaf`, agent: 'claude' }, [send(`m${i}`)])
+      writePendingSendCache({ paneKey: `tab-${i}:leaf`, agent: 'claude', conversationId: 's' }, [
+        send(`m${i}`)
+      ])
     }
-    expect(readPendingSendCache({ paneKey: 'tab-0:leaf', agent: 'claude' })).toEqual([])
-    expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
-      1
-    )
+    expect(
+      readPendingSendCache({ paneKey: 'tab-0:leaf', agent: 'claude', conversationId: 's' })
+    ).toEqual([])
+    expect(
+      readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude', conversationId: 's' })
+    ).toHaveLength(1)
   })
 })
