@@ -41,7 +41,11 @@ function heldPreeditLength(
   ) {
     held += 1
   }
-  return held
+  // Why the bound: the run can reach back over code points already delivered to the pty, and
+  // holding those makes the caller erase them with DEL and retype them. The reported branch above
+  // subtracts `stableLength` for the same reason; without it a settle-timer commit followed by
+  // another keystroke costs a DEL per already-sent character.
+  return Math.min(held, fieldCodePoints.length - stableLength)
 }
 
 function commonPrefixLength(left: readonly string[], right: readonly string[]): number {

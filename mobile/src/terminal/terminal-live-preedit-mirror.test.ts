@@ -256,6 +256,38 @@ describe('terminal live preedit mirror with no marked-text report', () => {
     expect(buildTerminalLiveMirrorPayload(step)).toBe('\x7f\x7f\x7f')
   })
 
+  // A settle-timer commit promotes the held run to sent text. The next keystroke must not reach
+  // back over it: the fallback has no composing signal, so without a bound it re-holds everything
+  // already delivered and the caller erases it with DEL. Measured at 120 DELs for this word.
+  it('Given a non-composing script on the fallback path When the settle timer commits between keystrokes Then nothing already sent is erased', () => {
+    // Given
+    const word = Array.from('приветмир')
+    let sentText = ''
+    let field = ''
+    const payloads: string[] = []
+
+    // When — every keystroke is followed by a settle commit, the Android shape
+    for (const codePoint of word) {
+      field += codePoint
+      const live = computeTerminalLiveMirrorStep(sentText, field, { commitHeld: false })
+      const livePayload = buildTerminalLiveMirrorPayload(live)
+      if (livePayload.length > 0) {
+        payloads.push(livePayload)
+      }
+      const settled = computeTerminalLiveMirrorStep(live.nextSentText, field, { commitHeld: true })
+      const settledPayload = buildTerminalLiveMirrorPayload(settled)
+      if (settledPayload.length > 0) {
+        payloads.push(settledPayload)
+      }
+      sentText = settled.nextSentText
+    }
+
+    // Then
+    const wire = payloads.join('')
+    expect(wire, 'a DEL erases a character the pty already received').not.toContain('\x7f')
+    expect(wire).toBe(word.join(''))
+  })
+
   it('Given empty field and empty sent text When committing Then produces a zero step', () => {
     // Given / When
     const step = computeTerminalLiveMirrorStep('', '', { commitHeld: true })
