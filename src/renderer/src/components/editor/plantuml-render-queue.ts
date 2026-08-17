@@ -15,16 +15,10 @@ export function enqueuePlantUmlRender(fn: () => Promise<void>): void {
   // renderer. Why the identity check: resetting unconditionally would overwrite a
   // newer pending chain, letting the render after it start early and run
   // concurrently with one still in flight.
-  void next.then(
-    () => {
-      if (renderQueue === next) {
-        renderQueue = Promise.resolve()
-      }
-    },
-    () => {
-      if (renderQueue === next) {
-        renderQueue = Promise.resolve()
-      }
+  const collapseIfIdle = (): void => {
+    if (renderQueue === next) {
+      renderQueue = Promise.resolve()
     }
-  )
+  }
+  void next.then(collapseIfIdle, collapseIfIdle)
 }
