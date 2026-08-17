@@ -68,6 +68,10 @@ import {
   isAskUserQuestionTool,
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
+import {
+  isClaudeToolPermissionWait,
+  type ClaudePermissionDenyInferenceRequest
+} from '../../shared/claude-permission-deny-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import {
@@ -831,6 +835,57 @@ export class AgentHookServer {
       }
     })
     console.debug('[agent-hooks] inferred answered question status', {
+      paneKey: inferred.paneKey,
+      state: inferred.payload.state
+    })
+    return true
+  }
+
+  /** Guarded fallback for a hook Claude never sends: denying a permission dialog aborts the turn with no
+   *  event, so the transcript's rejected tool_result (see claude-permission-deny-transcript-watch) is the
+   *  only signal. Re-validate the baseline against the cached status — a racing real hook wins — then
+   *  settle the pane as an interrupted turn, exactly like the Ctrl+C inference. */
+  inferClaudePermissionDenied(request: ClaudePermissionDenyInferenceRequest): boolean {
+    if (!isValidPaneKey(request.paneKey)) {
+      return false
+    }
+    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return false
+    }
+    const payload = existing.payload
+    if (!isClaudeToolPermissionWait(payload)) {
+      return false
+    }
+    if (
+      payload.agentType !== request.baselineAgentType ||
+      payload.prompt !== request.baselinePrompt ||
+      existing.receivedAt !== request.baselineUpdatedAt ||
+      existing.stateStartedAt !== request.baselineStateStartedAt ||
+      Date.now() - existing.receivedAt > AGENT_STATUS_STALE_AFTER_MS
+    ) {
+      return false
+    }
+    // Why: sync the lead-turn record too, or a later child event re-emits the stale waiting state.
+    markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+    const inferred = this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      payload: {
+        state: 'done',
+        prompt: payload.prompt,
+        agentType: payload.agentType,
+        ...(payload.model ? { model: payload.model } : {}),
+        interrupted: true,
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
+      }
+    })
+    console.debug('[agent-hooks] inferred denied permission status', {
       paneKey: inferred.paneKey,
       state: inferred.payload.state
     })
