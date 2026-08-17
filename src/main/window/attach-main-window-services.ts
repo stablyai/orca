@@ -57,6 +57,7 @@ import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identi
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { requestTerminalTabMoveFromRenderer } from './terminal-tab-move-request-relay'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import {
@@ -492,6 +493,8 @@ function registerRuntimeWindowLifecycle(
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
+    moveTerminalToWorktree: (tabId, destWorktreeId) =>
+      requestTerminalTabMoveFromRenderer(mainWindow, tabId, destWorktreeId),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>

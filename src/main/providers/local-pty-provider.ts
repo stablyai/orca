@@ -1473,6 +1473,14 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
+  setWorktreeId(id: string, worktreeId: string): boolean {
+    if (!ptyProcesses.has(id) || worktreeId.length === 0) {
+      return false
+    }
+    ptyWorktreeId.set(id, worktreeId)
+    return true
+  }
+
   async listProcesses(): Promise<PtyProcessInfo[]> {
     return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
       id,

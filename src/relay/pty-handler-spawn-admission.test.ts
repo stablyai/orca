@@ -79,6 +79,7 @@ describe('PtyHandler', () => {
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
+    expect(notifMethods).toContain('pty.setWorktreeId')
     expect(notifMethods).toContain('pty.ackData')
   })
 

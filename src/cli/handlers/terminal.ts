@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
+  RuntimeTerminalMove,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
@@ -17,6 +18,7 @@ import {
   formatTerminalCreate,
   formatTerminalFocus,
   formatTerminalList,
+  formatTerminalMove,
   formatTerminalRead,
   formatTerminalRename,
   formatTerminalSend,
@@ -33,6 +35,7 @@ import {
 import { RuntimeClientError } from '../runtime-client'
 import {
   getBrowserWorktreeSelector,
+  getMoveTerminalHandle,
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   getTerminalHandle
@@ -162,6 +165,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, formatTerminalClose)
+  },
+  'terminal move': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ move: RuntimeTerminalMove }>('terminal.move', {
+      terminal: getMoveTerminalHandle(flags),
+      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      tab: flags.get('tab') === true
+    })
+    printResult(result, json, formatTerminalMove)
   },
   'terminal split': async ({ flags, client, cwd, json }) => {
     const directionFlag = getOptionalStringFlag(flags, 'direction')

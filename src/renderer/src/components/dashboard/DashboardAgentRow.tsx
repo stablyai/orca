@@ -13,6 +13,17 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '@/components/sidebar/WorktreeContextMenu'
+import {
+  MoveTerminalToWorktreeContextSection,
+  useTerminalMoveDestinations
+} from '@/components/tab-bar/MoveTerminalToWorktreeMenuSection'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from '@/components/tab-bar/tab-context-menu-sizing'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -100,6 +111,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const destinations = useTerminalMoveDestinations(agent.tab.worktreeId)
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -179,7 +191,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
 
-  return (
+  const row = (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
     <div
       onClickCapture={handleSendTargetClickCapture}
@@ -310,6 +322,24 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         lastAssistantMessage={lastAssistantMessage}
       />
     </div>
+  )
+
+  if (agent.rowSource === 'subagent' || destinations.length === 0) {
+    return row
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}>
+        {row}
+      </ContextMenuTrigger>
+      <ContextMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS}>
+        <MoveTerminalToWorktreeContextSection
+          tabId={agent.tab.id}
+          sourceWorktreeId={agent.tab.worktreeId}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 })
 

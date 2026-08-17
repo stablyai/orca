@@ -212,6 +212,8 @@ export type IPtyProvider = {
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
   listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
+  /** Rebind a live PTY's worktree map without killing or respawning it. */
+  setWorktreeId?(id: string, worktreeId: string): boolean
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void

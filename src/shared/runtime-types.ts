@@ -728,6 +728,14 @@ export type RuntimeTerminalFocus = {
   navigated?: boolean
 }
 
+export type RuntimeTerminalMove = {
+  handle: string
+  tabId: string
+  sourceWorktreeId: string
+  destWorktreeId: string
+  ptyIds: string[]
+}
+
 export type RuntimeTerminalClose = {
   handle: string
   tabId: string

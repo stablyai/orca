@@ -369,6 +369,7 @@ function setAgentLineageState(options: {
     dropAgentStatus: vi.fn(),
     dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
+    moveTerminalTabToWorktree: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
     agentStatusByPaneKey
   }

@@ -50,6 +50,32 @@ describe('SshPtyProvider process listings and events', () => {
     }
   })
 
+  it('rebinds a live remote PTY worktree without falling back to a local map', async () => {
+    mux.request.mockResolvedValue([
+      { id: 'pty-1', cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
+    ])
+    await provider.listProcesses()
+
+    expect(provider.setWorktreeId(scopedPty1, 'repo::/moved')).toBe(true)
+    expect(mux.notify).toHaveBeenCalledWith('pty.setWorktreeId', {
+      id: 'pty-1',
+      worktreeId: 'repo::/moved'
+    })
+
+    mux.request.mockResolvedValue([
+      { id: 'pty-1', cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
+    ])
+    await expect(provider.listProcesses()).resolves.toEqual([
+      { id: scopedPty1, cwd: '/home', title: 'zsh', worktreeId: 'repo::/moved' }
+    ])
+  })
+
+  it('fails closed when the SSH provider cannot own the PTY', () => {
+    expect(provider.setWorktreeId('ssh:other@@pty-1', 'repo::/moved')).toBe(false)
+    expect(provider.setWorktreeId(scopedPty1, '')).toBe(false)
+    expect(mux.notify).not.toHaveBeenCalled()
+  })
+
   it('scopes recovered claim owner ids with their SSH connection', async () => {
     mux.request.mockResolvedValue([
       {

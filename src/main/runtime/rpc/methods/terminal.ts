@@ -829,6 +829,11 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalMove = TerminalHandle.extend({
+  worktree: requiredString('Missing worktree selector'),
+  tab: z.boolean().optional()
+})
+
 const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
@@ -1569,6 +1574,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         params.terminal,
         () => context.runtime.closeTerminalTab(params.terminal)
       )
+    })
+  }),
+  defineMethod({
+    name: 'terminal.move',
+    params: TerminalMove,
+    handler: async (params, { runtime }) => ({
+      move: await runtime.moveTerminalToWorktree(params.terminal, params.worktree, {
+        tab: params.tab === true
+      })
     })
   }),
   defineMethod({

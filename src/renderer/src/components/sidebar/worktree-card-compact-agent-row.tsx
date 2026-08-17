@@ -11,6 +11,17 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
+import {
+  MoveTerminalToWorktreeContextSection,
+  useTerminalMoveDestinations
+} from '@/components/tab-bar/MoveTerminalToWorktreeMenuSection'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from '@/components/tab-bar/tab-context-menu-sizing'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -111,6 +122,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   hideIdentityIcon = false,
   cacheTimerActive = true
 }: CompactAgentRowProps) {
+  const destinations = useTerminalMoveDestinations(agent.tab.worktreeId)
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -251,7 +263,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </>
   )
 
-  return (
+  const row = (
     <div
       draggable={false}
       className={cn(
@@ -278,5 +290,23 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     >
       {rowBody}
     </div>
+  )
+
+  if (agent.rowSource === 'subagent' || destinations.length === 0) {
+    return row
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}>
+        {row}
+      </ContextMenuTrigger>
+      <ContextMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS}>
+        <MoveTerminalToWorktreeContextSection
+          tabId={agent.tab.id}
+          sourceWorktreeId={agent.tab.worktreeId}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 })
