@@ -67,6 +67,7 @@ import {
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { moveTerminalTabToWorktreeInStore } from './move-terminal-tab-to-worktree'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
   applyGeneratedTabTitleUpdates,
@@ -649,6 +650,7 @@ export type TerminalSlice = {
   ) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
+  moveTerminalTabToWorktree: (tabId: string, destWorktreeId: string) => boolean
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
@@ -1872,6 +1874,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: reordered }
       }
     })
+  },
+
+  moveTerminalTabToWorktree: (tabId, destWorktreeId) => {
+    let moved = false
+    set((s) => {
+      const result = moveTerminalTabToWorktreeInStore(s, tabId, destWorktreeId)
+      if (!result) {
+        return {}
+      }
+      moved = true
+      return result.patch
+    })
+    if (moved) {
+      scheduleRuntimeGraphSync()
+    }
+    return moved
   },
 
   setTabBarOrder: (worktreeId, order) => {

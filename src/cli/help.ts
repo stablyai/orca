@@ -91,6 +91,7 @@ Terminals:
   terminal switch           Bring a terminal tab to the foreground
   terminal focus            Alias for terminal switch
   terminal close            Close a terminal pane/session, or its whole tab with --tab
+  terminal move             Move a live terminal tab to another worktree
 
 Orchestration:
   orchestration run-create  Create and bind a lightweight orchestration Run
@@ -249,6 +250,7 @@ Common Commands:
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--tab] [--json]
+  orca terminal move --worktree <selector> [--terminal <handle>] [--tab] [--json]
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
@@ -434,6 +436,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
+  }
+  if (command === 'terminal move' && flag === 'tab') {
+    return '--tab                  Move the whole tab when --terminal names a pane'
   }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'

@@ -175,6 +175,20 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[1]).not.toHaveProperty('wslDistro')
     })
 
+    it('updates worktreeId on a live PTY without respawning', async () => {
+      const spawned = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/owned-cwd',
+        worktreeId: 'repo::/tmp/owned-cwd'
+      })
+      provider.setWorktreeId(spawned.id, 'repo::/tmp/moved-cwd')
+      const listed = await provider.listProcesses()
+      expect(listed.find((entry) => entry.id === spawned.id)?.worktreeId).toBe(
+        'repo::/tmp/moved-cwd'
+      )
+    })
+
     it('reports native and WSL ownership explicitly on Windows', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const native = await provider.spawn({

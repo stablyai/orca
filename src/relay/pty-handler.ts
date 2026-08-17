@@ -882,6 +882,7 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
+    this.dispatcher.onNotification('pty.setWorktreeId', (p) => this.setWorktreeId(p))
     this.dispatcher.onNotification('pty.ackData', (_p) => {
       /* flow control ack -- not yet enforced */
     })
@@ -1819,6 +1820,16 @@ export class PtyHandler {
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
     }
+  }
+
+  private setWorktreeId(params: Record<string, unknown>): void {
+    const id = typeof params.id === 'string' ? params.id : ''
+    const worktreeId = typeof params.worktreeId === 'string' ? params.worktreeId : ''
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed || worktreeId.length === 0) {
+      return
+    }
+    managed.worktreeId = worktreeId
   }
 
   private async getSize(

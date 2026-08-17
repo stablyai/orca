@@ -27,6 +27,10 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
+import type {
+  TerminalTabMoveRequest,
+  TerminalTabMoveResponse
+} from '../../shared/terminal-tab-move'
 
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
@@ -203,6 +207,8 @@ export type UiCommandEventApi = {
   ) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
+  onTerminalTabMoveRequest?: (callback: (request: TerminalTabMoveRequest) => void) => () => void
+  respondTerminalTabMove?: (response: TerminalTabMoveResponse) => void
   onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void

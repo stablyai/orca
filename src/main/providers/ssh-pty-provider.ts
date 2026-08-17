@@ -1,6 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
-import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 import type {
   RemoteCliBridgeEnv,
@@ -34,6 +34,7 @@ export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
   private connectionId: string
   private livePtyIds = new Set<string>()
+  private worktreeIdByPtyId = new Map<string, string>()
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
@@ -66,6 +67,7 @@ export class SshPtyProvider implements IPtyProvider {
   dispose(): void {
     this.outputState.dispose()
     this.livePtyIds.clear()
+    this.worktreeIdByPtyId.clear()
   }
 
   getConnectionId = (): string => this.connectionId
@@ -286,10 +288,36 @@ export class SshPtyProvider implements IPtyProvider {
     const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
     for (const process of processes) {
       this.livePtyIds.add(process.id)
+      const remappedWorktreeId = this.worktreeIdByPtyId.get(process.id)
+      if (remappedWorktreeId) {
+        process.worktreeId = remappedWorktreeId
+      }
       const relayPtyId = this.toRelayPtyId(process.id)
       this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
     }
     return processes
+  }
+
+  setWorktreeId(id: string, worktreeId: string): boolean {
+    if (worktreeId.length === 0) {
+      return false
+    }
+    const parsed = parseAppSshPtyId(id)
+    if (parsed && parsed.connectionId !== this.connectionId) {
+      return false
+    }
+    if (!this.livePtyIds.has(id) && !parsed) {
+      return false
+    }
+    this.livePtyIds.add(id)
+    this.worktreeIdByPtyId.set(id, worktreeId)
+    try {
+      this.mux.notify('pty.setWorktreeId', { id: this.toRelayPtyId(id), worktreeId })
+    } catch {
+      this.worktreeIdByPtyId.delete(id)
+      return false
+    }
+    return true
   }
 
   hasPty = (id: string): boolean => this.livePtyIds.has(id)

@@ -414,6 +414,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'terminal.getAutoRestoreFit',
   'terminal.isRunningAgent',
   'terminal.list',
+  'terminal.move',
   'terminal.multiplex',
   'terminal.read',
   'terminal.rename',

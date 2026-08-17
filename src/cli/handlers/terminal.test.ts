@@ -62,6 +62,99 @@ describe('terminal close CLI', () => {
   })
 })
 
+describe('terminal move CLI', () => {
+  const originalHandle = process.env.ORCA_TERMINAL_HANDLE
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (originalHandle === undefined) {
+      delete process.env.ORCA_TERMINAL_HANDLE
+    } else {
+      process.env.ORCA_TERMINAL_HANDLE = originalHandle
+    }
+  })
+
+  it('defaults --terminal to $ORCA_TERMINAL_HANDLE', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_env'
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        move: {
+          handle: 'term_env',
+          tabId: 'tab-1',
+          sourceWorktreeId: 'repo::/src',
+          destWorktreeId: 'repo::/dest',
+          ptyIds: ['pty-1']
+        }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal move']({
+      flags: new Map([['worktree', 'id:repo::/dest']]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.move', {
+      terminal: 'term_env',
+      worktree: 'id:repo::/dest',
+      tab: false
+    })
+  })
+
+  it('routes --tab so a pane handle moves the whole tab', async () => {
+    const parsed = parseArgs([
+      'terminal',
+      'move',
+      '--terminal',
+      'term-1',
+      '--worktree',
+      'id:repo::/dest',
+      '--tab'
+    ])
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        move: {
+          handle: 'term-1',
+          tabId: 'tab-1',
+          sourceWorktreeId: 'repo::/src',
+          destWorktreeId: 'repo::/dest',
+          ptyIds: ['pty-1']
+        }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal move']({
+      flags: parsed.flags,
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(parsed.flags.get('tab')).toBe(true)
+    expect(call).toHaveBeenCalledWith('terminal.move', {
+      terminal: 'term-1',
+      worktree: 'id:repo::/dest',
+      tab: true
+    })
+  })
+
+  it('documents that --tab moves the whole tab', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printHelp(COMMAND_SPECS, ['terminal', 'move'])
+
+    const help = String(log.mock.calls[0]?.[0])
+    expect(help).toContain(
+      'orca terminal move --worktree <selector> [--terminal <handle>] [--tab] [--json]'
+    )
+    expect(help).toContain('whole tab')
+    expect(help).toContain('ORCA_TERMINAL_HANDLE')
+  })
+})
+
 describe('terminal send CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()

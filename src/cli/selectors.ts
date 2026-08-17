@@ -145,6 +145,26 @@ export async function getBrowserWorktreeSelector(
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
 // like `orca terminal send --text "hello" --enter` Just Work.
+export function getEnvTerminalHandle(): string | undefined {
+  const value = process.env.ORCA_TERMINAL_HANDLE
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+export function getMoveTerminalHandle(flags: Map<string, string | boolean>): string {
+  const explicit = getOptionalStringFlag(flags, 'terminal')
+  if (explicit) {
+    return explicit
+  }
+  const envHandle = getEnvTerminalHandle()
+  if (envHandle) {
+    return envHandle
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'Pass --terminal <handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+  )
+}
+
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,

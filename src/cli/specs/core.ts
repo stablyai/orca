@@ -270,6 +270,22 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['terminal', 'move'],
+    summary: 'Move a live terminal tab to another worktree without killing its process',
+    usage:
+      'orca terminal move --worktree <selector> [--terminal <handle>] [--tab] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'worktree', 'tab'],
+    notes: [
+      'Keeps the PTY alive and reattaches the existing tab to the destination worktree. The child process is not forced to chdir.',
+      'Omit --terminal to use $ORCA_TERMINAL_HANDLE from the current Orca terminal.',
+      'With --tab, a pane handle moves the whole tab. The floating terminal is not a valid destination.'
+    ],
+    examples: [
+      'orca terminal move --worktree name:follow-up',
+      'orca terminal move --terminal term_abc123 --worktree path:/projects/myapp --tab --json'
+    ]
+  },
+  {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
     usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',

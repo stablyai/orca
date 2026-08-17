@@ -5860,6 +5860,20 @@ export function registerPtyHandlers(
         return null
       }
     },
+    setWorktreeId: (ptyId, worktreeId) => {
+      // Why: a remote PTY must never fall through to the local map; lookup or
+      // missing rebind support has to fail closed so callers can refuse persist.
+      let provider: IPtyProvider
+      try {
+        provider = getProviderForPty(ptyId)
+      } catch {
+        return false
+      }
+      if (!provider.setWorktreeId) {
+        return false
+      }
+      return provider.setWorktreeId(ptyId, worktreeId)
+    },
     listProcesses: async (connectionId) => {
       if (connectionId === null) {
         return localProvider.listProcesses()
