@@ -17,7 +17,11 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
       .prepare(
         `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
           WHERE pane_key = ? AND ownership_state = 'owned'
-            AND release_state IN ('not_requested', 'retained', 'requested')`
+            AND release_state IN ('not_requested', 'retained', 'requested')
+            AND NOT EXISTS (
+              SELECT 1 FROM worker_dispatches w
+               WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+            )`
       )
       .all(paneKey) as { id: string; owner_dispatch_id: string; pane_key: string }[]
     const candidates =
@@ -29,6 +33,10 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
                 `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
                 WHERE ownership_state = 'owned'
                   AND release_state IN ('not_requested', 'retained', 'requested')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM worker_dispatches w
+                     WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+                  )
                   AND pane_key IS NOT NULL`
               )
               .all() as { id: string; owner_dispatch_id: string; pane_key: string }[]
@@ -38,7 +46,11 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
        SET ownership_state = 'user_owned', release_state = 'retained',
            retained_reason = 'user_takeover', updated_at = datetime('now')
        WHERE id = ? AND ownership_state = 'owned'
-         AND release_state IN ('not_requested', 'retained', 'requested')`
+         AND release_state IN ('not_requested', 'retained', 'requested')
+         AND NOT EXISTS (
+           SELECT 1 FROM worker_dispatches w
+            WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+         )`
     )
     let changed = 0
     for (const candidate of candidates) {

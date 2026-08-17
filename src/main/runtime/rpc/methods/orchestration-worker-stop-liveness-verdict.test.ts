@@ -176,6 +176,19 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('linearizes stop before a concurrent user takeover', () => {
+    const dispatch = createWorker()
+    expect(db.beginWorkerStop(dispatch.id).disposition).toBe('stopping')
+
+    expect(db.markWorkerTerminalUserOwned('tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toBe(
+      0
+    )
+    expect(db.getWorkerTerminalResourceByOwner(dispatch.id)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'not_requested'
+    })
+  })
+
   it('still reports a locally observed exit as exited', async () => {
     const dispatch = createWorker()
 
