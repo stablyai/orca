@@ -1572,8 +1572,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
-      // Why: annotations point at DOM coords of the loaded document; a real URL change invalidates those markers.
-      const shouldClearAnnotations = normalizeUrl(page.url) !== nextUrl
+      // Why: annotations used to be deleted outright on any real URL change, because their DOM-coordinate
+      // markers no longer apply to a different document. That silently discarded feedback for a user who
+      // clicks through several pages meaning to review/send everything at the end (see upstream report).
+      // We now keep the annotation (comment, target snippet, screenshot-free payload) and only stop
+      // rendering its on-page position marker once the page has moved on — see the pageId+URL guard in
+      // the marker-building effect below, which is the only other place that needs to know about this.
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId
           ? {
@@ -1586,12 +1590,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : entry
       )
       const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-      const nextBrowserAnnotationsByPageId = shouldClearAnnotations
-        ? { ...s.browserAnnotationsByPageId }
-        : s.browserAnnotationsByPageId
-      if (shouldClearAnnotations) {
-        delete nextBrowserAnnotationsByPageId[pageId]
-      }
       return {
         browserPagesByWorkspace: {
           ...s.browserPagesByWorkspace,
@@ -1602,10 +1600,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
             tab.id === workspace.id ? nextWorkspace : tab
           )
-        },
-        ...(shouldClearAnnotations
-          ? { browserAnnotationsByPageId: nextBrowserAnnotationsByPageId }
-          : {})
+        }
       }
     })
     get().setBrowserPageCertificateFailure(pageId, null)
