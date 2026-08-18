@@ -15,6 +15,8 @@ export function makeCandidate(
     repoId: 'repo1',
     repoName: 'Repo 1',
     connectionId: null,
+    // Why: main host-qualifies every candidate it builds; removal fails closed without it (STA-4343).
+    executionHostId: 'local',
     displayName: 'old-workspace',
     branch: 'old-workspace',
     path: '/tmp/old-workspace',
@@ -80,11 +82,15 @@ export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> 
   )
 }
 
-export function installWorkspaceCleanupApi(scan: ReturnType<typeof vi.fn>) {
+export function installWorkspaceCleanupApi(
+  scan: ReturnType<typeof vi.fn>,
+  getCachedScan: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(null)
+) {
   ;(globalThis as { window: unknown }).window = {
     api: {
       workspaceCleanup: {
         scan,
+        getCachedScan,
         dismiss: vi.fn().mockResolvedValue(undefined),
         clearDismissals: vi.fn().mockResolvedValue(undefined),
         hasKillableLocalProcesses: vi.fn().mockResolvedValue({

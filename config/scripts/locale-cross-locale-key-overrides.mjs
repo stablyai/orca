@@ -115,10 +115,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: '评审中',
     ja: 'レビュー中'
   },
-  'auto.components.skills.SkillsPage.b088e0785d': {
-    zh: '测试版',
-    ja: 'ベータ'
-  },
   'auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0': {
     zh: '测试版',
     ja: 'ベータ'

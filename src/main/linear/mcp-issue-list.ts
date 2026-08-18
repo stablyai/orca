@@ -1,7 +1,7 @@
 import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
 import { withLinearRead } from './issue-context-client'
 import { linearError } from './issue-context-errors'
@@ -106,7 +106,7 @@ export async function listMcpIssues(
   }
 }
 
-function getIssueListEntries(workspaceId?: string | 'all'): {
+function getIssueListEntries(workspaceId?: (string & {}) | 'all'): {
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
 } {

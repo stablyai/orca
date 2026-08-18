@@ -1,4 +1,4 @@
-import type { DiffComment, DiffReviewScope } from '../../../src/shared/types'
+import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
 import { formatDiffComment, formatDiffComments } from '../../../src/shared/diff-comments-format'
 
 export { formatDiffComment, formatDiffComments }

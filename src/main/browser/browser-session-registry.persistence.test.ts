@@ -24,7 +24,7 @@ function seedMeta(fsState: FsState, meta: unknown): void {
 
 function installModuleMocks(
   fsState: FsState,
-  copyFailures: Set<string> = new Set()
+  copyFailures = new Set<string>()
 ): {
   sessionFromPartitionMock: ReturnType<typeof vi.fn>
   setupClientHintsOverrideMock: ReturnType<typeof vi.fn>

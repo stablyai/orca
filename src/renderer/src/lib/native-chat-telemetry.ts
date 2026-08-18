@@ -9,13 +9,13 @@
 
 import { track, tuiAgentToAgentKind } from './telemetry'
 import type { NativeChatRuntime } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 /** Loose agent type accepted by these emitters: the strict launch `TuiAgent`, or
  *  the broader `AgentType` string carried by the chat view. Narrowing to the
  *  closed `agent_kind` enum (with an `'other'` fallback) happens here so call
  *  sites never need an unsound `as TuiAgent` cast. */
-export type NativeChatTelemetryAgent = TuiAgent | string | null | undefined
+export type NativeChatTelemetryAgent = TuiAgent | (string & {}) | null | undefined
 
 // `launchAgent` is optional on terminal tabs (plain shells, manually-started
 // agents) and the chat view's `AgentType` may carry a string outside the

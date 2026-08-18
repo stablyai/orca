@@ -84,7 +84,6 @@ export const Eval = BrowserTarget.extend({
 })
 
 export const TabList = z.object({ worktree: OptionalString })
-
 // Why: --index xor --page must be present. The refine guards that invariant
 // so the dispatcher surfaces a single legible error instead of either shape
 // leaking into the runtime.
@@ -110,18 +109,6 @@ export const TabSwitch = BrowserTarget.extend({
   },
   { message: 'Missing required --index (non-negative integer) or --page' }
 )
-
-export const TabCreate = z.object({
-  url: OptionalString,
-  worktree: OptionalString,
-  profileId: OptionalString,
-  waitForRegistration: z.boolean().optional(),
-  // User-initiated opens focus the tab; agent/automation opens stay background.
-  activate: z.boolean().optional(),
-  // Why: the split group whose "+" was clicked, so a headless host places the
-  // new browser tab there instead of coalescing into the first/active group.
-  targetGroupId: OptionalString
-})
 
 export const TabShow = z.object({
   page: requiredString('Missing required --page'),
@@ -161,7 +148,8 @@ export const ProfileDelete = z.object({ profileId: requiredString('Missing requi
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
-  browserProfile: OptionalString
+  browserProfile: OptionalString,
+  supportsPartitionSkippedCookies: z.literal(true).optional()
 })
 
 export const Drag = BrowserTarget.extend({

@@ -2,7 +2,9 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -41,6 +43,7 @@ import {
   planCommitMessageGeneration,
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
+import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
   resolveSourceControlAiForOperation,
@@ -293,13 +296,14 @@ function finalizeModelDiscoveryOutput(
 
 function planModelDiscovery(
   spec: AgentModelProbeSpec,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride)
+  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash)
   if (!command.ok) {
     return command
   }
@@ -339,7 +343,15 @@ export async function discoverCommitMessageModelsLocal(
       const spawnEnv = env ?? process.env
       let discoveryStdin: string | null = null
       try {
-        const planned = planModelDiscovery(spec, agentCommandOverride)
+        const planned = planModelDiscovery(
+          spec,
+          agentCommandOverride,
+          commandBackslashMode({
+            kind: 'local',
+            cwd: options.cwd ?? '',
+            wslDistro: options.wslDistro
+          })
+        )
         if (!planned.ok) {
           markProcessClosed()
           resolve({ success: false, error: planned.error })
@@ -821,6 +833,21 @@ function runLocalPlan(
   return { result, processClosed }
 }
 
+/**
+ * How the user's command override should read `\`.
+ *
+ * `'literal'` only when the command provably runs on native Windows: a LOCAL
+ * target, on win32, with no WSL distro. A WSL target runs a Linux binary inside
+ * the distro, and a remote target runs on a host whose platform this process
+ * cannot see — POSIX escaping stays the default for both.
+ */
+export function commandBackslashMode(
+  target: CommitMessageGenerationTarget,
+  platform: NodeJS.Platform = process.platform
+): CommandTemplateBackslash {
+  return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
+}
+
 type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
 
 function runLocalPlanForAgent(
@@ -1099,7 +1126,10 @@ export async function generateCommitMessageFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -1171,7 +1201,10 @@ export async function generatePullRequestFieldsFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return {
       success: false,
@@ -1221,7 +1254,10 @@ export async function generateBranchNameFromContext(
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }

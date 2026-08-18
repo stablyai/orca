@@ -61,7 +61,7 @@ export function createSetupCompletionScanner(
       }
       const combined = `${carry}${data}`
       const markerIndex = combined.lastIndexOf(expectedPrefix)
-      if (markerIndex >= 0) {
+      if (markerIndex !== -1) {
         const suffix = combined.slice(markerIndex + expectedPrefix.length)
         const match = suffix.match(/^(-?\d+)\r?\n/)
         if (match) {

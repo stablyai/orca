@@ -6,26 +6,24 @@ import type {
   AgentType
 } from './agent-status-types'
 import type {
-  BaseRefSearchResult,
-  BrowserCookieImportResult,
   BrowserCertificateFailure,
+  BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileSource,
-  CreateWorktreeResult,
-  GitWorktreeInfo,
-  RemoveWorktreeResult,
-  Repo,
-  TabGroupLayoutNode,
-  TerminalColorOverrides,
-  TerminalLayoutSnapshot,
-  TuiAgent,
-  Worktree,
-  WorktreeLineage,
+  BrowserSessionProfileSource
+} from './browser-workspace-types'
+import type { BaseRefSearchResult, Repo } from './repo-types'
+import type { TabGroupLayoutNode } from './tab-types'
+import type { TerminalColorOverrides } from './terminal-color-overrides'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TuiAgent } from './tui-agent'
+import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
+import type {
   WorkspaceLineage,
-  WorktreeLineageWarning,
-  TerminalPaneLayoutNode
-} from './types'
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './worktree/lineage-types'
+import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -67,6 +65,8 @@ export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export type RuntimeStatus = {
   runtimeId: string
+  /** Authenticated requester identity. Missing for in-process callers and older hosts. */
+  pairedDeviceId?: string
   rendererGraphEpoch: number
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
@@ -150,6 +150,11 @@ export type RuntimeSyncWindowGraph = {
   unchangedMobileSessionWorktrees?: string[]
 }
 
+export type RuntimeRendererSyncWindowGraph = RuntimeSyncWindowGraph & {
+  /** Unique to one renderer document; a reload must publish from a new generation. */
+  rendererGeneration: string
+}
+
 export type RuntimeNativeChatLaunchDraftResolution = {
   tabId: string
   text: string
@@ -176,6 +181,8 @@ export type RuntimeMobileSessionTerminalTab = {
   ptyId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
+  /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
+  turnCompletedAt?: number
   launchAgent?: TuiAgent
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
@@ -402,11 +409,18 @@ export type RuntimeTerminalPathOpenTarget =
       provider: 'local' | 'ssh'
       absolutePath: string
       grantId: string
+      /** Present when the exact-path grant permits preview/read but not mutation. */
+      readOnly?: true
     }
   | {
       kind: 'unsupported'
       reason: string
     }
+
+export type RuntimeNativeChatFileContext = {
+  tabId: string
+  sessionId: string
+}
 
 /** Result of resolving a file path tapped in the mobile terminal against the
  *  selected or sibling workspace root (+ optional cwd). relativePath is null
@@ -451,6 +465,9 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Where this terminal actually runs. Absent when the host predates the field
+   *  or could not name the host — never read an absent value as local. */
+  executionHostId?: ExecutionHostId
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -501,12 +518,24 @@ export type RuntimeTerminalVisualLayout = {
   root: RuntimeTerminalVisualLayoutNode
 }
 
+/** Which execution hosts a listing answered for, so an empty or partial result
+ *  reads as "none here" instead of "none anywhere". Host ids are as the
+ *  answering runtime names them — `_meta.runtimeId` says which runtime that is. */
+export type RuntimeTerminalListHostScope = {
+  hostIds: ExecutionHostId[]
+  /** Known hosts this listing skipped; a live terminal on one of them can be
+   *  absent from `terminals` without having exited. */
+  omittedHostIds: ExecutionHostId[]
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
   visualLayouts?: RuntimeTerminalVisualLayout[]
   topologyRevisions?: Record<string, number>
   totalCount: number
   truncated: boolean
+  /** Absent from hosts that predate the field — treat that scope as unverifiable. */
+  hostScope?: RuntimeTerminalListHostScope
 }
 
 export type RuntimeTerminalOrphanAdoptionClaim = {
@@ -705,6 +734,14 @@ export type RuntimeTerminalClose = {
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
   ptyKilled: boolean
+  /**
+   * Why the PTY was not killed, when we know. Absent means today's answer —
+   * nothing observed either way — so older clients reading only `ptyKilled` are
+   * unaffected. `exited` never appears here: that is what `ptyKilled` reports.
+   */
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  /** Set with `ptyStopVerdict: 'unverifiable'`; names what we lost contact with. */
+  ptyStopReason?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
@@ -774,6 +811,7 @@ export type RuntimeWorktreePsSummary = {
   manualOrder?: number
   lastActivityAt?: number
   createdAt?: number
+  creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

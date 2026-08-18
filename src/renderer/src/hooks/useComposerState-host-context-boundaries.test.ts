@@ -636,6 +636,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('setCreateError({')
   })
 
+  it('uses submit-time smart metadata for both folder launch mode and startup content', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const submitFolderTarget',
+      'const submit = useCallback'
+    )
+    expect(section).toContain(
+      'const submitLinkedWorkItem = smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem'
+    )
+    expect(section).toContain('resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)')
+    expect(section).toContain('linkedWorkItem: submitLinkedWorkItem')
+  })
+
   it('gates every submit path on the derived source intent', () => {
     // Why: derived from name+mode, so the submitted name and the gate can never disagree.
     expect(HOOK_SOURCE).toContain(

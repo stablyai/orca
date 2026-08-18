@@ -64,7 +64,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(getSharedAgentLabel('OC | Compare Codex and Claude')).toBe('OpenCode')
     expect(getSharedAgentLabel('OC | ✦ Gemini CLI')).toBe('OpenCode')
     expect(resolveExplicitTerminalTitleAgentType('tmux | OC | ses_123')).toBe('opencode')
-    expect(resolveExplicitTerminalTitleAgentType('OC|compact-session')).toBe('opencode')
+    expect(resolveExplicitTerminalTitleAgentType('OC|compact-session')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('oc | Understand about the plugin')).toBeNull()
   })
 

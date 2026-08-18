@@ -31,12 +31,12 @@ describe('StatusIndicator', () => {
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
   })
 
-  it('renders permission as an amber question glyph', () => {
+  it('renders permission as the shared question glyph', () => {
     const markup = renderMarkup('permission')
 
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(markup).toContain('text-amber-500')
-    expect(markup).not.toContain('bg-amber-500')
+    expect(markup).toContain('text-agent-question')
+    expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('data-agent-spinner')
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import {
   findDuplicateClaudeAccount,
   type ClaudeAccountIdentityCandidate

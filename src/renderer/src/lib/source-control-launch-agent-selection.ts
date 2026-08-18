@@ -9,7 +9,9 @@ import type {
   SourceControlActionRecipe
 } from '../../../shared/source-control-ai-actions'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
@@ -110,7 +112,7 @@ function hasActionOverride(
   overrides: NormalizedRepoSourceControlAiOverrides['actionOverrides'] | undefined,
   actionId: SourceControlActionId
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides ?? {}, actionId)
+  return Object.hasOwn(overrides ?? {}, actionId)
 }
 
 function readRecipeOverrideFields(
@@ -120,13 +122,13 @@ function readRecipeOverrideFields(
     | undefined
 ): SourceControlActionRecipeOverrideField[] {
   const fields: SourceControlActionRecipeOverrideField[] = []
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentId')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     fields.push('agent')
   }
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'commandInputTemplate')) {
+  if (Object.hasOwn(recipe ?? {}, 'commandInputTemplate')) {
     fields.push('commandTemplate')
   }
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentArgs')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
   }
   return fields

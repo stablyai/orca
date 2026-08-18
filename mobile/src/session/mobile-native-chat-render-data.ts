@@ -51,7 +51,7 @@ export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): Nat
 
 /** Assemble the list data the chat renders: the folded transcript, then a
  *  synthetic bubble for the streaming text the gate let through, then the
- *  route-owned optimistic "queued" messages at the tail. */
+ *  route-owned accepted optimistic messages at the tail. */
 export function buildMobileNativeChatTransientData({
   folded,
   streaming,

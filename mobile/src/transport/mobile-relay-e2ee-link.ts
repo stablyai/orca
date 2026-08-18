@@ -76,14 +76,18 @@ export class MobileRelayE2eeLink {
 
   private bindSocket(): void {
     this.socket.onopen = () => {
-      this.socket.send(
-        JSON.stringify({
-          type: 'relay-auth',
-          v: 1,
-          mode: 'connect',
-          credential: this.options.credential
-        })
-      )
+      try {
+        this.socket.send(
+          JSON.stringify({
+            type: 'relay-auth',
+            v: 1,
+            mode: 'connect',
+            credential: this.options.credential
+          })
+        )
+      } catch (error) {
+        this.fail(asError(error))
+      }
     }
     this.socket.onmessage = (event) => {
       this.inboundChain = this.inboundChain

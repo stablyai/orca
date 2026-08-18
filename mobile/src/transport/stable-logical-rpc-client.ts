@@ -5,6 +5,8 @@ import {
   type MigrationDialStateForwarder
 } from './migration-dial-state-forwarder'
 import { waitForAuthenticated } from './replacement-session-authentication'
+import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
+import { LogicalClientConnectionPath } from './logical-client-connection-path'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -46,9 +48,12 @@ export type StableLogicalRpcClient = RpcClient & {
   ): Promise<void>
   suspendActiveSession(): void
   getActivePath(): MobileConnectionPath
-  // Non-null only while a migration dial is publishing its own phases — the path the
-  // user is waiting on, which the still-bound active path can't name.
+  // The path the user is waiting on while migration or scheduled recovery is active.
   getPendingPath(): MobileConnectionPath | null
+  setRecoveryPath(path: MobileConnectionPath | null, attempt?: number): void
+  setRecoveryAttempt(attempt: number): void
+  // Recovery attempts share this signal so status-only changes rerender.
+  onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
 }
 
@@ -58,7 +63,6 @@ export function createStableLogicalRpcClient(
 ): StableLogicalRpcClient {
   let activeSession = initialSession
   let activePath = initialPath
-  let pendingPath: MobileConnectionPath | null = null
   let generation = 1
   let closed = false
   let suspended = false
@@ -68,6 +72,7 @@ export function createStableLogicalRpcClient(
   const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
+  const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
 
   bindActiveState(initialSession, generation)
 
@@ -84,22 +89,24 @@ export function createStableLogicalRpcClient(
       return new Promise<RpcResponse>((resolve, reject) => {
         const pending = { reject }
         pendingRequests.add(pending)
-        void session.sendRequest(method, params, options).then(
-          (response) => {
-            pendingRequests.delete(pending)
-            if (closed) {
-              reject(new Error('Client closed'))
-            } else if (requestGeneration !== generation) {
-              reject(new LogicalClientCutoverError())
-            } else {
-              resolve(response)
+        void session
+          .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
+          .then(
+            (response) => {
+              pendingRequests.delete(pending)
+              if (closed) {
+                reject(new Error('Client closed'))
+              } else if (requestGeneration !== generation) {
+                reject(new LogicalClientCutoverError())
+              } else {
+                resolve(response)
+              }
+            },
+            (error: unknown) => {
+              pendingRequests.delete(pending)
+              reject(error)
             }
-          },
-          (error: unknown) => {
-            pendingRequests.delete(pending)
-            reject(error)
-          }
-        )
+          )
       })
     },
 
@@ -148,7 +155,7 @@ export function createStableLogicalRpcClient(
     },
 
     getState: () => state,
-    getReconnectAttempt: () => activeSession.getReconnectAttempt(),
+    getReconnectAttempt: () => connectionPath.reconnectAttempt(activeSession.getReconnectAttempt()),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
     onStateChange(listener) {
       stateListeners.add(listener)
@@ -204,7 +211,7 @@ export function createStableLogicalRpcClient(
       // (direct dial fails) sits in 'reconnecting' — already amber, so forwarding adds
       // nothing, but the user still has no idea relay is what's being tried.
       if (suspended || state !== 'connected') {
-        pendingPath = path
+        connectionPath.setMigration(path)
       }
       const forwarder = forwardMigrationDialState({
         session: nextSession,
@@ -256,6 +263,7 @@ export function createStableLogicalRpcClient(
       }
       pendingRequests.clear()
       state = nextSession.getState()
+      connectionPath.clearAfterConnected()
       for (const listener of stateListeners) {
         listener(state)
       }
@@ -265,7 +273,10 @@ export function createStableLogicalRpcClient(
     getActivePath: () => activePath,
     // Why: a previous session that recovers mid-dial makes the pending path a lie —
     // once we're connected the user is no longer waiting on anything.
-    getPendingPath: () => (state === 'connected' ? null : pendingPath),
+    getPendingPath: () => connectionPath.pending(),
+    setRecoveryPath: (path, attempt) => connectionPath.setRecovery(path, attempt),
+    setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
+    onConnectionPathChange: (listener) => connectionPath.subscribe(listener),
     getGeneration: () => generation
   }
 
@@ -273,7 +284,9 @@ export function createStableLogicalRpcClient(
 
   function endDialForwarding(forwarder: MigrationDialStateForwarder, failed: boolean): void {
     forwarder.stop()
-    pendingPath = null
+    if (failed) {
+      connectionPath.setMigration(null)
+    }
     // Why: only walk back phases we published ourselves — a 'connected' here came from
     // the still-live previous session and outranks the dead dial.
     if (failed && forwarder.forwarded() && state !== 'connected') {
@@ -311,6 +324,9 @@ export function createStableLogicalRpcClient(
       return
     }
     state = next
+    if (next === 'connected') {
+      connectionPath.clearAfterConnected()
+    }
     for (const listener of stateListeners) {
       listener(next)
     }

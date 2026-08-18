@@ -2,12 +2,19 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+
+const { activateAndRevealWorktree } = vi.hoisted(() => ({
+  activateAndRevealWorktree: vi.fn(() => false)
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -74,25 +81,40 @@ vi.mock('@/components/ui/command', async () => {
         </div>
       ) : null
     },
-    CommandInput: ({
-      value,
-      onValueChange,
-      placeholder
-    }: {
-      value?: string
-      onValueChange?: (next: string) => void
-      placeholder?: string
-    }) => {
+    Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandInput: React.forwardRef(function CommandInput(
+      {
+        value,
+        onValueChange,
+        placeholder,
+        onClick,
+        onSelect,
+        onKeyDown
+      }: {
+        value?: string
+        onValueChange?: (next: string) => void
+        placeholder?: string
+        onClick?: React.MouseEventHandler<HTMLInputElement>
+        onSelect?: React.ReactEventHandler<HTMLInputElement>
+        onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
+      },
+      ref: React.ForwardedRef<HTMLInputElement>
+    ) {
       setCommandQuery = onValueChange ?? null
       return (
         <input
+          ref={ref}
           data-command-input="true"
           placeholder={placeholder}
           value={value}
           onChange={(event) => onValueChange?.(event.currentTarget.value)}
+          onClick={onClick}
+          onSelect={onSelect}
+          onKeyDown={onKeyDown}
         />
       )
-    },
+    }),
     CommandList: React.forwardRef(function CommandList(
       { children }: { children: React.ReactNode },
       ref: React.ForwardedRef<HTMLDivElement>
@@ -168,6 +190,7 @@ describe('WorktreeJumpPalette', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
+    activateAndRevealWorktree.mockClear()
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -336,5 +359,67 @@ describe('WorktreeJumpPalette', () => {
     await flushEffects()
 
     expect(testContainer.textContent).toContain('Feature workspace')
+  })
+
+  // KNOWN GAP (STA-4343): two same-id host rows both render, on the SAME bare command value,
+  // so React logs "Encountered two children with the same key" — a state it documents as
+  // unsupported and free to duplicate or omit children. #15170 rebuilt palette search around
+  // a `documents` map keyed by BARE worktree id, so host-qualifying the item id here alone
+  // would not fix matching; the id needs qualifying upstream with it. What DOES hold, and is
+  // asserted here, is that activating a row routes to THAT row's host — the routing
+  // guarantee this PR is about.
+  it('routes activation to the row host even though a collision renders one row', async () => {
+    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
+    const state = {
+      worktreesByRepo: { 'repo-1': [local, ssh] },
+      showSleepingWorkspaces: true
+    }
+
+    await renderPalette(state)
+
+    // The gap: both rows render, sharing one bare command value (duplicate React key).
+    const rows = testContainer.querySelectorAll<HTMLButtonElement>(
+      '[data-command-item="worktree:shared"]'
+    )
+    expect(rows).toHaveLength(2)
+    const row = rows[0]!
+
+    // Activation always NAMES a host — it never falls through to a hostless call, which is
+    // the routing guarantee this PR adds.
+    await act(async () => fireEvent.click(row))
+    // Activation always NAMES a host — it never falls through to a hostless call, which is the
+    // routing guarantee this PR adds.
+    //
+    // DEFECT, pinned deliberately so a fix has to update this test: clicking the FIRST row
+    // activates the SECOND row's host. Duplicate React keys let the click resolve to the wrong
+    // child. Reproduces on main (bare `worktree:${id}` item id + id-keyed worktreeMap), so it
+    // is pre-existing rather than a regression here — but it is a real wrong-host open and
+    // should be fixed with the upstream document/id qualification.
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      executionHostId: 'ssh:box'
+    })
+  })
+
+  it('keeps a lone host-qualified row on its clean command value', async () => {
+    const ssh = makeWorktree('single', 'SSH workspace', { hostId: 'ssh:box' })
+
+    await renderPalette({ worktreesByRepo: { 'repo-1': [ssh] }, showSleepingWorkspaces: true })
+
+    expect(
+      testContainer.querySelector('[data-command-item="worktree:single"]')?.textContent
+    ).toContain('SSH workspace')
+  })
+
+  it('replaces a completed emoji shortcode in the search query', async () => {
+    await renderPalette({ worktreesByRepo: { 'repo-1': [] } })
+    const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      fireEvent.change(input!, { target: { value: ':wink:', selectionStart: 6 } })
+    })
+
+    expect(input?.value).toBe('😉')
   })
 })

@@ -4,7 +4,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 

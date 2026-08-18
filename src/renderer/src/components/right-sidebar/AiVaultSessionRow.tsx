@@ -16,15 +16,11 @@ import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
-import {
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import {
   conversationRoleLabel,
   getSessionDetailsId,
-  SessionMetadata,
-  SessionWorktreeLine
+  SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 
@@ -186,37 +182,30 @@ export function VaultSessionRow({
               onRequestDelete={requestDelete}
             />
           </div>
-          {detailsExpanded && shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
-            <div className="mt-1">
-              <SessionWorktreeLine worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
+          {!detailsExpanded ? (
+            <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+              {latestTurn ? (
+                <>
+                  <span className="font-medium text-foreground/80">
+                    {conversationRoleLabel(latestTurn.role)}
+                  </span>
+                  <span>: {latestTurn.text}</span>
+                </>
+              ) : (
+                translate(
+                  'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+                  'No conversation preview available'
+                )
+              )}
             </div>
           ) : null}
-          {!detailsExpanded ? (
-            <>
-              <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-                {latestTurn ? (
-                  <>
-                    <span className="font-medium text-foreground/80">
-                      {conversationRoleLabel(latestTurn.role)}
-                    </span>
-                    <span>: {latestTurn.text}</span>
-                  </>
-                ) : (
-                  translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
-                    'No conversation preview available'
-                  )
-                )}
-              </div>
-              <SessionMetadata
-                session={session}
-                liveState={liveState}
-                updatedAt={updatedAt}
-                worktreeInfo={worktreeInfo}
-                vaultScope={vaultScope}
-              />
-            </>
-          ) : null}
+          <SessionMetadata
+            session={session}
+            liveState={liveState}
+            updatedAt={updatedAt}
+            worktreeInfo={worktreeInfo}
+            vaultScope={vaultScope}
+          />
           {detailsExpanded ? (
             <SessionInlineDetails
               id={detailsId}

@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { HostAvailableMemorySource, HostMemory } from '../../shared/types'
+import type { HostAvailableMemorySource, HostMemory } from '../../shared/process-stats-types'
 
 const MEMORY_PRESSURE_TIMEOUT_MS = 1_000
 const MEMORY_PRESSURE_MAX_BUFFER = 64 * 1024

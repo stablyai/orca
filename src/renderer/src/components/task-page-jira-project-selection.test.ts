@@ -4,7 +4,7 @@ import {
   compareJiraProjectsByDisplayLabel,
   getJiraProjectSelectionKey
 } from './task-page-jira-project-selection'
-import type { JiraProject } from '../../../shared/types'
+import type { JiraProject } from '../../../shared/jira-types'
 
 function project(overrides: Partial<JiraProject> = {}): JiraProject {
   return { id: '1', key: 'AA', name: 'Alpha', ...overrides }

@@ -88,6 +88,28 @@ describe('useNativeChatRetainedSession', () => {
     expect(latest?.messages).toEqual([])
   })
 
+  it('keeps retained messages instead of a full-pane read error', async () => {
+    liveSession.mockReturnValue(session('ready', [message('settled')]))
+    await render(ARGS)
+
+    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
+    await render(ARGS)
+
+    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
+    expect(latest?.readPhase).toBe('error')
+    expect(latest?.status).toBe('ready')
+    expect(latest?.error).toBeUndefined()
+  })
+
+  it('surfaces a read error when nothing was retained', async () => {
+    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
+    await render(ARGS)
+
+    expect(latest?.messages).toEqual([])
+    expect(latest?.status).toBe('error')
+    expect(latest?.error).toBe('read failed')
+  })
+
   it('does not overwrite retention with the session-less view', async () => {
     liveSession.mockReturnValue(session('ready', [message('settled')]))
     await render(ARGS)

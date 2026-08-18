@@ -332,7 +332,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        command: `claude '--dangerously-skip-permissions' 'don'"'"'t use powershell quoting'`,
         connectionId: null,
         worktreeId: 'wt-1',
         tabId: expect.stringMatching(UUID_RE)

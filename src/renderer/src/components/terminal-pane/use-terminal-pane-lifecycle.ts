@@ -32,7 +32,10 @@ import {
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
-import { terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
+import {
+  terminalHttpLinkActionDestinationsFor,
+  terminalUrlOpenHintOptionsFor
+} from './terminal-link-open-hints'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -53,13 +56,11 @@ import {
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
-import type {
-  GlobalSettings,
-  SetupSplitDirection,
-  TerminalTab,
-  TerminalLayoutSnapshot,
-  TuiAgent
-} from '../../../../shared/types'
+import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/workspace-browser-tab-open'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -88,6 +89,10 @@ import { copyTerminalSelection } from './terminal-selection-copy'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import {
+  isNonLatinControlChordKeyup,
+  resolveNonLatinControlChordInput
+} from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -126,6 +131,7 @@ import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-i
 import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
+import { useTerminalParkMountIntent } from './use-terminal-park-mount-intent'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   PRIMARY_SELECTION_MAX_LENGTH,
@@ -140,7 +146,7 @@ import {
   type CloseTerminalPaneDetail,
   type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
-import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import {
@@ -267,6 +273,7 @@ type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
   managerRef: React.RefObject<PaneManager | null>
+  getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
@@ -444,6 +451,13 @@ export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd
   return splitPaneCwd ?? fallbackCwd
 }
 
+// Why > 1, matching isIOSWebView in mobile/src/terminal/terminal-webview-html.ts: a Mac with a
+// touch peripheral can report exactly 1, and it must keep the forwarder. Real iPads report 5.
+// Why UA rather than that helper's platform check: an iPhone reports platform "iPhone", not "MacIntel".
+export function isTouchIOSUserAgent(userAgent: string, maxTouchPoints: number): boolean {
+  return userAgent.includes('Mac') && maxTouchPoints > 1
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -476,6 +490,19 @@ export function splitPaneWithOneShotStartup<TPane>(
     return splitPane()
   } finally {
     deps.startup = null
+  }
+}
+
+/** Scopes `deps.mountFollowsTerminalPark` to the restored-layout replay. */
+export function replayLayoutWithOneShotParkIntent<TRestored>(
+  deps: { mountFollowsTerminalPark: boolean },
+  replayLayout: () => TRestored
+): TRestored {
+  // Why: only panes reconstructed by this replay belong to the park reveal; later splits must use ordinary reconnect semantics.
+  try {
+    return replayLayout()
+  } finally {
+    deps.mountFollowsTerminalPark = false
   }
 }
 
@@ -606,6 +633,7 @@ export function useTerminalPaneLifecycle({
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
   managerRef,
+  getTabWideAgentHintLeafId,
   containerRef,
   expandedStyleSnapshotRef,
   paneFontSizesRef,
@@ -661,6 +689,7 @@ export function useTerminalPaneLifecycle({
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
+  const mountFollowsTerminalPark = useTerminalParkMountIntent(tabId)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const linkifierClickPrimingDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -668,7 +697,9 @@ export function useTerminalPaneLifecycle({
     new Map<number, ReturnType<typeof installTerminalLinkPointerGesture>>()
   )
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
-  const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const httpLinkClickFallbackDisposablesRef = useRef(
+    new Map<number, ReturnType<typeof installHttpLinkClickFallback>>()
+  )
   // Why: read settingsRef at fire time so toggling "copy on select" applies without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
@@ -740,15 +771,24 @@ export function useTerminalPaneLifecycle({
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
       resolveTerminalHttpLinkSourceOwner(paneTransportsRef.current.get(paneId))
+    const canOpenRuntimeBrowserForPane = (paneId: number): boolean => {
+      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
+      return (
+        sourceOwner.kind === 'runtime' &&
+        canOpenWorkspaceBrowserTabOnRuntime(
+          useAppStore.getState(),
+          worktreeId,
+          sourceOwner.runtimeEnvironmentId
+        )
+      )
+    }
     const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations => {
       const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      if (sourceOwner.kind !== 'local') {
-        return { primary: 'system' }
-      }
-      const options = terminalUrlOpenHintOptionsFor(settingsRef.current, sourceOwner)
-      return options.openLinksInApp
-        ? { primary: 'orca', alternate: 'system' }
-        : { primary: 'system', alternate: 'orca' }
+      return terminalHttpLinkActionDestinationsFor(
+        settingsRef.current,
+        sourceOwner,
+        canOpenRuntimeBrowserForPane(paneId)
+      )
     }
     const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
       if (settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
@@ -756,12 +796,14 @@ export function useTerminalPaneLifecycle({
       }
       const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
       const pointerGesture = linkPointerGestures.get(paneId)
-      if (!pane || !pointerGesture) {
+      const ptyMouseSuppression = httpLinkClickFallbackDisposables.get(paneId)?.ptyMouseSuppression
+      if (!pane || !pointerGesture || !ptyMouseSuppression) {
         return null
       }
       return {
         paneId,
         pointerGesture,
+        claimPtyMouse: ptyMouseSuppression.claimAction,
         request: requestTerminalLinkAction,
         focusTerminal: () => pane.terminal.focus()
       }
@@ -837,6 +879,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       cwd: startupCwd,
       startup: startupWithSetupSplitWait,
+      mountFollowsTerminalPark,
       paneTransportsRef,
       paneMode2031Ref,
       paneKittyKeyboardModesRef,
@@ -867,10 +910,18 @@ export function useTerminalPaneLifecycle({
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
       clearExitedPanePtyLayoutBinding,
-      // Why: record the main-answered 2031 subscribe in the CSI handler's registries, else theme flips never push CSI 997.
-      recordPaneMode2031Subscription: (paneId: number, repliedMode: 'dark' | 'light') => {
+      deferPtyInput: (paneId, data, forward) => {
+        const suppression = httpLinkClickFallbackDisposables.get(paneId)?.ptyMouseSuppression
+        if (!suppression) {
+          forward(data)
+          return
+        }
+        suppression.handlePtyInput(data, forward)
+      },
+      // Why: record the fact-observed 2031 subscribe in the pane registries, else theme flips never push CSI 997.
+      recordPaneMode2031Subscription: (paneId: number, subscribedMode: 'dark' | 'light') => {
         paneMode2031Ref.current.set(paneId, true)
-        paneLastThemeModeRef.current.set(paneId, repliedMode)
+        paneLastThemeModeRef.current.set(paneId, subscribedMode)
       },
       restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {}
     }
@@ -880,7 +931,8 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       getManager: () => managerRef.current,
       getContainer: () => containerRef.current,
-      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
+      getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
+      getTabWideAgentHintLeafId
     })
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
@@ -889,7 +941,8 @@ export function useTerminalPaneLifecycle({
       getTerminalUrlOpenHint({
         ...terminalUrlOpenHintOptionsFor(
           settingsRef.current,
-          getHttpLinkSourceOwnerForPane(paneId)
+          getHttpLinkSourceOwnerForPane(paneId),
+          canOpenRuntimeBrowserForPane(paneId)
         ),
         showActions: settingsRef.current?.terminalLinkActionPopoverEnabled !== false
       })
@@ -940,6 +993,7 @@ export function useTerminalPaneLifecycle({
 
         // Why: let host-handled keys bypass xterm's kitty CSI-u encoder — with kittyKeyboard on it preventDefaults Cmd+C and blocks Chromium's native copy. See xterm-bypass-policy.ts.
         let pendingTerminalInterruptKeyup = false
+        let claimedNonLatinControlChordCode: string | null = null
         const pendingTerminalImeCandidateKeyReleases =
           createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
@@ -948,6 +1002,8 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
+        // Why: gates the forwarder only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
+        const isTouchIOS = isTouchIOSUserAgent(navigator.userAgent, navigator.maxTouchPoints)
         const linuxImeCandidateState = isLinux
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
@@ -959,18 +1015,20 @@ export function useTerminalPaneLifecycle({
           }
         })
         // Why: macOS commits an input source's substituted text through the input event alone, so printable keydowns must not reach xterm's encoder.
-        const imeNativeTextForwarder = isMac
-          ? installTerminalImeNativeTextForwarder({
-              terminalElement: pane.terminal.element,
-              isComposing: () => imeCompositionTracker.isActive(),
-              sendInput: (data) => pane.terminal.input(data),
-              getKittyKeyboardFlags: () =>
-                paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
-            })
-          : {
-              claimKeyEvent: () => false,
-              dispose: () => undefined
-            }
+        // Not on touch iOS/iPadOS: the forwarder stands aside for IME input via composition events, which iPad Hangul appears not to fire (#13345).
+        const imeNativeTextForwarder =
+          isMac && !isTouchIOS
+            ? installTerminalImeNativeTextForwarder({
+                terminalElement: pane.terminal.element,
+                isComposing: () => imeCompositionTracker.isActive(),
+                sendInput: (data) => pane.terminal.input(data),
+                getKittyKeyboardFlags: () =>
+                  paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+              })
+            : {
+                claimKeyEvent: () => false,
+                dispose: () => undefined
+              }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
@@ -1034,6 +1092,22 @@ export function useTerminalPaneLifecycle({
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
+            return false
+          }
+          // Why here: after the Ctrl+C interrupt arm, which owns its own ETX and kitty reset.
+          // This covers the other 25 letters, whose only failure is the kitty encoder reading
+          // the layout glyph out of `key`. Sending the C0 byte reproduces what the OS control
+          // table produces for that physical key on any layout.
+          if (isNonLatinControlChordKeyup(e, claimedNonLatinControlChordCode)) {
+            claimedNonLatinControlChordCode = null
+            observeLinuxCandidateEvent()
+            return false
+          }
+          const nonLatinControlChord = resolveNonLatinControlChordInput(e)
+          if (nonLatinControlChord) {
+            claimedNonLatinControlChordCode = e.code
+            pane.terminal.input(nonLatinControlChord)
             observeLinuxCandidateEvent()
             return false
           }
@@ -1463,7 +1537,10 @@ export function useTerminalPaneLifecycle({
       onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
-        const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
+        const terminalFontWeights = resolveTerminalFontWeights(
+          currentSettings?.terminalFontWeight,
+          currentSettings?.terminalFontWeightBold
+        )
         const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
         const storeState = useAppStore.getState()
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
@@ -1549,7 +1626,9 @@ export function useTerminalPaneLifecycle({
       window.__paneManagers = window.__paneManagers ?? new Map()
       window.__paneManagers.set(tabId, manager)
     }
-    const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
+    const restoredPaneByLeafId = replayLayoutWithOneShotParkIntent(ptyDeps, () =>
+      replayTerminalLayout(manager, initialLayoutRef.current, isActive)
+    )
 
     const restoredBuffers = initialLayoutRef.current.buffersByLeafId
     restoreScrollbackBuffers(

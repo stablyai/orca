@@ -1,49 +1,21 @@
-/* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type {
-  FolderWorkspace,
-  GlobalSettings,
-  SetupSplitDirection,
-  Tab,
-  TuiAgent,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
-import type { EventProps } from '../../../shared/telemetry-events'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
-import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { buildSetupRunnerCommand } from './setup-runner'
-import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
-import { agentKindToTuiAgent } from '../../../shared/agent-kind'
+} from '../../../shared/worktree/launch-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   activateWebRuntimeSessionWorktree,
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
+  isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
-import {
-  beginWebRuntimeWakeTerminalRespawn,
-  endWebRuntimeWakeTerminalRespawn
-} from '@/runtime/web-runtime-wake-terminal-respawn'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
-import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import {
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -51,130 +23,14 @@ import {
   getFolderWorkspacePathStatusTitle
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
-import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
-import { getConnectionId } from '@/lib/connection-context'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
-
-/** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
- *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
-export type AgentStartedTelemetry = EventProps<'agent_started'>
-
-/** Startup command threaded onto a worktree's first terminal at activation. */
-export type WorktreeStartupPayload = {
-  command: string
-  env?: Record<string, string>
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
-  launchToken?: string
-  launchAgent?: TuiAgent
-  draftPrompt?: string
-  /**
-   * The unsent launch context, for the initial view-mode decision ONLY.
-   *
-   * Deliberately separate from `draftPrompt`, which drives the bracketed paste
-   * in pty-connection: an argv-prefill launch already carries the draft inside
-   * `command`, so reusing `draftPrompt` here would paste it a second time.
-   * Set this on every draft launch; set `draftPrompt` only for paste delivery.
-   */
-  launchDraftText?: string
-  startupCommandDelivery?: StartupCommandDelivery
-  initialAgentStatus?: { agent: TuiAgent; prompt: string }
-  sessionOptions?: Record<string, SessionOptionValue>
-  telemetry?: AgentStartedTelemetry
-}
-
-/**
- * The unsent launch context a startup payload carries, whichever way the agent
- * receives it: argv prefill sets only `launchDraftText`, post-ready paste sets
- * `draftPrompt`. Gating on `draftPrompt` alone silently misses every
- * argv-prefill launch.
- */
-export function resolveStartupLaunchDraftText(
-  startup: Pick<WorktreeStartupPayload, 'draftPrompt' | 'launchDraftText'> | undefined
-): string | undefined {
-  return startup?.draftPrompt ?? startup?.launchDraftText
-}
-
-/** Shared by both tab-creation sites so the draft gate can't drift between them. */
-function draftViewModeProps(draftText: string | undefined): {
-  promptDelivery?: 'draft'
-  launchDraftText?: string
-} {
-  return draftText == null ? {} : { promptDelivery: 'draft', launchDraftText: draftText }
-}
-
-// Why: accept either a main-generated runner script or a plain TaskPage command string, so callers needn't synthesize a runner file.
-export type IssueCommandLaunch =
-  | WorktreeSetupLaunch
-  | { command: string; env?: Record<string, string> }
-
-function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(
-    setup.runnerScriptPath,
-    navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-  )
-}
-
-type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
-  tabsByWorktree: Record<string, { id: string }[]>
-  defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
-  createTab: (
-    worktreeId: string,
-    targetGroupId?: string,
-    shellOverride?: string,
-    options?: {
-      pendingActivationSpawn?: boolean
-      launchAgent?: TuiAgent
-      recordInteraction?: boolean
-      viewMode?: Tab['viewMode']
-      activate?: boolean
-    }
-  ) => { id: string }
-  setActiveTab: (tabId: string) => void
-  setTabCustomTitle: (
-    tabId: string,
-    title: string | null,
-    opts?: { recordInteraction?: boolean }
-  ) => void
-  setTabColor: (tabId: string, color: string | null) => void
-  markDefaultTerminalTabsApplied: (worktreeId: string) => void
-  reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
-  queueTabStartupCommand: (
-    tabId: string,
-    startup: {
-      command: string
-      env?: Record<string, string>
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      draftPrompt?: string
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
-    }
-  ) => void
-  queueTabSetupSplit: (
-    tabId: string,
-    startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
-  ) => void
-  queueTabIssueCommandSplit: (
-    tabId: string,
-    startup: { command: string; env?: Record<string, string> }
-  ) => void
-  queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
-}
-
-type InitialTerminalOptions = {
-  activateCreatedTabs?: boolean
-  backendStartupTerminalSpawned?: boolean
-}
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
+import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -371,8 +227,11 @@ export function activateAndRevealWorktree(
 
   // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {
-    if (opts?.sidebarRevealBehavior) {
-      state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
+    if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
+      state.revealWorktreeInSidebar(worktreeId, {
+        ...(opts.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {}),
+        ...(opts.executionHostId ? { executionHostId: opts.executionHostId } : {})
+      })
     } else {
       state.revealWorktreeInSidebar(worktreeId)
     }
@@ -385,474 +244,24 @@ export function activateAndRevealWorktree(
   return { primaryTabId }
 }
 
-export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
-  const state = useAppStore.getState()
-  const worktree = state.getKnownWorktreeById(worktreeId)
-  if (!worktree) {
-    return
-  }
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktree.id)
-  if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    return
-  }
-
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
-  const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
-  if (hasLivePty) {
-    return
-  }
-
-  const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
-  if (hasMirroredHostTabs) {
-    // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
-    return
-  }
-
-  if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
-    return
-  }
-
-  const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (tabs.length > 0 && renderableTabCount === 0) {
-    return
-  }
-
-  if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
-    return
-  }
-
-  // Why: sleep keeps tab rows but terminal.stop clears host PTYs, so a woke workspace can have tab chrome but no surface.
-  void createWebRuntimeSessionTerminal({
-    worktreeId,
-    environmentId: runtimeEnvironmentId,
-    activate: true,
-    selectWorktree: false
-  }).finally(() => {
-    endWebRuntimeWakeTerminalRespawn(worktreeId)
-  })
-}
-
-export function ensureWorktreeHasInitialTerminal(
-  store: WorktreeActivationStore,
-  worktreeId: string,
-  startup?: WorktreeStartupPayload,
-  setup?: WorktreeSetupLaunch,
-  issueCommand?: IssueCommandLaunch,
-  defaultTabs?: WorktreeDefaultTabsLaunch,
-  opts?: InitialTerminalOptions
-): string | null {
-  const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
-  // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
-  const ownerState =
-    store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
-      ? store
-      : useAppStore.getState()
-  let sequencedStartup = startup
-  let wrappedSetupCommandStr: string | undefined
-
-  if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForLaunch(setup)
-    const sequenced = createSequencedSetupAgentCommands({
-      runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
-      platform,
-      shell: setup.shell
-    })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
-    }
-    wrappedSetupCommandStr = sequenced.setupCommand
-  }
-
-  const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
-  // Why: explicit spawn evidence survives the new-worktree ownership race; active web sessions provide the same authority for later activations.
-  if (
-    backendStartupTerminalSpawned ||
-    isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))
-  ) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      queueSetupAndIssueCommands(
-        store,
-        worktreeId,
-        existingTerminalTabId,
-        setup,
-        issueCommand,
-        wrappedSetupCommandStr,
-        opts
-      )
-      return existingTerminalTabId
-    }
-    if (existingTerminalTabId && backendStartupTerminalSpawned) {
-      return existingTerminalTabId
-    }
-    if (setup || issueCommand) {
-      // Why: runtime-owned worktrees mirror session tabs async, so hold commands for the first mirrored tab instead of dropping them.
-      queueHookCommandsForFirstWorktreeTab({
-        worktreeId,
-        deliver: (state, firstTerminalTabId) =>
-          queueSetupAndIssueCommands(
-            state,
-            worktreeId,
-            firstTerminalTabId,
-            setup,
-            issueCommand,
-            wrappedSetupCommandStr,
-            opts
-          )
-      })
-    }
-    return null
-  }
-
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
-      queueSetupAndIssueCommands(
-        store,
-        worktreeId,
-        existingTerminalTabId,
-        setup,
-        issueCommand,
-        wrappedSetupCommandStr,
-        opts
-      )
-      return existingTerminalTabId
-    }
-    return null
-  }
-
-  const templatedTabId = applyDefaultTerminalTabs(
-    store,
-    worktreeId,
-    sequencedStartup,
-    setup,
-    issueCommand,
-    defaultTabs,
-    wrappedSetupCommandStr,
-    opts
-  )
-  if (templatedTabId) {
-    return templatedTabId
-  }
-
-  // Why: tag this activation-created tab so its PTY spawn doesn't count as activity and reshuffle the Recent sort.
-  // Why: stamp the seeded agent before hooks arrive so native chat and provider chrome can resolve it immediately.
-  const launchAgent =
-    sequencedStartup?.launchAgent ??
-    (sequencedStartup?.telemetry
-      ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
-      : undefined)
-  const terminalTab = store.createTab(worktreeId, undefined, undefined, {
-    pendingActivationSpawn: true,
-    ...(launchAgent
-      ? {
-          launchAgent,
-          ...initialAgentTabViewModeProps(store.settings ?? null, {
-            agent: launchAgent,
-            // Why: argv-prefill launches carry the draft in `command` and set no
-            // draftPrompt, so gating on draftPrompt alone misses them entirely.
-            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionId(worktreeId)
-            )
-          })
-        }
-      : {}),
-    ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
-  })
-  if (opts?.activateCreatedTabs !== false) {
-    store.setActiveTab(terminalTab.id)
-  }
-
-  // Why: queue the seeded startup on the initial pane so the terminal begins in the requested agent session instead of an idle shell.
-  if (sequencedStartup) {
-    if (launchAgent) {
-      seedNativeChatAppliedSessionOptions(
-        terminalTab.id,
-        launchAgent,
-        sequencedStartup.sessionOptions
-      )
-    }
-    store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
-  }
-  queueSetupAndIssueCommands(
-    store,
-    worktreeId,
-    terminalTab.id,
-    setup,
-    issueCommand,
-    wrappedSetupCommandStr,
-    opts
-  )
-
-  return terminalTab.id
-}
-
-function applyDefaultTerminalTabs(
-  store: WorktreeActivationStore,
-  worktreeId: string,
-  startup: WorktreeStartupPayload | undefined,
-  setup: WorktreeSetupLaunch | undefined,
-  issueCommand: IssueCommandLaunch | undefined,
-  defaultTabs: WorktreeDefaultTabsLaunch | undefined,
-  wrappedSetupCommandStr: string | undefined,
-  opts: InitialTerminalOptions | undefined
-): string | null {
-  if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
-    return null
-  }
-  store.markDefaultTerminalTabsApplied(worktreeId)
-  if (defaultTabs.tabs.length === 0) {
-    return null
-  }
-
-  let firstTabId: string | null = null
-  for (const [index, template] of defaultTabs.tabs.entries()) {
-    const isStartupTab = index === 0 && startup !== undefined
-    const launchAgent =
-      isStartupTab && startup?.launchAgent
-        ? startup.launchAgent
-        : isStartupTab && startup?.telemetry
-          ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
-          : undefined
-    const tab = store.createTab(worktreeId, undefined, undefined, {
-      pendingActivationSpawn: true,
-      recordInteraction: false,
-      ...(launchAgent
-        ? {
-            launchAgent,
-            ...initialAgentTabViewModeProps(store.settings ?? null, {
-              agent: launchAgent,
-              ...draftViewModeProps(
-                isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
-              ),
-              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                getConnectionId(worktreeId)
-              )
-            })
-          }
-        : {}),
-      ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
-    })
-    if (index === 0) {
-      firstTabId = tab.id
-    }
-    if (template.title) {
-      store.setTabCustomTitle(tab.id, template.title, { recordInteraction: false })
-    }
-    if (template.color) {
-      store.setTabColor(tab.id, template.color)
-    }
-    const templateCommand = template.command?.trim()
-    if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
-      store.queueTabStartupCommand(tab.id, { command: templateCommand })
-    }
-  }
-
-  if (!firstTabId) {
-    return null
-  }
-  if (opts?.activateCreatedTabs !== false) {
-    store.setActiveTab(firstTabId)
-  }
-  if (startup) {
-    const startupAgent =
-      startup.launchAgent ??
-      (startup.telemetry
-        ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
-        : undefined)
-    if (startupAgent) {
-      seedNativeChatAppliedSessionOptions(firstTabId, startupAgent, startup.sessionOptions)
-    }
-    store.queueTabStartupCommand(firstTabId, startup)
-  }
-  queueSetupAndIssueCommands(
-    store,
-    worktreeId,
-    firstTabId,
-    setup,
-    issueCommand,
-    wrappedSetupCommandStr,
-    opts
-  )
-  return firstTabId
-}
-
-function queueSetupAndIssueCommands(
-  store: WorktreeActivationStore,
-  worktreeId: string,
-  terminalTabId: string,
-  setup: WorktreeSetupLaunch | undefined,
-  issueCommand: IssueCommandLaunch | undefined,
-  wrappedSetupCommandStr: string | undefined,
-  opts: InitialTerminalOptions | undefined
-): void {
-  // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
-  if (setup) {
-    const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
-    const setupCommand = {
-      command:
-        wrappedSetupCommandStr ??
-        setup.command ??
-        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
-      env: setup.envVars
-    }
-    if (mode === 'new-tab') {
-      const setupTab = store.createTab(worktreeId, undefined, undefined, {
-        recordInteraction: false,
-        ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
-      })
-      // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
-      if (opts?.activateCreatedTabs !== false) {
-        store.setActiveTab(terminalTabId)
-      }
-      // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
-      store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
-      store.queueTabStartupCommand(setupTab.id, setupCommand)
-    } else {
-      store.queueTabSetupSplit(terminalTabId, {
-        ...setupCommand,
-        direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
-      })
-    }
-  }
-
-  // Why: issue automation runs in its own split, queued independently from setup so both can start in parallel (separate concerns).
-  if (issueCommand) {
-    // Why: WorktreeSetupLaunch carries a runner-script file to shell out to; the TaskPage variant is already an expanded command string.
-    const queuedIssueCommand =
-      'runnerScriptPath' in issueCommand
-        ? {
-            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath, issueCommand.shell),
-            env: issueCommand.envVars
-          }
-        : { command: issueCommand.command, env: issueCommand.env }
-    store.queueTabIssueCommandSplit(terminalTabId, queuedIssueCommand)
-  }
-}
-
 /**
  * Activates a sidebar workspace id of either shape. Rendered sidebar order mixes
  * plain worktree ids with `folder:` keys, so every caller that navigates by that
  * order must dispatch here — the folder branch is what enforces the path-status
  * gate that blocks a missing/unmounted/disconnected-SSH folder (#10716).
  */
-export function activateAndRevealWorkspace(workspaceId: string): ActivateAndRevealResult | false {
+export function activateAndRevealWorkspace(
+  workspaceId: string,
+  opts?: { executionHostId?: ExecutionHostId }
+): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type === 'folder') {
-    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
   }
-  return activateAndRevealWorktree(workspaceId)
+  return activateAndRevealWorktree(workspaceId, opts)
 }
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.
 setWorktreeNavActivator(activateAndRevealWorkspace)
 
-// Why: page entries replay via setActiveView (not open*Page) so back/forward doesn't mutate previousViewBefore* or duplicate history (see navigateToIndex).
-setWorktreeNavViewActivator((entry) => {
-  if (entry === 'automations') {
-    useAppStore.getState().setActiveView(entry)
-    return
-  }
-  if (entry === 'tasks') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'github') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'github',
-        preselectedRepoId: entry.workItem.repoId,
-        openGitHubWorkItem: entry.workItem,
-        openGitHubSourceContext: entry.sourceContext,
-        openGitHubInitialTab: entry.initialTab,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'gitlab') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'gitlab',
-        preselectedRepoId: entry.workItem.repoId,
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: entry.workItem,
-        openGitLabSourceContext: entry.sourceContext,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'jira') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'jira',
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: entry.issue,
-        openJiraSourceContext: entry.sourceContext
-      }
-    }))
-    return
-  }
-  useAppStore.setState((state) => ({
-    activeView: 'tasks',
-    githubTaskDrawerWorkItem: null,
-    taskPageData: {
-      ...state.taskPageData,
-      taskSource: 'linear',
-      openGitHubWorkItem: undefined,
-      openGitHubSourceContext: undefined,
-      openGitHubInitialTab: undefined,
-      openGitLabWorkItem: undefined,
-      openGitLabSourceContext: undefined,
-      openLinearIssue: entry.issue,
-      openLinearSourceContext: entry.sourceContext,
-      openJiraIssue: undefined,
-      openJiraSourceContext: undefined
-    }
-  }))
-})
+setWorktreeNavViewActivator(applyWorktreeNavViewEntry)

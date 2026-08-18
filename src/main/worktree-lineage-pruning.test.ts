@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo, WorktreeLineage, WorkspaceLineage, WorktreeMeta } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { pruneLineageForMissingRepoWorktrees } from './worktree-lineage-pruning'
 

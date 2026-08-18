@@ -83,6 +83,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
       )}
       terminalWorktreeId="settings-linear-skill-terminal"
       terminalShellOverride={skillSetup.terminalShellOverride}
+      terminalRuntime={skillSetup.terminalRuntime}
       installed={skillSetup.skillInstalled}
       loading={skillSetup.skillLoading}
       error={skillSetup.error}

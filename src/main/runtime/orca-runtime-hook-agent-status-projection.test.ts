@@ -130,6 +130,23 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
+  it('publishes a gated turn end as event metadata, not stored agent status', async () => {
+    const turnCompletedAt = Date.now()
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        interactivePrompt: undefined,
+        turnCompletedAt
+      })
+    ])
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'terminal', turnCompletedAt })
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('turnCompletedAt')
+  })
+
   it('publishes no hook transport identity to clients', async () => {
     const agentStatus = await projectAgentStatus([
       hookRow({ launchToken: 'lt-secret', promptInteractionKey: 'turn-1' })
@@ -228,6 +245,65 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).toEqual(
       expect.objectContaining({ state: 'waiting', interactivePrompt: ASK_PROMPT })
     )
+  })
+
+  it('does not carry a shell-obscured question into the next working interval', async () => {
+    const rows = [hookRow()]
+    const runtime = await createRuntimeWithHookRows(rows)
+    const questionAt = rows[0]!.receivedAt
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(questionAt + 1)
+    try {
+      const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      const initialTab = initial.tabs[0]
+      if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
+        throw new Error('expected a live terminal handle')
+      }
+      await runtime.renameTerminal(initialTab.terminal, 'bash')
+      observePaneTitle(runtime, 'bash')
+      let result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      let tab = result.tabs[0]
+      expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
+        expect.objectContaining({ state: 'waiting', interactivePrompt: ASK_PROMPT })
+      )
+
+      dateNow.mockReturnValue(questionAt + 2)
+      observePaneTitle(runtime, '⠋ Claude')
+      result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      tab = result.tabs[0]
+      expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
+        expect.objectContaining({ state: 'working', prompt: '' })
+      )
+      expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('interactivePrompt')
+    } finally {
+      dateNow.mockRestore()
+    }
+  })
+
+  it('does not carry a hook question across a provider generation reset', async () => {
+    const runtime = await createRuntimeWithHookRows([hookRow()])
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { title: string | null }>
+      resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
+    }
+    internals.ptysById.get(PTY_ID)!.title = 'bash'
+    internals.resetTrackedTerminalStateForProviderGeneration(PTY_ID)
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('interactivePrompt')
+  })
+
+  it('does not carry a hook question across an identity-only owner title', async () => {
+    const runtime = await createRuntimeWithHookRows([hookRow()])
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { title: string | null }>
+    }
+    internals.ptysById.get(PTY_ID)!.title = 'bash'
+    observePaneTitle(runtime, 'Cursor Agent')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
   // The title path is refreshed live; an older hook `done` must not erase it.

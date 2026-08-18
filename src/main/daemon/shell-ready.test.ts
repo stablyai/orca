@@ -4,11 +4,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
+import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
+import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import {
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
+import { HeadlessEmulator } from './headless-emulator'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
   return import('./shell-ready')
+}
+
+async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
+  vi.resetModules()
+  return import('./daemon-bash-shell-ready-rcfile')
 }
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
@@ -16,8 +29,8 @@ const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version'])
 const itWithBash = hasBash ? it : it.skip
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
 const itWithZsh = hasZsh ? it : it.skip
-const hasFish = process.platform !== 'win32' && spawnSync('fish', ['--version']).status === 0
-const itWithFish = hasFish ? it : it.skip
+const FISH = resolveFishBinary()
+const itWithFish = FISH.available ? it : it.skip
 
 const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
 
@@ -166,6 +179,11 @@ function expectFinalZdotdirRestoreContext(content: string) {
 }
 
 describePosix('daemon shell-ready launch config', () => {
+  // Always runs, so the CI lane cannot report green with every live fish test skipped.
+  it('has the fish the live tests need when CI requires one', () => {
+    expect(fishRequirementViolation(FISH)).toBeNull()
+  })
+
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined
   let userDataPath: string
@@ -252,10 +270,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })
@@ -290,6 +308,8 @@ describePosix('daemon shell-ready launch config', () => {
           }
         })
         let output = ''
+        let scannedOutput = ''
+        const startupScanState = createShellStartupOutputScanState()
         let commandWritten = false
         let erasureProbeWritten = false
         let queryCarry = ''
@@ -315,6 +335,7 @@ describePosix('daemon shell-ready launch config', () => {
         }, 50)
         proc.onData((chunk) => {
           output += chunk
+          scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
           // Why: fish stalls its first prompt 10s waiting on these and re-queries
           // each prompt, so answer every occurrence — an unanswered query makes
           // fish swallow the post-marker command as its reply.
@@ -344,9 +365,15 @@ describePosix('daemon shell-ready launch config', () => {
         clearTimeout(deadline)
         clearInterval(sentinelPoll)
         proc.kill()
+        scannedOutput += drainShellStartupOutputScanState(startupScanState)
 
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+        expect(scannedOutput).toBe(output.replace(SHELL_READY_MARKER_OUTPUT, ''))
+        const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+        expect(rendered.writeSync(scannedOutput)).toBe(true)
+        expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+        rendered.dispose()
         expect(existsSync(sentinel)).toBe(true)
         // Why: asserts the erase directly rather than inferring it from the marker
         // count, which only holds once enough prompts have been drawn to expose it.
@@ -456,6 +483,7 @@ describePosix('daemon shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -625,6 +653,12 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
+    }
   })
 
   // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
@@ -638,14 +672,13 @@ describePosix('daemon shell-ready launch config', () => {
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
-    // precmd is prepended (captures $? first), epilogue appended last, so a framework needing last position stays between them.
-    expect(bashRc).toContain(
-      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}};__orca_osc133_epilogue"'
-    )
+    expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
+    expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
     // DEBUG is armed after PROMPT_COMMAND setup so rcfile commands aren't seen as foreground; lastIndexOf skips the epilogue's re-arm.
     expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('PROMPT_COMMAND="__orca_osc133_precmd')
+      bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
@@ -654,7 +687,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'runs the daemon bash wrapper without fake C/D markers before the first prompt',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
 
       const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
@@ -665,7 +698,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'preserves prompt hooks and existing DEBUG traps without fake command markers',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -685,7 +718,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
@@ -711,7 +744,7 @@ describePosix('daemon shell-ready launch config', () => {
   itWithBash(
     'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
     async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
@@ -751,15 +784,16 @@ describePosix('daemon shell-ready launch config', () => {
   )
 
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
-    const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
     writeFileSync(
       join(userDataPath, '.bash_profile'),
-      'PROMPT_COMMAND=(\'AFTER_ARRAY_PROMPT=1; printf "PROMPT_ARRAY\\n"\')\n'
+      'PROMPT_COMMAND=(\'printf "PROMPT_ARRAY_A\\n"\' \'printf "PROMPT_ARRAY_B\\n";  \')\n'
     )
 
     const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
-    expect(output).toContain('PROMPT_ARRAY')
+    expect(output.split('PROMPT_ARRAY_A')).toHaveLength(4)
+    expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
     expectBashOsc133Lifecycle(output)
   })
 
