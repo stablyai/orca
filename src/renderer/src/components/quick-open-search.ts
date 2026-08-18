@@ -1,5 +1,6 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareFileNames } from '../../../shared/file-name-sort'
+import { fuzzyMatchIndexedFile, prepareQuickOpenQuery } from './quick-open-fuzzy-match'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
@@ -8,6 +9,12 @@ export type QuickOpenIndexedFile = {
   path: string
   lowerPath: string
   lowerFilename: string
+  /**
+   * Per lowerPath index: 1 when the char is a word start (path start, after a
+   * separator, or identifier transition). Built from the original-case path
+   * so ProductDetail stays two words after lowercasing.
+   */
+  wordStarts: Uint8Array
   inputIndex: number
 }
 
@@ -18,12 +25,15 @@ export type QuickOpenSearchResult = {
 
 export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexedFile[] {
   return files.map((path, inputIndex) => {
+    // Why: Quick Open presents slash-normalized paths even on Windows.
     const searchPath = path.replace(/\\/g, '/')
     const lastSlash = searchPath.lastIndexOf('/')
+    const { lowerPath, wordStarts } = buildSearchPathIndex(searchPath)
     return {
       path,
-      lowerPath: searchPath.toLowerCase(),
+      lowerPath,
       lowerFilename: searchPath.slice(lastSlash + 1).toLowerCase(),
+      wordStarts,
       inputIndex
     }
   })
@@ -65,8 +75,9 @@ export function rankQuickOpenFiles(
   }
 
   // Why: Quick Open presents slash-normalized paths even on Windows; users
-  // still naturally type backslashes in path queries.
-  const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase()
+  // still naturally type backslashes in path queries. Collapse internal
+  // whitespace so "Product  Detail" behaves like "Product Detail".
+  const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase().replace(/\s+/g, ' ')
   if (!normalizedQuery) {
     const results: QuickOpenRankedResult[] = []
     for (const file of files) {
@@ -74,11 +85,12 @@ export function rankQuickOpenFiles(
     }
     return finalizeResults(results)
   }
+  const preparedQuery = prepareQuickOpenQuery(normalizedQuery)
 
   const results: QuickOpenRankedResult[] = []
   for (const file of files) {
-    const score = fuzzyMatchIndexedFile(normalizedQuery, file)
-    if (score === -1) {
+    const score = fuzzyMatchIndexedFile(preparedQuery, file)
+    if (score === null) {
       continue
     }
 
@@ -88,39 +100,63 @@ export function rankQuickOpenFiles(
   return finalizeResults(results)
 }
 
-function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): number {
-  let qi = 0
-  let score = 0
-  let lastMatchIdx = -1
-
-  for (let ti = 0; ti < file.lowerPath.length && qi < query.length; ti++) {
-    if (file.lowerPath[ti] === query[qi]) {
-      // Preserve the existing Quick Open score semantics while avoiding
-      // repeated lowercase work for each candidate on every keystroke.
-      const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
-      score += gap
-      if (
-        ti > 0 &&
-        (file.lowerPath[ti - 1] === '/' ||
-          file.lowerPath[ti - 1] === '.' ||
-          file.lowerPath[ti - 1] === '-')
-      ) {
-        score -= 5
-      }
-      lastMatchIdx = ti
-      qi++
+/**
+ * Word starts from the original-case slash-normalized path so identifier
+ * boundaries survive lowercasing in lowerPath.
+ */
+function buildSearchPathIndex(searchPath: string): {
+  lowerPath: string
+  wordStarts: Uint8Array
+} {
+  const lowerPath = searchPath.toLowerCase()
+  const starts = new Uint8Array(lowerPath.length)
+  let lowerIndex = 0
+  for (let i = 0; i < searchPath.length; i++) {
+    // Why: this loop touches every character in repositories that can exceed
+    // 100k paths; read each code unit once instead of repeatedly decoding it.
+    const currCode = searchPath.charCodeAt(i)
+    const prevCode = i > 0 ? searchPath.charCodeAt(i - 1) : -1
+    const nextCode = i + 1 < searchPath.length ? searchPath.charCodeAt(i + 1) : -1
+    if (
+      i === 0 ||
+      isPathSeparatorCode(prevCode) ||
+      (isAsciiLetterCode(prevCode) && isAsciiDigitCode(currCode)) ||
+      (isAsciiDigitCode(prevCode) && isAsciiLetterCode(currCode)) ||
+      (isAsciiLowerOrDigitCode(prevCode) && isAsciiUpperCode(currCode)) ||
+      (isAsciiUpperCode(prevCode) && isAsciiUpperCode(currCode) && isAsciiLowerCode(nextCode))
+    ) {
+      starts[lowerIndex] = 1
     }
+    // Why: Unicode lowercasing can expand one source character, so boundary
+    // offsets must advance in lowerPath's coordinate space. ASCII skips the
+    // per-character lowercase allocation; 100k-file indexing is ~2x faster.
+    lowerIndex += currCode < 128 ? 1 : searchPath[i].toLowerCase().length
   }
+  return { lowerPath, wordStarts: starts }
+}
 
-  if (qi < query.length) {
-    return -1
-  }
+function isAsciiLowerOrDigitCode(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 97 && code <= 122)
+}
 
-  if (file.lowerFilename.includes(query)) {
-    score -= 100
-  }
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 48 && code <= 57
+}
 
-  return score
+function isAsciiLetterCode(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+function isAsciiUpperCode(code: number): boolean {
+  return code >= 65 && code <= 90
+}
+
+function isAsciiLowerCode(code: number): boolean {
+  return code >= 97 && code <= 122
+}
+
+function isPathSeparatorCode(code: number): boolean {
+  return code === 47 || code === 95 || code === 45 || code === 46 || code === 32
 }
 
 type QuickOpenRankedResult = QuickOpenSearchResult & {
