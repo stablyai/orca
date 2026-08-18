@@ -2664,7 +2664,8 @@ function normalizeClaudeSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop' | 'TeammateIdle',
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  source: AgentHookSource = 'claude'
 ): ParsedAgentStatusPayload | null {
   const lifecycleField = eventName === 'TeammateIdle' ? 'teammate_name' : 'agent_id'
   const lifecycleId = readString(hookPayload, lifecycleField)
@@ -2743,7 +2744,7 @@ function normalizeClaudeSubagentLifecycleEvent(
     // Why: a restored-only ending proves no lead boundary, and an unmatched restored sibling proves no current liveness; persist the roster transition without publishing fresh work or completion.
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
   }
-  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, source, {
     workingChildEvidence,
     endedChildWork,
     endedRuntimeChildWork
@@ -2885,6 +2886,7 @@ function buildClaudeCachedLeadStatusPayload(
   eventName: unknown,
   paneKey: string,
   hookPayload: Record<string, unknown>,
+  source: AgentHookSource = 'claude',
   evidence: {
     workingChildEvidence?: boolean
     endedChildWork?: boolean
@@ -2904,7 +2906,7 @@ function buildClaudeCachedLeadStatusPayload(
       return null
     }
   }
-  return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
+  return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, source, {
     stateName: resolveClaudePaneState(state, paneKey, {
       state: leadState,
       interrupted: lead?.interrupted
@@ -2921,7 +2923,8 @@ function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  source: AgentHookSource = 'claude'
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -2929,7 +2932,7 @@ function normalizeClaudeEvent(
     eventName === 'SubagentStop' ||
     eventName === 'TeammateIdle'
   ) {
-    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload, source)
   }
   if (eventName === 'SessionStart') {
     // Why: SessionStart is the only signal a resumed session emits before its first prompt
@@ -2954,7 +2957,7 @@ function normalizeClaudeEvent(
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
-    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, source, {
       stateName: 'done',
       updateToolSnapshot: true,
       sessionBoundary: true
@@ -3034,7 +3037,7 @@ function normalizeClaudeEvent(
     eventToolUseId !== undefined &&
     eventToolUseId !== previousLead.waitingToolUseId
   if (isParallelSiblingCompletionDuringQuestion) {
-    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, source)
   }
 
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
@@ -3058,7 +3061,7 @@ function normalizeClaudeEvent(
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, source, {
         workingChildEvidence: true
       })
     }
@@ -3068,7 +3071,7 @@ function normalizeClaudeEvent(
       eventToolUseId !== undefined &&
       eventToolUseId !== lead.waitingToolUseId
     if (isParallelSiblingCompletionDuringChildQuestion) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, source, {
         workingChildEvidence: true
       })
     }
@@ -3076,7 +3079,7 @@ function normalizeClaudeEvent(
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
-    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, source, {
       stateName: resolveClaudePaneState(state, paneKey, restored),
       updateToolSnapshot: true,
       interrupted: restored.interrupted,
@@ -3086,7 +3089,7 @@ function normalizeClaudeEvent(
 
   // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
   if (eventAgentId && !isWaitingInducing) {
-    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, source, {
       workingChildEvidence: claudeRosterHasRuntimeWorkingSubagent(
         state.claudeSubagentRosterByPaneKey.get(paneKey)
       )
@@ -3163,7 +3166,7 @@ function normalizeClaudeEvent(
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
   }
 
-  return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+  return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, source, {
     stateName: effectiveState,
     updateToolSnapshot: true,
     interrupted,
@@ -3177,6 +3180,7 @@ function buildClaudeStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
+  source: AgentHookSource,
   options: {
     stateName: AgentStatusState
     updateToolSnapshot: boolean
@@ -3187,8 +3191,8 @@ function buildClaudeStatusPayload(
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
   const snapshot = options.updateToolSnapshot
-    ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
-        resetOnNewTurn: isNewTurnEvent('claude', eventName)
+    ? resolveToolState(state, paneKey, extractToolFields(source, eventName, hookPayload), {
+        resetOnNewTurn: isNewTurnEvent(source, eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
@@ -3198,9 +3202,9 @@ function buildClaudeStatusPayload(
     state: options.stateName,
     // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
     prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
+      resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent(source, eventName)
     }),
-    agentType: 'claude',
+    agentType: source,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
@@ -4514,7 +4518,14 @@ export function normalizeHookPayload(
       break
     case 'qoder':
       // Why: qoder emits Claude-compatible hooks (PreToolUse/PostToolUse/SessionStart/UserPromptSubmit/Stop).
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeClaudeEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord,
+        'qoder'
+      )
       break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {

@@ -95,7 +95,7 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   }
   // Why: qodercli's versioned binary (`qodercli-<version>`) is what node-pty can report when launched without the `qodercli` symlink.
   if (normalized.startsWith('qodercli-')) {
-    return PROCESS_TO_AGENT.get('qoder')
+    return PROCESS_TO_AGENT.get('qodercli')
   }
   return undefined
 }

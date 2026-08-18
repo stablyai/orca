@@ -3,6 +3,7 @@ import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ipc/ssh'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import path from 'node:path'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
@@ -13,9 +14,20 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   connectionId: string
   workspacePath: string
 }): Promise<void> {
-  const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
-  if (!home || !fsProvider) {
+  if (!fsProvider) {
+    return
+  }
+
+  // Why: qoder only needs the workspace filesystem, not the user home.
+  if (args.preset === 'qoder') {
+    const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
+    await markRemoteQoderWorkspaceTrusted(fsProvider, workspacePath)
+    return
+  }
+
+  const home = await resolveRemoteHome(args.connectionId)
+  if (!home) {
     return
   }
 
@@ -26,8 +38,6 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
-  } else if (args.preset === 'qoder') {
-    await markRemoteQoderWorkspaceTrusted(fsProvider, workspacePath)
   }
 }
 
@@ -155,7 +165,13 @@ async function markRemoteQoderWorkspaceTrusted(
   fsProvider: IFilesystemProvider,
   workspacePath: string
 ): Promise<void> {
-  const trustPath = `${workspacePath.replace(/\/$/, '')}/.trusted`
+  const trustPath = path.posix.join(workspacePath.replace(/\/$/, ''), '.trusted')
+  try {
+    await fsProvider.stat(trustPath)
+    return // already exists
+  } catch {
+    // doesn't exist, proceed
+  }
   try {
     await fsProvider.writeFile(trustPath, '')
   } catch {

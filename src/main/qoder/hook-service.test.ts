@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('os', async (importOriginal) => {
+vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
   return {
     ...actual,
@@ -133,18 +133,27 @@ describe('QoderHookService', () => {
   it('remove() strips managed hooks and leaves user hooks untouched', () => {
     const configDir = join(homeDir, '.qoder')
     mkdirSync(configDir, { recursive: true })
+    // Why: self-contained fixture so this test passes on its own, not just after install().
+    writeFileSync(
+      join(configDir, 'settings.json'),
+      JSON.stringify(
+        {
+          hooks: {
+            UserPromptSubmit: [
+              {
+                hooks: [{ type: 'command', command: 'echo user-prompt' }]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    )
     const service = new QoderHookService()
     service.install()
     const configWithManaged = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))
     expect(configWithManaged.hooks.PreToolUse).toHaveLength(1)
-
-    // Add a user hook back in, then remove managed hooks.
-    const config = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))
-    config.hooks.UserPromptSubmit = [
-      { hooks: [{ type: 'command', command: 'echo user-prompt' }] },
-      ...config.hooks.UserPromptSubmit
-    ]
-    writeFileSync(join(configDir, 'settings.json'), JSON.stringify(config, null, 2))
 
     const status = service.remove()
     const after = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))
