@@ -3,7 +3,10 @@ import { buildAutomationWorkspaceProvenance } from '../../shared/automation-work
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+type HeadlessAutomationRunForWorkspace = Pick<
+  AutomationRun,
+  'id' | 'title' | 'scheduledFor' | 'sourceContext' | 'linkedTask'
+>
 type RuntimeCreateManagedWorktreeArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
 
 export function buildHeadlessAutomationWorkspaceName(
@@ -32,6 +35,10 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   repo: Repo
   createdAt?: number
 }): RuntimeCreateManagedWorktreeArgs {
+  const linkedTask = Object.hasOwn(run, 'linkedTask') ? run.linkedTask : automation.linkedTask
+  const sourceContext = Object.hasOwn(run, 'sourceContext')
+    ? run.sourceContext
+    : automation.sourceContext
   return {
     repoSelector: repo.id,
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
@@ -41,6 +48,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,
     startupPrompt: automation.prompt,
+    linkedWorkItem: linkedTask ?? undefined,
+    linkedTaskSourceContext: linkedTask ? (sourceContext ?? undefined) : undefined,
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

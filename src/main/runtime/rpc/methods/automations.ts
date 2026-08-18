@@ -6,6 +6,8 @@ import {
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
+import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { defineMethod, type RpcMethod } from '../core'
 import {
@@ -79,6 +81,27 @@ const TaskSourceContext = z
   .optional()
   .nullable()
 
+const LinkedTask = WorkspaceLinkedItemSchema.optional().nullable()
+
+function assertLinkedTaskSourceMatch(
+  value: {
+    linkedTask?: z.infer<typeof WorkspaceLinkedItemSchema> | null
+    sourceContext?: z.infer<typeof TaskSourceContext> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    value.linkedTask &&
+    value.sourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(value.linkedTask, value.sourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked task and source context identities must match'
+    })
+  }
+}
+
 const WorkspaceRunContext = z
   .object({
     kind: z.literal('workspace-run'),
@@ -99,46 +122,52 @@ const AutomationRuns = z.object({
   automationId: OptionalString
 })
 
-const AutomationCreate = z.object({
-  name: requiredString('Missing automation name'),
-  prompt: requiredString('Missing automation prompt'),
-  precheck: AutomationPrecheck,
-  agentId: TuiAgent,
-  runContext: WorkspaceRunContext,
-  sourceContext: TaskSourceContext,
-  repo: OptionalString,
-  workspace: OptionalString,
-  workspaceMode: AutomationWorkspaceMode,
-  baseBranch: OptionalPlainString,
-  setupDecision: SetupDecision,
-  reuseSession: OptionalBoolean,
-  timezone: OptionalString,
-  rrule: AutomationSchedule,
-  dtstart: requiredNumber('Missing trigger start time'),
-  enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
-})
+const AutomationCreate = z
+  .object({
+    name: requiredString('Missing automation name'),
+    prompt: requiredString('Missing automation prompt'),
+    precheck: AutomationPrecheck,
+    agentId: TuiAgent,
+    runContext: WorkspaceRunContext,
+    sourceContext: TaskSourceContext,
+    linkedTask: LinkedTask,
+    repo: OptionalString,
+    workspace: OptionalString,
+    workspaceMode: AutomationWorkspaceMode,
+    baseBranch: OptionalPlainString,
+    setupDecision: SetupDecision,
+    reuseSession: OptionalBoolean,
+    timezone: OptionalString,
+    rrule: AutomationSchedule,
+    dtstart: requiredNumber('Missing trigger start time'),
+    enabled: OptionalBoolean,
+    missedRunGraceMinutes: OptionalPositiveInt
+  })
+  .superRefine(assertLinkedTaskSourceMatch)
 
-const AutomationUpdateFields = z.object({
-  name: OptionalString,
-  prompt: OptionalString,
-  precheck: AutomationPrecheck,
-  agentId: TuiAgent.optional(),
-  runContext: WorkspaceRunContext,
-  sourceContext: TaskSourceContext,
-  repo: OptionalString,
-  workspace: OptionalString,
-  workspaceMode: AutomationWorkspaceMode,
-  // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
-  baseBranch: OptionalNullablePlainString,
-  setupDecision: SetupDecision,
-  reuseSession: OptionalBoolean,
-  timezone: OptionalString,
-  rrule: AutomationSchedule.optional(),
-  dtstart: requiredNumber('Missing trigger start time').optional(),
-  enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
-})
+const AutomationUpdateFields = z
+  .object({
+    name: OptionalString,
+    prompt: OptionalString,
+    precheck: AutomationPrecheck,
+    agentId: TuiAgent.optional(),
+    runContext: WorkspaceRunContext,
+    sourceContext: TaskSourceContext,
+    linkedTask: LinkedTask,
+    repo: OptionalString,
+    workspace: OptionalString,
+    workspaceMode: AutomationWorkspaceMode,
+    // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
+    baseBranch: OptionalNullablePlainString,
+    setupDecision: SetupDecision,
+    reuseSession: OptionalBoolean,
+    timezone: OptionalString,
+    rrule: AutomationSchedule.optional(),
+    dtstart: requiredNumber('Missing trigger start time').optional(),
+    enabled: OptionalBoolean,
+    missedRunGraceMinutes: OptionalPositiveInt
+  })
+  .superRefine(assertLinkedTaskSourceMatch)
 
 const AutomationUpdate = z.object({
   id: requiredString('Missing automation id'),

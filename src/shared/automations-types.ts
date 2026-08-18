@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { WorkspaceLinkedItem } from './worktree/types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -103,6 +104,7 @@ export type Automation = {
   /** Why: task/provider data can come from a different host/account than the
    *  workspace run target, so automations persist it separately. */
   sourceContext?: TaskSourceContext | null
+  linkedTask?: WorkspaceLinkedItem | null
   /** @deprecated Legacy repo-id compatibility field. New code should persist
    *  runContext and use getAutomationRunRepoId() for fallback reads. */
   projectId: string
@@ -131,6 +133,7 @@ export type AutomationRun = {
   automationId: string
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
+  linkedTask?: WorkspaceLinkedItem | null
   title: string
   scheduledFor: number
   status: AutomationRunStatus
@@ -165,6 +168,7 @@ export type AutomationCreateInput = {
   agentId: TuiAgent
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
+  linkedTask?: WorkspaceLinkedItem | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
    *  automations and clients. Pair it with runContext for new writes. */
   projectId: string
@@ -189,6 +193,7 @@ export type AutomationUpdateInput = Partial<
     | 'agentId'
     | 'runContext'
     | 'sourceContext'
+    | 'linkedTask'
     | 'projectId'
     | 'workspaceMode'
     | 'workspaceId'

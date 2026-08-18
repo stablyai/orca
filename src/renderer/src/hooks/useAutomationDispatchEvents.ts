@@ -250,6 +250,12 @@ export function useAutomationDispatchEvents(): void {
           }
 
           const automationWorkspaceCreateRequestId = createBrowserUuid()
+          const linkedTask = Object.hasOwn(run, 'linkedTask')
+            ? run.linkedTask
+            : automation.linkedTask
+          const linkedTaskSourceContext = Object.hasOwn(run, 'sourceContext')
+            ? run.sourceContext
+            : automation.sourceContext
           const createResult =
             automation.workspaceMode === 'new_per_run'
               ? await useAppStore.getState().createWorktree(
@@ -286,7 +292,9 @@ export function useAutomationDispatchEvents(): void {
                       automationRunId: run.id,
                       dispatchToken,
                       createRequestId: automationWorkspaceCreateRequestId
-                    }
+                    },
+                    linkedWorkItem: linkedTask ?? null,
+                    linkedTaskSourceContext: linkedTask ? (linkedTaskSourceContext ?? null) : null
                   }
                 )
               : null

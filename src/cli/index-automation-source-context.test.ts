@@ -104,6 +104,59 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('passes an exact linked task separately from its source context', async () => {
+    const sourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'github:aprudkin/aimem',
+      hostId: 'local',
+      providerIdentity: { provider: 'github', owner: 'aprudkin', repo: 'aimem' }
+    }
+    const linkedTask = {
+      provider: 'github',
+      type: 'issue',
+      number: 814,
+      title: 'Disposable routing probe',
+      url: 'https://github.com/aprudkin/aimem/issues/814'
+    }
+    queueFixtures(
+      callMock,
+      okFixture('req_automation_create', {
+        automation: { id: 'auto-1', name: 'Task review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'Task review',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Resolve the linked task',
+        '--provider',
+        'codex',
+        '--repo',
+        'id:repo-target',
+        '--source-context',
+        JSON.stringify(sourceContext),
+        '--linked-task',
+        JSON.stringify(linkedTask),
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'automation.create',
+      expect.objectContaining({ sourceContext: expect.objectContaining(sourceContext), linkedTask })
+    )
+  })
+
   it('clears automation source context on edit with null', async () => {
     queueFixtures(
       callMock,

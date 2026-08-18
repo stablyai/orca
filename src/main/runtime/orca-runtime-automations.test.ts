@@ -71,6 +71,34 @@ const existingAutomation = {
 } satisfies Automation
 
 describe('OrcaRuntimeService automation methods', () => {
+  it('forwards linked task create, edit, and clear mutations to persistence', async () => {
+    const linkedTask = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: 814,
+      title: 'Disposable routing probe',
+      url: 'https://github.com/aprudkin/aimem/issues/814'
+    }
+    const store = makeStore([existingAutomation])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.createAutomation({
+      name: 'Task review',
+      prompt: 'Resolve task',
+      agentId: 'codex',
+      repo: 'repo-1',
+      linkedTask,
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    })
+    await runtime.updateAutomation('auto-1', { linkedTask })
+    await runtime.updateAutomation('auto-1', { linkedTask: null })
+
+    expect(store.createAutomation).toHaveBeenCalledWith(expect.objectContaining({ linkedTask }))
+    expect(store.updateAutomation).toHaveBeenNthCalledWith(1, 'auto-1', { linkedTask })
+    expect(store.updateAutomation).toHaveBeenNthCalledWith(2, 'auto-1', { linkedTask: null })
+  })
+
   it('creates repo-scoped automations through the shared store', async () => {
     const store = makeStore()
     const runtime = new OrcaRuntimeService(store as never)

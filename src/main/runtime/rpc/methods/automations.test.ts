@@ -133,6 +133,41 @@ describe('automation RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 
+  it('rejects a linked task whose provider differs from its source context', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Mismatched task',
+        prompt: 'Run',
+        agentId: 'codex',
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:aprudkin/aimem',
+          hostId: 'local'
+        },
+        linkedTask: {
+          provider: 'gitlab',
+          type: 'issue',
+          number: 814,
+          title: 'Wrong provider',
+          url: 'https://gitlab.example.test/group/project/-/issues/814'
+        },
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.createAutomation).not.toHaveBeenCalled()
+  })
+
   it('preserves null baseBranch update values through the RPC boundary', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
