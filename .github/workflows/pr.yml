@@ -539,6 +539,8 @@ jobs:
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
+          src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
