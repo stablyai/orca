@@ -184,27 +184,33 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   } else if (aValue.kind === 'users' && bValue.kind === 'users') {
     const aLogin = aValue.users[0]?.login ?? ''
     const bLogin = bValue.users[0]?.login ?? ''
+    // Why: return before the DESC flip below so an empty list sorts last in both
+    // directions, matching the missing-value case above. A field can hold an empty
+    // list once every user drops out of normalization, and the two ways of being
+    // unset must not land at opposite ends of the same sort.
     if (!aLogin && !bLogin) {
-      cmp = 0
-    } else if (!aLogin) {
-      cmp = 1
-    } else if (!bLogin) {
-      cmp = -1
-    } else {
-      cmp = aLogin.localeCompare(bLogin)
+      return 0
     }
+    if (!aLogin) {
+      return 1
+    }
+    if (!bLogin) {
+      return -1
+    }
+    cmp = aLogin.localeCompare(bLogin)
   } else if (aValue.kind === 'labels' && bValue.kind === 'labels') {
     const aName = aValue.labels[0]?.name ?? ''
     const bName = bValue.labels[0]?.name ?? ''
     if (!aName && !bName) {
-      cmp = 0
-    } else if (!aName) {
-      cmp = 1
-    } else if (!bName) {
-      cmp = -1
-    } else {
-      cmp = aName.localeCompare(bName)
+      return 0
     }
+    if (!aName) {
+      return 1
+    }
+    if (!bName) {
+      return -1
+    }
+    cmp = aName.localeCompare(bName)
   } else {
     // Why: unknown sort-field kind — ignore this sort field and fall through
     // to tie-breaks (and eventually row.position).
