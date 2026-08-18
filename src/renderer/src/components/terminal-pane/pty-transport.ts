@@ -44,6 +44,8 @@ import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
 } from '../../../../shared/agent-status-osc'
+import { tryMakePaneKey } from '../../../../shared/stable-pane-id'
+import { getPaneAgentStatusOscNonce } from './pane-agent-status-osc-nonce'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   registerPtySideEffectPendingGauge,
@@ -97,6 +99,8 @@ type PtyOutputProcessorOptions = Pick<
 > & {
   /** Seed for mid-session processors (parked-tab watchers): pane's last title, so an agent finishing mid-stream still yields a working→idle transition. */
   initialAgentTitle?: string
+  /** Pane whose agent-status nonce gates OSC 9999. Omitted for panes with no pane identity. */
+  agentStatusPaneKey?: string
 }
 
 type ProcessPtyOutputOptions = {
@@ -149,7 +153,8 @@ export function createPtyOutputProcessor({
   onAgentBecameWorking,
   onAgentExited,
   onAgentStatus,
-  initialAgentTitle
+  initialAgentTitle,
+  agentStatusPaneKey
 }: PtyOutputProcessorOptions): {
   processData: (
     data: string,
@@ -166,8 +171,12 @@ export function createPtyOutputProcessor({
   disposePendingSideEffectGauge: () => void
 } {
   const bellDetector = createBellDetector()
+  const agentStatusOscGate = {
+    getExpectedNonce: (): string | null =>
+      agentStatusPaneKey ? getPaneAgentStatusOscNonce(agentStatusPaneKey) : null
+  }
   // Why let: a model-restore marker drops bytes; recreating the parser stops a partial OSC-9999 carry from swallowing the next chunk's head.
-  let processAgentStatusChunk = createAgentStatusOscProcessor()
+  let processAgentStatusChunk = createAgentStatusOscProcessor(agentStatusOscGate)
   // Why: seed emitted-title memory and the agent tracker so a mid-session processor behaves as if it had observed the pane's last live title.
   let lastEmittedTitle: string | null =
     initialAgentTitle !== undefined ? normalizeTerminalTitle(initialAgentTitle) : null
@@ -547,7 +556,7 @@ export function createPtyOutputProcessor({
     flushPendingSideEffects,
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
-      processAgentStatusChunk = createAgentStatusOscProcessor()
+      processAgentStatusChunk = createAgentStatusOscProcessor(agentStatusOscGate)
     },
     disposePendingSideEffectGauge
   }
@@ -600,6 +609,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     }
   })
+  // Why: the gate's pane identity must be the same paneKey whose env carries the
+  // nonce; synthetic panes (floating/setup terminals) have none and stay ungated.
+  const agentStatusPaneKey = tryMakePaneKey(tabId, leafId)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -610,7 +622,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
     onAgentBecameWorking,
     onAgentExited,
-    onAgentStatus
+    onAgentStatus,
+    // Why: the same env that stamps the pane's nonce — using it keeps the gate's
+    // pane identity in lock-step with what this PTY's process actually inherited.
+    ...(agentStatusPaneKey ? { agentStatusPaneKey } : {})
   })
   // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<

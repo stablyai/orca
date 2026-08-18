@@ -8,6 +8,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
+import { AGENT_STATUS_OSC_NONCE_ENV_VAR } from '../../shared/agent-status-osc-nonce'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -78,6 +79,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_USER_DATA_PATH/p',
     'ORCA_CLI_COMMAND/u',
     'ORCA_PANE_KEY/u',
+    // Why: without this the guest process cannot attest its OSC 9999 payloads,
+    // and every WSL pane would report as unattested.
+    `${AGENT_STATUS_OSC_NONCE_ENV_VAR}/u`,
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',

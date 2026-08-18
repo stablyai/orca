@@ -10,6 +10,8 @@ import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { AGENT_STATUS_OSC_NONCE_ENV_VAR } from '../../../shared/agent-status-osc-nonce'
+import { getOrCreatePaneAgentStatusOscNonce } from '@/components/terminal-pane/pane-agent-status-osc-nonce'
 import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
@@ -54,9 +56,11 @@ function buildPaneEnv(
   leafId: string,
   env: Record<string, string> | undefined
 ): Record<string, string> {
+  const paneKey = makePaneKey(tabId, leafId)
   return {
     ...env,
-    ORCA_PANE_KEY: makePaneKey(tabId, leafId),
+    ORCA_PANE_KEY: paneKey,
+    [AGENT_STATUS_OSC_NONCE_ENV_VAR]: getOrCreatePaneAgentStatusOscNonce(paneKey),
     ORCA_TAB_ID: tabId,
     ORCA_WORKTREE_ID: worktreeId
   }

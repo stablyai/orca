@@ -10,6 +10,8 @@
  */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { AGENT_STATUS_OSC_NONCE_ENV_VAR } from '../../../../shared/agent-status-osc-nonce'
+import { getOrCreatePaneAgentStatusOscNonce } from './pane-agent-status-osc-nonce'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
@@ -156,6 +158,9 @@ function buildPaneIdentityEnv(
         }
       : {}),
     ORCA_PANE_KEY: makePaneKey(tabId, leafId),
+    [AGENT_STATUS_OSC_NONCE_ENV_VAR]: getOrCreatePaneAgentStatusOscNonce(
+      makePaneKey(tabId, leafId)
+    ),
     ORCA_TAB_ID: tabId,
     ORCA_WORKTREE_ID: worktreeId
   }

@@ -29,6 +29,18 @@ export function makePaneKey(tabId: string, stableLeafId: string): PaneKey {
   return `${tabId}:${stableLeafId}` as PaneKey
 }
 
+/** Non-throwing makePaneKey for call sites holding ids that may be synthetic
+ *  (floating/setup terminals) — those panes have no paneKey at all. */
+export function tryMakePaneKey(
+  tabId: string | undefined,
+  stableLeafId: string | undefined
+): PaneKey | null {
+  if (!tabId || tabId.includes(':') || !stableLeafId || !isTerminalLeafId(stableLeafId)) {
+    return null
+  }
+  return `${tabId}:${stableLeafId}` as PaneKey
+}
+
 export function parsePaneKey(
   paneKey: string
 ): { tabId: string; leafId: TerminalLeafId; stablePaneId: StablePaneId } | null {

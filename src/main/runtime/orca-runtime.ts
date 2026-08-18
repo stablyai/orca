@@ -89,6 +89,10 @@ import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
+import {
+  getAgentStatusOscNonceEnforcement,
+  getAgentStatusOscNonceForPty
+} from '../pty/agent-status-osc-nonce-registry'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 import {
   isTerminalInputTooLargeWithYield,
@@ -11237,10 +11241,23 @@ export class OrcaRuntimeService {
   private processAgentStatusOscForPty(ptyId: string, data: string): ProcessedAgentStatusChunk {
     let processor = this.agentStatusOscProcessorsByPtyId.get(ptyId)
     if (!processor) {
-      processor = createAgentStatusOscProcessor()
+      processor = createAgentStatusOscProcessor({
+        // Why late-bound: the processor is created by the first data chunk, which
+        // can beat the spawn path's nonce record on a reattach.
+        getExpectedNonce: () => getAgentStatusOscNonceForPty(ptyId),
+        enforcement: getAgentStatusOscNonceEnforcement()
+      })
       this.agentStatusOscProcessorsByPtyId.set(ptyId, processor)
     }
-    return processor(data)
+    const chunk = processor(data)
+    if (chunk.attestation.rejected > 0) {
+      console.warn('[runtime] dropped unattested agent-status OSC payload', {
+        ptyId,
+        paneKey: this.ptysById.get(ptyId)?.paneKey ?? null,
+        rejected: chunk.attestation.rejected
+      })
+    }
+    return chunk
   }
 
   /** Emit the facts batched while applying one chunk/frame as a single

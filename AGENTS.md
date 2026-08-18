@@ -48,6 +48,12 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Agent Status OSC Surface
+
+A pane can publish agent status in-band with `OSC 9999`. Orca parses it off the PTY master, so **any text the pane prints** reaches the parser — including a page an agent fetched or a file it `cat`'d. The payload is gated by a pane-inherited nonce.
+
+Before changing the parser, the payload, or what the gate accepts, read [`docs/reference/agent-status-osc-nonce.md`](./docs/reference/agent-status-osc-nonce.md). Two things it is easy to get wrong: the nonce proves possession of pane context, **not** agent identity, and un-nonced payloads are still accepted by default so existing external integrations do not break.
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).

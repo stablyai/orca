@@ -215,6 +215,7 @@ export function startParkedTerminalByteWatcher(
     ? null
     : createPtyOutputProcessor({
         ...(options.initialTitle !== undefined ? { initialAgentTitle: options.initialTitle } : {}),
+        agentStatusPaneKey: paneKey,
         ...sideEffectCallbacks
       })
   // Why (byte-parser mode only): under main authority, byte-scanning PR links too would observe every link twice (facts already carry them).

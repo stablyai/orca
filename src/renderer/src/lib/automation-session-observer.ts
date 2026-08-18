@@ -13,6 +13,7 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { getPaneAgentStatusOscNonce } from '@/components/terminal-pane/pane-agent-status-osc-nonce'
 
 export async function observeExistingAutomationSession(args: {
   ptyId: string
@@ -34,7 +35,9 @@ export async function observeExistingAutomationSession(args: {
       settings: useAppStore.getState().settings,
       runtimeEnvironmentId: null
     })
-  const processAgentStatus = createAgentStatusOscProcessor()
+  const processAgentStatus = createAgentStatusOscProcessor({
+    getExpectedNonce: () => getPaneAgentStatusOscNonce(paneKey)
+  })
   const handleData = (data: string): void => {
     onData(data)
     const processed = processAgentStatus(data)

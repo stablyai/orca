@@ -172,6 +172,11 @@ import { parseWslPath, wslUncDirectoryExistsAsync } from '../wsl'
 import { mergePersistedWindowsPath, resolvePathEnvKey } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
 import { resolveCodexShellLaunchPreflightCommand } from '../pty/codex-shell-launch-preflight'
+import {
+  forgetAgentStatusOscNonceForPty,
+  recordAgentStatusOscNonceForPty
+} from '../pty/agent-status-osc-nonce-registry'
+import { AGENT_STATUS_OSC_NONCE_ENV_VAR } from '../../shared/agent-status-osc-nonce'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
 import { beginTerminalInstall } from './watcher-removal-gate'
 import {
@@ -2201,6 +2206,8 @@ export function clearProviderPtyState(
       return !paneKey || (stillOwnsPaneKey && stablePaneKey === paneKey)
     }
   })
+  // Why: the pane secret outlives nothing — drop it with the PTY, unconditionally, so a reused id can never inherit a dead pane's nonce.
+  forgetAgentStatusOscNonceForPty(id)
   // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
@@ -5480,6 +5487,7 @@ export function registerPtyHandlers(
             worktreeId: args.worktreeId
           })
         }
+        recordAgentStatusOscNonceForPty(result.id, env?.[AGENT_STATUS_OSC_NONCE_ENV_VAR])
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
           result.isReattach === true &&
@@ -7166,6 +7174,9 @@ export function registerPtyHandlers(
             worktreeId: args.worktreeId
           })
         }
+        // Why: read from args.env, not the mutated spawn env — this is the value
+        // the pane's process actually inherited, and the only one it can present.
+        recordAgentStatusOscNonceForPty(result.id, args.env?.[AGENT_STATUS_OSC_NONCE_ENV_VAR])
         if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,

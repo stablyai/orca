@@ -10,6 +10,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../shared/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { tryMakePaneKey } from '../../../../shared/stable-pane-id'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
   RuntimeMobileSessionTerminalClientTab,
@@ -358,13 +359,15 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
+  const agentStatusPaneKey = tryMakePaneKey(tabId ?? undefined, leafId ?? undefined)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
-    onAgentStatus
+    onAgentStatus,
+    ...(agentStatusPaneKey ? { agentStatusPaneKey } : {})
   })
   const shutdownDataHandler = (
     data: string,

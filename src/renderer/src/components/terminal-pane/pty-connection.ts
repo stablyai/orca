@@ -14,6 +14,8 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { AGENT_STATUS_OSC_NONCE_ENV_VAR } from '../../../../shared/agent-status-osc-nonce'
+import { getOrCreatePaneAgentStatusOscNonce } from './pane-agent-status-osc-nonce'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -3433,6 +3435,9 @@ export function connectPanePty(
   const paneIdentityEnv = {
     ...workspaceEnv,
     ORCA_PANE_KEY: cacheKey,
+    // Why: rides the same pane env as ORCA_PANE_KEY so descendants inherit it;
+    // gates OSC 9999 so text merely passing through the pane can't assert status.
+    [AGENT_STATUS_OSC_NONCE_ENV_VAR]: getOrCreatePaneAgentStatusOscNonce(cacheKey),
     ORCA_TAB_ID: deps.tabId,
     ORCA_WORKTREE_ID: deps.worktreeId,
     ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})

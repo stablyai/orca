@@ -223,6 +223,9 @@ describe('connectPanePty', () => {
           startupCommandDelivery: 'shell-ready',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
+            // Why: the OSC 9999 gate is only as good as this stamp reaching the
+            // pane's process — assert it on the live spawn, not just the minter.
+            ORCA_AGENT_STATUS_NONCE: expect.stringMatching(/^[0-9a-f]{32}$/),
             ORCA_TAB_ID: 'tab-1',
             ORCA_WORKTREE_ID: 'wt-1',
             ORCA_WORKSPACE_ID: 'wt-1',
