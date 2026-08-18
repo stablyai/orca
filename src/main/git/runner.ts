@@ -34,6 +34,7 @@ import {
   gitCredentialPromptGuardEnv
 } from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
@@ -446,7 +447,7 @@ function resolveGitCommand(
     // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
     return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
   }
-  if (!forceLoginShell && shouldAttemptWslDirectGit(options)) {
+  if (!forceLoginShell && shouldAttemptWslDirectGit(args, options)) {
     const distro = wslDistroForCommand(options.cwd, options.wslDistro)
     const environment = distro ? peekWslGitReadEnvironment(distro) : undefined
     if (environment) {
@@ -462,10 +463,13 @@ function resolveGitCommand(
   return resolveGitCommandWithoutProbe(args, options, captureLoginShellOutput)
 }
 
-function shouldAttemptWslDirectGit(options: GitExecOptions): boolean {
+function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boolean {
   return Boolean(
     process.platform === 'win32' &&
-    options.preferWslDirectGit &&
+    // Why either: callers can still opt in explicitly, but a plain read no
+    // longer has to -- it needs nothing the login shell provides, and routing
+    // it through one is what exposes callers to the shell's rc output.
+    (options.preferWslDirectGit || isWslDirectGitReadCommand(args)) &&
     !options.useConfiguredSshCommandForNetwork &&
     !Object.entries(options.env ?? {}).some(
       ([key, value]) =>
@@ -1184,14 +1188,15 @@ export async function gitExecFileAsyncBuffer(
   if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
     await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
   }
-  // Why fenced: this returns raw blob bytes straight to the diff/blob viewer, so
-  // a login-shell banner would be prepended to displayed file content.
-  let resolved = resolveGitCommand(args, options, true, true)
+  // `git show` is a read, so this normally runs with no shell at all. The fence
+  // still matters for the login-shell fallback: these are raw blob bytes going
+  // straight to the diff/blob viewer, where a banner becomes file content.
+  let resolved = resolveGitCommand(args, options, false, true)
   const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined)
   if (environmentReady) {
     await environmentReady
   }
-  resolved = resolveGitCommand(args, options, true, true)
+  resolved = resolveGitCommand(args, options, false, true)
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
