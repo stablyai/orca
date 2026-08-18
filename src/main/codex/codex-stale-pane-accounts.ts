@@ -36,6 +36,7 @@ export function listStaleCodexPanes(args: {
       record.selectionKey === 'host' &&
       record.homeRoute !== undefined &&
       record.homeRoute !== 'custom-home' &&
+      record.homeRoute !== 'workspace-real-home' &&
       args.activeHostHomeRoute !== undefined &&
       record.homeRoute !== args.activeHostHomeRoute
     const accountChanged = record.accountId !== activeAccountId

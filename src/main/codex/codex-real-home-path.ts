@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 
@@ -37,6 +38,24 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
 
 export function hasCustomCodexHomeOverrideForLaunch(launchEnv?: NodeJS.ProcessEnv): boolean {
   return getCustomCodexHomeOverrideForLaunch(launchEnv) !== null
+}
+
+/**
+ * True when Codex would rediscover the native user home as a project layer.
+ *
+ * Why Windows-only: that platform normally stays on Orca's managed home because
+ * PowerShell startup files cannot be inspected. If the workspace itself owns
+ * the native .codex directory, the managed mirror and project layer otherwise
+ * register the same user hooks twice (#15292).
+ */
+export function isWindowsSystemCodexHomeWorkspace(workspacePath?: string): boolean {
+  if (process.platform !== 'win32' || !workspacePath) {
+    return false
+  }
+  return (
+    normalizeRuntimePathForComparison(resolve(workspacePath, '.codex')) ===
+    normalizeRuntimePathForComparison(getSystemCodexHomePath())
+  )
 }
 
 export function getCustomCodexHomeOverrideForLaunch(

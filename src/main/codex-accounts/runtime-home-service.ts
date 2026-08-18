@@ -66,7 +66,10 @@ import {
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
+import {
+  hasCustomCodexHomeOverrideForLaunch,
+  isWindowsSystemCodexHomeWorkspace
+} from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
   invalidateCodexSessionBackfillMarker
@@ -236,7 +239,7 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: { unavailableManagedHomePath?: string; workspacePath?: string }
   ): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
@@ -258,7 +261,7 @@ export class CodexRuntimeHomeService {
       // Why: only an untrusted home clears the selection; fall through to the
       // system default without injecting a path Orca cannot prove it owns.
     }
-    if (this.isHostSystemDefaultRealHome(launchEnv)) {
+    if (this.isHostSystemDefaultRealHome(launchEnv, options?.workspacePath)) {
       // Why: the system default runs Codex on the user's own ~/.codex.
       // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
       // the retired mirror is refreshed only for pre-rollout PTYs.
@@ -676,22 +679,27 @@ export class CodexRuntimeHomeService {
   }
 
   // Why: real-home routing applies only to the host system-default selection.
-  // Managed accounts run in their own homes; Windows (no shell-startup probe)
-  // and custom CODEX_HOMEs stay on the mirror until cleanup can be tracked
-  // across old homes.
-  isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
+  // Managed accounts and custom CODEX_HOMEs stay isolated. Windows normally
+  // stays mirrored because PowerShell startup files cannot be inspected, except
+  // when its native .codex would also be rediscovered as the project layer.
+  isHostSystemDefaultRealHomeSelected(
+    launchEnv?: NodeJS.ProcessEnv,
+    workspacePath?: string
+  ): boolean {
     const settings = this.store.getSettings()
     if (
       normalizeCodexRuntimeSelection(settings).host !== null ||
-      !isShellStartupEnvProbeSupported()
+      (!isShellStartupEnvProbeSupported() && !isWindowsSystemCodexHomeWorkspace(workspacePath))
     ) {
       return false
     }
     return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
   }
 
-  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
+  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv, workspacePath?: string): boolean {
+    return (
+      this.isHostSystemDefaultRealHomeSelected(launchEnv, workspacePath) && this.realHomeLaneGate()
+    )
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {

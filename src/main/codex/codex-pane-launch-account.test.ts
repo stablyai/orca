@@ -150,6 +150,23 @@ describe('resolveCodexPaneLaunchAccount', () => {
     ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'real-home' })
   })
 
+  it('records a workspace-scoped real home separately from the global route', () => {
+    expect(
+      resolveCodexPaneLaunchAccount({
+        pinnedByResume: false,
+        launchCodexHomePath: null,
+        workspaceScopedRealHome: true,
+        systemCodexHomePath: SYSTEM_HOME,
+        settings: settings({ host: null }),
+        target: { runtime: 'host' }
+      })
+    ).toEqual({
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'workspace-real-home'
+    })
+  })
+
   it('refuses to attribute a resume home no account owns', () => {
     expect(
       resolveCodexPaneLaunchAccount({

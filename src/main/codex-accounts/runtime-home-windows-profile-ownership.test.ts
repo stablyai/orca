@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { CodexRuntimeHomeService } from './runtime-home-service'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -30,6 +32,32 @@ describe('Windows System Default Codex home ownership', () => {
       })
     ).toBe(false)
     expect(service.isHostSystemDefaultSessionMigrationEligible()).toBe(true)
+  })
+
+  it('uses the real home only when the Windows workspace would rediscover it', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    delete process.env.CODEX_HOME
+    delete process.env.ORCA_CODEX_HOME
+
+    const service = Object.create(CodexRuntimeHomeService.prototype) as CodexRuntimeHomeService
+    Object.defineProperty(service, 'store', { value: createStore() })
+    service.setRealHomeLaneGate(() => true)
+    const userProfile = dirname(getSystemCodexHomePath())
+
+    expect(service.isHostSystemDefaultRealHomeSelected(undefined, userProfile)).toBe(true)
+    expect(service.isHostSystemDefaultRealHome(undefined, userProfile)).toBe(true)
+    expect(
+      service.isHostSystemDefaultRealHomeSelected(undefined, join(userProfile, 'project'))
+    ).toBe(false)
+    expect(
+      service.isHostSystemDefaultRealHomeSelected(
+        { CODEX_HOME: join(userProfile, 'custom-codex-home') },
+        userProfile
+      )
+    ).toBe(false)
+
+    service.setRealHomeLaneGate(() => false)
+    expect(service.isHostSystemDefaultRealHome(undefined, userProfile)).toBe(false)
   })
 })
 

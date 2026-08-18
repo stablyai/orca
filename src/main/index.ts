@@ -44,6 +44,7 @@ import {
   type CodexPaneHomeRoute,
   getCodexPaneAccount,
   hasRecordedManagedHostCodexPane,
+  hasRecordedWorkspaceRealHomeCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
@@ -987,7 +988,10 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
-      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
+      if (
+        codexRuntimeHome &&
+        (hasRecordedManagedHostCodexPane() || hasRecordedWorkspaceRealHomeCodexPane())
+      ) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
@@ -1063,6 +1067,8 @@ function prepareCodexRuntimeHomeForLaunch(
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
 ): string | null {
+  const codexWorkspacePath =
+    launchContext?.launchAgent === 'codex' ? launchContext.workspacePath : undefined
   if (
     target?.runtime !== 'wsl' &&
     launchContext?.launchAgent === 'codex' &&
@@ -1078,7 +1084,7 @@ function prepareCodexRuntimeHomeForLaunch(
   const ensureRealHomeHooksIfSelected = (): boolean => {
     if (
       target?.runtime === 'wsl' ||
-      !codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
+      !codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv, codexWorkspacePath)
     ) {
       return false
     }
@@ -1097,7 +1103,8 @@ function prepareCodexRuntimeHomeForLaunch(
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
   let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
-    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+    workspacePath: codexWorkspacePath
   })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
     // Why: launch prep can reject an untrusted managed home and clear its
@@ -1106,7 +1113,8 @@ function prepareCodexRuntimeHomeForLaunch(
     realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
       runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
-        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+        workspacePath: codexWorkspacePath
       })
     }
   }
@@ -2487,7 +2495,7 @@ void app.whenReady().then(async () => {
   setSystemCodexHomeHookSweepSuppressed(
     () =>
       codexRuntimeHome !== null &&
-      codexRuntimeHome.isHostSystemDefaultRealHome() &&
+      (codexRuntimeHome.isHostSystemDefaultRealHome() || hasRecordedWorkspaceRealHomeCodexPane()) &&
       isAgentStatusHooksEnabled(store?.getSettings())
   )
   codexSessionMigration = createCodexSessionMigrationScheduler({
@@ -2934,7 +2942,10 @@ void app.whenReady().then(async () => {
     console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
   })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
+  if (
+    codexRuntimeHome.isHostSystemDefaultRealHomeSelected() ||
+    hasRecordedWorkspaceRealHomeCodexPane()
+  ) {
     // Why: establish capability before managed-hook reconciliation so an
     // incapable host re-arms and completes the legacy real-home sweep now.
     ensureRealHomeCodexHookState({

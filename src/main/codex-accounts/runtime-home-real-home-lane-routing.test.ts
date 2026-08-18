@@ -280,6 +280,11 @@ describe('CodexRuntimeHomeService', () => {
       'account-pane': { selectionKey: 'host', accountId: 'account-1', homeRoute: 'account-home' },
       'unowned-pane': { selectionKey: 'host', accountId: 'account-2', homeRoute: 'account-home' },
       'real-pane': { selectionKey: 'host', accountId: null, homeRoute: 'real-home' },
+      'workspace-real-pane': {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'workspace-real-home'
+      },
       'wsl-pane': { selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'wsl-home' }
     })
     const settings = createSettings({
@@ -298,6 +303,7 @@ describe('CodexRuntimeHomeService', () => {
         'account-pane',
         'unowned-pane',
         'real-pane',
+        'workspace-real-pane',
         'wsl-pane',
         'unknown-pane'
       ])
