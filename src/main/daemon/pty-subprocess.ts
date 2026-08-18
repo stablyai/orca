@@ -15,7 +15,11 @@ import {
   validateWorkingDirectoryAsync,
   WorkingDirectoryValidationAbortedError
 } from '../providers/local-pty-utils'
-import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
+import {
+  hostReportsChildExitStatus,
+  wrapShellSpawnForMacosTccAttribution
+} from '../providers/macos-tcc-login-shell'
+import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
@@ -578,7 +582,10 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   shellPath: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
+  /** False when a wrapper owns the reported status, so no exit code may be read from it. */
+  reportsChildExitStatus: boolean
 } {
+  let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     const proc = pty.spawn(wrapped.file, wrapped.args, {
@@ -590,15 +597,18 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
     args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
     return proc
   }
 
   try {
+    const process_ = spawnAt(args.shellPath, args.shellArgs, args.spawnCwd)
     return {
-      process: spawnAt(args.shellPath, args.shellArgs, args.spawnCwd),
+      process: process_,
       shellPath: args.shellPath,
-      spawnCwd: args.spawnCwd
+      spawnCwd: args.spawnCwd,
+      reportsChildExitStatus
     }
   } catch (primaryErr) {
     if (process.platform !== 'win32') {
@@ -616,7 +626,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
           process,
           shellPath: attempt.shellPath,
           spawnCwd: attempt.effectiveCwd,
-          startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+          startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
+          reportsChildExitStatus
         }
       } catch {
         // This fallback shell also failed -- try the next link in the chain.
@@ -908,6 +919,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   }
 
   let proc: pty.IPty
+  let reportsChildExitStatus = true
   try {
     const spawned = spawnDaemonPtyWithWindowsFallback({
       shellPath,
@@ -923,6 +935,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
     shellPath = spawned.shellPath
     spawnCwd = spawned.spawnCwd
+    reportsChildExitStatus = spawned.reportsChildExitStatus
     if (spawned.startupCommandDeliveredInShellArgs !== undefined) {
       startupCommandDeliveredInShellArgs = spawned.startupCommandDeliveredInShellArgs
     }
@@ -934,10 +947,11 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   }
 
   let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
+  let onExitCb: ((code: number, cause?: TerminalExitCause) => void) | null = null
   let pendingPreListenerData: string[] = []
   let pendingPreListenerDataChars = 0
   let pendingPreListenerExitCode: number | null = null
+  let pendingPreListenerExitCause: TerminalExitCause | null = null
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires this subprocess in; preserve that spawn-time race window.
@@ -976,12 +990,21 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       bufferPreListenerData(data)
     }
   })
-  proc.onExit(({ exitCode }) => {
+  proc.onExit(({ exitCode, signal }) => {
+    // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}, and a
+    // wrapper spawn reports the wrapper's status — so build the cause here,
+    // where both facts are still in hand, rather than shipping a bare number.
+    const cause = resolveProcessExitCause({
+      exitCode,
+      signal,
+      hostReportsChildExitStatus: reportsChildExitStatus
+    })
     if (onExitCb) {
       flushPreListenerData()
-      onExitCb(exitCode)
+      onExitCb(exitCode, cause)
     } else {
       pendingPreListenerExitCode = exitCode
+      pendingPreListenerExitCause = cause
     }
   })
 
@@ -1341,9 +1364,11 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       onExitCb = cb
       if (pendingPreListenerExitCode !== null) {
         const code = pendingPreListenerExitCode
+        const cause = pendingPreListenerExitCause ?? resolveProcessExitCause({ exitCode: code })
         pendingPreListenerExitCode = null
+        pendingPreListenerExitCause = null
         flushPreListenerData()
-        cb(code)
+        cb(code, cause)
       }
     },
     dispose: () => {
@@ -1357,6 +1382,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       pendingPreListenerData = []
       pendingPreListenerDataChars = 0
       pendingPreListenerExitCode = null
+      pendingPreListenerExitCause = null
       // Why: UnixTerminal.destroy()'s async socket-close SIGHUP can land on a recycled pid, hitting an unrelated user process; neutralize kill on POSIX.
       // Windows destroy() uses kill() to close the ConPTY agent, so the guard is POSIX-only.
       if (process.platform !== 'win32') {

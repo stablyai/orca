@@ -1,3 +1,5 @@
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+
 export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
@@ -28,7 +30,7 @@ export type SubprocessHandle = {
   forceKill(): void
   signal(sig: string): void
   onData(cb: (data: string) => void): void
-  onExit(cb: (code: number) => void): void
+  onExit(cb: (code: number, cause?: TerminalExitCause) => void): void
   /** Release the native PTY handle via node-pty's destroy(). Idempotent; safe to call after exit. */
   dispose(): void
 }

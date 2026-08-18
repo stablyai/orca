@@ -2,7 +2,7 @@ import { migrateMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
-export function applySchemaMigrationsV13ToV28(this: OrchestrationDb, current: number): void {
+export function applySchemaMigrationsV13ToV29(this: OrchestrationDb, current: number): void {
   if (current < 13 && !this.hasColumn('worker_dispatches', 'runtime_epoch')) {
     this.db.exec('ALTER TABLE worker_dispatches ADD COLUMN runtime_epoch TEXT')
   }
@@ -150,6 +150,12 @@ export function applySchemaMigrationsV13ToV28(this: OrchestrationDb, current: nu
           caller_fingerprint  TEXT NOT NULL UNIQUE
         );
       `)
+  }
+  // Why a column and not a parsed `last_failure`: an operator close and a crash
+  // used to write the same sentence, so post-mortem tooling had to reconcile
+  // against external logs to tell them apart (STA-4603).
+  if (current < 29 && !this.hasColumn('dispatch_contexts', 'termination_reason')) {
+    this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN termination_reason TEXT')
   }
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
