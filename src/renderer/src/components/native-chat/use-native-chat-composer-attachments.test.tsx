@@ -25,9 +25,11 @@ const target: NativeChatResolvedTarget = {
 
 function Probe({
   scopeKey,
+  structured = false,
   onReady
 }: {
   scopeKey: string
+  structured?: boolean
   onReady: (api: ProbeApi) => void
 }): React.JSX.Element {
   const [caret, setCaret] = useState(0)
@@ -36,8 +38,9 @@ function Probe({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const api = useNativeChatComposerAttachments({
     attachmentScopeKey: scopeKey,
+    allowWithoutTarget: structured,
     caret,
-    resolveTarget: () => target,
+    resolveTarget: () => (structured ? null : target),
     textareaRef,
     setCaret,
     setDraft: (updater) => setDraftValue((previous) => updater(previous)),
@@ -48,7 +51,8 @@ function Probe({
 }
 
 async function renderProbe(
-  scopeKey: string
+  scopeKey: string,
+  structured = false
 ): Promise<{ root: Root; latest: () => ProbeApi; rerender: (scopeKey: string) => Promise<void> }> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -60,7 +64,7 @@ async function renderProbe(
     api = next
   }
   await act(async () => {
-    root.render(createElement(Probe, { scopeKey, onReady }))
+    root.render(createElement(Probe, { scopeKey, structured, onReady }))
   })
   if (!api) {
     throw new Error('Probe did not render')
@@ -75,7 +79,7 @@ async function renderProbe(
     },
     rerender: async (nextScopeKey: string) => {
       await act(async () => {
-        root.render(createElement(Probe, { scopeKey: nextScopeKey, onReady }))
+        root.render(createElement(Probe, { scopeKey: nextScopeKey, structured, onReady }))
       })
     }
   }
@@ -110,6 +114,17 @@ describe('useNativeChatComposerAttachments', () => {
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
     act(() => second.root.unmount())
+  })
+
+  it('accepts host-readable image paths without a PTY for structured transport', async () => {
+    const probe = await renderProbe('structured-session-1', true)
+
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/tmp/structured-image.png'])
+    })
+
+    expect(probe.latest().imageAttachments).toMatchObject([{ path: '/tmp/structured-image.png' }])
+    act(() => probe.root.unmount())
   })
 
   it('removes an attached image chip cleanly', async () => {

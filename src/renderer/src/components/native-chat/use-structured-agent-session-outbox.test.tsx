@@ -50,28 +50,6 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
   return { ok: false, refusal: { code, message: code } }
 }
 
-function unknownResult(clientMessageId: string) {
-  return {
-    ok: true,
-    replayed: false,
-    fence: 1,
-    cursor: { epoch: 'epoch-1', sequence: 1 },
-    value: {
-      clientMessageId,
-      submission: {
-        clientMessageId,
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState: 'unknown',
-        providerItemId: null,
-        reason: 'provider receipt missing',
-        submittedAt: 1,
-        resolvedAt: 1
-      }
-    }
-  }
-}
-
 describe('useStructuredAgentSessionOutbox', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -171,14 +149,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     ).toBe(firstId)
   })
 
-  it('discards an unconfirmed head after restart and dispatches the queued message', async () => {
-    vi.mocked(globalThis.crypto.randomUUID)
-      .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
-      .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
-    mocks.call
-      .mockResolvedValueOnce(unknownResult('11111111-1111-4111-8111-111111111111'))
-      .mockResolvedValueOnce(acceptedResult(1))
-    const first = renderHook(() =>
+  it('persists and dispatches an attachment-only structured send', async () => {
+    mocks.call.mockResolvedValue(acceptedResult(1))
+    const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
         sessionId: 'session-1',
         target: LOCAL_TARGET,
@@ -187,59 +160,19 @@ describe('useStructuredAgentSessionOutbox', () => {
       })
     )
 
-    act(() => expect(first.result.current.send('/permissions prompt')).toBe(true))
-    await waitFor(() => expect(first.result.current.outbox[0]?.state).toBe('unconfirmed'))
-    act(() => expect(first.result.current.send('send this next')).toBe(true))
-    const staleId = first.result.current.outbox[0]!.clientMessageId
-    first.unmount()
-
-    const restarted = renderHook(() =>
-      useStructuredAgentSessionOutbox({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        fence: 1,
-        submissions: []
-      })
+    act(() =>
+      expect(
+        result.current.send('', [{ path: '/tmp/image.png', previewUri: 'file:///tmp/image.png' }])
+      ).toBe(true)
     )
-    expect(restarted.result.current.outbox).toHaveLength(2)
-    act(() => restarted.result.current.discard(staleId))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(mocks.call.mock.calls[1]?.[2]).toMatchObject({
-      body: { blocks: [{ type: 'text', text: 'send this next' }] }
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'image-ref', path: '/tmp/image.png' }]
+      }
     })
-    await waitFor(() => expect(restarted.result.current.outbox).toHaveLength(0))
-  })
-
-  it('retries an unconfirmed slash command after restart without leaving a durable head', async () => {
-    mocks.call
-      .mockResolvedValueOnce(unknownResult('11111111-1111-4111-8111-111111111111'))
-      .mockResolvedValueOnce(acceptedResult(1))
-    const first = renderHook(() =>
-      useStructuredAgentSessionOutbox({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        fence: 1,
-        submissions: []
-      })
-    )
-
-    act(() => expect(first.result.current.send('/permissions prompt')).toBe(true))
-    await waitFor(() => expect(first.result.current.outbox[0]?.state).toBe('unconfirmed'))
-    const staleId = first.result.current.outbox[0]!.clientMessageId
-    first.unmount()
-
-    const restarted = renderHook(() =>
-      useStructuredAgentSessionOutbox({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        fence: 1,
-        submissions: []
-      })
-    )
-    act(() => restarted.result.current.retry(staleId))
-
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(restarted.result.current.outbox).toHaveLength(0))
   })
 })

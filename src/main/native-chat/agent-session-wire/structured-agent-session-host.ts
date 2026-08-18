@@ -47,6 +47,7 @@ import {
   type StructuredAgentSessionHostHandoff
 } from './structured-agent-session-host-handoff'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { pinnedAgentSessionLaunchEnv } from './structured-agent-session-launch-env'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import type {
   StructuredAgentSessionCaller,
@@ -54,10 +55,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
-export type {
-  StructuredAgentSessionCaller,
-  StructuredAgentSessionHostDeps
-} from './structured-agent-session-host-types'
+export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
@@ -99,6 +97,7 @@ export class StructuredAgentSessionHost {
       supportsRecord: (record) =>
         providerRouting.adapterSupportsAgentSessionRecord(deps.adapter, record),
       reconcile: this.reconcileLeases,
+      resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       resume: (params) =>
         this.attach({ callerKey: 'trusted-local:host-restart' }, params).then(
           (result) => result.ok
@@ -150,6 +149,7 @@ export class StructuredAgentSessionHost {
       if (unreconciled) {
         return refuseAgentSessionMutation(unreconciled)
       }
+      await this.runtimeState.resolveRecovery(sessionId)
       const eventSink = this.runtimeState.eventSinkFor(sessionId)
       const attached = await performAttach({
         store: this.deps.store,
@@ -166,9 +166,7 @@ export class StructuredAgentSessionHost {
           claimKeyId: this.deps.claimKeyId,
           handoffOperationId: params.envelope.clientOperationId,
           probe: await this.runtimeState.probeOwner(sessionId),
-          ...(this.deps.resolveLaunchEnv
-            ? { launchEnv: this.deps.resolveLaunchEnv(params.provider) }
-            : {})
+          ...(await pinnedAgentSessionLaunchEnv(this.deps.resolveLaunchEnv, params))
         },
         callerKey: caller.callerKey,
         params,
@@ -292,10 +290,9 @@ export class StructuredAgentSessionHost {
   }
 
   history(request: AgentSessionHistoryRequest): AgentSessionHistoryResult {
-    const record = this.deps.store.getRecord(request.sessionId)
     return readStructuredAgentSessionHistoryResult({
       journal: this.requireSession(request.sessionId).journal,
-      record,
+      record: this.deps.store.getRecord(request.sessionId),
       request
     })
   }

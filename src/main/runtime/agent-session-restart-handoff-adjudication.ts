@@ -27,6 +27,27 @@ export function adjudicateRestartedAgentSessionHandoff(
       lastRenewedAt: now
     })
   }
+  if (
+    record.lease.ownerProcess === null &&
+    record.lease.runtimeKind === 'native' &&
+    record.lease.claimStatus === 'reserved'
+  ) {
+    // Why: an abandoned native reservation has no stoppable owner to hand back; parking it
+    // at old-owner-stopped would strand journal-less sessions behind a stale operation id.
+    return updateLease(record, {
+      ...record.lease,
+      runtimeFence: adjudication.nextFence,
+      handoffStage: null,
+      handoffOperationId: null,
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      processlessAt: null,
+      claimStatus: 'released',
+      unreconciled: false,
+      lastRenewedAt: now,
+      deathEvidence: adjudication.evidence
+    })
+  }
   const provingTarget = record.lease.handoffStage === 'new-owner-proving'
   return updateLease(record, {
     ...record.lease,

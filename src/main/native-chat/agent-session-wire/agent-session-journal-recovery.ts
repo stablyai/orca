@@ -27,9 +27,7 @@ export type AgentSessionJournalRecovery = {
   reset: AgentJournalResetReason
   epoch: string
   imported: number
-  /** Set when provider history could not be read. The session still opens, on
-   *  an empty fresh epoch — an unreadable transcript is not a reason to refuse
-   *  the user their session. */
+  /** Set when provider history could not be read; the intact journal prefix remains live. */
   error?: string
 }
 
@@ -77,8 +75,8 @@ export async function openAgentSessionJournalWithRecovery(input: {
   if (!probe?.corrupt) {
     return { journal, recovery: null }
   }
-  // `open()` already rolled the epoch off the unusable prefix; the import rolls
-  // once more so the rebuilt timeline is the only content of its epoch.
+  // `open()` quarantines the unusable suffix; a successful import rolls once
+  // more so the rebuilt timeline is the only content of its epoch.
   return { journal, recovery: await rehydrate({ ...input, journal, trigger: 'journal_corrupt' }) }
 }
 

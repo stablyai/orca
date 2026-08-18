@@ -166,7 +166,11 @@ async function restoreRecoverableLiveTui(
   try {
     const recovered = await input.deps.transport.recoverTuiOwner(record)
     owner = await input.deps.transport.reproveTuiOwner({ record, owner: recovered })
-  } catch {
+  } catch (error) {
+    const ownerState = await input.deps.transport.probeRecoveredOwner?.(record)
+    if (ownerState !== 'dead') {
+      throw error
+    }
     await recoverUnavailableTuiAsNative(input, record)
     return
   }

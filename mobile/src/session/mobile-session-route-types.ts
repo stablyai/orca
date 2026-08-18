@@ -1,4 +1,5 @@
-import type { DiffComment, TuiAgent } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'

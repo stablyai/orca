@@ -86,6 +86,7 @@ export async function openCodexAppServerConnection(
   let stderrTail = ''
   let nextRequestId = 1
   let exited = false
+  let exitObserved = false
   let closing = false
   /** First terminal cause, or null while the transport is still usable. Set once:
    *  a child that dies reaches us through several listeners, and the specific
@@ -95,6 +96,7 @@ export async function openCodexAppServerConnection(
   const exitPromise = new Promise<void>((resolve) => {
     child.on('exit', () => {
       exited = true
+      exitObserved = true
       resolve()
     })
   })
@@ -127,7 +129,6 @@ export async function openCodexAppServerConnection(
   }
 
   child.on('error', (error) => {
-    exited = true
     handleUnexpectedEnd(error)
   })
   // Why: 'close' rather than 'exit' guarantees the stderr tail is complete, so
@@ -291,10 +292,9 @@ export async function openCodexAppServerConnection(
     }
   }
 
-  async function close(): Promise<void> {
+  async function close(): Promise<boolean> {
     if (closing) {
-      await exitPromise
-      return
+      return exitObserved
     }
     closing = true
     try {
@@ -310,6 +310,7 @@ export async function openCodexAppServerConnection(
       }
     }
     failPending(new Error('codex app-server connection closed'))
+    return exitObserved
   }
 
   const connection: CodexAppServerConnection = {

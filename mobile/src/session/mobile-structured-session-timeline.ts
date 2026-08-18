@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileStructuredPromptItem } from './MobileStructuredPromptCard'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -25,43 +26,77 @@ function isPendingPrompt(item: AgentJournalRenderItem): item is MobileStructured
 }
 
 function outboxMessage(entry: MobileStructuredOutboxEntry): NativeChatMessage {
-  let imageIndex = 0
   return {
     id: entry.clientMessageId,
     role: 'user',
     timestamp: entry.queuedAt,
     source: 'transcript',
-    blocks: entry.body.blocks.map((block) => {
-      if (block.type !== 'image-ref') {
-        return block
-      }
-      const preview = entry.previewUris[imageIndex++]
-      return preview ? { ...block, url: preview, path: undefined } : block
-    })
+    blocks: mobilePreviewBlocks(entry.body.blocks, entry.previewUris)
   }
+}
+
+function mobilePreviewBlocks(
+  blocks: NativeChatMessage['blocks'],
+  previewUris: readonly string[]
+): NativeChatMessage['blocks'] {
+  let imageIndex = 0
+  return blocks.map((block) => {
+    if (block.type !== 'image-ref') {
+      return block
+    }
+    const preview = previewUris[imageIndex++]
+    return preview ? { ...block, url: preview, path: undefined } : block
+  })
 }
 
 export function buildMobileStructuredTimeline(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly MobileStructuredOutboxEntry[]
 ): MobileStructuredTimelineRow[] {
+  // Why: the host renders its own bubble off the submission WAL row, which lands
+  // while the dispatch is still `pending` — before reconciliation retires the echo
+  // on `accepted`. Appending both drew the message twice for the whole provider
+  // round trip, so adopt the canonical row and keep the entry on it: retry and
+  // edit-queued still need the entry while delivery is unconfirmed.
+  const adopted = new Map(
+    outbox.map((entry) => [agentJournalSubmissionKey(entry.clientMessageId), entry])
+  )
+  const seen = new Set<string>()
   const canonical = items.flatMap((item): MobileStructuredTimelineRow[] => {
     if (isPendingPrompt(item)) {
       return [{ kind: 'prompt', key: item.itemId, item }]
     }
     const message = projectStructuredItemToNativeChat(item)
-    return message ? [{ kind: 'message', key: message.id, message }] : []
+    if (!message) {
+      return []
+    }
+    const entry = adopted.get(item.itemId)
+    if (entry) {
+      seen.add(entry.clientMessageId)
+    }
+    return [
+      {
+        kind: 'message',
+        key: message.id,
+        message: entry
+          ? { ...message, blocks: mobilePreviewBlocks(message.blocks, entry.previewUris) }
+          : message,
+        ...(entry ? { outbox: entry } : {})
+      }
+    ]
   })
   return [
     ...canonical,
-    ...outbox.map(
-      (entry): MobileStructuredTimelineRow => ({
-        kind: 'message',
-        key: entry.clientMessageId,
-        message: outboxMessage(entry),
-        outbox: entry
-      })
-    )
+    ...outbox
+      .filter((entry) => !seen.has(entry.clientMessageId))
+      .map(
+        (entry): MobileStructuredTimelineRow => ({
+          kind: 'message',
+          key: agentJournalSubmissionKey(entry.clientMessageId),
+          message: outboxMessage(entry),
+          outbox: entry
+        })
+      )
   ]
 }
 

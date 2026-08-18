@@ -71,17 +71,16 @@ export class AgentSessionRecordStore {
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
-    return new AgentSessionRecordStore(
-      new AgentSessionStoreTransactionQueue(
-        filePath,
-        args.hostId,
-        loaded.readOnly,
-        loaded.recoveredFromBackup,
-        loaded.storeFound,
-        loaded.state,
-        diskRevision
-      )
+    const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
+      filePath,
+      args.hostId,
+      loaded,
+      diskRevision
     )
+    if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
+      await transactions.persistLoadedMigration()
+    }
+    return new AgentSessionRecordStore(transactions)
   }
 
   private get state(): AgentSessionStoreState {

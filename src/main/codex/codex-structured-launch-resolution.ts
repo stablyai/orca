@@ -56,6 +56,7 @@ export function createCodexStructuredLaunchResolver(
       args: spawnArgs,
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
+      ...(record.launchEnv ? { env: { ...record.launchEnv } } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId: head?.handle.provider === 'codex' ? head.handle.threadId : null

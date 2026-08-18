@@ -152,7 +152,10 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
-import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import type {
+  TerminalQuickCommand,
+  TerminalQuickCommandScope
+} from '../../../../shared/terminal-quick-command-types'
 import {
   createRemotePaneLayoutPusher,
   type RemotePaneLayoutPusher
@@ -163,7 +166,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
@@ -192,6 +195,8 @@ import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
+import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
@@ -243,13 +248,6 @@ import {
 } from './regular-terminal-focus-ownership'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
-import { useTerminalStructuredHandoff } from '@/runtime/structured-agent-session-handoff-store'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../../shared/structured-agent-session-mutation'
 
 type TerminalPaneProps = {
   tabId: string
@@ -347,34 +345,6 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
-  const structuredHandoff = useTerminalStructuredHandoff(tabId)
-  const returnStructuredSession = useCallback(() => {
-    if (!structuredHandoff) {
-      return
-    }
-    const direction = 'to-native' as const
-    const mode = 'after-turn' as const
-    const action = 'start' as const
-    const sessionId = structuredHandoff.sessionId
-    const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
-    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
-    const clientOperationId = createStructuredAgentSessionOperationId(() => crypto.randomUUID())
-    void callStructuredAgentSession(target, 'agentSession.requestHandoff', {
-      envelope: {
-        sessionId,
-        clientOperationId,
-        expectedRuntimeFence: structuredHandoff.fence,
-        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-          method: 'agentSession.requestHandoff',
-          sessionId,
-          fields: { direction, mode, action }
-        })
-      },
-      direction,
-      mode,
-      action
-    })
-  }, [structuredHandoff, worktreeId])
   const {
     nativeChatTranscriptIsLocalReadable,
     sshReconnectEnvironmentId,
@@ -583,6 +553,10 @@ function TerminalPane(
     const leafIds = getNativeChatLeafIds()
     return leafIds.length === 1 ? leafIds[0] : null
   }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
+  useEffect(() => {
+    getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
+  }, [getTabWideAgentHintLeafId])
   useEffect(() => {
     if (tabWideAgentHintLeafId !== undefined) {
       return
@@ -763,11 +737,11 @@ function TerminalPane(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-  useEffect(() => {
+  const settleTabStartupCommand = useCallback(() => {
     if (startup) {
-      consumeTabStartupCommand(tabId)
+      consumeTabStartupCommand(tabId, startup)
     }
-  }, [startup, tabId, consumeTabStartupCommand])
+  }, [consumeTabStartupCommand, startup, tabId])
 
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
@@ -1384,6 +1358,7 @@ function TerminalPane(
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
+    getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
@@ -1418,6 +1393,7 @@ function TerminalPane(
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBinding,
+    onStartupBound: settleTabStartupCommand,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -1597,6 +1573,7 @@ function TerminalPane(
         worktreeId,
         cwd,
         startup: CODEX_ACCOUNT_RESTART_STARTUP,
+        mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
         paneKittyKeyboardModesRef,
@@ -1962,6 +1939,7 @@ function TerminalPane(
         },
         forceBracketedPaste: options?.forceBracketedPaste,
         forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
+        windowsInputRecordNewline: options?.windowsInputRecordNewline,
         terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
       })
       const execution = await executeTerminalPastePlan(plan, {
@@ -1992,6 +1970,28 @@ function TerminalPane(
       }
     }
 
+    // Why: resolved per pane and PTY host; split siblings and remote hosts can need
+    // different multiline paste protocols.
+    const resolvePaneProtectedMultilinePasteOptions = (
+      pane: ManagedPane
+    ): TerminalPasteTextOptions | undefined => {
+      const state = useAppStore.getState()
+      const transport = paneTransportsRef.current.get(pane.id) ?? null
+      return resolveProtectedMultilinePasteOptionsForPane({
+        isWindowsClient: forceBracketedMultilineTextPaste,
+        hostPlatform: resolveTerminalInputHostPlatform({
+          clientPlatform: shortcutPlatform,
+          state,
+          worktreeId,
+          transport
+        }),
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+        tabId,
+        leafId: pane.leafId
+      })
+    }
+
     const pasteFromClipboard = (
       pane: ManagedPane,
       source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -2009,7 +2009,7 @@ function TerminalPane(
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
-        forceBracketedMultilineTextPaste,
+        protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
         pasteText: (text, options) =>
           executePanePasteText(pane, source, activeElementAtDispatch, text, options),
         onTextPasteError: () =>
@@ -2156,7 +2156,7 @@ function TerminalPane(
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
-        forceBracketedMultilineTextPaste,
+        protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
         pasteText: (text, options) =>
           executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
         onTextPasteError: () =>
@@ -2733,6 +2733,7 @@ function TerminalPane(
             ? 'win32'
             : 'linux'
         const connectionId = getConnectionId(worktreeId) ?? null
+        const pasteState = useAppStore.getState()
         const targetStillMounted = (): boolean => {
           const manager = managerRef.current
           return Boolean(
@@ -2764,6 +2765,19 @@ function TerminalPane(
               transport
             })
           },
+          ...resolveProtectedMultilinePasteOptionsForPane({
+            isWindowsClient: forceBracketedMultilineTextPaste,
+            hostPlatform: resolveTerminalInputHostPlatform({
+              clientPlatform: shortcutPlatform,
+              state: pasteState,
+              worktreeId,
+              transport: transport ?? null
+            }),
+            agentStatusByPaneKey: pasteState.agentStatusByPaneKey,
+            paneForegroundAgentByPaneKey: pasteState.paneForegroundAgentByPaneKey,
+            tabId,
+            leafId: clickedPane.leafId
+          }),
           terminalBracketedPasteMode: clickedPane.terminal.modes.bracketedPasteMode
         })
         const execution = await executeTerminalPastePlan(plan, {
@@ -2780,7 +2794,7 @@ function TerminalPane(
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    [getPrimarySelectionMiddleClickPane, tabId, worktreeId]
+    [getPrimarySelectionMiddleClickPane, forceBracketedMultilineTextPaste, tabId, worktreeId]
   )
 
   const handlePrimarySelectionAuxClick = useCallback(
@@ -3065,7 +3079,7 @@ function TerminalPane(
       />
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+            <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
               <NativeChatView
                 terminalTabId={tabId}
                 isVisible={isRendererVisible}
@@ -3209,8 +3223,6 @@ function TerminalPane(
         canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}
-        canReturnStructuredSession={structuredHandoff?.status.owner === 'tui'}
-        onReturnStructuredSession={returnStructuredSession}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

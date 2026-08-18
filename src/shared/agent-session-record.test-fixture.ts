@@ -1,6 +1,10 @@
 /** Durable-record fixtures shared by the write-admission tests across shared, runtime, and IPC. */
 
-import type { AgentSessionLease, AgentSessionRecord } from './agent-session-record'
+import {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AgentSessionLease,
+  type AgentSessionRecord
+} from './agent-session-record'
 
 const OWNER_PROCESS = {
   hostId: 'local',
@@ -37,7 +41,7 @@ export function agentSessionRecordFixture(
   lease: AgentSessionLease = agentSessionLeaseFixture()
 ): AgentSessionRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: lease.sessionId,
     location: {
       executionHostId: 'local',
@@ -52,7 +56,7 @@ export function agentSessionRecordFixture(
         origin: 'created',
         mintedAtFence: lease.runtimeFence,
         observedAt: 1_000,
-        handle: { provider: 'claude', sessionId: lease.sessionId, leafUuid: null }
+        handle: { provider: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null }
       }
     ],
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/user/.claude' },

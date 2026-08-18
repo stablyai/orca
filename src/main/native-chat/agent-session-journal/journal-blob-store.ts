@@ -50,6 +50,14 @@ export async function readJournalBlob(journalDir: string, digest: string): Promi
   }
 }
 
+/** Remove a blob written speculatively for a row that was rejected. */
+export async function removeJournalBlob(journalDir: string, digest: string): Promise<void> {
+  const target = blobPath(journalDir, digest)
+  if (target) {
+    await rm(target, { force: true })
+  }
+}
+
 /** Drop every blob outside `retained`. Called from compaction, under the
  *  current lease fence, after the snapshot is durable — so a crash mid-prune
  *  leaves extra blobs rather than dangling references. */

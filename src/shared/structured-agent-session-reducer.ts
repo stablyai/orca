@@ -41,6 +41,8 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   handoff: null
 }
 
+const MAX_RETAINED_SUBMISSIONS = 256
+
 function replaceSnapshot(
   snapshot: AgentJournalSnapshot,
   fence: number,
@@ -52,7 +54,8 @@ function replaceSnapshot(
     fence,
     items: [...snapshot.items].sort((left, right) => left.sequence - right.sequence),
     submissions: snapshot.submissions,
-    hasOlder: snapshot.items.length >= 40,
+    // Snapshots contain the full reduced journal, unlike bounded history pages.
+    hasOlder: false,
     status: 'ready',
     handoff: handoff ?? null
   }
@@ -84,7 +87,9 @@ function mergeSubmissions(
   for (const submission of incoming) {
     byId.set(submission.clientMessageId, submission)
   }
-  return [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
+  return [...byId.values()]
+    .sort((left, right) => left.submittedAt - right.submittedAt)
+    .slice(-MAX_RETAINED_SUBMISSIONS)
 }
 
 export function reduceStructuredAgentSession(
@@ -102,19 +107,24 @@ export function reduceStructuredAgentSession(
   }
   if (action.type === 'tail-page') {
     const pageCursor = action.page.liveCursor ?? action.page.window.newest
+    // An equal cursor means the page holds nothing the stream has not already
+    // delivered; replacing would throw away paged-in older items mid-scroll.
     if (
       state.epoch === action.page.epoch &&
       state.cursor &&
-      (!pageCursor || pageCursor.sequence < state.cursor.sequence)
+      (!pageCursor || pageCursor.sequence <= state.cursor.sequence)
     ) {
       return state
     }
+    const sameEpoch = state.epoch === action.page.epoch
     return {
       epoch: action.page.epoch,
       cursor: action.page.liveCursor ?? null,
       fence: action.page.fence ?? null,
       items: action.page.items,
-      submissions: action.page.submissions,
+      submissions: sameEpoch
+        ? mergeSubmissions(state.submissions, action.page.submissions)
+        : action.page.submissions,
       hasOlder: action.page.hasOlder,
       status: 'ready',
       handoff: state.handoff

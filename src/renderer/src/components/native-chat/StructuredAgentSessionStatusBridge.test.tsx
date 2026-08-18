@@ -2,7 +2,7 @@
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -55,7 +55,7 @@ const structuredTab = {
 
 const historyResult = {
   ok: true,
-  providerSession: { key: 'session_id', id: 'provider-session-uuid' },
+  providerSession: { key: 'session_id', id: '01a002e9-9a1c-7d42-a642-e481f64446f1' },
   page: {
     sessionId: 'session-1',
     epoch: 'epoch-1',
@@ -114,12 +114,12 @@ describe('StructuredAgentSessionStatusBridge', () => {
     await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(2), { timeout: 1_500 })
   })
 
-  it('publishes the provider id without making native chat terminal-resumable', async () => {
+  it('publishes only provider identity and makes structured status non-terminal', async () => {
     render(<StructuredAgentSessionStatusBridge />)
 
     await waitFor(() => expect(mocks.setAgentStatus).toHaveBeenCalled())
     expect(mocks.setAgentStatus.mock.calls.at(-1)?.[5]).toEqual({
-      providerSession: { key: 'session_id', id: 'provider-session-uuid' },
+      providerSession: { key: 'session_id', id: '01a002e9-9a1c-7d42-a642-e481f64446f1' },
       terminalResumeEligible: false
     })
     expect(mocks.setAgentStatus.mock.calls.at(-1)?.[5]?.providerSession?.id).not.toBe('session-1')

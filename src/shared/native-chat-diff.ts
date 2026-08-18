@@ -80,6 +80,35 @@ function toLines(value: unknown, maxLines: number): { lines: string[]; truncated
   return { lines: bounded, truncated }
 }
 
+function patchTextFromToolInput(value: Record<string, unknown>): string | null {
+  if (typeof value.patch === 'string') {
+    return value.patch
+  }
+  if (typeof value.diff === 'string') {
+    return value.diff
+  }
+  if (!Array.isArray(value.changes)) {
+    return null
+  }
+  const sections = value.changes.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      return []
+    }
+    const change = entry as Record<string, unknown>
+    if (typeof change.diff !== 'string') {
+      return []
+    }
+    const path = typeof change.path === 'string' ? change.path : 'file'
+    const kind =
+      typeof change.kind === 'object' && change.kind !== null
+        ? (change.kind as Record<string, unknown>)
+        : null
+    const nextPath = kind && typeof kind.move_path === 'string' ? kind.move_path : path
+    return [`--- ${path}\n+++ ${nextPath}\n${change.diff}`]
+  })
+  return sections.length > 0 ? sections.join('\n') : null
+}
+
 export function diffFromToolCall(
   name: string,
   input: unknown,
@@ -89,6 +118,10 @@ export function diffFromToolCall(
     return null
   }
   const value = input as Record<string, unknown>
+  const patchText = patchTextFromToolInput(value)
+  if (patchText !== null) {
+    return diffFromText(patchText, maxLines)
+  }
   const oldLines = toLines(value.old_string ?? value.oldString ?? value.old, maxLines)
   const newLines = toLines(
     value.new_string ?? value.newString ?? value.new ?? value.content ?? value.file_text,

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
@@ -15,6 +15,7 @@ export class StructuredAgentSessionReadableRestorer {
       journalRoot: string
       supportsRecord: (record: AgentSessionRecord) => boolean
       reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+      resolveRecovery: (sessionId: string) => Promise<unknown>
       resume: (params: AgentSessionAttachParams) => Promise<boolean>
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
       hasSession: (sessionId: string) => boolean

@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { CodexTurnOrdinals } from './codex-structured-item-translation'
+import {
+  createCodexJournalTranslator,
+  MAX_CODEX_GENERIC_ROWS_PER_TURN
+} from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
@@ -387,6 +392,66 @@ describe('codex journal translation', () => {
     })
   })
 
+  it('folds long-running command output into one exec item and zero generic rows', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-1', command: 'long-task', status: 'inProgress' }
+      })
+    )
+
+    for (let index = 0; index < 512; index += 1) {
+      translator.handle(
+        notification('item/commandExecution/outputDelta', { itemId: 'exec-1', delta: 'x' })
+      )
+      window.fire()
+    }
+    translator.flush()
+
+    expect(new Set(tap.rows.map((row) => row.key))).toEqual(
+      new Set(['orca:codex-item%3Athread-abc%3Aexec-1'])
+    )
+    expect(tap.rows.every((row) => row.body.kind === 'tool-call')).toBe(true)
+    expect(tap.rows.length).toBeLessThan(40)
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      kind: 'tool-call',
+      output: { head: 'x'.repeat(512) }
+    })
+  })
+
+  it('folds reasoning and patch streams into their parent rows', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(TURN_STARTED)
+    translator.handle(notification('item/started', { item: { type: 'reasoning', id: 'r-1' } }))
+    translator.handle(
+      notification('item/reasoning/summaryTextDelta', { itemId: 'r-1', delta: 'thinking' })
+    )
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'fileChange', id: 'patch-1', changes: [], status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('item/fileChange/patchUpdated', {
+        itemId: 'patch-1',
+        changes: [{ path: 'src/app.ts', kind: { type: 'update' }, diff: '@@ -1 +1 @@' }]
+      })
+    )
+    window.fire()
+
+    const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
+    expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
+      kind: 'status',
+      text: 'thinking'
+    })
+    expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
+      kind: 'diff',
+      path: 'src/app.ts',
+      patch: { head: '@@ -1 +1 @@' }
+    })
+  })
+
   it('publishes after every write so a subscriber never trails the journal', () => {
     const { translator, tap } = translatorWith()
 
@@ -398,7 +463,19 @@ describe('codex journal translation', () => {
     expect(tap.publishes()).toBe(1)
   })
 
-  it('journals malformed item events and deltas instead of hiding them', () => {
+  it('releases a turn ordinal map when the turn completes', () => {
+    const spy = vi.spyOn(CodexTurnOrdinals.prototype, 'forgetTurn')
+    try {
+      const { translator } = translatorWith()
+      translator.handle(TURN_STARTED)
+      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+      expect(spy).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('journals malformed item events but never malformed deltas', () => {
     const { translator, tap, window } = translatorWith()
 
     translator.handle(TURN_STARTED)
@@ -410,10 +487,6 @@ describe('codex journal translation', () => {
       expect.objectContaining({
         kind: 'status',
         providerFrame: expect.objectContaining({ kind: 'notification:item/completed' })
-      }),
-      expect.objectContaining({
-        kind: 'status',
-        providerFrame: expect.objectContaining({ kind: 'notification:item/agentMessage/delta' })
       })
     ])
   })
@@ -440,6 +513,156 @@ describe('codex journal translation', () => {
     expect(
       tap.rows.map((row) => (row.body.kind === 'status' ? row.body.providerFrame?.kind : undefined))
     ).toEqual(['notification:future/notification', 'request:future/request', 'frame:unclassified'])
+  })
+
+  it('bounds generic rows per turn while keeping the suppression visible and countable', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(TURN_STARTED)
+    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 20; index += 1) {
+      translator.handle(notification('future/notification', { value: index }))
+    }
+    translator.handle(notification('item/future/outputDelta', { itemId: 'future', delta: 'x' }))
+
+    const generic = tap.rows.filter(
+      (row) => row.body.kind === 'status' && row.body.providerFrame !== undefined
+    )
+    expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN)
+    expect(generic[0]?.body).toMatchObject({
+      kind: 'status',
+      providerFrame: { kind: 'notification:future/notification' }
+    })
+    // The 20 capped frames reduce to ONE summary row whose count is exact, so
+    // suppressed provider activity is never invisible.
+    const summaries = new Map(
+      tap.rows
+        .filter((row) => row.key.includes('provider-frame-suppressed'))
+        .map((row) => [row.key, row.body])
+    )
+    expect(summaries.size).toBe(1)
+    expect([...summaries.values()][0]).toEqual({
+      kind: 'status',
+      text: '20 more provider notifications not shown for this turn'
+    })
+    expect(
+      tap.rows.some(
+        (row) =>
+          row.body.kind === 'status' &&
+          row.body.providerFrame?.kind === 'notification:item/future/outputDelta'
+      )
+    ).toBe(false)
+  })
+
+  it('never lets the generic-row cap hide an error frame', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(TURN_STARTED)
+    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 3; index += 1) {
+      translator.handle(notification('future/notification', { value: index }))
+    }
+    translator.handle(notification('future/failure', { error: 'provider exploded' }))
+
+    expect(
+      tap.rows.some(
+        (row) =>
+          row.body.kind === 'status' &&
+          row.body.providerFrame?.kind === 'notification:future/failure'
+      )
+    ).toBe(true)
+  })
+
+  it('keeps a fresh session timeline empty through startup and status notifications', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
+    for (let index = 0; index < 8; index += 1) {
+      translator.handle(
+        notification('mcpServer/startupStatus/updated', {
+          server: `server-${index}`,
+          status: 'starting'
+        })
+      )
+    }
+    translator.handle(notification('remoteControl/status/changed', { status: 'disabled' }))
+
+    const timeline = projectStructuredItemsToNativeChat(
+      tap.rows.map((row, index) => ({
+        itemId: row.key,
+        revision: 1,
+        sequence: index + 1,
+        observedAt: index + 1,
+        body: row.body
+      }))
+    )
+    expect(timeline).toEqual([])
+  })
+
+  it('projects only user and assistant content for a complete turn with hooks', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
+    translator.handle(notification('hook/started', { run: { id: 'hook-1', status: 'running' } }))
+    translator.handle(notification('account/rateLimits/updated', { rateLimits: { primary: null } }))
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/completed', {
+        item: { type: 'userMessage', id: 'item-0', text: 'hi' }
+      })
+    )
+    translator.handle(
+      notification('hook/completed', { run: { id: 'hook-1', status: 'completed' } })
+    )
+    translator.handle(
+      notification('item/completed', {
+        item: { type: 'agentMessage', id: 'item-1', text: 'hello' }
+      })
+    )
+    translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+
+    const timeline = projectStructuredItemsToNativeChat(
+      tap.rows.map((row, index) => ({
+        itemId: row.key,
+        revision: 1,
+        sequence: index + 1,
+        observedAt: index + 1,
+        body: row.body
+      }))
+    )
+    expect(timeline.map(({ role, blocks }) => ({ role, blocks }))).toEqual([
+      { role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
+      { role: 'assistant', blocks: [{ type: 'text', text: 'hello' }] }
+    ])
+  })
+
+  it('renders a system error carried by a suppressed status kind', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.handle(
+      notification('thread/status/changed', {
+        threadId: THREAD_ID,
+        status: { type: 'systemError' }
+      })
+    )
+
+    const timeline = projectStructuredItemsToNativeChat(
+      tap.rows.map((row, index) => ({
+        itemId: row.key,
+        revision: 1,
+        sequence: index + 1,
+        observedAt: index + 1,
+        body: row.body
+      }))
+    )
+    expect(timeline).toEqual([
+      expect.objectContaining({
+        role: 'system',
+        blocks: [
+          expect.objectContaining({
+            providerFrame: expect.objectContaining({
+              kind: 'notification:thread/status/changed'
+            })
+          })
+        ]
+      })
+    ])
   })
 
   it('writes nothing more after dispose', () => {

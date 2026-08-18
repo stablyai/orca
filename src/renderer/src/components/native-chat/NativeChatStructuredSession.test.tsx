@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
-  }
+  },
+  composerProps: null as null | { structuredTransport?: Record<string, unknown> }
 }))
 
 vi.mock('./use-structured-agent-session', () => ({
@@ -37,8 +38,26 @@ vi.mock('./use-structured-agent-session', () => ({
     turnId: null,
     cancel: vi.fn(),
     respond: vi.fn(),
-    optionSnapshot: [],
-    optionSurface: null,
+    optionSnapshot: [
+      {
+        id: 'model',
+        label: 'Model',
+        category: 'model',
+        kind: {
+          type: 'select',
+          currentValue: 'gpt-live',
+          choices: [{ value: 'gpt-live', label: 'GPT Live' }]
+        },
+        valueSource: 'reported',
+        settable: true
+      }
+    ],
+    optionSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
     setStructuredOption: vi.fn()
   })
 }))
@@ -66,7 +85,12 @@ vi.mock('./NativeChatMessageList', () => ({
   }
 }))
 
-vi.mock('./NativeChatComposer', () => ({ NativeChatComposer: () => null }))
+vi.mock('./NativeChatComposer', () => ({
+  NativeChatComposer: (props: typeof mocks.composerProps) => {
+    mocks.composerProps = props
+    return null
+  }
+}))
 vi.mock('./NativeChatEmptyState', () => ({ NativeChatEmptyState: () => null }))
 vi.mock('./NativeChatApprovalCard', () => ({ NativeChatApprovalCard: () => null }))
 vi.mock('./NativeChatQuestionCard', () => ({ NativeChatQuestionCard: () => null }))
@@ -77,6 +101,7 @@ describe('NativeChatStructuredSession', () => {
   afterEach(() => {
     cleanup()
     mocks.messageListProps = null
+    mocks.composerProps = null
   })
 
   it('wires local structured file links through the native chat opener', () => {
@@ -92,5 +117,29 @@ describe('NativeChatStructuredSession', () => {
 
     expect(mocks.messageListProps?.allowFileUriLinks).toBe(true)
     expect(mocks.messageListProps?.onLinkClick).toBe(mocks.fileLinkClick)
+  })
+
+  it('routes a bare model command to the native option picker', async () => {
+    render(
+      <NativeChatStructuredSession
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent="codex"
+        allowFileUriLinks
+      />
+    )
+    const dispatchCommand = mocks.composerProps?.structuredTransport?.dispatchCommand as
+      | ((text: string) => Promise<{ accepted: boolean }>)
+      | undefined
+
+    await act(async () => {
+      await expect(dispatchCommand?.('/model')).resolves.toMatchObject({ accepted: true })
+    })
+
+    expect(mocks.composerProps?.structuredTransport?.optionPickerRequest).toEqual({
+      id: 'model',
+      sequence: 1
+    })
   })
 })

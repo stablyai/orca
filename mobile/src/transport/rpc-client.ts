@@ -3,8 +3,7 @@ import type {
   RpcSuccess,
   ConnectionState,
   ConnectionLogLevel,
-  ConnectionLogSink,
-  ForegroundNudgeReason
+  ConnectionLogSink
 } from './types'
 import {
   generateKeyPair,
@@ -37,10 +36,20 @@ import {
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
-import { createRpcActivityProbe } from './rpc-client-activity-probe'
+import {
+  isStreamingSubscriptionReadyResult,
+  isTerminalSubscribedResult
+} from './rpc-subscription-result-shapes'
+import {
+  RpcSessionLivenessWatchdog,
+  type RpcSessionIdentity
+} from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { MOBILE_STRUCTURED_RUNTIME_CAPABILITIES } from './mobile-structured-runtime-capabilities'
+import type { RpcClient, SendRequestOptions, SubscribeOptions } from './rpc-client-contract'
+
+export type { RpcClient, SendRequestOptions } from './rpc-client-contract'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -51,27 +60,6 @@ type ConnectWaiter = {
   resolve: () => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout> | null
-}
-
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
-   *  phase its own. Interactive chat writes need it: they run as sequential loops
-   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
-   *  for a multiple of the stated ceiling. Off by default — the long-running
-   *  callers (worktree create, dictation finish, credit reset) sized their budgets
-   *  against the post-connect clock, and squeezing them to the floor after a slow
-   *  reconnect would fail sends that used to land. */
-  budgetSpansConnect?: boolean
-  /** Reject immediately when not connected — a send parked in the connect wait
-   *  replays stale terminal bytes into the PTY after reconnect. */
-  failWhenDisconnected?: boolean
-}
-
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  /** Rebuild cursor-bearing params after a transport reconnect. */
-  paramsForReconnect?: () => unknown
 }
 
 type StreamingListener = (result: unknown) => void
@@ -85,38 +73,6 @@ type StreamRequest = {
   cancelled?: boolean
   sent?: boolean
   paramsForReconnect?: () => unknown
-}
-
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
-  subscribe: (
-    method: string,
-    params: unknown,
-    onData: StreamingListener,
-    options?: SubscribeOptions
-  ) => () => void
-  updateTerminalSubscriptionViewport: (
-    terminal: string,
-    viewport: { cols: number; rows: number }
-  ) => void
-  getState: () => ConnectionState
-  // 0 means never failed; structured streams reset only after proving >5s longevity.
-  getReconnectAttempt: () => number
-  // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
-  getLastConnectedAt: () => number | null
-  onStateChange: (listener: (state: ConnectionState) => void) => () => void
-  // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
-  // The reason routes relay handling (probe vs replace); the direct socket probes regardless.
-  notifyForeground: (reason?: ForegroundNudgeReason) => void
-  /** A long-background structured stream must replace the socket immediately. */
-  restartAfterStructuredBackground?: () => void
-  /** A structured stream, not authentication alone, proved the path durable. */
-  confirmStructuredStreamLongevity?: () => void
-  close: () => void
 }
 
 // Why: tiered backoff — fast early entries recover blips; the slow tail avoids burning a SYN every 4s on an unreachable desktop.
@@ -137,6 +93,7 @@ const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 // Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
 const WEBSOCKET_CONNECTING_STATE = 0
+const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
@@ -185,7 +142,7 @@ export function connect(
   let lastConnectedAt: number | null = null
   // Why: cheap diagnostics for RN/OkHttp process-state poisoning (retry cadence, inbound traffic, close timing).
   let lastInboundAt: number | null = null
-  let inboundSequence = 0
+  let livenessIdentity: (RpcSessionIdentity & { socket: WebSocket }) | null = null
   let lastWsClosedAt: number | null = null
   let wsConstructionCounter = 0
   let dialStartedAt = 0
@@ -328,6 +285,7 @@ export function connect(
     const openingWs = ws
     let openingWsAuthenticated = false
     let openingWsLastInboundAt: number | null = null
+    let openingLivenessIdentity: (RpcSessionIdentity & { socket: WebSocket }) | null = null
 
     // Why: RN can leave opens pending forever on flaky handoffs — force reconnect if onopen never arrives.
     connectTimer = setTimeout(() => {
@@ -364,7 +322,12 @@ export function connect(
         type: 'e2ee_hello',
         publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
       })
-      openingWs.send(hello)
+      try {
+        openingWs.send(hello)
+      } catch {
+        closeAndSynthesize(openingWs)
+        return
+      }
       emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
 
       sharedKey = deriveSharedKey(ephemeral.secretKey, serverPublicKey)
@@ -436,9 +399,11 @@ export function connect(
               streamCount: streamListeners.size
             })
             openingWsAuthenticated = true
+            openingLivenessIdentity = { socket: openingWs }
+            livenessIdentity = openingLivenessIdentity
+            livenessWatchdog.start(openingLivenessIdentity)
             setState('connected')
             emitLog('success', 'Authenticated', 'Channel ready for RPC')
-            activityProbe.start()
             for (const [id, stream] of streamListeners) {
               if (stream.cancelled) {
                 removeStreamListener(id)
@@ -463,8 +428,9 @@ export function connect(
               ) {
                 stream.sent = true
               } else {
-                emitStreamError(stream, 'Connection interrupted')
-                removeStreamListener(id)
+                // The failed write already starts recovery; retain every stream for replay.
+                markStreamsForReplay()
+                break
               }
             }
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
@@ -495,6 +461,9 @@ export function connect(
         if (!plaintextBytes) {
           return
         }
+        if (openingLivenessIdentity) {
+          livenessWatchdog.noteAuthenticatedInbound(openingLivenessIdentity)
+        }
         handleBinaryFrame(plaintextBytes)
         return
       }
@@ -502,6 +471,9 @@ export function connect(
       const plaintext = decrypt(raw, sharedKey)
       if (plaintext === null) {
         return
+      }
+      if (openingLivenessIdentity) {
+        livenessWatchdog.noteAuthenticatedInbound(openingLivenessIdentity)
       }
 
       let response: unknown
@@ -513,8 +485,9 @@ export function connect(
       if (!isRpcResponse(response)) {
         return
       }
-      recordValidatedInboundTraffic()
-
+      if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
+        return
+      }
       // Why: a mid-session unauthorized may be transient (issue #5200) — handleAuthRejection retries before latching auth-failed.
       if (!response.ok && response.error.code === 'unauthorized') {
         handleAuthRejection('Unauthorized — pairing may be revoked')
@@ -663,7 +636,10 @@ export function connect(
     pendingBrowserScreencastRequestId = null
     markStreamsForReplay()
     clearHandshakeTimer()
-    activityProbe.stop()
+    if (livenessIdentity?.socket === closedWs) {
+      livenessWatchdog.stop(livenessIdentity)
+      livenessIdentity = null
+    }
     if (intentionallyClosed) {
       console.log('[net] handleSocketClosed — intentional close')
       setState('disconnected')
@@ -694,6 +670,10 @@ export function connect(
 
   // Why: an auth rejection may be transient (issue #5200) — retry up to AUTH_RETRY_BUDGET times before latching auth-failed.
   function handleAuthRejection(reason: string, preserveRecovery = false): void {
+    if (livenessIdentity) {
+      livenessWatchdog.stop(livenessIdentity)
+      livenessIdentity = null
+    }
     authRejectionCount++
     if (authRejectionCount < AUTH_RETRY_BUDGET) {
       console.log('[net] auth rejected — retrying handshake', {
@@ -899,21 +879,15 @@ export function connect(
     }
   }
 
-  function recordValidatedInboundTraffic(): void {
-    inboundSequence++
-  }
-
   function handleBinaryFrame(bytes: Uint8Array): void {
     const browserFrame = decodeBrowserScreencastFrame(bytes)
     if (browserFrame) {
-      recordValidatedInboundTraffic()
       handleBrowserBinaryFrame(browserFrame)
       return
     }
     handleTerminalBinaryFrame(bytes, {
       terminalSnapshots,
-      getListener: (streamId) => terminalStreamListeners.get(streamId),
-      recordValidatedInboundTraffic
+      getListener: (streamId) => terminalStreamListeners.get(streamId)
     })
   }
 
@@ -930,8 +904,16 @@ export function connect(
 
   function sendEncrypted(request: unknown): boolean {
     if (ws && ws.readyState === WebSocket.OPEN && sharedKey) {
-      ws.send(encrypt(JSON.stringify(request), sharedKey))
-      return true
+      const sendingWs = ws
+      try {
+        sendingWs.send(encrypt(JSON.stringify(request), sharedKey))
+        return true
+      } catch {
+        if (ws === sendingWs) {
+          closeAndSynthesize(sendingWs)
+        }
+        return false
+      }
     }
     console.log('[net] sendEncrypted FAILED — channel not ready', {
       hasWs: !!ws,
@@ -977,15 +959,23 @@ export function connect(
     }
   }
 
-  const activityProbe = createRpcActivityProbe({
-    getState: () => state,
-    getSocket: () => ws,
-    getInboundSequence: () => inboundSequence,
-    nextId,
-    registerPending: (id, onSettled) => pending.set(id, { resolve: onSettled, reject: onSettled }),
-    clearPending: (id) => pending.delete(id),
-    sendProbe: (id) => sendEncrypted({ id, deviceToken, method: 'status.get' }),
-    forceReconnect: closeAndSynthesize
+  const livenessWatchdog = new RpcSessionLivenessWatchdog({
+    transport: 'direct',
+    sendProbe: (identity) => {
+      if (identity !== livenessIdentity || state !== 'connected') {
+        return false
+      }
+      return sendEncrypted({
+        id: `${LIVENESS_REQUEST_ID_PREFIX}${nextId()}`,
+        deviceToken,
+        method: 'status.get'
+      })
+    },
+    terminate: (identity) => {
+      if (identity === livenessIdentity && livenessIdentity.socket === ws) {
+        closeAndSynthesize(livenessIdentity.socket)
+      }
+    }
   })
 
   openConnection()
@@ -1142,10 +1132,11 @@ export function connect(
         return
       }
       if (state === 'connected') {
-        // Why: OS can kill the TCP path while backgrounded without onclose; probe now to detect the half-open socket in ≤8s (issue #5049).
+        // Why: resume probes now; three fair misses detect a half-open socket within 24s.
         console.log('[net] foreground — probing live connection')
-        activityProbe.start()
-        activityProbe.run()
+        if (livenessIdentity) {
+          livenessWatchdog.probeNow(livenessIdentity)
+        }
         return
       }
       const dialing = ws
@@ -1198,7 +1189,10 @@ export function connect(
       }
       clearConnectTimer()
       clearHandshakeTimer()
-      activityProbe.stop()
+      if (livenessIdentity) {
+        livenessWatchdog.stop(livenessIdentity)
+        livenessIdentity = null
+      }
       if (ws) {
         ws.close()
         ws = null
@@ -1209,26 +1203,4 @@ export function connect(
       rejectAllPending('Client closed', { deliveryUnknown: true })
     }
   }
-}
-
-function isTerminalSubscribedResult(
-  value: unknown
-): value is { type: 'subscribed'; streamId: number } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'subscribed' &&
-    typeof (value as { streamId?: unknown }).streamId === 'number'
-  )
-}
-
-function isStreamingSubscriptionReadyResult(
-  value: unknown
-): value is { type: 'ready'; subscriptionId: string } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'ready' &&
-    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
-  )
 }

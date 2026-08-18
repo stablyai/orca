@@ -3,6 +3,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { parsePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
+  hasPersistedStructuredAgentSessionTurn,
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
   structuredAgentSessionPaneKey
@@ -48,6 +49,15 @@ describe('structured agent session status projection', () => {
 
     expect(structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')).toBe(paneKey)
     expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-1' })
+  })
+
+  it('requires a persisted provider conversation turn before TUI resume', () => {
+    const status = item('status', 1, { kind: 'status', text: 'Connected' })
+    const user = item('user', 2, { kind: 'message', role: 'user', blocks: [] })
+
+    expect(hasPersistedStructuredAgentSessionTurn([])).toBe(false)
+    expect(hasPersistedStructuredAgentSessionTurn([status])).toBe(false)
+    expect(hasPersistedStructuredAgentSessionTurn([status, user])).toBe(true)
   })
 
   it('preserves provider-frame detail on the backward-compatible status line', () => {

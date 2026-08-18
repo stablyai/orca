@@ -5,6 +5,7 @@ import { useAppStore } from '../store'
 import { applyWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } from './web-session-tabs-sync'
 
 const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
+let localStructuredSessionTabsRestorePromise: Promise<void> | null = null
 
 type SessionTabsEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -34,14 +35,17 @@ export function projectLocalStructuredSessionTabs(
   }
 }
 
-function applySnapshots(snapshots: readonly RuntimeMobileSessionTabsResult[]): void {
+export function applyStructuredSessionTabSnapshots(
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  owner = LOCAL_STRUCTURED_SESSION_OWNER
+): void {
   applyWebSessionTabsStorePatch((state) => {
     let next = state
     for (const snapshot of snapshots) {
       const patch = applyWebSessionTabsSnapshot(
         next,
         projectLocalStructuredSessionTabs(snapshot),
-        LOCAL_STRUCTURED_SESSION_OWNER,
+        owner,
         Date.now(),
         { preserveLocalLayout: true }
       )
@@ -49,6 +53,23 @@ function applySnapshots(snapshots: readonly RuntimeMobileSessionTabsResult[]): v
     }
     return next
   })
+}
+
+export function restoreLocalStructuredSessionTabsOnce(): Promise<void> {
+  localStructuredSessionTabsRestorePromise ??= window.api.runtime
+    .call({ method: 'session.tabs.listAll', params: {} })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error('structured session inventory unavailable')
+      }
+      const result = response.result as { snapshots?: RuntimeMobileSessionTabsResult[] }
+      applyStructuredSessionTabSnapshots(result.snapshots ?? [])
+    })
+    .catch((error) => {
+      localStructuredSessionTabsRestorePromise = null
+      throw error
+    })
+  return localStructuredSessionTabsRestorePromise
 }
 
 async function startLocalStructuredSessionTabsSync(args: {
@@ -60,12 +81,10 @@ async function startLocalStructuredSessionTabsSync(args: {
     return
   }
   const supported = status.capabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-  void window.api.runtime.call({ method: 'session.tabs.listAll', params: {} }).then((response) => {
-    if (!args.isDisposed() && response.ok) {
-      const result = response.result as { snapshots?: RuntimeMobileSessionTabsResult[] }
-      applySnapshots(result.snapshots ?? [])
-    }
-  })
+  await restoreLocalStructuredSessionTabsOnce()
+  if (args.isDisposed()) {
+    return
+  }
   if (!supported) {
     return
   }
@@ -77,9 +96,9 @@ async function startLocalStructuredSessionTabsSync(args: {
       }
       const event = response.result as SessionTabsEvent
       if (event.type === 'snapshots') {
-        applySnapshots(event.snapshots)
+        applyStructuredSessionTabSnapshots(event.snapshots)
       } else if (event.type === 'snapshot' || event.type === 'updated') {
-        applySnapshots([event])
+        applyStructuredSessionTabSnapshots([event])
       }
     }
   )
@@ -91,7 +110,9 @@ async function startLocalStructuredSessionTabsSync(args: {
 }
 
 export function useLocalStructuredSessionTabsSync(): void {
-  const ready = useAppStore((state) => state.workspaceSessionReady)
+  const ready = useAppStore(
+    (state) => state.workspaceSessionReady && state.terminalStartupRestorationReady
+  )
   useEffect(() => {
     if (!ready) {
       return

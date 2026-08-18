@@ -26,7 +26,10 @@ describe('structured agent-session owner probe', () => {
     const probe = vi.fn(async () => ({ outcome: 'pid-absent' }) as const)
     const result = await createStructuredAgentSessionOwnerProbe(HOST_ID, probe)(record(OWNER))
 
-    expect(probe).toHaveBeenCalledWith({ identity: OWNER })
+    expect(probe).toHaveBeenCalledWith({
+      identity: OWNER,
+      deps: { readEchoedSpawnToken: expect.any(Function) }
+    })
     expect(result).toEqual({ outcome: 'pid-absent' })
   })
 

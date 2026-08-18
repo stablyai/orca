@@ -1,9 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type {
-  AgentSessionHandoffStatus,
-  AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
+import type { AgentSessionHistoryResult } from '../../../../shared/agent-session-wire'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import {
   projectStructuredAgentSessionStatus,
@@ -15,7 +12,7 @@ import {
   shouldAdvanceStructuredResumeCursor,
   type StructuredAgentSessionState
 } from '../../../../shared/structured-agent-session-reducer'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
@@ -23,10 +20,6 @@ import {
   callStructuredAgentSession,
   subscribeStructuredAgentSession
 } from '@/runtime/structured-agent-session-client'
-import {
-  clearStructuredHandoff,
-  publishStructuredHandoff
-} from '@/runtime/structured-agent-session-handoff-store'
 
 type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -103,13 +96,6 @@ function startStatusProjection(tab: StructuredTab, target: RuntimeClientTarget):
         target,
         { sessionId: tab.entityId, ...(state.cursor ? { cursor: state.cursor } : {}) },
         (event) => {
-          if ('handoff' in event && event.handoff) {
-            publishStructuredHandoff({
-              sessionId: tab.entityId,
-              fence: event.fence ?? state.fence ?? 0,
-              status: event.handoff
-            })
-          }
           if (
             event.type === 'batch' &&
             !shouldAdvanceStructuredResumeCursor(state.cursor, event.batch.cursor)
@@ -150,17 +136,12 @@ function startStatusProjection(tab: StructuredTab, target: RuntimeClientTarget):
       opening = false
     }
   }
-  void Promise.all([
-    callStructuredAgentSession<AgentSessionHistoryResult>(target, 'agentSession.history', {
-      sessionId: tab.entityId,
-      direction: 'tail',
-      limit: 40
-    }),
-    callStructuredAgentSession<AgentSessionHandoffStatus>(target, 'agentSession.handoffStatus', {
-      sessionId: tab.entityId
-    }).catch(() => null)
-  ])
-    .then(async ([result, handoff]) => {
+  void callStructuredAgentSession<AgentSessionHistoryResult>(target, 'agentSession.history', {
+    sessionId: tab.entityId,
+    direction: 'tail',
+    limit: 40
+  })
+    .then(async (result) => {
       if (stopped) {
         return
       }
@@ -179,14 +160,6 @@ function startStatusProjection(tab: StructuredTab, target: RuntimeClientTarget):
           }
         })
       }
-      if (handoff) {
-        apply({ type: 'handoff', handoff })
-        publishStructuredHandoff({
-          sessionId: tab.entityId,
-          fence: result.ok ? (result.page.fence ?? 0) : (result.fence ?? 0),
-          status: handoff
-        })
-      }
       await open()
     })
     .catch(scheduleReconnect)
@@ -196,7 +169,6 @@ function startStatusProjection(tab: StructuredTab, target: RuntimeClientTarget):
       clearTimeout(reconnectTimer)
     }
     unsubscribe()
-    clearStructuredHandoff(tab.entityId)
     useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId))
   }
 }

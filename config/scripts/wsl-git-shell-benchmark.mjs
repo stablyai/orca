@@ -175,7 +175,7 @@ async function main() {
         wslShellArgs(distro, ['/bin/sh', '-lc', escapeWslShCommandForWindows(script)])
       )
       const markerOffset = result.stdout.indexOf(outputMarker)
-      if (markerOffset < 0) {
+      if (markerOffset === -1) {
         throw new Error('Login shell did not emit the Git output marker')
       }
       result.stdout = result.stdout.subarray(markerOffset + Buffer.byteLength(outputMarker))

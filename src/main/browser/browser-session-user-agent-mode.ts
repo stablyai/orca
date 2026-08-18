@@ -1,6 +1,6 @@
 import type { Session } from 'electron'
 
-import type { BrowserSessionUserAgentMode } from '../../shared/types'
+import type { BrowserSessionUserAgentMode } from '../../shared/browser-workspace-types'
 
 const userAgentModeBySession = new WeakMap<Session, BrowserSessionUserAgentMode>()
 

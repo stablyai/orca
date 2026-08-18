@@ -307,6 +307,22 @@ describe('openCodexAppServerConnection', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
+  it('reports unproven close when forced termination did not produce an exit event', async () => {
+    vi.useFakeTimers()
+    const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
+    answerInitialize(child)
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {},
+      spawnImpl
+    )
+
+    const closing = connection.close()
+    await vi.advanceTimersByTimeAsync(2_600)
+
+    await expect(closing).resolves.toBe(false)
+  })
+
   it('ends the connection rather than buffering an oversized line', async () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)

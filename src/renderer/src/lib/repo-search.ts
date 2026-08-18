@@ -1,4 +1,4 @@
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
 // Display-name matches must always outrank path-only matches. This offset is

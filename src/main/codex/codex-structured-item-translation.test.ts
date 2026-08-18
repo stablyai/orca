@@ -53,6 +53,23 @@ function keysFor(items: CodexThreadItem[]): string[] {
     )
 }
 
+describe('codex turn ordinals', () => {
+  it('releases a forgotten turn without ever reusing an ordinal it assigned', () => {
+    const ordinals = new CodexTurnOrdinals()
+    expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-1')).toBe(0)
+    expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-2')).toBe(1)
+
+    ordinals.forgetTurn('thread-1', 'turn-1')
+
+    // A straggler for the released turn — even a previously seen item id — gets
+    // a FRESH ordinal: reusing a released slot would upsert another item's row.
+    expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-1')).toBe(2)
+    expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-3')).toBe(3)
+    // Other turns are untouched.
+    expect(ordinals.ordinalFor('thread-1', 'turn-2', 'item-1')).toBe(0)
+  })
+})
+
 describe('codex item identity', () => {
   it('gives a resumed turn the same message keys as the live turn it renumbered', () => {
     expect(keysFor(LIVE_TURN)).toEqual(keysFor(RESUMED_TURN))
@@ -169,6 +186,24 @@ describe('codex item bodies', () => {
     expect(
       codexItemBody({ type: 'commandExecution', id: 'a', command: 'sleep', status: 'aborted' })
     ).toMatchObject({ state: 'failed' })
+  })
+
+  it('maps file changes to one bounded diff item', () => {
+    expect(
+      codexItemBody({
+        type: 'fileChange',
+        id: 'patch-1',
+        status: 'completed',
+        changes: [
+          { path: 'src/a.ts', diff: '@@ a @@' },
+          { path: 'src/b.ts', diff: '@@ b @@' }
+        ]
+      })
+    ).toMatchObject({
+      kind: 'diff',
+      path: '2 files',
+      patch: { head: '@@ a @@\n@@ b @@', truncated: false }
+    })
   })
 
   it('renders reasoning as status and exposes an unknown item as a provider frame', () => {

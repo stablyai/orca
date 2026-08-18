@@ -5,12 +5,20 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+
+export type NativeChatOptionPickerRequest = {
+  id: string
+  sequence: number
+}
 
 export type NativeChatStructuredComposerTransport = {
-  send: (text: string) => boolean
+  send: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => boolean
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
+  optionPickerRequest?: NativeChatOptionPickerRequest | null
+  worktreeId?: string
   onError: (message: string | null) => void
   runtime: 'local' | 'remote'
 }

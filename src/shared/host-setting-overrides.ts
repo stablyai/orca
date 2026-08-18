@@ -1,5 +1,17 @@
 import type { ExecutionHostId } from './execution-host'
-import type { GlobalSettings, HostSettingOverrides } from './types'
+import type { GlobalSettings } from './global-settings-types'
+
+/** Per-host overrides for client preferences that genuinely vary by execution
+ *  host. NARROW by design: only settings whose value is meaningless to share
+ *  across hosts belong here.
+ *  - `displayLabel`: a client-side rename for the host shown in sidebar/pickers.
+ *  - `defaultWorktreeLocation`: the host's root worktree directory; a remote
+ *    SSH/runtime host has a different filesystem layout than the local Mac, so
+ *    the client `workspaceDir` default cannot apply unchanged. */
+export type HostSettingOverrides = {
+  displayLabel?: string
+  defaultWorktreeLocation?: string
+}
 
 // Why: per-host preferences follow `effective = host override ?? client default`.
 // These pure helpers centralize that rule so the UI, registry, and tests share a

@@ -6,9 +6,12 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
+  AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
+import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime-memory-limits'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   openAgentSessionJournal,
   type AgentSessionJournal
@@ -191,6 +194,109 @@ describe('readAgentSessionHistory', () => {
   })
 })
 
+describe('history page byte ceiling', () => {
+  // A legal user message may be 256 KiB; twenty of them serialize past the
+  // 4 MiB outbound channel cap, which closes the socket on overflow.
+  const LARGE_TEXT = 'x'.repeat(250 * 1024)
+
+  async function appendLargeItems(count: number): Promise<void> {
+    for (let ordinal = 1; ordinal <= count; ordinal += 1) {
+      await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
+    }
+  }
+
+  function pageOf(result: ReturnType<typeof readAgentSessionHistory>) {
+    if (!result.ok) {
+      throw new Error(`expected a page, got reset ${result.reset}`)
+    }
+    // The actual channel gate: the page must serialize under the outbound cap.
+    serializeRemoteRuntimePayload(result.page)
+    return result.page
+  }
+
+  it('keeps a tail of legal large messages under the channel cap and still pages back to every item', async () => {
+    await appendLargeItems(20)
+
+    const tail = pageOf(
+      readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+    )
+    expect(tail.items.length).toBeGreaterThan(0)
+    expect(tail.hasOlder).toBe(true)
+
+    const seen = tail.items.map((entry) => entry.itemId)
+    let cursor = tail.window.nextCursor
+    let hasOlder = tail.hasOlder
+    let guard = 0
+    while (hasOlder) {
+      guard += 1
+      expect(guard).toBeLessThan(30)
+      const page = pageOf(
+        readAgentSessionHistory(journal, {
+          sessionId: 'session-1',
+          direction: 'before',
+          cursor,
+          limit: 40
+        })
+      )
+      expect(page.items.length).toBeGreaterThan(0)
+      seen.push(...page.items.map((entry) => entry.itemId))
+      cursor = page.window.nextCursor
+      hasOlder = page.hasOlder
+    }
+    expect(new Set(seen).size).toBe(20)
+  })
+
+  it('bounds a forward catch-up page by bytes and keeps replaying to the head', async () => {
+    const start = { epoch: journal.epoch, sequence: 0 }
+    await appendLargeItems(20)
+
+    const first = pageOf(
+      readAgentSessionHistory(journal, {
+        sessionId: 'session-1',
+        direction: 'after',
+        cursor: start,
+        limit: 40
+      })
+    )
+    expect(first.items.length).toBeGreaterThan(0)
+    expect(first.hasNewer).toBe(true)
+
+    const seen = first.items.map((entry) => entry.itemId)
+    let cursor = first.window.nextCursor
+    let hasNewer = first.hasNewer
+    let guard = 0
+    while (hasNewer) {
+      guard += 1
+      expect(guard).toBeLessThan(30)
+      const page = pageOf(
+        readAgentSessionHistory(journal, {
+          sessionId: 'session-1',
+          direction: 'after',
+          cursor,
+          limit: 40
+        })
+      )
+      expect(page.items.length).toBeGreaterThan(0)
+      seen.push(...page.items.map((entry) => entry.itemId))
+      cursor = page.window.nextCursor
+      hasNewer = page.hasNewer
+    }
+    expect(new Set(seen).size).toBe(20)
+  })
+
+  it('degrades a single over-budget item to a visible truncation marker instead of overflowing', async () => {
+    await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), { fence: 1 })
+
+    const tail = pageOf(
+      readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+    )
+    expect(tail.items).toHaveLength(1)
+    const bodyOnPage = tail.items[0]?.body
+    expect(bodyOnPage?.kind).toBe('status')
+    expect(bodyOnPage?.kind === 'status' ? bodyOnPage.text : '').toContain('[Orca: item truncated')
+  })
+})
+
 describe('projectJournalBatch', () => {
   it('reports a hole in the row sequence as journal_gap', async () => {
     await appendItems(3)
@@ -243,5 +349,53 @@ describe('projectJournalBatch', () => {
     }
     expect(projected.batch.removedItemIds).toHaveLength(1)
     expect(projected.batch.items).toHaveLength(0)
+  })
+
+  it('publishes a mismatched provider echo under its submission slot', async () => {
+    const message: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'queued follow-up' }]
+    }
+    await journal.appendSubmission({
+      clientMessageId: 'client-follow-up',
+      payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+        method: 'agentSession.send',
+        sessionId: IDENTITY.sessionId,
+        fields: { body: message }
+      }),
+      body: message,
+      fence: 1
+    })
+    const cursor = journal.cursor()
+    await journal.resolveDispatch({
+      clientMessageId: 'client-follow-up',
+      state: 'accepted',
+      providerIdentity: {
+        provider: 'codex',
+        threadId: 'thread-1',
+        turnId: 'predicted',
+        ordinal: 0
+      },
+      fence: 1
+    })
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'root-turn', ordinal: 2 },
+      message,
+      { fence: 1 }
+    )
+
+    const page = readAgentSessionHistory(journal, {
+      sessionId: IDENTITY.sessionId,
+      direction: 'after',
+      cursor
+    })
+    if (!page.ok) {
+      throw new Error(`expected a page, got reset ${page.reset}`)
+    }
+    expect(page.page.items).toMatchObject([
+      { itemId: agentJournalSubmissionKey('client-follow-up'), revision: 1 }
+    ])
+    expect(page.page.removedItemIds).toEqual([])
   })
 })

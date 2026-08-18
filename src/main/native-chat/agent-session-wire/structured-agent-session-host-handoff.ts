@@ -68,9 +68,14 @@ export function createStructuredAgentSessionHostHandoff(
     ...(deps.handoffTransport ? { transport: deps.handoffTransport } : {}),
     session: host.session,
     suspendNative: async (sessionId) => {
-      await deps.adapter.closeSession?.(sessionId)
+      const exited = await deps.adapter.closeSession?.(sessionId)
+      if (exited === false) {
+        // Report the unproven exit; the forward handoff refuses on it.
+        return false
+      }
       await host.flush(sessionId)
       host.eventSink(sessionId).unbind()
+      return true
     },
     acquireNative: (input) => acquireNativeHandoffOwner(deps, host, input),
     acquireNativeStop: async (sessionId, turnId, fence) =>

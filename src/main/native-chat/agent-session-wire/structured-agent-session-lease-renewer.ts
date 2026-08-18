@@ -54,7 +54,14 @@ export class StructuredAgentSessionLeaseRenewer {
             (record) =>
               !record.lease.unreconciled &&
               record.lease.claimStatus === 'live' &&
-              record.lease.ownerProcess !== null
+              record.lease.ownerProcess !== null &&
+              // A native record parked in recovery has no transport the host can vouch
+              // for; renewing it keeps an orphan pid's lease reading as a healthy owner.
+              !(
+                record.lease.runtimeKind === 'native' &&
+                (record.lease.handoffStage === 'recovering' ||
+                  record.lease.handoffStage === 'manual-recovery')
+              )
           )
           .map((record) => this.renewRecord(record))
       )

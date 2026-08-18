@@ -1,17 +1,17 @@
 import type {
-  GitStatusResult,
-  GitDiffResult,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
   GitStagingArea,
-  GitUpstreamStatus,
-  GitWorktreeInfo,
-  RemoveWorktreeResult
-} from '../../shared/types'
+  GitStatusResult,
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'

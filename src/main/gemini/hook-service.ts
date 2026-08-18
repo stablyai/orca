@@ -200,7 +200,7 @@ export class GeminiHookService {
     return this.getStatus()
   }
 
-  // POSIX-only remote install mirroring ClaudeHookService.installRemote. See docs/design/agent-status-over-ssh.md §8.
+  // POSIX-only remote install mirroring ClaudeHookService.installRemote; the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`

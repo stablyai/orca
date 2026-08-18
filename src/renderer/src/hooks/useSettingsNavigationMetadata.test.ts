@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 const repo = {
   id: 'repo-1',
@@ -79,7 +79,7 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
-  it('places Automations and Artifacts first under Workflows', () => {
+  it('places Automations, Artifacts, and Share Skills first under Workflows', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -88,6 +88,7 @@ describe('settings navigation metadata', () => {
     })
     const automations = sections.find((section) => section.id === 'automations')
     const artifacts = sections.find((section) => section.id === 'artifacts')
+    const shareSkills = sections.find((section) => section.id === 'share-skills')
     const workflowIds = sections
       .filter((section) => section.group === 'workflows')
       .map((section) => section.id)
@@ -99,7 +100,9 @@ describe('settings navigation metadata', () => {
     expect(artifacts?.description).toBe(
       'Share HTML and Markdown files with your team and manage their public links.'
     )
-    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
+    expect(shareSkills).toMatchObject({ group: 'workflows', badge: 'Beta' })
+    expect(shareSkills?.searchEntries[0]?.title).toBe('Unlisted skill links')
+    expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
   })
 
   it('places the Orca account in Set Up on desktop only', () => {
@@ -128,7 +131,13 @@ describe('settings navigation metadata', () => {
   })
 
   it('keeps desktop-only Settings panes out of web metadata', () => {
-    const webIds = ids({ isWebClient: true })
+    const webSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      repos: [repo]
+    })
+    const webIds = webSections.map((section) => section.id)
 
     expect(webIds).not.toContain('browser')
     expect(webIds).not.toContain('ssh')
@@ -138,6 +147,33 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
+    const floatingWorkspace = webSections.find((section) => section.id === 'floating-workspace')
+    expect(floatingWorkspace?.description).toBe('Global terminal and markdown tabs.')
+    expect(floatingWorkspace?.searchEntries.flatMap((entry) => entry.keywords)).not.toContain(
+      'browser'
+    )
+    const shortcuts = webSections.find((section) => section.id === 'shortcuts')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'New mobile emulator tab'
+    )
+  })
+
+  it('keeps the Browser shortcut searchable for a capable web runtime', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      managedBrowserCreationEnabled: true,
+      mobileEmulatorCreationEnabled: false,
+      repos: [repo]
+    })
+    const shortcutTitles = sections
+      .find((section) => section.id === 'shortcuts')
+      ?.searchEntries.map((entry) => entry.title)
+
+    expect(shortcutTitles).toContain('New browser tab')
+    expect(shortcutTitles).not.toContain('New mobile emulator tab')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {

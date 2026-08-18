@@ -1,17 +1,14 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  Repo,
-  SetupSplitDirection,
-  Tab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  TuiAgent,
-  Worktree,
-  WorkspaceKey,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -28,7 +25,6 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
-import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
   isTerminalLeafId,
@@ -43,21 +39,25 @@ import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
-} from '../../../../shared/worktree-id'
+} from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
-import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import {
+  clearTransientTerminalState,
+  emptyLayoutSnapshot,
+  singlePaneLayoutSnapshot
+} from './terminal-helpers'
 import {
   collectReleasedLeafIds,
   hydrateWorkspaceTerminalRows,
@@ -72,6 +72,12 @@ import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import {
+  applyGeneratedTabTitleUpdates,
+  applyTerminalTabTitleUpdates,
+  type GeneratedTabTitleUpdate,
+  type TerminalTabTitleUpdate
+} from './terminal-tab-title-batch'
 import {
   dedupeTabOrder,
   ensureGroup,
@@ -227,16 +233,6 @@ function consumePendingActivationSpawn(
   return count === 2 ? true : count - 1
 }
 
-function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
-  return (
-    tab.customTitle?.trim() ||
-    tab.quickCommandLabel?.trim() ||
-    tab.defaultTitle?.trim() ||
-    tab.title ||
-    `Terminal ${(index ?? 0) + 1}`
-  )
-}
-
 function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
   const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
@@ -337,36 +333,6 @@ function getTerminalTabOwnerWorktreeId(
     terminalTabOwnerCache = nextCache
   }
   return terminalTabOwnerCache.get(tabId) ?? null
-}
-
-function updateUnifiedTerminalLabel(
-  unifiedTabs: Tab[],
-  terminalTabId: string,
-  label: string
-): Tab[] | null {
-  const unifiedIndex = unifiedTabs.findIndex(
-    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
-  )
-  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.label === label) {
-    return null
-  }
-  return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
-}
-
-function updateUnifiedTerminalGeneratedLabel(
-  unifiedTabs: Tab[],
-  terminalTabId: string,
-  generatedLabel: string
-): Tab[] | null {
-  const unifiedIndex = unifiedTabs.findIndex(
-    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
-  )
-  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.generatedLabel === generatedLabel) {
-    return null
-  }
-  return unifiedTabs.map((entry, index) =>
-    index === unifiedIndex ? { ...entry, generatedLabel } : entry
-  )
 }
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
@@ -529,6 +495,40 @@ export type AutomaticAgentResumeClaim = {
   providerSession: AgentProviderSessionMetadata
 }
 
+type TabStartupCommand = {
+  command: string
+  /** Renderer-delivered startup input for callers needing xterm paste semantics before the submit Enter. */
+  delivery?: 'terminal-paste'
+  startupCommandDelivery?: StartupCommandDelivery
+  env?: Record<string, string>
+  envToDelete?: string[]
+  launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  launchToken?: string
+  launchAgent?: TuiAgent
+  /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+  agentArgsOverride?: string | null
+  draftPrompt?: string
+  sessionOptions?: Record<string, SessionOptionValue>
+  /** Initial prompt-start status for agents that lack native prompt hooks. */
+  initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  /** Show the restored-session banner when this startup command mounts. */
+  showSessionRestoredBanner?: boolean
+  /** Telemetry for the `agent_started` event; threaded to the pty:spawn handler so it fires only after spawn confirms, not on click-intent. */
+  telemetry?: AgentStartedTelemetry
+}
+
+function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
+  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
+  const launchToken = startup.launchConfig
+    ? (startup.launchToken ?? createBrowserUuid())
+    : undefined
+  return {
+    ...startup,
+    ...(launchToken ? { launchToken } : {})
+  }
+}
+
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
@@ -595,31 +595,7 @@ export type TerminalSlice = {
     resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
   ) => void
   clearNativeChatLaunchDraft: (tabId: string) => void
-  pendingStartupByTabId: Record<
-    string,
-    {
-      command: string
-      /** Renderer-delivered startup input for callers needing xterm paste semantics before the submit Enter. */
-      delivery?: 'terminal-paste'
-      startupCommandDelivery?: StartupCommandDelivery
-      env?: Record<string, string>
-      envToDelete?: string[]
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
-      agentArgsOverride?: string | null
-      draftPrompt?: string
-      sessionOptions?: Record<string, SessionOptionValue>
-      /** Initial prompt-start status for agents that lack native prompt hooks. */
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      /** Show the restored-session banner when this startup command mounts. */
-      showSessionRestoredBanner?: boolean
-      /** Telemetry for the `agent_started` event; threaded to the pty:spawn handler so it fires only after spawn confirms, not on click-intent. */
-      telemetry?: AgentStartedTelemetry
-    }
-  >
+  pendingStartupByTabId: Record<string, TabStartupCommand>
   pendingInitialCwdByTabId: Record<string, string>
   /** Queued setup-split requests; TerminalPane splits and runs the command in a new pane so the main terminal stays immediately interactive. */
   pendingSetupSplitByTabId: Record<
@@ -630,6 +606,9 @@ export type TerminalSlice = {
   pendingIssueCommandSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
+  terminalStartupRestorationReady: boolean
+  setTerminalStartupRestorationReady: (value: boolean) => void
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
@@ -660,6 +639,12 @@ export type TerminalSlice = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      initialLeafId?: string
+      /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
+      pendingStartup?: TabStartupCommand
+      /** Published atomically with pendingStartup for automatic resume ownership. */
+      automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
       recordInteraction?: boolean
       /** Pre-allocated tab id (main mints it for CLI/runtime PTYs with a baked pane key); minted fresh on omit or cross-worktree collision. */
@@ -690,12 +675,14 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitles: (updates: readonly TerminalTabTitleUpdate[]) => void
   setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
     options?: { replaceExistingGeneratedTitle?: boolean }
   ) => void
+  setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -776,45 +763,13 @@ export type TerminalSlice = {
     sourceTabId: string
     targetTabId: string
   }) => void
-  queueTabStartupCommand: (
-    tabId: string,
-    startup: {
-      command: string
-      delivery?: 'terminal-paste'
-      startupCommandDelivery?: StartupCommandDelivery
-      env?: Record<string, string>
-      envToDelete?: string[]
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      agentArgsOverride?: string | null
-      draftPrompt?: string
-      sessionOptions?: Record<string, SessionOptionValue>
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
-    }
-  ) => void
+  queueTabStartupCommand: (tabId: string, startup: TabStartupCommand) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
   consumeTabInitialCwd: (tabId: string) => string | null
-  consumeTabStartupCommand: (tabId: string) => {
-    command: string
-    delivery?: 'terminal-paste'
-    startupCommandDelivery?: StartupCommandDelivery
-    env?: Record<string, string>
-    envToDelete?: string[]
-    launchConfig?: SleepingAgentLaunchConfig
-    resumeProviderSession?: AgentProviderSessionMetadata
-    launchToken?: string
-    launchAgent?: TuiAgent
-    agentArgsOverride?: string | null
-    draftPrompt?: string
-    sessionOptions?: Record<string, SessionOptionValue>
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
-    showSessionRestoredBanner?: boolean
-    telemetry?: AgentStartedTelemetry
-  } | null
+  consumeTabStartupCommand: (
+    tabId: string,
+    expected?: TabStartupCommand
+  ) => TabStartupCommand | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
@@ -1106,6 +1061,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   nativeChatLaunchDraftByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  terminalStartupRestorationReady: false,
+  setTerminalStartupRestorationReady: (value) => {
+    set({ terminalStartupRestorationReady: value })
+  },
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
   markDefaultTerminalTabsApplied: (worktreeId) =>
@@ -1361,6 +1320,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         )
       }
       const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+      const requestedInitialLeafId =
+        options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
+          ? options.initialLeafId
+          : undefined
+      // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+      const initialLeafId =
+        options?.initialPtyId || options?.pendingStartup
+          ? (requestedInitialLeafId ?? createBrowserUuid())
+          : undefined
       const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
@@ -1522,9 +1490,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...orphanCleanupPatch.ptyIdsByTabId,
           [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
         },
+        pendingStartupByTabId: options?.pendingStartup
+          ? {
+              ...orphanCleanupPatch.pendingStartupByTabId,
+              [tab.id]: normalizeTabStartupCommand(options.pendingStartup)
+            }
+          : orphanCleanupPatch.pendingStartupByTabId,
+        automaticAgentResumeClaimsByTabId: options?.automaticResumeClaim
+          ? {
+              ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
+              [tab.id]: options.automaticResumeClaim
+            }
+          : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
         terminalLayoutsByTabId: {
           ...orphanCleanupPatch.terminalLayoutsByTabId,
-          [tab.id]: emptyLayoutSnapshot()
+          [tab.id]: initialLeafId
+            ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
+            : emptyLayoutSnapshot()
         }
       }
     })
@@ -2002,77 +1984,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   updateTabTitle: (tabId, title) => {
-    set((s) => {
-      // Why: update only the owner to preserve selector equality for background worktrees.
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-      if (!ownerWorktreeId) {
-        return s
+    set((state) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+      const ownerByTabId = ownerWorktreeId
+        ? new Map([[tabId, ownerWorktreeId]])
+        : new Map<string, string>()
+      const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }], ownerByTabId)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
-      const tabIndex = tabs.findIndex((t) => t.id === tabId)
-      const currentTab = tabs[tabIndex]
-      if (!currentTab) {
-        return s
+      return result.patch ?? state
+    })
+  },
+
+  updateTabTitles: (updates) => {
+    if (updates.length === 0) {
+      return
+    }
+    set((state) => {
+      const result = applyTerminalTabTitleUpdates(state, updates)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
-      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
-        const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
-          currentUnifiedTabs,
-          tabId,
-          currentTab.title
-        )
-        return unifiedTabsWithCurrentLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithCurrentLabel
-              }
-            }
-          : s
-      }
-      const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
-        currentUnifiedTabs,
-        tabId,
-        nextTitle
-      )
-      if (currentTab.title === nextTitle) {
-        return unifiedTabsWithUpdatedLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
-              }
-            }
-          : s
-      }
-      const ownerTabs = tabs.map((tab) =>
-        tab.id === tabId
-          ? {
-              ...tab,
-              // Why: PTYs can briefly emit an empty title as an agent exits; keep the stable fallback instead of a blank tab.
-              title: nextTitle,
-              defaultTitle:
-                tab.defaultTitle ??
-                (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
-                (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
-            }
-          : tab
-      )
-      scheduleRuntimeGraphSync()
-      const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
-      // Why: title changes affect sorting, except active-worktree remount side effects.
-      const isActive = ownerWorktreeId === s.activeWorktreeId
-      const nextState: Partial<AppState> = isActive
-        ? { tabsByWorktree: nextTabsByWorktree }
-        : { tabsByWorktree: nextTabsByWorktree, sortEpoch: s.sortEpoch + 1 }
-      if (unifiedTabsWithUpdatedLabel) {
-        nextState.unifiedTabsByWorktree = {
-          ...s.unifiedTabsByWorktree,
-          [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
-        }
-      }
-      return nextState
+      return result.patch ?? state
     })
   },
 
@@ -2109,18 +2043,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
     // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
-    if (get().settings?.tabAutoGenerateTitle !== true) {
-      return
-    }
+    const state = get()
     const tabId = getTabIdFromPaneKey(paneKey)
-    if (!tabId || prompt.length === 0) {
+    if (!tabId || prompt.length === 0 || state.settings?.tabAutoGenerateTitle !== true) {
       return
     }
-    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)
+    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
     if (!ownerWorktreeId) {
       return
     }
-    const tabs = get().tabsByWorktree[ownerWorktreeId] ?? []
+    const tabs = state.tabsByWorktree[ownerWorktreeId] ?? []
     const currentTab = tabs.find((tab) => tab.id === tabId)
     if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
       return
@@ -2129,57 +2061,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
       return
     }
-    const generatedTitle = deriveGeneratedTabTitle(prompt)
-    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+    set((latestState) => {
+      const result = applyGeneratedTabTitleUpdates(
+        latestState,
+        [{ paneKey, prompt, options }],
+        new Map([[tabId, ownerWorktreeId]])
+      )
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
+      }
+      return result.patch ?? latestState
+    })
+  },
+
+  setGeneratedTabTitlesFromAgentPrompts: (updates) => {
+    if (updates.length === 0) {
       return
     }
-    set((s) => {
-      const ownerTabsForWrite = s.tabsByWorktree[ownerWorktreeId]
-      if (!ownerTabsForWrite) {
-        return s
+    set((state) => {
+      const result = applyGeneratedTabTitleUpdates(state, updates)
+      if (result.runtimeGraphChanged) {
+        scheduleRuntimeGraphSync()
       }
-      const tabIndex = ownerTabsForWrite.findIndex((tab) => tab.id === tabId)
-      const tabForWrite = ownerTabsForWrite[tabIndex]
-      // Why: re-check inside set so concurrent renames / setting flips win.
-      if (
-        !tabForWrite ||
-        s.settings?.tabAutoGenerateTitle !== true ||
-        tabForWrite.customTitle?.trim() ||
-        tabForWrite.quickCommandLabel?.trim()
-      ) {
-        return s
-      }
-      const latestGeneratedTitle = tabForWrite.generatedTitle?.trim()
-      if (
-        latestGeneratedTitle &&
-        (latestGeneratedTitle === generatedTitle || options?.replaceExistingGeneratedTitle !== true)
-      ) {
-        return s
-      }
-      const ownerTabs = ownerTabsForWrite.map((tab) =>
-        tab.id === tabId ? { ...tab, generatedTitle } : tab
-      )
-      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      const unifiedTabsWithGeneratedLabel = updateUnifiedTerminalGeneratedLabel(
-        currentUnifiedTabs,
-        tabId,
-        generatedTitle
-      )
-      scheduleRuntimeGraphSync()
-      return {
-        tabsByWorktree: {
-          ...s.tabsByWorktree,
-          [ownerWorktreeId]: ownerTabs
-        },
-        ...(unifiedTabsWithGeneratedLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithGeneratedLabel
-              }
-            }
-          : {})
-      }
+      return result.patch ?? state
     })
   },
 
@@ -3795,17 +3699,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   queueTabStartupCommand: (tabId, startup) => {
-    // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-    const launchToken = startup.launchConfig
-      ? (startup.launchToken ?? createBrowserUuid())
-      : undefined
     set((s) => ({
       pendingStartupByTabId: {
         ...s.pendingStartupByTabId,
-        [tabId]: {
-          ...startup,
-          ...(launchToken ? { launchToken } : {})
-        }
+        [tabId]: normalizeTabStartupCommand(startup)
       }
     }))
   },
@@ -3832,13 +3729,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return pending
   },
 
-  consumeTabStartupCommand: (tabId) => {
+  consumeTabStartupCommand: (tabId, expected) => {
     const pending = get().pendingStartupByTabId[tabId]
-    if (!pending) {
+    if (!pending || (expected && pending !== expected)) {
       return null
     }
 
     set((s) => {
+      if (s.pendingStartupByTabId[tabId] !== pending) {
+        return {}
+      }
       const next = { ...s.pendingStartupByTabId }
       delete next[tabId]
       return { pendingStartupByTabId: next }
@@ -3970,7 +3870,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         rowHydrationByWorktree
           .map(([worktreeId, hydration]) => [worktreeId, hydration.rows] as const)
-          .filter(([, tabs]) => tabs.length > 0)
+          .filter(
+            ([worktreeId, tabs]) =>
+              tabs.length > 0 || session.tabsByWorktree[worktreeId]?.length === 0
+          )
       )
       const releasedPtyIdsByTabId = new Map<string, Set<string>>(
         rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.releasedPtyIdsByTabId])

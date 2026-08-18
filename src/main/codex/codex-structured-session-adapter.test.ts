@@ -11,12 +11,12 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { encodeCodexQuestionOptionId } from './codex-structured-prompt-replies'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
+  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 
@@ -100,7 +100,10 @@ function fakeCodex(routes: Record<string, Route> = {}): {
 function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
+  events: CodexStructuredSessionEvent[] = [],
+  processControl: Partial<
+    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
+  > = {}
 ): CodexStructuredSessionAdapter {
   return new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -114,7 +117,10 @@ function adapterFor(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    now: () => 1_700_000_000_500
+    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
+    terminateTurnProcesses: async () => true,
+    now: () => 1_700_000_000_500,
+    ...processControl
   })
 }
 
@@ -561,58 +567,6 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const turnStart = codex.connections[0].calls.findLast((call) => call.method === 'turn/start')
     expect(turnStart?.params).toMatchObject({ model: 'gpt-5', effort: 'high' })
     expect(turnStart?.params).not.toHaveProperty('sandboxEscape')
-  })
-})
-
-describe('CodexStructuredSessionAdapter.cancelTurn', () => {
-  it('confirms an interrupt Codex acknowledged', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-
-    expect(
-      await adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).toEqual({ cancelled: true })
-    expect(codex.connections[0].calls[1]).toEqual({
-      method: 'turn/interrupt',
-      params: { threadId: THREAD_ID, turnId: 'turn-1' }
-    })
-  })
-
-  it('reports not-cancelled when Codex declines or lacks the method', async () => {
-    const declined = fakeCodex({
-      'turn/interrupt': () => {
-        throw new CodexAppServerRequestError('turn/interrupt', -32602, 'no such turn')
-      }
-    })
-    const absent = fakeCodex({
-      'turn/interrupt': () => {
-        throw new CodexAppServerUnsupportedError('no turn/interrupt')
-      }
-    })
-
-    expect(
-      await (
-        await acquired(declined)
-      ).cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).toEqual({ cancelled: false })
-    expect(
-      await (
-        await acquired(absent)
-      ).cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).toEqual({ cancelled: false })
-  })
-
-  it('rethrows an unsettled interrupt so the turn is not shown as cancelled', async () => {
-    const codex = fakeCodex({
-      'turn/interrupt': () => {
-        throw new Error('codex app-server turn/interrupt exceeded 30000ms')
-      }
-    })
-    const adapter = await acquired(codex)
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).rejects.toThrow('exceeded 30000ms')
   })
 })
 

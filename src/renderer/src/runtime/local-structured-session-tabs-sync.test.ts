@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { Tab, WorkspaceSessionState } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { buildPersistedUnifiedTabSessionData } from '../lib/workspace-session-unified-tabs'
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
 import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync'

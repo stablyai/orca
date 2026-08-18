@@ -7,8 +7,8 @@ import {
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../../../../shared/terminal-quick-commands'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
-import type { PersistedUIState } from '../../../../shared/types'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -21,6 +21,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('client UI RPC methods', () => {
   it('returns the runtime host agent settings needed by mobile create flows', async () => {
     const settings = {
+      worktreeVisibilityDefaults: { external: 'show' as const },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
@@ -92,6 +93,17 @@ describe('client UI RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('settings.update', {
+        worktreeVisibilityDefaults: {
+          external: 'show',
+          customSources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'invalid', rootPath: '../relative' }
+          ],
+          sourcePreferences: {
+            builtIn: { claude: 'show', unknown: 'show' },
+            custom: { team: 'hide', 'bad id': 'show' }
+          }
+        },
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
@@ -108,6 +120,14 @@ describe('client UI RPC methods', () => {
     )
 
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      worktreeVisibilityDefaults: {
+        external: 'show',
+        customSources: [{ id: 'team', rootPath: '/srv/team' }],
+        sourcePreferences: {
+          builtIn: { claude: 'show' },
+          custom: { team: 'hide' }
+        }
+      },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',

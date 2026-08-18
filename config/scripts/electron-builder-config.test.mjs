@@ -155,6 +155,20 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the mac keyboard-layout helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
+          to: 'MacOS/orca-keyboard-layout'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-keyboard-layout' })])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining([

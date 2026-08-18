@@ -373,7 +373,7 @@ export default function TabGroupPanel({
           )}
 
         {activeTab?.contentType === 'agent-session' ? (
-          <div className="absolute inset-0 flex min-h-0 min-w-0">
+          <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0">
             <NativeChatView
               key={activeTab.entityId}
               mode="structured"

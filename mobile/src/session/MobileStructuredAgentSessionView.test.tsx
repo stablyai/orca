@@ -50,7 +50,6 @@ function options(): MobileNativeChatSessionOptionsController {
 describe('MobileStructuredAgentSessionView command seam', () => {
   let renderer: ReactTestRenderer | null = null
   const onSend = vi.fn(async () => true)
-  const onTuiSend = vi.fn(async () => true)
   let controller: MobileNativeChatSessionOptionsController
 
   function props(
@@ -65,7 +64,6 @@ describe('MobileStructuredAgentSessionView command seam', () => {
       onLoadOlder: async () => false,
       outbox: [],
       onSend,
-      onTuiSend,
       onTakeQueuedForEdit: async () => null,
       onRetry: async () => {},
       onRespondToPrompt: async () => true,
@@ -75,8 +73,6 @@ describe('MobileStructuredAgentSessionView command seam', () => {
       onAttachImage: () => {},
       onRemoveAttachment: () => {},
       onCancel: async () => true,
-      handoff: null,
-      onRequestHandoff: async () => true,
       ...overrides
     }
   }
@@ -90,7 +86,6 @@ describe('MobileStructuredAgentSessionView command seam', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     onSend.mockClear()
-    onTuiSend.mockClear()
     controller = options()
     render()
   })
@@ -225,6 +220,5 @@ describe('MobileStructuredAgentSessionView command seam', () => {
     await submit('native message')
 
     expect(onSend).toHaveBeenCalledWith('native message', [])
-    expect(onTuiSend).not.toHaveBeenCalled()
   })
 })

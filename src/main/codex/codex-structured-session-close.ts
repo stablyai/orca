@@ -4,13 +4,19 @@ export async function closeCodexPublishedSession(
   sessions: Map<string, CodexSession>,
   sessionId: string,
   onEvent?: (event: CodexStructuredSessionEvent) => void
-): Promise<void> {
+): Promise<boolean> {
   const session = sessions.get(sessionId)
   if (!session) {
-    return
+    return true
+  }
+  session.prompts.clear()
+  // Keep the session indexed until the child exit is observed. A timeout or
+  // failed kill must leave the live connection available for a safe retry.
+  const exited = await session.connection.close()
+  if (exited === false) {
+    return false
   }
   sessions.delete(sessionId)
-  session.prompts.clear()
   const event: CodexStructuredSessionEvent = {
     type: 'ended',
     sessionId,
@@ -20,5 +26,5 @@ export async function closeCodexPublishedSession(
   onEvent?.(event)
   session.translator?.flush()
   session.translator?.dispose()
-  await session.connection.close()
+  return true
 }

@@ -19,7 +19,8 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
+import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -129,11 +130,11 @@ export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.J
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="transition-transform group-open:rotate-90">›</span>
         <span className="font-medium text-foreground">{frame.provider}</span>
-        <span className="truncate">{frame.kind}</span>
+        <span className="truncate">{nativeChatProviderFrameSummary(block)}</span>
         {frame.payload.truncated ? (
           <span>
             ·{' '}
-            {translate('components.native-chat.providerFrame.bytes', '{{value0}} bytes', {
+            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
               value0: frame.payload.byteLength
             })}
           </span>
@@ -311,8 +312,7 @@ export function NativeChatMessageList({
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
   )
-  const showTypingIndicator =
-    isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
+  const showTypingIndicator = shouldShowNativeChatTypingIndicator({ messages, isWorking })
 
   // When an older page prepends, the scroll content grows above the viewport.
   // Capture the pre-render scroll height so the layout effect can restore the

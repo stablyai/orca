@@ -1,6 +1,7 @@
 import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import type { TuiAgent, TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -151,7 +152,11 @@ export function renderTabBarItems({
           onCloseOthers={() => onCloseOthers(item.id)}
           onCloseToRight={() => onCloseToRight(item.id)}
           onCloseToLeft={() => onCloseToLeft(item.id)}
-          onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
+          onDuplicate={
+            runtime.managedBrowserCreationEnabled
+              ? () => onDuplicateBrowserTab?.(item.id)
+              : undefined
+          }
           onTogglePin={() => togglePinned(item)}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}

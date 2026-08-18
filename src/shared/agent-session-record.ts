@@ -13,7 +13,7 @@ import {
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
 
-export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 1 as const
+export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
 

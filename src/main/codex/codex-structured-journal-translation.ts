@@ -1,19 +1,19 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  createAgentSessionDeltaCoalescer,
-  type AgentSessionDeltaCoalescerDeps
-} from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
   codexItemIdentity,
   codexJournalItem,
-  codexStreamingMessageBody,
   CodexTurnOrdinals,
   readCodexThreadItem
 } from './codex-structured-item-translation'
+import {
+  codexStructuredItemKey,
+  createCodexStructuredItemStreams
+} from './codex-structured-item-streams'
 import {
   codexApprovalItem,
   codexPromptIdentity,
@@ -29,7 +29,7 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 // per-session and per-acquisition — a new lease gets a new translator and a new
 // sink, so a superseded child cannot keep writing.
 
-const AGENT_MESSAGE_DELTA_METHOD = 'item/agentMessage/delta'
+export const MAX_CODEX_GENERIC_ROWS_PER_TURN = 8
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -65,13 +65,37 @@ export function createCodexJournalTranslator(
   /** What each announced item is, so an approval can name what it approves. */
   const details = new Map<string, string>()
   const currentTurnIds = new Map<string, string>()
-  const latestStreamText = new Map<string, string>()
-  const checkpointLengths = new Map<string, number>()
+  const genericRowsByTurn = new Map<string, number>()
+  const suppressedRowsByTurn = new Map<string, number>()
   let fallbackSequence = 0
 
-  const appendUnhandled = (kind: string, payload: unknown): void => {
-    fallbackSequence += 1
+  const appendUnhandled = (kind: string, payload: unknown, threadId = 'session'): void => {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    if (!translated) {
+      return
+    }
+    const turnId = readCodexTurnId(payload) ?? currentTurnIds.get(threadId) ?? 'outside-turn'
+    const bucket = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
+    const rowCount = genericRowsByTurn.get(bucket) ?? 0
+    // The cap bounds noise, never evidence: an error frame is always journaled,
+    // and capped frames stay countable through one summary row per turn.
+    const capped =
+      rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN && translated.classification !== 'error-surface'
+    if (capped) {
+      const suppressed = (suppressedRowsByTurn.get(bucket) ?? 0) + 1
+      suppressedRowsByTurn.set(bucket, suppressed)
+      deps.sink.appendItem(
+        { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
+        {
+          kind: 'status',
+          text: `${suppressed} more provider notification${suppressed === 1 ? '' : 's'} not shown for this turn`
+        }
+      )
+      deps.sink.publish()
+      return
+    }
+    genericRowsByTurn.set(bucket, rowCount + 1)
+    fallbackSequence += 1
     deps.sink.appendItem(
       { provider: 'orca', clientMessageId: `provider-frame:codex:${fallbackSequence}` },
       translated.body,
@@ -107,52 +131,12 @@ export function createCodexJournalTranslator(
     deps.sink.publish()
   }
 
-  const itemKey = (threadId: string, codexItemId: string): string =>
-    `${encodeURIComponent(threadId)}:${encodeURIComponent(codexItemId)}`
-
-  const persistStream = (key: string, text: string, force: boolean): void => {
-    latestStreamText.set(key, text)
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
-      return
-    }
-    checkpointLengths.set(key, text.length)
-    const identity = identities.get(key)
-    if (!identity) {
-      return
-    }
-    deps.sink.appendItem(identity, codexStreamingMessageBody(text))
-    deps.sink.publish()
-  }
-
-  const persistLatestStreams = (): void => {
-    for (const [key, text] of latestStreamText) {
-      if (checkpointLengths.get(key) !== text.length) {
-        persistStream(key, text, true)
-      }
-    }
-  }
-
-  const flushStreams = (): void => {
-    coalescer.flushAll()
-    persistLatestStreams()
-  }
-
-  const coalescer = createAgentSessionDeltaCoalescer({
-    windowMs: deps.coalesceMs,
-    schedule: deps.schedule,
-    emit: (key, text) => {
-      persistStream(key, text, false)
-    }
-  })
-
   const identityFor = (
     threadId: string,
     turnId: string | null,
     item: { type: string; id: string }
   ): AgentJournalItemIdentity => {
-    const key = itemKey(threadId, item.id)
+    const key = codexStructuredItemKey(threadId, item.id)
     const existing = identities.get(key)
     if (existing) {
       return existing
@@ -161,6 +145,16 @@ export function createCodexJournalTranslator(
     identities.set(key, identity)
     return identity
   }
+
+  const streams = createCodexStructuredItemStreams({
+    sink: deps.sink,
+    coalesceMs: deps.coalesceMs,
+    schedule: deps.schedule,
+    identityFor: (threadId, params, item) => {
+      const turnId = readCodexTurnId(params) ?? currentTurnIds.get(threadId) ?? null
+      return identityFor(threadId, turnId, item)
+    }
+  })
 
   const handleItemEvent = (event: {
     threadId: string
@@ -177,13 +171,13 @@ export function createCodexJournalTranslator(
     const translated = codexJournalItem(item)
     const command = readString(item, 'command')
     if (command) {
-      details.set(itemKey(event.threadId, item.id), command)
+      details.set(codexStructuredItemKey(event.threadId, item.id), command)
     }
     if (event.method === 'item/completed') {
       // The completed body is authoritative; the coalesced text is now stale.
-      coalescer.forget(itemKey(event.threadId, item.id))
-      latestStreamText.delete(itemKey(event.threadId, item.id))
-      checkpointLengths.delete(itemKey(event.threadId, item.id))
+      streams.forget(event.threadId, item.id)
+    } else {
+      streams.track(event.threadId, item, identity)
     }
     if (!translated.body) {
       return true
@@ -227,7 +221,7 @@ export function createCodexJournalTranslator(
       codexApprovalItem({
         method: event.method,
         params: event.params,
-        detail: details.get(itemKey(event.threadId, event.codexItemId)) ?? null
+        detail: details.get(codexStructuredItemKey(event.threadId, event.codexItemId)) ?? null
       })
     )
     deps.bindPromptItemId?.(agentJournalItemKey(identity), event.threadId, event.promptKey)
@@ -237,36 +231,31 @@ export function createCodexJournalTranslator(
   return {
     handle: (event) => {
       if (event.type === 'ended') {
-        flushStreams()
+        streams.flush()
         for (const [threadId, turnId] of currentTurnIds) {
           publishTurnLifecycle(event.sessionId, threadId, turnId, 'completed')
         }
         currentTurnIds.clear()
         return
       }
-      if (event.type === 'notification' && event.method === AGENT_MESSAGE_DELTA_METHOD) {
-        const params = readRecord(event.params)
-        const codexItemId = readString(params, 'itemId')
-        const delta = params.delta
-        if (codexItemId && typeof delta === 'string') {
-          coalescer.append(itemKey(event.threadId, codexItemId), delta)
-        } else {
-          appendUnhandled(`notification:${event.method}`, event.params)
-        }
+      if (
+        event.type === 'notification' &&
+        streams.handle(event.threadId, event.method, event.params)
+      ) {
         return
       }
       // Lifecycle bypass: nothing may be journaled ahead of the text it follows.
-      flushStreams()
+      streams.flush()
       if (event.type === 'prompt') {
         handlePrompt(event)
         return
       }
       if (event.type === 'server-request') {
-        appendUnhandled(`request:${event.method}`, event.params)
+        appendUnhandled(`request:${event.method}`, event.params, event.threadId)
         return
       }
       if (event.type === 'provider-frame') {
-        appendUnhandled(event.kind, event.payload)
+        appendUnhandled(event.kind, event.payload, event.threadId)
         return
       }
       if (event.method === 'turn/started') {
@@ -281,6 +270,7 @@ export function createCodexJournalTranslator(
         const turnId = readCodexTurnId(event.params) ?? currentTurnIds.get(event.threadId)
         if (turnId) {
           publishTurnLifecycle(event.sessionId, event.threadId, turnId, 'completed')
+          ordinals.forgetTurn(event.threadId, turnId)
         }
         // A later item with no turn of its own belongs to no turn, not to the
         // one that just ended.
@@ -289,20 +279,20 @@ export function createCodexJournalTranslator(
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         if (!handleItemEvent(event)) {
-          appendUnhandled(`notification:${event.method}`, event.params)
+          appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
         }
         return
       }
-      appendUnhandled(`notification:${event.method}`, event.params)
+      appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
     },
-    flush: flushStreams,
+    flush: streams.flush,
     dispose: () => {
-      coalescer.dispose()
+      streams.dispose()
       identities.clear()
       details.clear()
       currentTurnIds.clear()
-      latestStreamText.clear()
-      checkpointLengths.clear()
+      genericRowsByTurn.clear()
+      suppressedRowsByTurn.clear()
     }
   }
 }

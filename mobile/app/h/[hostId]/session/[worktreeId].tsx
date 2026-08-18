@@ -61,6 +61,7 @@ import {
 import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import {
   useLastConnectedAt,
+  usePendingConnectionPath,
   useReconnectAttempt
 } from '../../../../src/transport/client-context-connection-metrics'
 import {
@@ -227,9 +228,8 @@ import {
 } from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import { MobileNativeChatOverlay } from '../../../../src/session/MobileNativeChatOverlay'
-import { MobileStructuredAgentSessionView } from '../../../../src/session/MobileStructuredAgentSessionView'
+import { MobileStructuredSessionPane } from '../../../../src/session/MobileStructuredSessionPane'
 import { MobileStructuredSessionCreateError } from '../../../../src/session/MobileStructuredSessionCreateError'
-import * as mobileStructuredTuiSend from '../../../../src/session/mobile-structured-tui-send'
 import { useMobileStructuredSessionEntry } from '../../../../src/session/use-mobile-structured-session-entry'
 import {
   isMobileStructuredAgent,
@@ -264,6 +264,7 @@ import type {
 } from '../../../../src/session/mobile-session-tabs-stream-health'
 import { useMobileSessionTabsFetchReporting } from '../../../../src/session/use-mobile-session-tabs-fetch-reporting'
 import { useMobileSessionTabsReconciliation } from '../../../../src/session/use-mobile-session-tabs-reconciliation'
+import { PendingTerminalHandleRecoveryContextCache } from '../../../../src/session/pending-terminal-handle-recovery'
 import {
   getRepoIdFromMobileWorktreeId,
   getActiveTabIdForHandle,
@@ -288,7 +289,8 @@ import {
 import { colors } from '../../../../src/theme/mobile-theme'
 import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
 import { styles } from '../../../../src/session/mobile-session-styles'
-import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
+import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { TerminalQuickCommand } from '../../../../../src/shared/terminal-quick-command-types'
 import type {
   DiffCommentActions,
   DiffNotesDelivery,
@@ -745,6 +747,7 @@ export default function SessionScreen() {
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const pendingConnectionPath = usePendingConnectionPath(hostId)
   const forceReconnectHost = useForceReconnect()
   const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
     client,
@@ -928,6 +931,9 @@ export default function SessionScreen() {
   } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
+  // Why: a lease-only subscribe never renders, so the reconciler needs to tell it apart
+  // from a stream that does — an uncovered handle holding one is a blank terminal.
+  const leaseOnlyHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
   const terminalDiagnosticsRef = useRef(new MobileTerminalDiagnostics())
   // Why: bounds the scrollback→resubscribe fit loop per handle (STA-3337).
@@ -942,6 +948,9 @@ export default function SessionScreen() {
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const pendingTerminalActivationAttemptRef = useRef<string | null>(null)
+  const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
+    null
+  )
   // Why: route the terminal URL tap through a ref so it runs the current handleCreateBrowser closure (the memoized one may hold a null-client render).
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
 
@@ -1245,6 +1254,7 @@ export default function SessionScreen() {
       terminalUnsubsRef.current.get(handle)?.()
       terminalUnsubsRef.current.delete(handle)
       subscribingHandlesRef.current.delete(handle)
+      leaseOnlyHandlesRef.current.delete(handle)
       terminalDiagnosticsRef.current.terminalUnsubscribed(handle)
       subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
       // Why: reset the high-water mark so a fresh subscription's first scrollback isn't dropped as stale.
@@ -1277,6 +1287,7 @@ export default function SessionScreen() {
     clearNativeChatInputLease()
     terminalUnsubsRef.current.clear()
     subscribingHandlesRef.current.clear()
+    leaseOnlyHandlesRef.current.clear()
     initializedHandlesRef.current.clear()
     terminalDiagnosticsRef.current.clearTerminalCache()
     viewportResubscribeBudgetRef.current.clear()
@@ -1343,6 +1354,11 @@ export default function SessionScreen() {
       }
 
       subscribingHandlesRef.current.add(handle)
+      if (covered) {
+        leaseOnlyHandlesRef.current.add(handle)
+      } else {
+        leaseOnlyHandlesRef.current.delete(handle)
+      }
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
       diagnostics.streamArmed(handle, seq, viewportRef.current)
@@ -1531,6 +1547,7 @@ export default function SessionScreen() {
     streamRevision: coveredStreamRevision,
     subscriptionsRef: terminalUnsubsRef,
     subscribingRef: subscribingHandlesRef,
+    leaseOnlyRef: leaseOnlyHandlesRef,
     webReadyRef: webReadyHandlesRef,
     initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
@@ -2289,6 +2306,19 @@ export default function SessionScreen() {
       nativeChatStream.hasTabsRecoveryNeed(),
     [nativeChatStream]
   )
+  const pendingTerminalRecoveryContextCache = useMemo(
+    () => new PendingTerminalHandleRecoveryContextCache(),
+    []
+  )
+  const getPendingTerminalRecoveryContextKey = useCallback(
+    () =>
+      pendingTerminalRecoveryContextCache.read(
+        sessionTabsRef.current,
+        activeSessionTabIdRef.current
+      ),
+    [pendingTerminalRecoveryContextCache]
+  )
+  const pendingTerminalRecoveryContextKey = getPendingTerminalRecoveryContextKey()
   const getSessionTabsApplicationRevision = useCallback(
     () => appliedSessionTabsRevisionRef.current,
     []
@@ -2297,18 +2327,25 @@ export default function SessionScreen() {
     worktreeId,
     diagnosticsRef: terminalDiagnosticsRef
   })
-  const { fetchSessionTabs, ensureSessionTabs, fetchPendingBrowserSessionTabs } =
-    useMobileSessionTabsReconciliation<SessionTabsResult, MobileSessionTab>({
-      client,
-      connState,
-      worktreeId,
-      applySessionTabs,
-      consumeAcceptedSessionTabs,
-      fetchTerminals,
-      hasRecoveryNeed: hasSessionTabsRecoveryNeed,
-      getApplicationRevision: getSessionTabsApplicationRevision,
-      ...sessionTabsFetchReporting
-    })
+  const {
+    fetchSessionTabs,
+    ensureSessionTabs,
+    fetchPendingBrowserSessionTabs,
+    retryPendingTerminalRecovery
+  } = useMobileSessionTabsReconciliation<SessionTabsResult, MobileSessionTab>({
+    client,
+    connState,
+    worktreeId,
+    applySessionTabs,
+    consumeAcceptedSessionTabs,
+    fetchTerminals,
+    hasRecoveryNeed: hasSessionTabsRecoveryNeed,
+    pendingTerminalRecoveryContextKey,
+    getPendingTerminalRecoveryContextKey,
+    onPendingTerminalRecoveryParked: setParkedPendingTerminalContext,
+    getApplicationRevision: getSessionTabsApplicationRevision,
+    ...sessionTabsFetchReporting
+  })
   const getActiveWorktreeConnectionId = useCallback(async (): Promise<string | null> => {
     // Why: the floating workspace always runs on the paired host itself, never an SSH repo target.
     if (!client || isFloatingWorkspaceRoute) {
@@ -3144,6 +3181,10 @@ export default function SessionScreen() {
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,
+    nativeChatSessionId:
+      activeSessionTab?.type === 'terminal'
+        ? (activeSessionTab.agentStatus?.providerSession?.id ?? null)
+        : null,
     activeHandleRef,
     terminalCwdRef,
     openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
@@ -4105,6 +4146,9 @@ export default function SessionScreen() {
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+  const isPendingTerminalRecoveryParked =
+    pendingTerminalRecoveryContextKey !== null &&
+    pendingTerminalRecoveryContextKey === parkedPendingTerminalContext
 
   useEffect(() => {
     if (!client || connState !== 'connected' || !activePendingTerminalTab) {
@@ -4179,7 +4223,8 @@ export default function SessionScreen() {
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint
+    endpoint: hostEndpoint,
+    pendingPath: pendingConnectionPath
   })
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
@@ -4650,59 +4695,34 @@ export default function SessionScreen() {
                 )}
               </View>
             ) : activeStructuredTab ? (
-              <MobileStructuredAgentSessionView
+              <MobileStructuredSessionPane
                 key={activeStructuredTab.sessionId}
-                agent={activeStructuredTab.agent}
-                items={structuredSessionEntry.session.items}
-                status={structuredSessionEntry.session.status}
-                error={structuredSessionEntry.session.error}
-                hasOlder={structuredSessionEntry.session.hasOlder}
-                loadingOlder={structuredSessionEntry.session.loadingOlder}
-                onLoadOlder={structuredSessionEntry.session.loadOlder}
+                entry={structuredSessionEntry}
                 onOpenFile={handleNativeChatFileTap}
-                outbox={structuredSessionEntry.writes.outbox}
-                writeError={structuredSessionEntry.writes.error}
-                onSend={async (text, restored) => {
-                  const accepted = await structuredSessionEntry.writes.send(text, [
-                    ...restored,
-                    ...structuredSessionEntry.attachments.attachments
-                  ])
-                  if (accepted) {
-                    structuredSessionEntry.attachments.clear()
-                  }
-                  return accepted
-                }}
-                onTuiSend={(text, restored) =>
-                  mobileStructuredTuiSend.sendMobileStructuredTuiComposerMessage({
-                    client,
-                    connected: connState === 'connected',
-                    agent: activeStructuredTab.agent,
-                    handoff: structuredSessionEntry.session.handoff,
-                    deviceToken: deviceTokenRef.current,
-                    text,
-                    attachments: [...restored, ...structuredSessionEntry.attachments.attachments],
-                    onAccepted: structuredSessionEntry.attachments.clear,
-                    onToast: showToast
-                  })
-                }
-                onTakeQueuedForEdit={structuredSessionEntry.writes.takeQueuedForEdit}
-                onRetry={structuredSessionEntry.writes.retry}
-                onRespondToPrompt={structuredSessionEntry.writes.respondToPrompt}
-                sessionOptions={structuredSessionEntry.sessionOptions}
-                attachments={structuredSessionEntry.attachments.attachments}
-                isAttaching={structuredSessionEntry.attachments.attaching}
-                onAttachImage={() => void structuredSessionEntry.attachments.attach('library')}
-                onRemoveAttachment={structuredSessionEntry.attachments.remove}
-                onCancel={structuredSessionEntry.writes.cancel}
-                handoff={structuredSessionEntry.session.handoff}
-                onRequestHandoff={structuredSessionEntry.writes.requestHandoff}
               />
             ) : activePendingTerminalTab ? (
               <View style={styles.emptyState}>
-                <ActivityIndicator size="small" color={colors.textSecondary} />
+                {!isPendingTerminalRecoveryParked && (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                )}
                 <Text style={styles.emptyText}>
-                  {activePendingTerminalTab.title || 'Loading terminal'}
+                  {isPendingTerminalRecoveryParked
+                    ? 'Terminal is taking longer than expected'
+                    : activePendingTerminalTab.title || 'Loading terminal'}
                 </Text>
+                {isPendingTerminalRecoveryParked && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading terminal"
+                    style={({ pressed }) => [
+                      styles.createButton,
+                      pressed && styles.newTerminalButtonPressed
+                    ]}
+                    onPress={() => void retryPendingTerminalRecovery()}
+                  >
+                    <Text style={styles.createButtonText}>Retry</Text>
+                  </Pressable>
+                )}
               </View>
             ) : (
               <View

@@ -73,12 +73,14 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   calls: { method: string; params?: Record<string, unknown> }[]
   replies: { id: number | string; result?: unknown; code?: number }[]
   resumedThreadId: string | null
+  launch: Parameters<typeof openCodexAppServerConnection>[0]
 }
 
 function fakeCodex(): CodexScript {
   const connections: FakeConnection[] = []
-  const openConnection = (async (_launch, handlers = {}) => {
+  const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
+      launch,
       handlers,
       calls: [],
       replies: [],
@@ -307,7 +309,12 @@ beforeEach(async () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
-        openCodexConnection: codex.openConnection
+        resolveLaunchEnv: async () => ({
+          EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
+          CODEX_HOME: '/shell/home'
+        }),
+        openCodexConnection: codex.openConnection,
+        readProcessStartTime: async () => 1_700_000_000_000
       }).then(() => undefined),
     registerSubscriptionCleanup: vi.fn((id: string, dispose: () => void) =>
       cleanups.set(id, dispose)
@@ -386,6 +393,10 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.snapshot.items).toEqual([])
+    expect(codex.live().launch.env).toMatchObject({
+      EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
+      CODEX_HOME: '/home/dev/.codex'
+    })
     const stream = await subscribe('sub-first-send')
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }
 
@@ -769,7 +780,8 @@ describe('a structured codex session over agentSession.*', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
       resolveCodexCommand: () => '/usr/local/bin/codex',
-      openCodexConnection: codex.openConnection
+      openCodexConnection: codex.openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000
     })
     const adapter = (host as unknown as { deps: { adapter: CodexStructuredSessionAdapter } }).deps
       .adapter

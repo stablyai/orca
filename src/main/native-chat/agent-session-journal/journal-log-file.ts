@@ -9,6 +9,7 @@
 // superset of the tail, and recovery unions the two by sequence — never a hole.
 
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurable } from '../../durable-file-write'
 import type {
@@ -25,6 +26,8 @@ export type JournalSnapshotFile = {
   epoch: string
   /** Highest sequence folded into `items`; the tail starts after it. */
   compactedThrough: number
+  /** Fence monotonicity survives compaction and restart. */
+  highestFence: number
   items: AgentJournalRenderItem[]
   submissions: AgentJournalSubmission[]
   /** Receipts outlive the rows that minted them: a client reconnecting after
@@ -39,6 +42,7 @@ export type JournalSnapshotFile = {
   /** Provider item id → submission slot, preserved so a post-compaction echo
    *  still reconciles into the bubble it belongs to. */
   aliases: { providerItemId: string; itemId: string }[]
+  tombstones: { itemId: string; revision: number }[]
   tail: JournalRow[]
 }
 
@@ -50,7 +54,11 @@ export type JournalReadResult = {
   unreadable: boolean
   /** Lines that failed to parse for reasons other than schema version. */
   malformed: number
+  /** Raw suffix beginning at the first malformed line, if any. */
+  remainder?: string
 }
+
+const NEWLINE_BYTE = 0x0a
 
 export async function ensureJournalDir(journalDir: string): Promise<void> {
   await mkdir(journalDir, { recursive: true })
@@ -86,13 +94,17 @@ export async function readJournalLog(journalDir: string): Promise<JournalReadRes
   const rows: JournalRow[] = []
   let unreadable = false
   let malformed = 0
-  for (const line of raw.split('\n')) {
+  const lines = raw.split('\n')
+  let offset = 0
+  for (const line of lines) {
     if (!line.trim()) {
+      offset += line.length + 1
       continue
     }
     const parsed = parseJournalRow(line)
     if (parsed.ok) {
       rows.push(parsed.row)
+      offset += line.length + 1
       continue
     }
     if (parsed.unreadable) {
@@ -100,6 +112,7 @@ export async function readJournalLog(journalDir: string): Promise<JournalReadRes
       break
     }
     malformed += 1
+    return { rows, unreadable, malformed, remainder: raw.slice(offset) }
   }
   return { rows, unreadable, malformed }
 }
@@ -117,6 +130,29 @@ export async function appendJournalRows(
     return
   }
   const path = join(journalDir, JOURNAL_LOG_FILE)
+  // A process death can leave a final JSON fragment without its newline. Never
+  // concatenate a new durable row onto that fragment: truncate the torn tail
+  // first, then fsync the repair before acknowledging this append.
+  try {
+    // Read as bytes, not text: `truncate`/`write` take byte offsets, and a
+    // transcript's multi-byte characters make string indices the wrong unit.
+    const existing = await readFile(path)
+    if (existing.length > 0 && existing.at(-1) !== NEWLINE_BYTE) {
+      const boundary = existing.lastIndexOf(NEWLINE_BYTE)
+      const finalLine = existing.subarray(boundary + 1).toString('utf-8')
+      // A whole row that merely lost its newline is kept; a real fragment goes.
+      const complete = parseJournalRow(finalLine).ok
+      const handle = await open(path, 'r+')
+      try {
+        await (complete ? handle.write('\n', existing.length) : handle.truncate(boundary + 1))
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
+    }
+  } catch {
+    // The append below creates a missing log; other read errors remain visible.
+  }
   const payload = `${rows.map(serializeJournalRow).join('\n')}\n`
   await appendFile(path, payload, 'utf-8')
   const handle = await open(path, 'r+')
@@ -125,6 +161,22 @@ export async function appendJournalRows(
   } finally {
     await handle.close()
   }
+  try {
+    const directory = await open(journalDir, 'r')
+    await directory.sync()
+    await directory.close()
+  } catch {
+    // Directory fsync is unavailable on some platforms (notably Windows).
+  }
+}
+
+export async function quarantineJournalRemainder(
+  journalDir: string,
+  remainder: string
+): Promise<string> {
+  const path = join(journalDir, `quarantine-${Date.now()}-${randomUUID()}.jsonl`)
+  await writeFileDurable(durableWriteTempPath(path), path, remainder)
+  return path
 }
 
 /** Replace the log with exactly the retained tail. Runs only after the snapshot

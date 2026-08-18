@@ -68,10 +68,7 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
 }
 
 function isPotentialStructuredResumeCommand(command: string): boolean {
-  return (
-    /\bcodex(?:\.exe)?\b[\s\S]*\bresume\b/i.test(command) ||
-    /\bclaude(?:\.exe)?\b[\s\S]*--resume\b/i.test(command)
-  )
+  return parseResumeInvocation(command) !== null
 }
 
 function findSessionOwnership(session: AiVaultSession): StructuredProviderSessionOwnership | null {
@@ -125,12 +122,61 @@ function isResumeCommandFor(
   command: string,
   ownership: StructuredProviderSessionOwnership
 ): boolean {
-  if (!command.includes(ownership.providerSessionId)) {
+  const invocation = parseResumeInvocation(command)
+  if (!invocation || invocation.provider !== ownership.provider) {
     return false
   }
-  return ownership.provider === 'codex'
-    ? /\bcodex(?:\.exe)?\b[\s\S]*\bresume\b/i.test(command)
-    : /\bclaude(?:\.exe)?\b[\s\S]*--resume\b/i.test(command)
+  // A target-less resume (--last, --continue, or a bare --resume/-r) may pick
+  // any provider session, so it cannot be admitted while one is structured.
+  // Only an explicit target that differs from this owned session is safe.
+  return invocation.target === null || invocation.target === ownership.providerSessionId
+}
+
+type ResumeInvocation = {
+  provider: 'codex' | 'claude'
+  target: string | null
+}
+
+function parseResumeInvocation(command: string): ResumeInvocation | null {
+  // Keep this deliberately conservative: shell quoting is normalized only
+  // enough to identify executable/flag tokens; an unrecognized shape is not
+  // treated as proof that a different session is being resumed.
+  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
+  const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
+  const executableIndex = normalized.findIndex((token) =>
+    /(?:^|[\\/])(?:codex|claude)(?:\.exe)?$/i.test(token)
+  )
+  if (executableIndex === -1) {
+    return null
+  }
+  const provider = /codex(?:\.exe)?$/i.test(normalized[executableIndex]!) ? 'codex' : 'claude'
+  const args = normalized.slice(executableIndex + 1)
+  // `--continue`/`-c` resume the most recent session and never take an id, so a
+  // following token is a prompt, not a target — they are always target-less.
+  const targetlessFlags = provider === 'codex' ? [] : ['--continue', '-c']
+  const targetlessIndex = args.findIndex((token) => targetlessFlags.includes(token.toLowerCase()))
+  if (targetlessIndex !== -1) {
+    return { provider, target: null }
+  }
+  const resumeFlags = provider === 'codex' ? ['resume'] : ['--resume', '-r']
+  const inlineIndex = args.findIndex(
+    (token) =>
+      provider === 'claude' &&
+      (token.toLowerCase().startsWith('--resume=') || token.toLowerCase().startsWith('-r='))
+  )
+  if (inlineIndex !== -1) {
+    const target = args[inlineIndex]!.slice(args[inlineIndex]!.indexOf('=') + 1)
+    return { provider, target: target.length > 0 ? target : null }
+  }
+  const markerIndex = args.findIndex((token) => resumeFlags.includes(token.toLowerCase()))
+  if (markerIndex === -1) {
+    return null
+  }
+  const candidate = args[markerIndex + 1]
+  return {
+    provider,
+    target: candidate && !candidate.startsWith('-') ? candidate : null
+  }
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

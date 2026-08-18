@@ -36,8 +36,11 @@ export function createClaudeProviderFrameFallback(sink: StructuredAgentSessionEv
   let sequence = 0
   return {
     append: (kind, payload) => {
-      sequence += 1
       const translated = unhandledProviderFrameJournalItem('claude', kind, payload)
+      if (!translated) {
+        return
+      }
+      sequence += 1
       sink.appendItem(
         { provider: 'orca', clientMessageId: `provider-frame:claude:${sequence}` },
         translated.body,

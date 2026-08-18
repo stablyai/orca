@@ -194,7 +194,7 @@ describe('orchestration federation', () => {
     const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)
     expect(attachment).toMatchObject({
       task_id: task.id,
-      protocol_version: 2,
+      protocol_version: 3,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
@@ -296,35 +296,25 @@ describe('orchestration federation', () => {
     expect(workerRuntime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
-  it('rejects control mail before queueing when the worker lacks that capability', async () => {
+  it('starts a legacy federation worker through its negotiated protocol', async () => {
     workerCapabilities = workerCapabilities.filter(
       (capability) => capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
     )
     const task = createHomeTask()
     const started = await homeDispatcher.dispatch(startRequest(task.id))
-    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
+    expect(started).toMatchObject({
+      ok: true,
+      result: { state: 'ready' }
+    })
     const dispatch = homeDb.getDispatchContext(task.id)!
 
-    const sent = await homeDispatcher.dispatch({
-      id: 'send-control-to-old-worker',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'send-control-to-old-worker-request',
-      method: 'orchestration.send',
-      params: {
-        from: 'term_coord',
-        to: `dispatch:${dispatch.id}`,
-        subject: 'Continue',
-        body: 'This worker cannot receive control mail yet.',
-        type: 'status'
-      }
-    })
-
-    expect(sent).toMatchObject({
-      ok: false,
-      error: { code: 'capability_unsupported' }
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+      state: 'ready',
+      protocol_version: 1
     })
     expect(homeDb.listPendingFederationRelay(dispatch.id, 'to_worker')).toHaveLength(0)
+    expect(workerRuntime.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
   })
 
   it('durably relays remote completion into the home Run and acknowledges it', async () => {
@@ -356,11 +346,8 @@ describe('orchestration federation', () => {
         })
       }
     })
-    expect(sent).toMatchObject({
-      ok: true,
-      result: { relay: { dispatchId: dispatch.id, accepted: true } }
-    })
-    expect(homeDb.getTask(task.id)?.status).toBe('dispatched')
+    expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
+    expect(homeDb.getTask(task.id)?.status).toBe('completed')
 
     await homeRuntime.syncOrchestrationFederation()
 

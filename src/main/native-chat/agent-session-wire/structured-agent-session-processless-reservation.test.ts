@@ -157,11 +157,14 @@ describe('processless structured session reservation', () => {
       probe: createStructuredAgentSessionOwnerProbe('local'),
       now: NOW + 1
     })
+    // The consumed proof cannot come back, but restart itself proves the reserving runtime
+    // died before any owner was proven — the reservation is released, never latched.
     expect(reopened.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'recovering',
-      runtimeFence: 1,
-      processlessAt: null
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      reservedSpawnToken: null
     })
   })
 })

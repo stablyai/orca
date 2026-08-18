@@ -1,11 +1,10 @@
+import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
-  Tab,
-  TabGroup,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  WorkspaceSessionState
-} from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+  TerminalPaneLayoutNode
+} from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {

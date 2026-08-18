@@ -39,6 +39,8 @@ let activeModel: string
 let activeEffort: string | null
 let transcriptPath: string
 let optionFailure: Error | null
+/** What the adapter's closeSession reports about the child's exit. */
+let closeSessionExit: boolean | undefined
 const dispatchedModels: string[] = []
 const launchedOptions: (Readonly<Record<string, string>> | undefined)[] = []
 const closedTuiOwners: StructuredTuiOwner[] = []
@@ -158,6 +160,7 @@ function adapter(): StructuredAgentSessionAdapter {
     })),
     closeSession: vi.fn(async () => {
       activeModel = DEFAULT_MODEL
+      return closeSessionExit
     })
   }
 }
@@ -168,6 +171,7 @@ beforeEach(async () => {
   activeModel = DEFAULT_MODEL
   activeEffort = null
   optionFailure = null
+  closeSessionExit = undefined
   dispatchedModels.length = 0
   launchedOptions.length = 0
   closedTuiOwners.length = 0
@@ -281,5 +285,18 @@ describe('structured session handoff options', () => {
       })
     ).toMatchObject({ ok: true })
     expect(dispatchedModels).toEqual([PICKED_MODEL])
+  })
+
+  // A kill is a request. If the app-server never proved it exited, handing the
+  // thread to a TUI would put two live writers on one provider session.
+  it('refuses the handoff when closing the native owner cannot prove it exited', async () => {
+    closeSessionExit = false
+
+    expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
+    await vi.waitFor(async () =>
+      expect(await host.handoffStatus(SESSION)).toMatchObject({ phase: 'failed' })
+    )
+    expect(launchedOptions).toEqual([])
+    expect(store.getRecord(SESSION)?.lease.runtimeKind).toBe('native')
   })
 })

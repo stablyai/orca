@@ -11,8 +11,10 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
-  AgentJournalSnapshot
+  AgentJournalSnapshot,
+  AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
   AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -23,6 +25,83 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
+
+/** Byte budget for one history page. Half the outbound channel cap, so the RPC
+ *  envelope and page framing always fit beside the items: row counts alone
+ *  cannot protect the channel — forty legal 256 KiB messages serialize past the
+ *  4 MiB outbound cap, and an overflow closes the client's socket on every
+ *  reopen. Pages degrade to fewer rows instead; `hasOlder`/`hasNewer` keep the
+ *  client paging. */
+export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
+
+/** Item bytes plus the submission the page would carry alongside it. */
+function historyEntryBytes(
+  item: AgentJournalRenderItem,
+  submissionBytes: ReadonlyMap<string, number>
+): number {
+  return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
+}
+
+function submissionBytesByItemId(
+  submissions: readonly AgentJournalSubmission[]
+): Map<string, number> {
+  return new Map(
+    submissions.map((submission) => [
+      agentJournalSubmissionKey(submission.clientMessageId),
+      Buffer.byteLength(JSON.stringify(submission), 'utf8')
+    ])
+  )
+}
+
+/** Visible stand-in for an item whose body alone exceeds the page budget. The
+ *  full body stays in the journal — this bounds what ONE PAGE carries, it never
+ *  rewrites the record. */
+function oversizedHistoryItem(
+  item: AgentJournalRenderItem,
+  byteLength: number
+): AgentJournalRenderItem {
+  return {
+    ...item,
+    body: {
+      kind: 'status',
+      text: `[Orca: item truncated — ${byteLength} bytes exceeds the history page budget]`
+    }
+  }
+}
+
+/**
+ * Keep the edge of the window nearest the requested position within the byte
+ * budget: `newest` for tail/backward pages, `oldest` for forward catch-up. The
+ * page stays contiguous, so the dropped remainder is exactly what the next page
+ * serves. Never empties a non-empty window — a single over-budget item degrades
+ * to a visible marker so the client always makes progress.
+ */
+function boundHistoryItemsByBytes(
+  items: AgentJournalRenderItem[],
+  keep: 'newest' | 'oldest',
+  submissionBytes: ReadonlyMap<string, number>,
+  maxBytes: number
+): { items: AgentJournalRenderItem[]; dropped: number } {
+  const ordered = keep === 'newest' ? items.toReversed() : items
+  const kept: AgentJournalRenderItem[] = []
+  let total = 0
+  for (const item of ordered) {
+    const bytes = historyEntryBytes(item, submissionBytes)
+    if (kept.length === 0 && bytes > maxBytes) {
+      kept.push(oversizedHistoryItem(item, bytes))
+      break
+    }
+    if (total + bytes > maxBytes) {
+      break
+    }
+    kept.push(item)
+    total += bytes
+  }
+  return {
+    items: keep === 'newest' ? kept.toReversed() : kept,
+    dropped: items.length - kept.length
+  }
+}
 
 /** Clamped, never rejected: a client asking for more than the host will serve
  *  should get a smaller page and keep paging, not an error mid-scroll. */
@@ -57,14 +136,20 @@ export function readAgentSessionHistory(
   const older = cursor
     ? snapshot.items.filter((item) => item.sequence < cursor.sequence)
     : snapshot.items
-  const items = older.slice(Math.max(0, older.length - limit))
+  const windowed = older.slice(Math.max(0, older.length - limit))
+  const { items, dropped } = boundHistoryItemsByBytes(
+    windowed,
+    'newest',
+    submissionBytesByItemId(snapshot.submissions),
+    AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+  )
   return {
     ok: true,
     page: buildPage({
       snapshot,
       direction: request.direction,
       items,
-      hasOlder: older.length > items.length,
+      hasOlder: older.length > windowed.length || dropped > 0,
       hasNewer: older.length < snapshot.items.length,
       fallbackCursor: cursor ?? { epoch: snapshot.cursor.epoch, sequence: 0 },
       nextCursor: items[0]
@@ -90,18 +175,55 @@ function readForward(
   if (!since.ok) {
     return { ok: false, reset: since.reset, snapshot }
   }
-  const rows = since.rows.slice(0, limit)
-  const projected = projectJournalBatch({ rows, snapshot, afterSequence: cursor.sequence })
+  const submissionBytes = submissionBytesByItemId(snapshot.submissions)
+  const batchBytes = (items: readonly AgentJournalRenderItem[]): number =>
+    items.reduce((total, item) => total + historyEntryBytes(item, submissionBytes), 0)
+  // Rows replay forward, so the byte bound shrinks the ROW window rather than
+  // clipping projected items: dropping an item while advancing the cursor past
+  // the rows that touched it would lose that revision for good.
+  let rows = since.rows.slice(0, limit)
+  let projected = projectJournalBatch({
+    rows,
+    snapshot,
+    afterSequence: cursor.sequence,
+    canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
+  })
   if (!projected.ok) {
     return { ok: false, reset: projected.reset, snapshot }
   }
+  while (
+    rows.length > 1 &&
+    batchBytes(projected.batch.items) > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+  ) {
+    rows = rows.slice(0, Math.ceil(rows.length / 2))
+    const shrunk = projectJournalBatch({
+      rows,
+      snapshot,
+      afterSequence: cursor.sequence,
+      canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
+    })
+    if (!shrunk.ok) {
+      return { ok: false, reset: shrunk.reset, snapshot }
+    }
+    projected = shrunk
+  }
+  // One row can still touch an over-budget item; degrade it visibly.
+  const items =
+    batchBytes(projected.batch.items) > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+      ? projected.batch.items.map((item) => {
+          const bytes = historyEntryBytes(item, submissionBytes)
+          return bytes > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+            ? oversizedHistoryItem(item, bytes)
+            : item
+        })
+      : projected.batch.items
   const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
   return {
     ok: true,
     page: buildPage({
       snapshot,
       direction: 'after',
-      items: projected.batch.items,
+      items,
       removedItemIds: projected.batch.removedItemIds,
       // Reading after a position means there is something before it.
       hasOlder: cursor.sequence > 0,

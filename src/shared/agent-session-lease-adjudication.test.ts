@@ -183,10 +183,22 @@ describe('acquisition compare-and-swap', () => {
 })
 
 describe('restart reconciliation', () => {
-  it('re-adopts a proven-live owner without moving the fence', () => {
+  it('re-adopts a proven-live TUI owner without moving the fence', () => {
+    expect(
+      adjudicateAgentSessionRestart({
+        lease: lease({ runtimeKind: 'tui' }),
+        probe: MATCHED,
+        observedAt: 9_000
+      })
+    ).toEqual({ disposition: 'readopt' })
+  })
+
+  it('routes a surviving native owner to recovery instead of readopting a dead transport', () => {
+    // The native child's stdio belonged to the runtime that died; readoption would extend
+    // a lease no process can drive. Recovery stops the orphan and respawns at fence + 1.
     expect(
       adjudicateAgentSessionRestart({ lease: lease(), probe: MATCHED, observedAt: 9_000 })
-    ).toEqual({ disposition: 'readopt' })
+    ).toMatchObject({ disposition: 'recovering', stage: 'recovering' })
   })
 
   it('bumps the fence exactly once for a proven-dead owner and records the evidence', () => {
@@ -226,8 +238,18 @@ describe('restart reconciliation', () => {
     ).toEqual({ disposition: 'conflicted', reason: 'claim conflicted before restart' })
   })
 
-  it('frees a reservation only when nothing ever spawned', () => {
+  it('frees an abandoned native reservation even without a spawn-token scan', () => {
+    // Restart proves the reserving runtime is gone, and a never-proven native child lost
+    // its only request channel with it — nothing under this token can write again.
     const reserved = lease({ ownerProcess: null, claimStatus: 'reserved' })
+    expect(
+      adjudicateAgentSessionRestart({ lease: reserved, probe: INDETERMINATE, observedAt: 9_000 })
+    ).toMatchObject({ disposition: 'evicted', nextFence: 8 })
+  })
+
+  it('frees a TUI reservation only when a probe proves nothing ever spawned', () => {
+    // A TUI child lives in a terminal that outlives the runtime, so absence needs proof.
+    const reserved = lease({ ownerProcess: null, claimStatus: 'reserved', runtimeKind: 'tui' })
     expect(
       adjudicateAgentSessionRestart({
         lease: reserved,

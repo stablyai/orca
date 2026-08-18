@@ -220,15 +220,15 @@ export function useStructuredAgentSessionOutbox(args: {
   }, [fence, outbox, sessionId, target])
 
   const send = useCallback(
-    (text: string): boolean => {
-      if (!text.trim()) {
+    (text: string, attachments: readonly { path: string; previewUri: string }[] = []): boolean => {
+      if (!text.trim() && attachments.length === 0) {
         return false
       }
       const entry = createStructuredAgentSessionOutboxEntry({
         clientMessageId: structuredSessionOperationId(),
         sessionId,
         text,
-        attachments: [],
+        attachments,
         queuedAt: Date.now()
       })
       const next = [...outboxRef.current, entry]

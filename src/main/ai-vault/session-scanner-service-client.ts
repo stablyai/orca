@@ -130,7 +130,7 @@ export class AiVaultScannerServiceClient {
         continue
       }
       const index = this.queue.findIndex((call) => call.lane === lane)
-      if (index < 0) {
+      if (index === -1) {
         continue
       }
       const call = this.queue.splice(index, 1)[0]!
@@ -257,7 +257,7 @@ export class AiVaultScannerServiceClient {
     call.cancelled = true
     call.reject(createAiVaultScanCancelledError())
     const queuedIndex = this.queue.indexOf(call)
-    if (queuedIndex >= 0) {
+    if (queuedIndex !== -1) {
       this.queue.splice(queuedIndex, 1)
       clearAiVaultServiceCall(call)
       this.pump()

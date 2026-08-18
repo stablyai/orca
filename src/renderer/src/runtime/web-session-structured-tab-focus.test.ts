@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { Tab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
 
 const WORKTREE_ID = 'repo-1::/worktree'

@@ -3,9 +3,6 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
   AgentSessionMutationResult,
-  AgentSessionHandoffDirection,
-  AgentSessionHandoffMode,
-  AgentSessionHandoffResult,
   AgentSessionOptionResult,
   AgentSessionOptionsResult,
   AgentSessionPromptResult
@@ -21,10 +18,7 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
-import {
-  activeStructuredAgentSessionTurnId,
-  projectStructuredItemsToNativeChat
-} from '../../../../shared/structured-agent-session-projection'
+import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import {
@@ -32,6 +26,7 @@ import {
   useStructuredAgentSessionOutbox
 } from './use-structured-agent-session-outbox'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
+import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 export type StructuredPromptItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
@@ -212,16 +207,11 @@ export function useStructuredAgentSession(args: {
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   return {
-    messages: [
-      ...projectStructuredItemsToNativeChat(state.items),
-      ...outboxController.outbox.map((entry) => ({
-        id: entry.clientMessageId,
-        role: 'user' as const,
-        source: 'transcript' as const,
-        timestamp: entry.queuedAt,
-        blocks: entry.body.blocks
-      }))
-    ],
+    messages: projectStructuredAgentSessionMessages(
+      state.items,
+      outboxController.outbox,
+      state.submissions
+    ),
     status: state.status,
     error: state.error ?? writeError ?? outboxController.error,
     hasOlder: state.hasOlder,
@@ -246,18 +236,6 @@ export function useStructuredAgentSession(args: {
       ),
     optionSnapshot,
     optionSurface,
-    setStructuredOption,
-    requestHandoff: (
-      direction: AgentSessionHandoffDirection,
-      mode: AgentSessionHandoffMode,
-      action: 'start' | 'cancel-queued' | 'retry' | 'recover' = 'start'
-    ) =>
-      mutate<AgentSessionHandoffResult>(
-        'agentSession.requestHandoff',
-        'agentSession.requestHandoff',
-        { direction, mode, action },
-        action === 'retry' ? stateRef.current.handoff?.operationId : null
-      ),
-    handoff: state.handoff
+    setStructuredOption
   }
 }

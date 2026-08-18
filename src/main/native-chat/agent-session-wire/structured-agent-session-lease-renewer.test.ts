@@ -133,6 +133,30 @@ describe('structured agent-session lease renewal', () => {
     })
   })
 
+  it('never extends the lease of a native record parked in recovery', async () => {
+    // The host cannot vouch for a native child it holds no transport to; renewing while
+    // recovering keeps an orphan pid's lease alive and reads as a healthy owner.
+    const store = await liveStore()
+    await store.transitionHandoff('session-renewal', (record) => ({
+      ...record,
+      lease: { ...record.lease, handoffStage: 'recovering' }
+    }))
+    const probe = vi.fn(async () => ({
+      outcome: 'identity-matched' as const,
+      matchedOn: ['process-start-time' as const]
+    }))
+    const renewer = new StructuredAgentSessionLeaseRenewer({
+      store,
+      probe,
+      now: () => NOW + 10_000
+    })
+
+    await renewer.renewNow()
+
+    expect(probe).not.toHaveBeenCalled()
+    expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
+  })
+
   it('routes a proven dead TUI owner into handoff recovery', async () => {
     const store = await liveStore()
     await store.transitionHandoff('session-renewal', (record) => ({

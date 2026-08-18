@@ -60,6 +60,8 @@ export class PtyProcessListAdmission {
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
       wslDistroBytes === null ||
+      (value.rootProcessId !== undefined &&
+        (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
       (value.agentSessionOwners !== undefined && !Array.isArray(value.agentSessionOwners))
     ) {
@@ -108,6 +110,7 @@ export class PtyProcessListAdmission {
       cwd: value.cwd,
       title: value.title,
       ...(value.incarnationId !== undefined ? { incarnationId: value.incarnationId } : {}),
+      ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),

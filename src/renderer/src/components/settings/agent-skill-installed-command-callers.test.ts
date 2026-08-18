@@ -174,7 +174,7 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     // resolves the shell that prepares the executable form.
     expect(source).toContain('writeClipboardText(skillCommand)')
     expect(source).toContain('command={skillCommand}')
-    expect(source).toContain('prepareCommandForShell={buildSkillSetupTerminalCommand}')
+    expect(source).toContain('prepareCommandForShell={prepareCommandForShell}')
     expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
     expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
     // This terminal auto-pastes with no install gate, so a repair-required runtime

@@ -179,7 +179,8 @@ export class AgentSessionSubscribers {
     const projected = projectJournalBatch({
       rows: since.rows,
       snapshot,
-      afterSequence: subscriber.cursor.sequence
+      afterSequence: subscriber.cursor.sequence,
+      canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
     })
     if (!projected.ok) {
       this.emit(subscriber, {

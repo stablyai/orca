@@ -54,4 +54,5 @@ export function resolveZoomTarget(args: {
   }
   return 'ui'
 }
-import type { TopLevelView, WorkspaceVisibleTabType } from '../../../shared/types'
+import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'

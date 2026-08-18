@@ -13,6 +13,7 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
   journalRoot: string
   records: AgentSessionRecord[]
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+  resolveRecovery: (sessionId: string) => Promise<unknown>
   operationId: () => string
   resume: (params: AgentSessionAttachParams) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
@@ -23,6 +24,10 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
   await Promise.all(
     input.records.map(async ({ sessionId }) => {
       const unreconciled = await input.reconcile(sessionId)
+      if (!unreconciled) {
+        // A session latched in recovery exits here at startup, without waiting for a client.
+        await input.resolveRecovery(sessionId)
+      }
       const current = input.store.getRecord(sessionId)
       if (
         !unreconciled &&

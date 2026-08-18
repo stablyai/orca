@@ -68,6 +68,35 @@ describe('structured AI Vault ownership', () => {
       )
     ).rejects.toThrow('agent_session_ownership_unknown')
   })
+
+  it.each([
+    `codex resume --last`,
+    `claude --resume`,
+    `claude -r`,
+    `claude --continue`,
+    `claude -c`,
+    // `--continue` takes no session id, so the trailing token is a prompt —
+    // reading it as a target would admit a writer onto the owned session.
+    `claude --continue "keep going"`,
+    `claude -c 019fd532-7c11-7a90-b6de-4e1a2c3d5f61`
+  ])('refuses resume commands without a provably different target: %s', async (command) => {
+    installOwnership(command.startsWith('claude') ? { provider: 'claude' } : {})
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it('allows a resume command that names a different provider session', async () => {
+    installOwnership()
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        'codex resume 019fd532-7c11-7a90-b6de-4e1a2c3d5f61',
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
 })
 
 function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
 
 const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),

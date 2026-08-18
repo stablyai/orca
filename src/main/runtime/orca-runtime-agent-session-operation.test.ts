@@ -129,6 +129,26 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
+  it('waits for Codex shell launch preparation before a structured resume', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'provider-session-1' }
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({
+        command: expect.stringContaining("'resume' 'provider-session-1'"),
+        startupCommandDelivery: 'shell-ready'
+      })
+    )
+  })
+
   it('selects nested SSH legacy fallback before reading a Pi transcript path locally', async () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {

@@ -3,6 +3,10 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import {
+  adapterSupportsCreate,
+  adapterSupportsRecord
+} from './structured-agent-session-provider-support'
 
 export type StructuredAgentSessionTab = {
   sessionId: string
@@ -15,19 +19,14 @@ export function adapterSupportsAgentSessionCreate(
   location: AgentSessionExecutionLocation,
   agent: string
 ): boolean {
-  return (
-    adapter.supportsCreate?.(location, agent) ??
-    (agent === 'codex' && (adapter.supportsLocation?.(location) ?? false))
-  )
+  return adapterSupportsCreate(adapter, location, agent)
 }
 
 export function adapterSupportsAgentSessionRecord(
   adapter: StructuredAgentSessionAdapter,
   record: AgentSessionRecord
 ): boolean {
-  return adapter.supportsCreate
-    ? adapter.supportsCreate(record.location, record.provider)
-    : record.provider === 'codex'
+  return adapterSupportsRecord(adapter, record)
 }
 
 export function structuredAgentSessionTabAgent(agent: string): 'claude' | 'codex' {

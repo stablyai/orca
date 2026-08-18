@@ -11,16 +11,9 @@ import {
   type StructuredAgentSessionSetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import {
-  isCodexAppServerRequestError,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
-import {
-  CODEX_SPAWN_TOKEN_ENV,
-  codexProcessIdentity,
-  codexProviderHandleLink
-} from './codex-structured-owner-identity'
+import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
+import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
 import { answerCodexPrompt } from './codex-structured-prompt-replies'
 import { openCodexThread } from './codex-structured-thread-open'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
@@ -45,6 +38,7 @@ import {
   deliverCodexServerRequest,
   deliverCodexUnhandledFrame
 } from './codex-structured-provider-events'
+import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 
 export type {
   CodexStructuredLaunch,
@@ -55,8 +49,16 @@ export type {
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
+  private readonly turnCancellation: CodexStructuredTurnCancellation
 
-  constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {}
+  constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.turnCancellation = new CodexStructuredTurnCancellation({
+      captureTurnProcesses: deps.captureTurnProcesses,
+      terminateTurnProcesses: deps.terminateTurnProcesses,
+      requestTimeoutMs: deps.requestTimeoutMs,
+      emit: (session, event) => this.emit(session, event)
+    })
+  }
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -91,10 +93,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         {
           command: launch.command,
           args: launch.args,
-          env: {
-            [CODEX_SPAWN_TOKEN_ENV]: input.spawnToken,
-            ...(launch.codexHome ? { CODEX_HOME: launch.codexHome } : {})
-          }
+          env: buildCodexStructuredChildEnvironment(launch, input.spawnToken)
         },
         {
           onNotification: (method, params) =>
@@ -138,7 +137,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       }
       this.acquisitions.assertCurrent(sessionId, attempt)
       this.acquisitions.deleteIfCurrent(sessionId, attempt)
-      this.sessions.set(sessionId, {
+      const session: CodexSession = {
         connection,
         threadId: opened.threadId,
         historyPath: opened.historyPath,
@@ -147,7 +146,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         reportedOptions: reportedCodexThreadOptions(opened),
         turnIdWaiters: [],
         translator
-      })
+      }
+      this.turnCancellation.register(session)
+      this.sessions.set(sessionId, session)
       for (const event of acquisition.drain()) {
         event()
       }
@@ -197,12 +198,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   }
 
   private handleNotification(sessionId: string, method: string, params: unknown): void {
-    deliverCodexNotification(
-      sessionId,
-      this.sessions.get(sessionId),
-      method,
-      params,
-      (session, event) => this.emit(session, event)
+    const session = this.sessions.get(sessionId)
+    if (session && this.turnCancellation.handleNotification(sessionId, session, method, params)) {
+      return
+    }
+    deliverCodexNotification(sessionId, session, method, params, (session, event) =>
+      this.emit(session, event)
     )
   }
 
@@ -242,7 +243,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     body: AgentJournalMessageItem
     fence: number
   }): Promise<AgentSessionDispatchOutcome> {
-    return dispatchCodexTurn(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+    const session = this.session(input.sessionId)
+    await this.turnCancellation.captureBaseline(session)
+    return dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
   }
 
   async cancelTurn(input: {
@@ -251,21 +254,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     fence: number
   }): Promise<{ cancelled: boolean }> {
     const session = this.session(input.sessionId)
-    try {
-      await session.connection.request(
-        'turn/interrupt',
-        { threadId: session.threadId, turnId: input.turnId },
-        { timeoutMs: this.deps.requestTimeoutMs }
-      )
-      return { cancelled: true }
-    } catch (error) {
-      // Codex declining names a turn it no longer owns; anything else leaves the
-      // cancel unconfirmed and must surface as such.
-      if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
-        return { cancelled: false }
-      }
-      throw error
-    }
+    return this.turnCancellation.cancel(session, input.turnId)
   }
 
   async answerPrompt(input: {
@@ -302,14 +291,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   /** Reaps one session's child. The proven handle chain is already durable, so
    *  a graceful close loses nothing. */
-  async closeSession(sessionId: string): Promise<void> {
+  async closeSession(sessionId: string): Promise<void | boolean> {
     const attempt = this.acquisitions.get(sessionId)
     if (attempt) {
       attempt.cancelled = true
       await attempt.window.connection?.close()
       await attempt.finished
     }
-    await closeCodexPublishedSession(this.sessions, sessionId, this.deps.onEvent)
+    return closeCodexPublishedSession(this.sessions, sessionId, this.deps.onEvent)
   }
 
   async closeAll(): Promise<void> {
@@ -320,8 +309,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
   }
 
-  releaseAcquisition = (input: { sessionId: string }): Promise<void> =>
-    this.closeSession(input.sessionId)
+  releaseAcquisition = async (input: { sessionId: string }): Promise<void> => {
+    await this.closeSession(input.sessionId)
+  }
 
   private session(sessionId: string): CodexSession {
     const session = this.sessions.get(sessionId)

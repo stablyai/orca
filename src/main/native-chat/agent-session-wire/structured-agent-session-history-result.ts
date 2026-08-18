@@ -1,6 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult

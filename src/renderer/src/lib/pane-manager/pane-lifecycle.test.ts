@@ -430,6 +430,19 @@ describe('attachLigatures', () => {
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
     expect(pane.ligaturesAddon).not.toBeNull()
   })
+
+  it('defers a retained WebGL rebuild while hidden', () => {
+    const pane = createPane()
+    const retainedAddon = { dispose: vi.fn() } as never
+    pane.webglAddon = retainedAddon
+    pane.webglAttachmentDeferred = true
+
+    attachLigatures(pane)
+
+    expect(pane.webglAddon).toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(true)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+  })
 })
 
 describe('openTerminal — addon and provider wiring', () => {
@@ -484,6 +497,7 @@ describe('openTerminal — addon and provider wiring', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       querySelector: vi.fn(() => null),
+      style: { backgroundColor: '' },
       classList: { contains: vi.fn(() => false) }
     } as unknown as HTMLElement
     vi.stubGlobal(

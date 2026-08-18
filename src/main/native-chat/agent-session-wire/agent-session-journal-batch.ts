@@ -22,6 +22,7 @@ export function projectJournalBatch(input: {
   snapshot: AgentJournalSnapshot
   /** Sequence the subscriber has already applied. */
   afterSequence: number
+  canonicalItemId?: (itemId: string) => string
 }): JournalBatchProjection {
   const gap = findSequenceGap(
     input.rows.map((row) => row.seq),
@@ -35,7 +36,9 @@ export function projectJournalBatch(input: {
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
     if (row.kind === 'item' || row.kind === 'tombstone') {
-      touchedItemIds.add(aliases.get(row.itemId) ?? row.itemId)
+      touchedItemIds.add(
+        input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
+      )
       continue
     }
     if (row.kind === 'submission' || row.kind === 'dispatch') {

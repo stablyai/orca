@@ -16,7 +16,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { putJournalBlob } from '../agent-session-journal/journal-blob-store'
+import { putJournalBlob, removeJournalBlob } from '../agent-session-journal/journal-blob-store'
 
 export type StructuredAgentSessionJournalBlob = { digest: string; payload: string }
 
@@ -97,10 +97,22 @@ export function createDeferredStructuredAgentSessionEventSink(
     sink: {
       appendItem: (identity, body: AgentJournalItemBody, blobs = []) => {
         submit(async (bound) => {
-          for (const blob of blobs) {
-            await putJournalBlob(bound.journal.directory, blob.digest, blob.payload)
+          const persisted: string[] = []
+          try {
+            for (const blob of blobs) {
+              await putJournalBlob(bound.journal.directory, blob.digest, blob.payload)
+              persisted.push(blob.digest)
+            }
+            await bound.journal.appendItem(identity, body, { fence: bound.fence })
+          } catch (error) {
+            const retained = bound.journal.referencedBlobDigests?.() ?? new Set<string>()
+            for (const digest of persisted) {
+              if (!retained.has(digest)) {
+                await removeJournalBlob(bound.journal.directory, digest)
+              }
+            }
+            throw error
           }
-          await bound.journal.appendItem(identity, body, { fence: bound.fence })
         })
       },
       appendTombstone: (identity) => {
@@ -115,7 +127,7 @@ export function createDeferredStructuredAgentSessionEventSink(
         return
       }
       target = next
-      const pending = buffered.splice(0, buffered.length)
+      const pending = buffered.splice(0)
       for (const operation of pending) {
         enqueue(operation)
       }

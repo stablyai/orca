@@ -20,10 +20,12 @@ export type StructuredAgentSessionHostDeps = {
   journalRoot: string
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+  /** Recovery-exit stop requests only; a lease moves only on a later proven-absent probe. */
+  stopOwnerProcess?: (pid: number, signal: 'SIGTERM' | 'SIGKILL') => void
   mintSpawnToken?: () => string
   resolveLaunchEnv?: (
     provider: AgentSessionRecord['provider']
-  ) => Record<string, string> | undefined
+  ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   now?: () => number
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
   handoffTransport?: StructuredAgentSessionHandoffTransport

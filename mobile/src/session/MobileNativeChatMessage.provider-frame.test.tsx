@@ -71,4 +71,34 @@ describe('MobileNativeChatMessage provider frame', () => {
       '{"future":true}'
     )
   })
+
+  it('leads with the provider sentence instead of the raw frame kind', () => {
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatMessage, {
+          message: {
+            id: 'frame-1',
+            role: 'system',
+            source: 'transcript',
+            timestamp: 1,
+            blocks: [
+              {
+                type: 'text',
+                text: 'Your plan limit resets in 2 hours.',
+                providerFrame: {
+                  provider: 'codex',
+                  kind: 'notification:warning',
+                  payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+                }
+              }
+            ]
+          }
+        })
+      )
+    })
+
+    const labels = renderer!.root.findAllByType('Text').flatMap((node) => node.children)
+    expect(labels).toContain('Your plan limit resets in 2 hours.')
+    expect(labels).not.toContain('notification:warning')
+  })
 })

@@ -9,11 +9,16 @@
 
 import type {
   AgentJournalAcceptanceReceipt,
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { JournalRow } from './journal-row-schema'
 
 export type JournalReducerState = {
@@ -55,7 +60,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     return
   }
   if (row.kind === 'item') {
-    const itemId = resolveItemId(state, row.itemId)
+    const itemId = resolveJournalItemId(state, row.itemId, row.body)
     upsertItem(state, itemId, row.revision, {
       itemId,
       revision: row.revision,
@@ -75,6 +80,47 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     return
   }
   applyDispatch(state, row)
+}
+
+export function resolveJournalItemId(
+  state: JournalReducerState,
+  itemId: string,
+  body?: AgentJournalRenderItem['body']
+): string {
+  const aliased = state.aliases.get(itemId)
+  if (aliased) {
+    return aliased
+  }
+  const identity = parseAgentJournalItemKey(itemId)
+  if (
+    !body ||
+    body.kind !== 'message' ||
+    body.role !== 'user' ||
+    !identity ||
+    identity.provider === 'orca'
+  ) {
+    return itemId
+  }
+  const fingerprint = structuredAgentSessionPayloadFingerprint({
+    method: 'agentSession.send',
+    sessionId: state.sessionId,
+    fields: { body }
+  })
+  // Exact payload plus queue order preserves repeated identical sends one-for-one.
+  const submission = [...state.submissions.values()]
+    .sort((left, right) => left.submittedAt - right.submittedAt)
+    .find((candidate) => {
+      if (candidate.dispatchState === 'rejected' || candidate.payloadFingerprint !== fingerprint) {
+        return false
+      }
+      return state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
+    })
+  if (!submission) {
+    return itemId
+  }
+  const submissionId = agentJournalSubmissionKey(submission.clientMessageId)
+  state.aliases.set(itemId, submissionId)
+  return submissionId
 }
 
 function resolveItemId(state: JournalReducerState, itemId: string): string {
@@ -101,7 +147,11 @@ function upsertItem(
     return
   }
   // Creation sequence is the ordering key; a revision refreshes content only.
-  state.items.set(itemId, { ...next, sequence: existing.sequence })
+  // `observedAt` is pinned with it: clients sort the timeline by that timestamp,
+  // so letting a revision advance it makes the row jump past everything that
+  // landed in between — the provider's own echo of a send revises the submission
+  // row, which relocated the user's bubble below later rows.
+  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
   state.tombstones.delete(itemId)
 }
 
@@ -183,17 +233,25 @@ export function renderJournalState(state: JournalReducerState): AgentJournalSnap
   }
 }
 
+/** Blob digests one body points at. A retained row can outlive its render item
+ *  (a tombstone drops the item), so compaction reads rows through this too. */
+export function blobDigestsInBody(body: AgentJournalItemBody, into: Set<string>): void {
+  if (body.kind === 'tool-call' && body.output?.truncated) {
+    into.add(body.output.digest)
+  }
+  if (body.kind === 'diff' && body.patch.truncated) {
+    into.add(body.patch.digest)
+  }
+  if (body.kind === 'status' && body.providerFrame?.payload.truncated) {
+    into.add(body.providerFrame.payload.digest)
+  }
+}
+
 /** Digests referenced by live rows, so compaction knows which blobs to keep. */
 export function referencedBlobDigests(state: JournalReducerState): Set<string> {
   const digests = new Set<string>()
   for (const item of state.items.values()) {
-    const body = item.body
-    if (body.kind === 'tool-call' && body.output?.truncated) {
-      digests.add(body.output.digest)
-    }
-    if (body.kind === 'diff' && body.patch.truncated) {
-      digests.add(body.patch.digest)
-    }
+    blobDigestsInBody(item.body, digests)
   }
   return digests
 }

@@ -15,7 +15,16 @@ export function previewSourceFromRoute(
       grantId: params.grantId,
       ...(params.terminal ? { terminalHandle: params.terminal } : {}),
       ...(params.pathText ? { pathText: params.pathText } : {}),
-      ...(params.cwd ? { cwd: params.cwd } : {})
+      ...(params.cwd ? { cwd: params.cwd } : {}),
+      ...(params.nativeChatTab && params.nativeChatSession
+        ? {
+            nativeChatContext: {
+              tabId: params.nativeChatTab,
+              sessionId: params.nativeChatSession
+            },
+            readOnly: true as const
+          }
+        : {})
     }
   }
   if (!params.relativePath) {
@@ -28,12 +37,12 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
   if (!source) {
     return null
   }
-  return source.source === 'terminalArtifact'
-    ? JSON.stringify([
-        'terminal',
-        source.worktreeId,
-        source.absolutePath,
-        source.terminalHandle ?? ''
-      ])
-    : JSON.stringify(['worktree', source.worktreeId, source.relativePath])
+  if (source.source !== 'terminalArtifact') {
+    return JSON.stringify(['worktree', source.worktreeId, source.relativePath])
+  }
+  const key = ['terminal', source.worktreeId, source.absolutePath, source.terminalHandle ?? '']
+  if (source.nativeChatContext) {
+    key.push(source.nativeChatContext.tabId, source.nativeChatContext.sessionId)
+  }
+  return JSON.stringify(key)
 }

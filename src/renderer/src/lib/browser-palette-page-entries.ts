@@ -1,9 +1,6 @@
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  WorkspaceVisibleTabType,
-  Worktree
-} from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { SearchableBrowserPage } from './browser-palette-search'
 
 type BrowserPaletteActiveTabType = WorkspaceVisibleTabType

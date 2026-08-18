@@ -11,11 +11,7 @@ import {
 } from 'react-native'
 import { Square } from 'lucide-react-native'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import type {
-  AgentSessionHandoffDirection,
-  AgentSessionHandoffMode,
-  AgentSessionHandoffStatus
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionHandoffStatus } from '../../../src/shared/agent-session-wire'
 import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
@@ -72,11 +68,6 @@ type Props = {
   onRemoveAttachment: (id: string) => void
   onCancel: (turnId: string) => Promise<boolean>
   handoff: AgentSessionHandoffStatus | null
-  onRequestHandoff: (
-    direction: AgentSessionHandoffDirection,
-    mode: AgentSessionHandoffMode,
-    action?: 'start' | 'cancel-queued' | 'retry' | 'recover'
-  ) => Promise<boolean>
 }
 
 export function MobileStructuredAgentSessionView(props: Props): React.JSX.Element {
@@ -129,11 +120,6 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
 
   return (
     <View style={styles.root}>
-      <MobileStructuredHandoffBanner
-        status={props.handoff}
-        isWorking={turnId !== null}
-        onRequest={props.onRequestHandoff}
-      />
       <FlatList
         ref={listRef}
         inverted
@@ -298,95 +284,4 @@ export function MobileStructuredAgentSessionView(props: Props): React.JSX.Elemen
       />
     </View>
   )
-}
-
-function MobileStructuredHandoffBanner(props: {
-  status: AgentSessionHandoffStatus | null
-  isWorking: boolean
-  onRequest: Props['onRequestHandoff']
-}): React.JSX.Element | null {
-  const status = props.status
-  if (!status) {
-    return null
-  }
-  if (status.owner === 'native' && status.phase === 'idle') {
-    return (
-      <View style={styles.handoffBar}>
-        {props.isWorking ? (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.handoffButton, pressed && styles.pressed]}
-              onPress={() => void props.onRequest('to-tui', 'after-turn')}
-            >
-              <Text style={styles.handoffButtonText}>Switch after this turn</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.handoffButton, pressed && styles.pressed]}
-              onPress={() => void props.onRequest('to-tui', 'stop-turn')}
-            >
-              <Text style={styles.handoffButtonText}>Stop turn and switch</Text>
-            </Pressable>
-          </>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.handoffButton, pressed && styles.pressed]}
-            // A submitted turn can reach the host before isWorking updates; after-turn is immediate when idle.
-            onPress={() => void props.onRequest('to-tui', 'after-turn')}
-          >
-            <Text style={styles.handoffButtonText}>Open agent TUI</Text>
-          </Pressable>
-        )}
-      </View>
-    )
-  }
-  const copy =
-    status.phase === 'waiting-for-exit'
-      ? 'Exit the agent terminal to continue in chat.'
-      : status.phase === 'switching'
-        ? mobileHandoffStageCopy(status)
-        : (status.error?.message ??
-          `Agent is open in terminal${status.hostLabel ? ` on ${status.hostLabel}` : ''}`)
-  return (
-    <View style={[styles.handoffBanner, status.error ? styles.handoffError : null]}>
-      <Text style={status.error ? styles.handoffErrorText : styles.handoffText}>{copy}</Text>
-      {status.phase === 'queued' && status.direction ? (
-        <Pressable
-          onPress={() => void props.onRequest(status.direction!, 'after-turn', 'cancel-queued')}
-        >
-          <Text style={styles.handoffButtonText}>Cancel</Text>
-        </Pressable>
-      ) : status.owner === 'tui' && status.phase === 'idle' ? (
-        <Pressable onPress={() => void props.onRequest('to-native', 'after-turn')}>
-          <Text style={styles.handoffButtonText}>Return to chat</Text>
-        </Pressable>
-      ) : status.phase === 'failed' && status.direction && status.error?.canRetryProof ? (
-        <Pressable onPress={() => void props.onRequest(status.direction!, 'now', 'recover')}>
-          <Text style={styles.handoffButtonText}>Retry proof</Text>
-        </Pressable>
-      ) : status.phase === 'failed' &&
-        status.direction &&
-        status.error?.recoverableOwner !== 'none' ? (
-        <Pressable onPress={() => void props.onRequest(status.direction!, 'now', 'retry')}>
-          <Text style={styles.handoffButtonText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  )
-}
-
-function mobileHandoffStageCopy(status: AgentSessionHandoffStatus): string {
-  switch (status.stage) {
-    case 'preparing':
-      return status.direction === 'to-tui' ? 'Finishing chat session…' : 'Finishing agent terminal…'
-    case 'old-owner-stopped':
-      return status.direction === 'to-tui' ? 'Opening agent terminal…' : 'Resuming chat session…'
-    case 'new-owner-proving':
-      return status.direction === 'to-tui' ? 'Verifying agent terminal…' : 'Verifying chat session…'
-    case 'recovering':
-      return 'Recovering agent session…'
-    case 'manual-recovery':
-      return 'Agent session needs recovery'
-    default:
-      return 'Switching session owner…'
-  }
 }

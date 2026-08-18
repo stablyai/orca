@@ -32,7 +32,9 @@ import {
   mergeHookInstallDetail,
   parseDevinHooksConfigText,
   readConfigFromOrcaOverlapDetail,
-  readDevinHooksConfig
+  readDevinHooksConfig,
+  readDevinHooksSource,
+  serializeDevinHooksConfig
 } from './hook-config-json'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -140,8 +142,8 @@ export class DevinHookService {
   install(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
-    const config = readDevinHooksConfig(configPath)
-    if (!config) {
+    const source = readDevinHooksSource(configPath)
+    if (!source) {
       return {
         agent: 'devin',
         state: 'error',
@@ -152,9 +154,15 @@ export class DevinHookService {
     }
 
     const command = getDevinManagedCommand(scriptPath)
-    const nextConfig = applyDevinManagedHooks(config, command, getDevinManagedScriptFileName())
+    const nextConfig = applyDevinManagedHooks(
+      source.config,
+      command,
+      getDevinManagedScriptFileName()
+    )
     writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, nextConfig)
+    writeHooksJson(configPath, nextConfig, {
+      serialized: serializeDevinHooksConfig(source.text, nextConfig)
+    })
     return this.getStatus()
   }
 
@@ -187,7 +195,9 @@ export class DevinHookService {
       // Why: write script before settings so a mid-install failure never leaves settings.json referencing a missing script.
       // Why: SSH remotes use POSIX `.sh` hooks even when Orca runs on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
+        serialized: serializeDevinHooksConfig(body, nextConfig)
+      })
 
       return {
         agent: 'devin',
@@ -209,8 +219,8 @@ export class DevinHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
-    const config = readDevinHooksConfig(configPath)
-    if (!config) {
+    const source = readDevinHooksSource(configPath)
+    if (!source) {
       return {
         agent: 'devin',
         state: 'error',
@@ -220,11 +230,13 @@ export class DevinHookService {
       }
     }
     const { config: nextConfig, changed } = removeDevinManagedHooks(
-      config,
+      source.config,
       getDevinManagedScriptFileName()
     )
     if (changed) {
-      writeHooksJson(configPath, nextConfig)
+      writeHooksJson(configPath, nextConfig, {
+        serialized: serializeDevinHooksConfig(source.text, nextConfig)
+      })
     }
     return this.getStatus()
   }

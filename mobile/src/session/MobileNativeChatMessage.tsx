@@ -13,6 +13,7 @@ import {
 } from '../../../src/shared/native-chat-tool-summary'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { nativeChatProviderFrameSummary } from '../../../src/shared/native-chat-provider-frame-summary'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
@@ -200,7 +201,7 @@ function MobileProviderFrame({
         )}
         <Text style={styles.providerFrameProvider}>{frame.provider}</Text>
         <Text style={styles.providerFrameKind} numberOfLines={1}>
-          {frame.kind}
+          {nativeChatProviderFrameSummary(block)}
         </Text>
       </Pressable>
       {expanded ? (

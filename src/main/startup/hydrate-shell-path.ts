@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { ShellHydrationFailureReason } from '../../shared/types'
+import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shell-path-ownership'
 
@@ -49,7 +49,7 @@ export function _resetHydrateShellPathCache(): void {
   windowsPathOwnership.reset()
 }
 
-function pickShell(): string | null {
+export function resolveProfileLoadingShell(): string | null {
   if (process.platform === 'win32') {
     const family = resolveWindowsShellStartupFamily(configuredWindowsShell)
     if (family === 'cmd') {
@@ -68,14 +68,18 @@ function pickShell(): string | null {
   return process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
 }
 
+export function resolveProfileLoadingFallbackShell(): string | null {
+  return configuredWindowsFallbackShell
+}
+
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
-  if (first < 0) {
+  if (first === -1) {
     return []
   }
   const second = cleaned.indexOf(DELIMITER, first + DELIMITER.length)
-  if (second < 0) {
+  if (second === -1) {
     return []
   }
   const value = cleaned.slice(first + DELIMITER.length, second).trim()
@@ -204,7 +208,8 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
   }
   const platform = process.platform
   const configurationVersion = windowsShellConfigurationVersion
-  const shell = options.shellOverride !== undefined ? options.shellOverride : pickShell()
+  const shell =
+    options.shellOverride !== undefined ? options.shellOverride : resolveProfileLoadingShell()
   if (!shell) {
     cached = Promise.resolve({ segments: [], ok: false, failureReason: 'no_shell' })
     return cached

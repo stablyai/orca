@@ -8,17 +8,23 @@
  */
 
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rename, rm } from 'node:fs/promises'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   agentSessionOperationKey,
   isAgentSessionOperationRow,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
-import { isAgentSessionRecord, type AgentSessionRecord } from '../../shared/agent-session-record'
-import { durableWriteTempPath, writeFileDurable } from '../durable-file-write'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { loadAgentSessionRecord } from '../../shared/agent-session-record-load'
+import {
+  copyFileDurable,
+  durableWriteTempPath,
+  renameDurable,
+  writeTempFileDurable
+} from '../durable-file-write'
 
-export const AGENT_SESSION_STORE_SCHEMA_VERSION = 1 as const
+export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
 
 export const AGENT_SESSION_STORE_FILE_NAME = 'agent-sessions.json'
 
@@ -30,8 +36,8 @@ export type AgentSessionStoreState = {
   records: Map<string, AgentSessionRecord>
   operations: Map<string, AgentSessionOperationRow>
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
-  /** Rows this build cannot validate, kept verbatim so a rollback cannot delete another host's work. */
-  unreadableRecords: Map<string, unknown>
+  /** Rows this build cannot validate, kept with a durable refusal reason. */
+  unreadableRecords: Map<string, { reason: string; raw: unknown }>
 }
 
 export type LoadedAgentSessionStore = {
@@ -41,6 +47,8 @@ export type LoadedAgentSessionStore = {
   readOnly: boolean
   /** True when the primary file was unusable and the previous committed copy was used. */
   recoveredFromBackup: boolean
+  /** True when a legacy row or store needs a durable current-schema rewrite. */
+  needsRewrite: boolean
 }
 
 export function agentSessionStorePath(directory: string): string {
@@ -70,7 +78,10 @@ export function agentSessionStoreRevision(state: AgentSessionStoreState): string
     .digest('hex')
 }
 
-function parseState(raw: string, hostId: string): { state: AgentSessionStoreState } | null {
+function parseState(
+  raw: string,
+  hostId: string
+): { state: AgentSessionStoreState; needsRewrite: boolean } | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -86,6 +97,7 @@ function parseState(raw: string, hostId: string): { state: AgentSessionStoreStat
     records?: unknown
     operations?: unknown
     retiredClaimKeys?: unknown
+    unusableRecords?: unknown
   }
   if (
     !Number.isSafeInteger(file.schemaVersion) ||
@@ -97,29 +109,60 @@ function parseState(raw: string, hostId: string): { state: AgentSessionStoreStat
   const schemaVersion = file.schemaVersion as number
   if (
     schemaVersion <= AGENT_SESSION_STORE_SCHEMA_VERSION &&
-    (typeof file.records !== 'object' ||
-      file.records === null ||
-      Array.isArray(file.records) ||
-      typeof file.operations !== 'object' ||
+    (typeof file.records !== 'object' || file.records === null || Array.isArray(file.records))
+  ) {
+    return null
+  }
+  if (
+    schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION &&
+    (typeof file.operations !== 'object' ||
       file.operations === null ||
       Array.isArray(file.operations) ||
-      (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION &&
-        !Array.isArray(file.retiredClaimKeys)))
+      !Array.isArray(file.retiredClaimKeys) ||
+      typeof file.unusableRecords !== 'object' ||
+      file.unusableRecords === null ||
+      Array.isArray(file.unusableRecords))
   ) {
     return null
   }
   const state = emptyState(hostId)
-  state.schemaVersion = schemaVersion
+  state.schemaVersion =
+    schemaVersion <= AGENT_SESSION_STORE_SCHEMA_VERSION
+      ? AGENT_SESSION_STORE_SCHEMA_VERSION
+      : schemaVersion
   state.hostId = file.hostId
+  let needsRewrite = schemaVersion < AGENT_SESSION_STORE_SCHEMA_VERSION
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      if (isAgentSessionRecord(value) && value.sessionId === sessionId) {
-        state.records.set(sessionId, value)
+      const loaded = loadAgentSessionRecord(value)
+      if (loaded.status !== 'unusable' && loaded.record.sessionId === sessionId) {
+        state.records.set(sessionId, loaded.record)
+        needsRewrite ||= loaded.status === 'upgraded'
       } else {
-        // Why: a record this build cannot read must not silently vanish, and must never be
-        // granted a writer; keep it and refuse ownership for that session id.
-        state.unreadableRecords.set(sessionId, value)
+        state.unreadableRecords.set(sessionId, {
+          reason: loaded.status === 'unusable' ? loaded.reason : 'record_key_session_id_mismatch',
+          raw: value
+        })
+        needsRewrite ||= schemaVersion <= AGENT_SESSION_STORE_SCHEMA_VERSION
       }
+    }
+  }
+  if (typeof file.unusableRecords === 'object' && file.unusableRecords !== null) {
+    for (const [sessionId, value] of Object.entries(file.unusableRecords)) {
+      if (typeof value !== 'object' || value === null) {
+        if (schemaVersion <= AGENT_SESSION_STORE_SCHEMA_VERSION) {
+          return null
+        }
+        continue
+      }
+      const unusable = value as { reason?: unknown; raw?: unknown }
+      if (typeof unusable.reason !== 'string' || unusable.reason.length === 0) {
+        if (schemaVersion <= AGENT_SESSION_STORE_SCHEMA_VERSION) {
+          return null
+        }
+        continue
+      }
+      state.unreadableRecords.set(sessionId, { reason: unusable.reason, raw: unusable.raw })
     }
   }
   if (typeof file.operations === 'object' && file.operations !== null) {
@@ -157,7 +200,39 @@ function parseState(raw: string, hostId: string): { state: AgentSessionStoreStat
       state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
     }
   }
-  return { state }
+  return { state, needsRewrite }
+}
+
+/** A record the primary retained as unreadable may still have a valid copy in the previous
+ *  committed state. Adopting it keeps the session reachable — the lease is re-adjudicated
+ *  like any other — while the unreadable bytes stay quarantined verbatim. */
+async function salvageUnreadableRecordsFromBackup(
+  state: AgentSessionStoreState,
+  backupFilePath: string,
+  hostId: string
+): Promise<void> {
+  const missing = [...state.unreadableRecords.keys()].filter(
+    (sessionId) => !state.records.has(sessionId)
+  )
+  if (missing.length === 0) {
+    return
+  }
+  let raw: string
+  try {
+    raw = await readFile(backupFilePath, 'utf-8')
+  } catch {
+    return
+  }
+  const backup = parseState(raw, hostId)
+  if (!backup) {
+    return
+  }
+  for (const sessionId of missing) {
+    const record = backup.state.records.get(sessionId)
+    if (record) {
+      state.records.set(sessionId, record)
+    }
+  }
 }
 
 export async function loadAgentSessionStore(
@@ -174,6 +249,12 @@ export async function loadAgentSessionStore(
       raw = await readFile(candidate, 'utf-8')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        // Only a missing or unparseable primary means "fall back". A transient read failure
+        // (EACCES, EIO, EMFILE) says nothing about the primary's contents, and treating it as
+        // recovery would replace newer state with a stale backup and latch the recovery path.
+        if (!recoveredFromBackup) {
+          throw new Error('agent_session_store_corrupt')
+        }
         unusableStoreFound = true
       }
       continue
@@ -183,11 +264,15 @@ export async function loadAgentSessionStore(
       unusableStoreFound = true
       continue
     }
+    if (!recoveredFromBackup) {
+      await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
+    }
     return {
       state: parsed.state,
       storeFound: true,
       readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
-      recoveredFromBackup
+      recoveredFromBackup,
+      needsRewrite: parsed.needsRewrite
     }
   }
   if (unusableStoreFound) {
@@ -197,15 +282,13 @@ export async function loadAgentSessionStore(
     state: emptyState(hostId),
     storeFound: false,
     readOnly: false,
-    recoveredFromBackup: false
+    recoveredFromBackup: false,
+    needsRewrite: false
   }
 }
 
 function serializeState(state: AgentSessionStoreState): string {
   const records: Record<string, unknown> = Object.create(null)
-  for (const [sessionId, value] of state.unreadableRecords) {
-    records[sessionId] = value
-  }
   for (const [sessionId, record] of state.records) {
     records[sessionId] = record
   }
@@ -214,31 +297,31 @@ function serializeState(state: AgentSessionStoreState): string {
     hostId: state.hostId,
     records,
     operations: Object.fromEntries(state.operations),
-    retiredClaimKeys: state.retiredClaimKeys
+    retiredClaimKeys: state.retiredClaimKeys,
+    unusableRecords: Object.fromEntries(state.unreadableRecords)
   })
 }
 
-/** Commit the whole state. The previous file becomes the backup before the new one lands. */
+/**
+ * Commit the whole state. The live path is never absent: the new content is made durable in a temp
+ * file first, the old content is COPIED to the backup, and only then does the rename publish it.
+ *
+ * The old ordering renamed the live file aside before writing the new one, so a death in that
+ * window left the profile with a backup and no primary — which is exactly the state that wedged a
+ * real profile. Copy, don't move.
+ */
 export async function saveAgentSessionStore(
   filePath: string,
-  state: AgentSessionStoreState,
-  options: { recoveredFromBackup?: boolean } = {}
+  state: AgentSessionStoreState
 ): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
   const tmpPath = durableWriteTempPath(filePath)
-  if (!options.recoveredFromBackup) {
-    try {
-      await rm(backupPath(filePath), { force: true })
-      await rename(filePath, backupPath(filePath))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error
-      }
-      // First write, or recovery already found the primary missing.
-    }
-  }
   try {
-    await writeFileDurable(tmpPath, filePath, serializeState(state))
+    await writeTempFileDurable(tmpPath, serializeState(state))
+    // A failed rotation aborts the save. Recovery's fence floor assumes the backup is at most one
+    // committed generation behind; letting the primary advance past a stale backup breaks that.
+    await copyFileDurable(filePath, backupPath(filePath))
+    await renameDurable(tmpPath, filePath)
   } catch (error) {
     await rm(tmpPath, { force: true }).catch(() => {})
     throw error

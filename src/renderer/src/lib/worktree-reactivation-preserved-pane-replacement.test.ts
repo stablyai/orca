@@ -2,6 +2,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
+import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent-test-state'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
@@ -29,6 +30,8 @@ function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState>
     worktreesByRepo: { 'repo-1': [worktree] },
     activeRepoId: 'repo-1',
     activeView: 'terminal',
+    workspaceSessionReady: true,
+    terminalStartupRestorationReady: true,
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
@@ -123,7 +126,7 @@ afterEach(() => {
 })
 
 describe('preserved-pane replacement contract on workspace activation', () => {
-  it('appends exactly one replacement tab for a husk pane and retains the husk across repeats', () => {
+  it('appends exactly one replacement tab for a husk pane and retains the husk across repeats', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
     // Hibernation cleared the pane's PTY binding: the husk cannot resume in place.
@@ -132,6 +135,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     seedSleepingRecord(worktree.id, 'codex-session-A')
 
     activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const afterFirst = useAppStore.getState()
     const tabsAfterFirst = afterFirst.tabsByWorktree[worktree.id] ?? []
@@ -154,7 +158,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(afterRepeats.tabsByWorktree[worktree.id]).toHaveLength(2)
   })
 
-  it('does not append a replacement while the preserved pane still has a live PTY', () => {
+  it('does not append a replacement while the preserved pane still has a live PTY', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
     seedHuskTab(state, worktree.id, 'pty-live-1')
@@ -163,6 +167,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     seedSleepingRecord(worktree.id, 'codex-session-B')
 
     activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const after = useAppStore.getState()
     expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
@@ -170,7 +175,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
   })
 
-  it('does not fork a NON-group-active restorable pane into a replacement tab', () => {
+  it('does not fork a NON-group-active restorable pane into a replacement tab', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
     seedHuskTab(state, worktree.id, 'pty-old-1')
@@ -215,6 +220,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
 
     activateAndRevealWorktree(worktree.id)
     activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const after = useAppStore.getState()
     expect(after.tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([
@@ -226,7 +232,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
   })
 
-  it('does not append a replacement when the preserved pane will cold-restore in place', () => {
+  it('does not append a replacement when the preserved pane will cold-restore in place', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
     // Restorable binding persists, no live PTY: pane-level cold restore owns recovery.
@@ -237,6 +243,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     seedSleepingRecord(worktree.id, 'codex-session-C')
 
     activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const after = useAppStore.getState()
     expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
@@ -245,7 +252,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
 
   // Why: web-mirror tabs never mount a local pane, so they cannot own recovery
   // — the appended replacement stays the correct resume path for them.
-  it('still appends a replacement for a web-mirror tab that cannot mount a local pane', () => {
+  it('still appends a replacement for a web-mirror tab that cannot mount a local pane', async () => {
     const webTabId = 'web-terminal-host-tab'
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
@@ -302,6 +309,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     }))
 
     activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const after = useAppStore.getState()
     const tabs = after.tabsByWorktree[worktree.id] ?? []

@@ -7,13 +7,10 @@ import type { SessionOptionValue } from './native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
-import {
-  quoteStartupArg,
-  resolveStartupShell,
-  type AgentStartupShell
-} from './tui-agent-startup-shell'
+import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
+import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -59,11 +56,7 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-  const resumeArgs = argv
-    .slice(1)
-    .map((arg) => quoteStartupArg(arg, shell))
-    .join(' ')
-  const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
+  const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const applied = baseCommand.appliedSessionOptions
   return {
     agent: args.agent,
@@ -71,6 +64,7 @@ export function buildAgentResumeStartupPlan(args: {
     expectedProcess: TUI_AGENT_CONFIG[args.agent].expectedProcess,
     followupPrompt: null,
     launchConfig,
+    ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(Object.keys(applied).length > 0 ? { sessionOptions: { ...applied } } : {}),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }

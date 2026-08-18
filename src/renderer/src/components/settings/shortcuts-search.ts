@@ -34,15 +34,35 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
-export const getShortcutsPaneSearchEntries = createLocalizedCatalog(() => [
-  ...KEYBINDING_DEFINITIONS.map((item) => ({
-    title: item.title,
-    description: translate(
-      'auto.components.settings.shortcuts.search.groupShortcut',
-      '{{value0}} shortcut',
-      { value0: item.group }
-    ),
-    keywords: [...item.searchKeywords]
-  })),
-  getTerminalShortcutPolicySearchEntry()
-])
+const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
+  KEYBINDING_DEFINITIONS.map((item) => ({
+    actionId: item.id,
+    searchEntry: {
+      title: item.title,
+      description: translate(
+        'auto.components.settings.shortcuts.search.groupShortcut',
+        '{{value0}} shortcut',
+        { value0: item.group }
+      ),
+      keywords: [...item.searchKeywords]
+    }
+  }))
+)
+
+export function getShortcutsPaneSearchEntries(options?: {
+  includeManagedBrowser?: boolean
+  includeMobileEmulator?: boolean
+}): SettingsSearchEntry[] {
+  const includeManagedBrowser = options?.includeManagedBrowser !== false
+  const includeMobileEmulator = options?.includeMobileEmulator !== false
+  return [
+    ...getShortcutDefinitionSearchEntries()
+      .filter(
+        ({ actionId }) =>
+          (includeManagedBrowser || actionId !== 'tab.newBrowser') &&
+          (includeMobileEmulator || actionId !== 'tab.newSimulator')
+      )
+      .map(({ searchEntry }) => searchEntry),
+    getTerminalShortcutPolicySearchEntry()
+  ]
+}

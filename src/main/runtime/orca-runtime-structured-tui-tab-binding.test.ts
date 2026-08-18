@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
@@ -46,122 +47,242 @@ function notifier(revealTerminalSession: ReturnType<typeof vi.fn>) {
   }
 }
 
+function structuredTabNotifier() {
+  return {
+    ...notifier(vi.fn()),
+    focusEditorTab: vi.fn()
+  }
+}
+
 describe('structured TUI launch tab binding', () => {
-  it('recovers a live TUI from durable owner inventory in a fresh runtime', async () => {
-    const namespace = {
-      machine: 'native:test',
-      principal: 'uid:1',
-      container: 'native',
-      providerRoot: '/tmp/codex-home'
+  it('reveals the structured chat tab when reverse handoff completes', () => {
+    const runtime = new OrcaRuntimeService()
+    const targetNotifier = structuredTabNotifier()
+    runtime.setNotifier(targetNotifier as never)
+    const transport = (
+      runtime as unknown as {
+        createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
+      }
+    ).createStructuredAgentSessionHandoffTransport()
+
+    transport.revealNativeSession?.({ workspaceId: WORKTREE_ID, sessionId: 'session-1' })
+
+    expect(targetNotifier.focusEditorTab).toHaveBeenCalledWith(
+      'structured-agent-session-session-1',
+      WORKTREE_ID
+    )
+  })
+
+  it.each([
+    {
+      restoreMode: 'development reload',
+      durableTerminalHandle: 'term_current_runtime',
+      persistedIncarnationId: 'incarnation-1'
+    },
+    {
+      restoreMode: 'packaged restart',
+      durableTerminalHandle: 'term_previous_runtime',
+      persistedIncarnationId: 'incarnation-1'
+    },
+    {
+      restoreMode: 'packaged restart before incarnation hydration',
+      durableTerminalHandle: 'term_previous_runtime',
+      persistedIncarnationId: null
     }
-    const signer = createEphemeralAgentSessionClaimSigner('profile-test')
-    const claim = signer.createClaim({
-      namespace,
-      identity: { agent: 'codex', providerSession: { key: 'session_id', id: 'thread-1' } },
-      canonicalWorktreeId: WORKTREE_ID
-    })
-    const terminalHandle = 'term_cold_owner'
-    const leafId = '23013912-13f8-44e5-818f-d40a1ff4e8c5'
-    resolvePinnedCodexRolloutProof.mockResolvedValue('/tmp/codex-home/sessions/thread-1.jsonl')
-    const writeAgentSessionProof = vi.fn(() => false)
-    const runtime = new OrcaRuntimeService(undefined, undefined, {
-      agentSessionClaimSigner: signer
-    })
-    runtime.setPtyController({
-      listProcesses: vi.fn(async () => [
-        {
-          id: 'pty-cold-owner',
-          incarnationId: 'incarnation-1',
-          cwd: '/tmp/structured-handoff',
-          title: 'codex',
-          worktreeId: WORKTREE_ID,
-          terminalHandle,
-          agentSessionOwners: [
+  ])(
+    'recovers a live TUI after a $restoreMode with current runtime routing',
+    async ({ durableTerminalHandle, persistedIncarnationId }) => {
+      const namespace = {
+        machine: 'native:test',
+        principal: 'uid:1',
+        container: 'native',
+        providerRoot: '/tmp/codex-home'
+      }
+      const signer = createEphemeralAgentSessionClaimSigner('profile-test')
+      const claim = signer.createClaim({
+        namespace,
+        identity: { agent: 'codex', providerSession: { key: 'session_id', id: 'thread-1' } },
+        canonicalWorktreeId: WORKTREE_ID
+      })
+      const terminalHandle = 'term_current_runtime'
+      const leafId = '23013912-13f8-44e5-818f-d40a1ff4e8c5'
+      const conflictingLeafId = '33013912-13f8-44e5-818f-d40a1ff4e8c5'
+      resolvePinnedCodexRolloutProof.mockResolvedValue('/tmp/codex-home/sessions/thread-1.jsonl')
+      const writeAgentSessionProof = vi.fn(() => false)
+      const persistedSession = {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
             {
-              claim,
-              generation: 'generation-1',
-              phase: 'live' as const,
+              id: 'tab-cold-owner',
               ptyId: 'pty-cold-owner',
-              surface: {
-                worktreeId: WORKTREE_ID,
-                tabId: 'tab-cold-owner',
-                leafId,
-                terminalHandle
-              }
+              worktreeId: WORKTREE_ID,
+              title: 'Codex',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
             }
           ]
-        }
-      ]),
-      write: () => true,
-      kill: () => true,
-      writeAgentSessionProof,
-      getForegroundProcess: async () => null
-    })
-    const internal = runtime as unknown as {
-      createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      listResolvedWorktrees(): Promise<unknown[]>
-      resolveTerminalWorkspaceLaunchScope(): Promise<{
-        id: string
-        path: string
-        connectionId: null
-        repo: null
-        folderWorkspace: null
-      }>
-      getAgentSessionExecutionNamespace(): typeof namespace
-      ptysById: Map<
-        string,
-        { launchToken: string | null; launchAgent: string | null; agentSessionOwners: unknown[] }
-      >
-    }
-    internal.listResolvedWorktrees = vi.fn(async () => [
-      { id: WORKTREE_ID, repoId: 'repo-1', path: '/tmp/structured-handoff' }
-    ])
-    internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
-      id: WORKTREE_ID,
-      path: '/tmp/structured-handoff',
-      connectionId: null,
-      repo: null,
-      folderWorkspace: null
-    }))
-    internal.getAgentSessionExecutionNamespace = () => namespace
-    probeAgentSessionProcessIdentity.mockResolvedValue({
-      outcome: 'identity-matched',
-      matchedOn: ['process-start-time']
-    })
-
-    await internal.refreshMobileSessionPtyRecords()
-    const coldPty = internal.ptysById.get('pty-cold-owner')!
-    expect(coldPty).toMatchObject({ launchToken: null, launchAgent: null })
-    expect(coldPty.agentSessionOwners).toHaveLength(1)
-
-    const owner = await internal.createStructuredAgentSessionHandoffTransport().recoverTuiOwner({
-      sessionId: 'session-1',
-      location: { workspaceId: WORKTREE_ID, executionHostId: 'local' },
-      accountHome: { variable: 'CODEX_HOME', path: namespace.providerRoot },
-      providerHandleChain: [{ handle: { provider: 'codex', threadId: 'thread-1' }, observedAt: 1 }],
-      lease: {
-        ownerProcess: {
-          hostId: 'local',
-          pid: 4243,
-          processStartTimeMs: 10,
-          spawnToken: 'spawn-token'
         },
-        runtimeFence: 3
+        terminalLayoutsByTabId: {
+          'tab-cold-owner': {
+            root: { type: 'leaf' as const, leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leafId]: 'pty-cold-owner' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: persistedIncarnationId
+          ? { [`tab-cold-owner:${leafId}`]: persistedIncarnationId }
+          : {}
       }
-    } as never)
+      const runtime = new OrcaRuntimeService(
+        { getWorkspaceSession: () => persistedSession } as never,
+        undefined,
+        {
+          agentSessionClaimSigner: signer
+        }
+      )
+      runtime.setPtyController({
+        listProcesses: vi.fn(async () => [
+          {
+            id: 'pty-cold-owner',
+            incarnationId: 'incarnation-1',
+            rootProcessId: 31337,
+            cwd: '/tmp/structured-handoff',
+            title: 'codex',
+            worktreeId: WORKTREE_ID,
+            terminalHandle: durableTerminalHandle,
+            agentSessionOwners: [
+              {
+                claim,
+                generation: 'generation-1',
+                phase: 'live' as const,
+                ptyId: 'pty-cold-owner',
+                surface: {
+                  worktreeId: WORKTREE_ID,
+                  tabId: 'tab-cold-owner',
+                  leafId,
+                  terminalHandle: durableTerminalHandle
+                }
+              }
+            ]
+          },
+          {
+            id: 'pty-conflicting-owner',
+            incarnationId: 'incarnation-2',
+            rootProcessId: 41337,
+            cwd: '/tmp/structured-handoff',
+            title: 'codex',
+            worktreeId: WORKTREE_ID,
+            terminalHandle: 'term_conflicting_runtime',
+            agentSessionOwners: [
+              {
+                claim,
+                generation: 'generation-2',
+                phase: 'live' as const,
+                ptyId: 'pty-conflicting-owner',
+                surface: {
+                  worktreeId: WORKTREE_ID,
+                  tabId: 'tab-conflicting-owner',
+                  leafId: conflictingLeafId,
+                  terminalHandle: 'term_conflicting_runtime'
+                }
+              }
+            ]
+          }
+        ]),
+        write: () => true,
+        kill: () => true,
+        writeAgentSessionProof,
+        getForegroundProcess: async () => null
+      })
+      const internal = runtime as unknown as {
+        createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport
+        refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+        listResolvedWorktrees(): Promise<unknown[]>
+        resolveTerminalWorkspaceLaunchScope(): Promise<{
+          id: string
+          path: string
+          connectionId: null
+          repo: null
+          folderWorkspace: null
+        }>
+        getAgentSessionExecutionNamespace(): typeof namespace
+        ptysById: Map<
+          string,
+          { launchToken: string | null; launchAgent: string | null; agentSessionOwners: unknown[] }
+        >
+      }
+      internal.listResolvedWorktrees = vi.fn(async () => [
+        { id: WORKTREE_ID, repoId: 'repo-1', path: '/tmp/structured-handoff' }
+      ])
+      internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
+        id: WORKTREE_ID,
+        path: '/tmp/structured-handoff',
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      }))
+      internal.getAgentSessionExecutionNamespace = () => namespace
+      runtime.registerPreAllocatedHandleForPty('pty-cold-owner', terminalHandle)
+      probeAgentSessionProcessIdentity.mockResolvedValue({
+        outcome: 'identity-matched',
+        matchedOn: ['process-start-time']
+      })
+      readStructuredTuiProcessIdentity.mockResolvedValue({
+        hostId: 'local',
+        pid: 4243,
+        processStartTimeMs: 10,
+        spawnToken: 'spawn-token'
+      })
 
-    expect(owner.terminal).toEqual({
-      handle: terminalHandle,
-      tabId: 'tab-cold-owner',
-      paneKey: `tab-cold-owner:${leafId}`,
-      ptyId: 'pty-cold-owner'
-    })
-    expect(resolvePinnedCodexRolloutProof).toHaveBeenCalledWith(namespace.providerRoot, 'thread-1')
-    expect(writeAgentSessionProof).not.toHaveBeenCalled()
-    expect(agentSessionPtyWriteGate.boundSessionId('pty-cold-owner')).toBe('session-1')
-    agentSessionPtyWriteGate.unbindPty('pty-cold-owner')
-  })
+      await internal.refreshMobileSessionPtyRecords()
+      const coldPty = internal.ptysById.get('pty-cold-owner')!
+      expect(coldPty).toMatchObject({ launchToken: null, launchAgent: null })
+      expect(coldPty.agentSessionOwners).toHaveLength(1)
+
+      const owner = await internal.createStructuredAgentSessionHandoffTransport().recoverTuiOwner({
+        sessionId: 'session-1',
+        location: { workspaceId: WORKTREE_ID, executionHostId: 'local' },
+        accountHome: { variable: 'CODEX_HOME', path: namespace.providerRoot },
+        providerHandleChain: [
+          { handle: { provider: 'codex', threadId: 'thread-1' }, observedAt: 1 }
+        ],
+        lease: {
+          ownerProcess: {
+            hostId: 'local',
+            pid: 4243,
+            processStartTimeMs: 10,
+            spawnToken: 'spawn-token'
+          },
+          runtimeFence: 3
+        }
+      } as never)
+
+      expect(owner.terminal).toEqual({
+        handle: terminalHandle,
+        tabId: 'tab-cold-owner',
+        paneKey: `tab-cold-owner:${leafId}`,
+        ptyId: 'pty-cold-owner'
+      })
+      if (durableTerminalHandle !== terminalHandle) {
+        expect(owner.terminal.handle).not.toBe(durableTerminalHandle)
+      }
+      expect(resolvePinnedCodexRolloutProof).toHaveBeenCalledWith(
+        namespace.providerRoot,
+        'thread-1'
+      )
+      expect(writeAgentSessionProof).not.toHaveBeenCalled()
+      expect(readStructuredTuiProcessIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({ rootPid: 31337, spawnToken: 'spawn-token' })
+      )
+      expect(agentSessionPtyWriteGate.boundSessionId('pty-cold-owner')).toBe('session-1')
+      expect(agentSessionPtyWriteGate.boundSessionId('pty-conflicting-owner')).toBeNull()
+      agentSessionPtyWriteGate.unbindPty('pty-cold-owner')
+    }
+  )
 
   it('rebuilds a Claude proving link from current launch-token-bound hook evidence', async () => {
     const paneKey = 'tab-claude:leaf-claude'

@@ -8,13 +8,14 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // The runtime send paths are the choke point every RPC, plugin, and orchestration write funnels
 // through, so each one is proved to consult the lease and to leave unbound PTYs untouched.
 
 const WORKTREE_ID = 'repo-1::/tmp/lease-worktree'
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const RUN_ID = 'run-1'
 const PTY_ID = 'pty-agent-session'
 const SESSION_ID = 'session-alpha-1'
 
@@ -333,17 +334,22 @@ describe('lease transition against an in-flight write', () => {
           }
         }
       })
-      let messages: { sequence: number; type: string }[] = []
+      let messages: { id: string; sequence: number; type: string }[] = []
+      // Why run-scoped: pointer delivery only serves `run:` mailboxes, and it stages the
+      // batch as delivered before writing — a fake missing either makes the fence
+      // assertion below vacuous because nothing is ever written.
       runtime.setOrchestrationDb({
         getUndeliveredUnreadMessages: () => messages,
-        getCurrentRunForPane: () => undefined
+        getCurrentRunForPane: () => ({ id: RUN_ID }),
+        getRun: () => ({ id: RUN_ID, coordinator_handle: handle }),
+        markAsDelivered: () => undefined
       } as never)
       runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
       runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
       enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
-      messages = [{ sequence: 1, type: 'status' }]
+      messages = [{ id: 'msg-1', sequence: 1, type: 'status' }]
 
-      runtime.deliverPendingMessagesForHandle(handle)
+      runtime.deliverPendingMessagesForHandle(`run:${RUN_ID}`)
       expect(write).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(500)

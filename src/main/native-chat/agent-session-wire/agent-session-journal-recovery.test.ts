@@ -159,7 +159,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
 
   it('still opens the session when provider history cannot be read', async () => {
     const lines = await seedJournal(3)
-    const holed = lines.filter((_line, index) => index !== 1)
+    const holed = lines.filter((_line, index) => index !== 2)
     await writeFile(join(journalDir, 'log.jsonl'), `${holed.join('\n')}\n`, 'utf-8')
 
     const opened = await openAgentSessionJournalWithRecovery({
@@ -170,6 +170,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
     })
     expect(opened.recovery).toMatchObject({ trigger: 'journal_corrupt', imported: 0 })
     expect(opened.recovery?.error).toBeTruthy()
-    expect(opened.journal.snapshot().items).toHaveLength(0)
+    // A missing provider transcript must not clear the intact journal prefix.
+    expect(opened.journal.snapshot().items).toHaveLength(1)
   })
 })

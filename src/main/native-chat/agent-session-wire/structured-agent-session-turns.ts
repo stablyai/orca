@@ -96,6 +96,15 @@ export async function performSend(
   const existing = ctx.journal
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
+  if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
+    return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
+  }
+  if (existing && !(input.retryUnknown && existing.dispatchState === 'unknown')) {
+    return {
+      ok: true,
+      value: { clientMessageId: input.clientMessageId, submission: existing }
+    }
+  }
   if (!(input.retryUnknown && existing?.dispatchState === 'unknown')) {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
     ctx.publish()

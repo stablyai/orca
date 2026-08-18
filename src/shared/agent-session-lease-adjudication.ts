@@ -191,6 +191,21 @@ export function adjudicateAgentSessionRestart(args: {
         evidence: { kind: 'pid-absent', detail: 'reservation never spawned', observedAt }
       }
     }
+    if (lease.runtimeKind === 'native' && lease.claimStatus === 'reserved') {
+      // Why: adjudication itself proves the reserving runtime died before an owner was
+      // proven, and a never-proven native child lost its only request channel with that
+      // runtime — nothing under this token can reach the provider session again. A TUI
+      // child outlives the runtime inside its terminal, so it stays latched below.
+      return {
+        disposition: 'evicted',
+        nextFence: lease.runtimeFence + 1,
+        evidence: {
+          kind: 'pid-absent',
+          detail: 'native reservation abandoned before an owner was proven',
+          observedAt
+        }
+      }
+    }
     return {
       disposition: 'recovering',
       stage: 'recovering',
@@ -198,6 +213,15 @@ export function adjudicateAgentSessionRestart(args: {
     }
   }
   if (isProvenAliveProbe(probe)) {
+    if (lease.runtimeKind === 'native') {
+      // Why: the surviving child's stdio died with the previous runtime, so readoption
+      // would renew a lease no host can drive. Recovery stops it and respawns at fence + 1.
+      return {
+        disposition: 'recovering',
+        stage: 'recovering',
+        reason: 'native owner outlived the runtime that held its transport'
+      }
+    }
     // Why: re-adoption is not a new generation, so the fence does not move.
     return { disposition: 'readopt' }
   }

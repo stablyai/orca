@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TerminalTab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store/types'
 import {
   resolveNativeChatFileLink,

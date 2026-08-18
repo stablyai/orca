@@ -22,5 +22,6 @@ export type CodexAppServerConnection = {
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void
   respondWithError: (id: number | string, code: number, message: string) => void
-  close: () => Promise<void>
+  /** Resolves true only after the child emitted `exit`; false is unproven. */
+  close: () => Promise<void | boolean>
 }

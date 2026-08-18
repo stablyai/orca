@@ -8,7 +8,7 @@ export type HandoffOperationDecision =
   | { decision: 'new' }
   | { decision: 'replay'; outcome: AgentSessionOperationOutcome }
   | { decision: 'retry' }
-  | { decision: 'refused'; code: 'agent_session_operation_conflict' | string }
+  | { decision: 'refused'; code: string }
 
 export class StructuredAgentSessionHandoffOperationGuard {
   private readonly activeBySession = new Map<string, ActiveOperation>()

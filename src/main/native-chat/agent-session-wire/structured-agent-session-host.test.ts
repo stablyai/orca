@@ -382,6 +382,7 @@ describe('send', () => {
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(1)
     expect(page.ok && page.page.fence).toBe(1)
+    expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })
 
   it('settles a thrown dispatch as unknown, never as a rejection', async () => {

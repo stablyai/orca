@@ -88,6 +88,21 @@ export function killCodexAppServerProcessTree(
       // Fall through to the direct-child best effort when taskkill cannot start.
     }
   }
+  if (child.pid) {
+    try {
+      // npm/package-manager launchers insert a shim child on POSIX. Reap its
+      // direct descendants before signalling the wrapper itself.
+      const descendants = spawnImpl('pkill', ['-KILL', '-P', String(child.pid)], {
+        stdio: 'ignore'
+      })
+      // A missing pkill surfaces as an async 'error' event, and an unhandled one
+      // takes down the main process.
+      descendants.on('error', () => undefined)
+      descendants.unref()
+    } catch {
+      // The direct kill below remains the fallback when pkill is unavailable.
+    }
+  }
   child.kill('SIGKILL')
 }
 

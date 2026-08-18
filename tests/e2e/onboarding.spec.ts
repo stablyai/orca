@@ -10,7 +10,8 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
-import type { GlobalSettings, TuiAgent } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import type { TuiAgent } from '../../src/shared/tui-agent'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/constants'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 

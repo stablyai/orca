@@ -358,6 +358,7 @@ function NativeChatResolvedView({
     <div
       ref={rootRef}
       data-native-chat-root="true"
+      data-native-chat-working={isWorking ? 'true' : 'false'}
       tabIndex={-1}
       onPointerDownCapture={(event) => {
         if (event.button === 2) {

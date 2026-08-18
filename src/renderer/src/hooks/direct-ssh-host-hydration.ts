@@ -5,6 +5,7 @@ import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
+import { reuseEqualRecordMap } from '../store/slices/repo-identity-reconcile'
 import type {
   DirectSshLineageOutcome,
   DirectSshPreparationInput,
@@ -71,6 +72,20 @@ function mergeExactHostCatalog(state: AppState, snapshot: HostRepoCatalogSnapsho
   }
 }
 
+// Why: the host owns every in-scope key, so drop the stale in-scope rows, overlay the snapshot's,
+// and leave out-of-scope hosts alone. Reusing equal rows keeps a cloned no-op read from republishing.
+function overlayHostScopedLineage<T>(
+  previous: Readonly<Record<string, T>>,
+  incoming: Readonly<Record<string, T>>,
+  isHostScoped: (key: string) => boolean
+): Readonly<Record<string, T>> {
+  const next: Record<string, T> = Object.fromEntries([
+    ...Object.entries(previous).filter(([key]) => !isHostScoped(key)),
+    ...Object.entries(incoming).filter(([key]) => isHostScoped(key))
+  ])
+  return reuseEqualRecordMap(previous, next)
+}
+
 function mergeExactHostLineage(
   state: AppState,
   snapshot: Extract<HostLineageSnapshot, { authoritative: true }>,
@@ -78,38 +93,23 @@ function mergeExactHostLineage(
   catalogRevision: number
 ): AppState {
   const scope = directSshHostHydrationScope(state, authority, catalogRevision)
-  const worktreeLineageById = Object.fromEntries(
-    Object.entries(state.worktreeLineageById).filter(
-      ([worktreeId]) => !scope.gitWorktreeIds.has(worktreeId)
-    )
+  const worktreeLineageById = overlayHostScopedLineage(
+    state.worktreeLineageById,
+    snapshot.worktreeLineageById,
+    (worktreeId) => scope.gitWorktreeIds.has(worktreeId)
   )
-  const workspaceLineageByChildKey = Object.fromEntries(
-    Object.entries(state.workspaceLineageByChildKey).filter(
-      ([childKey]) => !isWorkspaceKey(childKey) || !scope.lineageWorkspaceKeys.has(childKey)
-    )
+  const workspaceLineageByChildKey = overlayHostScopedLineage(
+    state.workspaceLineageByChildKey,
+    snapshot.workspaceLineageByChildKey,
+    (childKey) => isWorkspaceKey(childKey) && scope.lineageWorkspaceKeys.has(childKey)
   )
-  const incomingWorktreeLineage = Object.fromEntries(
-    Object.entries(snapshot.worktreeLineageById).filter(([worktreeId]) =>
-      scope.gitWorktreeIds.has(worktreeId)
-    )
-  )
-  const incomingWorkspaceLineage = Object.fromEntries(
-    Object.entries(snapshot.workspaceLineageByChildKey).filter(
-      ([workspaceKey]) =>
-        isWorkspaceKey(workspaceKey) && scope.lineageWorkspaceKeys.has(workspaceKey)
-    )
-  )
-  return {
-    ...state,
-    worktreeLineageById: {
-      ...worktreeLineageById,
-      ...incomingWorktreeLineage
-    },
-    workspaceLineageByChildKey: {
-      ...workspaceLineageByChildKey,
-      ...incomingWorkspaceLineage
-    }
+  if (
+    worktreeLineageById === state.worktreeLineageById &&
+    workspaceLineageByChildKey === state.workspaceLineageByChildKey
+  ) {
+    return state
   }
+  return { ...state, worktreeLineageById, workspaceLineageByChildKey }
 }
 
 export function createDirectSshHostHydration(

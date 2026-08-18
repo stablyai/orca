@@ -7,6 +7,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -23,6 +24,7 @@ export type NativeChatComposerActionsProps = {
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
+  sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
 }
 
 export function NativeChatComposerActions({
@@ -39,7 +41,8 @@ export function NativeChatComposerActions({
   onSend,
   onStop,
   sessionOptionsSurface,
-  sessionOptionsSnapshot
+  sessionOptionsSnapshot,
+  sessionOptionsPickerRequest
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
@@ -73,6 +76,7 @@ export function NativeChatComposerActions({
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
+          pickerRequest={sessionOptionsPickerRequest}
         />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -120,6 +124,7 @@ export function NativeChatComposerActions({
         </Tooltip>
         <Button
           type="button"
+          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
           aria-label={
             isWorking
               ? translate('components.native-chat.stop', 'Stop the agent')

@@ -134,6 +134,18 @@ function upcastRow(record: Record<string, unknown>, version: number): Record<str
   return current
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Every render body is a kinded object; anything else would poison the reducer. */
+function isKindedBody(value: unknown): boolean {
+  return isPlainObject(value) && typeof value.kind === 'string' && value.kind.length > 0
+}
+
+/** Field values are type-checked, never enum-checked: a future build adding a
+ *  dispatch state or handle kind must bump the row version, but this build
+ *  should not misread a same-version row as malformed over a wider enum. */
 function isJournalRow(record: Record<string, unknown>): record is JournalRow {
   if (typeof record.kind !== 'string' || !ROW_KINDS.has(record.kind)) {
     return false
@@ -148,13 +160,36 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
   ) {
     return false
   }
-  if (record.kind === 'item' || record.kind === 'tombstone') {
+  if (record.kind === 'item') {
+    return (
+      typeof record.itemId === 'string' &&
+      Number.isInteger(record.revision) &&
+      isKindedBody(record.body)
+    )
+  }
+  if (record.kind === 'tombstone') {
     return typeof record.itemId === 'string' && Number.isInteger(record.revision)
   }
-  if (record.kind === 'submission' || record.kind === 'dispatch') {
-    return typeof record.clientMessageId === 'string' && record.clientMessageId.length > 0
+  if (record.kind === 'submission') {
+    return (
+      typeof record.clientMessageId === 'string' &&
+      record.clientMessageId.length > 0 &&
+      typeof record.payloadFingerprint === 'string' &&
+      isPlainObject(record.providerHandle) &&
+      isKindedBody(record.body)
+    )
   }
-  return typeof record.reason === 'string'
+  if (record.kind === 'dispatch') {
+    return (
+      typeof record.clientMessageId === 'string' &&
+      record.clientMessageId.length > 0 &&
+      typeof record.state === 'string' &&
+      record.state.length > 0 &&
+      (record.providerItemId === null || typeof record.providerItemId === 'string') &&
+      (record.reason === null || typeof record.reason === 'string')
+    )
+  }
+  return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
 }
 
 /** Approximate on-disk cost of a row, used for the per-session size bound. */

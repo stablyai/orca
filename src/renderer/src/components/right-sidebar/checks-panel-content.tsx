@@ -78,7 +78,7 @@ import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
   partitionPRCommentGroupsForTriage,
-  sortPRCommentGroupsForTimeline,
+  sortPRCommentGroupsByRecency,
   type PRCommentGroupActionState
 } from '@/lib/pr-comment-action-state'
 import { formatPrCommentRelativeTime } from '../../../../shared/pr-comment-time'
@@ -88,16 +88,14 @@ import {
   type PRCommentPresentationClasses
 } from './pr-comment-presentation'
 import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { GitHubReactionContent, PRComment } from '../../../../shared/github/comment-types'
 import type {
-  PRInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  GitHubReactionContent,
   GitHubRepositoryIdentity,
   PRConflictSummary,
+  PRInfo,
   PRMergeableState
-} from '../../../../shared/types'
+} from '../../../../shared/github/pull-request-types'
 import { useCheckDetailsResize } from './check-details-resize'
 import {
   RightPanelCommentComposer,
@@ -2477,9 +2475,13 @@ export function PRCommentsList({
     [botAuthorOverrides, commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
-  const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
-  // Why: triage mode prioritizes actionability; timeline restores the host discussion history.
-  const timelineGroups = React.useMemo(() => sortPRCommentGroupsForTimeline(groups), [groups])
+  const triageGroups = React.useMemo(
+    // Why: grouped sections read newest-first so recent discussion surfaces at the top.
+    () => partitionPRCommentGroupsForTriage(sortPRCommentGroupsByRecency(groups, 'newest-first')),
+    [groups]
+  )
+  // Why: timeline reads oldest-first so the discussion history unfolds in order.
+  const timelineGroups = React.useMemo(() => sortPRCommentGroupsByRecency(groups), [groups])
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )

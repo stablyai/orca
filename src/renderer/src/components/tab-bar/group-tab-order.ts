@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
 

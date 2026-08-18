@@ -591,6 +591,7 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
   it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {

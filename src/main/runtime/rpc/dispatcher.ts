@@ -10,11 +10,11 @@ import {
 } from './core'
 
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { errorResponse, successResponse } from './errors'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
-  authenticatedCallerFingerprint,
   getOrchestrationMutationExecutor,
   type OrchestrationMutationExecutor,
   type DurableMutationInvocation
@@ -44,7 +44,7 @@ export class RpcDispatcher {
     request: RpcRequest,
     options?: Pick<
       RpcDispatchStreamingOptions,
-      'signal' | 'clientId' | 'clientKind' | 'clientCapabilities'
+      'signal' | 'clientId' | 'clientKind' | 'clientCapabilities' | 'authenticatedCallerFingerprint'
     >
   ): Promise<RpcResponse> {
     const meta = this.meta()
@@ -94,6 +94,11 @@ export class RpcDispatcher {
         request,
         compatibility.legacyCoordinatorAuthority
       )
+      const authenticatedCallerFingerprint =
+        options?.authenticatedCallerFingerprint ??
+        (needsLocalCallerFingerprint(request, effectiveParams)
+          ? this.orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
+          : undefined)
       const invoke = (mutation?: DurableMutationInvocation) => {
         const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
         return method.handler(effectiveParams, {
@@ -105,7 +110,7 @@ export class RpcDispatcher {
           clientCapabilities: options?.clientCapabilities,
           orchestrationCapability: request.orchestrationCapability,
           authenticatedCallerFingerprint:
-            mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint(request),
+            mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint,
           recordMutationReceipt: mutation?.recordReceipt,
           orchestrationMutation: mutation?.identity,
           legacyCoordinatorRunId,
@@ -120,7 +125,7 @@ export class RpcDispatcher {
         request,
         effectiveParams,
         invoke,
-        legacyCoordinator?.mutationCallerFingerprint
+        legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
       )
       recordRuntimeFeatureInteraction(
         this.runtime,
@@ -185,6 +190,11 @@ export class RpcDispatcher {
           request,
           compatibility.legacyCoordinatorAuthority
         )
+        const authenticatedCallerFingerprint =
+          options?.authenticatedCallerFingerprint ??
+          (needsLocalCallerFingerprint(request, effectiveParams)
+            ? this.orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
+            : undefined)
         const invoke = (mutation?: DurableMutationInvocation) => {
           const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
           return method.handler(effectiveParams, {
@@ -198,7 +208,7 @@ export class RpcDispatcher {
             clientCapabilities: options?.clientCapabilities,
             orchestrationCapability: request.orchestrationCapability,
             authenticatedCallerFingerprint:
-              mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint(request),
+              mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint,
             recordMutationReceipt: mutation?.recordReceipt,
             orchestrationMutation: mutation?.identity,
             pairing: options?.pairing,
@@ -216,7 +226,7 @@ export class RpcDispatcher {
           request,
           effectiveParams,
           invoke,
-          legacyCoordinator?.mutationCallerFingerprint
+          legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
         )
         recordRuntimeFeatureInteraction(
           this.runtime,
@@ -298,4 +308,11 @@ export class RpcDispatcher {
   private meta(): RpcEnvelopeMeta {
     return { runtimeId: this.runtime.getRuntimeId() }
   }
+}
+
+function needsLocalCallerFingerprint(request: RpcRequest, params: unknown): boolean {
+  return (
+    request.method.startsWith('orchestration.federation') ||
+    (!!request.orchestrationRequestId && isOrchestrationMutation(request.method, params))
+  )
 }

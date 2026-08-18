@@ -1,37 +1,40 @@
 /* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps acquire/release and error handling consistent. */
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
-  GitPushTarget,
-  IssueSourcePreference,
-  ListWorkItemsResult,
-  PRInfo,
-  PRConflictSummary,
-  PRRefreshOutcome,
-  PRMergeableState,
-  PRReviewDecision,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  GitHubCommentResult,
-  GitHubReactionContent,
-  GitHubPRReviewCommentInput,
-  PRComment,
-  GitHubViewer,
-  GitHubWorkItem,
-  GitHubPullRequestStateUpdate,
   GitHubRerunPRChecksResult,
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../shared/github/check-types'
+import type {
+  GitHubCommentResult,
+  GitHubPRReviewCommentInput,
+  GitHubReactionContent,
+  PRComment
+} from '../../shared/github/comment-types'
+import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type {
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
-  GitHubPRStack
-} from '../../shared/types'
+  GitHubPRStack,
+  GitHubViewer,
+  PRConflictSummary,
+  PRInfo,
+  PRMergeableState,
+  PRReviewDecision
+} from '../../shared/github/pull-request-types'
+import type { GitHubWorkItem, ListWorkItemsResult } from '../../shared/github/work-item-types'
+import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github/pull-request-merge-methods'
 import { summarizeProviderChecks } from '../../shared/provider-check-summary'
-import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
-import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
+import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github/work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github/api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -91,17 +94,13 @@ import {
   type GitHubRepoExecOptions,
   type GitHubApiRepository
 } from './github-api-repository'
-import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 export { _resetOwnerRepoCache } from './gh-utils'
-export {
-  getIssue,
-  listIssues,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  listLabels,
-  listAssignableUsers
-} from './issues'
+export { getIssue, listIssues } from './issues'
+export { createIssue } from './issue-create'
+export { updateIssue } from './issue-update'
+export { addIssueComment } from './issue-comment'
+export { listLabels, listAssignableUsers } from './issue-field-options'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
@@ -127,7 +126,7 @@ import {
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../shared/github-check-details-deadline'
+} from '../../shared/github/check-details-deadline'
 import { hydrateGitHubPRStack, mergeGitHubPRStack } from './github-pr-stack'
 
 type GhExecOptions = GitHubRepoExecOptions & { signal?: AbortSignal }
@@ -193,6 +192,8 @@ const repositoryMergeMetadataCache = new Map<
 >()
 const PR_STACK_SUMMARY_CACHE_TTL_MS = 60_000
 const PR_STACK_SUMMARY_CACHE_MAX_ENTRIES = 512
+const STACK_METADATA_UNAVAILABLE_ERROR =
+  'Could not verify GitHub pull request stack metadata. Refresh and try again.'
 const prStackSummaryCache = new Map<
   string,
   { value: GitHubPRStack | undefined; expiresAt: number }
@@ -2947,16 +2948,69 @@ async function lookupPRByBranchName(args: {
   }
 }
 
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function isGitObjectId(value: unknown): value is string {
+  return typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value)
+}
+
+function isUsableRestStackMetadata(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const stack = value as {
+    number?: unknown
+    position?: unknown
+    size?: unknown
+    base?: unknown
+  }
+  if (!stack.base || typeof stack.base !== 'object' || Array.isArray(stack.base)) {
+    return false
+  }
+  const base = stack.base as { ref?: unknown; sha?: unknown }
+  return (
+    isPositiveSafeInteger(stack.number) &&
+    isPositiveSafeInteger(stack.position) &&
+    isPositiveSafeInteger(stack.size) &&
+    stack.position <= stack.size &&
+    typeof base.ref === 'string' &&
+    base.ref.trim().length > 0 &&
+    (base.sha === undefined || isGitObjectId(base.sha))
+  )
+}
+
 async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
-  ghOptions: ReturnType<typeof ghRepoExecOptions>
-): Promise<PullRequestLookupData | null> {
+  ghOptions: ReturnType<typeof ghRepoExecOptions>,
+  options: { requireUsableStackMetadata?: boolean } = {}
+): Promise<PullRequestLookupData> {
   const { stdout } = await ghExecFileAsync(
     ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
     { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
   )
-  return mapRestPullRequest(JSON.parse(stdout) as RestPullRequest)
+  const parsed = JSON.parse(stdout) as unknown
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('invalid response shape')
+  }
+  const restData = parsed as RestPullRequest
+  const mapped = mapRestPullRequest(restData)
+  if (
+    options.requireUsableStackMetadata &&
+    restData.stack !== undefined &&
+    restData.stack !== null
+  ) {
+    // Why: GitHub omits stack for ordinary PRs; only unusable non-null metadata is unsafe.
+    if (!isUsableRestStackMetadata(restData.stack) || !mapped.stack) {
+      throw new Error('malformed stack')
+    }
+    if (!isGitObjectId(restData.head?.sha)) {
+      throw new Error('missing head SHA')
+    }
+  }
+  return mapped
 }
 
 function prunePRStackSummaryCache(now = Date.now()): void {
@@ -2991,7 +3045,7 @@ async function getCachedGitHubPRStackSummary(
   if (existing) {
     return existing
   }
-  const request = getRestPRByNumber(ownerRepo, number, ghOptions).then((pr) => pr?.stack)
+  const request = getRestPRByNumber(ownerRepo, number, ghOptions).then((pr) => pr.stack)
   prStackSummaryInFlight.set(key, request)
   try {
     const value = await request
@@ -5015,19 +5069,28 @@ export async function mergePR(
   await acquire()
   let concurrencySlotHeld = true
   try {
-    let stackSummary: GitHubPRStack | undefined
-    let stackHeadSha: string | undefined
+    let restData: PullRequestLookupData
     try {
-      const restData = await getRestPRByNumber(ownerRepo, prNumber, ghOptions)
-      stackSummary = restData?.stack
-      stackHeadSha = restData?.headRefOid
-    } catch {
-      // GitHub remains authoritative when stack metadata cannot be read.
+      restData = await getRestPRByNumber(ownerRepo, prNumber, ghOptions, {
+        requireUsableStackMetadata: true
+      })
+    } catch (err) {
+      const diagnostic =
+        err instanceof SyntaxError
+          ? 'invalid JSON response'
+          : err instanceof Error
+            ? err.message
+            : String(err)
+      console.warn(
+        `mergePR stack metadata probe failed for ${ownerRepo.owner}/${ownerRepo.repo}#${String(prNumber)}:`,
+        diagnostic
+      )
+      return { ok: false, error: STACK_METADATA_UNAVAILABLE_ERROR }
     }
-    if (stackSummary) {
+    if (restData.stack) {
       const mergeMetadata = await detectRepositoryMergeMetadata(
         ownerRepo,
-        stackSummary.baseRefName,
+        restData.stack.baseRefName,
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
@@ -5038,7 +5101,7 @@ export async function mergePR(
         prNumber,
         method,
         mergeAction: mergeMetadata.mergeQueueRequired === true ? 'merge_queue' : 'direct_merge',
-        headSha: stackHeadSha,
+        headSha: restData.headRefOid,
         ghOptions
       })
     }
@@ -5185,7 +5248,7 @@ async function enablePRAutoMerge(
   if (ownerRepo) {
     try {
       const restData = await getRestPRByNumber(ownerRepo, prNumber, ghOptions)
-      if (restData?.stack) {
+      if (restData.stack) {
         return {
           ok: false,
           error: 'GitHub does not support auto-merge for stacked pull requests.'

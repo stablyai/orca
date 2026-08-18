@@ -8,10 +8,10 @@ import type {
   Tab,
   TabContentType,
   TabGroup,
-  TerminalTab,
-  WorkspaceVisibleTabType,
-  Worktree
-} from '../../../shared/types'
+  WorkspaceVisibleTabType
+} from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   buildAgentMetadataTabIndex,
   collectAgentMetadataFromIndex,

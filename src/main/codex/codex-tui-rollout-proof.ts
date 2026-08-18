@@ -118,7 +118,14 @@ export async function proveCodexTuiRollout(input: {
 }
 
 async function readCodexRolloutSessionMetaId(filePath: string): Promise<string | null> {
-  const file = await open(filePath, 'r')
+  // A listed rollout may vanish before it is read — Codex prunes and rewrites
+  // these files. One missing file must not abort the whole scan.
+  let file: Awaited<ReturnType<typeof open>>
+  try {
+    file = await open(filePath, 'r')
+  } catch {
+    return null
+  }
   try {
     const buffer = Buffer.alloc(ROLLOUT_READ_LIMIT)
     const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)

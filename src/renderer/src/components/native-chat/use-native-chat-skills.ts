@@ -43,6 +43,13 @@ const IDLE_STATE: StoredDiscoveryState = {
   error: null,
   contextKey: null
 }
+const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
+  status: 'error',
+  skills: [],
+  error: new Error('Skill discovery context is unavailable.'),
+  errorKind: 'unknown',
+  contextKey: null
+}
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function isNativeChatSkillForAgent(
@@ -83,11 +90,17 @@ export function useNativeChatSkills(
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
+  // Why: retry intent belongs to the next request, not to every later render —
+  // keying off the generation counter would keep forcing after a pane switch.
+  const forceNextDiscovery = useRef(false)
   const profile = getNativeChatAgentProfile(agent)
 
   useEffect(() => {
     let cancelled = false
     if (!profile || !enabled || !context) {
+      // Why: there is no pane to retry into, so a pending retry intent must not
+      // survive to force an unrelated pane's first scan.
+      forceNextDiscovery.current = false
       setState(IDLE_STATE)
       return
     }
@@ -119,7 +132,12 @@ export function useNativeChatSkills(
       return
     }
     setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
-    const request = getOrStartDiscovery(context)
+    // Why: Retry is an explicit "I changed something, look again", so it has to
+    // reach the host's disk rather than its shared scans. The first attempt for a
+    // pane rides those scans like every other passive reader.
+    const forced = forceNextDiscovery.current
+    forceNextDiscovery.current = false
+    const request = getOrStartDiscovery(context, forced)
     void request.then(
       (result) => {
         paneDiscoveryCache.current.set(paneCacheKey, result)
@@ -164,11 +182,13 @@ export function useNativeChatSkills(
 
   const effectiveState = useMemo(
     () =>
-      !profile || !enabled || !context
+      !profile || !enabled
         ? IDLE_STATE
-        : state.contextKey === context.key
-          ? state
-          : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
+        : !context
+          ? MISSING_CONTEXT_STATE
+          : state.contextKey === context.key
+            ? state
+            : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
     [context, enabled, profile, state]
   )
   const visibleSkills = useMemo(() => {
@@ -182,6 +202,7 @@ export function useNativeChatSkills(
   }, [agent, context, effectiveState, profile])
 
   const retry = useCallback(() => {
+    forceNextDiscovery.current = true
     if (context) {
       paneDiscoveryCache.current.delete(context.key)
       setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
@@ -201,10 +222,11 @@ export function useNativeChatSkills(
 }
 
 function getOrStartDiscovery(
-  context: NativeChatSkillDiscoveryContext
+  context: NativeChatSkillDiscoveryContext,
+  refresh = false
 ): Promise<SkillDiscoveryResult> {
   const existing = inFlightDiscovery.get(context.key)
-  if (existing) {
+  if (existing && !refresh) {
     return existing
   }
   // Why: the local runtime.call branch ignores timeoutMs, so the renderer must
@@ -213,7 +235,7 @@ function getOrStartDiscovery(
     callRuntimeRpc<SkillDiscoveryResult>(
       context.runtimeTarget,
       'skills.discover',
-      context.discoveryTarget,
+      refresh ? { ...context.discoveryTarget, refresh: true } : context.discoveryTarget,
       {
         timeoutMs: DISCOVERY_TIMEOUT_MS
       }

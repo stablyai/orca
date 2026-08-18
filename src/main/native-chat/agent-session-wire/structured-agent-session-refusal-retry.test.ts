@@ -270,8 +270,9 @@ const UNREACHABLE = new Set<Pair>([
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
-  // 26 real host round trips; the default 5s budget sits at the edge on CI.
-  it('agrees with every refusal the real host path can produce', { timeout: 30_000 }, async () => {
+  // 26 real host round trips, each committing the store — and every commit now also rotates a
+  // durable backup, so this does substantially more fsync work than the budget was set for.
+  it('agrees with every refusal the real host path can produce', { timeout: 90_000 }, async () => {
     const produced = new Set<Pair>()
     const record = (pair: Pair) => produced.add(pair)
 

@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
   discoverCommitMessageModels: vi.fn(),
   draft: 'hello',
+  imageAttachments: [] as { id: string; path: string }[],
   getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
@@ -108,7 +109,7 @@ vi.mock('./use-native-chat-skills', () => ({
 }))
 vi.mock('./use-native-chat-composer-attachments', () => ({
   useNativeChatComposerAttachments: () => ({
-    imageAttachments: [],
+    imageAttachments: mocks.imageAttachments,
     attachResolvedPaths: vi.fn(),
     clearImageAttachments: vi.fn(),
     removeImageAttachment: vi.fn()
@@ -149,6 +150,7 @@ describe('NativeChatComposer', () => {
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
     mocks.draft = 'hello'
+    mocks.imageAttachments = []
     mocks.draftScopeKeys.length = 0
     mocks.confirmationObserver = null
     mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
@@ -276,12 +278,49 @@ describe('NativeChatComposer', () => {
 
     expect(mocks.fieldProps?.sessionOptionsSurface).toBe(optionsSurface)
     expect(mocks.fieldProps?.sessionOptionsSnapshot).toBe(optionSnapshot)
-    expect(mocks.fieldProps?.attachDisabled).toBe(true)
+    expect(mocks.fieldProps?.attachDisabled).toBe(false)
     await act(async () => mocks.fieldProps?.onSend?.())
 
     expect(dispatchCommand).toHaveBeenCalledWith('hello')
-    expect(send).toHaveBeenCalledWith('hello')
+    expect(send).toHaveBeenCalledWith('hello', [])
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  it('sends structured image attachments through the durable transport', async () => {
+    mocks.draft = ''
+    mocks.imageAttachments = [{ id: 'image-1', path: '/tmp/image.png' }]
+    const send = vi.fn(() => true)
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:structured"
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{
+          send,
+          dispatchCommand: vi.fn(async () => ({
+            handled: false,
+            accepted: false,
+            error: null
+          })),
+          optionsSurface: {
+            getSnapshot: () => [],
+            setOption: vi.fn(),
+            invokeAction: vi.fn(),
+            subscribe: () => () => {}
+          },
+          optionSnapshot: [],
+          worktreeId: 'wt-1',
+          onError: vi.fn(),
+          runtime: 'local'
+        }}
+      />
+    )
+
+    await act(async () => mocks.fieldProps?.onSend?.())
+
+    expect(send).toHaveBeenCalledWith('', mocks.imageAttachments)
     expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 

@@ -1,5 +1,5 @@
 import type { BrowserFocusTarget } from '../components/browser-pane/browser-focus'
-import type { WorkspaceVisibleTabType } from '../../../shared/types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 
 // The surface that held focus before a modal (QuickOpen, Cmd+J, ...) opened.
 // Captured at open time because Radix steals document focus once the dialog

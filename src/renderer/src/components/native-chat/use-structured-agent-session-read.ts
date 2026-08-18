@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import type {
-  AgentSessionHandoffStatus,
-  AgentSessionHistoryResult,
-  AgentSessionSubscribeEvent
+import {
+  AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionHistoryResult,
+  type AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionEventCoalescer } from '../../../../shared/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -16,6 +17,11 @@ import {
   callStructuredAgentSession,
   subscribeStructuredAgentSession
 } from '@/runtime/structured-agent-session-client'
+import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
+
+function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
+  return item.body.kind !== 'status' || !item.body.providerFrame
+}
 
 function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: () => void }) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -130,24 +136,42 @@ export function useStructuredAgentSessionRead(args: {
       }
     }
     async function refreshTail(): Promise<void> {
-      const [result, handoff] = await Promise.all([
-        callStructuredAgentSession<AgentSessionHistoryResult>(target, 'agentSession.history', {
-          sessionId,
-          direction: 'tail',
-          limit: 40
-        }),
-        callStructuredAgentSession<AgentSessionHandoffStatus>(
-          target,
-          'agentSession.handoffStatus',
-          { sessionId }
-        ).catch(() => null)
-      ])
+      const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
+        target,
+        'agentSession.history',
+        { sessionId, direction: 'tail', limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
+      )
       if (stopped) {
         return
       }
       if (result.ok) {
         dispatch({ type: 'tail-page', page: result.page })
         resumeCursorRef.current = result.page.liveCursor ?? null
+        let page = result.page
+        let restored = page.items.filter(countsTowardInitialHistory).length
+        while (page.hasOlder && restored < NATIVE_CHAT_INITIAL_LIMIT) {
+          const oldest = page.window.oldest
+          if (!oldest || stopped) {
+            break
+          }
+          const missing = NATIVE_CHAT_INITIAL_LIMIT - restored
+          const older = await callStructuredAgentSession<AgentSessionHistoryResult>(
+            target,
+            'agentSession.history',
+            {
+              sessionId,
+              direction: 'before',
+              cursor: oldest,
+              limit: Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, missing)
+            }
+          )
+          if (!older.ok || older.page.window.oldest?.sequence === oldest.sequence) {
+            break
+          }
+          dispatch({ type: 'older-page', requestedEpoch: oldest.epoch, page: older.page })
+          restored += older.page.items.filter(countsTowardInitialHistory).length
+          page = older.page
+        }
       } else {
         dispatch({
           type: 'event',
@@ -160,9 +184,6 @@ export function useStructuredAgentSessionRead(args: {
           }
         })
         resumeCursorRef.current = result.snapshot.cursor
-      }
-      if (handoff) {
-        dispatch({ type: 'handoff', handoff })
       }
     }
     const refreshOnFocus = (): void => {
@@ -203,7 +224,7 @@ export function useStructuredAgentSessionRead(args: {
       const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
         target,
         'agentSession.history',
-        { sessionId, direction: 'before', cursor, limit: 40 }
+        { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
       )
       if (result.ok) {
         dispatch({ type: 'older-page', requestedEpoch: cursor.epoch, page: result.page })

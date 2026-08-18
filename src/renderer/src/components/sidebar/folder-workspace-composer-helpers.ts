@@ -17,14 +17,12 @@ import {
 } from '../../../../shared/execution-host'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type {
-  FolderWorkspace,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue,
-  ProjectGroup,
-  Repo
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { translate } from '@/i18n/i18n'
 

@@ -104,7 +104,10 @@ describe('projectSessionTabAgentStatus', () => {
     expect(projected.tabs[0]).not.toHaveProperty('agentStatus')
   })
 
-  it('withholds Claude tabs from the first Codex-only structured clients', () => {
+
+
+  it('withholds Claude tabs from Codex-only structured clients', () => {
+
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       ...makeSnapshot(false),
       tabs: [

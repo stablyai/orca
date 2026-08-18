@@ -13,13 +13,13 @@ function manualClock() {
       pending.push(entry)
       return () => {
         const index = pending.indexOf(entry)
-        if (index >= 0) {
+        if (index !== -1) {
           pending.splice(index, 1)
         }
       }
     },
     fire: () => {
-      const due = pending.splice(0, pending.length)
+      const due = pending.splice(0)
       for (const entry of due) {
         entry.run()
       }

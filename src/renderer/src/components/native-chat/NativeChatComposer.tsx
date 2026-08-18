@@ -3,7 +3,10 @@ import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { STRUCTURED_AGENT_SESSION_SLASH_COMMANDS } from '../../../../shared/structured-agent-session-composer'
+import {
+  isStructuredAgentSessionComposerCommand,
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
+} from '../../../../shared/structured-agent-session-composer'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   applyMentionSuggestion,
@@ -169,6 +172,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       useNativeChatComposerAttachments({
         attachmentScopeKey: paneKey,
+        allowWithoutTarget: Boolean(structuredTransport),
         caret,
         resolveTarget,
         textareaRef,
@@ -192,6 +196,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
 
     const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
       terminalTabId,
+      structuredWorktreeId: structuredTransport?.worktreeId,
       disabled,
       attachResolvedPaths,
       setNotice
@@ -239,11 +244,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
 
     const sendStructured = useCallback(
-      (text: string): void => {
+      (text: string, attachments = imageAttachments): void => {
         if (!structuredTransport) {
           return
         }
-        void dispatchNativeChatStructuredComposerText(structuredTransport, text)
+        if (attachments.length > 0 && isStructuredAgentSessionComposerCommand(text, agent)) {
+          structuredTransport.onError('Remove attachments before using a chat-session command.')
+          return
+        }
+        void dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
           .then(({ accepted, error }) => {
             structuredTransport.onError(error)
             if (!accepted) {
@@ -260,7 +269,14 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
             structuredTransport.onError(error instanceof Error ? error.message : String(error))
           )
       },
-      [agent, clearImageAttachments, clearSkillOrigin, setDraft, structuredTransport]
+      [
+        agent,
+        clearImageAttachments,
+        clearSkillOrigin,
+        imageAttachments,
+        setDraft,
+        structuredTransport
+      ]
     )
 
     const sendPty = useNativeChatPtyComposerSend({
@@ -289,10 +305,10 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const send = useCallback(() => {
       if (!structuredTransport) {
         sendPty()
-      } else if (draft.trim() !== '' && !disabled) {
-        sendStructured(draft)
+      } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
+        sendStructured(draft, imageAttachments)
       }
-    }, [disabled, draft, sendPty, sendStructured, structuredTransport])
+    }, [disabled, draft, imageAttachments, sendPty, sendStructured, structuredTransport])
 
     const interrupt = useCallback(() => {
       cancelPendingSends()
@@ -375,7 +391,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         imageAttachments={imageAttachments}
         sendButtonDisabled={sendButtonDisabled}
         isWorking={isWorking}
-        attachDisabled={disabled || Boolean(structuredTransport)}
+        attachDisabled={disabled}
         dictationDisabled={dictationDisabled}
         isDictating={isDictating}
         isDictationHoldMode={isDictationHoldMode}
@@ -419,6 +435,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onStop={interrupt}
         sessionOptionsSurface={sessionOptionsSurface}
         sessionOptionsSnapshot={sessionOptionsSnapshot}
+        sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
       />
     )
   }

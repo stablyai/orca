@@ -8,6 +8,8 @@ import type {
   AgentJournalCursor,
   AgentJournalResetReason
 } from '../../../shared/agent-session-journal-types'
+import type { JournalReadSince } from './journal-store-contracts'
+import type { JournalRow } from './journal-row-schema'
 
 export type JournalCursorRange = {
   epoch: string
@@ -68,4 +70,29 @@ export function findSequenceGap(
     expected += 1
   }
   return null
+}
+
+/** Rows appended after `cursor`, or the reset a client must take instead. A
+ *  read-only journal always resets: this build cannot vouch for what it holds. */
+export function readJournalSince(
+  source: {
+    state: { epoch: string; lastSequence: number; oldestSequence: number }
+    tailRows: readonly JournalRow[]
+    readOnly: boolean
+  },
+  cursor: AgentJournalCursor,
+  currentCursor: () => AgentJournalCursor
+): JournalReadSince {
+  if (source.readOnly) {
+    return { ok: false, reset: 'schema_unreadable' }
+  }
+  const resume = resolveJournalResume(source.state, cursor)
+  if (!resume.ok) {
+    return { ok: false, reset: resume.reset }
+  }
+  return {
+    ok: true,
+    rows: source.tailRows.filter((row) => row.seq > resume.afterSequence),
+    cursor: currentCursor()
+  }
 }

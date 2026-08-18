@@ -1,4 +1,4 @@
-import type { WorkspaceVisibleTabType } from '../../../../shared/types'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 
 export type TabCycleType = WorkspaceVisibleTabType
 

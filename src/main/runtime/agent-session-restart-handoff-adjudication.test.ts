@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AgentSessionRecord
+} from '../../shared/agent-session-record'
 import { adjudicateRestartedAgentSessionHandoff } from './agent-session-restart-handoff-adjudication'
 
 const NOW = 1_800_000_000_000
 
 function record(stage: 'preparing' | 'new-owner-proving'): AgentSessionRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: 'session-restart',
     location: {
       executionHostId: 'local',
@@ -59,6 +62,29 @@ describe('restarted handoff adjudication', () => {
       handoffOperationId: 'handoff-op-1',
       claimStatus: 'released',
       ownerProcess: null
+    })
+  })
+
+  it('fully releases an abandoned native reservation instead of resuming it as a handoff', () => {
+    // A native attach reservation also parks at new-owner-proving; rolling it into the
+    // handoff-retry machinery would strand journal-less sessions behind a stale operation.
+    const abandoned = record('new-owner-proving')
+    abandoned.lease.runtimeKind = 'native'
+    abandoned.lease.ownerProcess = null
+    expect(
+      adjudicateRestartedAgentSessionHandoff(
+        abandoned,
+        { outcome: 'indeterminate', reason: 'no spawn-token scan' },
+        NOW + 1_000
+      ).lease
+    ).toMatchObject({
+      runtimeKind: 'native',
+      runtimeFence: 5,
+      handoffStage: null,
+      handoffOperationId: null,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null
     })
   })
 

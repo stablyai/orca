@@ -54,24 +54,38 @@ export function readCodexThreadItem(value: unknown): CodexThreadItem | null {
  * than no key, because it would look reconcilable and reconcile wrongly.
  */
 export class CodexTurnOrdinals {
-  private readonly turns = new Map<string, Map<string, number>>()
+  private readonly turns = new Map<string, { assigned: Map<string, number>; next: number }>()
 
   ordinalFor(threadId: string, turnId: string, codexItemId: string): number {
     const turnKey = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
-    const assigned = this.turns.get(turnKey) ?? new Map<string, number>()
-    this.turns.set(turnKey, assigned)
-    const existing = assigned.get(codexItemId)
+    let turn = this.turns.get(turnKey)
+    if (!turn) {
+      turn = { assigned: new Map(), next: 0 }
+      this.turns.set(turnKey, turn)
+    }
+    const existing = turn.assigned.get(codexItemId)
     if (existing !== undefined) {
       return existing
     }
-    const ordinal = assigned.size
-    assigned.set(codexItemId, ordinal)
+    const ordinal = turn.next
+    turn.assigned.set(codexItemId, ordinal)
+    turn.next += 1
     return ordinal
   }
 
-  forgetTurn(turnId: string): void {
-    this.turns.delete(turnId)
+  /** Releases a finished turn's per-item map while keeping its counter, so a
+   *  straggler frame can never be assigned an ordinal the turn already used —
+   *  a reused slot would upsert another item's journal row. */
+  forgetTurn(threadId: string, turnId: string): void {
+    const turn = this.turns.get(`${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`)
+    if (turn) {
+      turn.assigned = new Map()
+    }
   }
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
 
 /**
@@ -196,6 +210,40 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
+function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+  const changes = Array.isArray(item.changes)
+    ? item.changes.flatMap((change) => {
+        const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
+        const path = readString(record, 'path')
+        const diff = readString(record, 'diff')
+        return path && diff ? [{ path, diff }] : []
+      })
+    : []
+  if (changes.length === 0) {
+    return {
+      body: {
+        kind: 'tool-call',
+        name: 'apply_patch',
+        input: { changes: item.changes ?? null },
+        state: commandState(item)
+      },
+      blobs: [],
+      handled: true
+    }
+  }
+  const patch = changes.map((change) => change.diff).join('\n')
+  const bounded = boundInlineText(patch, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+  return {
+    body: {
+      kind: 'diff',
+      path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
+      patch: bounded
+    },
+    blobs: bounded.truncated ? [{ digest: bounded.digest, payload: patch }] : [],
+    handled: true
+  }
+}
+
 /**
  * Journal body for a Codex item, or null for one with nothing to render.
  *
@@ -218,18 +266,9 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
     return commandItem(item)
   }
   if (item.type === 'fileChange') {
-    return {
-      body: {
-        kind: 'tool-call',
-        name: 'apply_patch',
-        input: { changes: item.changes ?? null },
-        state: commandState(item)
-      },
-      blobs: [],
-      handled: true
-    }
+    return fileChangeItem(item)
   }
-  if (item.type === 'reasoning') {
+  if (item.type === 'reasoning' || item.type === 'plan') {
     const text =
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
@@ -243,10 +282,10 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
-  return {
-    ...unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item),
-    handled: false
-  }
+  const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
+  return unhandled
+    ? { body: unhandled.body, blobs: unhandled.blobs, handled: false }
+    : { body: null, blobs: [], handled: true }
 }
 
 export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | null {
@@ -256,4 +295,27 @@ export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | nul
 /** Snapshot body for text still streaming, before its item completes. */
 export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+}
+
+/** Snapshot body for any item-level stream, keyed onto its parent item. */
+export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
+  if (item.type === 'agentMessage') {
+    return { body: codexStreamingMessageBody(text), blobs: [], handled: true }
+  }
+  if (item.type === 'commandExecution') {
+    return commandItem({ ...item, aggregatedOutput: text })
+  }
+  if (item.type === 'fileChange') {
+    const path = Array.isArray(item.changes)
+      ? readString(readRecord(item.changes[0]), 'path')
+      : null
+    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+    return {
+      body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
+      blobs: bounded.truncated ? [{ digest: bounded.digest, payload: text }] : [],
+      handled: true
+    }
+  }
+  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  return { body: { kind: 'status', text: bounded.text }, blobs: [], handled: true }
 }

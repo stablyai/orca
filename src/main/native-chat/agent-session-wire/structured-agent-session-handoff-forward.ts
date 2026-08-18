@@ -33,7 +33,12 @@ export async function handoffStructuredSessionToTui(
     throw new Error('agent_session_operation_conflict')
   }
   record = context.requireRecord(sessionId)
-  await deps.suspendNative(sessionId)
+  // A kill is a request. Everything below advances the fence and hands the
+  // provider session to a TUI, so an unproven exit must stop here rather than
+  // create a second live writer on the same thread.
+  if ((await deps.suspendNative(sessionId)) === false) {
+    throw new Error('agent_session_owner_exit_unproven')
+  }
   record = await stopStoredAgentSessionOwnerForHandoff(deps.store, {
     sessionId,
     expectedFence: record.lease.runtimeFence,

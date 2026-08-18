@@ -18,7 +18,6 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
-import { StructuredAgentSessionHandoffChrome } from './StructuredAgentSessionHandoffChrome'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -33,6 +32,10 @@ export function NativeChatStructuredSession(props: {
 }): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
   const [composerError, setComposerError] = useState<string | null>(null)
+  const [optionPickerRequest, setOptionPickerRequest] = useState<{
+    id: string
+    sequence: number
+  } | null>(null)
   const paneKey = useMemo(
     () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
     [props.sessionId, props.tabId]
@@ -94,35 +97,41 @@ export function NativeChatStructuredSession(props: {
     null
   const structuredTransport = useMemo(
     () => ({
-      send: controller.send,
+      send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
+        controller.send(
+          text,
+          attachments.map((attachment) => ({
+            path: attachment.path,
+            previewUri: attachment.path
+          }))
+        ),
       dispatchCommand: (text: string) =>
         dispatchStructuredAgentSessionComposerCommand(text, {
           agent: props.agent,
           snapshot: controller.optionSnapshot,
-          invokeAction: async () => false,
+          invokeAction: async (id) => {
+            setOptionPickerRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+            return true
+          },
           setOption: controller.setStructuredOption
         }),
       optionsSurface: controller.optionSurface,
       optionSnapshot: controller.optionSnapshot,
+      optionPickerRequest,
+      worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
       runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote'
     }),
-    [controller, props.agent, props.target.kind]
+    [controller, fileLinkContext?.worktreeId, optionPickerRequest, props.agent, props.target.kind]
   )
 
   return (
     <div
       data-native-chat-root="true"
+      data-native-chat-working={controller.isWorking ? 'true' : 'false'}
       tabIndex={-1}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
-      <StructuredAgentSessionHandoffChrome
-        status={controller.handoff}
-        isWorking={controller.isWorking}
-        onRequest={(direction, mode, action) => {
-          void controller.requestHandoff(direction, mode, action)
-        }}
-      />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -251,9 +260,7 @@ export function NativeChatStructuredSession(props: {
           {controller.error ?? composerError}
         </p>
       ) : null}
-      {prompt ||
-      controller.handoff?.owner === 'tui' ||
-      controller.handoff?.phase === 'switching' ? null : (
+      {prompt ? null : (
         <NativeChatComposer
           terminalTabId={props.tabId}
           paneKey={paneKey}
