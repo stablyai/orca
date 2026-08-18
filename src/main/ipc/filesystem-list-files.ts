@@ -17,6 +17,7 @@ import {
 import { isQuickOpenReaddirBudgetError } from '../../shared/quick-open-readdir-walk'
 import { buildInstallRgMessage } from '../../shared/quick-open-install-rg'
 import { listFilesWithGit } from './filesystem-list-files-git-fallback'
+import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 import {
   absorbPendingRipgrepSpawnError,
   isRipgrepUnavailableExit,
@@ -72,7 +73,7 @@ export async function listQuickOpenFiles(
   const children: {
     child: ChildProcess
     isDone: () => boolean
-    finish: () => void
+    finish: (error?: Error) => void
   }[] = []
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
@@ -89,11 +90,16 @@ export async function listQuickOpenFiles(
 
   const runRg = (args: string[]): Promise<void> => {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(fileListingCancellationError(signal))
+        return
+      }
       let buf = ''
       let done = false
       let parseablePathCount = 0
       let processErrorObserved = false
       let unavailableExitObserved = false
+      let onAbort: (() => void) | undefined
 
       const processLine = (rawLine: string): boolean => {
         const translated =
@@ -196,6 +202,9 @@ export async function listQuickOpenFiles(
         }
         done = true
         clearTimeout(timer)
+        if (onAbort) {
+          signal?.removeEventListener('abort', onAbort)
+        }
         // Why: child.kill() is advisory. If rg ignores it, detach our
         // closures so repeated Quick Open attempts do not retain old scans.
         child.stdout!.off('data', handleStdoutData)
@@ -220,6 +229,14 @@ export async function listQuickOpenFiles(
       child.stderr!.on('data', handleStderrData)
       child.once('error', handleError)
       child.once('close', handleClose)
+      onAbort = (): void => {
+        const error = fileListingCancellationError(signal)
+        finish(error)
+        if (child.exitCode === null && child.signalCode === null) {
+          killSpawnedRipgrepProcess(child)
+        }
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       timer = setTimeout(() => {
         // Why: on timeout, the buffer is likely truncated mid-path. Discard
         // it so Quick Open never displays a malformed entry.

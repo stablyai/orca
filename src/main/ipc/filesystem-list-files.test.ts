@@ -335,6 +335,49 @@ describe('filesystem-list-files', () => {
     }
   })
 
+  it('settles promptly when an in-flight rg listing is cancelled', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const p1 = createMockProcess()
+      const p2 = createMockProcess()
+      spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+
+      const controller = new AbortController()
+      const cancellation = new FileListingCancelledError('superseded')
+      const promise = listQuickOpenFiles(
+        '/mock/root',
+        {} as unknown as Store,
+        undefined,
+        controller.signal
+      )
+      await flushMicrotasks()
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
+      const outcome = promise.then(
+        () => null,
+        (error) => error
+      )
+      controller.abort(cancellation)
+      const raced = Promise.race([
+        outcome,
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 100))
+      ])
+      await vi.advanceTimersByTimeAsync(100)
+
+      await expect(raced).resolves.toBe(cancellation)
+      expect(p1.kill).toHaveBeenCalled()
+      expect(p2.kill).toHaveBeenCalled()
+      for (const child of [p1, p2]) {
+        expect((child.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        expect(child.listenerCount('close')).toBe(0)
+      }
+    } finally {
+      await vi.advanceTimersByTimeAsync(10_000)
+      vi.useRealTimers()
+    }
+  })
+
   it('filters out .next, .cache, .stably, .vscode, .idea', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
