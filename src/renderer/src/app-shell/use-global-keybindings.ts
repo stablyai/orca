@@ -136,6 +136,20 @@ export function useGlobalKeybindings(args: {
       }
 
       const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+      const tryOpenDiffNotesSendMenu = (): boolean => {
+        if (!canRevealRightSidebar || !matchShortcut('sourceControl.sendReviewNotes')) {
+          return false
+        }
+        if (!actions.openDiffNotesSendMenuForActiveWorktree()) {
+          return false
+        }
+        input.preventDefault()
+        // Why: this global action is allowed to run over editable surfaces. Once it
+        // claims the chord, keep local textarea/editor handlers from also acting.
+        input.stopPropagation()
+        notifyTerminalCapture('sourceControl.sendReviewNotes')
+        return true
+      }
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
         // With a folder selected in the explorer, Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern with it, not a text search.
@@ -188,7 +202,9 @@ export function useGlobalKeybindings(args: {
       }
 
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
+      // The user-bound send-notes action is the exception: it only claims the chord when the active worktree has saved, unsent notes.
       if (isEditableTarget(input.target)) {
+        tryOpenDiffNotesSendMenu()
         return
       }
 
@@ -242,13 +258,8 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      // Unbound by default, so it runs after the built-in alias handlers above; only consumes the chord when the active worktree has unsent notes.
-      if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
-        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
-          input.preventDefault()
-          notifyTerminalCapture('sourceControl.sendReviewNotes')
-        }
-      }
+      // Unbound by default, so it runs after the built-in alias handlers above.
+      tryOpenDiffNotesSendMenu()
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -274,7 +285,8 @@ export function useGlobalKeybindings(args: {
           doubleTapModifier: detected.modifier,
           target: e.target,
           defaultPrevented: e.defaultPrevented,
-          preventDefault: () => e.preventDefault()
+          preventDefault: () => e.preventDefault(),
+          stopPropagation: () => e.stopPropagation()
         })
         return
       }
@@ -287,7 +299,8 @@ export function useGlobalKeybindings(args: {
         shiftKey: e.shiftKey,
         target: e.target,
         defaultPrevented: e.defaultPrevented,
-        preventDefault: () => e.preventDefault()
+        preventDefault: () => e.preventDefault(),
+        stopPropagation: () => e.stopPropagation()
       })
     }
 

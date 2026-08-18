@@ -1,35 +1,27 @@
 import { BulkActionBar } from '../commit/bulk-action-bar'
 import { SourceControlHeaderToolbar } from './header-toolbar'
-import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
+import { SourceControlPanelNotesShelf } from './notes-shelf'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 /** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
-  const { model, worktreePath } = props
+  const { model } = props
   const {
-    activeGroupId,
-    activeWorktreeId,
     branchLineTotal,
     branchSummary,
     bulkStagePaths,
     bulkUnstagePaths,
     clearSelection,
     compareBaseRef,
-    deleteDiffComment,
     diffCommentCount,
-    diffCommentsCopied,
-    diffCommentsExpanded,
-    diffCommentsForActive,
     filterExpanded,
     filterQuery,
     gitIdentityDisplay,
     handleBulkStage,
     handleBulkUnstage,
-    handleCopyDiffComments,
     handleCreatePrHeaderClick,
-    handleOpenComment,
     handleSourceControlKeyDown,
     handleToggleSourceControlViewMode,
     hostedReview,
@@ -47,7 +39,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,
-    setPendingDiffCommentsClear,
     setSourceControlRoot,
     settings,
     sourceControlViewMode,
@@ -89,21 +80,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
         />
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
-        {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
-          <SourceControlNotesShelf
-            activeWorktreeId={activeWorktreeId}
-            activeGroupId={activeGroupId}
-            diffCommentsForActive={diffCommentsForActive}
-            diffCommentCount={diffCommentCount}
-            diffCommentsExpanded={diffCommentsExpanded}
-            setDiffCommentsExpanded={setDiffCommentsExpanded}
-            diffCommentsCopied={diffCommentsCopied}
-            handleCopyDiffComments={handleCopyDiffComments}
-            setPendingDiffCommentsClear={setPendingDiffCommentsClear}
-            deleteDiffComment={deleteDiffComment}
-            handleOpenComment={handleOpenComment}
-          />
-        )}
+        <SourceControlPanelNotesShelf model={model} />
 
         <div
           ref={setFileListScrollElement}

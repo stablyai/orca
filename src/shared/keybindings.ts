@@ -859,7 +859,16 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Add Review Note',
     group: 'Editors',
     scope: 'editor',
-    searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
+    searchKeywords: [
+      'shortcut',
+      'editor',
+      'diff',
+      'markdown',
+      'note',
+      'comment',
+      'annotation',
+      'review'
+    ],
     // Why: Ctrl+Alt+letter is AltGr text input on Windows/Linux, so an editor default must not reserve chars like Polish `ń`.
     defaultBindings: platformBindings(['Mod+Shift+A'])
   },

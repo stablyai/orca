@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { installDiffCommentAddButtonOverlay } from './diff-comment-add-button-overlay'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
+import { installDiffCommentReviewNoteShortcut } from './diff-comment-review-note-shortcut'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import {
   resizeDiffCommentZone,
@@ -24,6 +25,8 @@ type DecoratorArgs = {
   comments: readonly DecoratedDiffComment[]
   commentableLineNumbers?: readonly number[]
   addButtonLabel?: string
+  enableAddReviewNoteShortcut?: boolean
+  isAddCommentDraftOpen?: boolean
   onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
   // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
@@ -42,6 +45,8 @@ export function useDiffCommentDecorator({
   comments,
   commentableLineNumbers,
   addButtonLabel = 'Add note for the AI',
+  enableAddReviewNoteShortcut = false,
+  isAddCommentDraftOpen = false,
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
@@ -64,10 +69,13 @@ export function useDiffCommentDecorator({
   const scrollToZoneFrameRef = useRef<number | null>(null)
   // Stash callbacks in refs so the effect doesn't tear down + re-attach on every parent render (parent passes inline arrows) — avoids flicker.
   const onAddCommentClickRef = useRef(onAddCommentClick)
+  // Why: opening or closing a draft must update the shortcut guard without rebuilding Monaco overlays and view zones.
+  const isAddCommentDraftOpenRef = useRef(isAddCommentDraftOpen)
   const onDeleteCommentRef = useRef(onDeleteComment)
   const onUpdateCommentRef = useRef(onUpdateComment)
   const onPendingScrollConsumedRef = useRef(onPendingScrollConsumed)
   onAddCommentClickRef.current = onAddCommentClick
+  isAddCommentDraftOpenRef.current = isAddCommentDraftOpen
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
@@ -105,8 +113,18 @@ export function useDiffCommentDecorator({
       disposablesRef,
       onAddCommentClickRef
     })
+    const disposeAddReviewNoteShortcut = enableAddReviewNoteShortcut
+      ? installDiffCommentReviewNoteShortcut({
+          editor,
+          editorDomNode,
+          commentableLineSet,
+          isDraftOpen: () => isAddCommentDraftOpenRef.current,
+          onAddComment: (target) => onAddCommentClickRef.current(target)
+        })
+      : undefined
 
     return () => {
+      disposeAddReviewNoteShortcut?.()
       disposeAddButtonOverlay()
       // Editor swapped/torn down: unmount roots and clear tracking so the next mount starts known-empty.
       // Defer unmount via queueMicrotask: a sync unmount during React's commit triggers React 19's "unmount while rendering" warning; clear zones synchronously.
@@ -127,7 +145,14 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [addButtonLabel, cancelScrollToZoneFrame, commentableLineSet, editor, monacoModelIdentity])
+  }, [
+    addButtonLabel,
+    cancelScrollToZoneFrame,
+    commentableLineSet,
+    editor,
+    enableAddReviewNoteShortcut,
+    monacoModelIdentity
+  ])
 
   useEffect(() => {
     if (!editor) {

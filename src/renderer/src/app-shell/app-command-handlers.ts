@@ -29,6 +29,7 @@ export type ShortcutDispatchInput = {
   target: EventTarget | null
   defaultPrevented: boolean
   preventDefault: () => void
+  stopPropagation: () => void
 }
 
 export type AppShortcutActions = ReturnType<typeof useAppShortcutActions>
