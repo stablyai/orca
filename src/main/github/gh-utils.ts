@@ -26,6 +26,7 @@ export {
 } from './github-repository-identity'
 export type {
   GitHubRemoteIdentity,
+  GitHubRemoteIdentityProbeOptions,
   GitHubRepoContext,
   LocalGitExecOptions,
   OwnerRepo

@@ -117,11 +117,14 @@ import {
 } from './terminal-pane/terminal-hidden-view-parking'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  countEvictionExemptTabRoutes,
+  formatEvictionExemptRouteCounts,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import {
@@ -420,7 +423,9 @@ function Terminal(): React.JSX.Element | null {
         : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
-  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
+  const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
+    workspaceSessionReady && hydrationSucceeded
+  )
 
   // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
@@ -1096,10 +1101,18 @@ function Terminal(): React.JSX.Element | null {
         // Why logged: an all-exempt force-park frees no heap at all (daemon
         // fail-open makes every local pty exempt), so the budget only holds
         // while this stays rare — make the degenerate case observable.
+        // Why routed + breadcrumbed: only per-route counts in a field bundle
+        // can say whether fail-open ids or unresolved snapshot capability
+        // dominates the degenerate case.
         if (evictableTabIds.length === 0 && forceParkedTabs.length > 0) {
+          const exemptRouteCounts = countEvictionExemptTabRoutes(forceParkedTabs, worktreeId)
           warnTerminalLifecycleAnomaly('retention force-park freed no panes', {
             worktreeId,
-            reason: `exemptTabs=${forceParkedTabs.length}`
+            reason: `exemptTabs=${forceParkedTabs.length} ${formatEvictionExemptRouteCounts(exemptRouteCounts)}`
+          })
+          recordRendererCrashBreadcrumb('terminal_force_park_freed_no_panes', {
+            exemptTabs: forceParkedTabs.length,
+            ...exemptRouteCounts
           })
         }
         // Why conditional: a tab whose pane was mid-remount registered no
@@ -1168,6 +1181,7 @@ function Terminal(): React.JSX.Element | null {
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
+    terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
     workspaceSurfaces
@@ -1482,6 +1496,9 @@ function Terminal(): React.JSX.Element | null {
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
+  const activeWorktreeHasTerminalState = activeWorktreeId
+    ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
+    : false
   useEffect(() => {
     if (!workspaceSessionReady) {
       return
@@ -1496,12 +1513,18 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
       return
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeWorktreeHasTerminalState,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {

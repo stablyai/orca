@@ -15,7 +15,7 @@ import {
   serializeDaemonPidFile,
   unlinkOwnedDaemonPidFile
 } from './daemon-spawner'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 type ManualTimer = {
   callback: () => void

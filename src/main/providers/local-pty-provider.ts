@@ -19,8 +19,10 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
-  updateHistFileForFallback,
-  logHistoryInjection
+  injectWslFishHistoryEnv,
+  updateHistoryEnvForFallback,
+  logHistoryInjection,
+  type HistoryInjectionResult
 } from '../terminal-history'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
@@ -29,13 +31,12 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
+import { getMarkerlessShellLaunchConfig, getShellReadyLaunchConfig } from './local-pty-shell-ready'
 import {
-  getMarkerlessShellLaunchConfig,
-  getShellReadyLaunchConfig,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
-} from './local-pty-shell-ready'
-import type { ShellReadySignal } from './local-pty-shell-ready'
+} from './local-pty-shell-ready-startup-command'
+import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
@@ -873,7 +874,15 @@ export class LocalPtyProvider implements IPtyProvider {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
         wslDistro: launchWslDistro
       })
+      if (isWslTerminal && launchWslDistro) {
+        injectWslFishHistoryEnv(finalEnv, worktreeId, launchWslDistro)
+        addWslEnvKeys(finalEnv, ['HISTFILE', 'fish_history'])
+      }
       logHistoryInjection(worktreeId, historyResult)
+    } else {
+      // Why: injectHistoryEnv is what normally clears it, so when history is off
+      // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
+      delete finalEnv.ORCA_HISTFILE
     }
 
     await prepareLocalPtySpawn(id)
@@ -896,8 +905,9 @@ export class LocalPtyProvider implements IPtyProvider {
       ptySpawn: pty.spawn,
       getShellReadyConfig: getFallbackShellReadyConfig,
       // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
-      onBeforeFallbackSpawn: historyResult?.histFile
-        ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
+      onBeforeFallbackSpawn: historyResult?.historyDir
+        ? (env, fallbackShell) =>
+            updateHistoryEnvForFallback(env, fallbackShell, historyResult as HistoryInjectionResult)
         : undefined,
       windowsFallbackAttempts
     })

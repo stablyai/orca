@@ -11,7 +11,8 @@ import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { Session, SubprocessHandle } from './session'
+import type { Session } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function fixtureSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null

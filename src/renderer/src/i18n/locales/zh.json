@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "该文件处于冲突状态，但没有可编辑的工作树文件。",
+          "conflictPlaceholderGuidance": "请在 Git 中解决冲突，或恢复其中一侧后再重新打开。",
           "51f15c37d3": "无法打开目录：{{value0}}",
           "f2e00db373": "未找到文件：{{value0}}",
           "checkRunDetailsUnavailable": "此检查没有可用的详细信息。",
@@ -903,7 +904,7 @@
         "e52bed9264": "尚未报告任何 CI 检查",
         "90020cc1f3": "此PR尚未报告检查。",
         "ecffebc251": "未找到检查",
-        "5dddefdf58": "在 GitHub 中打开",
+        "checkOpenInBrowser": "在浏览器中打开",
         "744197c84d": "此检查没有可用的内联输出。",
         "08d072664d": "任务",
         "96d8f36798": "注释",
@@ -1439,7 +1440,6 @@
         "c57873d721": "拉取请求已合并",
         "a63b3c159c": "这将更新 GitHub 上的PR。",
         "eec3706a6a": "{{value0}} PR #{{value1}}？",
-        "b8c6cbb8c4": "{{value0}} PR 失败",
         "710e47aa06": "拉取请求已重新打开",
         "7aa3b5f706": "PR已关闭",
         "3d77438c92": "这将在 GitHub 上重新打开PR。",
@@ -1538,7 +1538,13 @@
         "dd5d9a4f17": "{{value0}}更新",
         "71a3c0f9d2": "启动工作区",
         "filesUnavailable": "无法加载变更的文件。",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "77482513f8": "关闭",
+        "2f5195c6a0": "重新开启",
+        "4b8ae7303f": "加载差异失败。",
+        "closePullRequestFailed": "关闭PR失败",
+        "reopenPullRequestFailed": "重新打开PR失败",
+        "diffLoadTimedOut": "加载此差异超时。"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -3282,7 +3288,9 @@
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
             "grokUsageMenu": "Grok 使用情况",
-            "floatingTerminalNewActivity": "{{label}}，有新活动"
+            "floatingTerminalNewActivity": "{{label}}，有新活动",
+            "codexSignInSuccess": "已登录 Codex",
+            "codexSignInError": "Codex 登录失败，请重试。"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -5329,6 +5337,7 @@
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
           "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置。请恢复该文件以恢复同步。",
           "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置。同步文件夹完成下载前出现这种情况是正常的。",
+          "codexConfigSyncManagedHomeUnavailable": "Orca 暂时无法读取此账户的 Codex 文件，因此设置可能尚未同步。这通常会自行恢复——防病毒软件或备份工具可能只是短暂锁定了这些文件。",
           "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。"
         },
         "AdvancedPane": {
@@ -8781,6 +8790,9 @@
               "4575341c77": "选择本地桌面、添加已保存的远程 Orca 服务器或生成配对 URL。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "已被调度中心拦截。在此重新映射，或在系统设置中更改。"
         },
         "shortcuts": {
           "search": {

@@ -13,6 +13,7 @@ type AnchorHarness = {
   terminal: Terminal
   element: HTMLElement
   style: { top: string; left: string }
+  compositionStyle: CSSStyleDeclaration
   counts: { rectReads: number; styleWrites: number }
   setCursor: (cursorX: number, cursorY: number) => void
   setLines: (lines: string[]) => void
@@ -45,6 +46,9 @@ function createHarness(): AnchorHarness {
   const element = document.createElement('div')
   const screen = document.createElement('div')
   screen.className = 'xterm-screen'
+  const compositionView = document.createElement('div')
+  compositionView.className = 'composition-view'
+  screen.appendChild(compositionView)
   element.appendChild(screen)
   document.body.appendChild(element)
 
@@ -86,6 +90,7 @@ function createHarness(): AnchorHarness {
     terminal,
     element,
     style,
+    compositionStyle: compositionView.style,
     counts,
     setCursor: (cursorX: number, cursorY: number) => {
       Object.assign(buffer, { cursorX, cursorY })
@@ -209,6 +214,45 @@ describe('installTerminalImeCandidateAnchor', () => {
     vi.runAllTimers()
 
     expect(harness.style.top).toBe(`${2 * CELL_HEIGHT}px`)
+  })
+
+  it('keeps the Cursor Agent preedit overlay on the textarea anchor', () => {
+    const harness = createHarness()
+    harness.setLines(['Cursor Agent', '', '→ hello'])
+    harness.element.addEventListener('compositionupdate', () => {
+      window.setTimeout(() => {
+        harness.style.top = `${CELL_HEIGHT}px`
+        harness.compositionStyle.top = `${CELL_HEIGHT}px`
+        harness.compositionStyle.left = '0px'
+      }, 0)
+    })
+    installTerminalImeCandidateAnchor(harness.terminal)
+
+    harness.setCursor(0, 1)
+    fire(harness.element, 'compositionstart')
+    fire(harness.element, 'compositionupdate')
+    vi.runAllTimers()
+
+    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${7 * CELL_WIDTH}px` })
+    expect(harness.compositionStyle.top).toBe(`${2 * CELL_HEIGHT}px`)
+    expect(harness.compositionStyle.left).toBe(`${7 * CELL_WIDTH}px`)
+    expect(harness.compositionStyle.height).toBe(`${CELL_HEIGHT}px`)
+    expect(harness.compositionStyle.lineHeight).toBe(`${CELL_HEIGHT}px`)
+  })
+
+  it('keeps typed follow-ups anchored after recognizing the initial Cursor Agent screen', () => {
+    const harness = createHarness()
+    harness.setLines(['Cursor Agent', '', '→ Plan, search, build anything', ''])
+    installTerminalImeCandidateAnchor(harness.terminal)
+    typeHangulSyllable(harness, 0, 1, 3)
+
+    harness.setLines(['transcript', '', '→ hello', ''])
+    harness.style.left = '0px'
+    fire(harness.element, 'compositionupdate')
+    vi.runAllTimers()
+
+    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${7 * CELL_WIDTH}px` })
+    expect(harness.compositionStyle.left).toBe(`${7 * CELL_WIDTH}px`)
   })
 
   it('refreshes the deferred metrics and anchor after a refit', () => {

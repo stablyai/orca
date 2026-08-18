@@ -1,10 +1,17 @@
 // Error classes shared across the daemon protocol boundary (client, server,
 // host). Split from types.ts, which is capped for wire-shape declarations.
+const ATTACH_CANCELED_PREFIX = 'Attach canceled for session '
+
 export class TerminalAttachCanceledError extends Error {
   constructor(sessionId: string) {
-    super(`Attach canceled for session ${sessionId}`)
+    super(`${ATTACH_CANCELED_PREFIX}${sessionId}`)
     this.name = 'TerminalAttachCanceledError'
   }
+}
+
+/** Recognizes the daemon's attach-cancellation across the wire, where only the message survives. */
+export function isTerminalAttachCanceledMessage(message: string): boolean {
+  return message.startsWith(ATTACH_CANCELED_PREFIX)
 }
 
 export class DaemonProtocolError extends Error {

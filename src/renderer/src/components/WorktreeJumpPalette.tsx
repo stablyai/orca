@@ -132,7 +132,7 @@ import { getPaletteHostBadge, type PaletteHostBadge } from '@/components/cmd-j/p
 import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
 import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
-import { getProjectGroupExecutionHostIdForRows } from '@/components/sidebar/worktree-list-host-filtering'
+import { getProjectGroupExecutionHostIdForRows } from '@/components/sidebar/worktree-list/listing/host-filtering'
 import {
   buildPaletteFilterPredicate,
   EMPTY_PALETTE_FILTER,

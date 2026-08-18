@@ -9,9 +9,11 @@ export async function purgeOrphanedRuntimeSshProjects(
   if (destroyedSshTargetIds.length === 0) {
     return
   }
-  const destroyedTargetIds = new Set(destroyedSshTargetIds)
+  // Drop blanks once, before both lookups, so a repo with no connectionId never matches below.
+  const purgeableSshTargetIds = destroyedSshTargetIds.filter((id) => id !== '')
+  const destroyedTargetIds = new Set(purgeableSshTargetIds)
   const destroyedHostIds = new Set<ExecutionHostId>(
-    destroyedSshTargetIds.map((id) => toSshExecutionHostId(id))
+    purgeableSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
   const orphanedSetupIds = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))

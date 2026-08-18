@@ -79,6 +79,7 @@ vi.mock('node:fs/promises', () => ({
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
+  realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
   default: {
     writeFile: fsWriteFileMock
@@ -88,8 +89,6 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
-  isENOENT: (error: unknown): boolean =>
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT',
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 

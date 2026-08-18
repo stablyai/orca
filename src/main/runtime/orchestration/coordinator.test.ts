@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
+import { Coordinator } from './coordinator'
+import type { CoordinatorRuntime } from './coordinator-runtime-contract'
 import {
-  Coordinator,
   DISPATCH_STALE_THRESHOLD,
-  parseAllowStaleBaseFromSpec,
-  type CoordinatorRuntime
-} from './coordinator'
+  parseAllowStaleBaseFromSpec
+} from './coordinator-stale-base-flag'
 
 type DriftResult = {
   base: string
@@ -335,12 +335,14 @@ describe('Coordinator', () => {
       await new Promise((r) => {
         setTimeout(r, 100)
       })
+      const dispatch = db.getDispatchContext(task.id)
+      expect(dispatch).toBeDefined()
       db.insertMessage({
-        from: `term_${i === 0 ? 'a' : 'b'}`,
+        from: dispatch?.assignee_handle ?? 'missing-worker',
         to: 'coord',
         subject: `Failed attempt ${i + 1}`,
         type: 'escalation',
-        payload: JSON.stringify({ taskId: task.id })
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch!.id })
       })
     }
 
@@ -392,6 +394,8 @@ describe('Coordinator', () => {
     })
 
     // Worker sends decision gate
+    const dispatch = db.getDispatchContext(task.id)
+    expect(dispatch).toBeDefined()
     db.insertMessage({
       from: 'term_a',
       to: 'coord',
@@ -399,6 +403,7 @@ describe('Coordinator', () => {
       type: 'decision_gate',
       payload: JSON.stringify({
         taskId: task.id,
+        dispatchId: dispatch!.id,
         question: 'Proceed with destructive migration?',
         options: ['yes', 'no']
       })

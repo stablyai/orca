@@ -2,7 +2,7 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
@@ -79,6 +79,12 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import {
+  deleteRelayFishHistory,
+  deleteRelayHistory,
+  injectRelayFishHistoryEnv,
+  injectRelayHistoryEnv
+} from './terminal-history'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -158,6 +164,7 @@ type ManagedPty = {
   shellPathEnv?: string
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
+  historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
@@ -327,6 +334,8 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  /** Optional for state serialized by relays predating scoped history. */
+  historyIsolationEnabled?: boolean
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -860,6 +869,13 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
+    this.dispatcher.onRequest('pty.deleteWorktreeHistory', async (p) => {
+      if (typeof p.worktreeId === 'string') {
+        deleteRelayFishHistory(p.worktreeId)
+        deleteRelayHistory(p.worktreeId)
+      }
+      return { ok: true }
+    })
     this.dispatcher.onRequest('pty.closeStartupQueryAuthority', (p) =>
       this.closeStartupQueryAuthority(p)
     )
@@ -1387,7 +1403,8 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
-    const worktreeId = env?.ORCA_WORKTREE_ID
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
@@ -1503,7 +1520,9 @@ export class PtyHandler {
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
-    const shell = resolvedShellOverride || resolveDefaultShell()
+    const requestedEnvShell =
+      process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
+    const shell = resolvedShellOverride || requestedEnvShell || resolveDefaultShell()
     let id: string
     do {
       id = `pty-${this.nextId++}`
@@ -1525,6 +1544,15 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+    const historyIsolationEnabled = params.historyIsolationEnabled === true
+    if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
+      injectRelayFishHistoryEnv(spawnEnv, worktreeId)
+    }
+    if (historyIsolationEnabled && worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, worktreeId, shell)
+    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -1591,7 +1619,6 @@ export class PtyHandler {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
     }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
@@ -1612,6 +1639,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       shellPath: shell,
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
@@ -2034,6 +2062,7 @@ export class PtyHandler {
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
+        ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -2097,11 +2126,22 @@ export class PtyHandler {
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
     const shell = resolveDefaultShell()
+    const historyIsolationEnabled = entry.historyIsolationEnabled === true
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    if (
+      historyIsolationEnabled &&
+      entry.worktreeId &&
+      basename(shell).toLowerCase().startsWith('fish')
+    ) {
+      injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
+    }
+    if (historyIsolationEnabled && entry.worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell)
+    }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
     if (gitCredentialPromptGuarded) {
@@ -2137,6 +2177,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell

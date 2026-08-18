@@ -16,7 +16,7 @@ import { HistoryReader } from './history-reader'
 import { TerminalHost } from './terminal-host'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
 const OLDEST_WRITTEN_LINE = 'LINE_00001'

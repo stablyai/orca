@@ -15,6 +15,8 @@ export function makeCandidate(
     repoId: 'repo1',
     repoName: 'Repo 1',
     connectionId: null,
+    // Why: main host-qualifies every candidate it builds; removal fails closed without it (STA-4343).
+    executionHostId: 'local',
     displayName: 'old-workspace',
     branch: 'old-workspace',
     path: '/tmp/old-workspace',

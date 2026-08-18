@@ -1,6 +1,7 @@
 import type { AppState } from '../../../types'
 import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage-types'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { normalizeRightSidebarRoute } from '../../../right-sidebar-route'
 import type { WorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 
 export function createWorktreePurgeOmitters(
@@ -40,14 +41,8 @@ export function createWorktreePurgeOmitters(
     let changed = omitted !== s.rightSidebarTabByWorktree
     const out: AppState['rightSidebarTabByWorktree'] = {}
     for (const [id, tab] of Object.entries(omitted)) {
-      if (
-        tab === 'explorer' ||
-        tab === 'vault' ||
-        tab === 'workspaces' ||
-        tab === 'source-control' ||
-        tab === 'checks' ||
-        tab === 'ports'
-      ) {
+      // Reuse the route validator so newer tabs (pr-checks, plugin panels) aren't silently dropped.
+      if (normalizeRightSidebarRoute(tab).rightSidebarTab === tab) {
         out[id] = tab
       } else {
         changed = true

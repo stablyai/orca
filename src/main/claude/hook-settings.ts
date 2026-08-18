@@ -6,7 +6,9 @@ import {
   getSharedManagedScriptPath,
   isPlainObject,
   MANAGED_HOOK_TIMEOUT_SECONDS,
+  quotePowerShellString,
   removeManagedCommands,
+  wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
@@ -16,38 +18,59 @@ import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-com
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
-  supportsExecHookArgs: boolean
+  usesWindowsPowerShellLauncher: boolean
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
   scriptBaseName: 'claude-hook',
-  supportsExecHookArgs: true
+  usesWindowsPowerShellLauncher: true
 }
 
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook',
-  supportsExecHookArgs: false
+  usesWindowsPowerShellLauncher: false
 }
 
 export const CLAUDE_EVENTS = [
   // Why: SessionStart is the only event a resumed/idle session emits before the
   // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
-  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'SessionStart',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'UserPromptSubmit',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'Stop',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
   // StopFailure instead; without this hook Orca leaves the turn spinning.
-  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'StopFailure',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
   // a pane 'working' while background children outlive the lead's turn.
   // TeammateIdle parks turn-based teammates without trusting their permanently
   // "running" background_tasks entry to gate the pane.
   // Older Claude builds ignore unregistered event names (StopFailure precedent).
-  { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'TeammateIdle', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'SubagentStart',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'SubagentStop',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'TeammateIdle',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
   // (name + input preview) before it completes.
   {
@@ -108,11 +131,15 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
-export function getManagedCommand(scriptPath: string): string {
+export function getManagedCommand(
+  scriptPath: string,
+  options: { neutralJsonWhenMissing?: boolean } = {}
+): string {
   const scriptFileName = basename(scriptPath)
   const extension = extname(scriptFileName)
   return wrapRuntimeHomeHookCommand(
-    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName
+    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
+    options
   )
 }
 
@@ -120,25 +147,25 @@ export function getManagedLifecycleHook(
   scriptPath: string,
   settings = CLAUDE_HOOK_SETTINGS
 ): HookCommandConfig {
-  if (process.platform !== 'win32' || !settings.supportsExecHookArgs) {
-    return buildManagedCommandHook(getManagedCommand(scriptPath))
+  if (process.platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
+    return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
   return getWindowsManagedLifecycleHook(scriptPath)
 }
 
+// Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
 export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
-  const system32 = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
-  const runtimeScriptPath = win32.join(
-    '%USERPROFILE%',
-    '.orca',
-    'agent-hooks',
-    win32.basename(scriptPath)
-  )
-  // Why: Claude's Windows shell form opens Git Bash consoles; exec form hosts the client in a windowless console.
+  const scriptFileName = win32.basename(scriptPath)
+  // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
+  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
+  // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
+  const innerCommand =
+    `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
+    'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
+    "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
   return {
     type: 'command',
-    command: win32.join(system32, 'conhost.exe'),
-    args: ['--headless', win32.join(system32, 'cmd.exe'), '/d', '/c', runtimeScriptPath],
+    command: wrapWindowsPowerShellEncodedCommand(innerCommand),
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }
@@ -154,7 +181,7 @@ export function hasSameManagedHookInvocation(
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
-  return getManagedCommand(scriptPath)
+  return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
 }
 
 export function applyManagedHooks(

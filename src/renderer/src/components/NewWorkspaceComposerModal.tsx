@@ -197,6 +197,7 @@ function QuickTabBody({
   // outcomes still navigate away and tear the whole modal down.)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
+  const [setLocationOpen, setSetLocationOpen] = useState(false)
   const handleOpenAddProject = useCallback((): void => {
     setAddProjectMounted(true)
     setAddProjectOpen(true)
@@ -238,10 +239,10 @@ function QuickTabBody({
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
-  const nestedDialogOpen = agentSettingsOpen || addProjectOpen
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
   useEffect(() => {
     if (!active || nestedDialogOpen) {
-      // Why: while a nested dialog (Add Project / Agents) is layered on top,
+      // Why: while a nested dialog (Add Project / Agents / Set location) is layered on top,
       // this capture-phase handler must not steal its Escape (which should
       // close only the nested dialog) or fire composer submit underneath it.
       return
@@ -324,6 +325,7 @@ function QuickTabBody({
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}
+        onNestedDialogOpenChange={setSetLocationOpen}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
       {addProjectMounted ? (
