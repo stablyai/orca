@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import {
@@ -351,6 +351,35 @@ describe('agent sleep coordinator', () => {
     })
 
     await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('rechecks dispatch settlement before shutdown', async () => {
+    vi.useFakeTimers()
+    const completed = {
+      ...entry(),
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed' as const
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [completed.paneKey]: completed }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [completed.paneKey]: {
+          ...completed,
+          orchestration: { ...completed.orchestration, dispatchStatus: 'dispatched' }
+        }
+      }
+    })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()

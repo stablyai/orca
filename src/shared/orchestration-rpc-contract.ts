@@ -26,6 +26,8 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.workerStart',
   'orchestration.workerStop',
   'orchestration.workerAbandon',
+  'orchestration.workerRelease',
+  'orchestration.workerRetain',
   'orchestration.ask',
   'orchestration.gateCreate',
   'orchestration.gateResolve',

@@ -37,7 +37,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     (worktreeId: string): boolean => {
       for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
         const itemIndex = sections[sectionIndex].data.findIndex((w) => w.worktreeId === worktreeId)
-        if (itemIndex >= 0) {
+        if (itemIndex !== -1) {
           sectionListRef.current?.scrollToLocation({
             sectionIndex,
             itemIndex,

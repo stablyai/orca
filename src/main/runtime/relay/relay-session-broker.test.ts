@@ -47,6 +47,7 @@ vi.mock('./relay-control-client', () => ({
   RelayControlClient: class {
     connect = fakes.controlConnect
     closeNow = vi.fn()
+    isLive = vi.fn(() => true)
     confirmResume = vi.fn().mockResolvedValue({
       type: 'device-resume-confirmed',
       v: 1,
@@ -157,6 +158,33 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(statuses).toEqual(['connecting'])
   })
 
+  it('fails connect when the control closes before origin activation', async () => {
+    // Why: a socket can deliver hello-ack and close in the same ws parser turn;
+    // onClose then fires before the connect promise settles, so nothing may
+    // publish this control as active.
+    fakes.controlConnect.mockImplementationOnce(async () => {
+      fakes.controls[0]!.options.onClose(1006)
+      return {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'A'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      } satisfies RelayHostHelloAckMessage
+    })
+    const statuses: string[] = []
+
+    await expect(
+      RelaySessionBroker.connect(brokerOptions({ onStatus: (status) => statuses.push(status) }))
+    ).rejects.toThrow('relay_control_closed_before_activation')
+
+    expect(statuses).not.toContain('registered')
+    expect(statuses.at(-1)).toBe('offline')
+    await vi.waitFor(() => expect(fakes.transports[0]!.stop).toHaveBeenCalled())
+  })
+
   it('activates a new origin while keeping basis-bound work on the drained origin', async () => {
     const firstAck: RelayHostHelloAckMessage = {
       type: 'host-hello-ack',
@@ -183,7 +211,20 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         assignmentEpoch: 2,
         leaseExpiresAt: 2_000_000
       })
-    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus: vi.fn() }))
+    const resolvePreferredRegion = vi
+      .fn()
+      .mockResolvedValueOnce('asia-east2')
+      .mockResolvedValueOnce('us-central1')
+    const broker = await RelaySessionBroker.connect(
+      brokerOptions({
+        onStatus: vi.fn(),
+        resolvePreferredRegion
+      })
+    )
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ preferredRegion: 'asia-east2', reconnect: true })
+    )
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'old-basis',
       connTicket: 'T'.repeat(43),
@@ -198,6 +239,12 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       recovery: 'resolve-director'
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ preferredRegion: 'us-central1', reconnect: true })
+    )
+    expect(resolvePreferredRegion).toHaveBeenCalledTimes(2)
 
     expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
     expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()

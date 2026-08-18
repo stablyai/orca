@@ -1,6 +1,7 @@
 import {
   isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
+  skillPlacementParticipatesInGlobalFreshness,
   type SkillFreshnessInventory
 } from '../../../shared/skill-freshness'
 
@@ -21,6 +22,13 @@ export function getSkillFreshnessDisplayStatus(
   let hasBlockedCopy = false
   for (const installation of inventory?.installations ?? []) {
     if (installation.name !== skillName) {
+      continue
+    }
+    // Why: a project-owned copy is outside the global updater's reach, so it can neither
+    // stand in as evidence this skill is installed globally nor make the badge amber over
+    // drift Orca has no way to fix. Skipped before `hasPlacement` so a repo-only skill
+    // reports presence, not a freshness claim about a copy Orca does not manage.
+    if (!skillPlacementParticipatesInGlobalFreshness(installation)) {
       continue
     }
     hasPlacement = true
@@ -61,8 +69,11 @@ export function hasSkillCopyNeedingAttention(
   inventory: SkillFreshnessInventory | null,
   skillName: string
 ): boolean {
+  // Why: the same participation filter the status above applies, or an unreadable plugin
+  // folder flags a repo-only skill the status calls merely installed.
   const placements = (inventory?.installations ?? []).filter(
-    (installation) => installation.name === skillName
+    (installation) =>
+      installation.name === skillName && skillPlacementParticipatesInGlobalFreshness(installation)
   )
   return (
     (placements.length > 0 &&

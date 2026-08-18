@@ -2,17 +2,18 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  BrowserCertificateFailure,
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
-  BrowserCertificateFailure,
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
-  BrowserWorkspace,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+  BrowserWorkspace
+} from '../../../../shared/browser-workspace-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -24,7 +25,12 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
-import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  restoreRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
+import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
@@ -38,12 +44,14 @@ import type {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import {
+  getExecutionHostLabel,
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
 import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
@@ -53,9 +61,14 @@ import {
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
 import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
+import {
+  assertManagedBrowserMaterializationAllowed,
+  getClientCreationActionPolicy
+} from '@/lib/client-creation-action-policy'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
+  browserPageId?: string
   title?: string
   sessionProfileId?: string | null
   sessionPartition?: string | null
@@ -81,9 +94,14 @@ type BrowserTabPageState = {
   loadError?: BrowserLoadError | null
 }
 
+type SetBrowserPageUrlOptions = {
+  preserveLoadError?: boolean
+}
+
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
   pages: BrowserPage[]
+  position?: RecentlyClosedTabPosition
 }
 
 function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
@@ -106,6 +124,19 @@ export type RemoteBrowserPageHandle = {
   remotePageId: string
 }
 
+export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
+  executionHostId: ExecutionHostId
+  executionHostLabel: string
+}
+
+function retainCookieImportExecutionHost(
+  result: BrowserCookieImportResult,
+  executionHostId: ExecutionHostId,
+  executionHostLabel: string
+): BrowserCookieImportExecutionResult {
+  return { ...result, executionHostId, executionHostLabel }
+}
+
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
@@ -124,6 +155,7 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -150,7 +182,7 @@ export type BrowserSlice = {
     failure: BrowserCertificateFailure | null
   ) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
-  setBrowserPageUrl: (pageId: string, url: string) => void
+  setBrowserPageUrl: (pageId: string, url: string, options?: SetBrowserPageUrlOptions) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void
   removeRemoteBrowserPageHandle: (
     pageId: string,
@@ -185,10 +217,11 @@ export type BrowserSlice = {
   fetchBrowserSessionProfiles: () => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string
+    label: string,
+    options?: BrowserSessionProfileCreateOptions
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportResult>
+  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -202,7 +235,7 @@ export type BrowserSlice = {
     profileId: string,
     browserFamily: string,
     browserProfile?: string
-  ) => Promise<BrowserCookieImportResult>
+  ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
@@ -239,6 +272,23 @@ function getBrowserSettingsHostId(
   state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>
 ): ExecutionHostId {
   return state.browserSessionHostIdOverride ?? getSettingsFocusedExecutionHostId(state.settings)
+}
+
+function getBrowserSettingsHostLabel(state: AppState, hostId: ExecutionHostId): string {
+  const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
+  if (override) {
+    return override
+  }
+  const parsed = parseExecutionHostId(hostId)
+  if (parsed?.kind === 'runtime') {
+    const name = state.runtimeEnvironments
+      ?.find((environment) => environment.id === parsed.environmentId)
+      ?.name.trim()
+    if (name) {
+      return name
+    }
+  }
+  return getExecutionHostLabel(hostId)
 }
 
 function getBrowserSettingsRuntimeEnvironmentId(
@@ -341,11 +391,12 @@ function buildBrowserPage(
   worktreeId: string,
   url: string,
   title?: string,
-  browserRuntimeEnvironmentId?: string | null
+  browserRuntimeEnvironmentId?: string | null,
+  browserPageId?: string
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
-    id: createBrowserUuid(),
+    id: browserPageId ?? createBrowserUuid(),
     workspaceId,
     worktreeId,
     url: normalizedUrl,
@@ -548,13 +599,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   createBrowserTab: (worktreeId, url, options) => {
+    assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
     const workspaceId = createBrowserUuid()
+    const browserPageId = options?.browserPageId
+    if (
+      browserPageId &&
+      (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
+        findPage(get().browserPagesByWorkspace, browserPageId))
+    ) {
+      throw new Error(`Browser page ${browserPageId} already exists`)
+    }
     const page = buildBrowserPage(
       workspaceId,
       worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      browserPageId
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
@@ -663,9 +724,16 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (!worktreeId) {
       return
     }
+    const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+    if (browserAvailability.state !== 'enabled') {
+      throw new Error(browserAvailability.reason)
+    }
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
+    if (browserAvailability.provider === 'paired-runtime') {
+      if (!runtimeEnvironmentId) {
+        throw new Error('The paired runtime browser provider is unavailable.')
+      }
       const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
       try {
         const created = await createWebRuntimeSessionBrowserTab({
@@ -684,15 +752,56 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           '[browser] remote browser tab creation failed:',
           error instanceof Error ? error.message : String(error)
         )
+        throw error
       }
-      return
+      throw new Error('The paired runtime could not create a managed browser tab.')
     }
     get().createBrowserTab(worktreeId, defaultUrl, {
       title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
       focusAddressBar: true,
+      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
       targetGroupId: groupId
     })
     get().recordFeatureInteraction('browser-tab-created')
+  },
+
+  openBrowserProfileTabInActiveWorkspace: async (url, profileId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+    if (browserAvailability.state !== 'enabled') {
+      return false
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    if (browserAvailability.provider === 'paired-runtime') {
+      if (!runtimeEnvironmentId) {
+        return false
+      }
+      const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+      try {
+        return await createWebRuntimeSessionBrowserTab({
+          worktreeId,
+          environmentId: runtimeEnvironmentId,
+          url,
+          profileId
+        })
+      } catch (error) {
+        console.warn(
+          '[browser] remote profile tab creation failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+        return false
+      }
+    }
+    get().createBrowserTab(worktreeId, url, {
+      activate: true,
+      sessionProfileId: profileId,
+      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+    })
+    return true
   },
   closeBrowserTab: (tabId) => {
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
@@ -771,8 +880,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
       const nextRecentlyClosedBrowserTabsByWorktree = { ...s.recentlyClosedBrowserTabsByWorktree }
       const existingSnapshots = nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
+      const position = getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
       nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] = [
-        { workspace: closedWorkspace, pages: closedPages },
+        {
+          workspace: closedWorkspace,
+          pages: closedPages,
+          ...(position ? { position } : {})
+        },
         ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
       ].slice(0, 10)
       const nextRecentlyClosedTabKindsByWorktree = pushRecentlyClosedTabKind(
@@ -890,8 +1004,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         title: snap.title,
         activate: true,
         sessionProfileId,
-        sessionPartition
+        sessionPartition,
+        targetGroupId: entryToRestore.position?.groupId
       })
+      restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
       return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
     }
 
@@ -902,6 +1018,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       activate: true,
       sessionProfileId,
       sessionPartition,
+      targetGroupId: entryToRestore.position?.groupId,
       browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
     })
 
@@ -918,11 +1035,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (activePageId) {
       const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
       const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
-      const targetPage = activePageIndex >= 0 ? restoredPages[activePageIndex] : null
+      const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
       if (targetPage && targetPage.id !== restoredPages[0]?.id) {
         get().setActiveBrowserPage(restored.id, targetPage.id)
       }
     }
+
+    restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
 
     return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
   },
@@ -1436,7 +1555,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   setBrowserTabUrl: (pageId, url) => get().setBrowserPageUrl(pageId, url),
 
-  setBrowserPageUrl: (pageId, url) => {
+  setBrowserPageUrl: (pageId, url, options) => {
     const nextUrl = normalizeUrl(url)
     if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
       const currentPage = findPage(get().browserPagesByWorkspace, pageId)
@@ -1462,7 +1581,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               url: nextUrl,
               title: normalizeBrowserTitle(entry.title, nextUrl),
               loading: true,
-              loadError: null
+              loadError: options?.preserveLoadError ? entry.loadError : null
             }
           : entry
       )
@@ -1629,29 +1748,40 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
         const hydratedTabs: BrowserWorkspace[] = []
         for (const tab of tabs) {
-          const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
-            {
-              id: createBrowserUuid(),
+          // Salvage can leave an empty page array; hydrate it like a missing array.
+          const storedPages = persistedPagesByWorkspace[tab.id]
+          const persistedPages = storedPages?.length
+            ? storedPages
+            : [
+                {
+                  id: createBrowserUuid(),
+                  workspaceId: tab.id,
+                  worktreeId,
+                  url: normalizeUrl(tab.url),
+                  title: tab.title,
+                  loading: false,
+                  faviconUrl: tab.faviconUrl ?? null,
+                  canGoBack: tab.canGoBack,
+                  canGoForward: tab.canGoForward,
+                  loadError: tab.loadError ?? null,
+                  createdAt: tab.createdAt
+                } satisfies BrowserPage
+              ]
+          const nextPages = persistedPages.map((page) => {
+            // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
+            const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
+              page as typeof page & {
+                allowWindowClose?: boolean
+              }
+            return {
+              ...persistedPage,
               workspaceId: tab.id,
               worktreeId,
-              url: normalizeUrl(tab.url),
-              title: tab.title,
+              url: normalizeUrl(page.url),
               loading: false,
-              faviconUrl: tab.faviconUrl ?? null,
-              canGoBack: tab.canGoBack,
-              canGoForward: tab.canGoForward,
-              loadError: tab.loadError ?? null,
-              createdAt: tab.createdAt
-            } satisfies BrowserPage
-          ]
-          const nextPages = persistedPages.map((page) => ({
-            ...page,
-            workspaceId: tab.id,
-            worktreeId,
-            url: normalizeUrl(page.url),
-            loading: false,
-            loadError: page.loadError ?? null
-          }))
+              loadError: page.loadError ?? null
+            }
+          })
           browserPagesByWorkspace[tab.id] = nextPages
           hydratedTabs.push(
             mirrorWorkspaceFromActivePage(
@@ -1814,7 +1944,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  createBrowserSessionProfile: async (scope, label) => {
+  createBrowserSessionProfile: async (scope, label, options) => {
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
@@ -1822,7 +1952,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const result = await callRuntimeRpc<BrowserProfileCreateResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'browser.profileCreate',
-          { scope, label },
+          { scope, label, ...options },
           { timeoutMs: 15_000 }
         )
         const profile = result.profile
@@ -1843,7 +1973,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     try {
       const profile = (await window.api.browser.sessionCreateProfile({
         scope,
-        label
+        label,
+        ...options
       })) as BrowserSessionProfile | null
       if (profile) {
         set((s) => ({
@@ -1921,8 +2052,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   importCookiesToProfile: async (profileId) => {
-    const hostId = getBrowserSettingsHostId(get())
-    if (getBrowserSettingsRuntimeEnvironmentId(get())) {
+    const initialState = get()
+    const hostId = getBrowserSettingsHostId(initialState)
+    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
       const reason = translate(
         'auto.store.slices.browser.remoteCookieImportUnavailable',
         'Manual cookie file import is unavailable while a remote runtime is active.'
@@ -1935,7 +2068,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           error: reason
         })
       )
-      return { ok: false as const, reason }
+      return retainCookieImportExecutionHost(
+        { ok: false as const, reason },
+        hostId,
+        executionHostLabel
+      )
     }
     set((state) =>
       browserImportStateForHostUpdate(state, hostId, {
@@ -1974,7 +2111,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return result
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -1985,7 +2122,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           error: reason
         })
       )
-      return { ok: false as const, reason }
+      return retainCookieImportExecutionHost(
+        { ok: false as const, reason },
+        hostId,
+        executionHostLabel
+      )
     }
   },
 
@@ -2043,8 +2184,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    const initialState = get()
+    const hostId = getBrowserSettingsHostId(initialState)
+    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
     if (runtimeEnvironmentId) {
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
@@ -2058,7 +2201,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const result = await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'browser.profileImportFromBrowser',
-          { profileId, browserFamily, browserProfile },
+          { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
           { timeoutMs: 30_000 }
         )
         if (result.ok) {
@@ -2085,7 +2228,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             })
           )
         }
-        return result
+        return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
         set((state) =>
@@ -2096,7 +2239,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             error: reason
           })
         )
-        return { ok: false as const, reason }
+        return retainCookieImportExecutionHost(
+          { ok: false as const, reason },
+          hostId,
+          executionHostLabel
+        )
       }
     }
     set((state) =>
@@ -2138,7 +2285,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return result
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -2149,7 +2296,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           error: reason
         })
       )
-      return { ok: false as const, reason }
+      return retainCookieImportExecutionHost(
+        { ok: false as const, reason },
+        hostId,
+        executionHostLabel
+      )
     }
   },
 

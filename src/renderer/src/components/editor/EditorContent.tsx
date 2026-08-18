@@ -14,7 +14,8 @@ import {
   getNextConflictNavigationIndex
 } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
@@ -33,7 +34,9 @@ import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
-const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
+const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'), {
+  reloadKey: 'rich-markdown-editor'
+})
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -178,6 +181,12 @@ export function EditorContent({
     viewStateScopeId === activeFile.id
       ? `${activeFile.id}:preview`
       : `${activeFile.id}::${viewStateScopeId}:preview`
+  // Why: only the single-pane edit path gets PDF scroll memory — the diff and
+  // conflict-review paths mount several viewers on one path (see PdfViewer).
+  const pdfViewStateKey =
+    viewStateScopeId === activeFile.id
+      ? `${activeFile.filePath}:pdf`
+      : `${activeFile.filePath}::${viewStateScopeId}:pdf`
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
 
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
@@ -738,7 +747,12 @@ export function EditorContent({
     if (fc.isBinary) {
       if (fc.isImage) {
         return (
-          <ImageViewer content={fc.content} filePath={activeFile.filePath} mimeType={fc.mimeType} />
+          <ImageViewer
+            content={fc.content}
+            filePath={activeFile.filePath}
+            mimeType={fc.mimeType}
+            scrollCacheKey={pdfViewStateKey}
+          />
         )
       }
       return (

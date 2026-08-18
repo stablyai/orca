@@ -20,6 +20,7 @@ import {
 import { cleanupRelayGcTombstones } from './ssh-relay-gc-tombstone'
 import {
   listRelayBaseDirsCommand,
+  MAX_RELAY_GC_LISTING_ENTRIES,
   moveRemoteTreeCommand,
   probeFileExistsCommand,
   probeRelayInstalledCommand,
@@ -196,6 +197,7 @@ export async function gcOldRelayVersions(
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
+    .slice(0, MAX_RELAY_GC_LISTING_ENTRIES)
 
   await cleanupRelayGcTombstones(conn, baseDir, entries, host)
 

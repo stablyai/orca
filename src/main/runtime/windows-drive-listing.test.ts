@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Stats } from 'node:fs'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 
@@ -20,6 +20,10 @@ describe('isServerDriveListRequest', () => {
 })
 
 describe('listWindowsDrives', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   const statOnly = (mounted: string[]) => async (p: string) => {
     if (!mounted.includes(p)) {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -51,14 +55,62 @@ describe('listWindowsDrives', () => {
     expect(result.entries.map((e) => e.name)).toEqual(['C:\\'])
   })
 
-  it.each(['EIO', 'EMFILE'])('surfaces systemic %s failures', async (code) => {
+  it('skips an unreadable drive with an unexpected errno and logs it', async () => {
+    const error = Object.assign(new Error('EIO'), { code: 'EIO' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const statPath = async (p: string): Promise<Stats> => {
       if (p === 'D:\\') {
-        throw Object.assign(new Error(code), { code })
+        throw error
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
 
-    await expect(listWindowsDrives(statPath)).rejects.toMatchObject({ code })
+    const result = await listWindowsDrives(statPath)
+
+    expect(result.entries).toEqual([])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith('[windows-drive-listing] Failed to stat drive', {
+      root: 'D:\\',
+      error
+    })
+  })
+
+  it('surfaces programming errors from isDirectory', async () => {
+    const error = new TypeError('programmer bug')
+    const statPath = async (p: string): Promise<Stats> => {
+      if (p === 'D:\\') {
+        return {
+          isDirectory: () => {
+            throw error
+          }
+        } as unknown as Stats
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+
+    await expect(listWindowsDrives(statPath)).rejects.toBe(error)
+  })
+
+  it('returns healthy drives among tolerated and unexpected stat failures', async () => {
+    const error = Object.assign(new Error('EIO'), { code: 'EIO' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const statPath = async (p: string): Promise<Stats> => {
+      if (p === 'C:\\' || p === 'F:\\') {
+        return { isDirectory: () => true } as Stats
+      }
+      if (p === 'E:\\') {
+        throw error
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+
+    const result = await listWindowsDrives(statPath)
+
+    expect(result.entries.map((entry) => entry.name)).toEqual(['C:\\', 'F:\\'])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith('[windows-drive-listing] Failed to stat drive', {
+      root: 'E:\\',
+      error
+    })
   })
 })

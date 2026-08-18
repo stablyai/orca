@@ -23,6 +23,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useAppStore } from '@/store'
 import {
   buildSkillCommandForRuntime,
@@ -74,6 +75,14 @@ export function FloatingTerminalOrchestrationDialog({
     }
   }, [orchestrationSkillDetected, onSetupStateChange])
 
+  const recheckOrchestrationSkill = async (): Promise<boolean> => {
+    const installed = await refreshOrchestrationSkill()
+    if (activeSkillRuntime.canUseLocalSkillFreshness) {
+      await refreshSkillFreshness()
+    }
+    return installed
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4 sm:max-w-[620px]">
@@ -95,18 +104,15 @@ export function FloatingTerminalOrchestrationDialog({
                 )}
               </IntegrationStatusPill>
             ) : orchestrationSkillDetected ? (
-              // Why: the modal owns the status pill, so it must carry the same
-              // freshness signal — and route to the same review dialog — as the
-              // settings card for this skill; WSL falls back to presence-only.
-              activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? (
+              activeSkillRuntime.canUseLocalSkillFreshness ? (
+                <SkillFreshnessStatusPill skillName={ORCHESTRATION_SKILL_NAME} />
+              ) : (
                 <IntegrationStatusPill tone="connected">
                   {translate(
                     'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.630c0ac8c8',
                     'Installed'
                   )}
                 </IntegrationStatusPill>
-              ) : (
-                <SkillFreshnessStatusPill skillName={ORCHESTRATION_SKILL_NAME} />
               )
             ) : (
               <IntegrationStatusPill tone="attention">
@@ -140,6 +146,7 @@ export function FloatingTerminalOrchestrationDialog({
           terminalAriaLabel="Orchestration skill install terminal"
           terminalWorktreeId="floating-terminal-orchestration-skill-terminal"
           terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+          terminalRuntime={activeSkillRuntime.agentRuntime}
           installed={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
@@ -161,7 +168,7 @@ export function FloatingTerminalOrchestrationDialog({
               ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
               : ensureOrcaCliAvailableForAgentSkillTerminal())
           }}
-          onRecheck={refreshOrchestrationSkill}
+          onRecheck={recheckOrchestrationSkill}
         />
       </DialogContent>
     </Dialog>

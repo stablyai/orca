@@ -62,6 +62,27 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     expect(getExecutionHostIdForWorktree(state, 'folder:runtime-folder')).toBe('runtime:folder-env')
   })
 
+  it('uses the folder host stamp when same-ID project groups exist on different hosts', () => {
+    const collisionState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      folderWorkspaces: [
+        {
+          id: 'same-folder',
+          projectGroupId: 'same-group',
+          executionHostId: 'runtime:folder-env'
+        }
+      ],
+      projectGroups: [
+        { id: 'same-group', connectionId: null, executionHostId: 'local' },
+        { id: 'same-group', connectionId: null, executionHostId: 'runtime:folder-env' }
+      ]
+    }
+
+    expect(getExecutionHostIdForWorktree(collisionState, 'folder:same-folder')).toBe(
+      'runtime:folder-env'
+    )
+  })
+
   it('routes restored runtime folder workspaces before their catalog loads', () => {
     const restoredFolderState: WorktreeRuntimeOwnerState = {
       settings: { activeRuntimeEnvironmentId: 'focused-env' },
@@ -556,5 +577,36 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
     }
 
     expect(getRuntimeSessionMirrorEnvironmentIds(localOnlyState)).toEqual([])
+  })
+})
+
+describe('active workspace host selection', () => {
+  const PAIRED_HUB_WORKTREE_ID = 'hub-repo::wt-paired'
+  const pairedHubState: WorktreeRuntimeOwnerState = {
+    activeWorktreeId: PAIRED_HUB_WORKTREE_ID,
+    activeWorkspaceExecutionHostId: 'ssh:hub-private-target',
+    worktreesByRepo: {
+      'hub-repo': [
+        {
+          id: PAIRED_HUB_WORKTREE_ID,
+          repoId: 'hub-repo',
+          hostId: 'ssh:hub-private-target',
+          runtimeOwnerEnvironmentId: 'hub-a'
+        }
+      ]
+    }
+  }
+
+  it('keeps the HUB transport for the active paired SSH worktree', () => {
+    expect(getRuntimeEnvironmentIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe('hub-a')
+    expect(getExplicitRuntimeEnvironmentIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
+      'hub-a'
+    )
+  })
+
+  it('keeps the selected host authoritative for the active worktree', () => {
+    expect(getExecutionHostIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
+      'ssh:hub-private-target'
+    )
   })
 })

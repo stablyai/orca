@@ -33,7 +33,17 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
   if (provider === 'gitea') {
     return 'Set ORCA_GITEA_TOKEN'
   }
+  if (provider === 'bitbucket') {
+    return 'Connect Bitbucket in Settings > Integrations'
+  }
   return 'Run gh auth login'
+}
+
+export function resolveUnavailableCreateReviewLookupNoticeMessage(
+  provider: HostedReviewProvider
+): string {
+  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+  return `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
 }
 
 export function resolveBlockedCreateReviewNoticeMessage(
@@ -43,6 +53,9 @@ export function resolveBlockedCreateReviewNoticeMessage(
     return null
   }
   const reason = eligibility.blockedReason
+  if (eligibility.reviewLookupOutcome === 'unavailable' && reason === null) {
+    return resolveUnavailableCreateReviewLookupNoticeMessage(eligibility.provider)
+  }
   if (!canClickBlockedCreateReviewReason(reason)) {
     return null
   }

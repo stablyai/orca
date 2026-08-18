@@ -25,7 +25,8 @@ describe('classifyConnection Tailscale hint', () => {
     const verdict = classifyConnection({
       ...base,
       reconnectAttempts: 3,
-      endpoint: 'ws://100.65.9.106:6768'
+      endpoint: 'ws://100.65.9.106:6768',
+      pendingPath: null
     })
     expect(verdict).toMatchObject({ kind: 'warning', hint: 'check Tailscale' })
   })
@@ -68,6 +69,76 @@ describe('classifyConnection Tailscale hint', () => {
       nowMs: 1_000_000
     })
     expect(verdict).toEqual({ kind: 'normal', label: 'Connected' })
+  })
+
+  it('presents an in-flight relay fallback instead of the failed Tailscale path', () => {
+    const incident = {
+      ...base,
+      reconnectAttempts: 5,
+      endpoint: 'ws://100.88.90.25:6768',
+      pendingPath: 'relay' as const
+    }
+
+    for (const state of ['connecting', 'handshaking', 'reconnecting', 'disconnected'] as const) {
+      const verdict = classifyConnection({ ...incident, state })
+      expect(verdict).toEqual({ kind: 'normal', label: 'Connecting via Relay…' })
+      expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
+    }
+  })
+
+  it('escalates a prolonged relay recovery without reviving the Tailscale hint', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 12,
+      endpoint: 'ws://100.88.90.25:6768',
+      pendingPath: 'relay'
+    })
+
+    expect(verdict).toEqual({
+      kind: 'unreachable',
+      label: "Can't connect via Relay",
+      reason: 'never-connected'
+    })
+    expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
+  })
+})
+
+// Issue #10119: every redial re-enters 'connecting', which used to revert an
+// escalated verdict to "Connecting…" for the whole dial window — on a loop that
+// had already failed for minutes, the user mostly saw the reassuring label.
+describe('classifyConnection while dialing (issue #10119)', () => {
+  const base = { lastConnectedAt: null, nowMs: 1_000_000 }
+
+  it('keeps the warning verdict through a redial instead of reverting to Connecting…', () => {
+    for (const state of ['connecting', 'handshaking'] as const) {
+      const verdict = classifyConnection({ ...base, state, reconnectAttempts: 3 })
+      expect(verdict).toMatchObject({ kind: 'warning', label: "Can't connect" })
+    }
+  })
+
+  it('keeps the unreachable verdict through a trickle dial', () => {
+    const verdict = classifyConnection({ ...base, state: 'connecting', reconnectAttempts: 12 })
+    expect(verdict).toMatchObject({ kind: 'unreachable', reason: 'never-connected' })
+  })
+
+  it('applies the stale heuristic while dialing too', () => {
+    const verdict = classifyConnection({
+      state: 'handshaking',
+      reconnectAttempts: 12,
+      lastConnectedAt: 900_000,
+      nowMs: 1_000_000
+    })
+    expect(verdict).toMatchObject({ kind: 'unreachable', reason: 'stale' })
+  })
+
+  it('still shows Connecting… before any failures', () => {
+    const verdict = classifyConnection({ ...base, state: 'connecting', reconnectAttempts: 0 })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
+  })
+
+  it('still shows Connecting… below the warning gate', () => {
+    const verdict = classifyConnection({ ...base, state: 'handshaking', reconnectAttempts: 2 })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
   })
 })
 

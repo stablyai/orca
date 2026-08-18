@@ -16,6 +16,10 @@ export const WORKER_HANDLE = 'term_legacy_worker'
 export const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
 export const COORDINATOR_HANDLE = 'term_legacy_coord'
 export const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+export const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+export const CURRENT_COORDINATOR_PANE = 'tab_current_coord:55555555-5555-4555-8555-555555555555'
+export const CURRENT_WORKER_HANDLE = 'term_current_worker'
+export const CURRENT_WORKER_PANE = 'tab_current_worker:66666666-6666-4666-8666-666666666666'
 
 type Transport = 'dispatch' | 'websocket'
 
@@ -71,8 +75,23 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
   const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
-  vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-    handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : handle === WORKER_HANDLE ? WORKER_PANE : null
+  vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => {
+    if (handle === COORDINATOR_HANDLE) {
+      return COORDINATOR_PANE
+    }
+    if (handle === WORKER_HANDLE) {
+      return WORKER_PANE
+    }
+    if (handle === CURRENT_COORDINATOR_HANDLE) {
+      return CURRENT_COORDINATOR_PANE
+    }
+    if (handle === CURRENT_WORKER_HANDLE) {
+      return CURRENT_WORKER_PANE
+    }
+    return null
+  })
+  vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
+    [WORKER_HANDLE, CURRENT_WORKER_HANDLE].includes(handle) ? 'process-1' : null
   )
   const verify = vi
     .spyOn(runtime, 'verifyOrchestrationCompatibilityCaller')
@@ -81,7 +100,16 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
         evidence?.terminalHandle === WORKER_HANDLE && evidence.paneKey === WORKER_PANE
       const validCoordinator =
         evidence?.terminalHandle === COORDINATOR_HANDLE && evidence.paneKey === COORDINATOR_PANE
-      if ((!validWorker && !validCoordinator) || !evidence?.launchToken) {
+      const validCurrentCoordinator =
+        evidence?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
+        evidence.paneKey === CURRENT_COORDINATOR_PANE
+      const validCurrentWorker =
+        evidence?.terminalHandle === CURRENT_WORKER_HANDLE &&
+        evidence.paneKey === CURRENT_WORKER_PANE
+      if (
+        (!validWorker && !validCoordinator && !validCurrentCoordinator && !validCurrentWorker) ||
+        !evidence?.launchToken
+      ) {
         return null
       }
       return {
@@ -114,6 +142,17 @@ export function evidence(
     terminalHandle: worker ? WORKER_HANDLE : COORDINATOR_HANDLE,
     paneKey: valid ? (worker ? WORKER_PANE : COORDINATOR_PANE) : 'tab_wrong:wrong-leaf',
     launchToken: `${role}-token`
+  }
+}
+
+export function currentEvidence(
+  role: 'worker' | 'coordinator'
+): OrchestrationCompatibilityEvidence {
+  const worker = role === 'worker'
+  return {
+    terminalHandle: worker ? CURRENT_WORKER_HANDLE : CURRENT_COORDINATOR_HANDLE,
+    paneKey: worker ? CURRENT_WORKER_PANE : CURRENT_COORDINATOR_PANE,
+    launchToken: `current-${role}-token`
   }
 }
 

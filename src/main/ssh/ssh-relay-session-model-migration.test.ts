@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
-import {
-  createMismatchedOwnerRecoveryError,
-  createMockDeps,
-  mockDeploySuccess
-} from './ssh-relay-session-test-fixtures'
+import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 type SettledMigration = {
   status: 'settled'
@@ -135,16 +131,22 @@ describe('SshRelaySession model migration', () => {
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([])
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
-      mode: 'negotiated',
-      clientInstanceId: options.clientInstanceId,
-      clientGeneration: 1,
-      ownerGeneration: 1,
-      ownerLease: 'owner-lease-1',
-      ...(options.outputFlowControl
-        ? {
-            outputFlowControl: { version: 1, windowSu: options.outputFlowControl.requestedWindowSu }
-          }
-        : {})
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: options.clientInstanceId,
+        clientGeneration: 1,
+        ownerGeneration: 1,
+        ownerLease: 'owner-lease-1',
+        ...(options.outputFlowControl
+          ? {
+              outputFlowControl: {
+                version: 1,
+                windowSu: options.outputFlowControl.requestedWindowSu
+              }
+            }
+          : {})
+      },
+      resumed: options.resume !== undefined
     }))
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
@@ -209,7 +211,7 @@ describe('SshRelaySession model migration', () => {
     )
   })
 
-  it('waits for a stale-owner migration before requesting restore', async () => {
+  it('waits for a voided-checkpoint migration before requesting restore', async () => {
     const targetId = 'migration-stale-owner'
     const appPtyId = `ssh:${targetId}@@pty-1`
     const migration = pendingMigration()
@@ -232,23 +234,24 @@ describe('SshRelaySession model migration', () => {
     vi.mocked(getSshPtyProvider).mockImplementation(
       () => vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1]
     )
-    openConsumerSessionMock
-      .mockRejectedValueOnce(createMismatchedOwnerRecoveryError())
-      .mockImplementationOnce(async (_mux, options) => ({
+    openConsumerSessionMock.mockImplementationOnce(async (_mux, options) => ({
+      state: {
         mode: 'negotiated',
         clientInstanceId: options.clientInstanceId,
         clientGeneration: 2,
         ownerGeneration: 2,
         ownerLease: 'fresh-owner-lease',
         outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-      }))
+      },
+      resumed: false
+    }))
     attachForReconnectMock.mockResolvedValue({
       incarnationId: 'incarnation-1',
       sourceRecovery: { status: 'restoreRequired', reason: 'checkpointUnavailable' }
     })
 
     const reconnect = session.reconnect(deps.mockConn)
-    await vi.waitFor(() => expect(openConsumerSessionMock).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(openConsumerSessionMock).toHaveBeenCalledTimes(2))
     expect(attachForReconnectMock).not.toHaveBeenCalled()
 
     migration.resolve(settledMigration(appPtyId, 8))

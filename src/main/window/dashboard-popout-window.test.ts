@@ -231,6 +231,12 @@ describe('createOrFocusDashboardPopout', () => {
     expect(options).toEqual({ search: 'view=kanban' })
   })
 
+  it('opens on the current dashboard view by default', () => {
+    createOrFocusDashboardPopout(makeStore() as never)
+
+    expect(instances[0].loadFile.mock.calls[0][1]).toEqual({ search: 'view=board' })
+  })
+
   it('loads the dev server URL with the requested view when in dev', () => {
     isMock.dev = true
     vi.stubEnv('ELECTRON_RENDERER_URL', RENDERER_URL)
@@ -247,6 +253,16 @@ describe('createOrFocusDashboardPopout', () => {
     expect(instances).toHaveLength(1)
     expect(second).toBe(first)
     expect(instances[0].focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches an existing popout to an explicitly requested view', () => {
+    const store = makeStore()
+    createOrFocusDashboardPopout(store as never)
+    const win = instances[0]
+
+    createOrFocusDashboardPopout(store as never, 'map')
+
+    expect(win.webContents.send).toHaveBeenCalledWith('dashboard:viewRequested', 'map')
   })
 
   it('trusts only the live popout webContents', () => {

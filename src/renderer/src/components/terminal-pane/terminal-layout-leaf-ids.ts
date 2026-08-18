@@ -1,6 +1,10 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
+import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -50,7 +54,7 @@ function remapLeafRecord(
 
 function collectLeafCounts(
   node: TerminalPaneLayoutNode,
-  counts: Map<string, number> = new Map()
+  counts = new Map<string, number>()
 ): Map<string, number> {
   if (node.type === 'leaf') {
     counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
@@ -72,7 +76,7 @@ function hasLeafPtyBinding(
   ptyIdsByLeafId: Record<string, string> | undefined,
   leafId: string
 ): boolean {
-  return ptyIdsByLeafId ? Object.prototype.hasOwnProperty.call(ptyIdsByLeafId, leafId) : false
+  return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
 }
 
 export function resolveRootlessTerminalLayoutLeafId(
@@ -124,9 +128,10 @@ function getRemappedLeafId(
   return rewrite.nextLeafIdByInputLeafId.get(leafId) ?? null
 }
 
-export function normalizeTerminalLayoutSnapshot(
-  snapshot: TerminalLayoutSnapshot | null | undefined
-): { snapshot: TerminalLayoutSnapshot; changed: boolean } {
+function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null | undefined): {
+  snapshot: TerminalLayoutSnapshot
+  changed: boolean
+} {
   if (!snapshot?.root) {
     const nextSnapshot = snapshot ?? EMPTY_TERMINAL_LAYOUT
     const activeLeafId = resolveRootlessTerminalLayoutLeafId(nextSnapshot)
@@ -204,6 +209,24 @@ export function normalizeTerminalLayoutSnapshot(
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true
+  }
+}
+
+export function normalizeTerminalLayoutSnapshot(
+  snapshot: TerminalLayoutSnapshot | null | undefined
+): { snapshot: TerminalLayoutSnapshot; changed: boolean } {
+  const ptyOwnership = normalizeTerminalLayoutPtyOwnership(snapshot ?? EMPTY_TERMINAL_LAYOUT)
+  const leafIds = normalizeTerminalLayoutLeafIds(ptyOwnership.snapshot)
+  const activeLeafId = leafIds.snapshot.root
+    ? leafIds.snapshot.activeLeafId
+    : resolveRootlessTerminalLayoutLeafId(leafIds.snapshot)
+  return {
+    snapshot:
+      activeLeafId === leafIds.snapshot.activeLeafId
+        ? leafIds.snapshot
+        : { ...leafIds.snapshot, activeLeafId },
+    changed:
+      ptyOwnership.changed || leafIds.changed || activeLeafId !== leafIds.snapshot.activeLeafId
   }
 }
 

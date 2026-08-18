@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -43,7 +43,13 @@ function formatTrackingSince(timestamp: number | null): string {
     return ''
   }
   const date = new Date(timestamp)
-  return `Tracking since ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+  return translate('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
+    value0: date.toLocaleDateString(getIntlLocale(), {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  })
 }
 
 type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'

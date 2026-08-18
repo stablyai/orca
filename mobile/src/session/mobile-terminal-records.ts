@@ -19,6 +19,7 @@ export type MobileTerminalSessionTab = {
   agentStatus?: AgentStatusEntry | null
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
+  launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -89,6 +90,7 @@ function mobileSessionTabEqual(
         // A frame whose only delta is the launch draft appearing or retracting
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
+        a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
       )

@@ -238,21 +238,39 @@ describe('renderer breadcrumb IPC routing', () => {
 
   // Why: park-churn notices are per-tab but the ring is process-wide, so many
   // tabs churning at once would otherwise evict the pre-crash trail.
-  it('coalesces park-verdict churn notices by name across tabs', () => {
+  it('coalesces park-verdict churn notices by trigger across tabs', () => {
     emitRendererBreadcrumb({
       name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-1', flips: 12, elapsedMs: 8 }
+      data: { tabId: 'tab-1', trigger: 'window', flips: 12, elapsedMs: 8 }
     })
     emitRendererBreadcrumb({
       name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-2', flips: 12, elapsedMs: 9 }
+      data: { tabId: 'tab-2', trigger: 'window', flips: 12, elapsedMs: 9 }
     })
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
     for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
-      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn' })
+      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn:window' })
     }
+  })
+
+  // Why: `burst` means damping engaged a commit short of React #185 while
+  // `window` is slow benign churn. A shared key would drop the near-crash
+  // signal into the slow-churn slot.
+  it('keeps burst and window park-verdict churn triggers in separate slots', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_park_verdict_churn',
+      data: { tabId: 'tab-1', trigger: 'burst', flips: 3, elapsedMs: 4 }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_park_verdict_churn',
+      data: { tabId: 'tab-1', trigger: 'window', flips: 12, elapsedMs: 900 }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map((call) => call[0].coalesceKey)
+    ).toEqual(['terminal_park_verdict_churn:burst', 'terminal_park_verdict_churn:window'])
   })
 
   // Why: every hidden pane is 0x0, so one post-reload reattach wave exhausts
@@ -295,6 +313,69 @@ describe('renderer breadcrumb IPC routing', () => {
     ).toEqual([
       'terminal_webgl_diagnostic:webgl-context-loss',
       'terminal_webgl_diagnostic:webgl-atlas-reset'
+    ])
+  })
+
+  it('coalesces atlas resets per trigger reason', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-atlas-reset', reason: 'terminal-output' }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-atlas-reset', reason: 'system-resume' }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_webgl_diagnostic:webgl-atlas-reset:terminal-output',
+      'terminal_webgl_diagnostic:webgl-atlas-reset:system-resume'
+    ])
+  })
+
+  // Why: the renderer guard is once per tab-id/verdict, so one stale worktree
+  // map can emit enough crumbs to evict the pre-crash trail.
+  it('coalesces duplicate-tab-owner notices across tabs', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: true }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 3, resolvedToActiveWorktree: true }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        coalesceKey: 'terminal_tab_id_owned_by_multiple_worktrees:true'
+      })
+    }
+  })
+
+  // Why flag-scoped: coalescing keeps only the newest payload, and the verdict
+  // flips under a persisting duplicate, so one would erase the other.
+  it('keeps a non-converging duplicate-tab-owner notice out of the converging one', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: false }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: true }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_tab_id_owned_by_multiple_worktrees:false',
+      'terminal_tab_id_owned_by_multiple_worktrees:true'
     ])
   })
 

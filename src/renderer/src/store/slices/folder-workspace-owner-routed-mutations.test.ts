@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -235,6 +236,56 @@ describe('folder workspace owner-routed mutations', () => {
 
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(true)
     expect(store.getState().folderWorkspaces[0]?.updatedAt).toBe(2)
+  })
+
+  it('does not fence a runtime update when the local same-ID catalog refreshes', async () => {
+    const localWorkspace = makeFolderWorkspace({ updatedAt: 3 })
+    const runtimeWorkspace = {
+      ...makeFolderWorkspace(),
+      executionHostId: 'runtime:env-owner' as const
+    }
+    let resolveRuntimeUpdate!: (response: {
+      id: string
+      ok: true
+      result: { folderWorkspace: FolderWorkspace }
+      _meta: { runtimeId: string }
+    }) => void
+    runtimeEnvironmentCall.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRuntimeUpdate = resolve
+        })
+    )
+    folderWorkspacesList.mockResolvedValue([localWorkspace])
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [localWorkspace, runtimeWorkspace]
+    })
+
+    const pendingUpdate = store
+      .getState()
+      .updateFolderWorkspace(
+        runtimeWorkspace.id,
+        { isUnread: true },
+        { executionHostId: 'runtime:env-owner' }
+      )
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
+    resolveRuntimeUpdate({
+      id: 'rpc-update-folder',
+      ok: true,
+      result: {
+        folderWorkspace: { ...runtimeWorkspace, isUnread: true, updatedAt: 2 }
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    await pendingUpdate
+
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localWorkspace, executionHostId: 'local' },
+      { ...runtimeWorkspace, isUnread: true, updatedAt: 2 }
+    ])
   })
 
   it('does not rewind newer optimistic activity when an older response arrives', async () => {

@@ -1,4 +1,10 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRConflictSummary,
+  PRMergeableState,
+  PRReviewDecision
+} from './github/pull-request-types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -9,6 +15,12 @@ export type HostedReviewProvider =
   | 'unsupported'
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
+
+// Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
+// there would either publish a live PR or fail at submit.
+export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
+  return provider !== 'bitbucket'
+}
 
 /** A linked review is identified by a positive integer PR/MR number. */
 export function isPositiveHostedReviewNumber(value: unknown): value is number {
@@ -30,6 +42,8 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
+  githubRepository?: GitHubRepositoryIdentity
   // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
   // checks accept a worktree head confirmed to be part of the merged PR.
   confirmedContainedHeadOid?: string
@@ -50,6 +64,12 @@ export type HostedReviewForBranchArgs = {
   linkedGiteaPR?: number | null
   // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
   currentHeadOid?: string | null
+  /**
+   * Set only by surfaces scoped to the selected worktree. That tier is O(1), so
+   * the host re-checks it per minute; the worktree list is O(N) and is paced far
+   * more slowly to stay inside the shared API budget (#11532).
+   */
+  active?: boolean
 }
 
 export type HostedReviewSummary = {
@@ -74,6 +94,14 @@ export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   connectionId?: string | null
 }
 
+export type CreateStackedHostedReviewInput = CreateHostedReviewInput
+
+export type CreateStackedHostedReviewArgs = CreateStackedHostedReviewInput & {
+  repoPath: string
+  repoId?: string
+  connectionId?: string | null
+}
+
 export type CreateHostedReviewErrorCode =
   | 'auth_required'
   | 'unsupported_provider'
@@ -91,6 +119,21 @@ export type CreateHostedReviewResult =
       code: CreateHostedReviewErrorCode
       error: string
       existingReview?: HostedReviewSummary
+    }
+
+export type CreateStackedHostedReviewResult =
+  | {
+      ok: true
+      number: number
+      url: string
+      stackNumber: number
+      parentReview: HostedReviewSummary
+    }
+  | {
+      ok: false
+      code: CreateHostedReviewErrorCode
+      error: string
+      createdReview?: HostedReviewSummary
     }
 
 export type HostedReviewCreationBlockedReason =
@@ -138,6 +181,8 @@ export type HostedReviewCreationEligibility = {
   head?: string | null
   title?: string | null
   body?: string | null
+  /** Present only when the executing host supports GitHub stack creation. */
+  stackedCreationSupported?: boolean
 }
 
 export type HostedReviewCreationEligibilityArgs = {
@@ -159,56 +204,4 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedGiteaPR?: number | null
 }
 
-export type HostedReviewIdentity = {
-  provider: HostedReviewProvider
-  host: string
-  owner: string
-  repo: string
-  number: number
-}
-
-export type HostedReviewUser = {
-  login: string | null
-  isBot?: boolean
-}
-
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null
-
-export type HostedReviewThreadSummary = {
-  unresolvedCount: number | null
-  dataCompleteness?: 'full' | 'partial'
-}
-
-export type HostedReviewQueueSummary = {
-  identity: HostedReviewIdentity
-  title: string
-  url: string
-  state: HostedReviewState
-  author: HostedReviewUser | null
-  updatedAt: string
-  lastViewedAt?: number
-  mergeable: PRMergeableState
-  mergeStateStatus?: string | null
-  checksStatus: CheckStatus
-  reviewDecision?: HostedReviewDecision
-  threadSummary?: HostedReviewThreadSummary
-  requestedReviewerLogins?: string[] | null
-  draft?: boolean
-}
-
-export type HostedReviewQueueKey =
-  | 'mine'
-  | 'requested'
-  | 'agent'
-  | 'teammate'
-  | 'needs-response'
-  | 'ready-to-merge'
-
-export type HostedReviewQueueState = 'mine' | 'requested' | 'agent' | 'teammate'
-
-export type HostedReviewQueueClassification = {
-  state: HostedReviewQueueState
-  needsResponse: boolean
-  readyToMerge: boolean
-  requested: boolean
-}

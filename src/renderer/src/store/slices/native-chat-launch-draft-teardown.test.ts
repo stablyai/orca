@@ -100,7 +100,7 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     const store = createTestStore()
     seedDrafts(store)
 
-    const result = await store.getState().removeWorktree(WT1)
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     const s = store.getState()
@@ -125,6 +125,21 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
 
     store.getState().clearNativeChatLaunchDraft(TAB1)
     expect(TAB1 in store.getState().nativeChatLaunchDraftByTabId).toBe(false)
+  })
+
+  it('resolves only the exact draft generation', () => {
+    const store = createTestStore()
+    const entry = draft(TAB1, 'same text')
+    store.getState().seedNativeChatLaunchDraft(entry)
+
+    store.getState().resolveNativeChatLaunchDraft(TAB1, { text: entry.text, createdAt: 0 })
+    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBeUndefined()
+
+    store.getState().resolveNativeChatLaunchDraft(TAB1, {
+      text: entry.text,
+      createdAt: entry.createdAt
+    })
+    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBe(true)
   })
 
   it('the orphan terminal cleanup patch drops swept tabs’ drafts only', () => {

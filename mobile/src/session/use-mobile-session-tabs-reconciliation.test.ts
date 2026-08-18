@@ -112,8 +112,6 @@ async function setAppState(state: string): Promise<void> {
 
 describe('useMobileSessionTabsReconciliation', () => {
   let renderer: ReactTestRenderer | null = null
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
-
   async function mount(): Promise<void> {
     await act(async () => {
       renderer = create(createElement(Harness))
@@ -124,14 +122,6 @@ describe('useMobileSessionTabsReconciliation', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    const originalConsoleError = console.error
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      originalConsoleError(...args)
-    })
     lifecycle.appState = 'active'
     lifecycle.focused = true
     lifecycle.listeners.clear()
@@ -157,7 +147,6 @@ describe('useMobileSessionTabsReconciliation', () => {
     act(() => renderer?.unmount())
     renderer = null
     streamListener = null
-    consoleErrorSpy.mockRestore()
     vi.useRealTimers()
   })
 

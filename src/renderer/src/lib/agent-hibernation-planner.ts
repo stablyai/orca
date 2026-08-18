@@ -7,7 +7,8 @@ import {
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from './pi-compatible-live-recovery-record'
-import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
@@ -110,6 +111,12 @@ function getEntryTabId(entry: AgentStatusEntry): string | null {
   return parsePaneKey(entry.paneKey)?.tabId ?? null
 }
 
+// Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
+const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
+  orchestration
+    ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
+    : false
+
 function getEligiblePane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
@@ -140,6 +147,8 @@ function getEligiblePane(args: {
   if (
     entry.state !== 'done' ||
     entry.interrupted === true ||
+    Boolean(entry.subagents?.length) ||
+    hasUnsettledOrUnknownDispatch(entry) ||
     (sleepingRecord && !hasOnlyLivePiCompatibleRecoveryIdentity)
   ) {
     return null
@@ -259,10 +268,7 @@ export function planAgentHibernationCandidates(
     }
     if (
       runtimeLivenessRequiredWorktreeIds.has(worktreeId) &&
-      !Object.prototype.hasOwnProperty.call(
-        snapshot.runtimeLivePtyIdsByWorktreeId ?? {},
-        worktreeId
-      )
+      !Object.hasOwn(snapshot.runtimeLivePtyIdsByWorktreeId ?? {}, worktreeId)
     ) {
       continue
     }

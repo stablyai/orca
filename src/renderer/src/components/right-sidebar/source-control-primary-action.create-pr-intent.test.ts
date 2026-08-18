@@ -4,7 +4,7 @@ import {
   resolvePrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveCreatePrHeaderAction } from './source-control-primary-create-pr-intent-action'
+import { resolveCreatePrHeaderAction } from './source-control/review/primary-create-pr-intent-action'
 
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -173,6 +173,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
       kind: 'create_pr_intent',
       label: 'Create PR',
       title: 'Prepare this branch and create a pull request',
+      disabled: false
+    })
+  })
+
+  it('returns Create PR intent for a dirty tree when review lookup is unavailable', () => {
+    const input = inputs({
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit',
+        defaultBaseRef: 'main',
+        reviewLookupOutcome: 'unavailable'
+      }
+    })
+
+    expect(resolvePrimaryAction(input)).toMatchObject({
+      kind: 'create_pr_intent',
+      disabled: false
+    })
+    expect(resolveCreatePrHeaderAction(input)).toMatchObject({
+      kind: 'create_pr_intent',
       disabled: false
     })
   })

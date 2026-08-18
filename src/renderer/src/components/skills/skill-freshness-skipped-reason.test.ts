@@ -6,7 +6,15 @@ function row(
   chip: SkillLocationRow['chip'],
   path = `/home/.agents/skills/${chip}`
 ): SkillLocationRow {
-  return { id: `row-${chip}-${path}`, path, chip }
+  return { id: `row-${chip}-${path}`, path, chip, participatesInGlobalFreshness: true }
+}
+
+/** A project's own copy: listed, but never judged by the global update. */
+function projectRow(chip: SkillLocationRow['chip'] = 'in-a-repo'): SkillLocationRow {
+  return {
+    ...row(chip, '/home/projects/work/.agents/skills/orchestration'),
+    participatesInGlobalFreshness: false
+  }
 }
 
 describe('skippedReason', () => {
@@ -46,6 +54,35 @@ describe('skippedReason', () => {
   it('keeps a placement blocker ahead of the record advice', () => {
     expect(skippedReason([row(null), row('unrecognized')], 'orchestration')).toContain(
       'doesn’t match the official version'
+    )
+  })
+
+  it('keeps the reinstall remedy when a project copy sits beside the blocked global copy', () => {
+    // The reported shape: a bare out-of-date global copy the updater's record cannot
+    // converge, plus the user's own project copy. Letting the project copy explain the
+    // skip swapped the one runnable command for advice about a copy Orca never judged.
+    const reason = skippedReason([row(null), projectRow()], 'orchestration')
+    expect(reason).toContain('reports the skill as already up to date')
+    expect(reason).toContain('skills add')
+    expect(reason).not.toContain('This is a project skill')
+  })
+
+  it('does not let a project copy outrank the placement that blocked the update', () => {
+    // Why by row and not by chip: the scan-limit sentinel is also project-scoped and
+    // carries 'inaccessible', which would otherwise claim a read failure Orca never hit.
+    expect(skippedReason([row('duplicate'), projectRow()], 'orchestration')).toContain(
+      'separate copy'
+    )
+    expect(
+      skippedReason([row('duplicate'), projectRow('inaccessible')], 'orchestration')
+    ).toContain('separate copy')
+  })
+
+  it('explains a project copy when that is the only location there is', () => {
+    // Why the fallback exists: the sentence stays total. With nothing else to point at,
+    // "Orca only updates your global skills" is the honest reason.
+    expect(skippedReason([projectRow()], 'orchestration')).toContain(
+      'This is a project skill, not a global one'
     )
   })
 

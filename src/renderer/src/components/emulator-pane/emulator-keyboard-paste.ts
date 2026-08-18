@@ -57,10 +57,6 @@ export type PasteTextIntoEmulatorKeyboardOptions = {
   text: string
 }
 
-export function getEmulatorKeyboardPasteByteLength(text: string): number {
-  return measureClipboardTextByteLength(text).byteLength
-}
-
 export function buildEmulatorKeyboardPastePlan(
   text: string,
   options: {

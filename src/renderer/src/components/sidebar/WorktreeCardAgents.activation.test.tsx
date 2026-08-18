@@ -68,6 +68,7 @@ function buildMockStoreState(): Record<string, unknown> {
   return {
     agentActivityDisplayMode: mockAgentActivityDisplayMode,
     acknowledgedAgentsByPaneKey: {},
+    unreadAgentCompletionPanes: {},
     cacheTimerByKey: {},
     dropAgentStatus: vi.fn(),
     dismissRetainedAgent: vi.fn(),

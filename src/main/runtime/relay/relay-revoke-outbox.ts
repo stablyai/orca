@@ -54,8 +54,9 @@ export class RelayRevokeOutbox {
       return existing
     }
     const item = { ...binding, reqId: randomUUID(), createdAt: Date.now() }
-    this.items.push(item)
-    this.save()
+    const next = [...this.items, item]
+    this.save(next)
+    this.items = next
     return item
   }
 
@@ -70,8 +71,8 @@ export class RelayRevokeOutbox {
     if (next.length === this.items.length) {
       return
     }
+    this.save(next)
     this.items = next
-    this.save()
   }
 
   private load(): RelayRevokeOutboxItem[] {
@@ -87,7 +88,7 @@ export class RelayRevokeOutbox {
     }
   }
 
-  private save(): void {
-    writeSecureJsonFile(this.path, this.items)
+  private save(items: readonly RelayRevokeOutboxItem[]): void {
+    writeSecureJsonFile(this.path, items)
   }
 }

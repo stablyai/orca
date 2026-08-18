@@ -473,6 +473,7 @@ describe('OrchestrationDb', () => {
       const after3 = d.failDispatch(ctx3.id, 'timeout')
       expect(after3?.failure_count).toBe(3)
       expect(after3?.status).toBe('circuit_broken')
+      expect([after1, after2, after3].every((dispatch) => dispatch?.completed_at)).toBe(true)
       expect(d.getTask(task.id)?.status).toBe('failed')
     })
 

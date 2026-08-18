@@ -1,7 +1,6 @@
 import './assets/main.css'
 
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import App from './App'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -14,6 +13,8 @@ import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
+import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
@@ -51,11 +52,12 @@ function RendererRoot(): React.JSX.Element {
       )}
     >
       <App />
+      <SkillWarningPreviewLauncher />
     </RecoverableRenderErrorBoundary>
   )
 }
 
-createRoot(rootElement).render(
+getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   <StrictMode>
     <I18nProvider>
       <RendererRoot />

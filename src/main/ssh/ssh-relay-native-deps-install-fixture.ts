@@ -54,6 +54,20 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
 
 export type ExecResponse = string | { reject: string }
 
+const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
+
+export function makeStagedFirstInstallExecPrefix(): ExecResponse[] {
+  return [
+    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+    '/home/u',
+    '', // bounded stale-stage recovery
+    `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`,
+    '', // chmod staged node
+    '', // final install namespace marker
+    `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
+  ]
+}
+
 // Repair reconnect (isRelayAlreadyInstalled → true) where BOTH native deps are broken and the host
 // cannot compile node-pty, so the caller's resets must survive into the node-pty-less reinstall.
 export function makeRepairToolchainSkipExecResponses(): ExecResponse[] {
@@ -108,23 +122,18 @@ export function makeExecResponses(opts: {
   // reinstall succeeds; only then are the chmod/probe/launch slots reached.
   if (opts.npmInstall !== 'ok' && opts.nodePtySkipRetry !== 'ok') {
     return [
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-      '/home/u',
-      '', // mkdir remoteDir (uploadRelay)
-      '', // chmod +x node
+      ...makeStagedFirstInstallExecPrefix(),
       opts.npmInstall, // npm install rejects
       opts.toolchainProbe ?? 'HAVE make\nHAVE g++\nHAVE cc\nHAVE python3\nPKG apt-get',
-      ...(opts.nodePtySkipRetry ? [opts.nodePtySkipRetry] : []) // reinstall also rejects
+      ...(opts.nodePtySkipRetry ? [opts.nodePtySkipRetry] : []), // reinstall also rejects
+      '' // clean stage root
     ]
   }
   if (opts.npmInstall !== 'ok') {
     // Skip path, exactly as production runs it: no chmod-prebuilds (node-pty is gone) and no rebuild
     // (it provably can't compile here). The probe still runs to catch a dead @parcel/watcher.
     return [
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-      '/home/u',
-      '', // mkdir remoteDir (uploadRelay)
-      '', // chmod +x node
+      ...makeStagedFirstInstallExecPrefix(),
       opts.npmInstall, // npm install rejects on the missing compiler
       opts.toolchainProbe ?? 'HAVE python3\nPKG dnf',
       '', // rm -rf node-pty + reinstall without it
@@ -134,6 +143,7 @@ export function makeExecResponses(opts: {
         : 'ORCA-NATIVE-DEPS-MISSING:node-pty\nMISSING\n',
       '', // cat probe stderr
       '', // rm -f probe stderr
+      '', // clean stage root
       'DEAD',
       '', // publish the per-launch credential
       'READY'
@@ -151,10 +161,7 @@ export function makeExecResponses(opts: {
             ? { reject: 'cd: no such file or directory' }
             : probe
   const slots: ExecResponse[] = [
-    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-    '/home/u',
-    '', // mkdir remoteDir (uploadRelay)
-    '', // chmod +x node
+    ...makeStagedFirstInstallExecPrefix(),
     '', // npm install native deps
     '', // chmod prebuilds
     probeSlot
@@ -178,6 +185,6 @@ export function makeExecResponses(opts: {
       slots.push('') // rm -f stderr after rebuild probe
     }
   }
-  slots.push('DEAD', '', 'READY')
+  slots.push('', 'DEAD', '', 'READY') // clean stage root, launch, credential, readiness
   return slots
 }

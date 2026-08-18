@@ -5,7 +5,7 @@ import type {
 import {
   getBrowserWebviewMemoryProfile,
   type BrowserWebviewMemoryProfile
-} from '../components/browser-pane/webview-registry'
+} from '../components/browser-pane/host-guest/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 
@@ -59,10 +59,6 @@ export function installRendererCrashDiagnostics(surface: RendererSurface = 'main
   }
 }
 
-export function _disposeRendererCrashDiagnosticsForTests(): void {
-  disposeRendererCrashDiagnostics()
-}
-
 function disposeRendererCrashDiagnostics(): void {
   if (!rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return
@@ -78,7 +74,7 @@ function disposeRendererCrashDiagnostics(): void {
   rendererSurface = 'main'
 }
 
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   // Why: Vite can replace this module without a full renderer reload. Remove
   // global diagnostics hooks so dev sessions do not accumulate listeners.
   import.meta.hot.dispose(disposeRendererCrashDiagnostics)

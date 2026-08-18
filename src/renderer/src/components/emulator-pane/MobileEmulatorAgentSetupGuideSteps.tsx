@@ -9,7 +9,7 @@ import {
 } from '@/lib/agent-skill-cli-prerequisite'
 import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
 import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
-import { StepBadge } from '../settings/BrowserUseStepBadge'
+import { StepBadge } from '../settings/SetupStepBadge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {

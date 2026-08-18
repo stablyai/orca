@@ -1,10 +1,13 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import {
+  resolveAgentResumeLaunchTarget,
+  type AgentResumeLaunchTarget
+} from '@/lib/agent-resume-launch-target'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
@@ -25,21 +28,18 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
+function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-  }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
-  }
-  return CLIENT_PLATFORM
+  // The resume tab is created without a shell override, so the global Windows shell wins.
+  return resolveAgentResumeLaunchTarget({
+    projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
+    connectionId: repo?.connectionId,
+    executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
+    worktreePath: worktree?.path,
+    terminalWindowsShell: state.settings?.terminalWindowsShell
+  })
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -68,6 +68,7 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -84,7 +85,8 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    platform: resumeTarget.platform,
+    shell: resumeTarget.shell
   })
   if (!startupPlan) {
     toast.error(

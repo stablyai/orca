@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
@@ -32,10 +32,12 @@ let root: Root | null = null
 let container: HTMLDivElement | null = null
 let state: SkillFreshnessState | null = null
 const states = new Map<string, SkillFreshnessState>()
+const renderedInventories: (SkillFreshnessInventory | null)[] = []
 
-function Probe({ id = 'default' }: { id?: string }): null {
-  state = useSkillFreshness()
+function Probe({ id = 'default', enabled = true }: { id?: string; enabled?: boolean }): null {
+  state = useSkillFreshness(enabled)
   states.set(id, state)
+  renderedInventories.push(state.inventory)
   return null
 }
 
@@ -44,6 +46,7 @@ describe('useSkillFreshness', () => {
     _skillFreshnessCacheForTests.reset()
     state = null
     states.clear()
+    renderedInventories.length = 0
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -51,6 +54,7 @@ describe('useSkillFreshness', () => {
 
   afterEach(async () => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     if (root) {
       await act(async () => root?.unmount())
     }
@@ -77,6 +81,65 @@ describe('useSkillFreshness', () => {
 
     await act(async () => second.resolve(inventory(2)))
     expect(state?.inventory?.scannedAt).toBe(2)
+  })
+
+  it('does not scan, subscribe, or refresh while local freshness is disabled', async () => {
+    const freshnessInventory = vi.fn().mockResolvedValue(inventory(1))
+    const addEventListener = vi.spyOn(window, 'addEventListener')
+    window.api = { skills: { freshnessInventory } } as never
+
+    await act(async () => root?.render(<Probe enabled={false} />))
+    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => state?.refresh())
+
+    expect(freshnessInventory).not.toHaveBeenCalled()
+    expect(state).toMatchObject({ inventory: null, loading: false, error: null })
+    expect(
+      addEventListener.mock.calls.filter(
+        ([name]) => name === 'focus' || name === 'orca:installed-agent-skills-changed'
+      )
+    ).toHaveLength(0)
+  })
+
+  it('forces one fresh scan before restoring authority after re-enable', async () => {
+    const second = deferred<SkillFreshnessInventory>()
+    const freshnessInventory = vi
+      .fn()
+      .mockResolvedValueOnce(inventory(1, ['orca-cli']))
+      .mockReturnValueOnce(second.promise)
+    window.api = { skills: { freshnessInventory } } as never
+    const renderProbes = (enabled: boolean): void => {
+      root?.render(
+        <StrictMode>
+          <Probe id="one" enabled={enabled} />
+          <Probe id="two" enabled={enabled} />
+        </StrictMode>
+      )
+    }
+
+    await act(async () => renderProbes(true))
+    expect(freshnessInventory).toHaveBeenCalledTimes(1)
+    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
+
+    await act(async () => renderProbes(true))
+    expect(freshnessInventory).toHaveBeenCalledTimes(1)
+
+    await act(async () => renderProbes(false))
+    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    expect(freshnessInventory).toHaveBeenCalledTimes(1)
+    expect(state).toMatchObject({ inventory: null, loading: false })
+
+    const reenableRenderStart = renderedInventories.length
+    await act(async () => renderProbes(true))
+    expect(freshnessInventory).toHaveBeenCalledTimes(2)
+    expect(state).toMatchObject({ inventory: null, loading: true })
+    expect(renderedInventories.slice(reenableRenderStart).every((value) => value === null)).toBe(
+      true
+    )
+
+    await act(async () => second.resolve(inventory(2)))
+    expect(state?.inventory?.scannedAt).toBe(2)
+    expect(state?.inventory?.eligibleUpdateNames).toEqual([])
   })
 
   it('skips focus rescans inside the cooldown but honors install-change events', async () => {

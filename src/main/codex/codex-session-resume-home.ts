@@ -1,4 +1,4 @@
-import { existsSync, lstatSync } from 'node:fs'
+import { lstatSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   getRuntimePathBasename,
@@ -6,24 +6,44 @@ import {
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 // Why: only Codex's dated rollout layout may establish account-home provenance; nested/misplaced JSONL must not select credentials.
-const DATED_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`
-const ROLLOUT_RELATIVE_PATH = new RegExp(`^${DATED_ROLLOUT_TAIL}$`)
+const CLAIMED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`
+const TRUSTED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/:]+\.jsonl(?:\.zst)?`
+const ROLLOUT_RELATIVE_PATH = new RegExp(`^${TRUSTED_CODEX_ROLLOUT_TAIL}$`)
 // Why: case-insensitive because trusted-home matching folds Windows path case too.
-const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${DATED_ROLLOUT_TAIL}$`, 'i')
+const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${CLAIMED_CODEX_ROLLOUT_TAIL}$`, 'i')
 
 /** `resume` pins CODEX_HOME to the account that owns the rollout. `fresh` means
  *  provenance could not be verified, so the caller drops the resume argv — an
  *  unverifiable rollout must never resume under whichever account is selected now.
+ *  `reconcileSharedRuntimeAuth` revalidates mutable shared-home auth before spawn.
  *  `claimedCodexProvenance` gates the user-facing notice: a path that claimed real
  *  Codex layout is worth reporting, stale cross-agent metadata is not. */
 export type CodexSessionResumePreparation =
-  | { outcome: 'resume'; codexHomePath: string }
+  | { outcome: 'resume'; codexHomePath: string; reconcileSharedRuntimeAuth?: boolean }
   | { outcome: 'fresh'; claimedCodexProvenance: boolean }
 
+// Why: fold only Win32's extended drive spelling; \\.\ device namespaces and every other \\?\ form
+// (including \\?\UNC\, which is a network share rather than a device) stay unfolded here.
+function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
+  if (filePath.startsWith('\\\\.\\')) {
+    return null
+  }
+  if (!filePath.startsWith('\\\\?\\')) {
+    return filePath
+  }
+  return filePath.match(/^\\\\\?\\([A-Za-z]:[\\/][\s\S]*)$/)?.[1] ?? null
+}
+
 function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
-  const relativePath = relativePathInsideRoot(sessionsRoot, filePath)
+  const comparisonSessionsRoot = toCodexTrustedPathComparisonCopy(sessionsRoot)
+  const comparisonFilePath = toCodexTrustedPathComparisonCopy(filePath)
+  if (!comparisonSessionsRoot || !comparisonFilePath) {
+    return false
+  }
+  const relativePath = relativePathInsideRoot(comparisonSessionsRoot, comparisonFilePath)
   return Boolean(relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath.replace(/\\/g, '/')))
 }
 
@@ -156,17 +176,20 @@ export async function resolveCodexSessionResumeProvenance(args: {
  * account's ownership marker, and the far more common provenance-present
  * resume never reaches the ranking at all.
  */
-function rankTrustedCodexHomesForRescan(args: {
-  trustedCodexHomes: readonly string[]
-  getSelectedAccountCodexHome: () => string | null
-  systemCodexHomePath: string | null
-  sharedRuntimeCodexHomePath: string | null
-}): string[] {
+function rankTrustedCodexHomesForRescan(
+  args: {
+    trustedCodexHomes: readonly string[]
+    getSelectedAccountCodexHome: () => string | null
+    systemCodexHomePath: string | null
+    sharedRuntimeCodexHomePath: string | null
+  },
+  selectedAccountHome = args.getSelectedAccountCodexHome()
+): string[] {
   const toComparisonHome = (value: string | null | undefined): string | null => {
     const trimmed = value?.trim()
     return trimmed ? normalizeRuntimePathForComparison(trimmed) : null
   }
-  const selectedComparison = toComparisonHome(args.getSelectedAccountCodexHome())
+  const selectedComparison = toComparisonHome(selectedAccountHome)
   const systemComparison = toComparisonHome(args.systemCodexHomePath)
   const sharedRuntimeComparison = toComparisonHome(args.sharedRuntimeCodexHomePath)
   const rankOf = (comparisonHome: string): number => {
@@ -194,6 +217,45 @@ function rankTrustedCodexHomesForRescan(args: {
     .map((entry) => entry.homePath)
 }
 
+function isSelectedAccountHome(selectedAccountHome: string | null, homePath: string): boolean {
+  return (
+    selectedAccountHome !== null &&
+    normalizeRuntimePathForComparison(selectedAccountHome) ===
+      normalizeRuntimePathForComparison(homePath)
+  )
+}
+
+/**
+ * Why: `existsSync` reports false for *any* stat error, so a briefly locked
+ * sessions tree (antivirus, backup, indexer) reads as "this rollout is not
+ * bridged here" and the scan moves on to the next ranked home. For the selected
+ * account that silently resumes the session under a DIFFERENT account's
+ * credentials while the UI still shows the selected one, so only a definitive
+ * absence may skip it (STA-4607).
+ */
+function sessionsTreeIsPresent(sessionsRoot: string, isSelectedAccount: boolean): boolean {
+  try {
+    statSync(sessionsRoot)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return false
+    }
+    if (isSelectedAccount) {
+      throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+    }
+    // Why: an unreadable home that is NOT the selected account cannot cause a
+    // wrong-account resume; skipping it only forgoes a candidate.
+    return false
+  }
+}
+
+function isDefinitiveSessionTreeAbsence(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
 export async function findTrustedCodexSessionResume(args: {
   sessionId: string
   transcriptPath: string | undefined
@@ -216,20 +278,38 @@ export async function findTrustedCodexSessionResume(args: {
     return null
   }
 
+  const selectedAccountHome = args.getSelectedAccountCodexHome()
+  const selectedSessionsRoot = selectedAccountHome
+    ? normalizeRuntimePathForComparison(join(selectedAccountHome, 'sessions'))
+    : null
   const listSessionFiles =
     args.listSessionFiles ??
     ((sessionsRoot: string) =>
-      listCodexSessionRolloutFilesIncrementally(sessionsRoot, { batchSize: 64, yieldMs: 0 }))
+      listCodexSessionRolloutFilesIncrementally(
+        sessionsRoot,
+        { batchSize: 64, yieldMs: 0 },
+        (_directoryPath, error) => {
+          if (
+            selectedSessionsRoot === normalizeRuntimePathForComparison(sessionsRoot) &&
+            !isDefinitiveSessionTreeAbsence(error)
+          ) {
+            throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+          }
+        }
+      ))
   const expectedSuffix = `-${args.sessionId}.jsonl`.toLowerCase()
   const seenHomes = new Set<string>()
-  for (const homePath of rankTrustedCodexHomesForRescan(args)) {
+  for (const homePath of rankTrustedCodexHomesForRescan(args, selectedAccountHome)) {
     const comparisonHome = normalizeRuntimePathForComparison(homePath)
     if (seenHomes.has(comparisonHome)) {
       continue
     }
     seenHomes.add(comparisonHome)
     const sessionsRoot = join(homePath, 'sessions')
-    if (!args.listSessionFiles && !existsSync(sessionsRoot)) {
+    if (
+      !args.listSessionFiles &&
+      !sessionsTreeIsPresent(sessionsRoot, isSelectedAccountHome(selectedAccountHome, homePath))
+    ) {
       continue
     }
     for await (const filePath of listSessionFiles(sessionsRoot)) {

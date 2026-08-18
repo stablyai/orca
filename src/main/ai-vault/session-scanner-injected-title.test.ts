@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -127,12 +128,18 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin'
-    })
+    // Full capture, else firstUserPrompt is never populated and the assertion
+    // below would pass whether or not the meta preamble is excluded.
+    const result = await withFullFirstUserPromptCapture(() =>
+      scanAiVaultSessions({
+        ...roots,
+        platform: 'darwin'
+      })
+    )
 
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.lastUserPrompt).toBe('Fix the zoom behavior in a separate PR')
+    // Meta skill preamble must not become the copyable first prompt.
+    expect(result.sessions[0]?.firstUserPrompt).toBeUndefined()
   })
 })

@@ -1,4 +1,8 @@
-import type { Repo, WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -6,7 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   mergeWorkspaceSessionsFromHosts,
   splitWorkspaceSessionByHost,
@@ -21,7 +25,11 @@ import {
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
-  folderWorkspaces?: readonly { id: string; projectGroupId: string }[]
+  folderWorkspaces?: readonly {
+    id: string
+    projectGroupId: string
+    executionHostId?: ExecutionHostId | null
+  }[]
   worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 }
@@ -145,7 +153,7 @@ function getFolderWorkspaceRuntimeHostId(
   const group = workspace
     ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
     : null
-  const parsed = parseExecutionHostId(group?.executionHostId)
+  const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
     return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
   }

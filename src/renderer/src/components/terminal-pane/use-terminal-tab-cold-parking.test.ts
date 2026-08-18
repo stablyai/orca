@@ -1,16 +1,25 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const mocks = vi.hoisted(() => ({
   storeState: {
     pendingStartupByTabId: {} as Record<string, unknown>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
+    runtimeStatusByEnvironmentId: new Map(),
+    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
-    terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>
+    terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    sleepingAgentSessionsByPaneKey: {} as Record<
+      string,
+      { paneKey: string; tabId?: string; worktreeId: string }
+    >
   },
   exemptTabIds: new Set<string>(),
-  exemptSelectCalls: 0
+  exemptSelectCalls: 0,
+  /** Toggled to churn the park verdict the way the crash cluster does. */
+  watcherCoverage: true
 }))
 
 vi.mock('../../store', () => ({
@@ -34,15 +43,23 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
-  canWatcherCoverParkedTerminalTab: () => true,
+  canWatcherCoverParkedTerminalTab: () => mocks.watcherCoverage,
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
   syncParkedTerminalTabWatchers: vi.fn()
+}))
+
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: vi.fn()
 }))
 
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   TERMINAL_TAB_HOT_RETAIN_MS
 } from './terminal-hidden-view-parking'
+import {
+  TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_WINDOW_MS
+} from './terminal-park-verdict-flip-telemetry'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const WORKTREE_ID = 'wt-1'
@@ -57,6 +74,7 @@ function hookArgs(shouldMeasureHiddenWorktree: boolean) {
     terminalTabs: [terminalTab('tab-1'), terminalTab('tab-2')],
     assignments: new Map<string, { groupId: string; isActiveInGroup: boolean }>(),
     isWorktreeActive: false,
+    activeTerminalTabId: null as string | null,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree,
     activityTerminalPortals: [],
@@ -74,7 +92,152 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
+    mocks.watcherCoverage = true
     mocks.storeState.terminalLayoutsByTabId = {}
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {}
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map()
+  })
+
+  // Why: leaving a worktree gives every tab the same hidden time.
+  it('exempts the tab the worktree was left on when every tab hides in one pass', () => {
+    const assignments = new Map([
+      ['tab-1', { groupId: 'group-1', isActiveInGroup: false }],
+      ['tab-2', { groupId: 'group-1', isActiveInGroup: true }]
+    ])
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs> & { isWorktreeActive: boolean }) =>
+        useTerminalTabColdParking(args),
+      {
+        initialProps: {
+          ...hookArgs(false),
+          assignments,
+          isWorktreeActive: true,
+          activeTerminalTabId: 'tab-2'
+        }
+      }
+    )
+    expect(result.current.size).toBe(0)
+
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: false,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+
+    expect(result.current).toEqual(new Set(['tab-1']))
+  })
+
+  it('records focused split changes when the visible tab set does not change', () => {
+    const assignments = new Map([
+      ['tab-1', { groupId: 'group-1', isActiveInGroup: true }],
+      ['tab-2', { groupId: 'group-2', isActiveInGroup: true }]
+    ])
+    const { result, rerender } = renderHook(
+      (
+        args: ReturnType<typeof hookArgs> & {
+          activeTerminalTabId: string | null
+          isWorktreeActive: boolean
+        }
+      ) => useTerminalTabColdParking(args),
+      {
+        initialProps: {
+          ...hookArgs(false),
+          assignments,
+          isWorktreeActive: true,
+          activeTerminalTabId: 'tab-1'
+        }
+      }
+    )
+
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: true,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      rerender({
+        ...hookArgs(false),
+        assignments,
+        isWorktreeActive: false,
+        activeTerminalTabId: 'tab-2'
+      })
+    })
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+
+    expect(result.current).toEqual(new Set(['tab-1']))
+  })
+
+  it('parks paired-runtime tabs only when their exact host advertises restore', () => {
+    const environmentId = 'paired-env'
+    const remoteArgs = {
+      ...hookArgs(false),
+      terminalTabs: [
+        { ...terminalTab('tab-1'), ptyId: `remote:${environmentId}@@term-1` },
+        { ...terminalTab('tab-2'), ptyId: `remote:${environmentId}@@term-2` }
+      ]
+    }
+    for (const [advertisedEnvironmentId, expected] of [
+      [environmentId, new Set(['tab-2'])],
+      ['other-env', new Set()]
+    ] as const) {
+      mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+        [advertisedEnvironmentId, { status: { capabilities: ['terminal.paired-parking.v1'] } }]
+      ])
+      const { result, unmount } = renderHook(() => useTerminalTabColdParking(remoteArgs))
+
+      act(() => {
+        vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+      })
+
+      expect(result.current).toEqual(expected)
+      unmount()
+    }
+  })
+
+  // Why: the flip-damping pin removes the tab from the parked set, and every
+  // hysteresis deadline of a long-hidden tab is already past — so the pin
+  // deadline is the only wakeup that can ever re-park it. Without scheduling
+  // it, damping silently becomes a permanent unpark: the pane (~4-5MB) stays
+  // mounted for the life of the window, which is the renderer-OOM cluster.
+  it('re-parks a damped tab once the pin expires with no other store change', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    // Churn the coverage veto at render cadence — no clock advance, so every
+    // flip lands inside the burst window and damping engages.
+    for (let flip = 0; flip <= TERMINAL_TAB_PARK_FLIP_BURST_LIMIT + 1; flip += 1) {
+      mocks.watcherCoverage = flip % 2 === 1
+      act(() => {
+        rerender(hookArgs(false))
+      })
+    }
+    mocks.watcherCoverage = true
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current.size).toBe(0)
+
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
   })
 
   // Why: the worktree layer preserves hiddenSince through a background-measure
@@ -209,6 +372,85 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       rerender({ ...stableArgs, isWorktreeActive: false })
     })
     expect(mocks.exemptSelectCalls).toBe(callsAfterFirstRender)
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  // Why: a parked pane can never cold-restore, so a per-tab park holding a
+  // sleeping-session record would strand the agent's resume until tab reveal.
+  it('unparks a per-tab-parked pane once it owns a sleeping-session record', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID
+      }
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current.size).toBe(0)
+
+    // Records for other worktrees change nothing.
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: 'other-worktree'
+      }
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  // Why: blocked and passive-completed records never auto-resume, so exempting
+  // them would pin a hidden pane mounted indefinitely for nothing.
+  it('keeps parking panes whose records cannot be consumed', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2:22222222-2222-4222-8222-222222222222': {
+        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+        tabId: 'tab-2',
+        worktreeId: WORKTREE_ID,
+        origin: 'worktree-sleep',
+        state: 'done'
+      } as never
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 })

@@ -116,7 +116,8 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
           {
             worktree: toRuntimeWorktreeSelector(worktreeId),
             limit: 10_000,
-            requireFreshPtyLiveness: true
+            requireFreshPtyLiveness: true,
+            includeVisualLayouts: false
           },
           { timeoutMs: 10_000 }
         )
@@ -234,10 +235,6 @@ export function stopAgentHibernationCoordinator(): void {
     coordinator.interval = null
   }
   coordinator.confirmationState = {}
-}
-
-export function isAgentHibernationCoordinatorRunning(): boolean {
-  return coordinator.interval !== null
 }
 
 export function resetAgentHibernationCoordinatorForTests(): void {

@@ -133,7 +133,7 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'chat' }])
 
     seedAgentTabStateAfterWorktreeCreate({
-      request: { ...request, launchDraftPrompt: 'note\rhttps://github.com/o/r/issues/12' },
+      request: { ...request, launchDraftPrompt: 'note\u2028https://github.com/o/r/issues/12' },
       worktreeId: 'wt-1',
       primaryTabId: 'agent-tab',
       startupTerminalTabId: 'agent-tab',
@@ -148,6 +148,24 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
 
     seedAgentTabStateAfterWorktreeCreate({
       request,
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startupTerminalTabId: 'agent-tab',
+      backendSpawned: true
+    })
+
+    expect(tabViewMode('agent-tab')).toBe('chat')
+  })
+
+  it('still opens a local omp draft in chat, despite the local-transcript gate', () => {
+    // Why: omp discloses no hook transcript path, so it joins Grok in requiring a
+    // locally readable sessions root. This call site must therefore SUPPLY that
+    // readability flag for omp too — gating on Grok alone left it undefined and
+    // parked every omp draft in the terminal view, local workspace or not.
+    setTabs([{ id: 'agent-tab', launchAgent: 'omp', viewMode: 'terminal' }])
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request: { ...request, agent: 'omp' as const },
       worktreeId: 'wt-1',
       primaryTabId: 'agent-tab',
       startupTerminalTabId: 'agent-tab',

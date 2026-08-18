@@ -13,8 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { githubAvatarUrl } from './github-issue-comment-helpers'
-import { resolveGitHubUserAvatarSrc } from './github-user-avatar'
+import { githubAvatarUrl, resolveGitHubUserAvatarSrc } from './github-user-avatar'
 
 describe('issue #8784 GHE avatar fallback (regression)', () => {
   it('prefers API avatar_url over login.png (GHE healthy path)', () => {
@@ -41,7 +40,7 @@ describe('issue #8784 GHE avatar fallback (regression)', () => {
   })
 
   it('source routes PR author/reviewer avatars through GitHubUserAvatar + authorAvatarUrl', () => {
-    const prPage = readFileSync(join(__dirname, '../PullRequestPage.tsx'), 'utf8')
+    const prPage = readFileSync(join(__dirname, '../pull-request-page/page/header.tsx'), 'utf8')
     expect(prPage).toMatch(/GitHubUserAvatar/)
     expect(prPage).toMatch(/authorAvatarUrl/)
     // Why: author chip must not ignore API avatar_url and only pass login.

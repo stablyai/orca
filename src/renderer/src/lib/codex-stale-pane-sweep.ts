@@ -47,6 +47,25 @@ export function notifyCodexPaneBoundForStaleSweep(ptyId: string): void {
   armForEarliestDue()
 }
 
+/**
+ * Queues every restored PTY for the stale-account check without waiting for a
+ * pane to mount.
+ *
+ * Why: the bind-driven sweep above only fires when a pane's transport binds, so
+ * a stale Codex pane restored into a never-revealed tab kept running under the
+ * old account with no prompt — and an accepted-then-quit restart was never
+ * re-offered. Foreign-machine ids are dropped by the notify guard.
+ */
+export function sweepRestoredCodexPanesForStaleAccounts(state: {
+  ptyIdsByTabId: Record<string, string[]>
+}): void {
+  for (const ptyIds of Object.values(state.ptyIdsByTabId)) {
+    for (const ptyId of ptyIds) {
+      notifyCodexPaneBoundForStaleSweep(ptyId)
+    }
+  }
+}
+
 export function resetCodexStalePaneSweepForTests(): void {
   if (flushTimer !== null) {
     clearTimeout(flushTimer)

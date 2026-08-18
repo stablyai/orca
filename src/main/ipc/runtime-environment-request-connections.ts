@@ -1,5 +1,8 @@
 import type { PairingOffer } from '../../shared/pairing'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
 import type {
@@ -25,7 +28,8 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   const pairingKey = getPairingKey(pairing)
   let cached = requestConnections.get(environmentId)
@@ -37,7 +41,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
     }
     requestConnections.set(environmentId, cached)
   }
-  return cached.connection.request(method, params, timeoutMs)
+  return cached.connection.request(method, params, timeoutMs, signal)
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
@@ -47,23 +51,22 @@ export function closeRemoteRuntimeRequestConnection(environmentId: string): void
   closeRemoteRuntimeSharedControlConnection(environmentId)
 }
 
-export function closeAllRemoteRuntimeRequestConnections(): void {
-  for (const environmentId of Array.from(requestConnections.keys())) {
-    closeRemoteRuntimeRequestConnection(environmentId)
-  }
-  for (const environmentId of Array.from(sharedControlConnections.keys())) {
-    closeRemoteRuntimeSharedControlConnection(environmentId)
-  }
-}
-
 export function sendRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return getSharedControlConnection(environmentId, pairing).request(method, params, timeoutMs)
+  return getSharedControlConnection(environmentId, pairing).request(
+    method,
+    params,
+    timeoutMs,
+    envelope,
+    signal
+  )
 }
 
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(

@@ -3,7 +3,7 @@ import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accoun
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { listRecordedCodexPaneLanes } from '../codex/codex-pane-account-registry'
 import { forgetStaleCodexPanes, listStaleCodexPanes } from '../codex/codex-stale-pane-accounts'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 export function registerCodexAccountHandlers(
   codexAccounts: CodexAccountService,
@@ -16,7 +16,8 @@ export function registerCodexAccountHandlers(
     }
     return listStaleCodexPanes({
       ptyIds: args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'),
-      settings
+      settings,
+      activeHostHomeRoute: codexAccounts.runtimeHomeService.getSelectedHostCodexHomeRoute()
     })
   })
   ipcMain.handle('codexAccounts:listRecordedPaneLanes', (_event, args: { ptyIds?: unknown }) => {
@@ -37,8 +38,12 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
-  ipcMain.handle('codexAccounts:reauthenticate', (_event, args: { accountId: string }) =>
-    codexAccounts.reauthenticateAccount(args.accountId)
+  ipcMain.handle(
+    'codexAccounts:reauthenticate',
+    (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
+      codexAccounts.reauthenticateAccount(args.accountId, {
+        activateIfSelectionWasEmpty: args.activateIfSelectionWasEmpty === true
+      })
   )
   ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>
     codexAccounts.removeAccount(args.accountId)

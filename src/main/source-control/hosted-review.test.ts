@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHostedReviewForBranch } from './hosted-review'
+import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 
 const {
   getProjectSlugMock,
@@ -36,6 +38,7 @@ vi.mock('../gitlab/client', () => ({
 vi.mock('../github/client', () => ({
   getRepoSlug: getRepoSlugMock,
   getPRForBranchOutcome: getPRForBranchOutcomeMock,
+  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
   createGitHubPullRequest: vi.fn()
 }))
 
@@ -66,8 +69,6 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-import { getHostedReviewForBranch } from './hosted-review'
-
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
     getProjectSlugMock.mockReset()
@@ -80,6 +81,9 @@ describe('getHostedReviewForBranch', () => {
     getAzureDevOpsPullRequestForBranchMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
     getGiteaPullRequestForBranchMock.mockReset()
+    // The branch cache is process-wide, so one test's answer would otherwise
+    // satisfy the next one's lookup.
+    __resetHostedReviewBranchCacheForTests()
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {

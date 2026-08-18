@@ -5,6 +5,7 @@
  * renderer store handler owns notification/unread policy.
  */
 
+import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
 /** Why tagged: stale-clear facts come from main's unthrottled 3s timer, not
@@ -12,6 +13,7 @@ import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
  *  must not schedule task-complete notifications or unread attention — a
  *  merely-paused agent (>3s silent mid-task) is not a completion. */
 export type TerminalSideEffectFact =
+  | { kind: 'agent-status'; payload: ParsedAgentStatusPayload }
   | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
   | { kind: 'bell' }
   | { kind: 'agent-working' }
@@ -28,9 +30,8 @@ export type TerminalSideEffectFact =
   | { kind: 'command-code-working'; prompt: string }
   | { kind: 'command-code-done'; prompt: string }
   /** DECSET 2031 color-scheme subscribe observed in the byte stream. Emitted
-   *  so hidden-delivery-gated views (whose bytes never arrive) can still send
-   *  the theme reply — the reply stays renderer-side because query authority
-   *  belongs to the view (model/view contract invariant 6). */
+   *  so hidden-delivery-gated views (whose bytes never arrive) can still record
+   *  the subscription and push later theme flips; subscribing is never answered. */
   | { kind: '2031-subscribe' }
   /** DECSET 2031 withdrawal observed in the byte stream. Gated views never see
    *  these bytes, so without this fact their subscription registry goes stale
@@ -43,7 +44,7 @@ export type TerminalSideEffectBatch = {
    *  their title state was current at, so the handler can drop a replay title
    *  older than the last live title fact it applied. */
   seq: number
-  /** Facts from one chunk, in byte order: titles in sequence, then bell.
+  /** Facts from one chunk, in byte order: agent status, titles, then bell.
    *  Command Code scrape facts trail the chunk's parser facts — their policy
    *  (status-row seeding) never interacts with title/bell ordering. */
   facts: TerminalSideEffectFact[]

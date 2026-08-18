@@ -1,4 +1,7 @@
-import type { WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import {

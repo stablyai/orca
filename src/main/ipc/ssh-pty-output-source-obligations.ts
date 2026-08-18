@@ -41,7 +41,12 @@ export class SshPtyOutputSourceObligations {
   private readonly coordinator: SshPtySourceObligationCoordinator
   private readonly remoteConsumers: SshPtyRemoteSourceRangeConsumers
   private readonly openedTokens = new Set<string>()
-  private readonly identityByPty = new Map<string, PtySourceDeliveryIdentity>()
+  // Why: fence/recovery consumers key checkpoints by app pty id, but the wire
+  // ACK path needs the relay id kept on identity.id — record both.
+  private readonly identityByPty = new Map<
+    string,
+    Readonly<{ appPtyId: string; identity: PtySourceDeliveryIdentity }>
+  >()
 
   constructor(publish: SshPtyOutputDataEventPublisher | undefined) {
     this.coordinator = new SshPtySourceObligationCoordinator({
@@ -68,7 +73,7 @@ export class SshPtyOutputSourceObligations {
     if (!this.openedTokens.has(tokenKey)) {
       this.coordinator.open(identity, span.sourceStartSu)
       this.openedTokens.add(tokenKey)
-      this.identityByPty.set(this.ptyKey(event), identity)
+      this.identityByPty.set(this.ptyKey(event), Object.freeze({ appPtyId: event.id, identity }))
     }
     return Object.freeze({
       span,
@@ -132,21 +137,21 @@ export class SshPtyOutputSourceObligations {
   }
 
   sealPty(event: SshPtyOutputExitEvent): void {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (identity) {
       this.coordinator.seal(identity)
     }
   }
 
   markExitPublished(event: SshPtyOutputExitEvent): void {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (identity) {
       this.coordinator.markExitPublished(identity)
     }
   }
 
   whenPtyTerminal(event: SshPtyOutputExitEvent): Promise<void> {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     return identity ? this.coordinator.whenTerminal(identity) : Promise.resolve()
   }
 
@@ -154,7 +159,7 @@ export class SshPtyOutputSourceObligations {
     event: SshPtyOutputExitEvent,
     cancel: (request: SshPtySourceCancellationRequest) => Promise<SshPtySourceCancellationProof>
   ): Promise<SshPtySourceCancellationProofCommit | null> {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (!identity) {
       return null
     }
@@ -171,7 +176,7 @@ export class SshPtyOutputSourceObligations {
     event: SshPtyOutputExitEvent,
     proof: SshPtySourceCancellationProof
   ): boolean {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (!identity) {
       return false
     }
@@ -183,7 +188,7 @@ export class SshPtyOutputSourceObligations {
     event: SshPtyOutputExitEvent,
     proof: SshPtySourceCancellationProof
   ): void {
-    const identity = this.identityByPty.get(this.ptyKey(event))
+    const identity = this.identityByPty.get(this.ptyKey(event))?.identity
     if (identity) {
       this.coordinator.applyRecoveryCancellationProof(identity, proof)
     }
@@ -198,8 +203,8 @@ export class SshPtyOutputSourceObligations {
         this.openedTokens.delete(key)
       }
     }
-    for (const [key, identity] of this.identityByPty) {
-      if (identity.providerGeneration === providerGeneration) {
+    for (const [key, record] of this.identityByPty) {
+      if (record.identity.providerGeneration === providerGeneration) {
         this.identityByPty.delete(key)
       }
     }
@@ -207,19 +212,20 @@ export class SshPtyOutputSourceObligations {
 
   acceptedCheckpoints(providerGeneration: number): readonly SshPtyAcceptedSourceCheckpoint[] {
     const checkpoints: SshPtyAcceptedSourceCheckpoint[] = []
-    for (const identity of this.identityByPty.values()) {
-      if (identity.providerGeneration !== providerGeneration) {
+    for (const record of this.identityByPty.values()) {
+      if (record.identity.providerGeneration !== providerGeneration) {
         continue
       }
       checkpoints.push(
         Object.freeze({
-          id: identity.id,
-          providerGeneration: identity.providerGeneration,
-          clientGeneration: identity.clientGeneration,
-          ownerGeneration: identity.ownerGeneration,
-          ptyIncarnation: identity.ptyIncarnation,
-          deliveryToken: identity.deliveryToken,
-          acceptedSourceEndSu: this.coordinator.modelAcceptedEnd(identity)
+          // Why: fence/recovery keys are app pty ids; the bare relay id stays on identity.id.
+          id: record.appPtyId,
+          providerGeneration: record.identity.providerGeneration,
+          clientGeneration: record.identity.clientGeneration,
+          ownerGeneration: record.identity.ownerGeneration,
+          ptyIncarnation: record.identity.ptyIncarnation,
+          deliveryToken: record.identity.deliveryToken,
+          acceptedSourceEndSu: this.coordinator.modelAcceptedEnd(record.identity)
         })
       )
     }
@@ -284,8 +290,8 @@ export class SshPtyOutputSourceObligations {
 
   private removeIdentity(identity: PtySourceDeliveryIdentity): void {
     this.openedTokens.delete(ptySourceDeliveryKey(identity))
-    for (const [key, candidate] of this.identityByPty) {
-      if (samePtySourceDelivery(candidate, identity)) {
+    for (const [key, record] of this.identityByPty) {
+      if (samePtySourceDelivery(record.identity, identity)) {
         this.identityByPty.delete(key)
       }
     }

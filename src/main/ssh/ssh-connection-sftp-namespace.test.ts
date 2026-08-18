@@ -43,6 +43,7 @@ const MARKER = '.install-lock/.sftp-namespace-cafebabe'
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_DIR}`
 
 const namespace: SftpNamespacePathMapping = {
+  homeRelativeNamespaceRoot: RELAY_DIR,
   homeRelativePath: RELAY_DIR,
   shellProbePath: `${SHELL_RELAY_DIR}/${MARKER}`,
   homeRelativeProbePath: `${RELAY_DIR}/${MARKER}`

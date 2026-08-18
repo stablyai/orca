@@ -1,8 +1,10 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   agentSubagentsEqual,
+  isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
@@ -16,6 +18,26 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('isFreshNonDoneAgentStatus', () => {
+  it('treats a within-TTL working entry as fresh', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 1_000 }, 2_000)).toBe(true)
+  })
+
+  it('never treats a restored-unconfirmed entry as fresh, regardless of age', () => {
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: 1_999, restoredUnconfirmed: true },
+        2_000
+      )
+    ).toBe(false)
+  })
+
+  it('stays false for done and for stale entries', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {
@@ -398,6 +420,55 @@ Fix dispatch fallback preview for normalized status prompts`
       const result = parseAgentStatusPayload(`{"state":"${state}","interrupted":true}`)
       expect(result!.interrupted).toBeUndefined()
     }
+  })
+
+  it('preserves sessionBoundary=true only on done (stale-signal suppression like interrupted)', () => {
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":true}')!.sessionBoundary
+    ).toBe(true)
+    for (const state of ['working', 'blocked', 'waiting'] as const) {
+      const result = parseAgentStatusPayload(`{"state":"${state}","sessionBoundary":true}`)
+      expect(result!.sessionBoundary).toBeUndefined()
+    }
+    // Why: parser uses `=== true`, so truthy sentinels don't count.
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
+    ).toBeUndefined()
+  })
+
+  it('keeps turnCompletedAt on the gated working row and its all-clear done, nowhere else', () => {
+    for (const state of ['working', 'done'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBe(1767225601000)
+    }
+    for (const state of ['blocked', 'waiting'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const raw of ['"1767225601000"', 'null', 'true']) {
+      expect(
+        parseAgentStatusPayload(`{"state":"done","turnCompletedAt":${raw}}`)!.turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        normalizeAgentStatusPayload({ state: 'done', turnCompletedAt: value })!.turnCompletedAt
+      ).toBeUndefined()
+    }
+  })
+
+  it('carries turnCompletedAt through the client-visible payload projection', () => {
+    expect(
+      pickParsedAgentStatusPayload({
+        state: 'working',
+        prompt: 'run the build',
+        turnCompletedAt: 1767225601000
+      }).turnCompletedAt
+    ).toBe(1767225601000)
   })
 
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {

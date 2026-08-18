@@ -1,194 +1,133 @@
 import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-terminal-http-links'
 import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
 import { dedupeLogicalLines } from './terminal-file-link-hit-testing'
 import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
-import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
+import {
+  installTerminalLinkPtyMouseSuppression,
+  type TerminalLinkPtyMouseSuppression
+} from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
-import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
+import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+import { translate } from '@/i18n/i18n'
+import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
+import {
+  requestTerminalLinkAction,
+  type TerminalLinkActionContext
+} from './terminal-link-action-request'
+
+export { extractTerminalHttpLinks } from './terminal-http-url-extraction'
+export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
+  sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  linkActionContext?: TerminalLinkActionContext | null
+  actionDestinations?: TerminalHttpLinkActionDestinations
+  actionDestination?: string
+  forceDestination?: TerminalHttpLinkDestination
 }
 
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
+  /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
+  getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  getLinkActionContext?: () => TerminalLinkActionContext | null
+  getActionDestinations?: () => TerminalHttpLinkActionDestinations
+}
+
+export type HttpLinkClickFallbackBinding = IDisposable & {
+  ptyMouseSuppression: TerminalLinkPtyMouseSuppression
+}
+
+export type TerminalHttpLinkDestination = 'orca' | 'system'
+
+export type TerminalHttpLinkActionDestinations = {
+  primary: TerminalHttpLinkDestination
+  alternate?: TerminalHttpLinkDestination
 }
 
 export type TerminalLinkRoutingPreferenceRequester = (
   url: string
 ) => boolean | Promise<boolean> | null | undefined
 
-type ParsedTerminalHttpLink = {
-  url: string
-  startIndex: number
-  endIndex: number
-}
-
-const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
-export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
-
-export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
-  const links: ParsedTerminalHttpLink[] = []
-  for (const candidate of iterateTerminalHttpUrlCandidates(lineText)) {
-    let parsed: URL
-    try {
-      parsed = new URL(candidate.url)
-    } catch {
-      continue
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      continue
-    }
-    links.push({
-      url: parsed.toString(),
-      startIndex: candidate.startIndex,
-      endIndex: candidate.endIndex
-    })
-  }
-  return links
-}
-
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || event.button !== 0) {
     return false
   }
-  // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
-  // plain clicks remain available for cursor placement and selection. Mobile
-  // tap routing is handled separately under mobile/src/terminal.
-  return isTerminalHttpLinkActivation(event)
+  // Why: Shift-only, Alt, and non-primary clicks remain available to the terminal or child TUI.
+  return isTerminalOwnedLinkGesture(event)
 }
 
-function* iterateTerminalHttpUrlCandidates(
-  lineText: string
-): Generator<{ url: string; startIndex: number; endIndex: number }> {
-  let searchStart = 0
-  while (searchStart < lineText.length) {
-    const startIndex = findNextHttpSchemeIndex(lineText, searchStart)
-    if (startIndex === -1) {
-      return
-    }
-
-    if (!hasHttpUrlWordBoundary(lineText, startIndex)) {
-      searchStart = startIndex + 1
-      continue
-    }
-
-    const rawEndIndex = findHttpUrlCandidateEnd(lineText, startIndex)
-    const endIndex = trimHttpUrlTrailingPunctuation(lineText, startIndex, rawEndIndex)
-    searchStart = Math.max(rawEndIndex, startIndex + 1)
-    if (endIndex <= startIndex || rawEndIndex - startIndex > TERMINAL_HTTP_URL_MAX_LENGTH) {
-      continue
-    }
-
-    yield {
-      url: lineText.slice(startIndex, endIndex),
-      startIndex,
-      endIndex
-    }
+export function handleTerminalHttpLink(
+  url: string,
+  event: MouseEvent | undefined,
+  deps: UrlLinkHitTestDeps
+): boolean {
+  if (isTerminalHttpLinkActivation(event)) {
+    const forceDestination = event?.shiftKey
+      ? (deps.actionDestinations?.alternate ?? deps.actionDestinations?.primary)
+      : deps.actionDestinations?.primary
+    openTerminalHttpLink(url, {
+      ...deps,
+      modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
+      forceDestination
+    })
+    return true
   }
-}
 
-function findNextHttpSchemeIndex(lineText: string, searchStart: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidateIndex = lineText.indexOf(prefix, searchStart)
-    if (candidateIndex !== -1 && (nextIndex === -1 || candidateIndex < nextIndex)) {
-      nextIndex = candidateIndex
-    }
-  }
-  return nextIndex
-}
+  const actionDestinations = deps.actionDestinations
+  const primaryDestination = actionDestinations?.primary
+  const labelForDestination = (destination: TerminalHttpLinkDestination): string =>
+    destination === 'orca'
+      ? translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
+          'Orca Browser'
+        )
+      : translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
+          'System Browser'
+        )
 
-function hasHttpUrlWordBoundary(lineText: string, startIndex: number): boolean {
-  return startIndex === 0 || !isAsciiWordCode(lineText.charCodeAt(startIndex - 1))
-}
-
-function findHttpUrlCandidateEnd(lineText: string, startIndex: number): number {
-  const scanEnd = Math.min(lineText.length, startIndex + TERMINAL_HTTP_URL_MAX_LENGTH + 1)
-  for (let index = startIndex; index < scanEnd; index += 1) {
-    if (isHttpUrlBodyTerminator(lineText.charCodeAt(index))) {
-      return index
-    }
-  }
-  return scanEnd
-}
-
-function trimHttpUrlTrailingPunctuation(
-  lineText: string,
-  startIndex: number,
-  rawEndIndex: number
-): number {
-  let endIndex = rawEndIndex
-  while (endIndex > startIndex && isHttpUrlTrailingPunctuation(lineText.charCodeAt(endIndex - 1))) {
-    endIndex -= 1
-  }
-  return endIndex
-}
-
-function isHttpUrlBodyTerminator(code: number): boolean {
-  return (
-    isAsciiWhitespace(code) ||
-    code === 0x22 ||
-    code === 0x27 ||
-    code === 0x21 ||
-    code === 0x2a ||
-    code === 0x28 ||
-    code === 0x29 ||
-    code === 0x7b ||
-    code === 0x7d ||
-    code === 0x7c ||
-    code === 0x5c ||
-    code === 0x5e ||
-    code === 0x3c ||
-    code === 0x3e ||
-    code === 0x60
-  )
-}
-
-function isHttpUrlTrailingPunctuation(code: number): boolean {
-  return (
-    isAsciiWhitespace(code) ||
-    code === 0x22 ||
-    code === 0x27 ||
-    code === 0x3a ||
-    code === 0x2c ||
-    code === 0x2e ||
-    code === 0x21 ||
-    code === 0x3f ||
-    code === 0x7b ||
-    code === 0x7d ||
-    code === 0x7c ||
-    code === 0x5c ||
-    code === 0x5e ||
-    code === 0x7e ||
-    code === 0x5b ||
-    code === 0x5d ||
-    code === 0x28 ||
-    code === 0x29 ||
-    code === 0x3c ||
-    code === 0x3e ||
-    code === 0x60
-  )
-}
-
-function isAsciiWhitespace(code: number): boolean {
-  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32
-}
-
-function isAsciiWordCode(code: number): boolean {
-  return (
-    (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) ||
-    code === 95 ||
-    (code >= 97 && code <= 122)
-  )
+  return requestTerminalLinkAction(event, deps.linkActionContext, {
+    destination: deps.actionDestination ?? url,
+    kind: 'url',
+    primary: {
+      external: primaryDestination === 'system',
+      label: primaryDestination
+        ? labelForDestination(primaryDestination)
+        : translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openLink',
+            'Open link'
+          ),
+      run: () =>
+        openTerminalHttpLink(url, {
+          ...deps,
+          modifierHeld: false,
+          forceDestination: primaryDestination
+        })
+    },
+    ...(actionDestinations?.alternate
+      ? {
+          alternate: {
+            external: actionDestinations.alternate === 'system',
+            label: labelForDestination(actionDestinations.alternate),
+            run: () =>
+              openTerminalHttpLink(url, {
+                ...deps,
+                modifierHeld: false,
+                forceDestination: actionDestinations.alternate
+              })
+          }
+        }
+      : {})
+  })
 }
 
 export function openHttpLinkAtTerminalMouseEvent(
@@ -206,11 +145,24 @@ export function openHttpLinkAtTerminalMouseEvent(
   return openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
 }
 
+export function findHttpLinkAtTerminalMouseEvent(
+  terminal: Terminal,
+  event: MouseEvent
+): string | null {
+  if (event.button !== 0 || !isTerminalOwnedLinkGesture(event)) {
+    return null
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return position
+    ? findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+    : null
+}
+
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
-): IDisposable {
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+): HttpLinkClickFallbackBinding {
+  const isLinkMouseEvent = (event: MouseEvent): boolean => {
     if (isTerminalLinkifierHoverActive(terminal)) {
       return true
     }
@@ -218,21 +170,34 @@ export function installHttpLinkClickFallback(
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
     )
-  })
+  }
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
+    terminal,
+    isLinkMouseEvent,
+    (event) => {
+      const context = deps.getLinkActionContext?.()
+      return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
+    },
+    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+  )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
     }
 
-    // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves modifier-clicks when the hover link was
-    // never established, while defaultPrevented avoids duplicate opens.
-    const opened = openHttpLinkAtTerminalMouseEvent(terminal, event, {
-      worktreeId: deps.worktreeId,
-      modifierHeld: event.shiftKey,
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
-    })
-    if (opened) {
+    // Why: xterm's WebLinksAddon misses first clicks before hover state exists.
+    const url = findHttpLinkAtTerminalMouseEvent(terminal, event)
+    const handled = Boolean(
+      url &&
+      handleTerminalHttpLink(url, event, {
+        worktreeId: deps.worktreeId,
+        sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
+        requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+        linkActionContext: deps.getLinkActionContext?.(),
+        actionDestinations: deps.getActionDestinations?.()
+      })
+    )
+    if (handled) {
       event.preventDefault()
       terminal.clearSelection()
     }
@@ -241,6 +206,7 @@ export function installHttpLinkClickFallback(
   const terminalElement = terminal.element
   terminalElement?.addEventListener('mouseup', handleMouseUp)
   return {
+    ptyMouseSuppression,
     dispose: () => {
       ptyMouseSuppression.dispose()
       terminalElement?.removeEventListener('mouseup', handleMouseUp)
@@ -307,16 +273,35 @@ function rangeContainsBufferPosition(
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
+  // Why: pane ownership beats the global active runtime for both local and remote routes.
+  const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
+  if (deps.forceDestination) {
+    openHttpLink(url, {
+      allowRuntimeInApp: true,
+      worktreeId: deps.worktreeId,
+      forceInApp: deps.forceDestination === 'orca',
+      forceSystemBrowser: deps.forceDestination === 'system',
+      sourceOwner
+    })
+    return
+  }
   if (deps.modifierHeld) {
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.
-    openHttpLink(url, { worktreeId: deps.worktreeId, modifierHeld: true })
+    openHttpLink(url, {
+      allowRuntimeInApp: true,
+      worktreeId: deps.worktreeId,
+      modifierHeld: true,
+      sourceOwner
+    })
     return
   }
 
-  const preferenceDecision = deps.requestOpenLinksInAppPreference?.(url)
+  // Why: remote panes use the persisted routing preference and never prompt the viewing client.
+  const preferenceDecision =
+    sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { worktreeId: deps.worktreeId })
+    openHttpLink(url, { allowRuntimeInApp: true, worktreeId: deps.worktreeId, sourceOwner })
     return
   }
 
@@ -326,11 +311,18 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {
+        allowRuntimeInApp: true,
         worktreeId: deps.worktreeId,
-        forceSystemBrowser: !openInOrca
+        forceSystemBrowser: !openInOrca,
+        sourceOwner
       })
     })
     .catch(() => {
-      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+      openHttpLink(url, {
+        allowRuntimeInApp: true,
+        worktreeId: deps.worktreeId,
+        forceSystemBrowser: true,
+        sourceOwner
+      })
     })
 }

@@ -14,7 +14,7 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
-import { styles } from './accounts-screen-styles'
+import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {

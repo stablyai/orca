@@ -6,7 +6,7 @@ import {
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   resolveDirectSshTargetScope,
@@ -59,6 +59,9 @@ function folderHasContradictoryOwner(
   const expectedHostId = toSshExecutionHostId(input.targetId)
   const folders = (input.folderWorkspaces ?? []).filter((folder) => folder.id === folderWorkspaceId)
   for (const folder of folders) {
+    if (isExplicitContradictoryHost(folder.executionHostId, expectedHostId)) {
+      return true
+    }
     if (folder.connectionId?.trim() && folder.connectionId.trim() !== input.targetId) {
       return true
     }

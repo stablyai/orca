@@ -1,5 +1,5 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,

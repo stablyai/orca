@@ -47,6 +47,22 @@ describe('PluginDevWatcher', () => {
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledOnce())
   })
 
+  it('contains unsubscribe rejections so dispose cannot fail the host process', async () => {
+    const unsubscribe = vi
+      .fn()
+      .mockRejectedValue(new Error('Unable to remove watcher: Invalid argument'))
+    const subscribePath = vi.fn(async () => ({ unsubscribe }))
+    const devWatcher = new PluginDevWatcher(subscribePath)
+    devWatcher.start(['/plugins/demo'], vi.fn())
+    await vi.waitFor(() => expect(subscribePath).toHaveBeenCalledOnce())
+
+    expect(() => devWatcher.dispose()).not.toThrow()
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledOnce())
+    // Why: give the rejected promise a turn so an uncaught rejection would surface.
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+
   it('does not spin refreshes when a missing path cannot be subscribed', async () => {
     vi.useFakeTimers()
     const subscribePath = vi.fn().mockRejectedValue(new Error('missing path'))

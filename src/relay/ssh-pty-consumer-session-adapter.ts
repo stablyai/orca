@@ -1,8 +1,8 @@
 import {
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
   PtyConsumerSession,
-  type PtyConsumerSessionGrant,
-  type PtyConsumerSessionHello
+  type PtyConsumerSessionAdmission,
+  type PtyConsumerSessionGrant
 } from '../shared/pty-consumer-session'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../shared/pty-source-credit-contract'
 import type {
@@ -11,62 +11,17 @@ import type {
   PtySourceSpan,
   PtySourceTransform
 } from '../shared/pty-source-credit-contract'
-import type { RelayClientSessionIdentity, RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { PtySourceSendReservation } from './pty-source-credit-ledger'
 import { SshPtySourceCreditAdapter } from './ssh-pty-source-credit-adapter'
+import {
+  admitsSshPtyDataPublication,
+  sshPtyDeliveryMode,
+  type SshPtyDeliveryMode
+} from './ssh-pty-data-publication-admission'
+import { parseOpenClientParams, requireIdentity } from './ssh-pty-open-client-request'
 
 export const SSH_PTY_OPEN_CLIENT_METHOD = 'pty.openClient'
-
-type OpenClientParams = PtyConsumerSessionHello & {
-  protocolVersion: number
-}
-
-function parseOpenClientParams(params: Record<string, unknown>): OpenClientParams {
-  const resume =
-    typeof params.resume === 'object' && params.resume !== null
-      ? (params.resume as Record<string, unknown>)
-      : undefined
-  const capabilities =
-    typeof params.capabilities === 'object' && params.capabilities !== null
-      ? (params.capabilities as Record<string, unknown>)
-      : undefined
-  const outputFlowControl =
-    typeof capabilities?.outputFlowControl === 'object' && capabilities.outputFlowControl !== null
-      ? (capabilities.outputFlowControl as Record<string, unknown>)
-      : undefined
-  return {
-    protocolVersion: Number(params.protocolVersion),
-    clientInstanceId: String(params.clientInstanceId ?? ''),
-    requestedRole: String(params.requestedRole ?? '') as PtyConsumerSessionHello['requestedRole'],
-    ...(resume
-      ? {
-          resume: {
-            ownerGeneration: Number(resume.ownerGeneration),
-            ownerLease: String(resume.ownerLease ?? '')
-          }
-        }
-      : {}),
-    ...(outputFlowControl
-      ? {
-          capabilities: {
-            outputFlowControl: {
-              versions: Array.isArray(outputFlowControl.versions)
-                ? outputFlowControl.versions.map(Number)
-                : [],
-              requestedWindowSu: Number(outputFlowControl.requestedWindowSu)
-            }
-          }
-        }
-      : {})
-  }
-}
-
-function requireIdentity(context: RequestContext): RelayClientSessionIdentity {
-  if (!context.sessionIdentity) {
-    throw new Error('SSH PTY consumer transport identity is unavailable')
-  }
-  return context.sessionIdentity
-}
 
 export class SshPtyConsumerSessionAdapter {
   private readonly session: PtyConsumerSession
@@ -74,7 +29,7 @@ export class SshPtyConsumerSessionAdapter {
   private readonly pausedDeliveryByPty = new Map<string, PtySourceDeliveryIdentity>()
 
   constructor(
-    dispatcher: RelayDispatcher,
+    private readonly dispatcher: RelayDispatcher,
     serverBuildId: string,
     private readonly setDeliveryPaused?: (id: string, paused: boolean) => void,
     onSourceCreditAvailable?: (id: string) => void
@@ -91,15 +46,26 @@ export class SshPtyConsumerSessionAdapter {
       serverBuildId,
       outputFlowControl: { versions: [1], maxWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
     })
+    // Why the admission is consulted again at drain time (see isStillAdmitted): a frame can sit
+    // queued behind a saturated socket long enough for the grant or the delivery to be retired, and
+    // publishing it then hands the client output from an owner it no longer is.
+    dispatcher.registerPtyDataPublicationAdmission((clientId, params) =>
+      admitsSshPtyDataPublication(
+        this.session.activeGrant(String(clientId)),
+        params,
+        this.sourceCredit
+      )
+    )
     dispatcher.onRequest(SSH_PTY_OPEN_CLIENT_METHOD, (params, context) =>
       this.openClient(params, context)
     )
-    dispatcher.onClientDetached((clientId) => {
-      const grant = this.session.activeGrant(String(clientId))
+    dispatcher.onClientDetached((clientId, cause) => {
+      const connectionKey = String(clientId)
+      const grant = this.session.activeGrant(connectionKey)
       if (grant) {
         this.clearPausedForGrant(grant)
       }
-      this.session.close(String(clientId))
+      this.session.close(connectionKey, cause)
       if (grant) {
         this.sourceCredit.retainOrCloseOnDetach(grant)
       }
@@ -217,6 +183,12 @@ export class SshPtyConsumerSessionAdapter {
     return this.sourceCredit.snapshot(identity)
   }
 
+  sourceDeliverySnapshotIfKnown(
+    identity: PtySourceDeliveryIdentity
+  ): PtySourceDeliverySnapshot | null {
+    return this.sourceCredit.snapshotIfKnown(identity)
+  }
+
   cancelDelivery(identity: PtySourceDeliveryIdentity, reason: string): void {
     this.clearPausedIdentity(identity)
     this.sourceCredit.cancelIdentity(identity, reason)
@@ -232,12 +204,8 @@ export class SshPtyConsumerSessionAdapter {
     return this.sourceCredit.retentionSnapshot()
   }
 
-  deliveryMode(clientId: number): 'source-owner' | 'legacy-owner' | 'subscriber' {
-    const grant = this.session.activeGrant(String(clientId))
-    if (grant?.role !== 'session-owner') {
-      return 'subscriber'
-    }
-    return grant.capabilities?.outputFlowControl ? 'source-owner' : 'legacy-owner'
+  deliveryMode(clientId: number): SshPtyDeliveryMode {
+    return sshPtyDeliveryMode(this.session.activeGrant(String(clientId)))
   }
 
   private async openClient(
@@ -262,13 +230,28 @@ export class SshPtyConsumerSessionAdapter {
       throw new Error('SSH PTY consumer response publication fence is unavailable')
     }
     context.onResponseSettled((result) => {
-      if (result.ok) {
-        admission.commitPublication()
-      } else {
+      if (!result.ok) {
         admission.rollbackPublication()
+        return
       }
+      admission.commitPublication()
+      this.closeDisplacedOwner(admission.displacedOwner)
     })
     return admission.grant
+  }
+
+  // Why: only after the replacement grant is published — until then the admission can still roll back
+  // onto the incumbent. Its deliveries are retained for the new owner to rotate, exactly as on detach.
+  private closeDisplacedOwner(displaced: PtyConsumerSessionAdmission['displacedOwner']): void {
+    if (!displaced) {
+      return
+    }
+    this.clearPausedForGrant(displaced.grant)
+    this.sourceCredit.retainOrCloseOnDetach(displaced.grant)
+    const clientId = Number(displaced.connectionId)
+    if (Number.isSafeInteger(clientId)) {
+      this.dispatcher.releaseDisplacedClient(clientId)
+    }
   }
 
   private clearPausedIdentity(identity: PtySourceDeliveryIdentity): void {

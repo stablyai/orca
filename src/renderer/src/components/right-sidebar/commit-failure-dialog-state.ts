@@ -3,10 +3,6 @@ export type CommitFailureDialogState = {
   open: boolean
 }
 
-export function getCommitFailureDialogWorktreeKey(worktreeId: string | null | undefined): string {
-  return worktreeId ?? 'no-worktree'
-}
-
 export function shouldShowCommitFailureDialog(
   state: CommitFailureDialogState,
   worktreeKey: string,

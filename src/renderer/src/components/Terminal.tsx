@@ -4,7 +4,6 @@ import React, { useEffect, useCallback, useMemo, useRef, useState, Suspense } fr
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
@@ -12,6 +11,7 @@ import {
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
 import { basename } from '../lib/path'
@@ -30,31 +30,52 @@ import {
   ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
+  type EditorRequestCmdSaveDetail,
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import type {
-  Tab,
-  TabContentType,
-  TabGroupLayoutNode,
-  TerminalTab,
-  TuiAgent
-} from '../../../shared/types'
+import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
-import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
-import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
-import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
+import {
+  isBrowserAutomationVisible,
+  onBrowserAutomationVisibilityChange,
+  useBrowserAutomationVisibilityForAny
+} from './browser-pane/host-guest/browser-automation-visibility'
+import {
+  isBrowserPageMobileDriven,
+  onBrowserDriverChange,
+  useBrowserMobileDriverForAny
+} from '@/lib/pane-manager/browser-mobile-driver-state'
+import {
+  useAnyBrowserGuestNeedsPaint,
+  useWorktreeBrowserPageIds
+} from './browser-pane/host-guest/browser-guest-paint-retention'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
   destroyRemovedBrowserWebview,
-  destroyWorkspaceWebviews
+  destroyWorkspaceWebviews,
+  destroyWorktreeBrowserGuests
 } from '../store/slices/browser-webview-cleanup'
+import {
+  browserTabVisibilityPageIds,
+  selectBrowserGuestEvictionWorktreeIds,
+  touchBrowserGuestWorktreeRecency,
+  worktreeHoldsLiveBrowserGuests
+} from './browser-pane/host-guest/browser-guest-worktree-retention'
+import {
+  hasActiveBrowserPageDownload,
+  installBrowserPageDownloadActivityTracking
+} from './browser-pane/navigate/browser-page-download-activity'
+import { hasLiveBrowserGuest } from './browser-pane/host-guest/webview-registry'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -64,7 +85,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
-import { resolveRepairedActiveTerminalTabId } from './terminal/active-terminal-repair'
+import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   applyBackgroundMountTabRestriction,
@@ -89,17 +110,21 @@ import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/termi
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   canParkTerminalWorktreeRenderers,
+  isParkRestorableTerminalPty,
   selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
 } from './terminal-pane/terminal-hidden-view-parking'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  countEvictionExemptTabRoutes,
+  formatEvictionExemptRouteCounts,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import {
@@ -112,12 +137,12 @@ import {
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
   shouldDeferParkedPtyExitTabClose,
-  syncParkedTerminalTabWatchers
+  syncParkedTerminalTabWatchers,
+  terminalWatcherLiveWorkspaceIds
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
-import CodexRestartChip from './CodexRestartChip'
 import {
   findActivityTerminalPortal,
   useActivityTerminalPortals,
@@ -164,19 +189,18 @@ import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
 } from './terminal-pane/use-manual-terminal-worktree-parking'
+import { EDITOR_TAB_CONTENT_TYPES, getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
 // Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
-
 type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
+
+function showClientCreationActionError(error: unknown): void {
+  toast.error(error instanceof Error ? error.message : String(error))
+}
 
 function haveSameIdSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) {
@@ -271,6 +295,8 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
 
 function Terminal(): React.JSX.Element | null {
   const mountedWorktreeIdsRef = useRef(new Set<string>())
+  // Why an array: browser-guest eviction needs activation order (LRU), not just membership.
+  const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   // Why two extra clocks: hiddenSince survives a background-measure window (so
@@ -309,6 +335,9 @@ function Terminal(): React.JSX.Element | null {
   )
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
+  )
+  const browserGuestRetentionBudgetEnabled = useAppStore(
+    (s) => s.settings?.browserGuestWorktreeRetentionBudget !== false
   )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((s) =>
     isMainTerminalSideEffectAuthorityForPty({
@@ -388,10 +417,15 @@ function Terminal(): React.JSX.Element | null {
   }, [foregroundTerminalTabIds])
 
   const tabs = useMemo(
-    () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
+    () =>
+      renderedActiveWorktreeId !== null && Object.hasOwn(tabsByWorktree, renderedActiveWorktreeId)
+        ? tabsByWorktree[renderedActiveWorktreeId]
+        : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
-  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
+  const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
+    workspaceSessionReady && hydrationSucceeded
+  )
 
   // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
@@ -419,6 +453,11 @@ function Terminal(): React.JSX.Element | null {
   const effectiveActiveLayout = renderedActiveWorktreeId
     ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
+  // Why: both wrappers below sit above every browser <webview>, so a remote controller needs
+  // them to drop `hidden` too — the per-worktree surface hatch cannot override an ancestor.
+  const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(
+    !renderedActiveWorktreeId || !effectiveActiveLayout
+  )
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -747,37 +786,21 @@ function Terminal(): React.JSX.Element | null {
       )
   }, [queueEditorCloseRequests])
 
-  useEffect(() => {
-    const rememberedTabId = renderedActiveWorktreeId
-      ? (activeTabIdByWorktree[renderedActiveWorktreeId] ?? null)
-      : null
-    // Why: prefer the remembered active tab so a repair on a transient switch render doesn't reset selection to Terminal 1.
-    const repairedTabId = resolveRepairedActiveTerminalTabId({
-      activeTabType,
-      activeTabId,
-      rememberedTabId,
-      tabs
-    })
-    if (!repairedTabId) {
-      return
-    }
-    // Why: run in an effect (Zustand mutation during render trips React's cross-component update warning); keep terminal-only so inactive CLI-created tabs can't steal editor/browser focus.
-    setActiveTab(repairedTabId)
-    // Why: `tabs` is the dependency so the repair reacts to tab-order/content changes, not just scalar IDs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
+  // Why: repair after render so Zustand mutation cannot trip React's cross-component update warning.
+  useActiveTerminalRepair({
     activeTabId,
     activeTabType,
     setActiveTab,
     tabs,
     activeTabIdByWorktree,
     renderedActiveWorktreeId
-  ])
+  })
 
   // Why: only mount TerminalPanes for visited worktrees, else restoring many saved tabs mass-spawns PTYs.
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
   const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
+  const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
@@ -1078,10 +1101,18 @@ function Terminal(): React.JSX.Element | null {
         // Why logged: an all-exempt force-park frees no heap at all (daemon
         // fail-open makes every local pty exempt), so the budget only holds
         // while this stays rare — make the degenerate case observable.
+        // Why routed + breadcrumbed: only per-route counts in a field bundle
+        // can say whether fail-open ids or unresolved snapshot capability
+        // dominates the degenerate case.
         if (evictableTabIds.length === 0 && forceParkedTabs.length > 0) {
+          const exemptRouteCounts = countEvictionExemptTabRoutes(forceParkedTabs, worktreeId)
           warnTerminalLifecycleAnomaly('retention force-park freed no panes', {
             worktreeId,
-            reason: `exemptTabs=${forceParkedTabs.length}`
+            reason: `exemptTabs=${forceParkedTabs.length} ${formatEvictionExemptRouteCounts(exemptRouteCounts)}`
+          })
+          recordRendererCrashBreadcrumb('terminal_force_park_freed_no_panes', {
+            exemptTabs: forceParkedTabs.length,
+            ...exemptRouteCounts
           })
         }
         // Why conditional: a tab whose pane was mid-remount registered no
@@ -1150,9 +1181,95 @@ function Terminal(): React.JSX.Element | null {
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
+    terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
     workspaceSurfaces
+  ])
+  // Why here: downloads outlive the pane-local state of hidden (unmounted)
+  // BrowserPanes, and the eviction veto below must see them.
+  useEffect(() => {
+    const invalidateRetention = (): void => {
+      setBrowserGuestRetentionRevision((revision) => revision + 1)
+    }
+    const removeDownloadTracking = installBrowserPageDownloadActivityTracking(invalidateRetention)
+    const removeAutomationTracking = onBrowserAutomationVisibilityChange(invalidateRetention)
+    const removeMobileTracking = onBrowserDriverChange(invalidateRetention)
+    return () => {
+      removeDownloadTracking()
+      removeAutomationTracking()
+      removeMobileTracking()
+    }
+  }, [])
+  // Browser-guest retention budget (#12137 follow-up): hidden worktrees keep
+  // webview guests alive for instant revisits, but only the most recently
+  // activated few. Older ones have every guest FULLY destroyed through the
+  // sanctioned cleanup path while the worktree surface stays mounted: slots
+  // never unmount-detach a live guest (the STA-3228 blank-forever state), the
+  // hidden slot mounts no BrowserPane so nothing resurrects the guest early,
+  // and terminal panes/watchers/capture contracts are untouched. A revisit
+  // rebuilds guests from store state.
+  useEffect(() => {
+    if (!renderedActiveWorktreeId) {
+      return
+    }
+    const recency = browserGuestWorktreeRecencyRef.current
+    touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
+    const surfaceIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
+    for (let index = recency.length - 1; index >= 0; index--) {
+      if (!surfaceIds.has(recency[index])) {
+        recency.splice(index, 1)
+      }
+    }
+    // Why after the bookkeeping: recency must track activation order even while
+    // the kill switch is off, or re-enabling would evict by worktree-list order.
+    if (!browserGuestRetentionBudgetEnabled) {
+      return
+    }
+    const state = useAppStore.getState()
+    // Why appended: a mounted worktree missing from recency (background mount) ranks oldest.
+    const recencyIds = new Set(recency)
+    const orderedWorktreeIds = [
+      ...recency,
+      ...workspaceSurfaces.map((workspace) => workspace.id).filter((id) => !recencyIds.has(id))
+    ]
+    const evictedWorktreeIds = selectBrowserGuestEvictionWorktreeIds({
+      orderedWorktreeIds,
+      activeWorktreeId: renderedActiveWorktreeId,
+      isRetained: (worktreeId) => mountedWorktreeIdsRef.current.has(worktreeId),
+      holdsLiveGuests: (worktreeId) =>
+        worktreeHoldsLiveBrowserGuests(
+          state.browserTabsByWorktree[worktreeId] ?? [],
+          state.browserPagesByWorkspace,
+          hasLiveBrowserGuest
+        ),
+      // Why these vetoes: automation/mobile keeps a hidden guest painted for a
+      // remote controller mid-drive, and main cancels a page's active downloads
+      // when its guest unregisters (tab-close semantics). Terminal state never
+      // vetoes — eviction only destroys guests and leaves the surface (panes,
+      // watchers) alone.
+      isEvictable: (worktreeId) =>
+        !(state.browserTabsByWorktree[worktreeId] ?? []).some((tab) =>
+          browserTabVisibilityPageIds(tab).some(
+            (pageId) =>
+              isBrowserAutomationVisible(pageId) ||
+              isBrowserPageMobileDriven(pageId) ||
+              hasActiveBrowserPageDownload(pageId)
+          )
+        )
+    })
+    for (const worktreeId of evictedWorktreeIds) {
+      destroyWorktreeBrowserGuests(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace,
+        worktreeId
+      )
+    }
+  }, [
+    renderedActiveWorktreeId,
+    workspaceSurfaces,
+    browserGuestRetentionBudgetEnabled,
+    browserGuestRetentionRevision
   ])
   // Why: a slow post-reconnect step exposes workspaceSessionReady before hydration can populate snapshot capabilities.
   if (
@@ -1204,8 +1321,15 @@ function Terminal(): React.JSX.Element | null {
       }
     }
     const activationHostSupportsDeferral = canDeferColdActivationTabsForHost({
-      executionHostId: activeWorktreeDeferralHostId
+      executionHostId: activeWorktreeDeferralHostId,
+      pairedRuntimeParkingEnvironmentIds
     })
+    const isColdActivationPtyEligible = (ptyId: string): boolean =>
+      isRemoteRuntimePtyId(ptyId)
+        ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
+            pairedRuntimeParkingEnvironmentIds
+          })
+        : terminalProviderHasAuthoritativeSnapshot(ptyId)
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
@@ -1226,7 +1350,7 @@ function Terminal(): React.JSX.Element | null {
             canWatcherCoverParkedTerminalTab(
               renderedActiveWorktreeId,
               tab,
-              terminalProviderHasAuthoritativeSnapshot
+              isColdActivationPtyEligible
             )
           )
         },
@@ -1243,7 +1367,7 @@ function Terminal(): React.JSX.Element | null {
           !canWatcherCoverParkedTerminalTab(
             renderedActiveWorktreeId,
             tab,
-            terminalProviderHasAuthoritativeSnapshot
+            isColdActivationPtyEligible
           )
         ) {
           immediateTabIds.add(tab.id)
@@ -1286,7 +1410,9 @@ function Terminal(): React.JSX.Element | null {
   )
   // Why: legacy (non-split) host owns watcher reconciliation; split mode's overlay layers own theirs, so only dispose worktrees with no overlay layer.
   useEffect(() => {
-    pruneParkedTerminalWatchers(new Set(workspaceSurfaces.map((workspace) => workspace.id)))
+    pruneParkedTerminalWatchers(
+      terminalWatcherLiveWorkspaceIds(workspaceSurfaces.map((workspace) => workspace.id))
+    )
     for (const workspace of workspaceSurfaces) {
       if (
         anyMountedWorktreeHasLayout &&
@@ -1370,6 +1496,9 @@ function Terminal(): React.JSX.Element | null {
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
+  const activeWorktreeHasTerminalState = activeWorktreeId
+    ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
+    : false
   useEffect(() => {
     if (!workspaceSessionReady) {
       return
@@ -1384,12 +1513,18 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
       return
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeWorktreeHasTerminalState,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {
@@ -1501,7 +1636,7 @@ function Terminal(): React.JSX.Element | null {
     void openMobileEmulatorTab(activeWorktreeId, {
       placement: 'rightSplit',
       targetGroupId: targetGroupId ?? undefined
-    })
+    }).catch(showClientCreationActionError)
   }, [activeWorktreeId])
 
   const handleNewBrowserTab = useCallback(() => {
@@ -1512,22 +1647,31 @@ function Terminal(): React.JSX.Element | null {
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
     if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId)
+      void openNewBrowserTabInActiveWorkspace(targetGroupId).catch(showClientCreationActionError)
       return
     }
-    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+    const state = useAppStore.getState()
+    const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
+      'managed-browser'
+    ]
+    if (browserAvailability.state !== 'enabled') {
+      toast.error(browserAvailability.reason)
+      return
+    }
+    const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (browserAvailability.provider === 'paired-runtime' && runtimeEnvironmentId) {
       void createWebRuntimeSessionBrowserTab({
         worktreeId: activeWorktreeId,
         environmentId: runtimeEnvironmentId,
         url: defaultUrl
-      })
+      }).catch(showClientCreationActionError)
       return
     }
     createBrowserTab(activeWorktreeId, defaultUrl, {
       title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true
+      focusAddressBar: true,
+      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
     })
   }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
 
@@ -1547,8 +1691,16 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
+        'managed-browser'
+      ]
+      if (browserAvailability.state !== 'enabled') {
+        toast.error(browserAvailability.reason)
+        return
+      }
       if (
-        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserAvailability.provider === 'paired-runtime' &&
+        runtimeEnvironmentId &&
         browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
       ) {
         void createWebRuntimeSessionBrowserTab({
@@ -1556,12 +1708,17 @@ function Terminal(): React.JSX.Element | null {
           environmentId: runtimeEnvironmentId,
           url: source.url,
           profileId: source.sessionProfileId
-        })
+        }).catch(showClientCreationActionError)
         return
       }
-      createBrowserTab(activeWorktreeId, source.url, {
-        ...buildDuplicatedBrowserTabOptions(source)
-      })
+      try {
+        createBrowserTab(activeWorktreeId, source.url, {
+          ...buildDuplicatedBrowserTabOptions(source),
+          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+        })
+      } catch (error) {
+        showClientCreationActionError(error)
+      }
     },
     [activeWorktreeId, createBrowserTab]
   )
@@ -1690,7 +1847,8 @@ function Terminal(): React.JSX.Element | null {
         ) {
           if (unifiedTab.contentType === 'terminal') {
             // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
-            closeTerminalTab(unifiedTab.entityId)
+            // No running-process prompt: "Close Others" over N busy tabs would be a modal storm.
+            closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
           } else {
             void closeWebRuntimeSessionTab({
               worktreeId: activeWorktreeId,
@@ -1935,7 +2093,11 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
-        useAppStore.getState().reopenClosedTab(activeWorktreeId)
+        try {
+          useAppStore.getState().reopenClosedTab(activeWorktreeId)
+        } catch (error) {
+          showClientCreationActionError(error)
+        }
         return
       }
 
@@ -1943,8 +2105,18 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newBrowser')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newBrowser')
+        const browserAvailability = getClientCreationActionPolicy(
+          useAppStore.getState(),
+          floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId
+        )['managed-browser']
+        if (browserAvailability.state !== 'enabled') {
+          toast.error(browserAvailability.reason)
+          return
+        }
         if (floatingWorkspaceFocused) {
-          void createFloatingWorkspaceBrowserTab(useAppStore.getState())
+          void createFloatingWorkspaceBrowserTab(useAppStore.getState()).catch(
+            showClientCreationActionError
+          )
           return
         }
         handleNewBrowserTab()
@@ -1955,6 +2127,14 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newSimulator')
+        const simulatorAvailability = getClientCreationActionPolicy(
+          useAppStore.getState(),
+          activeWorktreeId
+        )['mobile-emulator']
+        if (simulatorAvailability.state !== 'enabled') {
+          toast.error(simulatorAvailability.reason)
+          return
+        }
         if (!floatingWorkspaceFocused) {
           handleNewSimulatorTab()
         }
@@ -1969,10 +2149,17 @@ function Terminal(): React.JSX.Element | null {
           target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
         if (!inEditor) {
           const state = useAppStore.getState()
-          if (state.activeTabType === 'editor' && state.activeFileId) {
+          const floatingPanelOwnsEvent =
+            isEventTargetInsideFloatingWorkspacePanel(e.target) || floatingWorkspaceFocused
+          const requestedFileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent)
+          if (requestedFileId) {
             e.preventDefault()
             notifyTerminalCapture('editor.save')
-            window.dispatchEvent(new Event(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT))
+            window.dispatchEvent(
+              new CustomEvent<EditorRequestCmdSaveDetail>(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, {
+                detail: { fileId: requestedFileId }
+              })
+            )
             return
           }
         }
@@ -2255,7 +2442,15 @@ function Terminal(): React.JSX.Element | null {
 
   return (
     <div
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
+      // Why: already out of flow via the workbench container when hidden, so retention only
+      // has to drop `hidden` — it does not need to leave the flex column a second time.
+      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+        renderedActiveWorktreeId
+          ? ''
+          : retainBrowserGuestPaint
+            ? ' opacity-0 pointer-events-none'
+            : ' hidden'
+      }`}
       data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
       <EditorAutosaveController />
@@ -2322,7 +2517,13 @@ function Terminal(): React.JSX.Element | null {
 
       {anyMountedWorktreeHasLayout ? (
         <div
-          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
+          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
+            effectiveActiveLayout
+              ? ''
+              : retainBrowserGuestPaint
+                ? ' opacity-0 pointer-events-none'
+                : ' hidden'
+          }`}
         >
           {/* Why: absolutely position each mounted surface so hidden trees don't reflow the active one; the relative anchor sizes panes to the workspace body. */}
           {workspaceSurfaces
@@ -2403,7 +2604,6 @@ function Terminal(): React.JSX.Element | null {
                     }
                     aria-hidden={!isVisible}
                   >
-                    <CodexRestartChip isVisible={isVisible} worktreeId={workspace.id} />
                     {(tabsByWorktree[workspace.id] ?? [])
                       .filter((tab) =>
                         shouldMountBackgroundWorktreeTab(
@@ -2634,13 +2834,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
-  const browserPageIds = useAppStore(
-    useShallow((state) =>
-      (state.browserTabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
-        tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
-      )
-    )
-  )
+  const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =
@@ -2659,7 +2853,6 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       inert={!isVisible}
       aria-hidden={!isVisible}
     >
-      <CodexRestartChip isVisible={isVisible} worktreeId={worktreeId} />
       <TabGroupSplitLayout
         layout={layout}
         worktreeId={worktreeId}
@@ -2677,11 +2870,19 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
       />
+      {/* Why: once eligible, retain slot DOM so hidden worktrees keep their Electron guests alive (STA-3228). */}
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isVisible}
+        mountEligible={
+          isVisible ||
+          backgroundMountTabIds === null ||
+          hasAutomationVisibleBrowser ||
+          hasMobileDrivenBrowser
+        }
+      />
       {isVisible || backgroundMountTabIds === null ? (
-        <>
-          <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-          <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-        </>
+        <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       ) : null}
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>

@@ -23,6 +23,7 @@ import {
 } from '../../src/main/runtime/orchestration/db'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { listAllOrchestrationRuns } from './orchestration-run-pages'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -622,10 +623,8 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
 
       let assignmentRunId = run.result.run.id
       if (contractVersion === LEGACY_CONTRACT_VERSION) {
-        const runs = await secondClient.call<{
-          runs: { id: string; objective: string }[]
-        }>('orchestration.runList')
-        assignmentRunId = runs.result.runs.find(
+        const runs = await listAllOrchestrationRuns(secondClient)
+        assignmentRunId = runs.find(
           (candidate) =>
             candidate.objective === 'Recovered orchestration work from a contract update'
         )!.id

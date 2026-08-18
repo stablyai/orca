@@ -10,7 +10,11 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  formatExternalDate,
+  getExternalProviderLabel,
+  getExternalTargetKindLabel
+} from './external-automation-display'
 import {
   ExternalAutomationRunTable,
   type FetchExternalAutomationRuns
@@ -37,31 +41,12 @@ type ExternalAutomationManagersProps = {
   onEdit?: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
 }
 
-function formatExternalDate(value: string | null, now: number): string {
-  if (!value) {
-    return 'Never'
-  }
-  const parsed = Date.parse(value)
-  if (!Number.isFinite(parsed)) {
-    return value
-  }
-  return formatAutomationDateTimeWithRelative(parsed, now)
-}
-
 function actionKey(
   manager: ExternalAutomationManager,
   job: ExternalAutomationJob,
   action: ExternalAutomationAction
 ): string {
   return `${manager.id}:${job.id}:${action}`
-}
-
-function getProviderLabel(manager: ExternalAutomationManager): string {
-  return manager.provider === 'hermes' ? 'Hermes' : 'OpenClaw'
-}
-
-function getTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
 }
 
 function ExternalActionButton({
@@ -140,7 +125,7 @@ export function ExternalAutomationManagers({
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{manager.targetLabel}</div>
                 <div className="text-xs text-muted-foreground">
-                  {getProviderLabel(manager)} / {getTargetKindLabel(manager)} ·{' '}
+                  {getExternalProviderLabel(manager)} / {getExternalTargetKindLabel(manager)} ·{' '}
                   {manager.status === 'available'
                     ? manager.canManage
                       ? translate(
@@ -236,8 +221,8 @@ export function ExternalAutomationManagers({
                           'auto.components.automations.ExternalAutomationManagers.20fd7a3a15',
                           'next'
                         )}{' '}
-                        {formatExternalDate(job.nextRunAt, now)} · {getProviderLabel(manager)} /{' '}
-                        {manager.targetLabel}
+                        {formatExternalDate(job.nextRunAt, now)} ·{' '}
+                        {getExternalProviderLabel(manager)} / {manager.targetLabel}
                       </div>
                       {manager.provider === 'hermes' ? (
                         <div className="mt-1 truncate text-xs text-muted-foreground">

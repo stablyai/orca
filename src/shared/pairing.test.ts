@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   encodePairingOffer,
   decodePairingOffer,
@@ -19,6 +19,19 @@ describe('pairing offer', () => {
     expect(url).toMatch(/^orca:\/\/pair\?code=/)
 
     const decoded = decodePairingOffer(url)
+    expect(decoded).toEqual(offer)
+  })
+
+  it('decodes in browser runtimes without Buffer', () => {
+    const url = encodePairingOffer(offer)
+    const nodeBuffer = Buffer
+    let decoded: PairingOffer | null = null
+    try {
+      vi.stubGlobal('Buffer', undefined)
+      decoded = decodePairingOffer(url)
+    } finally {
+      vi.stubGlobal('Buffer', nodeBuffer)
+    }
     expect(decoded).toEqual(offer)
   })
 

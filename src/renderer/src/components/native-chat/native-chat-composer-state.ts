@@ -24,8 +24,6 @@ export {
   type NativeChatSkillDiscoverySnapshot
 } from './native-chat-picker-items'
 
-export type ComposerAutocompleteMode = 'none' | 'slash' | 'mention' | 'skill'
-
 type PickerAutocomplete = {
   query: string
   items: NativeChatPickerItem[]

@@ -19,6 +19,7 @@ export function closeSharedControlSocket(args: {
   readyWaiters: SharedControlReadyWaiter[]
   lastClose: { code: number; reason: string } | null
   error?: Error
+  preserveReadyWaitersAndPendingRequests?: boolean
   clearReadyStableTimer: () => void
 }): void {
   if (args.ws || args.socketCleanup) {
@@ -39,6 +40,7 @@ export function closeSharedControlSocket(args: {
     subscriptions: args.subscriptions,
     socketCleanup: args.socketCleanup,
     ws: args.ws,
-    error: args.error
+    error: args.error,
+    preserveReadyWaitersAndPendingRequests: args.preserveReadyWaitersAndPendingRequests
   })
 }

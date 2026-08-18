@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import { translate } from '@/i18n/i18n'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
@@ -15,7 +16,10 @@ import {
   getSkillDiscoveryTargetKey,
   resetSkillDiscoveryCacheForTests
 } from './installed-agent-skill-discovery'
-import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
+import {
+  INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
+  INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
+} from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
 
@@ -41,6 +45,9 @@ type InstalledAgentSkillMatchOptions = {
 export type InstalledAgentSkillState = {
   installed: boolean
   loading: boolean
+  // Why: a forced rescan keeps the previous result, so only the first scan per
+  // runtime-scoped target is genuinely unknown.
+  settled: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
   sources: readonly SkillDiscoverySource[]
@@ -85,6 +92,29 @@ export function hasInstalledAgentSkillNamed(
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
+}
+
+/**
+ * True when a root this query cares about did not answer, so its skills are
+ * unknown rather than absent. The host serves such a root's last answer, but a
+ * root that has never answered has none to serve, and a bare "Not installed"
+ * there offers Install for a skill that may already be present.
+ */
+export function hasUnreadableAgentSkillSource(
+  sources: readonly SkillDiscoverySource[],
+  sourceKinds?: readonly SkillSourceKind[]
+): boolean {
+  return sources.some(
+    (source) =>
+      source.skippedReason === 'unavailable' &&
+      (!sourceKinds || sourceKinds.includes(source.sourceKind))
+  )
+}
+
+export function notifyInstalledAgentSkillsRefreshed(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
+  }
 }
 
 export const _installedAgentSkillDiscoveryInternalsForTests = {
@@ -159,7 +189,7 @@ export function useInstalledAgentSkillNames(
   }
 
   const refresh = useCallback(
-    async (force = true): Promise<boolean> => {
+    async (force = true, showLoading = true): Promise<boolean> => {
       const requestDiscoveryTargetKey = discoveryTargetKey
       const requestGeneration = ++refreshGenerationRef.current
       const writeIfCurrent = (write: () => void): void => {
@@ -178,9 +208,11 @@ export function useInstalledAgentSkillNames(
         })
         return false
       }
-      writeIfCurrent(() => {
-        setLoading(true)
-      })
+      if (showLoading) {
+        writeIfCurrent(() => {
+          setLoading(true)
+        })
+      }
       if (!runtimeTarget) {
         // Why: stay in the loading state rather than scanning the wrong host and
         // reporting "not installed" before the owning runtime is known.
@@ -205,6 +237,9 @@ export function useInstalledAgentSkillNames(
           )
         })
       } finally {
+        // Why: a silent refresh can supersede an in-flight loading one, whose own
+        // clear is then dropped by the generation guard. Only the winning
+        // generation clears, so it must clear regardless of its own showLoading.
         writeIfCurrent(() => {
           setLoading(false)
         })
@@ -230,16 +265,26 @@ export function useInstalledAgentSkillNames(
     if (!enabled) {
       return
     }
-    const refreshFromExternalChange = (): void => {
+    // Why: skill install commands run outside React state, often in a terminal, so
+    // an install event is authoritative and forces past every cache.
+    const refreshFromInstall = (): void => {
       void refresh(true)
     }
-    // Why: skill install commands run outside React state, often in a terminal.
-    // Refresh on focus and explicit install events so completion is detected.
-    window.addEventListener('focus', refreshFromExternalChange)
-    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
+    // Why: focus fires on every app and window switch, and a forced refresh
+    // bypasses every cache down to the host's disk walk — that is what turned an
+    // alt-tab into a multi-root filesystem scan per window and per client. Focus,
+    // and another surface finishing its own scan, are both only hints that
+    // something may have changed, so they read through the freshness window.
+    const refreshQuietly = (): void => {
+      void refresh(false, false)
+    }
+    window.addEventListener('focus', refreshQuietly)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     return () => {
-      window.removeEventListener('focus', refreshFromExternalChange)
-      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
+      window.removeEventListener('focus', refreshQuietly)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     }
   }, [enabled, refresh])
 
@@ -258,6 +303,11 @@ export function useInstalledAgentSkillNames(
     [candidateSkillNames, enabled, skills, sourceKinds]
   )
 
+  const incompleteScan = useMemo(
+    () => enabled && !installed && hasUnreadableAgentSkillSource(sources, sourceKinds),
+    [enabled, installed, sources, sourceKinds]
+  )
+
   useEffect(() => {
     if (installed && candidateSkillNames.some(isOrchestrationSkillName)) {
       // Why: older floating-workspace education still keys off this marker; any
@@ -271,7 +321,15 @@ export function useInstalledAgentSkillNames(
   return {
     installed,
     loading: loadingForRender,
-    error: errorForRender,
+    settled: enabled && resultForRender !== null,
+    error:
+      errorForRender ??
+      (incompleteScan
+        ? translate(
+            'auto.hooks.useInstalledAgentSkills.unreadableSkillSource',
+            'A skill folder did not respond, so this status may be incomplete.'
+          )
+        : null),
     skills,
     sources,
     refresh: forceRefresh

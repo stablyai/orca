@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Check, CircleAlert, Copy, Maximize2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 
 type MobilePairingQrSectionProps = {
   qrDataUrl: string | null
+  qrSize?: number | null
   qrError: boolean
   pairingUrl: string | null
   endpoint: string | null
@@ -19,6 +20,7 @@ type MobilePairingQrSectionProps = {
 
 export function MobilePairingQrSection({
   qrDataUrl,
+  qrSize = null,
   qrError,
   pairingUrl,
   endpoint,
@@ -28,18 +30,40 @@ export function MobilePairingQrSection({
   onCodeCopiedChange,
   onClearCodeCopiedTimer
 }: MobilePairingQrSectionProps): React.JSX.Element | null {
+  const renderedQrSize = qrSize ?? 192
+  const enlargedQrSize = qrSize == null ? 288 : qrSize * 2
   const pairingCodeButtonMountedRef = useRef(false)
+  const pairingCodeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const hadPairingUrlRef = useRef(pairingUrl != null)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
+
+  // Why: the reset timeout is owned here, so clearing only the parent's timer would leave it running.
+  const clearCodeCopiedResetTimer = useCallback(() => {
+    if (codeCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(codeCopiedResetTimerRef.current)
+      codeCopiedResetTimerRef.current = null
+    }
+    onClearCodeCopiedTimer()
+  }, [onClearCodeCopiedTimer])
 
   const setPairingCodeButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       pairingCodeButtonMountedRef.current = node !== null
+      pairingCodeButtonRef.current = node
       if (node === null) {
-        onClearCodeCopiedTimer()
+        clearCodeCopiedResetTimer()
       }
     },
-    [onClearCodeCopiedTimer]
+    [clearCodeCopiedResetTimer]
   )
+
+  useEffect(() => {
+    const becameReady = !hadPairingUrlRef.current && pairingUrl != null
+    hadPairingUrlRef.current = pairingUrl != null
+    if (becameReady && document.activeElement === document.body) {
+      pairingCodeButtonRef.current?.focus()
+    }
+  }, [pairingUrl])
 
   async function copyPairingCode() {
     if (!pairingUrl) {
@@ -50,7 +74,7 @@ export function MobilePairingQrSection({
       if (!pairingCodeButtonMountedRef.current) {
         return
       }
-      onClearCodeCopiedTimer()
+      clearCodeCopiedResetTimer()
       onCodeCopiedChange(true)
       codeCopiedResetTimerRef.current = window.setTimeout(() => {
         codeCopiedResetTimerRef.current = null
@@ -82,7 +106,12 @@ export function MobilePairingQrSection({
                 'auto.components.settings.MobilePane.6436e56546',
                 'QR Code for mobile pairing'
               )}
-              className="size-48"
+              className="block"
+              style={{
+                width: renderedQrSize,
+                height: renderedQrSize,
+                imageRendering: 'pixelated'
+              }}
             />
             <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 can-hover:opacity-0 transition-opacity group-hover:opacity-100" />
           </button>
@@ -119,6 +148,10 @@ export function MobilePairingQrSection({
               variant="outline"
               size="sm"
               onClick={() => void copyPairingCode()}
+              aria-label={translate(
+                'auto.components.settings.MobilePane.copyPairingCode',
+                'Copy pairing code'
+              )}
               className="font-mono text-[11px] leading-tight whitespace-normal break-all h-auto py-2 px-3"
             >
               <span className="flex-1 text-left">{pairingUrl}</span>
@@ -134,7 +167,7 @@ export function MobilePairingQrSection({
 
       {qrDataUrl ? (
         <Dialog open={qrEnlarged} onOpenChange={onQrEnlargedChange}>
-          <DialogContent className="sm:max-w-sm">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
                 {translate(
@@ -151,7 +184,12 @@ export function MobilePairingQrSection({
                     'auto.components.settings.MobilePane.6436e56546',
                     'QR Code for mobile pairing'
                   )}
-                  className="size-72"
+                  className="block"
+                  style={{
+                    width: enlargedQrSize,
+                    height: enlargedQrSize,
+                    imageRendering: 'pixelated'
+                  }}
                 />
               </div>
               {endpoint && (

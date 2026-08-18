@@ -1,19 +1,20 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
-  isSnapshotBackedTerminalPty,
   selectIdsBeyondHotRetain,
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
 // not the ~4-5MB per WORKTREE the warm cap assumed — so un-parkable worktrees
-// (pty classes parking can't restore) get a retention budget: at most 12 stay
-// mounted while hidden and none past 45 minutes, evicted least-recently-hidden
+// (pty classes parking can't restore) get a retention budget: at most 4 stay
+// mounted while hidden and none past 15 minutes, evicted least-recently-hidden
 // first via force-park. The TTL is absolute: the last-active exemption bounds
 // the cap, never the clock.
 // NOT covered by this bound: eviction-exempt TABS (isEvictionExemptTerminalPty
@@ -26,8 +27,8 @@ import type { TerminalTab } from '../../../../shared/types'
 // spared worktree (last-active, exempt tabs) can hold full 50k-row scrollback
 // indefinitely. Accepted tradeoff: high-scrollback users rely on unmount
 // eviction, not demotion.
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 12
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 45 * 60_000
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
 
 export function hasPendingRetentionSpawnWork(
   tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
@@ -41,10 +42,9 @@ export function hasPendingRetentionSpawnWork(
   return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
 }
 
-// Why: an eviction-exempt pty is a live local one a remount could not reattach
-// (daemon-fail-open separator-less ids, ptys minted under another worktree) — a
-// fresh spawn would orphan the live shell. Its TAB keeps its mounted pane when
-// the worktree force-parks (per-tab exclusion, mirroring Activity portals).
+// Why: an eviction-exempt pty is a live local one a remount cannot restore
+// faithfully (daemon-fail-open/foreign ids or a preserved legacy daemon). Its
+// TAB keeps its mounted pane when the worktree force-parks.
 // Per-PTY, not per-tab: the coverage veto that makes a worktree a retention
 // candidate walks every split pane, so the exemption must too (see
 // isEvictionExemptTerminalTab).
@@ -52,10 +52,70 @@ export function isEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): boolean {
+  return classifyEvictionExemptTerminalPty(ptyId, worktreeId) !== null
+}
+
+export type EvictionExemptTerminalPtyRoute = 'fail-open' | 'foreign-worktree' | 'capability-unknown'
+
+// Why routes: an all-exempt force-park frees nothing, and only per-route
+// counts in the field can say whether daemon fail-open ids or unresolved
+// snapshot capability dominates that degenerate case.
+export function classifyEvictionExemptTerminalPty(
+  ptyId: string | null | undefined,
+  worktreeId: string
+): EvictionExemptTerminalPtyRoute | null {
   if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
-    return false
+    return null
   }
-  return !isSnapshotBackedTerminalPty(ptyId, worktreeId)
+  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  if (separatorIdx === -1) {
+    return 'fail-open'
+  }
+  if (ptyId.slice(0, separatorIdx) !== worktreeId) {
+    return 'foreign-worktree'
+  }
+  return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'
+}
+
+export type EvictionExemptRouteCounts = {
+  failOpen: number
+  foreignWorktree: number
+  capabilityUnknown: number
+  /** Tab-level pty classifies clean, so the exemption came from a split pane's pty. */
+  splitPane: number
+}
+
+export function countEvictionExemptTabRoutes(
+  tabs: readonly Pick<TerminalTab, 'ptyId'>[],
+  worktreeId: string
+): EvictionExemptRouteCounts {
+  const counts: EvictionExemptRouteCounts = {
+    failOpen: 0,
+    foreignWorktree: 0,
+    capabilityUnknown: 0,
+    splitPane: 0
+  }
+  for (const tab of tabs) {
+    switch (classifyEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
+      case 'fail-open':
+        counts.failOpen += 1
+        break
+      case 'foreign-worktree':
+        counts.foreignWorktree += 1
+        break
+      case 'capability-unknown':
+        counts.capabilityUnknown += 1
+        break
+      case null:
+        counts.splitPane += 1
+        break
+    }
+  }
+  return counts
+}
+
+export function formatEvictionExemptRouteCounts(counts: EvictionExemptRouteCounts): string {
+  return `routes=fail-open:${counts.failOpen},foreign:${counts.foreignWorktree},capability:${counts.capabilityUnknown},split-pane:${counts.splitPane}`
 }
 
 export type TerminalWorktreeRetentionCandidate = {
@@ -124,7 +184,7 @@ export function selectRetentionForceParkedTerminalWorktrees(
   })
   // Why re-applied here: selectIdsBeyondHotRetain spares the last-active id from
   // its clock too, which is right for the warm cap (instant return after a
-  // meeting) but makes "none past 45 minutes" false for a lone hidden worktree.
+  // meeting) but makes "none past 15 minutes" false for a lone hidden worktree.
   for (const candidate of candidates) {
     if (args.nowMs - candidate.hiddenSinceMs >= retentionTtlMs) {
       forceParkedIds.add(candidate.id)

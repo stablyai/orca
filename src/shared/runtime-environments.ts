@@ -10,8 +10,6 @@ export const RuntimeAccessEndpointSchema = z.object({
   publicKeyB64: z.string().min(1)
 })
 
-export type RuntimeAccessEndpoint = z.infer<typeof RuntimeAccessEndpointSchema>
-
 export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omit({
   deviceToken: true,
   publicKeyB64: true
@@ -28,9 +26,11 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
   pairingRevision: z.number().finite().optional(),
+  pairedDeviceId: z.string().min(1).optional(),
   lastUsedAt: z.number().finite().nullable(),
   runtimeId: z.string().min(1).nullable(),
   source: RuntimeEnvironmentSourceSchema.optional(),
+  connectionDependency: z.literal('ssh-tunnel').optional(),
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
   preferredEndpointId: z.string().min(1)
 })
@@ -66,6 +66,7 @@ export function createEnvironmentFromPairingOffer(args: {
   offer: PairingOffer
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
+  connectionDependency?: 'ssh-tunnel'
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
@@ -74,9 +75,11 @@ export function createEnvironmentFromPairingOffer(args: {
     createdAt: args.now,
     updatedAt: args.now,
     pairingRevision: args.now,
+    ...(args.offer.pairedDeviceId ? { pairedDeviceId: args.offer.pairedDeviceId } : {}),
     lastUsedAt: null,
     runtimeId: args.runtimeId ?? null,
     ...(args.source ? { source: args.source } : {}),
+    ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
     endpoints: [
       {
         id: endpointId,
@@ -114,6 +117,7 @@ export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): 
     v: PAIRING_OFFER_VERSION,
     endpoint: endpoint.endpoint,
     deviceToken: endpoint.deviceToken,
-    publicKeyB64: endpoint.publicKeyB64
+    publicKeyB64: endpoint.publicKeyB64,
+    ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
   }
 }

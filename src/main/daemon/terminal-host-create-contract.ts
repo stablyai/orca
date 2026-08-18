@@ -1,5 +1,5 @@
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
@@ -19,6 +19,8 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  /** Missing ownership is not permission to create during stable-pane adoption. */
+  attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null

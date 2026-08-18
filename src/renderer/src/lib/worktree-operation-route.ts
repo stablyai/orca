@@ -1,18 +1,21 @@
 import type { AppState } from '@/store/types'
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
-import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
+import { resolveExactWorktreeRoute } from './worktree-owner-route'
+import {
+  findIndexedDetectedWorktrees,
+  hasIndexedDetectedWorktree,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
+import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
+
+export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
@@ -24,7 +27,7 @@ export type WorktreeOperationRouteResolution =
   | { kind: 'ambiguous' }
   | { kind: 'missing' }
 
-type WorktreeOperationOwnerRecord = {
+export type WorktreeOperationOwnerRecord = {
   id: string
   repoId: string
   hostId?: ExecutionHostId
@@ -32,7 +35,7 @@ type WorktreeOperationOwnerRecord = {
 }
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
-type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
+export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
@@ -40,86 +43,125 @@ type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
 
-const repoOperationRouteIndexCache = new WeakMap<
-  NonNullable<WorktreeOperationRouteState['repos']>,
-  ReadonlyMap<string, WorktreeOperationRouteResolution>
->()
-
-function routeForOwner(owner: {
-  hostId?: ExecutionHostId
-  runtimeOwnerEnvironmentId?: string
-}): WorktreeOperationRoute | null {
-  const runtimeOwnerEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
-  if (!owner.hostId && !runtimeOwnerEnvironmentId) {
-    return null
-  }
-  const parsedHost = parseExecutionHostId(owner.hostId)
-  return {
-    executionHostId: owner.hostId ?? null,
-    runtimeEnvironmentId:
-      runtimeOwnerEnvironmentId ||
-      (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
-  }
-}
-
-function addRoute(
-  routes: Map<string, WorktreeOperationRoute>,
-  route: WorktreeOperationRoute | null
-): void {
-  if (!route) {
-    return
-  }
-  routes.set(JSON.stringify(route), route)
-}
-
-function resolveRepoRouteForSshOwner(
-  repos: WorktreeOperationRouteState['repos'],
-  owner: WorktreeOperationOwnerRecord
-): WorktreeOperationRouteResolution {
-  if (!repos || !owner.hostId) {
-    return { kind: 'missing' }
-  }
-  const routes = new Map<string, WorktreeOperationRoute>()
-  for (const repo of repos) {
-    if (repo.id !== owner.repoId) {
-      continue
-    }
-    const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
-    if (getRepoExecutionHostId(repo) !== owner.hostId && connectionHostId !== owner.hostId) {
-      continue
-    }
-    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
-  }
-  const route = routes.values().next().value
-  if (routes.size === 1 && route) {
-    return { kind: 'resolved', route }
-  }
-  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
-}
-
-function resolveExactWorktreeRoute(
+function ownerRecordsOnHost(
   state: WorktreeOperationRouteState,
-  owner: WorktreeOperationOwnerRecord
-): WorktreeOperationRouteResolution {
-  const route = routeForOwner(owner)
-  if (!route) {
-    return { kind: 'missing' }
-  }
-  if (route.runtimeEnvironmentId || parseExecutionHostId(route.executionHostId)?.kind !== 'ssh') {
-    return { kind: 'resolved', route }
-  }
-  // Recover an optional HUB transport only from the repo setup matching the worktree's SSH host.
-  const repoRoute = resolveRepoRouteForSshOwner(state.repos, owner)
-  if (repoRoute.kind === 'ambiguous') {
-    return repoRoute
-  }
-  if (repoRoute.kind === 'resolved' && repoRoute.route.runtimeEnvironmentId) {
-    return {
-      kind: 'resolved',
-      route: { ...route, runtimeEnvironmentId: repoRoute.route.runtimeEnvironmentId }
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationOwnerRecord[] {
+  const owners: WorktreeOperationOwnerRecord[] = []
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+    for (const worktree of worktrees) {
+      if (
+        worktree.id === worktreeId &&
+        parseExecutionHostId(worktree.hostId)?.id === executionHostId
+      ) {
+        owners.push(worktree)
+      }
     }
   }
-  return { kind: 'resolved', route }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
+      owners.push(worktree)
+    }
+  }
+  return owners
+}
+
+/**
+ * The active workspace's host selection is authoritative identity, but it carries no transport:
+ * an `ssh:` host reached through a paired HUB names the target, not the HUB that proxies it. Keep
+ * the selected host and recover the runtime owner from the matching owner rows (#11346).
+ */
+export function resolveActiveWorkspaceRoute(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  const activeHost =
+    state.activeWorktreeId === worktreeId
+      ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
+      : null
+  return activeHost ? resolveSelectedHostRoute(state, worktreeId, activeHost) : null
+}
+
+/**
+ * Route an operation at the host the CALLER named rather than whichever host
+ * the active workspace happens to select. `repoId::path` ids repeat across
+ * hosts, so a destructive path that resolves host-blind can delete the same-id
+ * workspace on the wrong machine (STA-4343); qualified callers resolve here.
+ */
+export function resolveWorktreeOperationRouteResultForHost(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationRouteResolution {
+  const host = parseExecutionHostId(executionHostId)
+  // Why: an unparseable qualifier is not evidence of an owner — fail closed.
+  return host
+    ? { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+    : { kind: 'missing' }
+}
+
+export function resolveWorktreeOperationRouteForHost(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationRoute | null {
+  const resolution = resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
+  return resolution.kind === 'resolved' ? resolution.route : null
+}
+
+function resolveSelectedHostRoute(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  selectedHost: NonNullable<ReturnType<typeof parseExecutionHostId>>
+): WorktreeOperationRoute {
+  if (selectedHost.kind === 'runtime') {
+    return { executionHostId: selectedHost.id, runtimeEnvironmentId: selectedHost.environmentId }
+  }
+  // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
+  if (selectedHost.kind !== 'ssh') {
+    return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
+  }
+  const environmentIds = new Set<string>()
+  for (const owner of ownerRecordsOnHost(state, worktreeId, selectedHost.id)) {
+    const resolution = resolveExactWorktreeRoute(state, owner)
+    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    }
+  }
+  const environmentId = environmentIds.values().next().value
+  return {
+    executionHostId: selectedHost.id,
+    // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
+    runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
+  }
+}
+
+/**
+ * Distinct execution hosts the store knows as owners of this id. More than one
+ * means an unqualified destructive call cannot pick a target without guessing;
+ * empty means no owner row carries host provenance (legacy hydration).
+ */
+export function getWorktreeOperationOwnerHostIds(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): ExecutionHostId[] {
+  const hostIds = new Set<ExecutionHostId>()
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+    for (const worktree of worktrees) {
+      const hostId = worktree.id === worktreeId ? parseExecutionHostId(worktree.hostId)?.id : null
+      if (hostId) {
+        hostIds.add(hostId)
+      }
+    }
+  }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    const hostId = parseExecutionHostId(worktree.hostId)?.id
+    if (hostId) {
+      hostIds.add(hostId)
+    }
+  }
+  return [...hostIds]
 }
 
 export function resolveWorktreeOperationRoute(
@@ -134,6 +176,10 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return { kind: 'resolved', route: activeRoute }
+  }
   // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
   // catalogs scanned below, so without this branch a plain local folder workspace reads as an
   // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
@@ -147,12 +193,8 @@ export function resolveWorktreeOperationRouteResult(
   }
 
   const hasKnownWorktree =
-    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
-      worktrees.some((worktree) => worktree.id === worktreeId)
-    ) ||
-    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
+    hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
   if (!hasKnownWorktree && !hasKnownRepo) {
@@ -206,102 +248,6 @@ function resolveFolderWorkspaceOperationRoute(
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }
-}
-
-export function resolveExplicitWorktreeOperationRouteResult(
-  state: WorktreeOperationRouteState,
-  worktreeId: string
-): WorktreeOperationRouteResolution {
-  const exactRoutes = new Map<string, WorktreeOperationRoute>()
-  const exactRepoIds = new Set<string>()
-  const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
-  if (indexedWorktree.kind === 'ambiguous') {
-    return { kind: 'ambiguous' }
-  }
-  if (indexedWorktree.kind === 'resolved') {
-    exactRepoIds.add(indexedWorktree.owner.repoId)
-    const resolution = resolveExactWorktreeRoute(state, indexedWorktree.owner)
-    if (resolution.kind === 'ambiguous') {
-      return resolution
-    }
-    if (resolution.kind === 'resolved') {
-      addRoute(exactRoutes, resolution.route)
-    }
-  }
-  for (const result of Object.values(state.detectedWorktreesByRepo ?? {})) {
-    for (const worktree of result.worktrees) {
-      if (worktree.id === worktreeId) {
-        exactRepoIds.add(worktree.repoId)
-        const resolution = resolveExactWorktreeRoute(state, worktree)
-        if (resolution.kind === 'ambiguous') {
-          return resolution
-        }
-        if (resolution.kind === 'resolved') {
-          addRoute(exactRoutes, resolution.route)
-        }
-      }
-    }
-  }
-  if (exactRoutes.size > 0) {
-    const route = exactRoutes.values().next().value
-    return exactRoutes.size === 1 && route ? { kind: 'resolved', route } : { kind: 'ambiguous' }
-  }
-  if (exactRepoIds.size === 0) {
-    exactRepoIds.add(getRepoIdFromWorktreeId(worktreeId))
-  }
-  const repoRoutes = new Map<string, WorktreeOperationRoute>()
-  for (const repoId of exactRepoIds) {
-    const resolution = resolveIndexedRepoOperationRoute(state.repos, repoId)
-    if (resolution.kind === 'ambiguous') {
-      return resolution
-    }
-    if (resolution.kind === 'resolved') {
-      addRoute(repoRoutes, resolution.route)
-    }
-  }
-  const route = repoRoutes.values().next().value
-  if (repoRoutes.size === 1 && route) {
-    return { kind: 'resolved', route }
-  }
-  if (repoRoutes.size > 1) {
-    return { kind: 'ambiguous' }
-  }
-  return { kind: 'missing' }
-}
-
-function resolveIndexedRepoOperationRoute(
-  repos: WorktreeOperationRouteState['repos'],
-  repoId: string
-): WorktreeOperationRouteResolution {
-  if (!repos) {
-    return { kind: 'missing' }
-  }
-  let index = repoOperationRouteIndexCache.get(repos)
-  if (!index) {
-    const next = new Map<string, WorktreeOperationRouteResolution>()
-    for (const repo of repos) {
-      const repoId = repo.id
-      if (!repo.executionHostId?.trim() && !repo.connectionId?.trim()) {
-        continue
-      }
-      const route = routeForOwner({ hostId: getRepoExecutionHostId(repo) })
-      if (!route) {
-        continue
-      }
-      const current = next.get(repoId)
-      if (!current) {
-        next.set(repoId, { kind: 'resolved', route })
-      } else if (
-        current.kind === 'resolved' &&
-        JSON.stringify(current.route) !== JSON.stringify(route)
-      ) {
-        next.set(repoId, { kind: 'ambiguous' })
-      }
-    }
-    index = next
-    repoOperationRouteIndexCache.set(repos, index)
-  }
-  return index.get(repoId) ?? { kind: 'missing' }
 }
 
 export function settingsForWorktreeOperationRoute(

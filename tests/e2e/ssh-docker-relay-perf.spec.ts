@@ -50,6 +50,11 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
+function encodedRemoteNodeCommand(script: string): string {
+  const encoded = Buffer.from(script, 'utf8').toString('base64')
+  return `node -e ${shellQuote(`eval(Buffer.from('${encoded}', 'base64').toString('utf8'))`)}`
+}
+
 function remoteTypingLoadScript(runId: string): string {
   return [
     "process.stdin.setEncoding('utf8')",
@@ -368,7 +373,9 @@ test.describe('Docker SSH relay perf', () => {
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
       const beforeMarker = `SSH_RECONNECT_BEFORE_${Date.now()}`
-      await execInTerminal(orcaPage, beforePtyId, `printf ${shellQuote(beforeMarker)}`)
+      const beforeCommand = encodedRemoteNodeCommand(`process.stdout.write('${beforeMarker}\\n')`)
+      expect(beforeCommand).not.toContain(beforeMarker)
+      await execInTerminal(orcaPage, beforePtyId, beforeCommand)
       await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
       const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${Date.now()}`
       const recoveryMarker = `SSH_RECONNECT_RECOVERY_${Date.now()}`
@@ -382,7 +389,10 @@ test.describe('Docker SSH relay perf', () => {
         `if (frame === 256) { clearInterval(timer); process.stdout.write('${recoveryMarker}\\n') }`,
         '}, 10)'
       ].join(';')
-      await execInTerminal(orcaPage, beforePtyId, `node -e ${shellQuote(recoveryScript)}`)
+      const recoveryCommand = encodedRemoteNodeCommand(recoveryScript)
+      expect(recoveryCommand).not.toContain(recoveryStartedMarker)
+      expect(recoveryCommand).not.toContain(recoveryMarker)
+      await execInTerminal(orcaPage, beforePtyId, recoveryCommand)
       await waitForTerminalOutput(orcaPage, recoveryStartedMarker, 30_000, 80_000)
 
       await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
@@ -392,11 +402,16 @@ test.describe('Docker SSH relay perf', () => {
       await waitForTerminalOutput(orcaPage, recoveryMarker, 30_000, 80_000)
       const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
       const remoteProofPath = `/tmp/${afterMarker}`
-      await execInTerminal(
-        orcaPage,
-        afterPtyId,
-        `printf ${shellQuote(afterMarker)} | tee ${shellQuote(remoteProofPath)}`
+      const afterCommand = encodedRemoteNodeCommand(
+        [
+          "const fs = require('node:fs')",
+          `const marker = '${afterMarker}'`,
+          `fs.writeFileSync('${remoteProofPath}', marker)`,
+          "process.stdout.write(marker + '\\n')"
+        ].join(';')
       )
+      expect(afterCommand).not.toContain(afterMarker)
+      await execInTerminal(orcaPage, afterPtyId, afterCommand)
       await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
       expect(execDockerSshRelayTargetCommand(target, `cat ${shellQuote(remoteProofPath)}`)).toBe(
         afterMarker

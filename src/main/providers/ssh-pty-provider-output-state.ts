@@ -14,6 +14,7 @@ import type { PtySourceReceivingActivation } from '../../shared/pty-source-recei
 
 export class SshPtyProviderOutputState {
   private readonly dataListeners = new Set<SshPtyDataCallback>()
+  private readonly rejectedDataListeners = new Set<SshPtyDataCallback>()
   private readonly replayListeners = new Set<SshPtyReplayCallback>()
   private readonly exitListeners = new Set<SshPtyExitCallback>()
   private readonly incarnationByRelayPtyId = new Map<string, string>()
@@ -34,11 +35,13 @@ export class SshPtyProviderOutputState {
     this.subscription = subscribeSshPtyNotifications({
       ...args,
       dataListeners: this.dataListeners,
+      rejectedDataListeners: this.rejectedDataListeners,
       replayListeners: this.replayListeners,
       exitListeners: this.exitListeners,
       providerGeneration,
       resolvePtyIncarnation: (relayPtyId, incarnationId) =>
         this.resolvePtyIncarnation(relayPtyId, incarnationId),
+      peekPtyIncarnation: (relayPtyId) => this.incarnationByRelayPtyId.get(relayPtyId),
       recordExit: (relayPtyId, incarnationId) => {
         args.recordExit(relayPtyId, incarnationId)
         this.incarnationByRelayPtyId.delete(relayPtyId)
@@ -52,6 +55,7 @@ export class SshPtyProviderOutputState {
     this.subscription?.dispose()
     this.subscription = null
     this.dataListeners.clear()
+    this.rejectedDataListeners.clear()
     this.replayListeners.clear()
     this.exitListeners.clear()
     this.incarnationByRelayPtyId.clear()
@@ -61,6 +65,11 @@ export class SshPtyProviderOutputState {
   onData(callback: SshPtyDataCallback): () => void {
     this.dataListeners.add(callback)
     return () => this.dataListeners.delete(callback)
+  }
+
+  onRejectedData(callback: SshPtyDataCallback): () => void {
+    this.rejectedDataListeners.add(callback)
+    return () => this.rejectedDataListeners.delete(callback)
   }
 
   onReplay(callback: SshPtyReplayCallback): () => void {

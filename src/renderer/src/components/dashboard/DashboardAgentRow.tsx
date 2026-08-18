@@ -8,10 +8,12 @@ import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './agent-finished-timestamp'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -41,24 +43,6 @@ function formatTimeAgo(ts: number, now: number): string {
   }
   const days = Math.floor(hours / 24)
   return `${days}d ago`
-}
-
-// Why: use stateStartedAt (not updatedAt, which drifts on within-state pings) for the true done-transition time.
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  // Why: idle subagents are alive-but-idle (persist between turns); don't label them as done.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
-    return null
-  }
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
 }
 
 function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {
@@ -161,10 +145,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
   const model = agent.entry.model?.trim() ?? ''
-  // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
+  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
+  const showsTool = showsAgentToolPreview(agent.state)
+  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
@@ -317,7 +303,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       </div>
       <DashboardAgentRowToolStep
         expanded={expanded}
-        isWorking={isWorking}
+        showsTool={showsTool}
+        reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
       />

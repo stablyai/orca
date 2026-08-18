@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { PNG } from 'pngjs'
 import { encodePairingOffer } from '../../shared/pairing'
 import type { PairingOffer } from '../../shared/mobile-relay-pairing-offer'
 import { encodeMobilePairingQr } from './mobile-pairing-qr'
+
+// Keep every capacity probe in the same encoded payload family.
+const FIXED_INVITE_EXPIRES_AT = Date.now() + 5 * 60_000
 
 function pairingUrl(endpointLength: number, relay: boolean): string {
   const prefix = 'wss://pair.example/'
@@ -20,7 +24,7 @@ function pairingUrl(endpointLength: number, relay: boolean): string {
             assignmentEpoch: 1,
             relayHostId: 'a'.repeat(16),
             inviteToken: 'b'.repeat(43),
-            inviteExpiresAt: Date.now() + 60_000,
+            inviteExpiresAt: FIXED_INVITE_EXPIRES_AT,
             e2eeFraming: 2
           }
         }
@@ -46,6 +50,30 @@ async function discoverEndpointBoundary(relay: boolean): Promise<number> {
 }
 
 describe('encodeMobilePairingQr', () => {
+  it('renders the current Relay-sized symbol at two pixels per module with a four-module quiet zone', async () => {
+    const { default: QRCode } = await import('qrcode')
+    const url = pairingUrl(100, true)
+    const moduleCount = QRCode.create(url, { errorCorrectionLevel: 'M' }).modules.size
+    expect(moduleCount).toBe(101)
+
+    const result = await encodeMobilePairingQr(url)
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    const image = PNG.sync.read(Buffer.from(result.qrDataUrl.split(',')[1]!, 'base64'))
+    expect(result.qrSize).toBe(218)
+    expect(image.width).toBe(result.qrSize)
+    expect(image.height).toBe(result.qrSize)
+    expect(image.data.subarray((8 * image.width + 7) * 4, (8 * image.width + 8) * 4)).toEqual(
+      Buffer.from([255, 255, 255, 255])
+    )
+    expect(image.data.subarray((8 * image.width + 8) * 4, (8 * image.width + 9) * 4)).toEqual(
+      Buffer.from([0, 0, 0, 255])
+    )
+  })
+
   it.each([
     ['direct', false],
     ['relay', true]

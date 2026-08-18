@@ -9,8 +9,8 @@ export const colors = {
   editorSurface: '#1e1e1e',
 
   textPrimary: '#e0e0e0',
-  textSecondary: '#888888',
-  textMuted: '#555555',
+  textSecondary: '#a1a1a1',
+  textMuted: '#8c8c8c',
 
   // Crisp near-white surface for the single primary action on a screen (the
   // worktree FAB). Brighter than textPrimary so it reads as a solid button, not

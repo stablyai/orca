@@ -1,5 +1,7 @@
 import type { HostSectionRow } from './host-section-rows'
-import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list-groups'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
 import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
 
 /** Worktree ids in sidebar order, taken from the rows the sidebar actually
@@ -14,13 +16,22 @@ export function getCyclableWorktreeIds(
   const ids: string[] = []
   const seen = new Set<string>()
   for (const row of getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy)) {
-    if (seen.has(row.worktree.id)) {
+    const identity = getWorktreeHostIdentity(row.worktree)
+    if (seen.has(identity)) {
       continue
     }
-    seen.add(row.worktree.id)
+    seen.add(identity)
     ids.push(row.worktree.id)
   }
   return ids
+}
+
+export function getCyclableWorktrees(
+  rows: readonly HostSectionRow[],
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+): Worktree[] {
+  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+  return getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.worktree)
 }
 
 /** Pick the worktree that `worktree.navigateUp` / `worktree.navigateDown` moves

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { performance } from 'node:perf_hooks'
-import { Session, type SubprocessHandle } from './session'
+import { Session } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 // Benchmark harness for the terminal performance initiative: measures the
 // daemon-side ingest rate (Session.handleSubprocessData -> HeadlessEmulator
 // write + pending-output recording + client fanout) for the same workload
-// shapes as tools/benchmarks/terminal-pipeline-bench.mjs. Bare headless
+// shapes as tests/tools/benchmarks/terminal-pipeline-bench.mjs. Bare headless
 // xterm parses these at ~80-100 MB/s; the end-to-end Orca pipeline measured
 // 2-15 MB/s (baseline-jul02) — this isolates the daemon layer's share.
 // Run with:

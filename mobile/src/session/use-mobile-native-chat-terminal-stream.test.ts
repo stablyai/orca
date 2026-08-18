@@ -8,18 +8,34 @@ describe('useMobileNativeChatTerminalStream', () => {
   let harnessRenderCount = 0
   const subscriptionsRef = { current: new Map<string, () => void>() }
   const subscribingRef = { current: new Set<string>() }
+  const leaseOnlyRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
   const initializedRef = { current: new Set(['terminal-1']) }
-  const subscribe = vi.fn((handle: string) => subscriptionsRef.current.set(handle, () => {}))
-  const unsubscribe = vi.fn((handle: string) => subscriptionsRef.current.delete(handle))
+  /** Mirrors the route's subscribe-time coverage guess, which is what decides whether
+   *  the host opens a lease-only stream or a streaming one. */
+  let subscribeOpensLeaseOnly = false
+  const registerSubscription = (handle: string): void => {
+    subscriptionsRef.current.set(handle, () => {})
+    if (subscribeOpensLeaseOnly) {
+      leaseOnlyRef.current.add(handle)
+    } else {
+      leaseOnlyRef.current.delete(handle)
+    }
+  }
+  const subscribe = vi.fn(registerSubscription)
+  const unsubscribe = vi.fn((handle: string) => {
+    subscriptionsRef.current.delete(handle)
+    leaseOnlyRef.current.delete(handle)
+  })
   const notifyWebReadyRef = { current: (_handle: string, _wasAlreadyReady: boolean): void => {} }
   const notifyListedHandlesRef = { current: (_liveHandles: ReadonlySet<string>): void => {} }
   const hasTabsRecoveryNeedRef = { current: (): boolean => false }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     subscriptionsRef.current = new Map([['terminal-1', () => {}]])
     subscribingRef.current = new Set()
+    leaseOnlyRef.current = new Set()
+    subscribeOpensLeaseOnly = false
     webReadyRef.current = new Set(['terminal-1'])
     initializedRef.current = new Set(['terminal-1'])
     harnessRenderCount = 0
@@ -52,6 +68,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       streamRevision,
       subscriptionsRef,
       subscribingRef,
+      leaseOnlyRef,
       webReadyRef,
       initializedRef,
       subscribe,
@@ -85,113 +102,178 @@ describe('useMobileNativeChatTerminalStream', () => {
   }
 
   it('replaces output with a lease-only stream while covered, then restores output', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: false }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: false }))
-      })
-      await act(async () => {
-        notifyWebReadyRef.current('terminal-1', false)
-      })
-      expect(harnessRenderCount).toBe(1)
-      await act(async () => {
-        renderer?.update(createElement(Harness, { showNativeChat: true }))
-      })
+    await act(async () => {
+      notifyWebReadyRef.current('terminal-1', false)
+    })
+    expect(harnessRenderCount).toBe(1)
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: true }))
+    })
 
-      expect(unsubscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
-      expect(subscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
-      expect(initializedRef.current.has('terminal-1')).toBe(false)
+    expect(unsubscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
+    expect(subscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
+    expect(initializedRef.current.has('terminal-1')).toBe(false)
 
-      await act(async () => {
-        renderer?.update(createElement(Harness, { showNativeChat: false }))
-      })
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: false }))
+    })
 
-      expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
-      expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
-    } finally {
-      consoleSpy.mockRestore()
-    }
+    expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+    expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+  })
+
+  /** What switchTab does synchronously on the tap, before the route re-renders: the
+   *  coverage it reads still describes the chat tab being left, so the incoming
+   *  terminal gets a lease-only subscribe — the shape that renders nothing. */
+  function handOffToTerminalTwo(): void {
+    subscribeOpensLeaseOnly = true
+    subscribe('terminal-2')
+    subscribeOpensLeaseOnly = false
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+  }
+
+  it('trades a lease-only stream for output when a chat tab hands off to a terminal tab', async () => {
+    webReadyRef.current.add('terminal-2')
+    initializedRef.current.add('terminal-2')
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+
+    expect(unsubscribe).toHaveBeenCalledWith('terminal-2')
+    expect(subscribe).toHaveBeenCalledWith('terminal-2')
+    expect(leaseOnlyRef.current.has('terminal-2')).toBe(false)
+    // The lease-only stream carried no scrollback, so xterm is empty — a stale
+    // initialized mark would drop the replacement snapshot and keep the tab blank.
+    expect(initializedRef.current.has('terminal-2')).toBe(false)
+  })
+
+  it('settles once a lease-only stream has been replaced by a full one', async () => {
+    webReadyRef.current.add('terminal-2')
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          showNativeChat: false,
+          activeHandle: 'terminal-2',
+          streamRevision: 1
+        })
+      )
+    })
+
+    // A stream that renders is settled — resubscribing it again would be a loop.
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('repairs a lease-only stream once its WebView reports ready', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    handOffToTerminalTwo()
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: false, activeHandle: 'terminal-2' })
+      )
+    })
+
+    // Cold WebView: the resume must wait, and the route's own web-ready path bails
+    // because the lease-only subscription already counts as live.
+    expect(subscribe).not.toHaveBeenCalled()
+
+    await act(async () => {
+      webReadyRef.current.add('terminal-2')
+      notifyWebReadyRef.current('terminal-2', false)
+    })
+
+    expect(unsubscribe).toHaveBeenCalledWith('terminal-2')
+    expect(subscribe).toHaveBeenCalledWith('terminal-2')
+  })
+
+  it('keeps a covered lease-only stream instead of trading it for output (#10681)', async () => {
+    subscribeOpensLeaseOnly = true
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: true, streamRevision: 1 }))
+    })
+
+    // Lease-only is the correct shape under chat; swapping it for output would drop
+    // the input floor the composer holds.
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(unsubscribe).not.toHaveBeenCalled()
+    expect(leaseOnlyRef.current.has('terminal-1')).toBe(true)
   })
 
   it('re-subscribes a covered stream torn down under chat (#10681)', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: true }))
-      })
-      subscribe.mockClear()
-      unsubscribe.mockClear()
-      // What a terminal.list prune / `end` frame does to the lease-only stream:
-      // the subscription is gone and the lease drops with it.
-      subscriptionsRef.current.delete('terminal-1')
-      await act(async () => {
-        renderer?.update(createElement(Harness, { showNativeChat: true, leaseReady: false }))
-      })
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+    // What a terminal.list prune / `end` frame does to the lease-only stream:
+    // the subscription is gone and the lease drops with it.
+    subscriptionsRef.current.delete('terminal-1')
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: true, leaseReady: false }))
+    })
 
-      expect(subscribe).toHaveBeenCalledOnce()
-      expect(subscribe).toHaveBeenCalledWith('terminal-1')
-      // Pins the rearm branch specifically: without it the action falls through to
-      // the resume tail, which also subscribes — but drops coverage on the way.
-      expect(unsubscribe).not.toHaveBeenCalled()
-    } finally {
-      consoleSpy.mockRestore()
-    }
+    expect(subscribe).toHaveBeenCalledOnce()
+    expect(subscribe).toHaveBeenCalledWith('terminal-1')
+    // Pins the rearm branch specifically: without it the action falls through to
+    // the resume tail, which also subscribes — but drops coverage on the way.
+    expect(unsubscribe).not.toHaveBeenCalled()
   })
 
   it('stops rearming a handle whose stream never comes back (#10681)', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
     })
-    try {
+    subscribe.mockClear()
+    // A dead PTY answers every subscribe with `subscribed`+`end`, so the stream is
+    // gone again on each pass. Unbounded, that is a ~10s resubscribe loop.
+    for (let revision = 1; revision <= 6; revision += 1) {
+      subscriptionsRef.current.delete('terminal-1')
       await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: true }))
+        renderer?.update(
+          createElement(Harness, {
+            showNativeChat: true,
+            leaseReady: false,
+            streamRevision: revision
+          })
+        )
       })
-      subscribe.mockClear()
-      // A dead PTY answers every subscribe with `subscribed`+`end`, so the stream is
-      // gone again on each pass. Unbounded, that is a ~10s resubscribe loop.
-      for (let revision = 1; revision <= 6; revision += 1) {
-        subscriptionsRef.current.delete('terminal-1')
-        await act(async () => {
-          renderer?.update(
-            createElement(Harness, {
-              showNativeChat: true,
-              leaseReady: false,
-              streamRevision: revision
-            })
-          )
-        })
-      }
-
-      expect(subscribe.mock.calls.length).toBeLessThanOrEqual(3)
-    } finally {
-      consoleSpy.mockRestore()
     }
+
+    expect(subscribe.mock.calls.length).toBeLessThanOrEqual(3)
   })
 
   it('does not charge the rearm budget for a subscribe its own gates turned away', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
     try {
       await act(async () => {
         renderer = create(createElement(Harness, { showNativeChat: true }))
@@ -215,92 +297,67 @@ describe('useMobileNativeChatTerminalStream', () => {
 
       expect(subscribe).toHaveBeenCalledTimes(5)
     } finally {
-      subscribe.mockImplementation((handle: string) =>
-        subscriptionsRef.current.set(handle, () => {})
-      )
-      consoleSpy.mockRestore()
+      subscribe.mockImplementation(registerSubscription)
     }
   })
 
   it('refills the rearm budget when terminal.list reports the handle again (#10681)', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: true }))
-      })
-      for (let revision = 1; revision <= 5; revision += 1) {
-        subscriptionsRef.current.delete('terminal-1')
-        await act(async () => {
-          renderer?.update(
-            createElement(Harness, {
-              showNativeChat: true,
-              leaseReady: false,
-              streamRevision: revision
-            })
-          )
-        })
-      }
-      subscribe.mockClear()
-      // Budget is spent, so a further teardown signal alone changes nothing.
-      await act(async () => {
-        renderer?.update(
-          createElement(Harness, { showNativeChat: true, leaseReady: false, streamRevision: 6 })
-        )
-      })
-      expect(subscribe).not.toHaveBeenCalled()
-
-      // A dead-but-listed handle must not buy a new budget on every list refresh,
-      // or the resubscribe loop this bound exists to stop comes straight back.
-      await act(async () => {
-        notifyListedHandlesRef.current(new Set(['terminal-1']))
-        notifyListedHandlesRef.current(new Set(['terminal-1']))
-      })
-      expect(subscribe).not.toHaveBeenCalled()
-
-      // The handle actually went away and came back: it may have a live PTY once more.
-      await act(async () => {
-        notifyListedHandlesRef.current(new Set())
-        notifyListedHandlesRef.current(new Set(['terminal-1']))
-      })
-
-      expect(subscribe).toHaveBeenCalledWith('terminal-1')
-    } finally {
-      consoleSpy.mockRestore()
-    }
-  })
-
-  it('rearms on a teardown the lease cannot report (#10681)', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: true }))
-      })
-      subscribe.mockClear()
-      // `end` with no preceding `subscribed` leaves the lease untouched, so
-      // `leaseReady` holds its value and only the revision bump can re-run us.
+    for (let revision = 1; revision <= 5; revision += 1) {
       subscriptionsRef.current.delete('terminal-1')
       await act(async () => {
         renderer?.update(
-          createElement(Harness, { showNativeChat: true, leaseReady: true, streamRevision: 1 })
+          createElement(Harness, {
+            showNativeChat: true,
+            leaseReady: false,
+            streamRevision: revision
+          })
         )
       })
-
-      expect(subscribe).toHaveBeenCalledWith('terminal-1')
-    } finally {
-      consoleSpy.mockRestore()
     }
+    subscribe.mockClear()
+    // Budget is spent, so a further teardown signal alone changes nothing.
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: true, leaseReady: false, streamRevision: 6 })
+      )
+    })
+    expect(subscribe).not.toHaveBeenCalled()
+
+    // A dead-but-listed handle must not buy a new budget on every list refresh,
+    // or the resubscribe loop this bound exists to stop comes straight back.
+    await act(async () => {
+      notifyListedHandlesRef.current(new Set(['terminal-1']))
+      notifyListedHandlesRef.current(new Set(['terminal-1']))
+    })
+    expect(subscribe).not.toHaveBeenCalled()
+
+    // The handle actually went away and came back: it may have a live PTY once more.
+    await act(async () => {
+      notifyListedHandlesRef.current(new Set())
+      notifyListedHandlesRef.current(new Set(['terminal-1']))
+    })
+
+    expect(subscribe).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('rearms on a teardown the lease cannot report (#10681)', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
+    })
+    subscribe.mockClear()
+    // `end` with no preceding `subscribed` leaves the lease untouched, so
+    // `leaseReady` holds its value and only the revision bump can re-run us.
+    subscriptionsRef.current.delete('terminal-1')
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, { showNativeChat: true, leaseReady: true, streamRevision: 1 })
+      )
+    })
+
+    expect(subscribe).toHaveBeenCalledWith('terminal-1')
   })
 
   it('does not let a dead PTY buy a new budget with its own `subscribed` ack', async () => {
@@ -411,34 +468,23 @@ describe('useMobileNativeChatTerminalStream', () => {
   })
 
   it('resumes a cold-start lease-only stream when WebView readiness arrives late', async () => {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    webReadyRef.current.clear()
+    await act(async () => {
+      renderer = create(createElement(Harness, { showNativeChat: true }))
     })
-    try {
-      webReadyRef.current.clear()
-      await act(async () => {
-        renderer = create(createElement(Harness, { showNativeChat: true }))
-      })
-      await act(async () => {
-        renderer?.update(createElement(Harness, { showNativeChat: false }))
-      })
+    await act(async () => {
+      renderer?.update(createElement(Harness, { showNativeChat: false }))
+    })
 
-      expect(unsubscribe).toHaveBeenCalledOnce()
-      expect(subscribe).toHaveBeenCalledOnce()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subscribe).toHaveBeenCalledOnce()
 
-      webReadyRef.current.add('terminal-1')
-      await act(async () => {
-        notifyWebReadyRef.current('terminal-1', false)
-      })
+    webReadyRef.current.add('terminal-1')
+    await act(async () => {
+      notifyWebReadyRef.current('terminal-1', false)
+    })
 
-      expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
-      expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
-    } finally {
-      consoleSpy.mockRestore()
-    }
+    expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+    expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
   })
 })

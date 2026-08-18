@@ -63,7 +63,6 @@ export function launchDevApp({ cdpPort, userDataDir }) {
     ORCA_DEV_USER_DATA_PATH: userDataDir,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
-    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
     ORCA_SKIP_DEV_WEB_PREPARE: '1',
     ORCA_STARTUP_DIAGNOSTICS: '1',
     REMOTE_DEBUGGING_PORT: String(cdpPort),

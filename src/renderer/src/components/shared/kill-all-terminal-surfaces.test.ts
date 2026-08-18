@@ -339,6 +339,26 @@ describe('runKillAllTerminalSurfaces', () => {
     expect(killPty).not.toHaveBeenCalled()
   })
 
+  it('invalidates cached session inventories once the daemon sweep settles either way', async () => {
+    const notifyInventoryInvalidated = vi.fn()
+
+    await runKillAllTerminalSurfaces([], {
+      getState: () => state(),
+      killDaemonSessions: vi.fn().mockResolvedValue({ killedCount: 3, remainingCount: 0 }),
+      notifyInventoryInvalidated,
+      reportSummary: vi.fn()
+    })
+    expect(notifyInventoryInvalidated).toHaveBeenCalledTimes(1)
+
+    await runKillAllTerminalSurfaces([], {
+      getState: () => state(),
+      killDaemonSessions: vi.fn().mockRejectedValue(new Error('daemon gone')),
+      notifyInventoryInvalidated,
+      reportSummary: vi.fn()
+    })
+    expect(notifyInventoryInvalidated).toHaveBeenCalledTimes(2)
+  })
+
   it('uses one daemon management call and never inventories sessions afterward', async () => {
     const killAll = vi.fn().mockResolvedValue({ killedCount: 0, remainingCount: 0 })
     const listSessions = vi.fn()

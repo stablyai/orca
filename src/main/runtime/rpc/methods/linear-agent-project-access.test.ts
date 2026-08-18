@@ -10,7 +10,7 @@ type LinearProjectResolverTester = {
     id: string
     name: string
   }>
-  readLinearProjectByIdForCreate(id: string, workspaceId: string): Promise<unknown | null>
+  readLinearProjectByIdForCreate(id: string, workspaceId: string): Promise<unknown>
   readLinearProjectsForCreate(query: string, workspaceId: string): Promise<unknown[]>
   readLinearProjectsByExactNameForCreate(name: string, workspaceId: string): Promise<unknown[]>
 }

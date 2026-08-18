@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
 const PTY_ID_SSH = 'ssh:target-1@@pty-9'
@@ -13,7 +14,11 @@ const DONE_SETTLE_MS = 1500
 const ROUTING = { connectionId: null }
 
 type MockStoreState = {
+  tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
+  retainedAgentsByPaneKey: Record<string, { agentType: AgentType } | undefined>
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
+  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
   setAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
@@ -40,7 +45,11 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
 
 function makeMockStoreState(): MockStoreState {
   return {
+    tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID }] },
     agentStatusByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    paneForegroundAgentByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     runtimePaneTitlesByTabId: { [TAB_ID]: { [PANE_ID]: '✳ Build feature' } },
     setAgentStatus: vi.fn(),
     dropAgentStatus: vi.fn(),
@@ -107,6 +116,80 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.onCommandCodeWorking('Fix the spinner')
 
     expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('rejects scrape status when a Claude hook owns the pane', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({ state: 'done' })
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onCommandCodeWorking('False prompt')
+    policy.onCommandCodeDone('False prompt')
+    vi.advanceTimersByTime(DONE_SETTLE_MS)
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('rejects scrape status when retained Claude identity owns the pane', async () => {
+    mockStoreState.retainedAgentsByPaneKey[PANE_KEY] = { agentType: 'claude' }
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({ agentType: 'unknown' })
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onCommandCodeWorking('False prompt')
+    policy.onCommandCodeDone('False prompt')
+    vi.advanceTimersByTime(DONE_SETTLE_MS)
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('rejects scrape status when Claude launch metadata owns the pane', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'claude' }]
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onCommandCodeWorking('False prompt')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('rejects scrape status when Claude is the foreground process', async () => {
+    mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+      agent: 'claude',
+      shellForeground: false
+    }
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onCommandCodeWorking('False prompt')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('lets a current Command Code process reclaim stale Claude ownership', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'claude' }]
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({ state: 'done' })
+    mockStoreState.retainedAgentsByPaneKey[PANE_KEY] = { agentType: 'claude' }
+    mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+      agent: 'command-code',
+      shellForeground: false
+    }
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onCommandCodeWorking('New Command Code prompt')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      PANE_KEY,
+      {
+        state: 'working',
+        prompt: 'New Command Code prompt',
+        agentType: 'command-code'
+      },
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
     policy.dispose()
   })
 
@@ -271,7 +354,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     ssh.dispose()
 
     expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledTimes(2)
-    expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID, 0)
   })
 
   it('drops a same-turn status row on command finished for SSH PTYs only', async () => {

@@ -4,7 +4,7 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../shared/constants'
-import type { PersistedUIState } from '../../../shared/types'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,
@@ -51,6 +51,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     hideDefaultBranchWorkspace: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     hideAutomationGeneratedWorkspaces: false,
     filterRepoIds: [],
     collapsedGroups: [],

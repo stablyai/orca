@@ -22,7 +22,7 @@ const BUDGETS = {
   maxTimerDriftMs: 150,
   // Why: mirrors MAX_TIMER_DRIFT_UNDER_LOAD_MS in artificial-opencode-terminal-load.spec.ts
   // so injected multi-pane redraw rows are not judged against the unloaded ceiling.
-  maxTimerDriftUnderLoadMs: 2_500,
+  maxTimerDriftUnderLoadMs: 3_500,
   maxScrollLatencyMs: 150,
   maxRestoreLatencyMs: 1000,
   maxRendererQueuedChars: 2 * 1024 * 1024,

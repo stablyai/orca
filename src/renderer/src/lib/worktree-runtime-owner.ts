@@ -1,12 +1,14 @@
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings, Worktree } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
+  hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
@@ -17,6 +19,7 @@ import {
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import {
+  resolveActiveWorkspaceRoute,
   resolveExplicitWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
@@ -43,6 +46,15 @@ function getExecutionHostIdFromWorktreeHost(
   return parseExecutionHostId(hostId)?.id ?? null
 }
 
+function getActiveWorkspaceExecutionHostId(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string
+): ExecutionHostId | null {
+  return state.activeWorktreeId === worktreeId
+    ? (state.activeWorkspaceExecutionHostId ?? null)
+    : null
+}
+
 export function getRuntimeEnvironmentIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -52,6 +64,10 @@ export function getRuntimeEnvironmentIdForWorktree(
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
+  }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -65,9 +81,7 @@ export function getRuntimeEnvironmentIdForWorktree(
     const owner = indexedOwner.owner
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
-    const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
         projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
@@ -100,6 +114,10 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   if (!worktreeId) {
     return null
   }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExplicitRuntimeEnvironmentIdForFolderWorkspace(
@@ -107,9 +125,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
       workspaceScope.folderWorkspaceId
     )
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     // Why: detected-only rows are selectable before the primary catalog lands; use the same
     // ambiguity-aware explicit provenance as filesystem and terminal operations.
@@ -151,13 +167,15 @@ export function getExecutionHostIdForWorktree(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'local'
   }
+  const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
+  if (activeHostId) {
+    return activeHostId
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
     if (resolution.kind === 'resolved') {

@@ -28,14 +28,14 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
-import { useWorktreeMap } from '../../store/selectors'
+import { getAllWorktreesFromState, useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
-import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { AppMemory, UsageValues } from '../../../../shared/process-stats-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type {
   Metric,
@@ -69,6 +69,7 @@ import {
 } from './resource-manager-terminal-copy'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
+import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import {
   countUnboundDaemonSessions,
   selectUnboundDaemonSessions,
@@ -825,9 +826,6 @@ export function ResourceUsageStatusSegment({
       clearSessionsError()
       void fetchSnapshot()
       void refreshSessions()
-    },
-    onKillAllSettled: () => {
-      void refreshSessions()
     }
   })
 
@@ -875,6 +873,12 @@ export function ResourceUsageStatusSegment({
     }
   }, [open, fetchSnapshot, refreshSessions])
 
+  useEffect(() => {
+    if (!open) {
+      clearSessionsError()
+    }
+  }, [open, clearSessionsError])
+
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const repo of repos) {
@@ -905,26 +909,10 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
-  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
-
-  const oldWorkspaceCount = useMemo(() => {
-    const now = Date.now()
-    let count = 0
-    for (const worktree of allWorktrees) {
-      const repo = repoById.get(worktree.repoId)
-      if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
-        continue
-      }
-      if (isWorkspaceOldForCleanup(worktree, now)) {
-        count += 1
-      }
-    }
-    return count
-  }, [allWorktrees, repoById])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
@@ -1027,7 +1015,14 @@ export function ResourceUsageStatusSegment({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
-    activateAndRevealWorktree(worktreeId)
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
+    activateAndRevealWorktree(worktreeId, { executionHostId: target.hostId })
   }, [])
 
   const navigateToTab = useCallback(
@@ -1044,8 +1039,15 @@ export function ResourceUsageStatusSegment({
   )
 
   const deleteWorktree = useCallback((worktreeId: string): void => {
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
     setOpen(false)
-    runWorktreeDelete(worktreeId)
+    runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
   }, [])
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
@@ -1192,12 +1194,9 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            {resourceManagerTooltipLines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={line === 'Space scan ready' ? 'text-primary' : ''}
-              >
-                {line}
+            {resourceManagerTooltipLines.map((line) => (
+              <div key={line.id} className={line.emphasized ? 'text-primary' : ''}>
+                {line.text}
               </div>
             ))}
           </div>
@@ -1491,8 +1490,7 @@ export function ResourceUsageStatusSegment({
             <span className="min-w-0 truncate px-4 text-center">
               {translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                'Review inactive workspaces ({{value0}})',
-                { value0: oldWorkspaceCount }
+                'Clean up workspaces'
               )}
             </span>
             <ChevronRight

@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 
 // Why: thresholds for escalating connection UX from neutral
@@ -49,6 +50,7 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  pendingPath?: MobileConnectionPath | null
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -61,19 +63,30 @@ export function classifyConnection(args: {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
-  // Connected / connecting / handshaking are normal.
   if (state === 'connected') {
     return { kind: 'normal', label: 'Connected' }
   }
-  if (state === 'connecting' || state === 'handshaking') {
-    return { kind: 'normal', label: 'Connecting…' }
+
+  if (args.pendingPath === 'relay') {
+    if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+      if (lastConnectedAt == null) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }
+      }
+      if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'stale' }
+      }
+    }
+    return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
   if (state === 'disconnected') {
     return { kind: 'normal', label: 'Disconnected' }
   }
 
-  // state === 'reconnecting' from here.
+  // connecting / handshaking / reconnecting from here. The gates apply to all
+  // three: every redial re-enters 'connecting', and letting that revert an
+  // escalated verdict to "Connecting…" hid the failure loop behind a reassuring
+  // label for most of each cycle (issue #10119).
   if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
     if (lastConnectedAt == null) {
       return {
@@ -97,7 +110,7 @@ export function classifyConnection(args: {
     return { kind: 'warning', label: "Can't connect", hint }
   }
 
-  return { kind: 'normal', label: 'Reconnecting…' }
+  return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
 }
 
 // Why: single place that turns a verdict into display text so every screen

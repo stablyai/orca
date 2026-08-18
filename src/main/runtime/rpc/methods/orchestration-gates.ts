@@ -3,6 +3,8 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import type { GateStatus } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
+import { resolveRunScope } from './orchestration-run-scope'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
@@ -22,17 +24,23 @@ const RunStopParams = z.object({})
 const GateCreateParams = z.object({
   task: requiredString('Missing --task'),
   question: requiredString('Missing --question'),
-  options: OptionalString
+  options: OptionalString,
+  from: OptionalString,
+  run: OptionalString
 })
 
 const GateResolveParams = z.object({
   id: requiredString('Missing --id'),
-  resolution: requiredString('Missing --resolution')
+  resolution: requiredString('Missing --resolution'),
+  from: OptionalString,
+  run: OptionalString
 })
 
 const GateListParams = z.object({
   task: OptionalString,
-  status: z.enum(['pending', 'resolved', 'timeout']).optional()
+  status: z.enum(['pending', 'resolved', 'timeout']).optional(),
+  from: OptionalString,
+  run: OptionalString
 })
 
 export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
@@ -103,12 +111,8 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateCreate',
     params: GateCreateParams,
-    handler: (params, { runtime, legacyCoordinatorRunId }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.getTask(params.task)
-      if (legacyCoordinatorRunId && task?.run_id !== legacyCoordinatorRunId) {
-        throw new Error(`Task not found: ${params.task}`)
-      }
       let options: string[] | undefined
       if (params.options) {
         try {
@@ -120,6 +124,23 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
         } catch {
           throw new Error('Invalid --options: must be a JSON array of strings')
         }
+      }
+      const task = db.getTask(params.task)
+      if (!task) {
+        throw new Error(`Task not found: ${params.task}`)
+      }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.from,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
+      if (task.run_id !== run.id) {
+        throw new OrchestrationError(
+          'task_not_found',
+          `Task ${params.task} was not found in Run ${run.id}.`
+        )
       }
       const gate = db.createGate({
         taskId: params.task,
@@ -133,10 +154,21 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateResolve',
     params: GateResolveParams,
-    handler: (params, { runtime, legacyCoordinatorRunId }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const existing = db.getGate(params.id)
-      if (legacyCoordinatorRunId && existing?.run_id !== legacyCoordinatorRunId) {
+      if (!existing) {
+        throw new Error(`Gate not found: ${params.id}`)
+      }
+      const run = resolveRunScope(runtime, {
+        runId: params.run,
+        callerTerminalHandle: params.from,
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
+      // Why: a gate outside the caller's Run is indistinguishable from a missing one, so probing cannot map foreign Runs.
+      if (existing.run_id !== run.id) {
         throw new Error(`Gate not found: ${params.id}`)
       }
       const gate = db.resolveGate(params.id, params.resolution)
@@ -150,13 +182,27 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateList',
     params: GateListParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
-      const gates = db.listGates({
-        taskId: params.task,
-        status: params.status as GateStatus
-      })
-      return { gates, count: gates.length }
+      const explicitRun = params.run ? db.getRun(params.run) : undefined
+      // Why: same read posture as taskList — an explicitly named Run is inspectable, an unnamed one means the caller's own.
+      const run =
+        explicitRun?.legacy === 1
+          ? explicitRun
+          : resolveRunScope(runtime, {
+              runId: params.run,
+              callerTerminalHandle: params.from,
+              requireCurrentConsumer: params.run === undefined,
+              legacyCoordinatorRunId,
+              callerEvidence: orchestrationCompatibilityEvidence
+            })
+      const gates = db
+        .listGates({
+          taskId: params.task,
+          status: params.status as GateStatus
+        })
+        .filter((gate) => gate.run_id === run.id)
+      return { runId: run.id, gates, count: gates.length }
     }
   })
 ]

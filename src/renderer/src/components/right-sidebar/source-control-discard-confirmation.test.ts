@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   getDiscardAreaConfirmationCopy,
   getDiscardEntryConfirmationCopy
-} from './source-control-discard-confirmation'
-import type { GitStatusEntry } from '../../../../shared/types'
+} from './source-control/commit/discard-confirmation'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {

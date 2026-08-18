@@ -56,6 +56,7 @@ export function OrchestrationSetupCard(props: {
       terminalAriaLabel="Orchestration skill install terminal"
       terminalWorktreeId="feature-wall-orchestration-skill-terminal"
       terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+      terminalRuntime={activeSkillRuntime.agentRuntime}
       installed={skill.installed}
       loading={skill.loading}
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
@@ -77,7 +78,7 @@ export function OrchestrationSetupCard(props: {
       }}
       onRecheck={skill.refresh}
       freshnessSkillName={
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCHESTRATION_SKILL_NAME
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
       }
     />
   )

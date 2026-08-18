@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
@@ -103,6 +103,7 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions = null
     fakes.sendText.mockReturnValue(true)
   })
+  afterEach(() => vi.useRealTimers())
 
   it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
     const { session, confirmationRequest } = await authenticateSession()
@@ -119,7 +120,7 @@ describe('mobile relay RPC session', () => {
     })
     expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
     expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
-    expect(session.getLeaseExpiresAt()).toEqual(expect.any(Number))
+    expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
   })
 
   it('rejects a mismatched outer credential version and closes the physical link', () => {

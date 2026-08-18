@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import {
   readWindowsTerminalCapabilities,
   type WindowsTerminalCapabilityLoadTarget
@@ -174,7 +175,7 @@ export function loadWindowsTerminalCapabilities(
 }
 
 export function refreshWindowsTerminalCapabilities(
-  ownerKey: string | undefined = undefined,
+  ownerKey?: string,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): Promise<WindowsTerminalCapabilities> {
@@ -197,7 +198,7 @@ export function selectWindowsTerminalCapabilitiesForOwner(
 export function useWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false,
-  ownerKey: string | undefined = undefined,
+  ownerKey?: string,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): WindowsTerminalCapabilities {
@@ -239,19 +240,35 @@ export function useWindowsTerminalCapabilities(
     const subscribers = subscribersByOwnerKey.get(resolvedOwnerKey) ?? new Set()
     subscribers.add(setCapabilities)
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
+    const reprobe: { stop: (() => void) | null } = { stop: null }
     void loadWindowsTerminalCapabilities({
       force: forceRefreshOnMount,
       ownerKey: resolvedOwnerKey,
       target: resolvedTarget,
       sshConnectionId: sshConnectionIdKey
     }).then((nextCapabilities) => {
-      if (!cancelled) {
-        setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
+      if (cancelled) {
+        return
+      }
+      setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
+      // Why: each re-probe spawns wsl.exe/pwsh.exe, so local consumers share a bounded backoff.
+      if (resolvedTarget.kind === 'local' && !sshConnectionIdKey) {
+        reprobe.stop = startWindowsTerminalCapabilityReprobe({
+          ownerKey: resolvedOwnerKey,
+          readCached: () => getCachedWindowsTerminalCapabilities(resolvedOwnerKey),
+          probe: () =>
+            loadWindowsTerminalCapabilities({
+              ownerKey: resolvedOwnerKey,
+              target: resolvedTarget,
+              sshConnectionId: sshConnectionIdKey
+            })
+        })
       }
     })
 
     return () => {
       cancelled = true
+      reprobe.stop?.()
       const currentSubscribers = subscribersByOwnerKey.get(resolvedOwnerKey)
       currentSubscribers?.delete(setCapabilities)
       if (currentSubscribers?.size === 0) {

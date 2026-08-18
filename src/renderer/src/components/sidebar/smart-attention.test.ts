@@ -11,7 +11,8 @@ import {
   resolveAttention,
   type PaneInput
 } from './smart-attention'
-import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 function hookPane(entry: AgentStatusEntry): PaneInput {
   return { kind: 'hook', entry }
@@ -60,7 +61,9 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
-    interrupted: overrides.interrupted
+    interrupted: overrides.interrupted,
+    sessionBoundary: overrides.sessionBoundary,
+    restoredUnconfirmed: overrides.restoredUnconfirmed
   }
 }
 
@@ -174,6 +177,87 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 30_000
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('treats a session boundary as idle unless it displaced a real completion', () => {
+    const boundary = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      sessionBoundary: true,
+      stateStartedAt: NOW - 1_000,
+      updatedAt: NOW - 500
+    })
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
+
+    boundary.stateHistory = [makeHistory('done', NOW - 90_000)]
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual({
+      cls: 2,
+      attentionTimestamp: NOW - 90_000
+    })
+  })
+
+  it('drops a done pane out of Class 2 once the completion itself ages out', () => {
+    const justInside = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention([hookPane(justInside)], NOW)).toEqual({
+      cls: 2,
+      attentionTimestamp: NOW - AGENT_STATUS_STALE_AFTER_MS
+    })
+
+    const justOutside = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention([hookPane(justOutside)], NOW)).toEqual(IDLE)
+  })
+
+  it('does not let same-state done writes extend Class 2 eligibility', () => {
+    // The captured regression: updatedAt was 3m04s newer than the completion, keeping a 32m-old
+    // "done" row above two spinners.
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - 32 * 60_000,
+      updatedAt: NOW - 29 * 60_000
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('keeps an expired done pane from masking a live working sibling', () => {
+    const expiredDone = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
+      updatedAt: NOW - 1_000
+    })
+    const working = makeEntry({
+      paneKey: 't:2',
+      state: 'working',
+      stateStartedAt: NOW - 10_000,
+      updatedAt: NOW - 1_000
+    })
+    expect(resolveAttention(hookPanes([expiredDone, working]), NOW)).toEqual({
+      cls: 3,
+      attentionTimestamp: NOW - 10_000
+    })
+  })
+
+  it('ages out a session-boundary completion from its real completion time', () => {
+    const boundary = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      sessionBoundary: true,
+      stateStartedAt: NOW - 1_000,
+      updatedAt: NOW - 500,
+      stateHistory: [makeHistory('done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)]
+    })
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
   })
 
   it('classifies a working pane with prior done as Class 3 with the prior timestamp', () => {
@@ -574,6 +658,82 @@ describe('buildAttentionByWorktree', () => {
       splitLayout(tab.id)
     )
     expect(map.get(w.id)).toEqual({ cls: 2, attentionTimestamp: NOW - 30_000 })
+  })
+
+  it('keeps a restored row idle while allowing an independently live sibling title', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          restoredUnconfirmed: true
+        })
+      },
+      { [tab.id]: { 1: '⠋ Claude', 2: '✋ Gemini CLI' } },
+      ptyMap([tab.id]),
+      NOW,
+      undefined,
+      splitLayout(tab.id)
+    )
+
+    expect(map.get(w.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW,
+      cause: 'title-heuristic'
+    })
+  })
+
+  it('does not revive a restored row from one title before layout hydration', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          restoredUnconfirmed: true
+        })
+      },
+      { [tab.id]: { 1: '⠋ Claude' } },
+      ptyMap([tab.id]),
+      NOW
+    )
+
+    expect(map.get(w.id)).toEqual(IDLE)
+  })
+
+  it('still uses one unmapped title when the hook is only age-stale', () => {
+    const w = makeWorktree('wt-1')
+    const tab = makeTab('tab-1', w.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const map = buildAttentionByWorktree(
+      [w],
+      { [w.id]: [tab] },
+      {
+        [key]: makeEntry({
+          paneKey: key,
+          state: 'working',
+          updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+        })
+      },
+      { [tab.id]: { 1: '✋ Gemini CLI' } },
+      ptyMap([tab.id]),
+      NOW
+    )
+
+    expect(map.get(w.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW,
+      cause: 'title-heuristic'
+    })
   })
 
   it('per-pane authority across panes: pane A fresh hook=done, pane B no hook + permission title → Class 1', () => {

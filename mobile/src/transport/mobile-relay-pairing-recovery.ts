@@ -27,7 +27,7 @@ import {
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { HostProfile, RpcResponse } from './types'
 
-export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred'
+export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred' | 'abandoned'
 
 type RecoveryDependencies = {
   loadJournal: typeof loadMobileRelayPairingJournal
@@ -56,6 +56,10 @@ const defaultDependencies: RecoveryDependencies = {
   now: Date.now,
   platform: Platform.OS
 }
+
+// One full invite lifetime past expiry, so a momentary outage never discards a
+// journal that a later launch could still reconcile.
+const ABANDON_GRACE_MS = 10 * 60 * 1000
 
 let recoveryPromise: Promise<MobileRelayPairingRecoveryResult> | null = null
 
@@ -96,6 +100,10 @@ async function runRecovery(
   }
 
   const credentials = recoveryCredentials(journal, bundle, dependencies.now())
+  // Why: publishCommitted runs inside the catch below, so a failed local write
+  // of an authoritatively committed install must not look like "nothing to
+  // reconcile" — that journal is the only record left to retry the write from.
+  let observedCommitted = false
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
     try {
@@ -113,6 +121,7 @@ async function runRecovery(
             })
       const endpoints = await getRecoveryStatus(client, journal, credential.kind)
       if (endpoints.installStatus?.state === 'committed') {
+        observedCommitted = true
         await publishCommitted(journal, endpoints, dependencies)
         return 'recovered'
       }
@@ -128,6 +137,7 @@ async function runRecovery(
         )
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
+        observedCommitted = true
         await publishCommitted(journal, reconciled, dependencies)
         return 'recovered'
       }
@@ -137,6 +147,19 @@ async function runRecovery(
     } finally {
       client?.close()
     }
+  }
+  // Why: past invite expiry no credential can still establish what happened, so
+  // retaining the journal cannot reconcile anything — it only fails every later
+  // pairing with "recovery pending" forever. Re-pairing mints a fresh device and
+  // any uncommitted server-side install expires on its own. The extra invite
+  // lifetime of slack keeps a brief relay outage from discarding a journal whose
+  // resume credential would have reconciled it on the next launch.
+  if (
+    !observedCommitted &&
+    journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now()
+  ) {
+    await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
+    return 'abandoned'
   }
   return 'deferred'
 }

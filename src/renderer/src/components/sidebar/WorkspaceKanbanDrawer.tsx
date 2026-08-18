@@ -1,5 +1,13 @@
 /* eslint-disable max-lines -- Why: the board drawer owns shared board state, drag/drop, and settings callbacks that need one coordinated surface. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -41,11 +49,17 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
-import type { WorkspaceStatus, Worktree, WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
+import { registerWorkspaceKanbanSidebarDropGroups } from './workspace-kanban-sidebar-drop'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -56,6 +70,9 @@ type WorkspaceKanbanDrawerProps = {
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
 }
+
+// Why: outlast the Sheet close animation so the board does not disappear mid-slide.
+const WORKSPACE_BOARD_CLOSE_LINGER_MS = 300
 
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
@@ -131,7 +148,26 @@ function formatTaskStatusSyncDescription(result: WorkspaceBoardTaskStatusSyncRes
     .join('. ')
 }
 
-export default function WorkspaceKanbanDrawer({
+export default function WorkspaceKanbanDrawer(
+  props: WorkspaceKanbanDrawerProps
+): React.JSX.Element | null {
+  const [lingering, setLingering] = useState(props.open)
+  useEffect(() => {
+    if (props.open) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), WORKSPACE_BOARD_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [props.open])
+
+  if (!props.open && !lingering) {
+    return null
+  }
+  return <WorkspaceKanbanDrawerContent {...props} />
+}
+
+function WorkspaceKanbanDrawerContent({
   leftSidebarStyle,
   open,
   statusBarVisible,
@@ -143,6 +179,7 @@ export default function WorkspaceKanbanDrawer({
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
@@ -162,7 +199,11 @@ export default function WorkspaceKanbanDrawer({
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
-  const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
+  const [renderCards, setRenderCards] = useState(false)
+  const activeWorktreeIdentity = activeWorktreeId
+    ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId ?? undefined, activeWorktreeId)
+    : null
+  const { createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
     repoMap
@@ -191,6 +232,12 @@ export default function WorkspaceKanbanDrawer({
       })),
     [worktreesByStatus, workspaceStatuses]
   )
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    return registerWorkspaceKanbanSidebarDropGroups(boardDragGroups)
+  }, [boardDragGroups, open])
   const laneFullWorktreeIds = useMemo(
     () => new Map(boardDragGroups.map((group) => [group.key, group.worktreeIds])),
     [boardDragGroups]
@@ -210,7 +257,9 @@ export default function WorkspaceKanbanDrawer({
   const renderedBoardWorktrees = useMemo(
     () =>
       matchingWorktreeIds
-        ? boardWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? boardWorktrees.filter((worktree) =>
+            matchingWorktreeIds.has(getWorktreeHostIdentity(worktree))
+          )
         : boardWorktrees,
     [boardWorktrees, matchingWorktreeIds]
   )
@@ -488,7 +537,9 @@ export default function WorkspaceKanbanDrawer({
   const renderedSelectedWorktrees = useMemo(
     () =>
       matchingWorktreeIds
-        ? selectedWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? selectedWorktrees.filter((worktree) =>
+            matchingWorktreeIds.has(getWorktreeHostIdentity(worktree))
+          )
         : selectedWorktrees,
     [matchingWorktreeIds, selectedWorktrees]
   )
@@ -498,7 +549,7 @@ export default function WorkspaceKanbanDrawer({
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const selection = selectForContextMenu(event, worktree)
       return matchingWorktreeIds
-        ? selection.filter((item) => matchingWorktreeIds.has(item.id))
+        ? selection.filter((item) => matchingWorktreeIds.has(getWorktreeHostIdentity(item)))
         : selection
     },
     [matchingWorktreeIds, selectForContextMenu]
@@ -692,6 +743,28 @@ export default function WorkspaceKanbanDrawer({
     }
   )
 
+  // Why: mounting every lane's cards in the same commit that opens the sheet
+  // blocks the slide-in for the whole card render. Paint the board chrome
+  // first, then fill the lanes in a non-blocking transition.
+  useEffect(() => {
+    if (!open) {
+      setRenderCards(false)
+      return
+    }
+    let cancelled = false
+    const frameId = window.requestAnimationFrame(() => {
+      startTransition(() => {
+        if (!cancelled) {
+          setRenderCards(true)
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [open])
+
   useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
   useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
   useContextualTour('workspace-board', open && !dragPreview, 'workspace_board_visible')
@@ -861,16 +934,17 @@ export default function WorkspaceKanbanDrawer({
             className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek"
           >
             <WorkspaceKanbanLaneGrid
+              laneScrollerRef={laneScrollerRef}
               statuses={workspaceStatuses}
               laneViews={laneViews}
               laneFullWorktreeIds={laneFullWorktreeIds}
               hasQuery={hasQuery}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               columnWidth={columnWidth}
               isResizingColumn={isResizingColumn}
               dragOverStatus={dragOverStatus}
-              canCreateWorktree={canCreateWorktree}
+              renderCards={renderCards}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={renderedSelectedWorktrees}
               onDragOver={handleDragOver}

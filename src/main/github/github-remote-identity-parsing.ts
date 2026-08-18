@@ -1,12 +1,7 @@
-import type { GitHubOwnerRepo } from '../../shared/types'
+import { normalizeGitHubRemoteHost } from '../../shared/git-remote-host-alias'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
-
-export function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
 
 // Why: HTTP ports identify the GHES web/API endpoint; SSH and git ports are
 // transport-only and must not leak into gh's host identity.

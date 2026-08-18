@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown, CircleDashed, MinusCircle, XCircle } from 'l
 import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { PRCheckJob, PRCheckStep } from '../../../../shared/types'
+import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
 import { resolveStepOutcome, summarizeJobSteps, type StepOutcome } from './check-job-step-status'
 
 function StepOutcomeIcon({ outcome }: { outcome: StepOutcome }): React.JSX.Element {

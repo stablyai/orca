@@ -13,7 +13,13 @@ import {
 } from './e2ee-crypto'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from './protocol-version'
+import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
 const servers: WebSocketServer[] = []
 
@@ -69,7 +75,13 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await expect(server.nextAuth).resolves.toEqual({
       type: 'e2ee_auth',
       deviceToken: 'device-token',
-      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      clientCapabilities: [
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        SKILL_INSTALL_RESULT_V2_CAPABILITY,
+        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+      ]
     })
     const bytes = new Uint8Array([1, 2, 3])
     expect(subscription.sendBinary(bytes)).toBe(true)
@@ -197,6 +209,28 @@ describe('sendRemoteRuntimeRequest', () => {
     )
   })
 
+  it('classifies a non-Orca handshake as a host identity mismatch', async () => {
+    const server = await createInvalidHandshakeServer()
+
+    await expect(
+      sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)
+    ).rejects.toMatchObject({
+      code: 'invalid_runtime_response',
+      pairingStage: 'host-identity'
+    })
+  })
+
+  it('classifies an undecryptable post-auth frame as a runtime failure', async () => {
+    const server = await createOneShotServer({ sendUndecryptableResponse: true })
+
+    await expect(
+      sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)
+    ).rejects.toMatchObject({
+      code: 'invalid_runtime_response',
+      pairingStage: 'runtime'
+    })
+  })
+
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const server = await createOneShotServer()
 
@@ -211,6 +245,33 @@ describe('sendRemoteRuntimeRequest', () => {
       ok: true,
       result: { satisfied: true }
     })
+  })
+
+  it('aborts and closes an in-flight one-shot socket', async () => {
+    let requestObserved: () => void = () => {}
+    const observed = new Promise<void>((resolve) => {
+      requestObserved = resolve
+    })
+    const server = await createOneShotServer({ onRequest: requestObserved })
+    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
+    const controller = new AbortController()
+    try {
+      const request = sendRemoteRuntimeRequest(
+        server.pairing,
+        'skills.install',
+        {},
+        60_000,
+        undefined,
+        controller.signal
+      )
+      await observed
+
+      controller.abort()
+      await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+      expect(closeSpy).toHaveBeenCalled()
+    } finally {
+      closeSpy.mockRestore()
+    }
   })
 
   it('preserves structured failure data for remote computer-use recovery hints', async () => {
@@ -425,10 +486,35 @@ async function createClosingServer(
   return { pairing }
 }
 
+async function createInvalidHandshakeServer(): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+  wss.on('connection', (ws) => {
+    ws.once('message', () => ws.send(JSON.stringify({ type: 'not_orca' })))
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
+}
+
 async function createOneShotServer(
   options: {
     response?: (requestId: string) => unknown
     onRequest?: (request: Record<string, unknown>) => void
+    sendUndecryptableResponse?: boolean
   } = {}
 ): Promise<{ pairing: PairingOffer }> {
   const serverKeyPair = generateKeyPair()
@@ -466,6 +552,10 @@ async function createOneShotServer(
 
       const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
       options.onRequest?.(request)
+      if (options.sendUndecryptableResponse) {
+        ws.send('not-an-encrypted-frame')
+        return
+      }
       const key = sharedKey
       const keepalive = setInterval(() => {
         sendEncrypted(ws, key, { _keepalive: true })

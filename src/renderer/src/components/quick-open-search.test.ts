@@ -9,11 +9,33 @@ import {
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
-  it('returns the first 50 paths with score 0 for an empty query', () => {
-    const files = Array.from({ length: 75 }, (_, index) => `src/file-${index}.ts`)
+  it('orders numbered paths naturally for empty queries and fuzzy-score ties', () => {
+    const files = prepareQuickOpenFiles([
+      'songs/100 - b.txt',
+      'songs/9 - c.txt',
+      'songs/99 - a.txt'
+    ])
+
+    expect(rankQuickOpenFiles('', files).map((item) => item.path)).toEqual([
+      'songs/9 - c.txt',
+      'songs/99 - a.txt',
+      'songs/100 - b.txt'
+    ])
+    expect(rankQuickOpenFiles('songs', files).map((item) => item.path)).toEqual([
+      'songs/9 - c.txt',
+      'songs/99 - a.txt',
+      'songs/100 - b.txt'
+    ])
+  })
+
+  it('returns the first 50 naturally sorted paths with score 0 for an empty query', () => {
+    const files = Array.from({ length: 75 }, (_, index) => `src/file-${74 - index}.ts`)
 
     expect(rankQuickOpenFiles('', prepareQuickOpenFiles(files))).toEqual(
-      files.slice(0, QUICK_OPEN_RESULT_LIMIT).map((path) => ({ path, score: 0 }))
+      Array.from({ length: QUICK_OPEN_RESULT_LIMIT }, (_, index) => ({
+        path: `src/file-${index}.ts`,
+        score: 0
+      }))
     )
   })
 
@@ -35,8 +57,8 @@ describe('quick-open-search', () => {
     ).toEqual(['src/components/Button.tsx', 'button-area/deep/path/file.tsx'])
   })
 
-  it('keeps first-seen order for tie-heavy results at the limit boundary', () => {
-    const files = Array.from({ length: 10 }, (_, index) => `src/path-${index}.bin`)
+  it('uses natural order for tie-heavy results at the limit boundary', () => {
+    const files = Array.from({ length: 10 }, (_, index) => `src/path-${9 - index}.bin`)
 
     expect(rankQuickOpenFiles('s', prepareQuickOpenFiles(files), 4)).toEqual([
       { path: 'src/path-0.bin', score: 0 },
@@ -85,9 +107,9 @@ describe('quick-open-search', () => {
   it('indexes normalized relative paths without changing path semantics', () => {
     const files = [
       'src/renderer/src/components/QuickOpen.tsx',
+      'legacy\\provider\\raw-path.ts',
       'packages/windows-origin/src/App.tsx',
-      'single-file.ts',
-      'legacy\\provider\\raw-path.ts'
+      'single-file.ts'
     ]
 
     expect(prepareQuickOpenFiles(files)).toEqual([
@@ -98,21 +120,21 @@ describe('quick-open-search', () => {
         inputIndex: 0
       },
       {
+        path: 'legacy\\provider\\raw-path.ts',
+        lowerPath: 'legacy/provider/raw-path.ts',
+        lowerFilename: 'raw-path.ts',
+        inputIndex: 1
+      },
+      {
         path: 'packages/windows-origin/src/App.tsx',
         lowerPath: 'packages/windows-origin/src/app.tsx',
         lowerFilename: 'app.tsx',
-        inputIndex: 1
+        inputIndex: 2
       },
       {
         path: 'single-file.ts',
         lowerPath: 'single-file.ts',
         lowerFilename: 'single-file.ts',
-        inputIndex: 2
-      },
-      {
-        path: 'legacy\\provider\\raw-path.ts',
-        lowerPath: 'legacy/provider/raw-path.ts',
-        lowerFilename: 'raw-path.ts',
         inputIndex: 3
       }
     ])

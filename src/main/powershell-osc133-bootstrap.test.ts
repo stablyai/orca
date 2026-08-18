@@ -17,6 +17,9 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).toContain('function Global:omp')
     expect(script).toContain('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     expect(script).toContain('ORCA_CODEX_HOME')
+    expect(script).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT')
+    expect(script).toContain('function Global:codex')
+    expect(script).not.toContain('$Global:__OrcaCodexExecutable')
     expect(script).toContain('function Global:prompt')
     expect(script).toContain('function Global:PSConsoleHostReadLine')
     expect(script).toContain('Esc = [char]27')
@@ -29,6 +32,11 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).not.toContain('$PROFILE')
     expect(script).not.toContain('ExecutionPolicy')
     expect(script).not.toContain('NoProfile')
+
+    const codexHomeRestore = script.indexOf('if ($env:ORCA_CODEX_HOME)')
+    expect(codexHomeRestore).toBeGreaterThan(-1)
+    expect(codexHomeRestore).toBeLessThan(script.indexOf('Test-Path variable:global:'))
+    expect(codexHomeRestore).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
   })
 
   it('encodes commands as UTF-16LE base64 for PowerShell -EncodedCommand', () => {

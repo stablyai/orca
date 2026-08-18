@@ -51,14 +51,12 @@ function mountedDrawer(renderer: ReactTestRenderer) {
 
 describe('BottomDrawer close lifecycle', () => {
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     const originalConsoleError = console.error
     vi.spyOn(console, 'error').mockImplementation((...args) => {
       const message = args[0]
       if (
         typeof message === 'string' &&
-        (message.includes('react-test-renderer is deprecated') ||
-          message.includes('The current testing environment is not configured to support act'))
+        message.includes('The current testing environment is not configured to support act')
       ) {
         return
       }

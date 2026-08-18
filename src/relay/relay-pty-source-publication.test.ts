@@ -19,7 +19,9 @@ function requestFrame(id: number, method: string, params: Record<string, unknown
   return encodeJsonRpcFrame({ jsonrpc: '2.0', id, method, params }, id, 0)
 }
 
-function notification(buffer: Buffer): { method: string; params: Record<string, unknown> } | null {
+type Notification = { method: string; params: Record<string, unknown> }
+
+function notification(buffer: Buffer): Notification | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
@@ -52,17 +54,23 @@ describe('RelayPtySourcePublication', () => {
   async function createHarness(
     windowSu = 4,
     settleSourceImmediately = true,
-    highWaterMark?: number
+    highWaterMark?: number,
+    holdExitSettlement = false
   ) {
     const writes: Buffer[] = []
     const sourceSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    const exitSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    const capacityIds: string[] = []
     dispatcher = new RelayDispatcher(
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         const frame = notification(data)
         if (frame?.method === 'pty.data' || frame?.method === 'pty.exit') {
           sourceSettlements.push(onSettled)
-          if (settleSourceImmediately) {
+          if (frame.method === 'pty.exit') {
+            exitSettlements.push(onSettled)
+          }
+          if (settleSourceImmediately && !(holdExitSettlement && frame.method === 'pty.exit')) {
             onSettled({ ok: true })
           }
         } else {
@@ -85,7 +93,7 @@ describe('RelayPtySourcePublication', () => {
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
-    publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
+    publication = new RelayPtySourcePublication(dispatcher, adapter, (id) => capacityIds.push(id))
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
         protocolVersion: 1,
@@ -105,7 +113,7 @@ describe('RelayPtySourcePublication', () => {
       })
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
-    return { adapter, publication, sourceSettlements, writes }
+    return { adapter, publication, sourceSettlements, exitSettlements, capacityIds, writes }
   }
 
   it('commits only from writer settlement and resumes exactly after cumulative ACK', async () => {
@@ -215,14 +223,24 @@ describe('RelayPtySourcePublication', () => {
   it('keeps mixed legacy and V1 clients on distinct frame authority', async () => {
     const harness = await createHarness(8)
     const legacyWrites: Buffer[] = []
-    dispatcher!.attachClient(
+    const legacyClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         legacyWrites.push(Buffer.from(data))
         onSettled({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher!.feedClient(
+      legacyClientId,
+      requestFrame(2, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'legacy-client',
+        requestedRole: 'subscriber'
+      })
+    )
+    await flushRequests()
 
     harness.publication.publish('pty-1', { data: 'data' }, false)
 
@@ -281,10 +299,15 @@ describe('RelayPtySourcePublication', () => {
     const saturatedWrites: Buffer[] = []
     const healthyWrites: Buffer[] = []
     const heldSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    let saturateSubscriber = false
     dispatcher!.onClientDetached((clientId) => detached.push(clientId))
     const saturatedId = dispatcher!.attachClient(
       (data, onSettled) => {
         saturatedWrites.push(Buffer.from(data))
+        if (!saturateSubscriber) {
+          onSettled({ ok: true })
+          return true
+        }
         heldSettlements.push(onSettled)
         return false
       },
@@ -292,7 +315,8 @@ describe('RelayPtySourcePublication', () => {
         supportsWriteCallback: true,
         writableLength: () => 128 * 1024,
         writableHighWaterMark: () => 4 * 1024 * 1024
-      }
+      },
+      endpointIdentity
     )
     const healthyId = dispatcher!.attachClient(
       (data, onSettled) => {
@@ -300,8 +324,27 @@ describe('RelayPtySourcePublication', () => {
         onSettled({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher!.feedClient(
+      saturatedId,
+      requestFrame(2, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'saturated-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    dispatcher!.feedClient(
+      healthyId,
+      requestFrame(3, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'healthy-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    await flushRequests()
+    saturateSubscriber = true
     const saturatedPayload = 's'.repeat(128 * 1024)
     let admitted = 0
     while (
@@ -320,7 +363,9 @@ describe('RelayPtySourcePublication', () => {
 
     expect(detached).toEqual([saturatedId])
     expect(detached).not.toContain(healthyId)
-    expect(saturatedWrites).toHaveLength(1)
+    expect(
+      saturatedWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+    ).toHaveLength(1)
     expect(heldSettlements).toHaveLength(1)
     expect(
       healthyWrites.map(notification).filter((frame) => frame?.method === 'pty.data')

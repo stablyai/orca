@@ -8,16 +8,24 @@ import {
   hasPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 import {
+  capturedPanesByTabId,
   parkedWatchersByTabId,
-  pruneParkedTerminalWatchers
+  pruneParkedTerminalWatchers,
+  terminalWatcherLiveWorkspaceIds
 } from './terminal-parked-watcher-registry'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const TAB_ID = 'removed-parked-tab'
 const PTY_ID = 'removed-worktree@@parked-pty'
+const FLOATING_TAB_ID = 'floating-parked-tab'
+const FLOATING_PTY_ID = `${FLOATING_TERMINAL_WORKTREE_ID}@@parked-pty`
 
 describe('terminal parked watcher registry removal', () => {
   afterEach(() => {
     parkedWatchersByTabId.delete(TAB_ID)
+    parkedWatchersByTabId.delete(FLOATING_TAB_ID)
+    capturedPanesByTabId.delete(TAB_ID)
+    capturedPanesByTabId.delete(FLOATING_TAB_ID)
     clearPreHandlerPtyState(PTY_ID)
   })
 
@@ -50,5 +58,36 @@ describe('terminal parked watcher registry removal', () => {
     drainPreHandlerPtyData(PTY_ID, delayedData)
     expect(exit).not.toHaveBeenCalled()
     expect(delayedData).not.toHaveBeenCalled()
+  })
+
+  it('keeps the floating workspace while pruning a removed workspace', () => {
+    const removedDispose = vi.fn()
+    const floatingDispose = vi.fn()
+    parkedWatchersByTabId.set(TAB_ID, {
+      worktreeId: 'removed-worktree',
+      tabPtyId: PTY_ID,
+      paneIdByPtyId: new Map([[PTY_ID, 1]]),
+      disposersByPtyId: new Map([[PTY_ID, removedDispose]])
+    })
+    parkedWatchersByTabId.set(FLOATING_TAB_ID, {
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabPtyId: FLOATING_PTY_ID,
+      paneIdByPtyId: new Map([[FLOATING_PTY_ID, 1]]),
+      disposersByPtyId: new Map([[FLOATING_PTY_ID, floatingDispose]])
+    })
+    capturedPanesByTabId.set(TAB_ID, { worktreeId: 'removed-worktree', panes: [] })
+    capturedPanesByTabId.set(FLOATING_TAB_ID, {
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      panes: []
+    })
+
+    pruneParkedTerminalWatchers(terminalWatcherLiveWorkspaceIds([]))
+
+    expect(parkedWatchersByTabId.has(TAB_ID)).toBe(false)
+    expect(capturedPanesByTabId.has(TAB_ID)).toBe(false)
+    expect(removedDispose).toHaveBeenCalledOnce()
+    expect(parkedWatchersByTabId.has(FLOATING_TAB_ID)).toBe(true)
+    expect(capturedPanesByTabId.has(FLOATING_TAB_ID)).toBe(true)
+    expect(floatingDispose).not.toHaveBeenCalled()
   })
 })

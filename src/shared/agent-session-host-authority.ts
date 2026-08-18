@@ -7,7 +7,7 @@ import {
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -27,8 +27,6 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'execution_owner_reconciling',
   'execution_owner_unavailable'
 ] as const
-
-export type AgentSessionRpcErrorCode = (typeof AGENT_SESSION_RPC_ERROR_CODES)[number]
 
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 

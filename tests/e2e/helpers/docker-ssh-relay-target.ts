@@ -14,6 +14,7 @@ export const DOCKER_SSH_SECOND_HUB_REMOTE_REPO_PATH = '/tmp/orca-docker-second-h
 export type DockerSshRelayTarget = {
   containerName: string
   containerIp: string
+  host: string
   identityFile: string
   port: number
   tempDir: string
@@ -44,6 +45,21 @@ export function execDockerSshRelayTargetCommand(
   })
 }
 
+export function execDockerSshRelayTargetControlCommand(
+  target: DockerSshRelayTarget,
+  command: string
+): string {
+  return run('docker', [
+    'exec',
+    target.containerName,
+    'bash',
+    '--noprofile',
+    '--norc',
+    '-c',
+    command
+  ])
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',
@@ -58,7 +74,7 @@ function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
     'BatchMode=yes',
     '-o',
     'IdentitiesOnly=yes',
-    'root@127.0.0.1',
+    `root@${target.host}`,
     command
   ]
 }
@@ -110,6 +126,19 @@ function seedRemoteRepo(target: DockerSshRelayTarget, repoPath: string): void {
   )
 }
 
+/**
+ * The fixture image ships Debian's `/etc/bash.bashrc` with the xterm title block commented out and
+ * an all-comments `/root/.bashrc`, so its shell never emits OSC 0. Orca derives a tab title from
+ * that sequence, so without this every SSH tab keeps its `Terminal N` placeholder no matter how
+ * healthy the shell is. Opt in from specs that assert on titles; a real user's shell sets one.
+ */
+export function enableDockerSshRelayTargetShellTitle(target: DockerSshRelayTarget): void {
+  execDockerSshRelayTargetControlCommand(
+    target,
+    `printf '%s\\n' ${shellQuote(String.raw`PS1="\[\e]0;\u@\h: \w\a\]$PS1"`)} >> /root/.bashrc`
+  )
+}
+
 export function writeDockerSshRelayTargetFile(
   target: DockerSshRelayTarget,
   filePath: string,
@@ -122,6 +151,13 @@ export function writeDockerSshRelayTargetFile(
 }
 
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
+  const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
+  if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
+    if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
+      throw new Error(`ORCA_E2E_SSH_TARGET_HOST must be non-loopback: ${host}`)
+    }
+  }
+  const bindHost = host === '127.0.0.1' ? host : '0.0.0.0'
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-ssh-docker-'))
   const identityFile = path.join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
@@ -139,7 +175,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
         '--name',
         containerName,
         '-p',
-        '127.0.0.1::22',
+        `${bindHost}::22`,
         '-e',
         `AUTHORIZED_KEY=${publicKey}`,
         getDockerSshRelayImage(),
@@ -169,7 +205,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     if (!containerIp) {
       throw new Error(`Unable to read container IP for ${containerName}`)
     }
-    target = { containerName, containerIp, identityFile, port, tempDir }
+    target = { containerName, containerIp, host, identityFile, port, tempDir }
     waitForSsh(target)
     seedRemoteRepo(target, DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
     seedRemoteRepo(target, DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH)
@@ -177,7 +213,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     return target
   } catch (error) {
     cleanupDockerSshRelayTarget(
-      target ?? { containerName, containerIp: '', identityFile, port: 0, tempDir }
+      target ?? { containerName, containerIp: '', host, identityFile, port: 0, tempDir }
     )
     throw error
   }

@@ -467,10 +467,9 @@ describe('launchWorkItemDirect', () => {
     expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
   })
 
-  it('withholds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
-    // A Linear draft is always `Linked Linear issue: ENG-42\n<url>\n`. The chat
-    // send pre-clears the TUI with Ctrl+U (kill-to-start-of-LINE), so seeding it
-    // would leave the first line parked to glue onto the next message.
+  it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
+    // A Linear draft is always `Linked Linear issue: ENG-42\n<url>\n`, so withholding
+    // multi-line drafts made every Linear launch invisible in the chat view.
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
@@ -490,7 +489,12 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: 'Linked Linear issue: ENG-42\nhttps://linear.app/acme/issue/ENG-42/ship-linear-parity\n',
+      createdAt: expect.any(Number)
+    })
   })
 
   it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
@@ -684,7 +688,9 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
     expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
   })
 
@@ -725,7 +731,9 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
   })
 
   it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
