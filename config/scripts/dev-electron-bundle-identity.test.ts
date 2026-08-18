@@ -17,8 +17,9 @@ const BRANCH_ENV_KEYS = [
 
 /** Collect the patch set as it would be computed on a given branch. */
 function patchesUnder(dockTitle: string, branch: string) {
-  // Restores individual keys rather than reassigning process.env: that would swap Node's special
-  // env object for a plain one, losing child-process propagation for every later test in this worker.
+  // Restores individual keys rather than reassigning process.env: that swaps Node's native env
+  // object for a plain one, which stops coercing assigned values to strings (`env.X = 5` stays a
+  // number). Vitest reuses a worker across files, so every later test would inherit the plain object.
   const saved = BRANCH_ENV_KEYS.map((key) => [key, process.env[key]] as const)
   Object.assign(process.env, {
     ORCA_DEV_DOCK_TITLE: dockTitle,
