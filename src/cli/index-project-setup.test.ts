@@ -191,6 +191,28 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-by-client')
   })
 
+  // Why: --host runtime:<id> routes to a paired server, so an older one is reachable without the
+  // caller meaning to. A raw method_not_found reads as an Orca bug rather than a version gap.
+  it('names the version gap when the server predates project host setup', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'old-server')
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('method_not_found', 'Unknown method: projectHostSetup.list')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'runtime:old-server', '--json'], '/tmp/repo')
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('does not support project host setup yet')
+    expect(printed).not.toContain('Unknown method')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects a runtime host id that no paired server owns instead of answering empty', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

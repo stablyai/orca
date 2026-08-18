@@ -118,6 +118,16 @@ describe('projectRemoteAppStatus', () => {
     })
   })
 
+  // Why: the SSH host-passthrough answers for the Orca host the caller reached, and used to
+  // claim running:true unconditionally. Both transports now share this projection.
+  it('does not claim a desktop app for a headless serve on any transport', () => {
+    expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'openable' }))).toEqual({
+      running: false,
+      pid: null,
+      desktopWindowStatus: 'openable'
+    })
+  })
+
   it('never reports a remote pid', () => {
     expect(
       projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' })).pid

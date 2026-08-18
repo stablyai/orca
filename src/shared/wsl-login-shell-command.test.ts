@@ -156,9 +156,7 @@ describe('wsl login shell command helpers', () => {
     // Why the captured form: an interactive login shell also prints the distro's
     // rc/motd to stdout (stock Ubuntu ships a sudo hint), so a raw login-shell
     // read cannot be compared byte-for-byte on a real distro.
-    const captured = buildWslCapturedLoginShellCommand(
-      'orca_value=ok; printf "<%s>" "$orca_value"'
-    )
+    const captured = buildWslCapturedLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
 
     expect(
       captured.readStdout(
