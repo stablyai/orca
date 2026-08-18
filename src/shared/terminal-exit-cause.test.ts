@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
-  resolveProcessExitCause
+  resolveProcessExitCause,
+  resolveUnreportedExitCause
 } from './terminal-exit-cause'
 
 describe('resolveProcessExitCause', () => {
@@ -47,6 +48,19 @@ describe('resolveProcessExitCause', () => {
   })
 })
 
+describe('resolveUnreportedExitCause', () => {
+  it('refuses to turn a bare code into a clean finish', () => {
+    // An older daemon, or the SSH relay, forwards a code and no cause. Its 0 may
+    // be a clean finish or a SIGKILL; nothing downstream can tell them apart.
+    expect(resolveUnreportedExitCause(0)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
+    expect(resolveUnreportedExitCause(7)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
+  })
+
+  it('keeps the more specific reason for the stop sentinel', () => {
+    expect(resolveUnreportedExitCause(-1)).toEqual({ kind: 'unknown', reason: 'stop_unverified' })
+  })
+})
+
 describe('describeTerminalExitCause', () => {
   it('gives every cause a sentence that does not need a number decoded', () => {
     expect(describeTerminalExitCause({ kind: 'operator_close' })).toBe(
@@ -63,6 +77,9 @@ describe('describeTerminalExitCause', () => {
     )
     expect(describeTerminalExitCause({ kind: 'unknown', reason: 'host_status_unavailable' })).toBe(
       'Agent process ended; this host cannot report why'
+    )
+    expect(describeTerminalExitCause({ kind: 'unknown', reason: 'cause_unreported' })).toBe(
+      'Agent process ended; the reporting host did not say why'
     )
   })
 })

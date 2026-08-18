@@ -124,7 +124,7 @@ import {
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
   let mockProc: LocalPtyMockProcess
-  let exitCb: ((info: { exitCode: number }) => void) | undefined
+  let exitCb: ((info: { exitCode: number; signal?: number }) => void) | undefined
 
   installLocalPtyProviderEnvSandbox()
 
@@ -318,6 +318,23 @@ describe('LocalPtyProvider', () => {
         code: 0,
         incarnationId,
         cause: { kind: 'exited', exitCode: 0 }
+      })
+    })
+
+    it('reports a signalled death as a signal, not as the zero node-pty pairs with it', async () => {
+      const exitHandler = vi.fn()
+      provider.onExit(exitHandler)
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+
+      // node-pty reports an OOM/SIGKILL as {exitCode: 0, signal: 9}; dropping
+      // the signal is what made a crash read as a clean finish (STA-4536).
+      exitCb?.({ exitCode: 0, signal: 9 })
+
+      expect(exitHandler).toHaveBeenCalledWith({
+        id,
+        code: 0,
+        incarnationId,
+        cause: { kind: 'signaled', signal: 9 }
       })
     })
 

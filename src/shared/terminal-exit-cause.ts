@@ -25,6 +25,12 @@ export type TerminalExitUnknownReason =
   | 'stop_unverified'
   /** The host cannot report its child's status at all (see {@link hostReportsChildExitStatus}). */
   | 'host_status_unavailable'
+  /**
+   * The exit arrived from a source that reports a code but no cause — an SSH
+   * relay, or a daemon older than this field. Its `0` may be a clean finish or
+   * a signal; nothing here can tell, so nothing here claims to.
+   */
+  | 'cause_unreported'
 
 export const OPERATOR_CLOSE_EXIT_CAUSE: TerminalExitCause = { kind: 'operator_close' }
 
@@ -53,6 +59,19 @@ export function resolveProcessExitCause(observation: {
   return { kind: 'exited', exitCode: observation.exitCode }
 }
 
+/**
+ * The cause for an exit delivered without one.
+ *
+ * Why not `exited(code)`: a bare code is not evidence. node-pty pairs `0` with a
+ * signal, and the reporter may itself sit behind a wrapper. Only the process
+ * that watched the child can vouch for a status, and it did not.
+ */
+export function resolveUnreportedExitCause(exitCode: number): TerminalExitCause {
+  return exitCode < 0
+    ? { kind: 'unknown', reason: 'stop_unverified' }
+    : { kind: 'unknown', reason: 'cause_unreported' }
+}
+
 /** One line an operator or a coordinating agent can read without decoding a number. */
 export function describeTerminalExitCause(cause: TerminalExitCause): string {
   switch (cause.kind) {
@@ -63,9 +82,14 @@ export function describeTerminalExitCause(cause: TerminalExitCause): string {
     case 'exited':
       return `Agent process exited with code ${cause.exitCode}`
     case 'unknown':
-      return cause.reason === 'stop_unverified'
-        ? 'Agent process stop was requested but never confirmed'
-        : 'Agent process ended; this host cannot report why'
+      switch (cause.reason) {
+        case 'stop_unverified':
+          return 'Agent process stop was requested but never confirmed'
+        case 'host_status_unavailable':
+          return 'Agent process ended; this host cannot report why'
+        case 'cause_unreported':
+          return 'Agent process ended; the reporting host did not say why'
+      }
   }
 }
 

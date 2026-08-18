@@ -394,7 +394,7 @@ import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
   OPERATOR_CLOSE_EXIT_CAUSE,
-  resolveProcessExitCause,
+  resolveUnreportedExitCause,
   type TerminalExitCause
 } from '../../shared/terminal-exit-cause'
 import type {
@@ -3152,7 +3152,8 @@ export class OrcaRuntimeService {
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   // Why a set and not a timer: the intent is retired by the exit it explains, or
-  // by the next spawn on that id (advancePtyLifecycleGeneration).
+  // by the next lifecycle generation on that id (advancePtyLifecycleGeneration),
+  // so a stop that never produced an exit cannot outlive its process.
   private readonly stopRequestedPtyIds = new Set<string>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
@@ -12117,6 +12118,10 @@ export class OrcaRuntimeService {
 
   private advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    // Why: a stop whose exit never arrived would otherwise stay armed across a
+    // same-id respawn and label the NEXT process's crash an operator close —
+    // the exact lie this cause model exists to remove.
+    this.stopRequestedPtyIds.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
@@ -15045,9 +15050,18 @@ export class OrcaRuntimeService {
     }
     // Why intent first: a requested stop can still be delivered by the provider's
     // own exit event, whose status looks exactly like a natural finish.
-    const exitCause: TerminalExitCause = this.stopRequestedPtyIds.has(ptyId)
-      ? OPERATOR_CLOSE_EXIT_CAUSE
-      : (options?.cause ?? resolveProcessExitCause({ exitCode }))
+    //
+    // Why it yields to stop_unverified: a stop nobody confirmed is not a
+    // completed close. The process may still be running against a revoked
+    // dispatch — an incident a coordinator must hear about, not a routine
+    // teardown to be filed away and left unescalated.
+    const observedCause = options?.cause ?? resolveUnreportedExitCause(exitCode)
+    const stopNeverConfirmed =
+      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
+    const exitCause: TerminalExitCause =
+      this.stopRequestedPtyIds.has(ptyId) && !stopNeverConfirmed
+        ? OPERATOR_CLOSE_EXIT_CAUSE
+        : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&

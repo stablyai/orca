@@ -129,6 +129,20 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
+  it('does not read a bare code from an older daemon or an SSH relay as a clean finish', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    const ctx = dispatchOnHandle(db, 'exit delivered without a cause')
+    // No `cause`: the reporter forwards a number and nothing else. Its 0 may be
+    // a SIGKILL, so the record must not claim the agent finished.
+    runtime.onPtyExit(PTY_ID, 0)
+    expect(observe(db, ctx.id)).toEqual({
+      status: 'failed',
+      last_failure: 'Agent process ended; the reporting host did not say why',
+      termination_reason: 'unknown'
+    })
+  })
+
   it('settles the dispatch when the whole tab is closed before the exit lands', () => {
     const db = createDb()
     const runtime = createRuntime(db)
@@ -149,9 +163,12 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const closedDb = createDb()
     const closed = createRuntime(closedDb)
     closedDb.createCoordinatorRun({ spec: 'watch', coordinatorHandle: 'term_coordinator' })
-    dispatchOnHandle(closedDb, 'no escalation on close')
+    const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
     closed.markPtyStopRequested(PTY_ID)
     closed.onPtyExit(PTY_ID, 0)
+    // Assert the dispatch actually settled first: an empty inbox also happens
+    // when nothing was settled at all, which would make this vacuous.
+    expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
     expect(closedDb.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(0)
 
     const crashDb = createDb()
@@ -160,6 +177,43 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     dispatchOnHandle(crashDb, 'escalate on crash')
     crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
     expect(crashDb.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(1)
+  })
+
+  it('does not carry an unconsumed stop intent across a same-id respawn', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    // The operator asked for a stop, but the stop never produced an exit — the
+    // process outlived it. A respawn then reuses the same session id.
+    runtime.markPtyStopRequested(PTY_ID)
+    runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
+    expect(runtime.isPtyStopRequested(PTY_ID)).toBe(false)
+
+    const ctx = dispatchOnHandle(db, 'crash after respawn')
+    runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    // The replacement's crash must not inherit the old close's provenance.
+    expect(observe(db, ctx.id)).toEqual({
+      status: 'failed',
+      last_failure: 'Agent process killed by signal 9',
+      termination_reason: 'signaled'
+    })
+  })
+
+  it('does not file an unconfirmed stop as a completed operator close', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    db.createCoordinatorRun({ spec: 'watch', coordinatorHandle: 'term_coordinator' })
+    const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
+    runtime.markPtyStopRequested(PTY_ID)
+    // The stop paths pass -1 when they asked a process to die and never saw it.
+    // The process may still be running against a revoked dispatch.
+    runtime.onPtyExit(PTY_ID, -1)
+    expect(observe(db, ctx.id)).toEqual({
+      status: 'failed',
+      last_failure: 'Agent process stop was requested but never confirmed',
+      termination_reason: 'unknown'
+    })
+    // ...and it must still wake the coordinator, unlike a clean close.
+    expect(db.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(1)
   })
 
   it('treats a reported completion as authoritative and makes the later exit a no-op', () => {
@@ -175,6 +229,54 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     expect(settlement.action).toBe('settled')
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toMatchObject({ status: 'completed', last_failure: null })
+  })
+
+  it('marks the intent from the real close path, not just from the helper', async () => {
+    const db = createDb()
+    const runtime = new OrcaRuntimeService(null)
+    runtime.setOrchestrationDb(db)
+    // Model the shipping controller: `orca terminal close` reaches stopAndWait,
+    // which verifies the stop and then reports it with a synthetic code 0 --
+    // a number indistinguishable from a clean agent finish.
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      stopAndWait: async (ptyId: string) => {
+        runtime.onPtyExit(ptyId, 0)
+        return true
+      }
+    })
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'audit-incarnation'
+    })
+    runtime.registerPreAllocatedHandleForPty(PTY_ID, HANDLE)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Agent',
+          activeLeafId: LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        { tabId: TAB_ID, worktreeId: WORKTREE_ID, leafId: LEAF_ID, paneRuntimeId: 1, ptyId: PTY_ID }
+      ]
+    })
+    const ctx = dispatchOnHandle(db, 'close through the real path')
+
+    await runtime.closeTerminal(HANDLE)
+
+    expect(observe(db, ctx.id)).toEqual({
+      status: 'failed',
+      last_failure: 'Terminal closed by operator request',
+      termination_reason: 'operator_close'
+    })
   })
 
   it('publishes the cause on the terminal record a coordinator polls', async () => {
