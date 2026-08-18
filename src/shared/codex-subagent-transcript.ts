@@ -11,6 +11,7 @@ import {
   reconcileCodexSubagentTranscriptLifecycle,
   type CodexSubagentTranscriptLifecycleState
 } from './codex-subagent-transcript-lifecycle'
+import { readCodexSubagentTranscriptModel } from './codex-subagent-transcript-model'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -209,24 +210,6 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
-/** Latest model from the child's own `turn_context` records. A child can be
- *  launched on a different model than its parent, so this is read from the
- *  child rollout rather than inherited. */
-function readChildModel(records: JsonRecord[]): string | undefined {
-  let model: string | undefined
-  for (const recordValue of records) {
-    if (recordValue.type !== 'turn_context') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    const value = typeof payload?.model === 'string' ? payload.model.trim() : ''
-    if (value) {
-      model = value
-    }
-  }
-  return model
-}
-
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
@@ -316,7 +299,7 @@ export function reconcileCodexSubagentTranscript(
       }
     } else {
       tracked.unresolvedSince = undefined
-      tracked.model = readChildModel(records) ?? tracked.model
+      tracked.model = readCodexSubagentTranscriptModel(records) ?? tracked.model
       const lifecycle = reconcileCodexSubagentTranscriptLifecycle(records, tracked.state)
       tracked.state = lifecycle.state
       if (!lifecycle.complete) {
