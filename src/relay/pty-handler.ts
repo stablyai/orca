@@ -903,9 +903,6 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
-    this.dispatcher.onNotification('pty.ackData', (_p) => {
-      /* flow control ack -- not yet enforced */
-    })
   }
 
   private isLikelyInteractiveRedraw(data: string): boolean {
