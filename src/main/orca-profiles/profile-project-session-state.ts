@@ -73,6 +73,7 @@ export function mergeWorkspaceSessions(
     unifiedTabs: { ...base.unifiedTabs, ...incoming.unifiedTabs },
     tabGroups: { ...base.tabGroups, ...incoming.tabGroups },
     tabGroupLayouts: { ...base.tabGroupLayouts, ...incoming.tabGroupLayouts },
+    tabFolderGroups: { ...base.tabFolderGroups, ...incoming.tabFolderGroups },
     activeGroupIdByWorktree: {
       ...base.activeGroupIdByWorktree,
       ...incoming.activeGroupIdByWorktree
@@ -158,6 +159,7 @@ export function removeRepoFromWorkspaceSession(
   next.unifiedTabs = removeRepoWorktreeRecord(next.unifiedTabs, repoId)
   next.tabGroups = removeRepoWorktreeRecord(next.tabGroups, repoId)
   next.tabGroupLayouts = removeRepoWorktreeRecord(next.tabGroupLayouts, repoId)
+  next.tabFolderGroups = removeRepoWorktreeRecord(next.tabFolderGroups, repoId)
   next.activeGroupIdByWorktree = removeRepoWorktreeRecord(next.activeGroupIdByWorktree, repoId)
   next.lastVisitedAtByWorktreeId = removeRepoWorktreeRecord(next.lastVisitedAtByWorktreeId, repoId)
   next.defaultTerminalTabsAppliedByWorktreeId = removeRepoWorktreeRecord(

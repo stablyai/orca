@@ -39713,6 +39713,7 @@ function resolveTerminalSessionWorktreeId(
     ...Object.keys(session.tabsByWorktree),
     ...Object.keys(session.tabGroups ?? {}),
     ...Object.keys(session.tabGroupLayouts ?? {}),
+    ...Object.keys(session.tabFolderGroups ?? {}),
     ...Object.keys(session.activeTabIdByWorktree ?? {}),
     ...Object.keys(session.activeGroupIdByWorktree ?? {})
   ])
@@ -39742,6 +39743,14 @@ function canonicalizeTerminalSessionWorktreeId(
     delete session.tabGroups![sourceWorktreeId]
     session.tabGroups![targetWorktreeId] = groups.map((group) => ({
       ...group,
+      worktreeId: targetWorktreeId
+    }))
+  }
+  const folders = session.tabFolderGroups?.[sourceWorktreeId]
+  if (folders) {
+    delete session.tabFolderGroups![sourceWorktreeId]
+    session.tabFolderGroups![targetWorktreeId] = folders.map((folder) => ({
+      ...folder,
       worktreeId: targetWorktreeId
     }))
   }

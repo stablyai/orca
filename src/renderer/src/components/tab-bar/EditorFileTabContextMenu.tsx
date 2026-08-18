@@ -26,6 +26,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
+import { TabFolderMenuItems } from './TabFolderMenuItems'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -152,6 +153,11 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <TabFolderMenuItems
+          unifiedTabId={unifiedTabId}
+          worktreeId={file.worktreeId}
+          splitGroupId={groupId}
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />

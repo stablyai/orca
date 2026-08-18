@@ -27,6 +27,7 @@ function createSnapshot(
     groupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
+    tabFolderGroupsByWorktree: {},
     sshConnectionStates: new Map(),
     repos: [],
     worktreesByRepo: {},

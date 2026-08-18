@@ -33,6 +33,10 @@ vi.mock('react', async () => {
   }
 })
 
+vi.mock('./TabFolderMenuItems', () => ({
+  TabFolderMenuItems: () => null
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},
@@ -65,6 +69,15 @@ vi.mock('lucide-react', () => ({
   },
   ExternalLink: function ExternalLink(props: Record<string, unknown>) {
     return { type: 'ExternalLink', props }
+  },
+  FolderMinus: function FolderMinus(props: Record<string, unknown>) {
+    return { type: 'FolderMinus', props }
+  },
+  FolderPlus: function FolderPlus(props: Record<string, unknown>) {
+    return { type: 'FolderPlus', props }
+  },
+  FolderSymlink: function FolderSymlink(props: Record<string, unknown>) {
+    return { type: 'FolderSymlink', props }
   },
   Globe: function Globe(props: Record<string, unknown>) {
     return { type: 'Globe', props }

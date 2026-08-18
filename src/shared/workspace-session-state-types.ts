@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from './execution-host'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
+import type { TabFolderGroup } from './tab-folder-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
@@ -72,6 +73,8 @@ export type WorkspaceSessionState = {
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
+  /** User-defined collapsible tab folders, keyed by worktree. */
+  tabFolderGroups?: Record<string, TabFolderGroup[]>
   /** SSH target IDs that were connected at shutdown. Used on startup to
    *  auto-reconnect before attempting remote PTY reattach. */
   activeConnectionIdsAtShutdown?: string[]

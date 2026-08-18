@@ -89,6 +89,9 @@ export function deleteOwnerKeyedSessionFields(
   if (next.tabGroupLayouts) {
     delete next.tabGroupLayouts[ownerKey]
   }
+  if (next.tabFolderGroups) {
+    delete next.tabFolderGroups[ownerKey]
+  }
   if (next.activeGroupIdByWorktree) {
     delete next.activeGroupIdByWorktree[ownerKey]
   }

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { TabFolderGroup } from '../../../../shared/tab-folder-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
@@ -9,10 +10,17 @@ import {
   findActiveVisibleTabId,
   type TabBarItem
 } from './tab-bar-item-model'
+import {
+  projectTabStripEntries,
+  tabStripEntriesLayoutKey,
+  visibleSortableIdsFromStripEntries,
+  type TabStripEntry
+} from './tab-folder-strip-entries'
 import type { DropIndicator } from './drop-indicator'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
+  stripEntries: TabStripEntry[]
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   activeVisibleTabId: string | null
@@ -23,6 +31,7 @@ export function useTabBarItemProjection({
   props,
   resolvedGroupId,
   unifiedTabs,
+  folderGroups,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
   statusByRelativePath
@@ -30,6 +39,7 @@ export function useTabBarItemProjection({
   props: TabBarProps
   resolvedGroupId: string
   unifiedTabs: readonly Tab[]
+  folderGroups: readonly TabFolderGroup[]
   unifiedTabByVisibleId: Map<string, Tab>
   generatedTabTitlesEnabled: boolean
   statusByRelativePath: Map<string, GitFileStatus>
@@ -94,7 +104,14 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const stripEntries = useMemo(
+    () => projectTabStripEntries(orderedItems, folderGroups, unifiedTabs, resolvedGroupId),
+    [folderGroups, orderedItems, resolvedGroupId, unifiedTabs]
+  )
+  const sortableIds = useMemo(
+    () => visibleSortableIdsFromStripEntries(stripEntries),
+    [stripEntries]
+  )
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(
@@ -121,17 +138,28 @@ export function useTabBarItemProjection({
   )
   const tabStripLayoutKey = useMemo(
     () =>
-      buildTabStripLayoutKey(
-        orderedItems,
-        generatedTabTitlesEnabled,
-        expandedPaneByTabId,
-        statusByRelativePath
-      ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+      [
+        buildTabStripLayoutKey(
+          orderedItems,
+          generatedTabTitlesEnabled,
+          expandedPaneByTabId,
+          statusByRelativePath
+        ),
+        // Why: collapse/expand changes stripEntries without changing orderedItems.
+        tabStripEntriesLayoutKey(stripEntries)
+      ].join('\u001e'),
+    [
+      expandedPaneByTabId,
+      generatedTabTitlesEnabled,
+      orderedItems,
+      statusByRelativePath,
+      stripEntries
+    ]
   )
 
   return {
     orderedItems,
+    stripEntries,
     sortableIds,
     dropIndicatorByVisibleId,
     activeVisibleTabId,

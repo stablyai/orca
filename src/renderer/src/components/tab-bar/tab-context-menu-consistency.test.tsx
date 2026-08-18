@@ -15,7 +15,9 @@ const TAB_MENU_SOURCES = [
   'SortableTabContextMenu.tsx',
   'BrowserTab.tsx',
   'TabWorkspaceLayoutMenuSection.tsx',
-  'TerminalTabSplitMenuSection.tsx'
+  'TerminalTabSplitMenuSection.tsx',
+  'TabFolderMenuItems.tsx',
+  'TabFolderChip.tsx'
 ] as const
 
 function readSource(fileName: string): string {

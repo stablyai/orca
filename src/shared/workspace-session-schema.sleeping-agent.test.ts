@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWorkspaceSession } from './workspace-session-schema'
+import { parseWorkspaceSession } from './workspace-session-parse'
 
 describe('parseWorkspaceSession sleeping agents', () => {
   it('preserves valid sleeping agent resume records', () => {

@@ -1,6 +1,7 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
+import type { TabFolderGroup } from '../../shared/tab-folder-types'
 import type { Tab, TabGroup } from '../../shared/tab-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type {
@@ -107,6 +108,9 @@ export function extractSessionForTransfer(
   )
   transferred.tabGroupLayouts = mapOwnerRecord(source.tabGroupLayouts, (value) =>
     structuredClone(value)
+  )
+  transferred.tabFolderGroups = mapOwnerRecord(source.tabFolderGroups, (folders) =>
+    folders.map((folder) => rekeyTabFolderGroup(folder, oldRepoId, newRepoId))
   )
   transferred.activeGroupIdByWorktree = mapOwnerRecord(source.activeGroupIdByWorktree, (value) =>
     structuredClone(value)
@@ -236,5 +240,16 @@ function rekeyTabGroup(group: TabGroup, oldRepoId: string, newRepoId: string): T
   return {
     ...structuredClone(group),
     worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, group.worktreeId)
+  }
+}
+
+function rekeyTabFolderGroup(
+  folder: TabFolderGroup,
+  oldRepoId: string,
+  newRepoId: string
+): TabFolderGroup {
+  return {
+    ...structuredClone(folder),
+    worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, folder.worktreeId)
   }
 }

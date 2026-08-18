@@ -27,6 +27,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     groupsByWorktree: true,
     layoutByWorktree: true,
     activeGroupIdByWorktree: true,
+    tabFolderGroupsByWorktree: true,
     sshConnectionStates: true,
     repos: true,
     worktreesByRepo: true,

@@ -14,6 +14,7 @@
 import { z } from 'zod'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
+import { tabFolderGroupSchema } from './tab-folder-schema'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
@@ -149,7 +150,8 @@ const tabSchema = z.object({
   // newer build that wrote an unrecognized mode) by degrading to the safe
   // default instead of failing the whole-session parse. Legacy/missing stays
   // undefined → 'terminal' in the renderer.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
+  folderGroupId: z.string().nullable().optional()
 })
 
 const tabGroupSchema = z.object({
@@ -283,6 +285,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'activeGroupIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string())
   ),
+  tabFolderGroups: salvagedOptional(
+    'tabFolderGroups',
+    salvagingRecord(worktreeIdSchema, salvagingArray(tabFolderGroupSchema))
+  ),
   activeConnectionIdsAtShutdown: salvagedOptional(
     'activeConnectionIdsAtShutdown',
     salvagingArray(z.string())
@@ -318,46 +324,3 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     salvagingRecord(z.string(), terminalSurfaceTombstoneSchema)
   )
 })
-
-export type ParsedWorkspaceSession =
-  | { ok: true; value: WorkspaceSessionState }
-  | { ok: false; error: string }
-
-/** Why: keep the error compact — a zod issue dump is noisy and most of the time
- *  only the first divergent field is actionable for debugging. */
-export function describeWorkspaceSessionError(error: z.ZodError): string {
-  const firstIssue = error.issues[0]
-  const path = firstIssue?.path.join('.') || '<root>'
-  return `${path}: ${firstIssue?.message ?? 'invalid session'}`
-}
-
-export const WORKSPACE_SESSION_UNVALIDATABLE = '<root>: session could not be validated'
-
-/** safeParse, or null when the validator itself could not run.
- *  Why: safeParse is documented not to throw, but a payload holding hundreds of
- *  thousands of bad records overflows the stack while zod materializes an issue
- *  per field. This parse runs in the Store constructor, so an escaping RangeError
- *  is a launch failure the user cannot recover from without deleting their
- *  profile — exactly the "never throw into main" contract at the top of this file. */
-export function safeParseWorkspaceSession(
-  raw: unknown
-): ReturnType<typeof workspaceSessionStateSchema.safeParse> | null {
-  try {
-    return workspaceSessionStateSchema.safeParse(raw)
-  } catch {
-    return null
-  }
-}
-
-/** Validate raw JSON as a WorkspaceSessionState. Returns a discriminated union
- *  so callers can fall back to defaults on failure without a try/catch. */
-export function parseWorkspaceSession(raw: unknown): ParsedWorkspaceSession {
-  const result = safeParseWorkspaceSession(raw)
-  if (!result) {
-    return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
-  }
-  if (result.success) {
-    return { ok: true, value: result.data }
-  }
-  return { ok: false, error: describeWorkspaceSessionError(result.error) }
-}

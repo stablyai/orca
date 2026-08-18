@@ -9,6 +9,7 @@ import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
+import { createTabFolderGroupsSlice } from './tab-folder-groups'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createKeybindingsSlice } from './keybindings'
@@ -66,6 +67,7 @@ export function createTestStore() {
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),
+    ...createTabFolderGroupsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createKeybindingsSlice(...a),
