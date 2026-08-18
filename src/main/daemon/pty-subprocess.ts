@@ -37,6 +37,7 @@ import {
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { dropInheritedOrcaFishHistory } from '../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
@@ -654,6 +655,12 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   }
   // Why: the daemon can inherit the pane identity of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  // Why: the daemon inherits an exported `fish_history` from the fish pane that
+  // launched Orca; only a session this spawn asked for may reach the shell, or
+  // panes write into the launching worktree's history file (STA-4682).
+  if (opts.env?.fish_history === undefined) {
+    dropInheritedOrcaFishHistory(env)
+  }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
   removeAppImageRuntimeEnv(env)

@@ -48,6 +48,7 @@ import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -627,6 +628,12 @@ export class PtyHandler {
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
     // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
     stripLegacyTerminalShimEnv(result, process.platform)
+    // Why unconditionally here, not in injectRelayFishHistoryEnv: that runs only for a
+    // fish pane with isolation on, yet an Orca-minted `fish_history` (fish EXPORTS it,
+    // so the relay inherits one when launched from an Orca fish pane) must never scope
+    // any pane to someone else's worktree. Matches the desktop, which drops it on both
+    // branches (STA-4682).
+    dropInheritedOrcaFishHistory(result)
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]

@@ -7,6 +7,8 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { fishHistorySessionName, relayFishHistorySessionName } from '../main/fish-history-session'
+import { hashWorktreeId } from '../main/terminal-history-id'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -154,6 +156,48 @@ describe('PtyHandler', () => {
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(spawnOptions.env.NODE_ENV).toBe('production')
+  })
+
+  describe('history isolation off', () => {
+    // Why isolation OFF: injectRelayFishHistoryEnv runs only for a fish pane with
+    // isolation on, but fish EXPORTS fish_history, so a relay launched from an Orca
+    // fish pane inherits one on EVERY path — and it names someone else's worktree
+    // (a desktop-minted name names a directory that does not exist here at all).
+    it.each([
+      [
+        'a relay-minted session',
+        relayFishHistorySessionName(hashWorktreeId('r::/other')),
+        undefined
+      ],
+      ['a desktop-minted session', fishHistorySessionName(hashWorktreeId('r::/other')), undefined],
+      ['a user value', 'mine', 'mine']
+    ])('%s inherited from the relay process env', async (_kind, inherited, expected) => {
+      const previous = process.env.fish_history
+      process.env.fish_history = inherited
+      try {
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.fish_history
+        } else {
+          process.env.fish_history = previous
+        }
+      }
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBe(expected)
+    })
+
+    it('drops a desktop-minted session handed over in the client env', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { fish_history: fishHistorySessionName(hashWorktreeId('r::/other')) }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBeUndefined()
+    })
   })
 
   it('guards SSH agent terminals after merging the relay inherited Git config', async () => {

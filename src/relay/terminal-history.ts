@@ -12,6 +12,7 @@ import { basename, join } from 'node:path'
 import { hashWorktreeId } from '../main/terminal-history-id'
 import {
   deleteFishHistoryFile,
+  dropInheritedOrcaFishHistory,
   relayFishHistorySessionName,
   resolveFishHistoryDir
 } from '../main/fish-history-session'
@@ -121,6 +122,11 @@ export function deleteRelayHistory(worktreeId: string): void {
  *  isolates it the same way the desktop app does and deletes by that name.
  *  No metadata file is needed: the name is a pure function of the worktree id. */
 export function injectRelayFishHistoryEnv(env: Record<string, string>, worktreeId: string): void {
+  // Own precondition, not the caller's: the check below may only honour a genuine
+  // user value, and fish EXPORTS `fish_history` so an Orca-minted name arrives from
+  // the relay's own env or the client's. `PtyHandler.buildSpawnEnv` already scrubs
+  // every spawn path, so this is belt-and-braces for any other caller.
+  dropInheritedOrcaFishHistory(env)
   if (env.fish_history) {
     return
   }
