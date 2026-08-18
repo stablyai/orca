@@ -60,6 +60,7 @@ import {
   assertOwnedHostCodexManagedHomePath,
   ManagedCodexHomeTemporarilyUnavailableError
 } from './host-codex-managed-home-ownership'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
@@ -762,7 +763,7 @@ export class CodexAccountService {
       await this.runCodexLogin(managedHomePath)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
-      this.safeRemoveManagedHome(managedHomePath, accountId)
+      this.removeManagedHomeUnlessUnproven(error, managedHomePath, accountId)
       throw error
     }
   }
@@ -781,7 +782,7 @@ export class CodexAccountService {
       this.importCodexAuthFromHome(sourceHome, managedHomePath, accountId)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
-      this.safeRemoveManagedHome(managedHomePath, accountId)
+      this.removeManagedHomeUnlessUnproven(error, managedHomePath, accountId)
       throw error
     }
   }
@@ -799,13 +800,22 @@ export class CodexAccountService {
       throw new Error('A Codex home directory path is required.')
     }
     const authPath = join(resolve(trimmed), 'auth.json')
-    if (!existsSync(authPath)) {
+    let sourceAuthContents: string
+    try {
+      sourceAuthContents = readFileSync(authPath, 'utf-8')
+    } catch (error) {
+      // Why: "no credentials here, run codex login" is only true for a definitive
+      // absence. A locked source file used to produce that advice, which sends the
+      // user to re-run a login they had already completed.
+      if (!isDefinitiveAbsence(error)) {
+        throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+      }
       throw new Error(
         `No Codex credentials found in ${resolve(trimmed)}. Run \`codex login\` into this directory first.`
       )
     }
     const trustedHome = this.assertManagedHomePath(managedHomePath, accountId)
-    writeFileAtomically(join(trustedHome, 'auth.json'), readFileSync(authPath, 'utf-8'), {
+    writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, {
       mode: 0o600
     })
   }
@@ -1624,6 +1634,22 @@ export class CodexAccountService {
     }
   }
 
+  /**
+   * Rollback deletes the managed home, so it may only run on a *proven* failure.
+   * An unreadable credential file means the login may well have succeeded, and a
+   * kept home is a recoverable leak where a deleted one is permanent data loss.
+   */
+  private removeManagedHomeUnlessUnproven(
+    error: unknown,
+    managedHomePath: string,
+    accountId: string
+  ): void {
+    if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
+      return
+    }
+    this.safeRemoveManagedHome(managedHomePath, accountId)
+  }
+
   private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
     let managedHomePath: string
     try {
@@ -1794,7 +1820,14 @@ export class CodexAccountService {
           // Why: the post-auth tree kill is a success path — auth.json already
           // exists and codex only failed to exit on its own, so the forced
           // non-zero exit must not surface as a login failure.
-          if (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath))) {
+          // Why: the kill only arms after the watcher observed new credential
+          // bytes, so an unreadable auth.json here is a lock, not a failed login.
+          // Only a definitive absence may revoke that verdict — reading a lock as
+          // failure sends the caller's rollback at a home that just authenticated.
+          if (
+            code === 0 ||
+            (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
+          ) {
             resolvePromise()
             return
           }
@@ -1875,7 +1908,18 @@ export class CodexAccountService {
       this.assertManagedHomePath(managedHomePath, expectedAccountId),
       'auth.json'
     )
-    const authFileContents = readFileSync(authFilePath, 'utf-8')
+    let authFileContents: string
+    try {
+      authFileContents = readFileSync(authFilePath, 'utf-8')
+    } catch (error) {
+      // Why: an unreadable auth.json is not a missing credential. Surfacing it as
+      // a generic failure is what lets the add path's rollback delete a home
+      // holding freshly authenticated bytes.
+      if (isDefinitiveAbsence(error)) {
+        throw error
+      }
+      throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+    }
     let parsed: Record<string, unknown>
     try {
       parsed = JSON.parse(authFileContents) as Record<string, unknown>
