@@ -14,6 +14,7 @@ import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } fr
 import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_DISPATCH_SHOW_SCOPE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
@@ -41,7 +42,7 @@ export class RuntimeClient {
   private readonly remotePairing: PairingOffer | null
   private readonly environmentSelector: string | null
   private readonly remoteCompat: RemoteRuntimeCompatGate
-  private orchestrationContractCheck: Promise<void> | null = null
+  private orchestrationContractCheck: Promise<RuntimeStatus> | null = null
   private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
     process.env
   )
@@ -73,8 +74,11 @@ export class RuntimeClient {
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
     const orchestrationMutation = isOrchestrationMutation(method, params)
-    if (orchestrationMutation) {
-      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+    if (orchestrationMutation || method === 'orchestration.dispatchShow') {
+      await this.ensureOrchestrationContractCompatible(
+        effectiveTimeoutMs,
+        method === 'orchestration.dispatchShow'
+      )
     }
     const orchestrationRequestId = orchestrationMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
@@ -191,14 +195,26 @@ export class RuntimeClient {
     return getCliStatus(this.userDataPath)
   }
 
-  private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
+  private async ensureOrchestrationContractCompatible(
+    timeoutMs: number,
+    requireDispatchShowScope = false
+  ): Promise<void> {
     if (!this.orchestrationContractCheck) {
       this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(timeoutMs)
     }
-    await this.orchestrationContractCheck
+    const status = await this.orchestrationContractCheck
+    if (requireDispatchShowScope) {
+      if (!status.capabilities?.includes(ORCHESTRATION_DISPATCH_SHOW_SCOPE_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'orchestration_migration_required',
+          'The connected Orca runtime does not support Run-scoped dispatch inspection. No effects were applied.',
+          orchestrationMigrationData('runtime_capability_missing')
+        )
+      }
+    }
   }
 
-  private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
+  private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<RuntimeStatus> {
     const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
     if (this.remotePairing) {
       this.remoteCompat.noteVerifiedStatus(response.result)
@@ -210,6 +226,7 @@ export class RuntimeClient {
         orchestrationMigrationData('runtime_capability_missing')
       )
     }
+    return response.result
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {

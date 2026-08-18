@@ -176,6 +176,44 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(requests[0]?.method).toBe('status.get')
   })
 
+  it('rejects an older host before dispatch inspection can drop caller scope', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    await expect(
+      client.call('orchestration.dispatchShow', {
+        task: 'task_foreign',
+        callerTerminalHandle: 'term_a'
+      })
+    ).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: { reason: 'runtime_capability_missing', effectsApplied: false }
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.method).toBe('status.get')
+  })
+
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

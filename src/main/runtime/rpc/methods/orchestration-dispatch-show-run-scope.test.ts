@@ -269,7 +269,8 @@ describe('orchestration.dispatchShow Run scope', () => {
       vi.spyOn(db, 'getTaskForRun'),
       vi.spyOn(db, 'getDispatchContext'),
       vi.spyOn(db, 'getDispatchContextForRun'),
-      vi.spyOn(db, 'getDispatchContextForCallerIdentity')
+      vi.spyOn(db, 'getDispatchContextForCallerIdentity'),
+      vi.spyOn(db, 'getCurrentRunForPane')
     ]
 
     const malformedForeign = await rejection({ task: task.id }, malformed)
