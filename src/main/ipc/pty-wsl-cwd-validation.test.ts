@@ -166,7 +166,7 @@ describe('registerPtyHandlers', () => {
       if (target === missingCwd) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     try {
@@ -229,7 +229,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     // Why: without the renderer opt-in the provider surfaces its normal missing-directory error — API/runtime callers keep exact cwd semantics.
@@ -266,7 +266,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     // Why: a reattach must keep the session's exact cwd; remapping would silently detach the restored terminal from its recorded state.

@@ -188,6 +188,82 @@ describe('PtyHandler', () => {
       expect(spawnEnv.fish_history).toBe(expected)
     })
 
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`,
+        undefined
+      ],
+      [
+        'a desktop-minted path',
+        '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history',
+        undefined
+      ],
+      ['a user value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+    ])(
+      '%s inherited as HISTFILE from the relay process env',
+      async (_kind, inherited, expected) => {
+        const previous = process.env.HISTFILE
+        process.env.HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.HISTFILE
+          } else {
+            process.env.HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.HISTFILE).toBe(expected)
+      }
+    )
+
+    // Why unconditionally, not only with isolation on: injectRelayHistoryEnv is
+    // what normally mints (and first clears) ORCA_HISTFILE, and it runs only
+    // with isolation on. An inherited one — the relay can be launched from an
+    // Orca pane — would otherwise reach the remote wrapper on the disabled and
+    // revive paths, re-exporting another worktree's history path (#11146) and
+    // wrapping a zsh pane nothing asked to wrap.
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`
+      ],
+      ['a desktop-minted path', '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'],
+      ['a user value', '/home/me/.zsh_history']
+    ])(
+      'drops %s inherited as ORCA_HISTFILE from the relay process env',
+      async (_kind, inherited) => {
+        const previous = process.env.ORCA_HISTFILE
+        process.env.ORCA_HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_HISTFILE
+          } else {
+            process.env.ORCA_HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+      }
+    )
+
+    it('drops an ORCA_HISTFILE handed over in the client env', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_HISTFILE: '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+    })
+
     it('drops a desktop-minted session handed over in the client env', async () => {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,

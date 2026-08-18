@@ -103,6 +103,8 @@ import {
 
 import { runHistoryGc, scheduleHistoryGc } from './terminal-history-gc'
 
+const OTHER_WORKTREE_HASH = hashWorktreeId('repo-1::/path/other-wt')
+
 describe('terminal-history', () => {
   afterEach(() => {
     cancelPendingHistoryTreeRemovalRetries()
@@ -369,6 +371,53 @@ describe('terminal-history', () => {
 
       expect(env.HISTFILE).toBe(['', 'mine', 'zsh_history'].join(sep))
       expect(env.ORCA_HISTFILE).toBeUndefined()
+    })
+
+    it.each([
+      [
+        'desktop',
+        ['', 'fake', 'userData', 'terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ],
+      [
+        'relay',
+        [
+          '',
+          'home',
+          'me',
+          '.orca-remote',
+          'terminal-history',
+          `${OTHER_WORKTREE_HASH}-zsh_history`
+        ].join(sep)
+      ]
+    ])('drops a %s HISTFILE inherited from a parent Orca pane', (_kind, inherited) => {
+      // HISTFILE stays EXPORTED once the wrapper restores it, so an Orca launched
+      // from a pane in another worktree would otherwise hit the check-before-set
+      // early return in EVERY pane and append into that one worktree's file.
+      const env: Record<string, string> = { HISTFILE: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(result.histFile).toBe(env.HISTFILE)
+      expect(env.HISTFILE).toContain(hashWorktreeId('repo-1::/path/wt'))
+      expect(env.HISTFILE).not.toContain(OTHER_WORKTREE_HASH)
+    })
+
+    it.each([
+      ['an ordinary path', ['', 'home', 'me', '.zsh_history'].join(sep)],
+      // Orca only ever mints absolute paths, so the same shape relative to the
+      // user's cwd is theirs.
+      [
+        'a relative path of Orca’s shape',
+        ['terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ]
+    ])('preserves %s the user set as HISTFILE', (_kind, histFile) => {
+      // Only a path Orca minted is droppable; everything else is the user's.
+      const env: Record<string, string> = { HISTFILE: histFile }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.HISTFILE).toBe(histFile)
+      expect(result.histFile).toBeNull()
     })
 
     it('preserves a caller-supplied fish_history', () => {

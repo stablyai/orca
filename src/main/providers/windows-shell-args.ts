@@ -6,7 +6,7 @@ import {
   buildWslInteractiveLoginShellCommand,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
-import { getMarkerlessShellLaunchConfig } from './local-pty-shell-ready'
+import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
@@ -34,7 +34,7 @@ function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
   }
 
   ensureShellReadyWrappersAt()
-  const wrapperArgs = getMarkerlessShellLaunchConfig('bash').args
+  const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
     return GIT_BASH_UTF8_LOGIN_COMMAND
   }

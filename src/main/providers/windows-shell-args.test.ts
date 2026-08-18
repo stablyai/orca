@@ -384,8 +384,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // Why: typed OMP keeps its existing shell integration, while typed Prime
     // commands must reach the user's binary without Orca rewriting argv.
     const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
-    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    for (const wrapperFile of [bashRcfile, zshLogin]) {
+    // Why .zshenv: the omp wrapper is part of the epilogue defined there.
+    const zshEnv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
       expect(wrapperFile).not.toContain('prime-agent()')

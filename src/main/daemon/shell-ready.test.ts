@@ -3,8 +3,12 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import type * as ShellReadyModule from './shell-ready'
 import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
+import {
+  OVERLAY_ONLY_FEATURES,
+  STARTUP_COMMAND_FEATURES
+} from '../shell-startup-launch-intent-fixtures'
+import { makeUserZdotdir } from '../zsh-user-config-dir-fixture'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
 import {
@@ -14,9 +18,16 @@ import {
 } from '../shell-startup-output-scanner'
 import { HeadlessEmulator } from './headless-emulator'
 
-async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
+async function importFreshShellReady() {
   vi.resetModules()
-  return import('./shell-ready')
+  const module = await import('./shell-ready')
+  return {
+    ...module,
+    getShellReadyLaunchConfig: (shell: string) =>
+      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES),
+    getMarkerlessShellLaunchConfig: (shell: string) =>
+      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES)
+  }
 }
 
 async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
@@ -68,7 +79,7 @@ async function runInteractiveZshLogin(args: {
       ZDOTDIR: args.wrapperZdotdir,
       ORCA_ORIG_ZDOTDIR: args.tempHome,
       ORCA_ZSHENV_SOURCE_DIR: args.tempHome,
-      ORCA_SHELL_READY_MARKER: '1'
+      ORCA_SHELL_FEATURES: 'ready'
     }
   })
   let output = ''
@@ -106,7 +117,7 @@ async function runInteractiveZshRc(args: {
       HOME: args.zdotdir,
       TERM: 'xterm-256color',
       ZDOTDIR: args.zdotdir,
-      ORCA_SHELL_READY_MARKER: '1'
+      ORCA_SHELL_FEATURES: 'ready'
     }
   })
   let output = ''
@@ -140,7 +151,7 @@ function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): strin
       env: {
         ...process.env,
         HOME: tempDir,
-        ORCA_SHELL_READY_MARKER: '1',
+        ORCA_SHELL_FEATURES: 'ready',
         TERM: process.env.TERM || 'xterm'
       },
       timeout: 5000
@@ -175,7 +186,7 @@ function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.z
 
 function expectFinalZdotdirRestoreContext(content: string) {
   expect(content).toContain("after Orca's last wrapper file has loaded")
-  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain('export ZDOTDIR="$_orca_resolved_config_dir"')
 }
 
 describePosix('daemon shell-ready launch config', () => {
@@ -259,7 +270,9 @@ describePosix('daemon shell-ready launch config', () => {
     const config = getShellReadyLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config.supportsReadyMarker).toBe(true)
-    expect(config.env).toEqual({ ORCA_SHELL_READY_MARKER: '1' })
+    // Why empty: fish's selection is baked into the init command text, so it
+    // needs no exported feature variable at all.
+    expect(config.env).toEqual({})
     expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
     const init = config.args?.[2] ?? ''
     expect(init).toContain('--on-event fish_prompt')
@@ -415,14 +428,15 @@ describePosix('daemon shell-ready launch config', () => {
     const previousZdotdir = process.env.ZDOTDIR
     const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const previousHome = process.env.HOME
+    const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
-    process.env.ORCA_ORIG_ZDOTDIR = '/Users/alice/.config/zsh'
-    process.env.HOME = '/Users/alice'
+    process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
+    process.env.HOME = userDataPath
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe(userDataPath)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -482,15 +496,20 @@ describePosix('daemon shell-ready launch config', () => {
     const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"')
     expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-    expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
-    expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expect(zshenv).toContain('"$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then')
+    expect(zshenv).toContain('export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"')
     expectZdotdirSourceContext(zprofile, '.zprofile')
     expectZdotdirSourceContext(zshrc, '.zshrc')
     expectZdotdirSourceContext(zlogin, '.zlogin')
-    expectFinalZdotdirRestoreContext(zshrc)
-    expectFinalZdotdirRestoreContext(zlogin)
+    // Why .zshenv: the final restore is the last step of the single epilogue,
+    // which .zshrc (non-login) and .zlogin (login) each invoke once.
+    expectFinalZdotdirRestoreContext(zshenv)
+    // Why the emulation probe: sh/ksh emulation makes zsh read $HOME/.zlogin
+    // rather than the wrapper's, so the epilogue has to run from here instead.
+    expect(zshrc).toContain('if [[ ! -o login || "$(emulate 2>/dev/null)" != zsh ]]; then')
+    expect(zshrc).toContain('(( ${+functions[__orca_shell_epilogue]} )) && __orca_shell_epilogue')
   })
 
   it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
@@ -498,14 +517,16 @@ describePosix('daemon shell-ready launch config', () => {
 
     getShellReadyLaunchConfig('/bin/zsh')
 
-    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
-    expect(zlogin).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
-    expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    // Why .zshenv: the widget registration lives in the epilogue, which .zlogin
+    // (login) and .zshrc (non-login) both call exactly once.
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
+    expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
     // Why: add-zle-hook-widget aborts its chain when an earlier hook exits non-zero, so don't register the marker through it.
-    expect(zlogin).not.toContain('add-zle-hook-widget line-init')
+    expect(zshenv).not.toContain('add-zle-hook-widget line-init')
     // Why: re-source guard — skip re-capturing when already the bound widget so the prior chain survives a second source.
-    expect(zlogin).toContain('== "user:__orca_prompt_mark"')
+    expect(zshenv).toContain('== "user:__orca_prompt_mark"')
   })
 
   // Why: oh-my-zsh vi-mode's zle-line-init returns non-zero; add-zle-hook-widget then aborts the chain and the marker never fires.
@@ -621,8 +642,10 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
     getShellReadyLaunchConfig('/bin/bash')
 
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
-    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    // Why one file: every restore now lives in the single epilogue in .zshenv,
+    // which .zshrc and .zlogin each invoke on their own startup path.
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zlogin = zshrc
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
@@ -668,7 +691,8 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
     getShellReadyLaunchConfig('/bin/bash')
 
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    // Why .zshenv: the zsh markers live in the epilogue, behind `markers`.
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
@@ -800,12 +824,13 @@ describePosix('daemon shell-ready launch config', () => {
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
     // Why: only the wrapper self-loop should be rejected; a real user ZDOTDIR must round-trip so their configs load.
     const previousZdotdir = process.env.ZDOTDIR
-    process.env.ZDOTDIR = '/Users/alice/.config/zsh'
+    const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
+    process.env.ZDOTDIR = userZdotdir
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice/.config/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -866,11 +891,12 @@ describePosix('daemon shell-ready launch config', () => {
   it('preserves ZDOTDIR that contains /shell-ready/zsh as a substring but does not end with it', async () => {
     // Why: guard must match suffix not substring — `/Users/alice/shell-ready/zsh-custom` must round-trip unchanged.
     const previousZdotdir = process.env.ZDOTDIR
-    process.env.ZDOTDIR = '/Users/alice/shell-ready/zsh-custom'
+    const userZdotdir = makeUserZdotdir(userDataPath, 'shell-ready', 'zsh-custom')
+    process.env.ZDOTDIR = userZdotdir
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/shell-ready/zsh-custom')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -889,12 +915,10 @@ describePosix('daemon shell-ready launch config', () => {
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
     expect(zshenv).toContain('unset ZDOTDIR')
-    expect(zshenv).toContain('_orca_zshenv_source_dir="${ORCA_ZSHENV_SOURCE_DIR:-$HOME}"')
+    expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ZSHENV')
     expect(zshenv).toContain('source "${_orca_zshenv_path}"')
     expect(zshenv).toContain('_orca_discovered_zdotdir="${ZDOTDIR:-}"')
-    expect(zshenv).toContain(
-      'export ORCA_ORIG_ZDOTDIR="${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}"'
-    )
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
     expect(zshenv).toContain('export ZDOTDIR=')
   })
 
@@ -907,7 +931,7 @@ describePosix('daemon shell-ready launch config', () => {
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
     // Save spawn-env value before sourcing user .zshenv
-    expect(zshenv).toContain('_orca_spawn_orig_zdotdir="${ORCA_ORIG_ZDOTDIR:-}"')
+    expect(zshenv).toContain('_orca_user_zdotdir="$_orca_resolved_config_dir"')
 
     // Fallback chain: discovered → normalized spawn-env path → HOME
     expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')

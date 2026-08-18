@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { buildSshPtySpawnEnv } from '../main/providers/ssh-pty-spawn-env'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
@@ -66,7 +67,7 @@ function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.z
 
 function expectFinalZdotdirRestoreContext(content: string) {
   expect(content).toContain("after Orca's last wrapper file has loaded")
-  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain('export ZDOTDIR="$_orca_resolved_config_dir"')
 }
 
 describe('isRelayWslShell', () => {
@@ -109,22 +110,21 @@ describe('getRelayShellLaunchConfig', () => {
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
-      expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-        'export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-      )
-      expect(readFileSync(join(zshRoot, '.zprofile'), 'utf8')).toContain(
-        '_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-      )
+      const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
+      const userZdotdirResolution =
+        '__orca_resolve_user_config_dir "${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
+      expect(zshenv).toContain('export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"')
       const zprofile = readFileSync(join(zshRoot, '.zprofile'), 'utf8')
       const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
       const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
-      expect(zshrc).toContain('_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')
-      expect(zlogin).toContain('_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')
+      expect(zprofile).toContain(userZdotdirResolution)
+      expect(zshrc).toContain(userZdotdirResolution)
+      expect(zlogin).toContain(userZdotdirResolution)
       expectZdotdirSourceContext(zprofile, '.zprofile')
       expectZdotdirSourceContext(zshrc, '.zshrc')
       expectZdotdirSourceContext(zlogin, '.zlogin')
-      expectFinalZdotdirRestoreContext(zshrc)
-      expectFinalZdotdirRestoreContext(zlogin)
+      // Why .zshenv: the final restore is the last step of the one epilogue.
+      expectFinalZdotdirRestoreContext(zshenv)
     }
   )
 
@@ -133,7 +133,8 @@ describe('getRelayShellLaunchConfig', () => {
       getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir }, 'win32')
     ).toEqual({
       args: [],
-      env: {}
+      env: {},
+      supportsReadyMarker: false
     })
     expect(
       getRelayShellLaunchConfig(
@@ -143,14 +144,70 @@ describe('getRelayShellLaunchConfig', () => {
       )
     ).toEqual({
       args: ['-NoLogo'],
-      env: {}
+      env: {},
+      supportsReadyMarker: false
     })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'wraps an ordinary SSH pane, as every remote pane with a CLI bridge already was',
+    () => {
+      // Why the real builder: the relay's wrapping rule is only meaningful
+      // against the env main actually sends. Every relay session with a CLI
+      // bridge sets ORCA_REMOTE_CLI_BIN_DIR, which was already enough to wrap.
+      const env = buildSshPtySpawnEnv({
+        env: { HOME: homeDir, PATH: '/usr/bin:/bin' },
+        remoteCliBridgeEnv: {
+          binDir: '/home/remote/.orca-relay/bin',
+          relayDir: '/home/remote/.orca-relay',
+          nodePath: '/home/remote/.orca-relay/node',
+          sockPath: '/home/remote/.orca-relay/relay.sock'
+        }
+      })
+      env.ORCA_HISTFILE = join(homeDir, 'orca-history', 'zsh_history')
+
+      const config = getRelayShellLaunchConfig('/bin/zsh', env)
+
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
+      expect(config.env.ORCA_SHELL_FEATURES).toBe('overlay,history,markers')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'repairs worktree history on a remote pane whose host reports no CLI bridge',
+    () => {
+      // Why this env shape: a host too old to report its platform leaves
+      // remoteCliBridgeEnv null, so the pane carries no overlay key at all.
+      // It is the one pane class the relay was NOT already wrapping, and
+      // leaving it unwrapped silently loses its worktree history.
+      const env = buildSshPtySpawnEnv({ env: { HOME: homeDir, PATH: '/usr/bin:/bin' } })
+      env.ORCA_HISTFILE = join(homeDir, 'orca-history', 'zsh_history')
+
+      const config = getRelayShellLaunchConfig('/bin/zsh', env)
+
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
+      expect(config.env.ORCA_SHELL_FEATURES).toBe('history')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a remote zsh with nothing Orca-owned on the plain login path',
+    () => {
+      const env = buildSshPtySpawnEnv({ env: { HOME: homeDir, PATH: '/usr/bin:/bin' } })
+
+      expect(getRelayShellLaunchConfig('/bin/zsh', env)).toEqual({
+        args: ['-l'],
+        env: {},
+        supportsReadyMarker: false
+      })
+    }
+  )
 
   it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
     expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
       args: ['-l'],
-      env: {}
+      env: {},
+      supportsReadyMarker: false
     })
   })
 
@@ -165,7 +222,7 @@ describe('getRelayShellLaunchConfig', () => {
     })
 
     expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-      'export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
+      'export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"'
     )
   })
 
@@ -177,11 +234,13 @@ describe('getRelayShellLaunchConfig', () => {
         ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
       })
       const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
-      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+      // Why .zshenv: the overlay restores live in the one epilogue defined there.
+      const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
-      expect(zshrc).toContain(
+      expect(config.env.ORCA_SHELL_FEATURES).toBe('overlay,history,markers')
+      expect(zshenv).toContain(
         '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
       )
     }
@@ -195,7 +254,9 @@ describe('getRelayShellLaunchConfig', () => {
       const bashRc = readFileSync(rcfile, 'utf8')
 
       expect(config.args).toEqual(['--rcfile', rcfile])
-      expect(config.env).toEqual({})
+      // Why the empty allowlist: bash keeps its unconditional OSC 133 hooks, and
+      // an explicit empty value also overrides anything the relay inherited.
+      expect(config.env).toEqual({ ORCA_SHELL_FEATURES: '' })
       expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
       expect(bashRc).toContain('printf "\\033]133;C\\007"')
     }
@@ -208,19 +269,17 @@ describe('getRelayShellLaunchConfig', () => {
         emitReadyMarker: true
       })
       const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
-      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+      const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
-      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
-      expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-        'printf "\\033]777;orca-shell-start:%s\\007" "$$"'
-      )
-      expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-        'unset ORCA_SHELL_STARTUP_IDENTITY'
-      )
-      expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
-      expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+      expect(config.supportsReadyMarker).toBe(true)
+      expect(config.env.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+      // Why: the channel is destroyed before the user's own config is sourced.
+      expect(zshenv).toContain('builtin unset ORCA_SHELL_FEATURES')
+      expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
+      expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
   )
 
@@ -232,9 +291,10 @@ describe('getRelayShellLaunchConfig', () => {
       })
       const bashRc = readFileSync(config.args[1] as string, 'utf8')
 
-      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(config.supportsReadyMarker).toBe(true)
+      expect(config.env.ORCA_SHELL_FEATURES).toContain('ready')
       expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-      expect(bashRc).toContain('unset ORCA_SHELL_STARTUP_IDENTITY')
+      expect(bashRc).toContain('builtin unset ORCA_SHELL_FEATURES')
       expect(bashRc).toContain('__orca_append_prompt_command "__orca_prompt_mark"')
       expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
@@ -248,8 +308,12 @@ describe('getRelayShellLaunchConfig', () => {
       })
 
       expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
-      expect(config.env.ORCA_SHELL_STARTUP_IDENTITY).toBe('1')
-      expect(config.env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+      expect(config.env.ORCA_SHELL_FEATURES).toContain('identity')
+      // Why the negative half: identity emission alone must not arm the
+      // readiness handshake, or the delivering side waits for a marker that
+      // this shell was never told to print.
+      expect(config.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(config.supportsReadyMarker).toBe(false)
     }
   )
 

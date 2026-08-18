@@ -128,6 +128,10 @@ export type ShellSpawnParams = {
   getShellReadyConfig?: (
     shell: string
   ) => { args: string[] | null; env: Record<string, string> } | null
+  /** Env keys the primary shell's launch config wrote into `env`. Passed in
+   *  rather than re-derived: asking for the config again re-runs wrapper
+   *  generation just to read back its key names. */
+  launchEnvKeys?: readonly string[]
   /** Called before each fallback shell spawn so callers can update env vars
    *  (e.g. HISTFILE) that depend on which shell is about to run. */
   onBeforeFallbackSpawn?: (env: Record<string, string>, fallbackShell: string) => void
@@ -247,6 +251,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   // Try fallback shells on Unix
   if (process.platform !== 'win32') {
     const fallbackShells = UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
+    // Why: the previous shell's launch keys (its wrapper ZDOTDIR and the feature
+    // channel) mean nothing to a different shell. An unwrapped fallback writes
+    // none of them back, so they would stay exported to the pane and to every
+    // child — including a nested zsh that would then load Orca's wrapper. Tracked
+    // per attempt, not once: the second fallback must not inherit the first's.
+    let staleLaunchEnvKeys: readonly string[] = params.launchEnvKeys ?? []
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
@@ -255,7 +265,11 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
+        for (const key of staleLaunchEnvKeys) {
+          delete env[key]
+        }
         Object.assign(env, fallbackReady?.env ?? {})
+        staleLaunchEnvKeys = Object.keys(fallbackReady?.env ?? {})
         const wrapped = wrapShellSpawnForMacosTccAttribution(
           fallback,
           fallbackReady?.args ?? ['-l'],

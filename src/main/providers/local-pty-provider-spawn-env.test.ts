@@ -40,6 +40,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 
@@ -208,6 +210,32 @@ describe('LocalPtyProvider', () => {
       }
 
       expect(spawnMock.mock.calls.at(-1)![2].env.fish_history).toBe(expected)
+    })
+
+    it.each([
+      // HISTFILE is exported, so an Orca launched from a pane in another worktree
+      // hands every pane that worktree's history file — isolation off included.
+      [
+        'an inherited Orca path',
+        '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history',
+        undefined
+      ],
+      ['a user value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+    ])('history isolation off: %s HISTFILE', async (_kind, inherited, expected) => {
+      const previous = process.env.HISTFILE
+      process.env.HISTFILE = inherited
+      try {
+        // No worktreeId: the history-disabled branch of spawn.
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.HISTFILE
+        } else {
+          process.env.HISTFILE = previous
+        }
+      }
+
+      expect(spawnMock.mock.calls.at(-1)![2].env.HISTFILE).toBe(expected)
     })
 
     it('does not inherit NODE_ENV from the Orca process env', async () => {
@@ -421,7 +449,7 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[1]).toEqual(['-l'])
       expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
-      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
     })
 
     it('promotes the agent-teams shim onto the Windows `Path` spelling', async () => {

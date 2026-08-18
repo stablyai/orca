@@ -5,11 +5,8 @@ import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { DaemonProtocolError } from './types'
-import {
-  getMarkerlessShellLaunchConfig,
-  getShellReadyLaunchConfig,
-  resolvePtyShellPath
-} from './shell-ready'
+import { getShellLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import {
   ensureNodePtySpawnHelperExecutable,
@@ -38,6 +35,7 @@ import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { dropInheritedOrcaFishHistory } from '../fish-history-session'
+import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
@@ -661,6 +659,20 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)
   }
+  // Why the same for HISTFILE: it is exported too, so a daemon started from an
+  // Orca pane hands that worktree's history file to every pane this spawn did
+  // not scope itself — including panes of other worktrees.
+  if (opts.env?.HISTFILE === undefined) {
+    dropInheritedOrcaHistFile(env)
+  }
+  // Why ORCA_HISTFILE too: the desktop drops an inherited one on both of its
+  // branches, and the daemon inherits one from the pane that launched it just
+  // as readily. Left in place it now both WRAPS a pane the client scoped
+  // nothing for (shell-startup-features selects `history` on its presence) and
+  // makes the wrapper re-export another worktree's history path (#11146).
+  if (opts.env?.ORCA_HISTFILE === undefined) {
+    delete env.ORCA_HISTFILE
+  }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
   removeAppImageRuntimeEnv(env)
@@ -824,33 +836,34 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
         `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
       )
     }
-    // Why: OpenCode/Codex path restoration and OMP's typed-command status wrapper need shell-ready code after user startup files run.
-    let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
-    if (opts.command && isCodexStartupCommand) {
-      const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
+    // Why: OpenCode/Codex path restoration, OMP's typed-command status wrapper,
+    // and the worktree HISTFILE repair all need shell-ready code that runs after
+    // the user's own startup files.
+    // Why: payload-bearing Codex startup text can be dropped by rc-file noise; plain Codex stays markerless for the startup-speed path.
+    const waitsForShellReady =
+      Boolean(opts.command) &&
+      (!isCodexStartupCommand ||
+        shouldUseShellReadyStartupDelivery({
+          command: opts.command as string,
+          startupCommandDelivery: opts.startupCommandDelivery
+        }))
+    // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch config
+    // below may name features for this shell.
+    delete env.ORCA_SHELL_FEATURES
+    const shellLaunch = getShellLaunchConfig(
+      shellPath,
+      selectShellStartupFeatures({
+        shellPath,
+        env,
+        hasStartupCommand: Boolean(opts.command),
+        waitsForShellReady,
+        // Why identical: the identity marker exists so the readiness handshake
+        // can bind output to the right shell PID.
+        emitsStartupIdentity: waitsForShellReady
       })
-      // Why: payload-bearing Codex startup text can be dropped by rc-file noise; plain Codex stays markerless for the startup-speed path.
-      shellLaunch = shouldWaitForShellReady
-        ? getShellReadyLaunchConfig(shellPath)
-        : getMarkerlessShellLaunchConfig(shellPath)
-    } else if (opts.command) {
-      shellLaunch = getShellReadyLaunchConfig(shellPath)
-    } else {
-      shellLaunch =
-        env.ORCA_OPENCODE_CONFIG_DIR ||
-        env.ORCA_MIMOCODE_HOME ||
-        env.ORCA_OMP_STATUS_EXTENSION ||
-        env.ORCA_CODEX_HOME ||
-        env.ORCA_AGENT_TEAMS_SHIM_DIR
-          ? getMarkerlessShellLaunchConfig(shellPath)
-          : null
-    }
-    if (shellLaunch) {
-      Object.assign(env, shellLaunch.env)
-    }
-    shellArgs = shellLaunch?.args ?? ['-l']
+    )
+    Object.assign(env, shellLaunch.env)
+    shellArgs = shellLaunch.args ?? ['-l']
   }
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
   if (

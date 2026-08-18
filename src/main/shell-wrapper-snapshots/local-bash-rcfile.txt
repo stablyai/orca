@@ -1,8 +1,14 @@
 # Orca bash shell-ready wrapper
-if [[ "${ORCA_SHELL_STARTUP_IDENTITY:-0}" == "1" ]]; then
-  unset ORCA_SHELL_STARTUP_IDENTITY
-  printf "\033]777;orca-shell-start:%s\007" "$$"
-fi
+_orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
+builtin unset ORCA_SHELL_FEATURES
+__orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
+__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+# Why a plain variable: the channel is consumed and destroyed in these first
+# lines, so nothing this shell later spawns can see or inherit the selection.
+__orca_ready_marker=""
+__orca_has_feature ready && __orca_ready_marker=1
+unset _orca_shell_features
+unset -f __orca_has_feature
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -311,7 +317,7 @@ __orca_append_prompt_command() {
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
-if [[ "${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+if [[ -n "$__orca_ready_marker" ]]; then
   __orca_prompt_mark() {
     printf "\033]777;orca-shell-ready\007"
   }

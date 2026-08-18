@@ -17,6 +17,8 @@ export const mkdirSyncMock: Mock = vi.fn()
 export const readFileSyncMock: Mock = vi.fn()
 export const writeFileSyncMock: Mock = vi.fn()
 export const chmodSyncMock: Mock = vi.fn()
+export const renameSyncMock: Mock = vi.fn()
+export const rmSyncMock: Mock = vi.fn()
 export const getPathMock: Mock = vi.fn()
 export const loginPreflightExecFileMock: Mock = vi.fn()
 export const spawnMock: Mock = vi.fn()
@@ -85,6 +87,8 @@ export const fsModuleMock = () => ({
   readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
+  renameSync: renameSyncMock,
+  rmSync: rmSyncMock,
   constants: {
     X_OK: 1,
     R_OK: 4

@@ -7,12 +7,19 @@
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
-import { SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
+import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-wrapper-root'
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
+${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+# Why a plain variable: the channel is consumed and destroyed in these first
+# lines, so nothing this shell later spawns can see or inherit the selection.
+__orca_ready_marker=""
+__orca_has_feature ready && __orca_ready_marker=1
+unset _orca_shell_features
+unset -f __orca_has_feature
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -107,7 +114,7 @@ ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+if [[ -n "$__orca_ready_marker" ]]; then
   __orca_prompt_mark() {
     printf "${SHELL_READY_MARKER_ESCAPED}"
   }

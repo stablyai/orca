@@ -18,6 +18,7 @@ import {
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { addWslEnvKeys } from '../shared/wsl-env'
+import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
@@ -50,6 +51,7 @@ import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-gr
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
+import { dropInheritedOrcaHistFile } from '../main/worktree-history-file-path'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -635,6 +637,17 @@ export class PtyHandler {
     // any pane to someone else's worktree. Matches the desktop, which drops it on both
     // branches (STA-4682).
     dropInheritedOrcaFishHistory(result)
+    // Why here as well as in injectRelayHistoryEnv: that runs only with isolation
+    // on, yet an inherited Orca HISTFILE must not scope a pane to someone else's
+    // worktree on the disabled and revive paths either.
+    dropInheritedOrcaHistFile(result)
+    // Why unconditionally: ORCA_HISTFILE is Orca-owned and minted below by
+    // injectRelayHistoryEnv, which also runs only with isolation on. An
+    // inherited one (the relay can be launched from an Orca pane) would
+    // otherwise reach the wrapper on the disabled and revive paths, scoping the
+    // pane to another worktree's history file — and wrapping a zsh pane that
+    // nothing asked to wrap, since `history` is selected on its presence.
+    delete result.ORCA_HISTFILE
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -1590,7 +1603,7 @@ export class PtyHandler {
       emitStartupIdentity: shouldEmitShellReadyMarker
     })
     const rendererShellReadySupported =
-      !shouldProviderDeliverCommand && shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
+      !shouldProviderDeliverCommand && shellLaunch.supportsReadyMarker
 
     if (context?.signal?.aborted || context?.isStale()) {
       // Why: cancellation remains side-effect-free until the exact native spawn seam.
@@ -1610,11 +1623,11 @@ export class PtyHandler {
         cols,
         rows,
         cwd,
-        // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
+        // Why the empty default: relay shells inherit process.env, and the launch
+        // config is the only thing allowed to name features for this shell.
         env: {
           ...spawnEnv,
-          ORCA_SHELL_READY_MARKER: '0',
-          ORCA_SHELL_STARTUP_IDENTITY: '0',
+          [SHELL_STARTUP_FEATURE_ENV]: '',
           ...shellLaunch.env
         }
       })
@@ -1671,11 +1684,10 @@ export class PtyHandler {
               command: shouldProviderDeliverCommand ? managedStartupCommand : null,
               providerDelivery: shouldProviderDeliverCommand,
               delivered: false,
-              waitForShellReady: shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
-              outputScanState:
-                shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
-                  ? createShellStartupOutputScanState()
-                  : null,
+              waitForShellReady: shellLaunch.supportsReadyMarker,
+              outputScanState: shellLaunch.supportsReadyMarker
+                ? createShellStartupOutputScanState()
+                : null,
               shellPid: null,
               promptProbe: null,
               timer: null
@@ -2189,8 +2201,7 @@ export class PtyHandler {
       // Why: no provider-delivered command is waiting for a ready marker.
       env: {
         ...spawnEnv,
-        ORCA_SHELL_READY_MARKER: '0',
-        ORCA_SHELL_STARTUP_IDENTITY: '0',
+        [SHELL_STARTUP_FEATURE_ENV]: '',
         ...shellLaunch.env
       }
     })

@@ -122,7 +122,7 @@ describe('registerPtyHandlers', () => {
       expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
       expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
       expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -163,7 +163,7 @@ describe('registerPtyHandlers', () => {
       expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -306,7 +306,7 @@ describe('registerPtyHandlers', () => {
         })
 
         const [, , options] = spawnMock.mock.calls[0]!
-        expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+        expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
 
         await Promise.resolve()
         vi.advanceTimersByTime(49)
@@ -338,7 +338,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('last login: today\r\n')
@@ -405,7 +405,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('\x1b]777;orca-shell-ready\x07')
