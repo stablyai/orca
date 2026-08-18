@@ -82,6 +82,14 @@ function collectUnboundTabSurfaces(
     panes,
     paneIdsBySessionAndBinding
   )
+  if (!owner && (graph.tabsByWorktreeId[worktreeId] ?? []).length > 0) {
+    const herdrTabsInWorkspace = snapshot.tabs.filter(
+      (candidate) => candidate.workspace_id === tab.workspace_id
+    )
+    if (herdrTabsInWorkspace.length <= 1 || isOrcaProvisionedHerdrTabLabel(tab.label)) {
+      return []
+    }
+  }
   if (!owner) {
     const root = unbound[0] ?? panes[0]
     if (!root) {
@@ -110,6 +118,15 @@ function collectUnboundTabSurfaces(
       tab.tab_id
     )
   })
+}
+
+function isOrcaProvisionedHerdrTabLabel(label: string | undefined): boolean {
+  if (!label) {
+    return false
+  }
+  // Why: workspace.create names the first tab "1"; materialize used "Terminal"
+  // or leaf-<id>. Those are Orca leftovers, not extra Herdr tabs.
+  return label === '1' || label === 'Terminal' || /^leaf-[0-9a-f-]{8,}$/i.test(label)
 }
 
 function findOrcaOwnerForHerdrTab(

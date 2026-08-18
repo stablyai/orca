@@ -86,6 +86,17 @@ export async function ensureTabLayout(
     }
   }
 
+  // Why: materializeLeafPane used to leave one tab labeled leaf-<id>. Orca
+  // persists title "1", so label match fails and tab.create would duplicate.
+  if (!herdrTab) {
+    const workspaceTabs = snapshot.tabs.filter(
+      (candidate) => candidate.workspace_id === workspaceId
+    )
+    if (workspaceTabs.length === 1) {
+      herdrTab = workspaceTabs[0]
+    }
+  }
+
   if (herdrTab && !rootPane) {
     await restoreOrcaPaneBindings(
       transport,

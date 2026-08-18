@@ -209,17 +209,34 @@ export async function enrichHerdrWorkspaceCheckouts(
   }
 }
 
+export function findHerdrWorkspaceForWorktree(
+  snapshot: HerdrSessionSnapshot,
+  projectId: string,
+  worktree: { id: string; path: string; displayName?: string }
+): HerdrWorkspace | undefined {
+  const binding = orcaWorkspaceBinding(projectId, worktree)
+  const bound = snapshot.workspaces.find(
+    (workspace) => workspace.tokens?.[ORCA_BINDING_TOKEN] === binding
+  )
+  if (bound) {
+    return bound
+  }
+  return findAdoptableWorkspace(snapshot.workspaces, worktree) ?? undefined
+}
+
 function findAdoptableWorkspace(
   workspaces: HerdrWorkspace[],
-  worktree: HerdrWorktreeDescriptor
+  worktree: { path: string; displayName?: string }
 ): HerdrWorkspace | null {
-  const byCheckout = findUniqueHerdrMatch(
-    workspaces,
-    (workspace) => workspaceMatchesCheckout(workspace, worktree.path),
-    `workspace checkout ${worktree.path}`
-  )
-  if (byCheckout) {
-    return byCheckout
+  if (worktree.path) {
+    const byCheckout = findUniqueHerdrMatch(
+      workspaces,
+      (workspace) => workspaceMatchesCheckout(workspace, worktree.path),
+      `workspace checkout ${worktree.path}`
+    )
+    if (byCheckout) {
+      return byCheckout
+    }
   }
   const expectedLabel = worktree.displayName || basename(worktree.path)
   const unbound = workspaces.filter((workspace) => !workspace.tokens?.[ORCA_BINDING_TOKEN])

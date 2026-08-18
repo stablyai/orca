@@ -663,6 +663,63 @@ describe('HerdrRuntimeManager stock reconciliation', () => {
     })
     expect(present.mock.calls[0][0]).toEqual(persist.mock.calls[0][0])
   })
+
+  it('adopts a leftover materialized herdr tab instead of minting a second orca tab', async () => {
+    const leafId = 'existing-leaf'
+    const worktree = {
+      id: 'worktree-1',
+      instanceId: 'instance-1',
+      path: '/repo',
+      displayName: 'repo'
+    }
+    const workspaceBinding = orcaWorkspaceBinding('project-1', worktree)
+    const host = stockTransport({
+      workspaces: [
+        {
+          workspace_id: 'w1',
+          label: 'repo',
+          tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding }
+        }
+      ],
+      tabs: [
+        {
+          tab_id: 'w1:t9',
+          workspace_id: 'w1',
+          label: 'leaf-3542a4f8-ea86-4908-9dbd-40d2fc3bcf4'
+        }
+      ],
+      panes: [{ pane_id: 'w1:p9', tab_id: 'w1:t9', workspace_id: 'w1' }]
+    })
+    const persist = vi.fn()
+    const present = vi.fn()
+    const manager = new HerdrRuntimeManager(host.transport, undefined, undefined, {
+      persist,
+      present
+    })
+
+    await manager.reconcileProjectHost({
+      ...singleLeafGraph(),
+      tabsByWorktreeId: {
+        'worktree-1': [{ ...tab(), title: '1' }]
+      },
+      layoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    expect(
+      host.requestMock.mock.calls.filter(([, method]) => method === 'tab.create')
+    ).toHaveLength(0)
+    expect(present).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalled()
+    expect(manager.getPaneId(herdrSessionNameForProject(project()), 'project-1', leafId)).toBe(
+      'w1:p9'
+    )
+  })
 })
 
 describe('HerdrRuntimeManager event-driven reconcile', () => {

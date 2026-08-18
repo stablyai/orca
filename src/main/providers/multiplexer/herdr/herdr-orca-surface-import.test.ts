@@ -96,6 +96,144 @@ describe('collectUnboundHerdrSurfaces', () => {
     })
   })
 
+  it('does not import a materialized leaf tab when the worktree already has an Orca tab', () => {
+    const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
+    const surfaces = collectUnboundHerdrSurfaces(
+      'orca',
+      {
+        project,
+        worktrees: [worktree],
+        tabsByWorktreeId: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              ptyId: null,
+              worktreeId: 'wt-1',
+              title: '1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        layoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: 'existing' },
+            activeLeafId: 'existing',
+            expandedLeafId: null
+          }
+        }
+      },
+      snapshot({
+        workspaces: [
+          { workspace_id: 'w1', label: 'repo', tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding } }
+        ],
+        tabs: [
+          {
+            tab_id: 'w1:t9',
+            workspace_id: 'w1',
+            label: 'leaf-3542a4f8-ea86-4908-9dbd-40d2fc3bcf4'
+          }
+        ],
+        panes: [{ pane_id: 'w1:p9', tab_id: 'w1:t9', workspace_id: 'w1' }]
+      }),
+      new Map()
+    )
+
+    expect(surfaces).toEqual([])
+  })
+
+  it('does not import a leftover Terminal tab when the worktree already has an Orca tab', () => {
+    const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
+    const surfaces = collectUnboundHerdrSurfaces(
+      'orca',
+      {
+        project,
+        worktrees: [worktree],
+        tabsByWorktreeId: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              ptyId: null,
+              worktreeId: 'wt-1',
+              title: '1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        layoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: 'existing' },
+            activeLeafId: 'existing',
+            expandedLeafId: null
+          }
+        }
+      },
+      snapshot({
+        workspaces: [
+          { workspace_id: 'w1', label: 'repo', tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding } }
+        ],
+        tabs: [
+          { tab_id: 'w1:t1', workspace_id: 'w1', label: '1' },
+          { tab_id: 'w1:t2', workspace_id: 'w1', label: 'Terminal' }
+        ],
+        panes: [
+          { pane_id: 'w1:p1', tab_id: 'w1:t1', workspace_id: 'w1' },
+          { pane_id: 'w1:p2', tab_id: 'w1:t2', workspace_id: 'w1' }
+        ]
+      }),
+      new Map()
+    )
+
+    expect(surfaces).toEqual([])
+  })
+
+  it('does not mint a second Orca tab when the worktree already owns the only Herdr tab', () => {
+    const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
+    const surfaces = collectUnboundHerdrSurfaces(
+      'orca',
+      {
+        project,
+        worktrees: [worktree],
+        tabsByWorktreeId: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              ptyId: null,
+              worktreeId: 'wt-1',
+              title: '1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        layoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: 'existing' },
+            activeLeafId: 'existing',
+            expandedLeafId: null
+          }
+        }
+      },
+      snapshot({
+        workspaces: [
+          { workspace_id: 'w1', label: 'repo', tokens: { [ORCA_BINDING_TOKEN]: workspaceBinding } }
+        ],
+        tabs: [{ tab_id: 'w1:t1', workspace_id: 'w1', label: 'logs' }],
+        panes: [{ pane_id: 'w1:p1', tab_id: 'w1:t1', workspace_id: 'w1' }]
+      }),
+      new Map()
+    )
+
+    expect(surfaces).toEqual([])
+  })
+
   it('imports an unbound sibling pane as a split on the bound Orca tab', () => {
     const workspaceBinding = orcaWorkspaceBinding(project.id, worktree)
     const leafId = 'leaf-1'

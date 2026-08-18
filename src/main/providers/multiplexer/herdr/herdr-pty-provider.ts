@@ -109,13 +109,17 @@ export class HerdrPtyProvider implements IPtyProvider {
       target.identity.leafId
     )
     if (!paneId) {
-      const worktree = target.graph.worktrees[0]
-      paneId = await runtime.manager.materializeLeafPane(
-        target.project,
-        target.identity.leafId,
-        opts.cwd ?? '',
-        worktree?.displayName ?? worktree?.path ?? ''
-      )
+      const worktree =
+        target.graph.worktrees.find((candidate) => candidate.id === target.identity.worktreeId) ??
+        target.graph.worktrees[0]
+      if (worktree) {
+        paneId = await runtime.manager.materializeLeafPane(
+          target.project,
+          target.identity.leafId,
+          opts.cwd ?? '',
+          worktree
+        )
+      }
     }
     const controller = await runtime.manager.controlProjectPane(
       target.project,

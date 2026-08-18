@@ -18,13 +18,10 @@ import {
   paneBindingMapKey,
   rememberOrcaPaneBindings,
   orcaPaneBinding,
-  orcaWorkspaceBinding,
-  collectLeafIds,
-  ORCA_BINDING_TOKEN,
-  ORCA_METADATA_SOURCE
+  collectLeafIds
 } from './herdr-binding-metadata'
-import { collectHerdrPaneIds, ensureTabLayout } from './herdr-tab-layout'
-import type { LayoutNode } from './herdr-socket-types'
+import { ensureTabLayout } from './herdr-tab-layout'
+import { materializeHerdrLeafPane } from './herdr-leaf-materialize'
 import type { HerdrBindingAgentState } from './herdr-pty-binding-queries'
 import {
   claimAndPresentHerdrSurfaces,
@@ -141,6 +138,9 @@ export class HerdrRuntimeManager {
       for (const worktree of graph.worktrees) {
         const tabs = graph.tabsByWorktreeId[worktree.id] ?? []
         const firstTab = tabs.find((tab) => graph.layoutsByTabId[tab.id]?.root)
+        if (!firstTab) {
+          continue
+        }
         const workspace = await ensureStockHerdrWorkspace(
           this.transport,
           sessionName,
@@ -170,6 +170,12 @@ export class HerdrRuntimeManager {
         }
       }
 
+      rememberOrcaPaneBindings(
+        this.paneIdsBySessionAndBinding,
+        sessionName,
+        graph.project.id,
+        snapshot
+      )
       snapshot = await this.snapshot(sessionName)
       rememberOrcaPaneBindings(
         this.paneIdsBySessionAndBinding,
@@ -364,56 +370,27 @@ export class HerdrRuntimeManager {
     return this.transport.controlTerminal(sessionName, paneId, options)
   }
 
-  // Why: a spawn whose leaf never reconciled to a pane must recreate the pane
-  // instead of failing the whole tab. Materialize a single-leaf layout in a
-  // fresh tab, claim the binding, and let controlProjectPane resolve normally.
+  // Why: a spawn whose leaf never reconciled to a pane must claim an existing
+  // workspace pane instead of failing the whole tab.
   async materializeLeafPane(
     project: Project,
     leafId: string,
     cwd: string,
-    workspaceLabel: string
+    worktree: { id: string; path: string; displayName?: string }
   ): Promise<string | null> {
     const sessionName = herdrSessionNameForProject(project, this.sharedName?.())
     const graph = this.graphsByKey.get(graphKey(sessionName, project.id))
-    const snapshot = await this.snapshot(sessionName)
-    const boundWorkspaceId = graph?.worktrees
-      .map((worktree) => orcaWorkspaceBinding(project.id, worktree))
-      .map((binding) =>
-        snapshot.workspaces.find((workspace) => workspace.tokens?.[ORCA_BINDING_TOKEN] === binding)
-      )
-      .find((workspace) => workspace)?.workspace_id
-    const applied = unwrapHerdrResponse<{
-      layout: { root?: LayoutNode }
-      workspace_id: string
-      tab_id: string
-    }>(
-      await this.transport.request(sessionName, 'layout.apply', {
-        ...(boundWorkspaceId
-          ? { workspace_id: boundWorkspaceId }
-          : {
-              workspace_label: workspaceLabel || project.displayName || 'project'
-            }),
-        tab_label: `leaf-${leafId}`,
-        root: { type: 'pane', pane_id: leafId, cwd },
-        focus: false
-      })
-    )
-    const paneIds: string[] = []
-    collectHerdrPaneIds(applied.layout?.root, paneIds)
-    const paneId = paneIds[0]
-    if (!paneId) {
-      return null
-    }
-    await this.transport.request(sessionName, 'pane.report_metadata', {
-      pane_id: paneId,
-      source: ORCA_METADATA_SOURCE,
-      tokens: { orca_binding: orcaPaneBinding(project.id, leafId) }
+    return materializeHerdrLeafPane({
+      transport: this.transport,
+      sessionName,
+      project,
+      leafId,
+      cwd,
+      worktree,
+      graph,
+      paneIdsBySessionAndBinding: this.paneIdsBySessionAndBinding,
+      snapshot: () => this.snapshot(sessionName)
     })
-    this.paneIdsBySessionAndBinding.set(
-      paneBindingMapKey(sessionName, orcaPaneBinding(project.id, leafId)),
-      paneId
-    )
-    return paneId
   }
 
   private async snapshot(sessionName: string): Promise<HerdrSessionSnapshot> {
