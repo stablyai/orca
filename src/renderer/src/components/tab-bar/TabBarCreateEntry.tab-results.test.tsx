@@ -140,6 +140,7 @@ function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSe
     entityId: 'term-1',
     groupId: 'g',
     relativePath: null,
+    occupantAgent: null,
     ...overrides
   } as OpenTabSearchResult
 }

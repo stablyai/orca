@@ -89,6 +89,7 @@ function makeWorkspaceTab({
     agentMetadata: agentSnippets.length
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
+    occupantAgent: null,
     isCurrentTab: false,
     isCurrentWorktree: true
   }

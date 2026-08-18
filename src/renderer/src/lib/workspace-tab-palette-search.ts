@@ -11,8 +11,11 @@ import {
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
 import type { Tab, TabContentType, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Worktree } from '../../../shared/worktree/types'
+import { resolveOpenTabOccupantAgent } from './open-tab-occupant-agent'
 import {
   buildAgentMetadataTabIndex,
   collectAgentMetadataFromIndex,
@@ -50,6 +53,8 @@ export type SearchableWorkspaceTab = {
   /** Normalized field index, built once per entry rather than per keystroke. */
   document: PaletteDocument
   agentMetadata: AgentMetadata[]
+  /** Confident occupant for the row icon; null when the pane is a plain shell. */
+  occupantAgent: TuiAgent | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
 }
@@ -77,6 +82,8 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   activeFileIdByWorktree: Record<string, string | null | undefined>
   activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
   generatedTitlesEnabled: boolean
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 
 function getActiveUnifiedTabId({
@@ -170,7 +177,9 @@ export function buildSearchableWorkspaceTabs({
   activeFileId,
   activeFileIdByWorktree,
   activeTabTypeByWorktree,
-  generatedTitlesEnabled
+  generatedTitlesEnabled,
+  terminalLayoutsByTabId,
+  paneForegroundAgentByPaneKey
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
   const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
@@ -263,7 +272,19 @@ export function buildSearchableWorkspaceTabs({
             repoName,
             typeAliases: TERMINAL_TYPE_SEARCH_ALIASES
           }),
-          agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id)
+          agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id),
+          occupantAgent: resolveOpenTabOccupantAgent({
+            tabId: tab.entityId,
+            // The unified label, not terminalTab.title: the record can lag it (see above).
+            title,
+            defaultTitle: terminalTab?.defaultTitle,
+            launchAgent: terminalTab?.launchAgent,
+            layout: terminalLayoutsByTabId?.[tab.entityId],
+            agentStatusByPaneKey,
+            retainedAgentsByPaneKey,
+            sleepingAgentSessionsByPaneKey,
+            paneForegroundAgentByPaneKey
+          })
         })
         continue
       }
@@ -287,7 +308,8 @@ export function buildSearchableWorkspaceTabs({
           branch,
           repoName
         }),
-        agentMetadata: []
+        agentMetadata: [],
+        occupantAgent: null
       })
     }
   }

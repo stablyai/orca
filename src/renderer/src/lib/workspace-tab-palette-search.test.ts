@@ -559,4 +559,32 @@ describe('workspace-tab-palette-search', () => {
     const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
     expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
   })
+
+  it('stamps grok occupancy from the idle OSC title the sidebar already shows', () => {
+    const titledOnly = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'grok' })] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
+    })
+    expect(titledOnly[0]?.occupantAgent).toBe('grok')
+    expect(searchWorkspaceTabs(titledOnly, 'grok')[0]?.occupantAgent).toBe('grok')
+  })
+
+  it('stamps occupancy from the live unified label when the terminal record title is stale', () => {
+    const staleRecord = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'Terminal 1' })] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
+    })
+    expect(staleRecord[0]?.title).toBe('grok')
+    expect(staleRecord[0]?.occupantAgent).toBe('grok')
+  })
+
+  it('does not stamp grok occupancy from a hyphenated filename-style title', () => {
+    const hyphenated = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'session-scanner-grok-parser' })] },
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab({ label: 'session-scanner-grok-parser' })]
+      }
+    })
+    expect(hyphenated[0]?.occupantAgent).toBeNull()
+  })
 })

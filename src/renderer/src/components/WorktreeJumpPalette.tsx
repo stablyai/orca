@@ -68,6 +68,7 @@ import {
   shouldOpenTabsLeadPaletteSections,
   NO_PALETTE_QUALITY_RANK
 } from '@/lib/cmd-j-section-leadership'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
@@ -743,6 +744,7 @@ function WorktreeJumpPaletteContent({
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sleepingAgentSessionsByPaneKey = useAppStore((s) => s.sleepingAgentSessionsByPaneKey)
+  const paneForegroundAgentByPaneKey = useAppStore((s) => s.paneForegroundAgentByPaneKey)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
@@ -1207,7 +1209,9 @@ function WorktreeJumpPaletteContent({
       activeFileId,
       activeFileIdByWorktree,
       activeTabTypeByWorktree,
-      generatedTitlesEnabled: settings?.tabAutoGenerateTitle === true
+      generatedTitlesEnabled: settings?.tabAutoGenerateTitle === true,
+      terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey
     })
   }, [
     paletteStatusInputsActive,
@@ -1227,7 +1231,9 @@ function WorktreeJumpPaletteContent({
     retainedAgentsByPaneKey,
     settings?.tabAutoGenerateTitle,
     sleepingAgentSessionsByPaneKey,
+    paneForegroundAgentByPaneKey,
     tabsByWorktree,
+    terminalLayoutsByTabId,
     unifiedTabsByWorktree,
     worktreeOrder
   ])
@@ -3337,8 +3343,20 @@ function WorktreeJumpPaletteContent({
                   hostOptions,
                   hostFilterActive
                 )
-                const WorkspaceTabIcon =
-                  result.contentType === 'terminal' ? SquareTerminal : FileText
+                const workspaceTabFallback =
+                  result.contentType === 'terminal' && result.occupantAgent ? (
+                    <span
+                      className="inline-flex"
+                      data-agent-icon={result.occupantAgent}
+                      aria-hidden="true"
+                    >
+                      <AgentIcon agent={result.occupantAgent} size={14} />
+                    </span>
+                  ) : result.contentType === 'terminal' ? (
+                    <SquareTerminal className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <FileText className="size-3.5" aria-hidden="true" />
+                  )
                 // Why regardless of query: a searched-for tab is exactly when you need to know it's
                 // still working — the map covers every open tab, not just the recent section.
                 const recentRow = recentTabRowById.get(entry.id) ?? null
@@ -3351,10 +3369,7 @@ function WorktreeJumpPaletteContent({
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                      <PaletteRecentTabStatusDot
-                        row={recentRow}
-                        fallback={<WorkspaceTabIcon className="size-3.5" aria-hidden="true" />}
-                      />
+                      <PaletteRecentTabStatusDot row={recentRow} fallback={workspaceTabFallback} />
                     </div>
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="flex items-center justify-between gap-2.5">

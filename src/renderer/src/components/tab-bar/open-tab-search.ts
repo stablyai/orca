@@ -17,6 +17,7 @@ import {
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab,
@@ -49,6 +50,7 @@ export type OpenTabSearchResult =
       entityId: string
       groupId: string
       relativePath: string | null
+      occupantAgent: TuiAgent | null
     })
   | (OpenTabSearchResultBase & {
       source: 'browser'
@@ -194,7 +196,8 @@ export function searchOpenTabs({
       tabId: result.tabId,
       entityId: result.entityId,
       groupId: result.groupId,
-      relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId))
+      relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId)),
+      occupantAgent: result.occupantAgent
     })),
     ...rank('browser', searchBrowserPages([...browserPages], trimmed), (result) => ({
       ...baseResult('browser', result.pageId, result, executionHostId),
