@@ -173,7 +173,7 @@ describe('runHook', () => {
       expect(result).toEqual({ success: true, output: '' })
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/feature' && echo hello"],
+        ['-d', 'Ubuntu', '--exec', 'bash', '-c', "cd '/home/jin/feature' && echo hello"],
         // #7652 regression: the unattended WSL hook branch must carry the
         // credential guard, and WSLENV is what carries it into the distro.
         expect.objectContaining({
@@ -238,7 +238,7 @@ describe('runHook', () => {
         [
           '-d',
           'Ubuntu',
-          '--',
+          '--exec',
           'bash',
           '-c',
           "cd '/mnt/c/Users/jinwo/git/orca-feature' && echo hello"

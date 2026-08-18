@@ -30,7 +30,7 @@ function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
   return [
     '-d',
     info.distro,
-    '--',
+    '--exec',
     'sh',
     '-c',
     `if [ -d "$1" ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`,
@@ -262,7 +262,7 @@ export function getWslHome(distro: string): string | null {
   }
 
   try {
-    const home = execFileSync('wsl.exe', ['-d', distro, '--', 'bash', '-c', 'echo $HOME'], {
+    const home = execFileSync('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
@@ -293,7 +293,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
 
   try {
     const home = (
-      await execFileUtf8('wsl.exe', ['-d', distro, '--', 'bash', '-c', 'echo $HOME'])
+      await execFileUtf8('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'])
     ).trim()
 
     if (!home || !home.startsWith('/')) {

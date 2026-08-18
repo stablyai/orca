@@ -1212,13 +1212,13 @@ export class CodexRuntimeHomeService {
     )
     const nextLinuxPath = `${activeLinuxPath}.next-${process.pid}-${Date.now()}`
     const activeLinuxParentPath = this.dirnameLinuxPath(activeLinuxPath)
-    // Why: WSL drops bash argv, so keep the script literal; login-shell cleanup turns `exit 0` into status 1, so fall through.
+    // Why: login-shell cleanup turns `exit 0` into status 1, so fall through.
     execFileSync(
       'wsl.exe',
       [
         '-d',
         distro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         [

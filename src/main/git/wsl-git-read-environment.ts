@@ -1,8 +1,5 @@
 import { execFile } from 'node:child_process'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
 
@@ -48,11 +45,11 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
     'if [ -n "${XDG_CONFIG_HOME:-}" ] || [ -n "${LD_LIBRARY_PATH:-}" ] || env | grep -q \'^GIT_\'; then exit 78; fi',
     `printf '\\0${PROBE_MARKER}\\0%s\\0%s\\0%s\\0' "$PATH" "$_orca_git_path" "$HOME"`
   ].join('\n')
-  const script = escapeWslShCommandForWindows(buildWslLoginShellCommand(probeCommand))
+  const script = buildWslLoginShellCommand(probeCommand)
   return new Promise((resolve) => {
     execFile(
       'wsl.exe',
-      ['-d', distro, '--', 'sh', '-lc', script],
+      buildWslExecArgs(distro, ['sh', '-lc', script]),
       {
         encoding: 'utf8',
         maxBuffer: PROBE_MAX_BUFFER,

@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { lstat, readFile } from 'node:fs/promises'
 import {
+  buildWslExecArgs,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
@@ -58,14 +58,7 @@ function execFileText(
 function runWslLoginShellCommand(distro: string, command: string): Promise<ExecFileTextResult> {
   return execFileText(
     'wsl.exe',
-    [
-      '-d',
-      distro,
-      '--',
-      'sh',
-      '-lc',
-      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-    ],
+    buildWslExecArgs(distro, ['sh', '-lc', buildWslLoginShellCommand(command)]),
     { timeout: WSL_FILE_OPERATION_TIMEOUT_MS }
   )
 }

@@ -1203,7 +1203,7 @@ export class CodexAccountService {
     const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
     const infoOutput = execFileSync(
       'wsl.exe',
-      [...distroArgs, '--', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
+      [...distroArgs, '--exec', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
       { encoding: 'utf-8', timeout: 5000 }
     )
     const [rawDistro, rawHome] = infoOutput
@@ -1223,7 +1223,7 @@ export class CodexAccountService {
       [
         '-d',
         distro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
@@ -1460,7 +1460,7 @@ export class CodexAccountService {
       [
         '-d',
         wslInfo.distro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         buildEncodedWslBashCommand(
@@ -1519,7 +1519,7 @@ export class CodexAccountService {
             [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
               '-lc',
               buildEncodedWslBashCommand(
@@ -1595,7 +1595,7 @@ export class CodexAccountService {
         [
           '-d',
           distro,
-          '--',
+          '--exec',
           'bash',
           '-lc',
           buildEncodedWslBashCommand(

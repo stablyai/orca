@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildPosixCommandPathLookupScript } from './posix-command-path-lookup'
-import { buildWslLoginShellCommand, escapeWslShCommandForWindows } from './wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from './wsl-login-shell-command'
 
 type ShellCase = {
   name: string
@@ -243,7 +243,7 @@ describe('buildPosixCommandPathLookupScript', () => {
       )
       const resolved = execFileSync(
         'wsl.exe',
-        ['--', 'sh', '-lc', escapeWslShCommandForWindows(command)],
+        buildWslExecArgs(undefined, ['sh', '-lc', command]),
         { encoding: 'utf8', timeout: WSL_TEST_COMMAND_TIMEOUT_MS }
       ).trim()
 
@@ -266,7 +266,7 @@ function canRunWslSh(): boolean {
     return wslShAvailable
   }
   try {
-    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'true'], {
+    execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
     })
     wslShAvailable = true

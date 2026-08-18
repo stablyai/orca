@@ -86,10 +86,6 @@ function wslArgs(distro, args) {
   return ['-d', distro, '--exec', ...args]
 }
 
-function wslShellArgs(distro, args) {
-  return ['-d', distro, '--', ...args]
-}
-
 async function resolveDistro(requested) {
   if (requested) {
     return requested
@@ -139,15 +135,16 @@ async function main() {
   assertRepoPath(options.mountedRepo, '/mnt/')
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
-  const { buildWslLoginShellCommand, escapeWslShCommandForWindows, quotePosixShell } =
-    await jiti.import('../../src/shared/wsl-login-shell-command.ts')
+  const { buildWslLoginShellCommand, quotePosixShell } = await jiti.import(
+    '../../src/shared/wsl-login-shell-command.ts'
+  )
 
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`
   )
   const probe = await run(
     'wsl.exe',
-    wslShellArgs(distro, ['/bin/sh', '-lc', escapeWslShCommandForWindows(loginProbe)])
+    wslArgs(distro, ['/bin/sh', '-lc', loginProbe])
   )
   const probeText = probe.stdout.toString('utf8')
   const loginPath = /__ORCA_PATH__(.*)/.exec(probeText)?.[1]?.trim()
@@ -172,7 +169,7 @@ async function main() {
       const script = `${delay}${buildWslLoginShellCommand(command)}`
       result = await run(
         'wsl.exe',
-        wslShellArgs(distro, ['/bin/sh', '-lc', escapeWslShCommandForWindows(script)])
+        wslArgs(distro, ['/bin/sh', '-lc', script])
       )
       const markerOffset = result.stdout.indexOf(outputMarker)
       if (markerOffset === -1) {

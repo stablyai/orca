@@ -56,7 +56,7 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
-      ['-d', distro, '--', 'bash', '-c', command],
+      ['-d', distro, '--exec', 'bash', '-c', command],
       {
         encoding: 'utf8',
         maxBuffer: WSL_SCAN_MAX_BUFFER_BYTES,

@@ -412,7 +412,7 @@ describe('preflight', () => {
       expect.arrayContaining([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'sh',
         '-c',
         expect.stringContaining("'claude'")
@@ -443,7 +443,7 @@ describe('preflight', () => {
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      expect.arrayContaining(['--', 'sh', '-c', expect.stringContaining("'codex'")]),
+      expect.arrayContaining(['--exec', 'sh', '-c', expect.stringContaining("'codex'")]),
       { encoding: 'utf-8', timeout: 10000 }
     )
   })
