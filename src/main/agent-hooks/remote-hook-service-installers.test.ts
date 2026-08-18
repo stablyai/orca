@@ -400,6 +400,7 @@ describe('remote hook service installers', () => {
       'UserPromptSubmit',
       'Stop',
       'StopFailure',
+      'StopCancelled',
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
@@ -415,6 +416,7 @@ describe('remote hook service installers', () => {
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
+    expect(grokConfig.hooks.StopCancelled?.[0]?.matcher).toBeUndefined()
 
     const devinText = devin.fs.files.get('/home/dev/.config/devin/config.json')!
     // Why: Devin config.json is JSONC — parse it as such, and assert the user's comment

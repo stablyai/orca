@@ -217,6 +217,114 @@ describe('shared agent-hook-listener', () => {
     expect(failed?.payload.toolInput).toBeUndefined()
   })
 
+  it('maps Grok StopCancelled to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'UserPromptSubmit', prompt: 'do work' }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'StopCancelled', reason: 'user_interrupt' }
+      },
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'done',
+      prompt: 'do work'
+    })
+  })
+
+  it('maps Grok idle_prompt and task_complete notifications to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
+      'production'
+    )
+
+    const idle = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'Notification',
+          notificationType: 'idle_prompt',
+          message: 'Waiting for input'
+        }
+      },
+      'production'
+    )
+    expect(idle?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'grok'
+    })
+
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          toolName: 'read_file',
+          toolInput: { path: 'README.md' }
+        }
+      },
+      'production'
+    )
+    const complete = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'Notification', notification_type: 'task_complete' }
+      },
+      'production'
+    )
+    expect(complete?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'grok'
+    })
+  })
+
+  it('maps legacy Grok idle notification copy to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
+      'production'
+    )
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'Notification',
+          message: 'Type your message · Enter send · Shift-Tab normal'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'grok'
+    })
+  })
+
   it('maps Grok StopFailure to done', () => {
     normalizeHookPayload(
       state,
@@ -520,6 +628,18 @@ describe('shared agent-hook-listener', () => {
       hasPendingAgentResultText('grok', {
         payload: {
           hookEventName: 'SessionEnd',
+          sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf528',
+          cwd: '/tmp/workspace'
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('treats Grok StopCancelled chat history as pending result text', () => {
+    expect(
+      hasPendingAgentResultText('grok', {
+        payload: {
+          hookEventName: 'StopCancelled',
           sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf528',
           cwd: '/tmp/workspace'
         }

@@ -23,7 +23,8 @@ import {
 import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
-  GROK_HOME_ENVELOPE_MAX_LENGTH
+  GROK_HOME_ENVELOPE_MAX_LENGTH,
+  GROK_HOOK_POST_MAX_TIME_SECONDS
 } from './windows-grok-hook-script'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
@@ -39,6 +40,8 @@ const GROK_EVENTS = [
   // Why: Grok can end a turn on API error without a normal Stop; without this
   // the sidebar can stick on working (same rationale as Claude StopFailure).
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why (#15225): Grok 1.0+ fires StopCancelled instead of Stop on Ctrl+C / Esc / max-turns.
+  { eventName: 'StopCancelled', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     eventName: 'PreToolUse',
@@ -130,7 +133,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
     // command line (EDR command-line false positives). Wire body is identical.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/grok" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
+    // Why: Grok Stop stdin includes lastAssistantMessage (up to 32 KiB). The
+    // shared 1.5s bound drops those posts; TUI still shows `stop [hooks: 1]`.
+    `  --connect-timeout 0.5 --max-time ${GROK_HOOK_POST_MAX_TIME_SECONDS} \\`,
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',

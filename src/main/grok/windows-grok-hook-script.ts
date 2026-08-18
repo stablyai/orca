@@ -7,10 +7,17 @@ import {
 /** Matches the envelope length cap used by the POSIX grok-hook branch. */
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
-const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok', [
-  // Why: attach grokHome before payload@- without string-replacing the shared template.
-  '  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^'
-])
+/** Curl deadline for Grok posts (#15225). Stop payloads carry lastAssistantMessage. */
+export const GROK_HOOK_POST_MAX_TIME_SECONDS = 8
+
+const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand(
+  'grok',
+  [
+    // Why: attach grokHome before payload@- without string-replacing the shared template.
+    '  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^'
+  ],
+  GROK_HOOK_POST_MAX_TIME_SECONDS
+)
 
 /**
  * Windows `grok-hook.cmd` body.

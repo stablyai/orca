@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
+import {
+  buildWindowsGrokHookScript,
+  GROK_HOOK_POST_MAX_TIME_SECONDS
+} from './windows-grok-hook-script'
 
 /**
  * Conservative model of cmd's read-then-evaluate order: `%VAR:~n%` is expanded
@@ -57,6 +60,14 @@ describe('buildWindowsGrokHookScript', () => {
 
     expect(lines).toContain('setlocal DisableDelayedExpansion')
     expect(lines.filter((line) => line.includes('!'))).toEqual([])
+  })
+
+  it('uses a longer curl deadline than the shared 1.5s hook bound', () => {
+    const script = buildWindowsGrokHookScript()
+
+    expect(GROK_HOOK_POST_MAX_TIME_SECONDS).toBeGreaterThan(1.5)
+    expect(script).toContain(`--max-time ${GROK_HOOK_POST_MAX_TIME_SECONDS}`)
+    expect(script).not.toContain('--max-time 1.5')
   })
 
   it('re-checks the envelope after appending the trailing-backslash sentinel', () => {

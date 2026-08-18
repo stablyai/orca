@@ -1464,7 +1464,7 @@ export function preparePendingGrokResultDiscovery(
     envelope?.hookEventName ??
     record.hook_event_name ??
     record.hookEventName
-  if (!isGrokEvent(eventName, 'stop', 'session_end')) {
+  if (!isGrokEvent(eventName, 'stop', 'session_end', 'stop_cancelled')) {
     return null
   }
   const metadata = readGrokSessionMetadata(
@@ -2285,7 +2285,7 @@ function extractGrokToolFields(
     }
     return update
   }
-  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')
@@ -2407,7 +2407,15 @@ function isGrokRoutinePermissionPromptNotification(
   )
 }
 
-function isGrokIdleNotification(message: string | undefined): boolean {
+function isGrokIdleNotification(
+  notificationType: string | undefined,
+  message: string | undefined
+): boolean {
+  // Why (#15225): Grok 1.0+ documents idle_prompt / task_complete as the official
+  // idle types. Message-text matching is a leftover from earlier Build TUI copy.
+  if (isGrokEvent(notificationType, 'idle_prompt', 'task_complete')) {
+    return true
+  }
   if (!message) {
     return false
   }
@@ -4150,7 +4158,7 @@ function normalizeGrokEvent(
     stateName = 'working'
   } else if (isUserInputPreTool) {
     stateName = 'waiting'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     stateName = 'done'
   } else if (
     isGrokEvent(eventName, 'notification') &&
@@ -4168,7 +4176,7 @@ function normalizeGrokEvent(
     stateName = 'waiting'
   } else if (
     isGrokEvent(eventName, 'notification') &&
-    isGrokIdleNotification(notificationMessage)
+    isGrokIdleNotification(notificationType, notificationMessage)
   ) {
     stateName = 'done'
   }
