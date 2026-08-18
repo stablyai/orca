@@ -18328,7 +18328,7 @@ export class OrcaRuntimeService {
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
         : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return labelTerminalReadSource(visibleRead, read)
+      return labelTerminalReadSource(visibleRead)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -18350,7 +18350,7 @@ export class OrcaRuntimeService {
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return labelTerminalReadSource(visibleRead, read)
+    return labelTerminalReadSource(visibleRead)
   }
 
   // Why: the default read is the accumulated pty stream, which stacks every repaint of a line
@@ -18370,7 +18370,7 @@ export class OrcaRuntimeService {
     if (lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }
-    return { ...buildVisibleSnapshotReadFallback(read, lines, opts.limit), source: 'screen' }
+    return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
   }
 
   // Why a cache: leaf-branch sends may arrive per keystroke; one proven-absent
@@ -39570,16 +39570,11 @@ function visibleNonBlankTerminalLines(lines: string[]): string[] {
 
 // Why: every read carries its source, so a caller that asked for a screen and got a response
 // with no source at all knows it reached a host that predates screen reads — rather than
-// mistaking the stream for the screen. This also surfaces the pre-existing visible-snapshot
-// fallback, which until now silently swapped rendered lines into an ordinary read.
-function labelTerminalReadSource(
-  resolved: RuntimeTerminalRead,
-  streamRead: RuntimeTerminalRead
-): RuntimeTerminalRead {
-  if (resolved.source) {
-    return resolved
-  }
-  return { ...resolved, source: resolved.tail === streamRead.tail ? 'stream' : 'screen' }
+// mistaking the stream for the screen. Rendered lines only ever enter a read through
+// buildVisibleSnapshotReadFallback, which stamps `screen` itself, so anything still unlabelled
+// here is the accumulated stream.
+function labelTerminalReadSource(resolved: RuntimeTerminalRead): RuntimeTerminalRead {
+  return resolved.source ? resolved : { ...resolved, source: 'stream' }
 }
 
 function buildVisibleSnapshotReadFallback(
@@ -39598,7 +39593,8 @@ function buildVisibleSnapshotReadFallback(
     tail: charBoundedTail.tail,
     limited:
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
-    returnedLineCount: charBoundedTail.tail.length
+    returnedLineCount: charBoundedTail.tail.length,
+    source: 'screen'
   }
 }
 
