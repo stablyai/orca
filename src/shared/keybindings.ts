@@ -2242,12 +2242,19 @@ export function matchesActiveNonTerminalKeybinding(
     }
   }
   if (overrides) {
-    for (const actionId of Object.keys(overrides)) {
-      if (
-        isPluginKeybindingActionId(actionId) &&
-        keybindingMatchesAction(actionId, input, platform, overrides, options)
-      ) {
-        return true
+    const isAllowedInTerminal =
+      options.context !== 'terminal' ||
+      normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
+    if (isAllowedInTerminal) {
+      for (const actionId of Object.keys(overrides)) {
+        if (
+          isPluginKeybindingActionId(actionId) &&
+          getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
+            keybindingMatchesInput(binding, input, platform)
+          )
+        ) {
+          return true
+        }
       }
     }
   }

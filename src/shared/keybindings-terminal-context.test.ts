@@ -228,5 +228,17 @@ describe('keybindings', () => {
       shift: false
     }
     expect(matchesActiveNonTerminalKeybinding(cmdBackspace, 'darwin')).toBe(false)
+
+    // Dynamic plugin action overrides match under orca-first policy
+    const pluginOverrides = {
+      'plugin:sample-org.tasks/open': ['Mod+ArrowLeft']
+    }
+    expect(matchesActiveNonTerminalKeybinding(cmdArrowLeft, 'darwin', pluginOverrides)).toBe(true)
+    expect(
+      matchesActiveNonTerminalKeybinding(cmdArrowLeft, 'darwin', pluginOverrides, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(false)
   })
 })

@@ -136,4 +136,45 @@ describe('terminal-shortcut-yield-app-keybindings', () => {
       )
     ).toBeNull()
   })
+
+  it('yields when dynamic plugin actions are customized', () => {
+    const pluginKeybindings = {
+      'plugin:sample-org.tasks/open': ['Mod+ArrowLeft']
+    }
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        pluginKeybindings,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'orca-first'
+      )
+    ).toBeNull()
+
+    // Under terminal-first, terminal translation retains priority
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        pluginKeybindings,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'terminal-first'
+      )
+    ).toEqual({ type: 'sendInput', data: '\x01' })
+  })
 })
