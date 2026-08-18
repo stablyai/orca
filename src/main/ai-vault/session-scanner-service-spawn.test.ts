@@ -1,10 +1,14 @@
 import type { ChildProcess } from 'node:child_process'
+import type * as NodeFsModule from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const forkMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
-vi.mock('node:fs', () => ({ existsSync: () => true }))
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFsModule>()),
+  existsSync: () => true
+}))
 
 const { spawnAiVaultServiceProcess } = await import('./session-scanner-service-spawn')
 

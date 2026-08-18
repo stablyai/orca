@@ -96,6 +96,8 @@ export type AiVaultSession = {
   updatedAt: string | null
   modifiedAt: string
   messageCount: number
+  /** Provider evidence that content exists when an exact turn count is unavailable. */
+  hasConversation?: boolean
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
   /** Older messages fell out of the newest-N window: the earliest preview turn
@@ -153,9 +155,10 @@ export type AiVaultFirstUserPromptResult = {
 // Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
 // fallback schemas) only learn the turn count from metadata that may be absent.
 export function isAiVaultSessionResumableContent(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'hasConversation'>
 ): boolean {
   return (
+    session.hasConversation === true ||
     session.messageCount > 0 ||
     session.previewMessages.some(
       (message) => message.role === 'user' || message.role === 'assistant'

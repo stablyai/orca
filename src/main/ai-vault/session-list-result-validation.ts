@@ -59,6 +59,7 @@ const aiVaultSessionSchema = z.object({
   updatedAt: z.string().nullable(),
   modifiedAt: z.string(),
   messageCount: z.number(),
+  hasConversation: z.boolean().optional(),
   totalTokens: z.number(),
   previewMessages: z.array(sessionPreviewMessageSchema),
   previewMessagesTruncated: z.boolean().optional(),

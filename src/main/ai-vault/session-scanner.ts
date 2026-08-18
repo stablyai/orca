@@ -13,8 +13,7 @@ import {
 } from './codex-session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
-  readLocalAntigravityHistory,
-  type AntigravityWorkspaceResolver
+  readLocalAntigravityHistory
 } from './session-scanner-antigravity-history'
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
@@ -22,13 +21,9 @@ import {
   ensureSessionParseCacheLoaded,
   scheduleSessionParseCachePersist
 } from './session-parse-cache-persistence'
-import {
-  createSessionParseStats,
-  parseAgentSessionFileCached,
-  type SessionParseStats
-} from './session-scanner-parse-cache'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { createSessionParseStats, type SessionParseStats } from './session-scanner-parse-cache'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
+import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   DEFAULT_CODEX_HOME_DIR,
   discoverAiVaultSessionSources
@@ -36,14 +31,14 @@ import {
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
-  SessionFileDiscovery,
-  SessionParseResult
+  SessionFileDiscovery
 } from './session-scanner-types'
-import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { clampPositiveInteger } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
+import { processLocalCursorCandidates } from './session-scanner-cursor-local-pipeline'
+import { recordLocalCursorDiscoverySpan } from './session-scanner-cursor-observability'
 
-const SESSION_PARSE_CONCURRENCY = 8
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
 /**
@@ -99,7 +94,12 @@ export async function scanAiVaultSessions(
               antigravityHistoryPath:
                 discovery.agent === 'antigravity'
                   ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                  : undefined
+                  : undefined,
+              cursorLayout: discovery.cursorLayout,
+              cursorStorageContextKey: discovery.cursorStorageContextKey,
+              cursorTargetPlatform: discovery.cursorTargetPlatform,
+              cursorCwdEvidence: discovery.cursorCwdEvidenceByPath?.get(file.path),
+              cursorExpectedRootRealPath: discovery.cursorExpectedRootRealPath
             })
           )
         )
@@ -112,8 +112,24 @@ export async function scanAiVaultSessions(
       }
     )
 
+    const cursorCandidates = candidates.filter((candidate) => candidate.agent === 'cursor')
+    const nonCursorCandidates = candidates.filter((candidate) => candidate.agent !== 'cursor')
+    const cursorResult = await processLocalCursorCandidates({
+      candidates: cursorCandidates,
+      limit,
+      scopeLimit: limit,
+      platform,
+      executionHostId,
+      issues,
+      parseStats,
+      span,
+      discoveries,
+      signal: options.signal
+    })
+    recordLocalCursorDiscoverySpan(span, discoveries)
+    throwIfAiVaultScanCancelled(options.signal)
     const parsedSessions = await parseSessionCandidates({
-      candidates: candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),
+      candidates: nonCursorCandidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),
       limit,
       platform,
       executionHostId,
@@ -123,7 +139,10 @@ export async function scanAiVaultSessions(
       antigravityWorkspaceResolver
     })
 
-    const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
+    const cappedSessions = dedupeCodexSessionsBySessionId([
+      ...parsedSessions,
+      ...cursorResult.sessions
+    ])
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit)
 
@@ -152,7 +171,10 @@ export async function scanAiVaultSessions(
     scheduleSessionParseCachePersist(parseStats)
 
     return {
-      sessions: mergeSessions(cappedSessions, scopeSessions),
+      sessions: mergeSessions(cappedSessions, [
+        ...scopeSessions,
+        ...cursorResult.sessions.filter((session) => cursorResult.scopedSessionIds.has(session.id))
+      ]),
       issues: issues.map((issue) => ({ executionHostId, ...issue })),
       scannedAt: new Date().toISOString()
     }
@@ -219,123 +241,4 @@ async function scanInScopeSessions(args: {
     parseStats: args.parseStats,
     signal: args.signal
   })
-}
-
-async function parseSessionCandidates(args: {
-  candidates: SessionFileCandidate[]
-  limit: number
-  platform: NodeJS.Platform
-  executionHostId: ExecutionHostId
-  issues: AiVaultScanIssue[]
-  parseStats: SessionParseStats
-  signal?: AbortSignal
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
-}): Promise<AiVaultSession[]> {
-  const sessions: AiVaultSession[] = []
-  let index = 0
-
-  while (index < args.candidates.length) {
-    throwIfAiVaultScanCancelled(args.signal)
-    if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
-      break
-    }
-
-    const remaining = args.candidates.length - index
-    const needed = Math.max(args.limit - sessions.length, 1)
-    const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
-    const batch = args.candidates.slice(index, index + batchSize)
-    const results = await Promise.all(
-      batch.map((candidate) =>
-        parseSessionCandidate(
-          candidate,
-          args.platform,
-          args.executionHostId,
-          args.parseStats,
-          args.antigravityWorkspaceResolver
-        )
-      )
-    )
-
-    for (const result of results) {
-      if (result.issue) {
-        recordSessionScanIssue(args.issues, result.issue)
-      }
-      if (result.session) {
-        sessions.push(result.session)
-      }
-    }
-
-    // Why: cross-volume backfill copies have no shared inode, so collapse
-    // parsed aliases before they can crowd the unique-session parse budget.
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
-
-    index += batchSize
-  }
-
-  // An abort can land while the final batch settles; observe it here so a
-  // partial parse is never cached or returned as a complete scan.
-  throwIfAiVaultScanCancelled(args.signal)
-  return sessions
-}
-
-async function parseSessionCandidate(
-  candidate: SessionFileCandidate,
-  platform: NodeJS.Platform,
-  executionHostId: ExecutionHostId,
-  parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
-): Promise<SessionParseResult> {
-  try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
-    if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
-      session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
-    }
-    return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
-      issue: null
-    }
-  } catch (err) {
-    return {
-      session: null,
-      issue: {
-        executionHostId,
-        agent: candidate.agent,
-        path: candidate.file.path,
-        message: errorMessage(err)
-      }
-    }
-  }
-}
-
-function withSessionExecutionHost(
-  session: AiVaultSession,
-  executionHostId: ExecutionHostId
-): AiVaultSession {
-  if (session.executionHostId === executionHostId) {
-    return session
-  }
-  return {
-    ...session,
-    executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
-  }
-}
-
-function canStopParsingSessions(
-  sessions: AiVaultSession[],
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtime is already our discovery bound and fallback sort key; older
-  // files cannot displace the current visible set once the cutoff is newer.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }

@@ -1,11 +1,25 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import {
+  wslGatedOpendir,
+  wslGatedReaddir,
+  wslGatedStat
+} from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+
+export type SessionDiscoveryBudget = {
+  entriesRemaining: number
+  filesRemaining: number
+  truncated: boolean
+  entriesTruncated: boolean
+  filesTruncated: boolean
+  directoriesRead: number
+  direntsRead: number
+}
 
 export async function discoverFiles(args: {
   rootDir: string
@@ -15,13 +29,17 @@ export async function discoverFiles(args: {
   extensions: string[]
   filePredicate?: (path: string) => boolean
   directoryPredicate?: (name: string, depth: number) => boolean
+  signal?: AbortSignal
+  budget?: SessionDiscoveryBudget
 }): Promise<SessionFileDiscovery> {
   let paths: string[]
   try {
     paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
       extensions: new Set(args.extensions),
       filePredicate: args.filePredicate,
-      directoryPredicate: args.directoryPredicate
+      directoryPredicate: args.directoryPredicate,
+      signal: args.signal,
+      budget: args.budget
     })
   } catch (err) {
     // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
@@ -39,8 +57,16 @@ export async function discoverFiles(args: {
   }
   const files: FileWithMtime[] = []
   for (const path of paths) {
+    if (args.budget && args.budget.filesRemaining <= 0) {
+      args.budget.truncated = true
+      args.budget.filesTruncated = true
+      break
+    }
+    if (args.budget) {
+      args.budget.filesRemaining--
+    }
     try {
-      const fileStat = await wslGatedStat(path, 'scan')
+      const fileStat = await wslGatedStat(path, 'scan', args.signal)
       files.push({
         path,
         mtimeMs: fileStat.mtimeMs,
@@ -51,6 +77,7 @@ export async function discoverFiles(args: {
         nlink: fileStat.nlink
       })
     } catch (err) {
+      args.signal?.throwIfAborted()
       recordSessionScanIssue(args.issues, {
         agent: args.agent,
         path,
@@ -77,15 +104,23 @@ export async function walkSessionFiles(
     directoryPredicate?: (name: string, depth: number) => boolean
     readDirectory?: (dirPath: string) => Promise<Dirent[]>
     signal?: AbortSignal
+    budget?: SessionDiscoveryBudget
   },
   depth = 0
 ): Promise<string[]> {
   options.signal?.throwIfAborted()
+  if (options.budget && options.budget.entriesRemaining <= 0) {
+    options.budget.truncated = true
+    options.budget.entriesTruncated = true
+    return []
+  }
   let entries
   try {
     entries = options.readDirectory
       ? await options.readDirectory(dirPath)
-      : await wslGatedReaddir(dirPath, 'scan', options.signal)
+      : options.budget
+        ? await readBoundedDirectoryEntries(dirPath, options.budget, options.signal)
+        : await wslGatedReaddir(dirPath, 'scan', options.signal)
   } catch (error) {
     options.signal?.throwIfAborted()
     // Why: a gate refusal means the scan could not run, not that the tree is
@@ -117,4 +152,38 @@ export async function walkSessionFiles(
     }
   }
   return files
+}
+
+async function readBoundedDirectoryEntries(
+  dirPath: string,
+  budget: SessionDiscoveryBudget,
+  signal?: AbortSignal
+): Promise<Dirent[]> {
+  const directory = await wslGatedOpendir(dirPath, 'scan', signal)
+  budget.directoriesRead += 1
+  const entries: Dirent[] = []
+  const iterator = directory[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      signal?.throwIfAborted()
+      const next = await iterator.next()
+      if (!next.done) {
+        budget.direntsRead += 1
+      }
+      signal?.throwIfAborted()
+      if (next.done) {
+        break
+      }
+      if (budget.entriesRemaining <= 0) {
+        budget.truncated = true
+        budget.entriesTruncated = true
+        break
+      }
+      budget.entriesRemaining--
+      entries.push(next.value)
+    }
+  } finally {
+    await directory.close().catch(() => undefined)
+  }
+  return entries
 }

@@ -1,0 +1,12 @@
+export type WslTranscriptFsOperation =
+  | 'access'
+  | 'readdir'
+  | 'realpath'
+  | 'stat'
+  | 'lstat'
+  | 'opendir'
+  | 'dirread'
+  | 'open'
+  | 'fstat'
+  | 'read'
+  | 'readfile'

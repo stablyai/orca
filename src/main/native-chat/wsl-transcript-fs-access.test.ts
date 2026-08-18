@@ -12,6 +12,8 @@ const POSIX_PATH = '/home/ada/.codex/sessions/a.jsonl'
 const mocks = vi.hoisted(() => ({
   stat: vi.fn(),
   lstat: vi.fn(),
+  realpath: vi.fn(),
+  opendir: vi.fn(),
   readdir: vi.fn(),
   readFile: vi.fn(),
   open: vi.fn(),
@@ -28,6 +30,8 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat,
   lstat: mocks.lstat,
+  realpath: mocks.realpath,
+  opendir: mocks.opendir,
   readdir: mocks.readdir,
   readFile: mocks.readFile,
   open: mocks.open
@@ -43,11 +47,15 @@ import {
   closeTranscriptHandle,
   openTranscriptReadStream,
   readTranscriptSlice,
+  wslGatedFileHandleStat,
   wslGatedLstat,
   wslGatedOpen,
+  wslGatedOpenNoFollow,
+  wslGatedOpendir,
   wslGatedRead,
   wslGatedReaddir,
   wslGatedReadFile,
+  wslGatedRealpath,
   wslGatedStat,
   WSL_TRANSCRIPT_READ_CHUNK_BYTES
 } from './wsl-transcript-fs-access'
@@ -58,7 +66,7 @@ import {
 } from './wsl-transcript-fs-gate'
 
 function fakeHandle() {
-  return { read: vi.fn(), close: vi.fn(async () => {}) }
+  return { read: vi.fn(), stat: vi.fn(), close: vi.fn(async () => {}) }
 }
 
 beforeEach(() => {
@@ -122,6 +130,16 @@ describe('transcript filesystem accessor off WSL UNC', () => {
       signal: controller.signal
     })
   })
+
+  it('does not start a local filesystem call after cancellation', async () => {
+    const controller = new AbortController()
+    const reason = new Error('cancelled')
+    controller.abort(reason)
+
+    await expect(wslGatedRealpath(POSIX_PATH, 'scan', controller.signal)).rejects.toBe(reason)
+    expect(mocks.realpath).not.toHaveBeenCalled()
+    expect(mocks.runTask).not.toHaveBeenCalled()
+  })
 })
 
 describe('transcript filesystem accessor on WSL UNC', () => {
@@ -158,6 +176,37 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     for (const call of mocks.runTask.mock.calls) {
       expect(call[0]).toMatchObject({ dedupe: false })
     }
+  })
+
+  it('gates streamed directory and verified-read operations', async () => {
+    const directory = {
+      read: vi.fn(async () => null),
+      close: vi.fn(async () => {})
+    }
+    const handle = fakeHandle()
+    handle.stat.mockResolvedValue({ size: 1 })
+    handle.read.mockResolvedValue({ bytesRead: 0, buffer: Buffer.alloc(1) })
+    mocks.realpath.mockResolvedValue(UNC_PATH)
+    mocks.opendir.mockResolvedValue(directory)
+    mocks.open.mockResolvedValue(handle)
+
+    await wslGatedRealpath(UNC_PATH, 'scan')
+    const openedDirectory = await wslGatedOpendir(UNC_PATH, 'scan')
+    await openedDirectory.read()
+    await openedDirectory.close()
+    const openedFile = await wslGatedOpenNoFollow(UNC_PATH, 'scan')
+    await wslGatedFileHandleStat(openedFile, UNC_PATH, 'scan')
+    await wslGatedRead(openedFile, UNC_PATH, Buffer.alloc(1), 0, 1, 0, 'scan')
+
+    expect(mocks.runTask.mock.calls.map(([options]) => options.operation)).toEqual([
+      'realpath',
+      'opendir',
+      'dirread',
+      'open',
+      'fstat',
+      'read'
+    ])
+    expect(directory.close).toHaveBeenCalledOnce()
   })
 
   it('reads a slice and closes the handle even when the read rejects', async () => {

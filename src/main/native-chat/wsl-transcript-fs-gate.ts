@@ -1,4 +1,5 @@
 import { wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
+import type { WslTranscriptFsOperation } from './wsl-transcript-fs-operation'
 
 const MAX_CONCURRENT_WSL_TRANSCRIPT_FS_TASKS = 2
 export const WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS = 30_000
@@ -252,7 +253,7 @@ function pumpTasks(): void {
       return
     }
     const task = queuedTasks.splice(index, 1)[0]
-    if (!task || task.state !== 'queued') {
+    if (task?.state !== 'queued') {
       continue
     }
     task.state = 'running'
@@ -307,7 +308,7 @@ export function resetWslTranscriptFsGateForTests(): void {
 /** Bound 9P work without letting scans delay exact transcript probes. */
 export function runWslTranscriptFsTask<T>(
   options: {
-    operation: 'access' | 'readdir' | 'stat' | 'lstat' | 'open' | 'read' | 'readfile'
+    operation: WslTranscriptFsOperation
     path: string
     priority: WslTranscriptFsTaskPriority
     signal?: AbortSignal

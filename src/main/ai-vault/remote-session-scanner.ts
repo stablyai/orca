@@ -45,6 +45,8 @@ export async function scanRemoteAiVaultSessions(args: {
   unlimited?: boolean
   scopePaths?: readonly string[]
   signal?: AbortSignal
+  /** Current owning-host relays scan Cursor locally so sidecars and legacy rows reconcile. */
+  includeCursorLegacy?: boolean
 }): Promise<AiVaultListResult> {
   throwIfAiVaultScanCancelled(args.signal)
   const limit = aiVaultScanLimit(args)
@@ -75,7 +77,9 @@ export async function scanRemoteAiVaultSessions(args: {
   const candidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
-        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        remoteSessionSources(args.remoteHome, args.hostPlatform).filter(
+          (source) => args.includeCursorLegacy !== false || source.agent !== 'cursor'
+        ),
         REMOTE_SCAN_CONCURRENCY,
         (source) => discoverRemoteSourceCandidates({ source, context, issues }),
         args.signal

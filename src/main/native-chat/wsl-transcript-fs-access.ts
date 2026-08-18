@@ -1,8 +1,18 @@
-import { createReadStream, type Dirent, type Stats } from 'node:fs'
-import { lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
+import { constants, createReadStream, type Dirent, type Stats } from 'node:fs'
+import {
+  lstat,
+  open,
+  opendir,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  type FileHandle
+} from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import type { CursorDirectoryStream } from '../../shared/cursor-sidecar-scan-directory'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
 import { wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
 
@@ -11,6 +21,8 @@ import { wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
 // Why: one deadline per chunk instead of one for the whole file, so a large
 // healthy-but-slow transcript is not false-failed by a whole-file timeout.
 export const WSL_TRANSCRIPT_READ_CHUNK_BYTES = 1024 * 1024
+// Windows has no O_NOFOLLOW; verified reads rely on lstat plus handle identity there.
+const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
 type Operation = Parameters<typeof runWslTranscriptFsTask>[0]['operation']
 
 function runPathOperation<T>(
@@ -21,6 +33,9 @@ function runPathOperation<T>(
   task: () => Promise<T>,
   options?: { dedupe?: boolean; onAbandonedResult?: (value: T) => void }
 ): Promise<T> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error('Filesystem operation aborted'))
+  }
   return isWslUncPath(path)
     ? runWslTranscriptFsTask({ operation, path, priority, signal, ...options }, task)
     : task()
@@ -42,6 +57,14 @@ export function wslGatedLstat(
   return runPathOperation('lstat', path, priority, signal, () => lstat(path))
 }
 
+export function wslGatedRealpath(
+  path: string,
+  priority: WslTranscriptFsTaskPriority,
+  signal?: AbortSignal
+): Promise<string> {
+  return runPathOperation('realpath', path, priority, signal, () => realpath(path))
+}
+
 export function wslGatedReaddir(
   path: string,
   priority: WslTranscriptFsTaskPriority,
@@ -50,6 +73,44 @@ export function wslGatedReaddir(
   return runPathOperation('readdir', path, priority, signal, () =>
     readdir(path, { withFileTypes: true })
   )
+}
+
+export async function wslGatedOpendir(
+  path: string,
+  priority: WslTranscriptFsTaskPriority,
+  signal?: AbortSignal
+): Promise<CursorDirectoryStream> {
+  const directory = await runPathOperation('opendir', path, priority, signal, () => opendir(path), {
+    dedupe: false,
+    onAbandonedResult: (lateDirectory) => void closeTranscriptHandle(lateDirectory, path)
+  })
+  let closed = false
+  const close = async (): Promise<void> => {
+    if (closed) {
+      return
+    }
+    closed = true
+    await closeTranscriptHandle(directory, path)
+  }
+  const read = (): Promise<Dirent | null> =>
+    runPathOperation('dirread', path, priority, signal, () => directory.read(), { dedupe: false })
+  return {
+    read,
+    close,
+    async *[Symbol.asyncIterator]() {
+      try {
+        for (;;) {
+          const entry = await read()
+          if (!entry) {
+            return
+          }
+          yield entry
+        }
+      } finally {
+        await close()
+      }
+    }
+  }
 }
 
 export function wslGatedReadFile(
@@ -73,6 +134,33 @@ export function wslGatedOpen(
     // cancelled; without this the descriptor leaks for the process lifetime.
     onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
   })
+}
+
+export function wslGatedOpenNoFollow(
+  path: string,
+  priority: WslTranscriptFsTaskPriority,
+  signal?: AbortSignal
+): Promise<FileHandle> {
+  return runPathOperation(
+    'open',
+    path,
+    priority,
+    signal,
+    () => open(path, constants.O_RDONLY | OPEN_NOFOLLOW),
+    {
+      dedupe: false,
+      onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
+    }
+  )
+}
+
+export function wslGatedFileHandleStat(
+  handle: FileHandle,
+  path: string,
+  priority: WslTranscriptFsTaskPriority,
+  signal?: AbortSignal
+): Promise<Stats> {
+  return runPathOperation('fstat', path, priority, signal, () => handle.stat(), { dedupe: false })
 }
 
 /**
@@ -111,7 +199,8 @@ export function wslGatedRead(
 // stalled distro never settles — a shared queue would strand every later close,
 // including handles on healthy distros, for the process lifetime.
 const MAX_CONCURRENT_UNC_CLOSES_PER_ROUTE = 1
-type RouteCloseQueue = { queued: FileHandle[]; active: number }
+type Closable = { close(): Promise<void> }
+type RouteCloseQueue = { queued: Closable[]; active: number }
 const closeQueuesByRoute = new Map<string, RouteCloseQueue>()
 
 function drainQueuedCloses(route: string): void {
@@ -145,7 +234,7 @@ function drainQueuedCloses(route: string): void {
  * burn a permit and a waiter deadline purely for teardown. One leaked fd until
  * the OS unblocks beats a second blocked waiter.
  */
-export function closeTranscriptHandle(handle: FileHandle, path: string): Promise<void> {
+export function closeTranscriptHandle(handle: Closable, path: string): Promise<void> {
   if (!isWslUncPath(path)) {
     return handle.close()
   }

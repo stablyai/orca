@@ -18,6 +18,7 @@ export type AiVaultScanOptions = {
   antigravityBrainDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string
+  cursorChatsDir?: string
   opencodeStorageDir?: string
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
@@ -60,6 +61,7 @@ export type FileWithMtime = {
   dev?: number
   ino?: number
   nlink?: number
+  cursorStoreMtimeMs?: number
 }
 
 export type SessionFileCandidate = {
@@ -67,12 +69,56 @@ export type SessionFileCandidate = {
   file: FileWithMtime
   codexHome: string | null
   antigravityHistoryPath?: string
+  cursorLayout?: CursorLayout
+  cursorStorageContextKey?: string
+  cursorTargetPlatform?: NodeJS.Platform
+  cursorCwdEvidence?: CursorCwdEvidence
+  cursorExpectedRootRealPath?: string
 }
 
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  cursorLayout?: CursorLayout
+  cursorStorageContextKey?: string
+  cursorTargetPlatform?: NodeJS.Platform
+  cursorCwdEvidenceByPath?: ReadonlyMap<string, CursorCwdEvidence>
+  cursorExpectedRootRealPath?: string
+  cursorDiscoveryCounters?: {
+    rootReaddir: number
+    bucketReaddir: number
+    direntsRead: number
+    fileLstat: number
+    boundedReads: number
+    scopeRealpath: number
+    returnedBytes: number
+    elapsedMs: number
+  }
+  cursorDiscoveryTruncated?: {
+    scopePaths: boolean
+    buckets: boolean
+    sessionDirs: boolean
+    sidecarBytes: boolean
+  }
+  cursorLegacyDiscoveryCounters?: {
+    directoryReaddir: number
+    direntsRead: number
+    fileStat: number
+    scopeRealpath: number
+  }
+  cursorLegacyDiscoveryTruncated?: {
+    entries: boolean
+    files: boolean
+  }
+}
+
+export type CursorLayout = 'sidecar' | 'legacy'
+
+export type CursorCwdEvidence = {
+  kind: 'scope-bucket' | 'sidecar-bucket-match' | 'legacy-scope-only'
+  cwd: string | null
+  bucket?: string
 }
 
 export type SessionParseResult = {

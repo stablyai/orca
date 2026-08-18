@@ -98,7 +98,8 @@ describe('parseAiVaultListResult', () => {
           ...validSession(),
           previewMessagesTruncated: true,
           firstUserPrompt: 'first',
-          lastUserPrompt: 'last'
+          lastUserPrompt: 'last',
+          hasConversation: true
         }
       ],
       issues: [],
@@ -108,7 +109,8 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.sessions[0]).toMatchObject({
       previewMessagesTruncated: true,
       firstUserPrompt: 'first',
-      lastUserPrompt: 'last'
+      lastUserPrompt: 'last',
+      hasConversation: true
     })
   })
 

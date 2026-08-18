@@ -6,6 +6,7 @@ import type {
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { buildAiVaultSessionId } from '../../shared/ai-vault-session-id'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -48,7 +49,13 @@ export function restampAiVaultListResult(
         : {
             ...session,
             executionHostId,
-            id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+            id: buildAiVaultSessionId({
+              executionHostId,
+              agent: session.agent,
+              sessionId: session.sessionId,
+              filePath: session.filePath,
+              previousId: session.id
+            })
           }
     ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),

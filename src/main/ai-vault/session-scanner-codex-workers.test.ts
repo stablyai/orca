@@ -109,6 +109,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       antigravityBrainDir: join(root, 'antigravity-brain'),
       copilotSessionsDir: join(root, 'copilot-sessions'),
       cursorProjectsDir: join(root, 'cursor-projects'),
+      cursorChatsDir: join(root, 'cursor-chats'),
       opencodeStorageDir: join(root, 'opencode-storage'),
       opencodeDbPaths: [],
       grokSessionsDir: join(root, 'grok-sessions'),

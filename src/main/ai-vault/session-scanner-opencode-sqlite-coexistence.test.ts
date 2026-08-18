@@ -39,6 +39,7 @@ function isolatedScanRoots(root: string) {
     antigravityBrainDir: join(root, 'antigravity-brain'),
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
+    cursorChatsDir: join(root, 'cursor-chats'),
     opencodeStorageDir: join(root, 'opencode-storage'),
     opencodeDbPaths: [] as readonly string[],
     grokSessionsDir: join(root, 'grok-sessions'),

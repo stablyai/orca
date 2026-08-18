@@ -3,8 +3,42 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
+import { cursorLegacySlug } from './session-scanner-cursor-paths'
 
 describe('scanRemoteAiVaultSessions', () => {
+  it('keeps legacy Cursor discovery enabled for old-relay fallback', async () => {
+    const provider = new MemoryRemoteProvider()
+    const workspace = '/home/ada/repo'
+    const sessionId = 'legacy-fallback-session'
+    provider.addFile(
+      `/home/ada/.cursor/projects/${cursorLegacySlug(workspace)}/agent-transcripts/${sessionId}/${sessionId}.jsonl`,
+      jsonLines([
+        { role: 'user', message: { content: [{ type: 'text', text: 'Fallback prompt' }] } },
+        { role: 'assistant', message: { content: [{ type: 'text', text: 'Fallback answer' }] } }
+      ]),
+      10
+    )
+    const args = {
+      provider,
+      executionHostId: 'ssh:legacy-box' as const,
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    }
+
+    const fallback = await scanRemoteAiVaultSessions(args)
+    const owningHostOnly = await scanRemoteAiVaultSessions({ ...args, includeCursorLegacy: false })
+
+    expect(fallback.issues).toEqual([])
+    expect(fallback.sessions).toHaveLength(1)
+    expect(fallback.sessions[0]).toMatchObject({
+      agent: 'cursor',
+      sessionId,
+      executionHostId: 'ssh:legacy-box',
+      messageCount: 2
+    })
+    expect(owningHostOnly.sessions).toEqual([])
+  })
+
   it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(

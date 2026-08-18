@@ -15,6 +15,7 @@ import {
 } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { AI_VAULT_AGENT_SOURCES, isDiscoverableSessionFile } from './session-scanner-agent-sources'
+import { isCursorSidecarPath, resolveCursorLocalRoots } from './session-scanner-cursor-paths'
 import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
@@ -61,6 +62,15 @@ export function validateAiVaultSessionDeleteTarget(
   // resolve() collapses `..` first: isPathInsideOrEqual compares textually and
   // would otherwise pass `<root>/../../etc/x.jsonl`.
   const resolvedPath = resolve(filePath)
+  const sidecarDelete = cursorSidecarDeleteTarget({
+    agent,
+    resolvedPath,
+    wslHomeDirs: args.wslHomeDirs ?? [],
+    rootOptions: args.rootOptions ?? {}
+  })
+  if (sidecarDelete) {
+    return sidecarDelete
+  }
   const source = AI_VAULT_AGENT_SOURCES[agent]
   const roots = source
     .rootDirs(args.rootOptions ?? {}, args.wslHomeDirs ?? [])
@@ -135,6 +145,38 @@ function sessionDeleteRemovals(args: {
   }
 
   return [{ path: resolvedPath, kind: 'file', roots }]
+}
+
+function cursorSidecarDeleteTarget(args: {
+  agent: AiVaultDeletableAgent
+  resolvedPath: string
+  wslHomeDirs: readonly string[]
+  rootOptions: AiVaultScanOptions
+}): AiVaultSessionDeleteValidationResult | null {
+  if (args.agent !== 'cursor') {
+    return null
+  }
+  const defaults = resolveCursorLocalRoots()
+  const roots = [
+    args.rootOptions.cursorChatsDir ?? defaults.chatsDir,
+    ...args.wslHomeDirs.map((homeDir) => join(homeDir, '.cursor', 'chats'))
+  ]
+    .filter((rootDir) => rootDir.trim().length > 0)
+    .map((rootDir) => resolve(rootDir))
+  const matchedRoot = roots.find((root) => isPathInsideOrEqual(root, args.resolvedPath))
+  if (!matchedRoot || !isCursorSidecarPath(matchedRoot, args.resolvedPath)) {
+    return null
+  }
+  const sessionDir = dirname(args.resolvedPath)
+  if (sessionDir === matchedRoot || !isPathInsideOrEqual(matchedRoot, sessionDir)) {
+    return rejected(args.agent, 'no-session-directory')
+  }
+  return {
+    allowed: true,
+    agent: args.agent,
+    resolvedPath: args.resolvedPath,
+    removals: [{ path: sessionDir, kind: 'directory', roots }]
+  }
 }
 
 function rejected(
