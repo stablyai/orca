@@ -311,11 +311,15 @@ describe('orchestration.dispatchShow Run scope', () => {
     const taskB = db.createTask({ spec: 'Run B work', runId: runB })
     const dispatchB = db.createDispatchContext(taskB.id, 'term_worker_b')
 
+    // Queue every handler before its synchronous DB lookup begins so the
+    // authority inputs are exercised as independent concurrent callers.
+    const concurrent = (params: Record<string, unknown>, context = ctx) =>
+      Promise.resolve().then(() => call(params, context))
     const [aOwn, aForeign, bOwn, bForeign] = (await Promise.all([
-      call({ task: taskA.id }),
-      call({ task: taskB.id }),
-      call({ task: taskB.id }, callerContext('b')),
-      call({ task: taskA.id }, callerContext('b'))
+      concurrent({ task: taskA.id }),
+      concurrent({ task: taskB.id }),
+      concurrent({ task: taskB.id }, callerContext('b')),
+      concurrent({ task: taskA.id }, callerContext('b'))
     ])) as DispatchResult[]
 
     expect(aOwn.dispatch?.id).toBe(dispatchA.id)
