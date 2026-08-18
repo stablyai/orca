@@ -65,7 +65,7 @@ describe('buildWindowsGrokHookScript', () => {
   it('uses a longer curl deadline than the shared 1.5s hook bound', () => {
     const script = buildWindowsGrokHookScript()
 
-    expect(GROK_HOOK_POST_MAX_TIME_SECONDS).toBeGreaterThan(1.5)
+    expect(GROK_HOOK_POST_MAX_TIME_SECONDS).toBe(8)
     expect(script).toContain(`--max-time ${GROK_HOOK_POST_MAX_TIME_SECONDS}`)
     expect(script).not.toContain('--max-time 1.5')
   })
