@@ -1247,7 +1247,13 @@ function buildMirroredAgentStatusPatch(
             tabId: entry.tabId,
             providerSession:
               existing.providerSession ??
-              (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession)
+              (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession),
+            // Why: hook-only content the byte pipeline can never see, and every OSC
+            // write blanks it, so a fenced pane's message line stayed empty forever
+            // (#12906). Host-first unlike providerSession: only the host can mint one.
+            lastAssistantMessage:
+              (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
+              existing.lastAssistantMessage
           }
         : entry
     nextByPaneKey.set(entry.paneKey, nextEntry)
