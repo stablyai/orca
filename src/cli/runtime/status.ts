@@ -75,6 +75,20 @@ export async function getCliStatus(
   }
 }
 
+// Why: a paired server's status describes THAT machine, so `app` must too. `available` is the
+// only desktop-window status that requires a live renderer owning the graph, which makes it the
+// signal separating a real desktop app from a headless `serve`. Reporting running:false here
+// while echoing the target's desktopWindowStatus is what made a remote GUI run look headless
+// (STA-4792 defect 4). The remote pid is not knowable from status.get, so it stays null.
+export function projectRemoteAppStatus(status: RuntimeStatus): CliStatusResult['app'] {
+  const desktopWindowStatus = resolveDesktopWindowStatus(status)
+  return {
+    running: desktopWindowStatus === 'available',
+    pid: null,
+    ...(desktopWindowStatus ? { desktopWindowStatus } : {})
+  }
+}
+
 export function resolveDesktopWindowStatus(
   status: RuntimeStatus
 ): CliStatusResult['app']['desktopWindowStatus'] {
@@ -92,7 +106,7 @@ function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliS
   return {
     id: 'local-status',
     ok: true,
-    result,
+    result: { target: { kind: 'local' }, ...result },
     _meta: {
       runtimeId: result.runtime.runtimeId ?? 'none'
     }

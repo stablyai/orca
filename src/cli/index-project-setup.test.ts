@@ -408,6 +408,71 @@ describe('orca cli worktree awareness', () => {
     }
   )
 
+  // Why: STA-4792 defect 2. `--host runtime:<id>` used to leave the client local, so a Windows
+  // destination fell into resolve(cwd, ...) and became a literal directory next to the caller.
+  // Routing makes the client remote, which is what sends the path through untouched.
+  it('sends a windows destination to the routed host instead of joining it to the local cwd', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'awin')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_clone', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-awin',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-awin',
+            path: 'C:\\orca-probe\\orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'cloned',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          repo: {
+            id: 'repo-awin',
+            path: 'C:\\orca-probe\\orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            addedAt: 1
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-clone',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:awin',
+        '--url',
+        'https://github.com/stablyai/orca.git',
+        '--destination',
+        'C:\\orca-probe',
+        '--json'
+      ],
+      '/Users/nwparker/orca/workspaces/orca/IME-koko'
+    )
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'awin')
+    expect(callMock).toHaveBeenCalledWith(
+      'projectHostSetup.clone',
+      expect.objectContaining({ destination: 'C:\\orca-probe' })
+    )
+  })
+
   it('updates project host setup metadata through the project-first runtime API', async () => {
     queueFixtures(
       callMock,

@@ -105,8 +105,13 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
+  // Why: every field below describes ONE machine. When the CLI targets a paired server the
+  // whole result is about that server, and callers were reading `app` as if it described their
+  // own laptop. Naming the subject removes the ambiguity; absent means local.
+  target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean
+    // Null whenever the pid is not knowable, which includes every remote target.
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
   }

@@ -177,6 +177,9 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [
+    ...(status.target && status.target.kind === 'environment'
+      ? [`target: environment ${status.target.environment}`]
+      : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
