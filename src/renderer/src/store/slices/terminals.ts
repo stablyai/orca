@@ -53,7 +53,11 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
-import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import {
+  clearTransientTerminalState,
+  emptyLayoutSnapshot,
+  singlePaneLayoutSnapshot
+} from './terminal-helpers'
 import {
   collectReleasedLeafIds,
   hydrateWorkspaceTerminalRows,
@@ -1488,7 +1492,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         },
         terminalLayoutsByTabId: {
           ...orphanCleanupPatch.terminalLayoutsByTabId,
-          [tab.id]: emptyLayoutSnapshot()
+          // Why: phone-created agent tabs stay unmounted on desktop until
+          // clicked; a real leaf lets the sidebar address the row immediately.
+          [tab.id]: options?.launchAgent
+            ? singlePaneLayoutSnapshot(createBrowserUuid())
+            : emptyLayoutSnapshot()
         }
       }
     })

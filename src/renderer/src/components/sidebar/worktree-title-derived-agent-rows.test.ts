@@ -126,6 +126,70 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
+  it('keeps a phone-launched agent even when its desktop layout has no leaf yet', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude', title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {
+        'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].agentType).toBe('claude')
+    expect(rows[0].state).toBe('idle')
+    expect(rows[0].paneKey.startsWith('tab-1:')).toBe(true)
+  })
+
+  it('keeps a phone-launched agent on the worktree card before the desktop mounts its PTY', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', title: 'Terminal 1', createdAt: 1500 })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      paneKey: makePaneKey('tab-1', LEAF_ID_1),
+      agentType: 'codex',
+      rowSource: 'live',
+      state: 'idle',
+      startedAt: 1500
+    })
+  })
+
+  it('does not duplicate a phone-launched agent once hook status arrives', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', title: 'Terminal 1' })],
+      entries: [
+        {
+          paneKey,
+          state: 'working',
+          prompt: 'ship it',
+          updatedAt: 2000,
+          stateStartedAt: 1800,
+          stateHistory: [],
+          agentType: 'codex'
+        }
+      ],
+      retained: [],
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([paneKey])
+    expect(rows[0].entry.prompt).toBe('ship it')
+    expect(rows[0].state).toBe('working')
+  })
+
   it('uses runtime orchestration metadata for title-derived worker rows', () => {
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID_1)
     const childPaneKey = makePaneKey('tab-child', LEAF_ID_2)
