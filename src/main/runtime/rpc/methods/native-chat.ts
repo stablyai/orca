@@ -13,8 +13,8 @@ import {
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
-// Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
-// desktop reaches the readers via Electron IPC; mobile/web clients reach the
+// Why: native chat renders an agent's own transcript (including Hermes JSONL).
+// The desktop reaches the readers via Electron IPC; mobile/web clients reach the
 // same pure readers through these runtime RPC methods so the native chat view
 // works over the paired connection, not just in the desktop renderer.
 

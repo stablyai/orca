@@ -1,4 +1,4 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'hermes'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
@@ -6,7 +6,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'hermes'
 ])
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
@@ -42,6 +43,9 @@ export function resolveNativeChatTranscriptAgent(
   }
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
     return agent
+  }
+  if (agent === 'hermes') {
+    return 'hermes'
   }
   return null
 }

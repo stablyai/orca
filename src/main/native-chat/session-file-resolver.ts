@@ -57,6 +57,10 @@ function ompSessionsDir(): string {
   )
 }
 
+function hermesSessionsDir(): string {
+  return join(process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes'), 'sessions')
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -67,6 +71,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Hermes sessions root (tests / isolated scans). */
+  hermesSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -157,6 +163,13 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+  }
+  if (transcriptAgent === 'hermes') {
+    return resolveHermesSessionFile(
+      trimmedId,
+      options.hermesSessionsDir ?? hermesSessionsDir(),
+      signal
+    )
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -280,6 +293,22 @@ async function resolveOmpSessionFile(
     // delegated. Depth 0 is the workspace dir, which is never an artifact dir.
     directoryPredicate: (name, depth) =>
       depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
+    filePredicate: (path) => {
+      const name = basename(path, extname(path))
+      return name === sessionId || name.endsWith(`_${sessionId}`)
+    },
+    signal
+  })
+  return files[0] ?? null
+}
+
+async function resolveHermesSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const files = await walkSessionFiles(sessionsDir, 'hermes', [], {
+    extensions: new Set(['.jsonl']),
     filePredicate: (path) => {
       const name = basename(path, extname(path))
       return name === sessionId || name.endsWith(`_${sessionId}`)
