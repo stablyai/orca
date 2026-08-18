@@ -61,10 +61,9 @@ export function isClaudeTeammateLifecycleId(id: string): boolean {
 }
 
 /** Refresh a tracked child from its own tool activity. Returns false for an
- *  unknown id: tool hooks never mint rows — only SubagentStart, an
- *  authoritative background_tasks fold, or a snapshot restore does — so
- *  non-stable agent ids on long-lived async agents can't pile up phantom
- *  entries that fill the roster cap and hide real children. */
+ *  unknown id — creation policy belongs to the caller (see
+ *  trackClaudeSubagentToolActivity), so untyped non-stable ids from
+ *  long-lived async agents can't mint phantom rows here. */
 export function refreshWorkingClaudeSubagent(
   roster: ClaudeSubagentRoster,
   id: string,
