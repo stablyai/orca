@@ -161,8 +161,18 @@ function prepareMacDevElectronApp() {
   // click is lost, not misdirected.
   const bundleId = DEV_BUNDLE_ID
   process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
+  // Why the patches are in the marker: bundleLayoutVersion alone does not cover them, so a cache
+  // built before a patch value changed would be reused and keep presenting the old identity.
   const expectedMarker = JSON.stringify(
-    { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
+    {
+      title,
+      appBundleName,
+      bundleId,
+      sourceAppPath,
+      electronVersion,
+      bundleLayoutVersion,
+      plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
+    },
     null,
     2
   )
