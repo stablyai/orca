@@ -75,6 +75,25 @@ describe('electron-builder config', () => {
     expect(packs('out/main/examples/index.js')).toBe(true)
   })
 
+  // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
+  // CI never creates it, so only a local package would have hit this -- silently, as bulk.
+  it('keeps cached dev Electron bundles out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const devBundlePath of [
+      'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
+      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+    ]) {
+      expect(packs(devBundlePath)).toBe(false)
+    }
+    // The real build outputs sit beside it under out/ and must still ship.
+    expect(packs('out/main/index.js')).toBe(true)
+    expect(packs('out/renderer/index.html')).toBe(true)
+  })
+
   it('keeps runtime resources available through extraResources', () => {
     const bundledPluginResources = expect.objectContaining({
       from: 'resources/plugins/launch',
