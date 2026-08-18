@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction,
+  matchesActiveNonTerminalKeybinding,
   matchKeybindingDigitIndex
 } from './keybindings'
 
@@ -187,5 +188,45 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches active non-terminal keybindings for yielding in terminal context', () => {
+    const cmdArrowLeft = {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+
+    // Default on macOS: Cmd+ArrowLeft is not bound to an app keybinding
+    expect(matchesActiveNonTerminalKeybinding(cmdArrowLeft, 'darwin')).toBe(false)
+
+    // User customizes tab switching to Cmd+ArrowLeft / ArrowRight
+    const overrides = {
+      'tab.previousSameType': ['Mod+ArrowLeft'],
+      'tab.nextSameType': ['Mod+ArrowRight']
+    }
+    expect(matchesActiveNonTerminalKeybinding(cmdArrowLeft, 'darwin', overrides)).toBe(true)
+
+    // Terminal-first policy yields to terminal behavior
+    expect(
+      matchesActiveNonTerminalKeybinding(cmdArrowLeft, 'darwin', overrides, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(false)
+
+    // Panel-scoped shortcuts like fileExplorer.delete (Cmd+Backspace) do not match
+    const cmdBackspace = {
+      key: 'Backspace',
+      code: 'Backspace',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    expect(matchesActiveNonTerminalKeybinding(cmdBackspace, 'darwin')).toBe(false)
   })
 })

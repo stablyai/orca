@@ -1,5 +1,6 @@
 import {
   keybindingMatchesAction,
+  matchesActiveNonTerminalKeybinding,
   type KeybindingInput,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
@@ -161,6 +162,15 @@ export function resolveTerminalShortcutAction(
     if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
+  }
+
+  if (
+    matchesActiveNonTerminalKeybinding(event, platform, keybindings, {
+      context: 'terminal',
+      terminalShortcutPolicy
+    })
+  ) {
+    return null
   }
 
   if (

@@ -2217,6 +2217,43 @@ export function matchKeybindingDigitIndex(
   return null
 }
 
+/**
+ * Returns whether the input matches any active application keybinding (global, tabs, plugins),
+ * allowing low-level terminal interceptors to yield to higher-level application actions.
+ */
+export function matchesActiveNonTerminalKeybinding(
+  input: KeybindingInput,
+  platform: NodeJS.Platform,
+  overrides?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  for (const definition of KEYBINDING_DEFINITIONS) {
+    if (definition.scope !== 'global' && definition.scope !== 'tabs') {
+      continue
+    }
+    if (isDigitIndexActionId(definition.id)) {
+      if (matchKeybindingDigitIndex(definition.id, input, platform, overrides, options) !== null) {
+        return true
+      }
+      continue
+    }
+    if (keybindingMatchesAction(definition.id, input, platform, overrides, options)) {
+      return true
+    }
+  }
+  if (overrides) {
+    for (const actionId of Object.keys(overrides)) {
+      if (
+        isPluginKeybindingActionId(actionId) &&
+        keybindingMatchesAction(actionId, input, platform, overrides, options)
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   switch (modifier) {
     case 'Mod':
