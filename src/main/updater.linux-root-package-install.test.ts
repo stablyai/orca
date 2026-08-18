@@ -77,6 +77,95 @@ function stageLinuxUpdateCache(): StagedLinuxPackages {
   }
 }
 
+type RevalidationProbe = {
+  /** Switch to held mode, where a verdict only lands when the test says so. Must precede startUpdater. */
+  hold: () => void
+  settle: (verdict: RevalidationVerdict) => void
+  fail: (error: Error) => void
+  invocationCount: () => number
+  /** Resolves once every re-proof this test started has finished. */
+  drain: () => Promise<void>
+}
+
+/** One outstanding re-proof; `awaitable` stays false while a held verdict has no way to settle. */
+type OutstandingRevalidation = { promise: Promise<unknown>; awaitable: boolean }
+
+/**
+ * Wraps the pre-install re-proof so tests can await the real disk read instead of budgeting
+ * event-loop turns, and can hold a verdict open at an exact point in the cycle. Only that one call
+ * is wrapped — the artifact state stays real.
+ */
+function probeRevalidation(): RevalidationProbe {
+  type Artifact = Parameters<typeof RecoveryModule.revalidateLinuxPackageForInstall>[0]
+  let held = false
+  let invocationCount = 0
+  let pending: {
+    resolve: (verdict: RevalidationVerdict) => void
+    reject: (error: Error) => void
+    entry: OutstandingRevalidation
+  } | null = null
+  const outstanding: OutstandingRevalidation[] = []
+
+  const track = (verdict: Promise<RevalidationVerdict>, awaitable: boolean) => {
+    const noop = (): void => undefined
+    const entry: OutstandingRevalidation = { promise: verdict.then(noop, noop), awaitable }
+    outstanding.push(entry)
+    return entry
+  }
+
+  vi.doMock('./linux-package-update-recovery', async () => {
+    const actual = await vi.importActual<typeof RecoveryModule>('./linux-package-update-recovery')
+    return {
+      ...actual,
+      revalidateLinuxPackageForInstall: vi.fn((artifact: Artifact) => {
+        invocationCount += 1
+        if (!held) {
+          const verdict = actual.revalidateLinuxPackageForInstall(artifact)
+          track(verdict, true)
+          return verdict
+        }
+        let resolve!: (verdict: RevalidationVerdict) => void
+        let reject!: (error: Error) => void
+        const verdict = new Promise<RevalidationVerdict>((res, rej) => {
+          resolve = res
+          reject = rej
+        })
+        pending = { resolve, reject, entry: track(verdict, false) }
+        return verdict
+      })
+    }
+  })
+
+  const release = (): typeof pending => {
+    const current = pending
+    if (current) {
+      current.entry.awaitable = true
+      pending = null
+    }
+    return current
+  }
+
+  return {
+    hold: () => {
+      held = true
+    },
+    settle: (verdict) => release()?.resolve(verdict),
+    fail: (error) => release()?.reject(error),
+    invocationCount: () => invocationCount,
+    drain: async () => {
+      // A verdict still held open can never settle on its own, so draining skips it.
+      let ready = outstanding.filter((entry) => entry.awaitable)
+      while (ready.length > 0) {
+        for (const entry of ready) {
+          outstanding.splice(outstanding.indexOf(entry), 1)
+        }
+        await Promise.all(ready.map((entry) => entry.promise))
+        ready = outstanding.filter((entry) => entry.awaitable)
+      }
+    }
+  }
+}
+
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
@@ -85,11 +174,15 @@ describe('updater', () => {
   describe('linux root package install recovery', () => {
     let staged: StagedLinuxPackages
     let EXIT_127: string
+    let revalidation: RevalidationProbe
 
-    // Why: the pre-install digest re-proof streams the package off real disk. Fake timers never
-    // advance libuv, so the quit timer needs fake time while the read needs real event-loop turns.
+    // Why: the quit timer needs fake time, and the work it starts needs real event-loop turns —
+    // fake timers never advance libuv. The re-proof itself is awaited rather than counted out
+    // (#15243): its disk read is wall-clock bound, so a loaded runner outlasts any turn budget and
+    // the tail lands in the next test.
     const settleQuitAndInstall = async (): Promise<void> => {
       await vi.advanceTimersByTimeAsync(100)
+      await revalidation.drain()
       for (let turn = 0; turn < 40; turn += 1) {
         await new Promise((resolve) => realSetTimeout(resolve, 0))
       }
@@ -100,54 +193,17 @@ describe('updater', () => {
       staged = stageLinuxUpdateCache()
       vi.stubEnv('XDG_CACHE_HOME', staged.cacheRoot)
       EXIT_127 = `Command failed: /usr/bin/pkexec /usr/bin/dpkg -i ${staged.debPath}, exited with code 127`
+      revalidation = probeRevalidation()
     })
 
-    afterEach(() => {
+    afterEach(async () => {
+      // Why: an unfinished re-proof keeps running against this test's module instance, whose mocks
+      // are the same singletons the next test asserts on — it would double every install-path count.
+      await revalidation.drain()
       vi.doUnmock('./linux-package-update-recovery')
       vi.unstubAllEnvs()
       rmSync(staged.cacheRoot, { recursive: true, force: true })
     })
-
-    /**
-     * Holds the pre-install re-proof open so a verdict can be delivered at an exact point in the
-     * cycle. Only that call is replaced — the artifact state stays real. Must precede startUpdater.
-     */
-    const holdRevalidation = (): {
-      settle: (verdict: RevalidationVerdict) => void
-      fail: (error: Error) => void
-      invocationCount: () => number
-    } => {
-      let invocationCount = 0
-      let pending: {
-        resolve: (verdict: RevalidationVerdict) => void
-        reject: (error: Error) => void
-      } | null = null
-      vi.doMock('./linux-package-update-recovery', async () => {
-        const actual = await vi.importActual<typeof RecoveryModule>(
-          './linux-package-update-recovery'
-        )
-        return {
-          ...actual,
-          revalidateLinuxPackageForInstall: vi.fn(() => {
-            invocationCount += 1
-            return new Promise<RevalidationVerdict>((resolve, reject) => {
-              pending = { resolve, reject }
-            })
-          })
-        }
-      })
-      return {
-        settle: (verdict) => {
-          pending?.resolve(verdict)
-          pending = null
-        },
-        fail: (error) => {
-          pending?.reject(error)
-          pending = null
-        },
-        invocationCount: () => invocationCount
-      }
-    }
 
     const lastStatus = (send: ReturnType<typeof vi.fn>): UpdateStatus | undefined =>
       send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
@@ -501,7 +557,7 @@ describe('updater', () => {
     // Why: hashing 160 MB outlives the cycle it started in, and Check for Updates stays enabled
     // while it runs — a verdict from the old cycle must not replace the card that took over.
     it('drops an abort verdict once a newer check replaced the card', async () => {
-      const revalidation = holdRevalidation()
+      revalidation.hold()
       const { send, updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
 
@@ -531,7 +587,7 @@ describe('updater', () => {
     // Why: EMFILE/EIO during the stream says nothing about the bytes, so the copy must not claim
     // the package changed and the card must keep the actions that still work.
     it('keeps the recovery card usable when the re-proof cannot read the package', async () => {
-      const revalidation = holdRevalidation()
+      revalidation.hold()
       const { send, updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
       autoUpdaterMock.quitAndInstall.mockImplementation(() => {
@@ -565,7 +621,7 @@ describe('updater', () => {
     // Why: the re-proof runs before performQuitAndInstall's own error handling, so a rejection
     // there would strand the quit timer and make every later install a silent no-op.
     it('stays installable after a re-proof that rejects outright', async () => {
-      const revalidation = holdRevalidation()
+      revalidation.hold()
       const { send, updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
 
@@ -592,7 +648,7 @@ describe('updater', () => {
 
     // Why: a second click during the multi-second hash must not schedule a parallel install.
     it('ignores a second install request while the digest re-proof runs', async () => {
-      const revalidation = holdRevalidation()
+      revalidation.hold()
       const { updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
 
