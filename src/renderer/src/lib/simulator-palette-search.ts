@@ -1,6 +1,8 @@
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
@@ -78,11 +80,13 @@ export function isSimulatorPaletteQueryTooLarge(
 export type BuildSearchableSimulatorTabsOptions = {
   worktrees: readonly Worktree[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
+  repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
   unifiedTabsByWorktree: Record<string, readonly Tab[] | undefined>
   activeGroupIdByWorktree: Record<string, string | undefined>
   groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeTabType: SimulatorPaletteActiveTabType
 }
 
@@ -151,17 +155,31 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
 
 function getActiveUnifiedTabId({
   worktreeId,
+  worktreeHostId,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   activeTabType,
   activeGroupIdByWorktree,
   groupsByWorktree
 }: Pick<
   BuildSearchableSimulatorTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'activeWorktreeId' | 'groupsByWorktree'
+  | 'activeGroupIdByWorktree'
+  | 'activeTabType'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'groupsByWorktree'
 > & {
   worktreeId: string
+  worktreeHostId?: Worktree['hostId']
 }): string | null {
-  if (activeWorktreeId !== worktreeId || activeTabType !== 'simulator') {
+  if (
+    !isPaletteCurrentWorktree(
+      { id: worktreeId, hostId: worktreeHostId },
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId
+    ) ||
+    activeTabType !== 'simulator'
+  ) {
     return null
   }
   const activeGroupId = activeGroupIdByWorktree[worktreeId]
@@ -174,20 +192,28 @@ function getActiveUnifiedTabId({
 export function buildSearchableSimulatorTabs({
   worktrees,
   repoMap,
+  repoMapByHostIdentity,
   worktreeOrder,
   unifiedTabsByWorktree,
   activeGroupIdByWorktree,
   groupsByWorktree,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
   for (const worktree of worktrees) {
-    const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-    const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
+    const repoName =
+      resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
+    const worktreeSortIndex =
+      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(worktree.id) ??
+      Number.MAX_SAFE_INTEGER
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
+      worktreeHostId: worktree.hostId,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType,
       activeGroupIdByWorktree,
       groupsByWorktree
@@ -205,7 +231,11 @@ export function buildSearchableSimulatorTabs({
         // Why: simulator tabs are unified tabs; terminal activeTabId does not
         // identify the visible emulator tab after split-group activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
-        isCurrentWorktree: activeWorktreeId === worktree.id,
+        isCurrentWorktree: isPaletteCurrentWorktree(
+          worktree,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        ),
         document: buildPaletteTabDocument({
           id: tab.id,
           title: simulatorPaletteTabTitle(tab),

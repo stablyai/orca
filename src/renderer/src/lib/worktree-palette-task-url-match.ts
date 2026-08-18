@@ -316,6 +316,7 @@ export function matchWorktreePaletteTaskUrl(args: {
   }
   return buildWorktreePaletteTaskUrlResult({
     worktreeId: worktree.id,
+    ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
     labelKind: 'issue',
     text: intent.parsed.issueKey
   })

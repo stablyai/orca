@@ -82,6 +82,26 @@ describe('browser-palette-search', () => {
     )
   })
 
+  it('stamps the row execution host so activation never resolves by id alone', () => {
+    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
+    // host's workspace behind a row labelled with this one's name and branch.
+    const [result] = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ id: 'page-1', title: 'Docs' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'shared', hostId: 'ssh:box' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 0,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      ''
+    )
+    expect(result.executionHostId).toBe('ssh:box')
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchBrowserPages(
       [

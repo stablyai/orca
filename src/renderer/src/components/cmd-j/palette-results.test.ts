@@ -172,6 +172,23 @@ function top(query: string): string | undefined {
   return rankMiddle(query)[0]?.id
 }
 
+describe('action keyword folding', () => {
+  it('folds verbKeywords so a raw-cased command still reaches exact-intent', () => {
+    // Why: the query is folded before ranking, so a plugin command titled `Format Document`
+    // could never satisfy rules 1/3/4 and sank below any prefix-matching workspace.
+    const [folded] = buildCmdJActionResults([
+      {
+        id: 'quick-action:format',
+        kind: 'action',
+        title: 'Format Document',
+        description: 'Format the open file',
+        verbKeywords: ['Format Document', 'FORMAT  DOC']
+      } as (typeof actions)[number]
+    ])
+    expect(folded.verbKeywords).toEqual(['format document', 'format doc'])
+  })
+})
+
 const overTokenLimitQuery = Array.from(
   { length: PALETTE_QUERY_MAX_TOKENS + 1 },
   (_, index) => `token${index}`
