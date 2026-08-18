@@ -101,9 +101,9 @@ function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 
   if (verdict !== false) {
     return verdict
   }
-  // Why not false: identity keeps one remote, chosen when the repo was added and never re-probed.
-  // An `upstream` pick means a fork's `origin` existed and is invisible here, so rejecting would
-  // drop URLs from the fork itself. A stale snapshot can still misjudge a renamed repo.
+  // Why not false: identity keeps only one remote, so an `upstream` pick means a fork's `origin`
+  // existed and is invisible here, and rejecting would drop URLs from the fork itself. GitLab makes
+  // the opposite trade (STA-4450); aligning the two is left to a twin ticket.
   return identity?.remoteName === 'upstream' ? 'unknown' : false
 }
 
