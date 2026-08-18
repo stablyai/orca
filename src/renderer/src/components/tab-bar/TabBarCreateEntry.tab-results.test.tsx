@@ -27,15 +27,63 @@ vi.mock('@/lib/agent-catalog', () => ({
 
 // `hold` stands in for the hook's deferred query: it pins the results to the
 // query they were built from, so later keystrokes leave them stale.
-const tabSearchMock = vi.hoisted(() => ({
-  hold: null as string | null,
-  resultsByQuery: {} as Record<string, unknown[]>
-}))
+const tabSearchMock = vi.hoisted(() => {
+  const worktree = {
+    id: 'wt',
+    repoId: 'repo-1',
+    path: '/tmp/wt',
+    hostId: 'local',
+    displayName: 'Aurora Workspace'
+  }
+  return {
+    hold: null as string | null,
+    resultsByQuery: {} as Record<string, unknown[]>,
+    // Retention re-checks each row against the live query with the real engines,
+    // so every registered row needs the searchable entry it came from.
+    entries(): unknown {
+      const rows = Object.values(tabSearchMock.resultsByQuery).flat() as {
+        source: string
+        tabId?: string
+        title: string
+        contentType: string
+        relativePath?: string | null
+      }[]
+      return {
+        browserPages: [],
+        simulatorTabs: [],
+        workspaceTabs: rows
+          .filter((row) => row.source === 'workspace')
+          .map((row) => ({
+            tab: {
+              id: row.tabId,
+              entityId: `${row.tabId}-entity`,
+              groupId: 'g',
+              worktreeId: worktree.id,
+              contentType: row.contentType
+            },
+            worktree,
+            repoName: 'octo/rocket',
+            worktreeSortIndex: 0,
+            groupSortIndex: 0,
+            tabSortIndex: 0,
+            title: row.title,
+            secondaryText: row.relativePath ?? '',
+            titleSearchText: row.title,
+            secondarySearchTexts: row.relativePath ? [row.relativePath] : [],
+            agentMetadata: [],
+            isCurrentTab: false,
+            isCurrentWorktree: true
+          }))
+      }
+    }
+  }
+})
 vi.mock('./use-open-tab-search', () => ({
   useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
     const resolved = tabSearchMock.hold ?? query
     return {
       query: enabled ? resolved : query,
+      entries: enabled ? tabSearchMock.entries() : null,
       results: enabled ? (tabSearchMock.resultsByQuery[resolved.trim()] ?? []) : []
     }
   }
@@ -274,7 +322,27 @@ describe('TabBarCreateEntry tab results', () => {
     expect(activationMocks.workspace).not.toHaveBeenCalled()
   })
 
-  it('drops tab rows built for an earlier query until the search catches up', () => {
+  it('keeps a deferred tab row that still matches the newer query', () => {
+    entryOptionsMock.options = [newFileOption]
+    tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+
+    setQuery('add tab')
+    expect(rowTexts()[0]).toContain('Switch to tab')
+
+    // The user backspaces; the deferred search still describes 'add tab'.
+    tabSearchMock.hold = 'add tab'
+    setQuery('add ta')
+
+    expect(rowTexts()[0]).toContain('Switch to tab')
+    submitForm()
+
+    expect(activationMocks.workspace).toHaveBeenCalledTimes(1)
+    expect(onOpenEntry).not.toHaveBeenCalled()
+  })
+
+  it('drops a deferred tab row that the newer query no longer matches', () => {
     entryOptionsMock.options = [newFileOption]
     tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
