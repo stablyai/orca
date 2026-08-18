@@ -60,6 +60,55 @@ export function isClaudeTeammateLifecycleId(id: string): boolean {
   return separator > 1 && id.startsWith('a') && /^[0-9a-f]+$/i.test(id.slice(separator + 1))
 }
 
+/** Refresh a tracked child from its own tool activity. Returns false for an
+ *  unknown id: tool hooks never mint rows — only SubagentStart, an
+ *  authoritative background_tasks fold, or a snapshot restore does — so
+ *  non-stable agent ids on long-lived async agents can't pile up phantom
+ *  entries that fill the roster cap and hide real children. */
+export function refreshWorkingClaudeSubagent(
+  roster: ClaudeSubagentRoster,
+  id: string,
+  fields: { agentType?: string; description?: string }
+): boolean {
+  const existing = roster.get(id)
+  if (!existing) {
+    return false
+  }
+  existing.state = 'working'
+  existing.agentType = fields.agentType ?? existing.agentType
+  existing.description = fields.description ?? existing.description
+  // Why: live activity proves the lifecycle stream owns this id again;
+  // background_tasks omission must stop reaping it (teammate-shaped ids
+  // never appear there). The fold re-tags its own recreations after this.
+  existing.backgroundTasksAuthoritative = undefined
+  // Why: the live event proves the agent process behind the restored row is
+  // still running it, so the liveness reap must stop treating it as a claim.
+  existing.restoredFromSnapshot = undefined
+  return true
+}
+
+/** Track a child observed on a tool hook (PreToolUse/PostToolUse family).
+ *  Refreshes a known id always; creates an unknown id only when the payload
+ *  carries an `agentType` — the documented subagent context, and the only
+ *  signal separating a real child whose SubagentStart was missed (Orca
+ *  restart) from the non-stable untyped agent_ids long-lived async agents
+ *  emit on tool calls, which used to mint dozens of phantom rows that filled
+ *  the roster cap and hid real children. */
+export function trackClaudeSubagentToolActivity(
+  roster: ClaudeSubagentRoster,
+  id: string,
+  fields: { agentType?: string; description?: string },
+  now: number
+): void {
+  if (refreshWorkingClaudeSubagent(roster, id, fields)) {
+    return
+  }
+  if (fields.agentType === undefined) {
+    return
+  }
+  upsertWorkingClaudeSubagent(roster, id, fields, now)
+}
+
 export function upsertWorkingClaudeSubagent(
   roster: ClaudeSubagentRoster,
   id: string,
@@ -69,18 +118,7 @@ export function upsertWorkingClaudeSubagent(
   if (id.length === 0 || id.length > CLAUDE_SUBAGENT_ID_MAX_LENGTH) {
     return
   }
-  const existing = roster.get(id)
-  if (existing) {
-    existing.state = 'working'
-    existing.agentType = fields.agentType ?? existing.agentType
-    existing.description = fields.description ?? existing.description
-    // Why: live activity proves the lifecycle stream owns this id again;
-    // background_tasks omission must stop reaping it (teammate-shaped ids
-    // never appear there). The fold re-tags its own recreations after this.
-    existing.backgroundTasksAuthoritative = undefined
-    // Why: the live event proves the agent process behind the restored row is
-    // still running it, so the liveness reap must stop treating it as a claim.
-    existing.restoredFromSnapshot = undefined
+  if (refreshWorkingClaudeSubagent(roster, id, fields)) {
     return
   }
   // Why: beyond the wire cap extra rows would be invisible anyway; idle

@@ -36,6 +36,7 @@ import {
   idleClaudeTeammateByName,
   reapUnconfirmedRestoredClaudeSubagents,
   stopClaudeSubagent,
+  trackClaudeSubagentToolActivity,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
@@ -3044,12 +3045,20 @@ function normalizeClaudeEvent(
       ? eventAgentId
       : undefined
   if (eventAgentId && (subagentOriginId || isWaitingInducing)) {
-    upsertWorkingClaudeSubagent(
-      getOrCreateClaudeSubagentRoster(state, paneKey),
-      eventAgentId,
-      { agentType: readString(hookPayload, 'agent_type') },
-      Date.now()
-    )
+    // Why: tool hooks refresh known children and may recover a start-less one
+    // only with agent_type (documented subagent context); untyped agent_ids
+    // are non-stable noise from long-lived async agents that minted phantom
+    // rows until the roster cap hid real children.
+    const agentType = readString(hookPayload, 'agent_type')
+    const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+    if (roster || agentType !== undefined) {
+      trackClaudeSubagentToolActivity(
+        roster ?? getOrCreateClaudeSubagentRoster(state, paneKey),
+        eventAgentId,
+        { agentType },
+        Date.now()
+      )
+    }
   }
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
