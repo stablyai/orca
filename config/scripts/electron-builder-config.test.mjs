@@ -207,6 +207,14 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('unpacks the replaceable WSL transcript filesystem process entry', async () => {
+    const entryFilename = 'wsl-transcript-fs-process-entry.js'
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
+  })
+
   // Why: the scanner service is forked with ELECTRON_RUN_AS_NODE, so asar is
   // invisible to it and a packed worker entry fails closed — dropping every
   // OpenCode session in packaged builds while dev stays green. Three legs must
