@@ -1,30 +1,31 @@
 /**
- * Real-zsh proof that a wrapper dir shared by two Orca builds still loads the
- * user's own zsh config.
+ * Real-zsh proof that a wrapper dir holding files from two Orca builds still
+ * loads the user's own zsh config.
  *
- * One wrapper dir (`<userData>/shell-ready/zsh`, or `~/.orca-relay/shell-ready/
- * zsh` for a remote host) is shared by every concurrently installed build, and
- * each rewrites it on spawn. That used to mean a shell could read one build's
- * `.zshenv` and another's `.zprofile`/`.zshrc`/`.zlogin`, so every generated
- * file had to redefine the helpers it called.
+ * A shared dir used to mean a shell could read one build's `.zshenv` and
+ * another's `.zprofile`/`.zshrc`/`.zlogin`, which is why every generated file
+ * redefined the helpers it called. #15285 removed the hazard for the desktop and
+ * daemon trees by naming each one after a hash of its contents, so two builds
+ * never write the same directory.
  *
- * Orca now writes one file. The mixing hazard is therefore a different, smaller
- * shape, and this pins both halves of it:
+ * The relay is the one writer left on a fixed path — `~/.orca-relay/shell-ready`
+ * — so this is where the scenario is still reachable, and it is now much smaller:
+ * Orca writes one file, and that file hands ZDOTDIR back before anything else
+ * runs. Both halves are pinned here:
  *
- * 1. An older build's `.zprofile`/`.zshrc`/`.zlogin` left beside the new
- *    `.zshenv` must be inert — the new file hands ZDOTDIR back, so zsh reads
- *    those three from the user's own directory and never from here.
- * 2. Generation must NOT delete them. An older build checks for all four before
- *    deciding its tree is complete; deleting them makes it rewrite its own
- *    `.zshenv` over ours, and an older `.zshenv` points ZDOTDIR at a directory
- *    that would then hold no `.zshrc` at all — which is the user losing their
- *    entire config, the exact failure this file exists to prevent.
+ * 1. Files an older build left beside the hook are inert — zsh reads .zprofile,
+ *    .zshrc and .zlogin from the user's own directory and never from here.
+ * 2. Generation does not delete them. An older build checks for all four before
+ *    calling its tree complete; deleting them makes it rewrite its own `.zshenv`
+ *    over ours, and an older `.zshenv` points ZDOTDIR at a directory that would
+ *    then hold no `.zshrc` at all — the user losing their entire config, which is
+ *    the failure this file exists to prevent.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ensureShellReadyWrappersAt } from './providers/local-pty-shell-ready-wrapper-generation'
+import { ensureOverlayRestoreWrappers } from '../relay/pty-shell-overlay-wrappers'
 import { hasZsh, makeZshHome, runZshPty } from './zsh-startup-hook-pty-harness'
 
 const itWithZsh = hasZsh ? it : it.skip
@@ -45,7 +46,7 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
       '.zshrc': 'export ORCA_TEST_USER_ZSHRC=1\n'
     })
     try {
-      expect(ensureShellReadyWrappersAt(root)).toBe(true)
+      expect(ensureOverlayRestoreWrappers(root)).toBe(true)
       const zshDir = join(root, 'zsh')
       for (const [name, content] of Object.entries(OLDER_BUILD_FILES)) {
         writeFileSync(join(zshDir, name), content)
@@ -86,14 +87,14 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
   it('leaves an older build’s files in place so that build can still use them', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-wrapper-mismatch-keep-'))
     try {
-      expect(ensureShellReadyWrappersAt(root)).toBe(true)
+      expect(ensureOverlayRestoreWrappers(root)).toBe(true)
       const zshDir = join(root, 'zsh')
       for (const [name, content] of Object.entries(OLDER_BUILD_FILES)) {
         writeFileSync(join(zshDir, name), content)
       }
 
       // A second generation pass is what an older build's launch would race.
-      expect(ensureShellReadyWrappersAt(root)).toBe(true)
+      expect(ensureOverlayRestoreWrappers(root)).toBe(true)
 
       for (const [name, content] of Object.entries(OLDER_BUILD_FILES)) {
         expect(existsSync(join(zshDir, name))).toBe(true)
