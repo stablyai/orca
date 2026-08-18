@@ -605,6 +605,19 @@ jobs:
               'tests/e2e/ssh-startup-exec-readiness.spec.ts' \
               'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts' | sort -u)"
           fi
+          # Why: same lesson as the SSH specs above. The IME e2e suite asserts real pty bytes and
+          # real overlay geometry, but only ran when someone edited a spec, so every IME fix in the
+          # 1.4.18x window shipped without it - including one whose diagnosis hardware later refuted.
+          # config/patches is listed because the terminal's input handling lives in the xterm patch.
+          if printf '%s\n' "$CHANGED" | grep -Ev '\.test\.tsx?$' | grep -Eq '^(config/patches/|src/renderer/src/components/terminal-pane/(terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy))'; then
+            TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
+              'tests/e2e/terminal-cjk-ime-committed-text.spec.ts' \
+              'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts' \
+              'tests/e2e/terminal-ime-exact-byte.spec.ts' \
+              'tests/e2e/terminal-korean-composing-chord-order.spec.ts' \
+              'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts' \
+              'tests/e2e/terminal-korean-preedit-visibility.spec.ts' | sort -u)"
+          fi
           TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
