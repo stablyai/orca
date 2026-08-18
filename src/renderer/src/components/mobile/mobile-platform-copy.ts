@@ -7,6 +7,8 @@ export type IosChannel = 'stable' | 'preview'
 
 export type InstallCopy = { ctaLabel: string; url: string }
 
+export const ANDROID_INSTALL_GUIDE_URL = 'https://www.onorca.dev/docs/android-apk'
+
 const IOS_CHANNEL_COPY: Record<IosChannel, InstallCopy> = {
   stable: {
     ctaLabel: 'Open App Store',

@@ -72,6 +72,7 @@ describe('HeroFlow height', () => {
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         iosChannel="preview"
         onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -119,6 +120,7 @@ describe('HeroFlow height', () => {
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         iosChannel="preview"
         onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -151,6 +153,20 @@ describe('HeroFlow height', () => {
 
     expect(viewport).toHaveStyle({ height: '520px' })
     expect(screen.getByText('Step 1 of 2').closest('.mp-flow-screen')).toHaveAttribute('inert')
+  })
+
+  it('opens the APK install guide without duplicating its troubleshooting steps', async () => {
+    const user = userEvent.setup()
+    const onOpenAndroidInstallGuide = vi.fn()
+    renderFlow(0, {
+      platform: 'android',
+      installCopy: { ctaLabel: 'Download APK', url: 'https://example.com/app-release.apk' },
+      onOpenAndroidInstallGuide
+    })
+
+    expect(screen.queryByText(/full browser, not an in-app browser/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Install guide' }))
+    expect(onOpenAndroidInstallGuide).toHaveBeenCalledOnce()
   })
 
   it('shows Relay mint failure with no QR and the beta note', () => {

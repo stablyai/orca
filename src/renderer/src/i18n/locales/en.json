@@ -13128,7 +13128,10 @@
           "pairThisPc": "Pair this PC.",
           "pairThisComputer": "Pair this computer.",
           "directAddressDisclosure": "Also use a faster local path",
-          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away."
+          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.",
+          "androidHelp": {
+            "guide": "Install guide"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
