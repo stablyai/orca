@@ -1,12 +1,21 @@
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import type { OpenFile } from '@/store/slices/editor'
+import { buildPaletteTabDocument } from './palette-match/tab-document'
+import type { PaletteDocument } from './palette-match/palette-document'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type { Tab, TabContentType, TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
-  collectAgentMetadataForTerminal,
+  buildAgentMetadataTabIndex,
+  collectAgentMetadataFromIndex,
   type AgentMetadata,
   type WorkspaceTabAgentMetadataState
 } from './workspace-tab-agent-metadata'
@@ -33,10 +42,21 @@ export type SearchableWorkspaceTab = {
   secondaryText: string
   titleSearchText: string
   secondarySearchTexts: string[]
+  /**
+   * Search-only type labels (e.g. "terminal tab"). Matched without writing into
+   * the row secondary — the content icon already conveys type.
+   */
+  typeSearchAliases?: readonly string[]
+  /** Normalized field index, built once per entry rather than per keystroke. */
+  document: PaletteDocument
   agentMetadata: AgentMetadata[]
   isCurrentTab: boolean
   isCurrentWorktree: boolean
 }
+
+// Why search-only: the status/content icon already says "terminal"; a fixed
+// secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
+export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
 type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
@@ -154,9 +174,16 @@ export function buildSearchableWorkspaceTabs({
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
   const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
+  const agentIndex = buildAgentMetadataTabIndex({
+    agentStatusByPaneKey,
+    retainedAgentsByPaneKey,
+    sleepingAgentSessionsByPaneKey
+  })
 
   for (const worktree of worktrees) {
     const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
+    const worktreeName = resolveWorktreeDisplayName(worktree)
+    const branch = resolveWorktreeBranchLabel(worktree)
     const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
@@ -202,22 +229,41 @@ export function buildSearchableWorkspaceTabs({
 
       if (tab.contentType === 'terminal') {
         const terminalTab = terminalTabs.get(tab.entityId)
-        const title = terminalTab
+        // Match the tab strip: useTabGroupWorkspaceModel resolves the visible
+        // title from the unified tab, not tabsByWorktree. Those two can desync
+        // (live OSC on the label, stale "Terminal N" on the terminal record).
+        const terminalTitle = terminalTab
           ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
-          : resolveUnifiedTabLabel(tab, generatedTitlesEnabled, 'Terminal')
+          : 'Terminal'
+        const title = resolveUnifiedTabLabel(
+          {
+            ...tab,
+            customLabel: tab.customLabel ?? terminalTab?.customTitle ?? null,
+            quickCommandLabel: tab.quickCommandLabel ?? terminalTab?.quickCommandLabel,
+            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle
+          },
+          generatedTitlesEnabled,
+          terminalTitle
+        )
         entries.push({
           ...baseEntry,
           title,
-          secondaryText: 'Terminal tab',
+          // Why: type is already clear from the status/content icon; a fixed
+          // "Terminal tab" label only crowds the row (and used to leave a bare "· ·").
+          secondaryText: '',
           titleSearchText: title,
-          secondarySearchTexts: ['Terminal tab'],
-          agentMetadata: collectAgentMetadataForTerminal({
-            terminalTabId: tab.entityId,
-            worktreeId: worktree.id,
-            agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
-            sleepingAgentSessionsByPaneKey
-          })
+          secondarySearchTexts: [],
+          typeSearchAliases: TERMINAL_TYPE_SEARCH_ALIASES,
+          document: buildPaletteTabDocument({
+            id: tab.id,
+            title,
+            secondaryTexts: [],
+            worktreeName,
+            branch,
+            repoName,
+            typeAliases: TERMINAL_TYPE_SEARCH_ALIASES
+          }),
+          agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id)
         })
         continue
       }
@@ -233,6 +279,14 @@ export function buildSearchableWorkspaceTabs({
         secondaryText: file.relativePath,
         titleSearchText: title,
         secondarySearchTexts: [file.relativePath, file.filePath],
+        document: buildPaletteTabDocument({
+          id: tab.id,
+          title,
+          secondaryTexts: [file.relativePath, file.filePath],
+          worktreeName,
+          branch,
+          repoName
+        }),
         agentMetadata: []
       })
     }

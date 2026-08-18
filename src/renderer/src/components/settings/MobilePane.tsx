@@ -24,12 +24,14 @@ import {
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
+import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
   const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [qrSize, setQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [qrError, setQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
@@ -41,6 +43,7 @@ export function MobilePane(): React.JSX.Element {
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
@@ -79,6 +82,7 @@ export function MobilePane(): React.JSX.Element {
     pairingRequestIdRef.current += 1
     const hadPending = qrDisplayedRef.current || loadingRef.current
     setQrDataUrl(null)
+    setQrSize(null)
     setPairingUrl(null)
     setQrError(false)
     setRelayMintFailure(null)
@@ -195,6 +199,7 @@ export function MobilePane(): React.JSX.Element {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
           if (mountedRef.current) {
             setQrDataUrl(result.qrDataUrl)
+            setQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
             setQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
@@ -207,6 +212,7 @@ export function MobilePane(): React.JSX.Element {
           }
         } else if (mountedRef.current) {
           setQrDataUrl(null)
+          setQrSize(null)
           setPairingUrl(null)
           setQrError(false)
           setEndpoint(null)
@@ -386,6 +392,7 @@ export function MobilePane(): React.JSX.Element {
       <MobilePairingSetupSection
         connectionMode={connectionMode}
         canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
+        addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
         connectionPathControl={
           <MobilePairingConnectionOptions
             value={connectionMode}
@@ -429,6 +436,7 @@ export function MobilePane(): React.JSX.Element {
 
       <MobilePairingQrSection
         qrDataUrl={qrDataUrl}
+        qrSize={qrSize}
         qrError={qrError}
         pairingUrl={pairingUrl}
         endpoint={endpoint}
@@ -439,7 +447,11 @@ export function MobilePane(): React.JSX.Element {
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
 
-      <WindowsFirewallNotice pairingReady={pairingUrl != null} address={selectedAddress} />
+      <WindowsFirewallNotice
+        pairingReady={pairingUrl != null}
+        address={selectedAddress}
+        usingRelay={connectionMode === 'automatic'}
+      />
 
       <MobilePairedDevicesSection
         devices={devices}

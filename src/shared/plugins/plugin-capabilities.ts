@@ -30,10 +30,6 @@ export const pluginCapabilitySchema = z.object({ kind: z.enum(PLUGIN_CAPABILITY_
 
 export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 
-export function isPluginCapabilityKind(value: string): value is PluginCapabilityKind {
-  return (PLUGIN_CAPABILITY_KINDS as readonly string[]).includes(value)
-}
-
 /** Plain-language consent copy per capability. Shown verbatim in the install
  *  preview / consent dialog; keep each line honest about what is enforced. */
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { PersistedMobileClientTabSelections } from '../../shared/types'
+import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,
@@ -249,6 +249,62 @@ describe('client session-tab selection', () => {
     expect(store.project(empty, 'device-a').activeTabId).toBeNull()
 
     expect(store.project(snapshot(), 'device-a').activeTabId).toBe('browser-unified')
+  })
+
+  it('restores the selection after a snapshot transiently drops the selected tab', () => {
+    const store = new ClientSessionTabSelectionStore()
+    const full = snapshot()
+    store.activate(full, 'device-a', 'browser-unified')
+
+    // A browser guest process swap omits the tab from one snapshot.
+    const withoutBrowser = {
+      ...full,
+      activeTabId: 'terminal-a::leaf-a',
+      activeTabType: 'terminal' as const,
+      tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
+    }
+    expect(store.project(withoutBrowser, 'device-a').activeTabId).toBe('terminal-a::leaf-a')
+
+    expect(store.project(full, 'device-a').activeTabId).toBe('browser-unified')
+  })
+
+  it('does not restore a closed tab from a stale pre-close snapshot', () => {
+    const store = new ClientSessionTabSelectionStore()
+    const full = snapshot()
+    store.activate(full, 'device-a', 'browser-unified')
+    store.activate(full, 'device-b', 'browser-unified')
+
+    store.forgetTabs('wt-1', ['browser-unified'])
+
+    for (const clientId of ['device-a', 'device-b']) {
+      const stale = store.project(full, clientId)
+      expect(stale.activeTabId).toBe('terminal-a::leaf-a')
+      expect(stale.tabs.some((tab) => tab.id === 'browser-unified')).toBe(false)
+    }
+
+    const withoutBrowser = {
+      ...full,
+      activeTabId: 'terminal-a::leaf-a',
+      activeTabType: 'terminal' as const,
+      tabGroups: full.tabGroups?.slice(0, 1),
+      tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
+    }
+    store.project(withoutBrowser, 'device-a')
+    const reused = store.project(full, 'device-a')
+    expect(reused.activeTabId).toBe('terminal-a::leaf-a')
+    expect(reused.tabs.some((tab) => tab.id === 'browser-unified')).toBe(true)
+  })
+
+  it('lets an explicit activation reuse a recently closed tab identity', () => {
+    const store = new ClientSessionTabSelectionStore()
+    const full = snapshot()
+    store.activate(full, 'device-a', 'browser-unified')
+    store.forgetTabs('wt-1', ['browser-unified'])
+
+    const reopened = store.activate(full, 'device-a', 'browser-unified')
+
+    expect(reopened.activeTabId).toBe('browser-unified')
+    expect(reopened.tabs.some((tab) => tab.id === 'browser-unified')).toBe(true)
   })
 
   it('drops malformed persisted payloads instead of hydrating them', () => {

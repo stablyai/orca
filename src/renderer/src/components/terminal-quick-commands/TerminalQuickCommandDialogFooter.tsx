@@ -16,7 +16,7 @@ export function TerminalQuickCommandDialogFooter({
   onSave
 }: TerminalQuickCommandDialogFooterProps): React.JSX.Element {
   return (
-    <DialogFooter>
+    <DialogFooter className="border-t border-border px-6 py-4 sm:justify-end">
       <Button type="button" variant="outline" onClick={onCancel}>
         {translate(
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.28370f16b9',

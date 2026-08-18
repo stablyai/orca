@@ -43,7 +43,11 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
             closeReason:
               params.reason ??
               (requiresIntent
@@ -85,7 +89,12 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-lifecycle-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
+            terminal: params.terminal,
             closeReason: params.reason,
             connectionGeneration: context.connectionId ?? 'in-process',
             requestId: context.requestId ?? 'in-process',

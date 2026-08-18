@@ -6,7 +6,8 @@ import {
   createTerminalImeModifiedEnterChordOwner,
   isTerminalImeEnterKeyUp,
   isTerminalImeProcessEnter,
-  sendTerminalInputAfterComposition
+  sendTerminalInputAfterComposition,
+  TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
 } from './terminal-ime-deferred-newline'
 import {
   installTerminalImeCompositionRoute,
@@ -37,6 +38,43 @@ describe('sendTerminalInputAfterComposition', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
+  // #12871: a newline arriving late still arrives, so the fallback timer is right for it. A
+  // cursor chord arriving mid-preedit is the corruption the wait exists to prevent, and a
+  // conversion can hold its candidate window open for seconds — far past the fallback.
+  it('never fires on a timer when the caller opts out of the fallback', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    vi.advanceTimersByTime(60_000)
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  // STA-4476: `fallbackMs: null` has no exit of its own, so the disposer is the only thing that
+  // can detach the listeners when compositionend never arrives.
+  it('detaches its listeners and never sends once disposed', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const removeEventListener = vi.spyOn(el, 'removeEventListener')
+
+    const dispose = sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    dispose()
+
+    expect(removeEventListener).toHaveBeenCalledWith('compositionend', expect.any(Function))
+    expect(removeEventListener).toHaveBeenCalledWith(
+      XTERM_COMPOSITION_SESSION_END_EVENT,
+      expect.any(Function)
+    )
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('falls back to sending when no compositionend arrives', () => {
     const el = document.createElement('div')
     const send = vi.fn()
@@ -45,6 +83,22 @@ describe('sendTerminalInputAfterComposition', () => {
     vi.runAllTimers()
 
     expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  // STA-4476: why the Enter path needs no disposer of its own — its fallback always runs, so the
+  // listeners cannot outlive it even when the composition never ends.
+  it('detaches its listeners on the fallback, not only on compositionend', () => {
+    const el = document.createElement('div')
+    const removeEventListener = vi.spyOn(el, 'removeEventListener')
+
+    sendTerminalInputAfterComposition(el, vi.fn())
+    vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
+
+    expect(removeEventListener).toHaveBeenCalledWith('compositionend', expect.any(Function))
+    expect(removeEventListener).toHaveBeenCalledWith(
+      XTERM_COMPOSITION_SESSION_END_EVENT,
+      expect.any(Function)
+    )
   })
 
   it('finishes from the captured xterm transaction when deferral starts after compositionend', () => {
@@ -85,6 +139,37 @@ describe('sendTerminalInputAfterComposition', () => {
     vi.advanceTimersByTime(0)
     expect(send).toHaveBeenCalledTimes(1)
 
+    route.dispose()
+  })
+
+  // A composition the user starts after pressing Enter must not hold that Enter behind itself, or
+  // the terminal sees `한글\n` for what was typed as `한` Enter `글`.
+  it('does not let a composition started after the defer hold the newline', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const terminal = { input: vi.fn() }
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal,
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    const sessionEvent = (type: string, id: number, data: string) =>
+      new CustomEvent(type, { cancelable: true, detail: { id, data } })
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1, ''))
+    const stopWaiting = sendTerminalInputAfterComposition(el, send, { fallbackMs: null })
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 2, ''))
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 1, '한'))
+    vi.advanceTimersByTime(0)
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(terminal.input.mock.calls).toEqual([['한']])
+
+    stopWaiting()
     route.dispose()
   })
 
@@ -178,6 +263,17 @@ describe('createTerminalImeDeferredNewlineSender', () => {
 
     sender.releaseRedispatchedEnter(enter(10))
     expect(sender.absorbRedispatchedEnter(enter(10))).toBe(true)
+  })
+
+  it('moves a credit to a balancing keyup with the redispatch timestamp', () => {
+    const el = document.createElement('div')
+    const sender = createSender()
+
+    sender.defer(enter(10), el, vi.fn())
+    sender.releaseRedispatchedEnter(enter(20), enter(10))
+
+    expect(sender.absorbRedispatchedEnter(enter(20))).toBe(true)
+    expect(sender.absorbRedispatchedEnter(enter(10))).toBe(false)
   })
 
   it('releases an unused credit on a later physical keyup', () => {
@@ -289,6 +385,22 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
 
     expect(defer).toHaveBeenCalledTimes(1)
     expect(owner.absorb(chord('shift', 5037.9, 'Enter'))).toBe(true)
+    expect(owner.ownsRedispatchedEnter()).toBe(false)
+  })
+
+  it('owns a modifier-lost redispatch only after a terminal modifier keydown', () => {
+    const owner = createTerminalImeModifiedEnterChordOwner()
+
+    expect(owner.claim({ ...chord('shift', 10), terminalModifierKeyDownObserved: true })).toBe(true)
+    expect(owner.ownsRedispatchedEnter()).toBe(true)
+  })
+
+  it('releases a claimed chord when the balancing Enter keyup loses its modifier', () => {
+    const owner = createTerminalImeModifiedEnterChordOwner()
+
+    expect(owner.claim(chord('shift', 10))).toBe(true)
+    expect(owner.releaseForEnterKeyUp()).toEqual(chord('shift', 10))
+    expect(owner.ownsRedispatchedEnter()).toBe(false)
   })
 
   it('does not merge different modified Enter kinds into one chord', () => {
@@ -303,7 +415,7 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
     const owner = createTerminalImeModifiedEnterChordOwner()
 
     expect(owner.claim(chord('ctrl', 10))).toBe(true)
-    owner.release(chord('ctrl', 30, 'Enter'))
+    expect(owner.release(chord('ctrl', 30, 'Enter'))).toEqual(chord('ctrl', 10))
 
     expect(owner.absorb(chord('ctrl', 40, 'Enter'))).toBe(false)
     expect(owner.claim(chord('ctrl', 40, 'Enter'))).toBe(true)
@@ -313,7 +425,7 @@ describe('createTerminalImeModifiedEnterChordOwner', () => {
     const owner = createTerminalImeModifiedEnterChordOwner()
 
     expect(owner.claim(chord('shift', 10))).toBe(true)
-    owner.release(chord('ctrl', 20))
+    expect(owner.release(chord('ctrl', 20))).toBeNull()
     expect(owner.absorb(chord('shift', 30))).toBe(true)
     owner.clear()
 
@@ -325,6 +437,7 @@ describe('isTerminalImeProcessEnter', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
       key: 'Process',
+      code: 'Enter',
       keyCode: 229,
       metaKey: false,
       ctrlKey: false,
@@ -333,19 +446,25 @@ describe('isTerminalImeProcessEnter', () => {
       ...overrides
     }) as KeyboardEvent
 
-  it.each([{ shiftKey: true }, { shiftKey: false, ctrlKey: true }])(
-    'recognizes a Windows IME modifier Enter reported as Process',
-    (modifiers) => {
-      expect(isTerminalImeProcessEnter(event(modifiers))).toBe(true)
-    }
-  )
+  it.each([
+    { shiftKey: true },
+    { shiftKey: false, ctrlKey: true },
+    { code: 'NumpadEnter' },
+    { code: '' },
+    { code: 'Unidentified' }
+  ])('recognizes a Windows IME modifier Enter reported as Process', (modifiers) => {
+    expect(isTerminalImeProcessEnter(event(modifiers))).toBe(true)
+  })
 
   it.each([
     { key: 'Enter' },
     { keyCode: 13 },
     { shiftKey: false },
     { ctrlKey: true },
-    { altKey: true }
+    { altKey: true },
+    { code: 'ShiftLeft' },
+    { code: 'KeyQ' },
+    { code: 'ArrowLeft' }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
   })

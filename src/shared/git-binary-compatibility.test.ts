@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -137,6 +137,19 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).resolves.toBeDefined()
   })
 
+  it('deregisters a worktree whose directory was renamed away', async () => {
+    // Orca renames the checkout into a trash directory and then clears the registration, so every
+    // supported Git must accept `worktree remove --force` on the now-missing path.
+    await runGit(['worktree', 'add', '-b', 'compat-deferred', 'deferred-wt'])
+    await rename(join(repoPath, 'deferred-wt'), join(repoPath, 'deferred-trash'))
+
+    await expect(runGit(['worktree', 'remove', '--force', 'deferred-wt'])).resolves.toBeDefined()
+
+    const remaining = await runGit(['worktree', 'list', '--porcelain'])
+    expect(remaining.stdout).not.toContain('deferred-wt')
+    await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
@@ -212,5 +225,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     expect(lines[0]).toBe('--end-of-options')
     expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
+  })
+
+  // Why pin this: `show --end-of-options <oid>:<path>` is the only Git command on the
+  // pinned SSH branch-diff path, and both blob sides depend on it resolving against the
+  // named commit rather than live HEAD, and on failing (not falling back) for a path
+  // absent at that commit — that failure is what renders additions and deletions.
+  it('reads a blob at a pinned object id', async () => {
+    await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
+    await runGit(['add', 'pinned.txt'])
+    await runGit(['commit', '-qm', 'pinned'])
+    const pinnedOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+
+    await writeFile(join(repoPath, 'pinned.txt'), 'moved on\n')
+    await runGit(['commit', '-qam', 'after pinned'])
+
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:pinned.txt`])
+    ).resolves.toMatchObject({ stdout: 'pinned\n' })
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
+    ).rejects.toBeDefined()
   })
 })

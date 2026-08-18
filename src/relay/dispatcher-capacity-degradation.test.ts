@@ -9,16 +9,15 @@ import { LEGACY_CLIENT_RETAINED_BYTES_LOW } from './legacy-relay-publication-led
 import type * as ProtocolModule from './protocol'
 import { encodeJsonRpcFrame, RelayErrorCode } from './protocol'
 
-// Counts every frame encode (including the estimate-only ones) so a redundant re-encode is observable.
-const encodeCalls = vi.hoisted(() => ({ count: 0 }))
+const preparationCalls = vi.hoisted(() => ({ count: 0 }))
 
 vi.mock('./protocol', async (importOriginal) => {
   const actual = await importOriginal<typeof ProtocolModule>()
   return {
     ...actual,
-    encodeJsonRpcFrame: (...args: Parameters<typeof actual.encodeJsonRpcFrame>) => {
-      encodeCalls.count++
-      return actual.encodeJsonRpcFrame(...args)
+    prepareJsonRpcPayload: (...args: Parameters<typeof actual.prepareJsonRpcPayload>) => {
+      preparationCalls.count++
+      return actual.prepareJsonRpcPayload(...args)
     }
   }
 })
@@ -344,7 +343,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     }
   })
 
-  it('does not re-encode a dropped frame when its log line is suppressed', () => {
+  it('prepares a dropped frame once when its log line is suppressed', () => {
     const primary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
@@ -353,11 +352,10 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       bounded.notify('fs.changed', flood)
       expect(stderr).toHaveBeenCalledTimes(1)
 
-      // The suppressed drop must size the frame once, not once to publish and again to log.
-      encodeCalls.count = 0
+      preparationCalls.count = 0
       bounded.notify('fs.changed', flood)
       expect(stderr).toHaveBeenCalledTimes(1)
-      expect(encodeCalls.count).toBe(1)
+      expect(preparationCalls.count).toBe(1)
     } finally {
       stderr.mockRestore()
       bounded.dispose()

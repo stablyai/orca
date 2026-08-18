@@ -33,6 +33,13 @@ name: Adhoc macOS Dev Build
 # Contents: Read and write. The secret names below are historical — one App, one
 # private key, both dev-channel repos — and rotating it stays a single operation.
 # Provision with `bash config/scripts/setup-hourly-release-token.sh`.
+#
+# The requested ref is vetted before checkout: it must be a branch or tag of this
+# repo, or a commit reachable from one. PR refs are refused outright — this
+# workflow runs the checked-out code next to MAC_CERTS and the notary password,
+# so "just build that community PR" must not become a way to hand fork code the
+# release identity. A branch here always belongs to someone with write access,
+# which is the same trust the dispatch button itself already requires.
 
 on:
   workflow_dispatch:
@@ -45,7 +52,7 @@ on:
         # than the one the workflow file itself is read from — normally leave the
         # picker on main and name your branch here, so a stale copy of this
         # workflow on an old branch is not what runs.
-        description: 'Branch, tag, or SHA to build (default: the branch selected above)'
+        description: 'Branch, tag, or SHA to build — must live in stablyai/orca; PR refs are refused (default: the branch selected above)'
         required: false
         default: ''
         type: string
@@ -77,6 +84,14 @@ env:
 jobs:
   build-adhoc-mac:
     if: github.repository == 'stablyai/orca'
+    # Why an environment: it gives the signing/notary/App secrets somewhere to
+    # live that a stale copy of this workflow on an old branch cannot reach.
+    # Referencing it is a no-op until repo settings give it teeth; the intended
+    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
+    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
+    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
+    # policy to main so only main's copy of this file can read them.
+    environment: adhoc-mac-build
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -85,6 +100,57 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
+      # Why vet before checkout: everything after this step runs the checked-out
+      # code with release signing credentials in reach. Branches and tags of this
+      # repo are the intended audience; refs/pull/* would smuggle in fork code,
+      # and a raw SHA is only accepted when some branch or tag of this repo can
+      # actually reach it. Resolving to a pinned SHA here also means the commit
+      # that was vetted is the commit that gets checked out — a push to the
+      # branch between the two steps cannot swap it.
+      - name: Vet the requested ref
+        id: vetted
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED_REF" in
+            refs/pull/*|pull/*)
+              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of stablyai/orca. Push the code to a branch of this repo instead."
+              exit 1
+              ;;
+          esac
+          # Bare: a work-tree repo refuses to fetch over its own checked-out
+          # branch. tree:0 keeps the fetch to the commit graph — no trees, no
+          # blobs — so this stays cheap next to the build it fronts.
+          scratch="$RUNNER_TEMP/vet-requested-ref"
+          git init -q --bare "$scratch"
+          git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          # Branch first to keep actions/checkout's old tie-break: bare
+          # rev-parse would prefer the tag when a branch shares its name.
+          sha=""
+          for cand in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "$REQUESTED_REF"; do
+            if sha="$(git -C "$scratch" rev-parse --verify --quiet "$cand^{commit}")"; then
+              break
+            fi
+            sha=""
+          done
+          if [[ -z "$sha" ]]; then
+            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of stablyai/orca."
+            exit 1
+          fi
+          # The object resolving locally is not proof a branch or tag reaches
+          # it: a partial clone can lazily fetch a bare SHA on demand, and
+          # GitHub serves PR-only commits by SHA. Reachability is the actual
+          # trust test.
+          if [[ -z "$(git -C "$scratch" for-each-ref --contains "$sha" refs/heads refs/tags | head -1)" ]]; then
+            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
+            exit 1
+          fi
+          echo "Vetted $REQUESTED_REF -> $sha"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
       - name: Checkout the requested ref
         uses: actions/checkout@v6
         with:
@@ -92,7 +158,7 @@ jobs:
           # build code that has not landed, and the workflow definition itself
           # always comes from the dispatch ref — naming the branch here instead
           # applies main's current copy of this file to an arbitrary branch.
-          ref: ${{ inputs.ref || github.ref_name }}
+          ref: ${{ steps.vetted.outputs.sha }}
           fetch-depth: 0
           # This job only reads stablyai/orca and never pushes; every write goes
           # to the adhoc repo through a minted App token passed by env. Not
@@ -146,17 +212,26 @@ jobs:
         env:
           REF: ${{ inputs.ref || github.ref_name }}
           LABEL: ${{ inputs.label }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Why this check: the version script is read from the branch being built,
+          # Why this check: the version scripts are read from the branch being built,
           # not from main, so a branch cut before the adhoc channel landed has no
-          # copy of it. Say that plainly instead of failing with a module-not-found.
-          if [[ ! -f config/scripts/adhoc-build-version.mjs ]]; then
-            echo "::error::$REF has no config/scripts/adhoc-build-version.mjs; rebase it onto a main that has the adhoc channel."
-            exit 1
-          fi
+          # copy of them. Say that plainly instead of failing with a module-not-found.
+          for script in adhoc-build-version dev-channel-base-version; do
+            if [[ ! -f "config/scripts/$script.mjs" ]]; then
+              echo "::error::$REF has no config/scripts/$script.mjs; rebase it onto a main that has the adhoc channel."
+              exit 1
+            fi
+          done
           echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
-          ORCA_ADHOC_LABEL="${LABEL:-$REF}" node config/scripts/adhoc-build-version.mjs \
+          # Why the main repo's tags: package.json on a branch is as stale as the
+          # main it forked from, and stable patches never merge back into it.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
+            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
+            --json tagName --jq '.[].tagName' || true)"
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
+            node config/scripts/adhoc-build-version.mjs \
             >"$RUNNER_TEMP/adhoc-identity.txt"
           if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
             echo "::error::adhoc-build-version.mjs emitted no release name; $REF's copy of the script is out of sync with this workflow."

@@ -68,6 +68,21 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
+  it('surfaces project scope truncation from the runtime transport bound', async () => {
+    const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
+
+    const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
+      scopePaths
+    })
+
+    expect(scanResult.issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'scope',
+        message: expect.stringContaining('first 64 project paths')
+      })
+    )
+  })
+
   it('stamps sessions and issues returned for a different execution host', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({
       ok: true,

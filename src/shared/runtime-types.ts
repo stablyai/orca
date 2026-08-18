@@ -6,26 +6,24 @@ import type {
   AgentType
 } from './agent-status-types'
 import type {
-  BaseRefSearchResult,
-  BrowserCookieImportResult,
   BrowserCertificateFailure,
+  BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileSource,
-  CreateWorktreeResult,
-  GitWorktreeInfo,
-  RemoveWorktreeResult,
-  Repo,
-  TabGroupLayoutNode,
-  TerminalColorOverrides,
-  TerminalLayoutSnapshot,
-  TuiAgent,
-  Worktree,
-  WorktreeLineage,
+  BrowserSessionProfileSource
+} from './browser-workspace-types'
+import type { BaseRefSearchResult, Repo } from './repo-types'
+import type { TabGroupLayoutNode } from './tab-types'
+import type { TerminalColorOverrides } from './terminal-color-overrides'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TuiAgent } from './tui-agent'
+import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
+import type {
   WorkspaceLineage,
-  WorktreeLineageWarning,
-  TerminalPaneLayoutNode
-} from './types'
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './worktree/lineage-types'
+import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -67,6 +65,8 @@ export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export type RuntimeStatus = {
   runtimeId: string
+  /** Authenticated requester identity. Missing for in-process callers and older hosts. */
+  pairedDeviceId?: string
   rendererGraphEpoch: number
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
@@ -143,7 +143,16 @@ export type RuntimeSyncedLeaf = {
 export type RuntimeSyncWindowGraph = {
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]
+  /** Only worktrees whose snapshot changed since the last acknowledged publication. */
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
+  /** Worktrees the renderer is still publishing unchanged; main must keep their
+   *  stored snapshots alive instead of pruning them as removed. */
+  unchangedMobileSessionWorktrees?: string[]
+}
+
+export type RuntimeRendererSyncWindowGraph = RuntimeSyncWindowGraph & {
+  /** Unique to one renderer document; a reload must publish from a new generation. */
+  rendererGeneration: string
 }
 
 export type RuntimeNativeChatLaunchDraftResolution = {
@@ -157,6 +166,9 @@ export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
    *  parent metadata needed by title-derived agent rows without name guessing. */
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
+  /** Worktrees the renderer withheld as unchanged that main holds no snapshot
+   *  for — it dropped them independently, so the renderer must republish them. */
+  mobileSessionResyncWorktrees?: string[]
 }
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -169,6 +181,8 @@ export type RuntimeMobileSessionTerminalTab = {
   ptyId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
+  /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
+  turnCompletedAt?: number
   launchAgent?: TuiAgent
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
@@ -395,15 +409,22 @@ export type RuntimeTerminalPathOpenTarget =
       provider: 'local' | 'ssh'
       absolutePath: string
       grantId: string
+      /** Present when the exact-path grant permits preview/read but not mutation. */
+      readOnly?: true
     }
   | {
       kind: 'unsupported'
       reason: string
     }
 
+export type RuntimeNativeChatFileContext = {
+  tabId: string
+  sessionId: string
+}
+
 /** Result of resolving a file path tapped in the mobile terminal against the
- *  worktree root (+ optional cwd). relativePath is null when the path resolves
- *  outside the worktree (not openable via the worktree-scoped file RPCs). */
+ *  selected or sibling workspace root (+ optional cwd). relativePath is null
+ *  when no workspace on the same execution host owns the path. */
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null
@@ -444,6 +465,9 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Where this terminal actually runs. Absent when the host predates the field
+   *  or could not name the host — never read an absent value as local. */
+  executionHostId?: ExecutionHostId
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -494,12 +518,24 @@ export type RuntimeTerminalVisualLayout = {
   root: RuntimeTerminalVisualLayoutNode
 }
 
+/** Which execution hosts a listing answered for, so an empty or partial result
+ *  reads as "none here" instead of "none anywhere". Host ids are as the
+ *  answering runtime names them — `_meta.runtimeId` says which runtime that is. */
+export type RuntimeTerminalListHostScope = {
+  hostIds: ExecutionHostId[]
+  /** Known hosts this listing skipped; a live terminal on one of them can be
+   *  absent from `terminals` without having exited. */
+  omittedHostIds: ExecutionHostId[]
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
   visualLayouts?: RuntimeTerminalVisualLayout[]
   topologyRevisions?: Record<string, number>
   totalCount: number
   truncated: boolean
+  /** Absent from hosts that predate the field — treat that scope as unverifiable. */
+  hostScope?: RuntimeTerminalListHostScope
 }
 
 export type RuntimeTerminalOrphanAdoptionClaim = {
@@ -659,6 +695,8 @@ export type RuntimeTerminalCreate = {
   warning?: string
   /** Present only for the structured host-authority resume path. */
   agentSessionDisposition?: 'created' | 'adopted'
+  /** The host attached this request to the existing stable pane owner. */
+  isReattach?: true
 }
 
 export type RuntimeTerminalSplit = {
@@ -672,6 +710,7 @@ export type RuntimeTerminalResolvePane = {
   tabId: string
   leafId: string
   ptyId: string | null
+  connected?: boolean
   worktreeId?: string
   executionHostId?: ExecutionHostId
   hostPlatform?: NodeJS.Platform
@@ -681,6 +720,12 @@ export type RuntimeTerminalFocus = {
   handle: string
   tabId: string
   worktreeId: string
+  /**
+   * Whether this request remained the winning applied host navigation when it settled.
+   * False also covers identity-only requests and unavailable host navigation.
+   * Optional for older clients; omit only when unknown.
+   */
+  navigated?: boolean
 }
 
 export type RuntimeTerminalClose = {
@@ -689,6 +734,14 @@ export type RuntimeTerminalClose = {
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
   ptyKilled: boolean
+  /**
+   * Why the PTY was not killed, when we know. Absent means today's answer —
+   * nothing observed either way — so older clients reading only `ptyKilled` are
+   * unaffected. `exited` never appears here: that is what `ptyKilled` reports.
+   */
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  /** Set with `ptyStopVerdict: 'unverifiable'`; names what we lost contact with. */
+  ptyStopReason?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
@@ -731,6 +784,8 @@ export type RuntimeWorktreeAgentRow = {
   /** When the current `state` was first reported (ms). Drives "Xm ago". */
   stateStartedAt: number
   updatedAt: number
+  /** See AgentStatusEntry.restoredUnconfirmed — set for hydrated nonterminal rows so clients don't render them as confirmed activity. */
+  restoredUnconfirmed?: boolean
 }
 
 export type RuntimeWorktreePsSummary = {
@@ -756,6 +811,7 @@ export type RuntimeWorktreePsSummary = {
   manualOrder?: number
   lastActivityAt?: number
   createdAt?: number
+  creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -20,12 +21,7 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-'))
   // Why: the real-home check consults CODEX_HOME and the shell rc, so a
   // developer who exports one would otherwise fail this suite locally.
-  for (const key of [
-    'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
-    'CODEX_HOME',
-    'ORCA_CODEX_HOME'
-  ]) {
+  for (const key of ['ORCA_USER_DATA_PATH', 'CODEX_HOME', 'ORCA_CODEX_HOME']) {
     previousEnv[key] = process.env[key]
     delete process.env[key]
   }
@@ -80,7 +76,7 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
-    expect(service.getMirroredHostHomePathForStatus()).toBeNull()
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({ kind: 'ready', homePath: null })
   })
 
   it('returns the selected account own home, which is what its mirror targets', async () => {
@@ -88,17 +84,23 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(createStore([account], account.id) as never)
 
-    expect(service.getMirroredHostHomePathForStatus()).toBe(account.managedHomePath)
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({
+      kind: 'ready',
+      homePath: account.managedHomePath
+    })
   })
 
-  it('returns the shared runtime home when the real-home lane is off', async () => {
-    process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME = '0'
+  it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
+    process.env.CODEX_HOME = join(testState.home, 'custom-codex-home')
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
     // Why: compare against the real helper, not a repeated literal, so the
     // status cannot silently drift if the managed home layout ever moves.
-    expect(service.getMirroredHostHomePathForStatus()).toBe(getOrcaManagedCodexHomePath())
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({
+      kind: 'ready',
+      homePath: getOrcaManagedCodexHomePath()
+    })
   })
 })

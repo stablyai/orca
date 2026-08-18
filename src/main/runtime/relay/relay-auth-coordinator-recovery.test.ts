@@ -257,3 +257,77 @@ describe('RelayAuthCoordinator transient recovery', () => {
     expect(openBroker).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('RelayAuthCoordinator liveness safety net', () => {
+  it('reopens a broker that died leaving no retry timer behind', async () => {
+    // Why: an auth refresh failing past token expiry closes the broker with
+    // no timer; only ensureLive (periodic/power-resume) can revive it.
+    vi.useFakeTimers()
+    const dead = { closeNow: vi.fn(), isLive: () => false }
+    const live = { closeNow: vi.fn(), isLive: () => true }
+    const openBroker = vi.fn().mockResolvedValueOnce(dead).mockResolvedValueOnce(live)
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.getActiveBroker()).toBe(dead)
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(openBroker).toHaveBeenCalledOnce()
+
+    coordinator.ensureLive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    expect(dead.closeNow).toHaveBeenCalled()
+    expect(coordinator.getActiveBroker()).toBe(live)
+  })
+
+  it('does not disturb a live broker, a scheduled retry, or an open in flight', async () => {
+    vi.useFakeTimers()
+    const broker = { closeNow: vi.fn(), isLive: () => true }
+    let releaseOpen: ((value: typeof broker) => void) | undefined
+    const openBroker = vi
+      .fn()
+      .mockRejectedValueOnce(new RelayHttpError('assignment', 503, 30_000))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseOpen = resolve
+          })
+      )
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
+
+    // A scheduled Retry-After timer owns recovery; ensureLive must not race it.
+    coordinator.ensureLive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
+
+    // The retry fires into a slow open; ensureLive must not preempt it.
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    coordinator.ensureLive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    releaseOpen?.(broker)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.getActiveBroker()).toBe(broker)
+
+    // A live broker needs nothing.
+    coordinator.ensureLive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+  })
+})

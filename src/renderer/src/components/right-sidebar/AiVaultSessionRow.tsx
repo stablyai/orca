@@ -14,16 +14,13 @@ import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
+import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
-import {
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import {
   conversationRoleLabel,
   getSessionDetailsId,
-  SessionMetadata,
-  SessionWorktreeLine
+  SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 
@@ -51,7 +48,8 @@ export function VaultSessionRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onRequestDelete
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -77,10 +75,14 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRequestDelete: (session: AiVaultSession) => void
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
+  // Computed once so the dropdown menu and the context menu never disagree.
+  const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session)
+  const requestDelete = (): void => onRequestDelete(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
@@ -120,7 +122,14 @@ export function VaultSessionRow({
             'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
             !detailsExpanded && 'min-h-[98px]'
           )}
-          onClick={() => {
+          onClick={(event) => {
+            // Radix portals this row's menus out of its DOM, but React still
+            // bubbles their clicks here — without this, choosing Delete expands
+            // the row behind the dialog.
+            const target = event.target
+            if (target instanceof Node && !event.currentTarget.contains(target)) {
+              return
+            }
             onToggleDetails()
           }}
         >
@@ -169,39 +178,34 @@ export function VaultSessionRow({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              deleteBlockedReason={deleteBlockedReason}
+              onRequestDelete={requestDelete}
             />
           </div>
-          {detailsExpanded && shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
-            <div className="mt-1">
-              <SessionWorktreeLine worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
+          {!detailsExpanded ? (
+            <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+              {latestTurn ? (
+                <>
+                  <span className="font-medium text-foreground/80">
+                    {conversationRoleLabel(latestTurn.role)}
+                  </span>
+                  <span>: {latestTurn.text}</span>
+                </>
+              ) : (
+                translate(
+                  'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+                  'No conversation preview available'
+                )
+              )}
             </div>
           ) : null}
-          {!detailsExpanded ? (
-            <>
-              <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-                {latestTurn ? (
-                  <>
-                    <span className="font-medium text-foreground/80">
-                      {conversationRoleLabel(latestTurn.role)}
-                    </span>
-                    <span>: {latestTurn.text}</span>
-                  </>
-                ) : (
-                  translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
-                    'No conversation preview available'
-                  )
-                )}
-              </div>
-              <SessionMetadata
-                session={session}
-                liveState={liveState}
-                updatedAt={updatedAt}
-                worktreeInfo={worktreeInfo}
-                vaultScope={vaultScope}
-              />
-            </>
-          ) : null}
+          <SessionMetadata
+            session={session}
+            liveState={liveState}
+            updatedAt={updatedAt}
+            worktreeInfo={worktreeInfo}
+            vaultScope={vaultScope}
+          />
           {detailsExpanded ? (
             <SessionInlineDetails
               id={detailsId}
@@ -233,6 +237,8 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          deleteBlockedReason={deleteBlockedReason}
+          onDelete={requestDelete}
         />
       </ContextMenuContent>
     </ContextMenu>

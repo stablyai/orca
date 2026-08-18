@@ -72,9 +72,39 @@ import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
   BrowserSessionProfileSource
-} from '../../shared/types'
+} from '../../shared/browser-workspace-types'
 import { browserSessionRegistry } from './browser-session-registry'
-import { setupClientHintsOverride } from './browser-session-ua'
+import {
+  isGoogleSourceBoundCookie,
+  isNonTransplantableCookieDomain,
+  NON_TRANSPLANTABLE_HOST_KEY_SQL,
+  normalizeCookieDomain,
+  normalizeCookieImportDomain,
+  replaceCookiesForImportedDomains,
+  type CookieImportMode,
+  type ReplacedImportedDomainCookies
+} from './browser-cookie-import-policy'
+import {
+  removeTransplantableCookies,
+  withCookieClearLock,
+  type CookieClearStore,
+  type CookieImportWriteStore
+} from './browser-cookie-import-clear'
+import { openCookieClearStore } from './browser-cookie-clear-store'
+import {
+  readChromiumRowPartition,
+  readFirefoxRowPartition,
+  readJsonCookiePartition,
+  type SourcePartitionRead
+} from './browser-cookie-source-partition'
+import {
+  emptyImportWritePhase,
+  writeImportedCookies,
+  type ImportedCookieFields,
+  type ImportWritePhase,
+  type SourceCookieToWrite,
+  planImportWrites
+} from './browser-cookie-import-write'
 import {
   createChromiumCookieSnapshot,
   type ChromiumCookieSnapshot
@@ -437,18 +467,15 @@ type RawCookieEntry = {
   httpOnly?: unknown
   sameSite?: unknown
   expirationDate?: unknown
+  partitionKey?: unknown
+  partitionKeyOpaque?: unknown
 }
 
-type ValidatedCookie = {
-  url: string
-  name: string
-  value: string
-  domain: string
-  path: string
-  secure: boolean
-  httpOnly: boolean
+// Why (STA-4300): `partition` is required, not optional, so every source that builds a cookie has to
+// state what it read. An optional field would let a new source silently default to unpartitioned.
+type ValidatedCookie = ImportedCookieFields & {
   sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
-  expirationDate: number | undefined
+  partition: SourcePartitionRead
 }
 
 // Why: Chromium's CookieSameSiteForStorage enum (0=Unspecified,1=None,2=Lax,3=Strict) differs from Firefox's numbering.
@@ -498,15 +525,15 @@ function normalizeSameSite(raw: unknown): 'unspecified' | 'no_restriction' | 'la
   return 'unspecified'
 }
 
-// Why: cookies.set() needs a url to scope the cookie; derive it from domain + secure flag.
+// Why: a cookie identity needs a url to scope it; derive it from domain + secure flag.
 function deriveUrl(domain: string, secure: boolean): string | null {
-  const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
-  if (!cleanDomain || cleanDomain.includes(' ')) {
+  const normalizedDomain = normalizeCookieDomain(domain)
+  if (!normalizedDomain) {
     return null
   }
   const protocol = secure ? 'https' : 'http'
   try {
-    const url = new URL(`${protocol}://${cleanDomain}/`)
+    const url = new URL(`${protocol}://${normalizedDomain}/`)
     return url.toString()
   } catch {
     return null
@@ -545,74 +572,173 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
     secure,
     httpOnly: raw.httpOnly === true || raw.httpOnly === 1,
     sameSite: normalizeSameSite(raw.sameSite),
-    expirationDate
+    expirationDate,
+    partition: readJsonCookiePartition(raw.partitionKey, raw.partitionKeyOpaque)
+  }
+}
+
+// Why (STA-4300): the import writes get a store with no `set` on it and no Session behind it, so
+// the partition-dropping write is not merely unused here — it cannot be reached.
+type CookieImportSessionStore = CookieClearStore & CookieImportWriteStore & { dispose: () => void }
+
+type CookieImportTarget = {
+  partition: string
+  openWriteStore: () => CookieImportSessionStore
+}
+
+type CookieImportOptions = {
+  canReportPartitionSkippedCookies?: boolean
+}
+
+function cookieImportTarget(targetPartition: string): CookieImportTarget {
+  const targetSession = session.fromPartition(targetPartition)
+  return {
+    partition: targetPartition,
+    openWriteStore: () => openCookieClearStore(targetSession)
   }
 }
 
 async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
-  targetPartition: string
+  target: CookieImportTarget,
+  mode: CookieImportMode,
+  options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
-  diag(
-    `importValidatedCookies: ${cookies.length} validated of ${totalInput} total, partition="${targetPartition}"`
+  const targetPartition = target.partition
+  const importDomainCache = new Map<string, boolean>()
+  const validDomainCookies = cookies.filter((cookie) => {
+    let valid = importDomainCache.get(cookie.domain)
+    if (valid === undefined) {
+      valid = normalizeCookieImportDomain(cookie.domain) !== null
+      importDomainCache.set(cookie.domain, valid)
+    }
+    return valid
+  })
+  const sourceBoundFiltered = validDomainCookies.filter(
+    (cookie) => !isGoogleSourceBoundCookie(cookie.name, cookie.domain)
   )
-  const targetSession = session.fromPartition(targetPartition)
-  let importedCount = 0
-  let skipped = totalInput - cookies.length
-  const domainSet = new Set<string>()
+  // Why: dropping these before the replace scope is computed is what keeps the existing
+  // Google session intact — replaceCookiesForImportedDomains only clears domains we import.
+  const importableCookies = sourceBoundFiltered.filter(
+    (cookie) => !isNonTransplantableCookieDomain(cookie.domain)
+  )
+  const integritySkipped = validDomainCookies.length - sourceBoundFiltered.length
+  const nonTransplantableSkipped = sourceBoundFiltered.length - importableCookies.length
+  const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
+  const invalidDomainSkipped = cookies.length - validDomainCookies.length
+  diag(
+    `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped, ${nonTransplantableSkipped} non-transplantable skipped of ${totalInput} total, partition="${targetPartition}"`
+  )
+  // Why (STA-4300 I1): every cookie's fate is decided here, before the jar is opened. The plan is
+  // the single value the write set AND the removal scope both derive from, so they cannot drift
+  // apart the way they did in bf6dc6fcba.
+  const plan = planImportWrites(importableCookies)
 
-  // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
-  const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+  // Why (§4.3c): a family we cannot name is one we cannot exclude from the removal scope, and
+  // clearing a family we cannot protect is the P0. Refuse before touching anything.
+  if (plan.hasUnrepresentableSkip) {
+    return {
+      ok: false,
+      reason:
+        'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+    }
+  }
 
-  for (const cookie of cookies) {
+  // Why: an older remote client cannot surface this skip, so fail before opening the target jar.
+  if (options.canReportPartitionSkippedCookies === false && plan.skips.length > 0) {
+    return {
+      ok: false,
+      reason:
+        'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
+    }
+  }
+  // Why: a family-suppressed sibling is a partition skip too, so partitionSkippedCookies is a
+  // BREAKDOWN of skippedCookies and is added into it exactly once — never a separate addend, or
+  // totalCookies === importedCookies + skippedCookies silently stops holding.
+  const partitionSkipped = plan.skips.length
+  let skipped = totalInput - importableCookies.length + partitionSkipped
+  let phase: ImportWritePhase = emptyImportWritePhase()
+  // Why (STA-4097/STA-4300): both the rollback and the import writes need CDP identities — only
+  // they carry partitionKey. cookies.set drops it silently, on the success path as well.
+  const cookieClearStore = plan.writes.length > 0 ? target.openWriteStore() : null
+
+  if (cookieClearStore) {
+    let replaced: ReplacedImportedDomainCookies | null = null
     try {
-      // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-      const isHostPrefixed = cookie.name.startsWith('__Host-')
-      await targetSession.cookies.set({
-        url: cookie.url,
-        name: cookie.name,
-        value: stripNonPrintable(cookie.value),
-        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-        path: isHostPrefixed ? '/' : cookie.path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        expirationDate: cookie.expirationDate
-      })
-      importedCount++
-      // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
-      const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
-      domainSet.add(cleanDomain)
-    } catch (err) {
-      skipped++
-      if (skipped <= 5) {
-        // Find the exact offending character position and code
-        const val = cookie.value
-        let badInfo = 'none found'
-        for (let i = 0; i < val.length; i++) {
-          const code = val.charCodeAt(i)
-          if (code < 0x20 || code > 0x7e) {
-            badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
-            break
+      if (mode === 'replace-imported-domains') {
+        try {
+          // Why (STA-4300 I2 / §2b): the removal scope is the write set. Filtering per exact
+          // cookie is NOT enough — replaceCookiesForImportedDomains expands each imported domain
+          // into its descendant roots, so a readable apex cookie would drag a skipped subdomain's
+          // live session into the removal scope with nothing written back. plan.writes is already
+          // family-closed, and using the same array for both makes them impossible to diverge.
+          const replacementDomains = plan.writes.map((cookie) => cookie.domain)
+          replaced = await replaceCookiesForImportedDomains(cookieClearStore, replacementDomains)
+          diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
+        } catch (err) {
+          diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+          return {
+            ok: false,
+            reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
           }
         }
-        diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
-        )
       }
+
+      // Why: Chromium rejects any non-printable-ASCII byte in a cookie value; strip as a safety net.
+      const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+      phase = await writeImportedCookies(
+        cookieClearStore,
+        plan.writes.map((cookie) => ({ ...cookie, value: stripNonPrintable(cookie.value) })),
+        { stopOnFailure: replaced !== null, log: diag }
+      )
+      // Why: plan.skips holds every partition-driven skip — the unreadable rows AND the readable
+      // siblings suppressed by family closure. phase.partitionSkipped is 0 now that only planned
+      // writes reach the writer, so the count comes from the plan and is added exactly once.
+      skipped += phase.writeRejected
+
+      if (phase.failure && replaced) {
+        const rollbackFailures: unknown[] = []
+        for (const cookie of phase.attemptedKeys.toReversed()) {
+          try {
+            await cookieClearStore.remove(cookie.url, cookie.name)
+          } catch (err) {
+            rollbackFailures.push(err)
+          }
+        }
+        // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
+        // restore set would spin up a hidden BrowserWindow to put nothing back.
+        if (replaced.identities.length > 0) {
+          try {
+            await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
+          } catch (err) {
+            rollbackFailures.push(err)
+          }
+        }
+        if (rollbackFailures.length > 0) {
+          diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+        }
+        return {
+          ok: false,
+          reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
+        }
+      }
+    } finally {
+      cookieClearStore.dispose()
     }
   }
 
   diag(
-    `importValidatedCookies result: imported=${importedCount} skipped=${skipped} domains=${domainSet.size}`
+    `importValidatedCookies result: imported=${phase.importedCount} skipped=${skipped} partition-unreadable=${partitionSkipped} domains=${phase.domains.size}`
   )
 
   const summary: BrowserCookieImportSummary = {
     totalCookies: totalInput,
-    importedCookies: importedCount,
+    importedCookies: phase.importedCount,
     skippedCookies: skipped,
-    domains: [...domainSet].sort()
+    ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+    ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+    domains: [...phase.domains].sort()
   }
 
   return { ok: true, profileId: '', summary }
@@ -690,73 +816,12 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(validated, parsed.length, targetPartition)
-}
-
-// ---------------------------------------------------------------------------
-// Direct import from installed Chromium browser
-// ---------------------------------------------------------------------------
-
-// Why: services bind auth cookies to the creating User-Agent, so build a UA matching the source browser's real version.
-export function getUserAgentForBrowser(
-  family: BrowserSessionProfileSource['browserFamily']
-): string | null {
-  // Why: UA version comes from macOS-only plist reading; elsewhere the default Electron UA is acceptable.
-  if (process.platform !== 'darwin') {
-    return null
-  }
-
-  const platform = 'Macintosh; Intel Mac OS X 10_15_7'
-  const chromeBase = 'AppleWebKit/537.36 (KHTML, like Gecko)'
-
-  function readBrowserVersion(
-    appPath: string,
-    plistKey = 'CFBundleShortVersionString'
-  ): string | null {
-    try {
-      return (
-        execFileSync('defaults', ['read', `${appPath}/Contents/Info`, plistKey], {
-          encoding: 'utf-8',
-          timeout: 5_000
-        }).trim() || null
-      )
-    } catch {
-      return null
-    }
-  }
-
-  switch (family) {
-    case 'chrome': {
-      const v = readBrowserVersion('/Applications/Google Chrome.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'edge': {
-      const v = readBrowserVersion('/Applications/Microsoft Edge.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36 Edg/${v}` : null
-    }
-    case 'arc': {
-      const v = readBrowserVersion('/Applications/Arc.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'chromium': {
-      const v = readBrowserVersion('/Applications/Brave Browser.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'comet': {
-      // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Comet.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'helium': {
-      // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Helium.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'firefox':
-    case 'safari':
-    case 'manual':
-      return null
-  }
+  return importValidatedCookies(
+    validated,
+    parsed.length,
+    cookieImportTarget(targetPartition),
+    'replace-imported-domains'
+  )
 }
 
 const PBKDF2_ITERATIONS = 1003
@@ -785,12 +850,13 @@ function chromiumTimestampToUnix(chromiumTs: bigint | number | string): number {
 
 // Why: each platform protects the Chromium key differently: macOS/Linux PBKDF2→AES-128-CBC, Windows DPAPI→AES-256-GCM.
 
-type EncryptionKeyResult = {
-  key: Buffer
-  mode: 'aes-128-cbc' | 'aes-256-gcm'
-  // Why: Linux v10 cookies use "peanuts" and v11 the keyring password; both keys are needed to decrypt the full set.
-  fallbackKey?: Buffer
-}
+type EncryptionKeyResult =
+  | {
+      mode: 'aes-128-cbc'
+      keysByVersion: Partial<Record<'v10' | 'v11', Buffer>>
+      keyringUnavailable?: boolean
+    }
+  | { mode: 'aes-256-gcm'; key: Buffer }
 
 export type ChromiumCookieColumnInfo = {
   name: string
@@ -891,7 +957,7 @@ export function buildChromiumCookieInsertParams(
       return decryptedValue
     }
 
-    const sourceHasColumn = Object.prototype.hasOwnProperty.call(sourceRow, column.name)
+    const sourceHasColumn = Object.hasOwn(sourceRow, column.name)
     const sourceValue = sourceHasColumn ? normalizeSqliteCookieValue(sourceRow[column.name]) : null
     if (sourceValue !== null) {
       return sourceValue
@@ -933,8 +999,10 @@ function getMacEncryptionKey(
       { encoding: 'utf-8', timeout: 30_000 }
     ).trim()
     return {
-      key: pbkdf2Sync(raw, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, 'sha1'),
-      mode: 'aes-128-cbc'
+      mode: 'aes-128-cbc',
+      keysByVersion: {
+        v10: pbkdf2Sync(raw, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, 'sha1')
+      }
     }
   } catch {
     return null
@@ -945,7 +1013,8 @@ function getLinuxEncryptionKey(
   keychainService: string,
   keychainAccount: string
 ): EncryptionKeyResult | null {
-  // Why: v10 cookies use hardcoded "peanuts", v11 the keyring password; derive both so decrypt can pick by version prefix.
+  // Chromium uses v11 only with OS key storage; without it, Linux writes v10 with hardcoded
+  // "peanuts". Keep eligibility explicit because CBC cannot authenticate a wrong-key result.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
@@ -965,12 +1034,20 @@ function getLinuxEncryptionKey(
         timeout: 5_000
       }).trim()
     } catch {
-      diag('  Linux keyring unavailable — v11 cookies may fail to decrypt')
+      diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
+    }
+  }
+
+  if (!keyringPassword) {
+    return {
+      mode: 'aes-128-cbc',
+      keysByVersion: { v10: v10Key },
+      keyringUnavailable: true
     }
   }
 
   const v11Key = pbkdf2Sync(keyringPassword, PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
-  return { key: v11Key, mode: 'aes-128-cbc', fallbackKey: v10Key }
+  return { mode: 'aes-128-cbc', keysByVersion: { v10: v10Key, v11: v11Key } }
 }
 
 function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult | null {
@@ -1046,6 +1123,53 @@ function stripHmac(buf: Buffer): Buffer {
   return hasHmacPrefix(buf) ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN) : buf
 }
 
+// Why: the version prefix is the only thing that survives a failed decrypt, so read it once and
+// share it between the decrypt path and the failure attribution.
+function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null {
+  if (encryptedBuffer.length < 3) {
+    return null
+  }
+  const version = encryptedBuffer.subarray(0, 3).toString('utf-8')
+  return /^v\d\d$/.test(version) ? version : null
+}
+
+// Why: Chrome/Edge 140+ on Windows prefix every cookie with `v20` (app-bound encryption), which
+// only the writing browser can unwrap. Classify it before decrypt so it is not folded into corruption.
+export function isAppBoundEncryptedCookie(encryptedBuffer: Buffer): boolean {
+  return cookieEncryptionVersion(encryptedBuffer) === 'v20'
+}
+
+// Why: a named cause must carry only its exact count; tied causes fall back to unknown.
+function buildUndecryptableWarning(counts: {
+  decryptFailed: number
+  appBoundFailed: number
+  keyringUnavailableFailed: number
+}): BrowserCookieImportSummary['warning'] {
+  if (counts.decryptFailed === 0) {
+    return undefined
+  }
+  const unknownFailed =
+    counts.decryptFailed - counts.appBoundFailed - counts.keyringUnavailableFailed
+  const rankedCauses = [
+    { reason: 'app-bound-encryption' as const, count: counts.appBoundFailed },
+    { reason: 'linux-keyring-unavailable' as const, count: counts.keyringUnavailableFailed },
+    { reason: 'unknown' as const, count: unknownFailed }
+  ].sort((left, right) => right.count - left.count)
+  const [dominant, runnerUp] = rankedCauses
+
+  if (dominant.reason === 'unknown' || dominant.count === runnerUp.count) {
+    return { code: 'cookies-undecryptable', failedCookies: counts.decryptFailed, reason: 'unknown' }
+  }
+
+  const otherFailedCookies = counts.decryptFailed - dominant.count
+  return {
+    code: 'cookies-undecryptable',
+    failedCookies: dominant.count,
+    reason: dominant.reason,
+    ...(otherFailedCookies > 0 ? { otherFailedCookies } : {})
+  }
+}
+
 function decryptCookieValueRaw(
   encryptedBuffer: Buffer,
   keyResult: EncryptionKeyResult
@@ -1063,29 +1187,25 @@ function decryptCookieValueRaw(
   }
 
   // AES-128-CBC (macOS and Linux)
+  const key = version === 'v10' || version === 'v11' ? keyResult.keysByVersion[version] : undefined
+  if (!key) {
+    return null
+  }
+
   const ciphertext = encryptedBuffer.subarray(3)
   if (!ciphertext.length) {
-    return Buffer.alloc(0)
+    return null
   }
 
-  // Why: Linux v10 uses the "peanuts" key, v11 the keyring key; try primary then fallback (macOS uses one key).
-  const keysToTry =
-    version === 'v10' && keyResult.fallbackKey
-      ? [keyResult.fallbackKey, keyResult.key]
-      : [keyResult.key, ...(keyResult.fallbackKey ? [keyResult.fallbackKey] : [])]
-
-  for (const key of keysToTry) {
-    try {
-      const iv = Buffer.alloc(16, ' ')
-      const decipher = createDecipheriv('aes-128-cbc', key, iv)
-      decipher.setAutoPadding(true)
-      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-      return stripHmac(decrypted)
-    } catch {
-      continue
-    }
+  try {
+    const iv = Buffer.alloc(16, ' ')
+    const decipher = createDecipheriv('aes-128-cbc', key, iv)
+    decipher.setAutoPadding(true)
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+    return stripHmac(decrypted)
+  } catch {
+    return null
   }
-  return null
 }
 
 function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
@@ -1226,7 +1346,10 @@ function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
     secure,
     httpOnly,
     sameSite: 'unspecified',
-    expirationDate
+    expirationDate,
+    // Why: Cookies.binarycookies has no partition field — Safari's format predates CHIPS, so every
+    // decoded cookie is genuinely unpartitioned rather than missing an identity.
+    partition: { status: 'unpartitioned' }
   }
 }
 
@@ -1250,7 +1373,8 @@ function readCString(buf: Buffer, offset: number, end: number): string | null {
 
 async function importCookiesFromFirefox(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  options: CookieImportOptions
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromFirefox: partition="${targetPartition}"`)
 
@@ -1279,7 +1403,7 @@ async function importCookiesFromFirefox(
 
   try {
     const db = new DatabaseSync(tmpCookiesPath, { readOnly: true })
-    type FirefoxRow = {
+    type FirefoxRow = Record<string, unknown> & {
       name: string
       value: string
       host: string
@@ -1288,10 +1412,21 @@ async function importCookiesFromFirefox(
       isSecure: number
       isHttpOnly: number
       sameSite: number
+      isPartitionedAttributeSet?: number
     }
+    // Why: selecting a column an older moz_cookies schema lacks fails the whole import. A schema
+    // without the server-declared partition flag predates that cookie identity.
+    const firefoxColumns = new Set(
+      (db.prepare('PRAGMA table_info(moz_cookies)').all() as { name: string }[]).map(
+        (column) => column.name
+      )
+    )
+    const partitionColumn = firefoxColumns.has('isPartitionedAttributeSet')
+      ? ', isPartitionedAttributeSet'
+      : ''
     const rows = db
       .prepare(
-        'SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite FROM moz_cookies'
+        `SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite${partitionColumn} FROM moz_cookies`
       )
       .all() as FirefoxRow[]
     db.close()
@@ -1328,7 +1463,8 @@ async function importCookiesFromFirefox(
         secure,
         httpOnly: row.isHttpOnly === 1,
         sameSite: firefoxSameSite(row.sameSite),
-        expirationDate: row.expiry > 0 ? row.expiry : undefined
+        expirationDate: row.expiry > 0 ? row.expiry : undefined,
+        partition: readFirefoxRowPartition(row, firefoxColumns)
       })
     }
 
@@ -1338,7 +1474,13 @@ async function importCookiesFromFirefox(
       return { ok: false, reason: 'No valid cookies found in Firefox.' }
     }
 
-    return importValidatedCookies(validated, rows.length, targetPartition)
+    return importValidatedCookies(
+      validated,
+      rows.length,
+      cookieImportTarget(targetPartition),
+      'replace-imported-domains',
+      options
+    )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
     diag(`  Firefox import failed: ${String(err)}`)
@@ -1392,7 +1534,12 @@ async function importCookiesFromSafari(
       return { ok: false, reason: 'All Safari cookies are expired.' }
     }
 
-    return importValidatedCookies(valid, cookies.length, targetPartition)
+    return importValidatedCookies(
+      valid,
+      cookies.length,
+      cookieImportTarget(targetPartition),
+      'replace-imported-domains'
+    )
   } catch (err) {
     diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
@@ -1405,7 +1552,8 @@ async function importCookiesFromSafari(
 
 export async function importCookiesFromBrowser(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromBrowser: browser=${browser.family} partition="${targetPartition}"`)
   if (!existsSync(browser.cookiesPath)) {
@@ -1414,7 +1562,7 @@ export async function importCookiesFromBrowser(
   }
 
   if (browser.family === 'firefox') {
-    return importCookiesFromFirefox(browser, targetPartition)
+    return importCookiesFromFirefox(browser, targetPartition, options)
   }
   if (browser.family === 'safari') {
     return importCookiesFromSafari(browser, targetPartition)
@@ -1426,8 +1574,15 @@ export async function importCookiesFromBrowser(
   const targetSession = session.fromPartition(targetPartition)
   await targetSession.cookies.flushStore()
 
+  // Why (STA-4300): ask the Session where its own storage lives instead of rebuilding the path from
+  // the caller's partition string. String surgery on a caller-supplied name is what let a value like
+  // "persist:../.." resolve a Cookies DB outside the Partitions directory and stage a replacement
+  // over it; it also drifts whenever Chromium changes how a partition name maps to a directory.
+  const partitionDir = targetSession.getStoragePath()
+  if (!partitionDir) {
+    return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
+  }
   const partitionName = targetPartition.replace('persist:', '')
-  const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
   let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
 
   // Why: Electron creates the Cookies file only after a cookie is stored; a throwaway set/remove forces DB init for unused profiles.
@@ -1527,7 +1682,10 @@ export async function importCookiesFromBrowser(
         const targetCols: string[] = targetColumnInfo.map((r) => r.name)
         colList = targetCols.join(', ')
         placeholders = targetCols.map(() => '?').join(', ')
-        stagingDb.exec('DELETE FROM cookies')
+        // Why: the staged DB replaces the whole live DB at cold start, so it is a clear step
+        // like any other — keep the live non-transplantable rows in it rather than replaying
+        // a wipe the in-memory path was not allowed to perform.
+        stagingDb.exec(`DELETE FROM cookies WHERE NOT (${NON_TRANSPLANTABLE_HOST_KEY_SQL})`)
       } catch (err) {
         diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
         stagingAvailable = false
@@ -1540,6 +1698,13 @@ export async function importCookiesFromBrowser(
       }
     }
 
+    // Why (STA-4300): the partition columns drift across Chromium versions, so read the source
+    // schema rather than assuming a row's missing column means "unpartitioned".
+    const sourceColumns = new Set(
+      (sourceDb.prepare('PRAGMA table_info(cookies)').all() as ChromiumCookieColumnInfo[]).map(
+        (column) => column.name
+      )
+    )
     const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
       string,
       unknown
@@ -1555,9 +1720,41 @@ export async function importCookiesFromBrowser(
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
+    // Why (STA-4300): partition fidelity is a property of the source row, even when its value
+    // cannot be decrypted. Plan first so decryption failure cannot discard a family's skip.
+    const partitionCandidates = sourceRows.flatMap((sourceRow) => {
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+      return isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain)
+        ? []
+        : [{ sourceRow, domain, partition: readChromiumRowPartition(sourceRow, sourceColumns) }]
+    })
+    const nativePlan = planImportWrites(partitionCandidates)
+    const plannedSourceRows = new Set(nativePlan.writes.map((candidate) => candidate.sourceRow))
+    const partitionBySourceRow = new Map(
+      partitionCandidates.map((candidate) => [candidate.sourceRow, candidate.partition])
+    )
+
+    // Why (§4.3c): a family we cannot name is one we cannot exclude from the clear, and clearing a
+    // family we cannot protect is the P0. Refuse before the jar is touched.
+    if (nativePlan.hasUnrepresentableSkip) {
+      closeStagingDb()
+      discardStagingFile()
+      return {
+        ok: false,
+        reason:
+          'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+      }
+    }
+
     const needsSourceKey = sourceRows.some((sourceRow) => {
       const encRaw = sourceRow.encrypted_value
-      return encRaw instanceof Uint8Array && encRaw.length > 0
+      if (!(encRaw instanceof Uint8Array) || encRaw.length === 0) {
+        return false
+      }
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+      return !(isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain))
     })
     const sourceKey = needsSourceKey
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
@@ -1572,42 +1769,29 @@ export async function importCookiesFromBrowser(
       }
     }
 
-    // Why: Google integrity cookies are bound to the source browser's TLS/env; importing them triggers CookieMismatch, so skip and let Google reissue.
-    const INTEGRITY_COOKIE_NAMES = new Set([
-      'SIDCC',
-      '__Secure-1PSIDCC',
-      '__Secure-3PSIDCC',
-      '__Secure-STRP',
-      'AEC'
-    ])
-    function isIntegrityCookie(name: string, domain: string): boolean {
-      if (!INTEGRITY_COOKIE_NAMES.has(name)) {
-        return false
-      }
-      const d = domain.startsWith('.') ? domain.slice(1) : domain
-      return d === 'google.com' || d.endsWith('.google.com')
-    }
-
     let imported = 0
     let skipped = 0
+    let decryptFailed = 0
+    let appBoundFailed = 0
+    let keyringUnavailableFailed = 0
     let integritySkipped = 0
+    let nonTransplantableSkipped = 0
+    const partitionSkipped = nativePlan.skips.length
     let memoryLoaded = 0
     let memoryFailed = 0
     const domainSet = new Set<string>()
 
-    type DecryptedCookie = {
+    type DecryptedCookie = Omit<ImportedCookieFields, 'url'> & {
       decryptedValue: Buffer
-      value: string
-      domain: string
-      name: string
-      path: string
-      secure: boolean
-      httpOnly: boolean
       sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
-      expirationDate: number | undefined
+      partition: SourcePartitionRead
     }
 
     const decryptedCookies: DecryptedCookie[] = []
+    // Why: the staging insert needs the RAW source row, so each scanned candidate carries it.
+    // A plan record holding only the derived fields compiles fine and then cannot stage.
+    const scanned: { entry: DecryptedCookie; sourceRow: Record<string, unknown> }[] = []
+    const sourceDomainValidity = new Map<string, boolean>()
 
     // Why: staging only backs the cold-restart replay, so any failure writing it disables that
     // fallback instead of aborting an import whose in-memory half still works.
@@ -1633,7 +1817,29 @@ export async function importCookiesFromBrowser(
       disableStaging('staged database exposed no cookies columns')
     }
 
+    // Why (§4.3b): a staged image is a whole-DB replacement on next start, so it cannot represent
+    // "preserve this family". When anything is preserved, this import gets no cold-start fallback.
+    if (nativePlan.skippedFamilies.size > 0) {
+      disableStaging(
+        `${nativePlan.skippedFamilies.size} preserved cookie families cannot be represented in a staged image`
+      )
+    }
+
     for (const sourceRow of sourceRows) {
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+
+      if (isGoogleSourceBoundCookie(name, domain)) {
+        integritySkipped++
+        continue
+      }
+
+      // Why: transplanting these replaces a working sign-in with a session the site rejects.
+      if (isNonTransplantableCookieDomain(domain)) {
+        nonTransplantableSkipped++
+        continue
+      }
+
       const encRaw = sourceRow.encrypted_value
       // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
       const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
@@ -1641,8 +1847,26 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
-        const raw = sourceKey ? decryptCookieValueRaw(encBuf, sourceKey) : null
+        const version = cookieEncryptionVersion(encBuf)
+        const appBoundIneligible = version === 'v20'
+        const keyringIneligible =
+          version === 'v11' &&
+          sourceKey?.mode === 'aes-128-cbc' &&
+          sourceKey.keyringUnavailable === true
+        const raw =
+          sourceKey && !appBoundIneligible && !keyringIneligible
+            ? decryptCookieValueRaw(encBuf, sourceKey)
+            : null
         if (!raw) {
+          // Why: once decrypt returns null every failure looks identical, so attribute the cause
+          // here while the version prefix is still in hand. Without this an undecryptable profile
+          // is indistinguishable from an empty one and reports success.
+          decryptFailed++
+          if (appBoundIneligible) {
+            appBoundFailed++
+          } else if (keyringIneligible) {
+            keyringUnavailableFailed++
+          }
           skipped++
           continue
         }
@@ -1655,43 +1879,65 @@ export async function importCookiesFromBrowser(
         decryptedValue = Buffer.alloc(0)
       }
 
-      const domain = sourceRow.host_key as string
-      const name = sourceRow.name as string
-
-      if (isIntegrityCookie(name, domain)) {
-        integritySkipped++
+      let validDomain = sourceDomainValidity.get(domain)
+      if (validDomain === undefined) {
+        validDomain = normalizeCookieImportDomain(domain) !== null
+        sourceDomainValidity.set(domain, validDomain)
+      }
+      if (!validDomain) {
+        skipped++
         continue
       }
 
-      const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
-      domainSet.add(cleanDomain)
+      // Decryption failures are already counted above. Every other row suppressed by the
+      // pre-decryption family plan is counted once here, keeping partitionSkipped a breakdown.
+      if (!plannedSourceRows.has(sourceRow)) {
+        skipped++
+        continue
+      }
 
       const path = sourceRow.path as string
       const secure = sourceRow.is_secure === 1n
       const httpOnly = sourceRow.is_httponly === 1n
       const sameSite = chromiumSameSite(Number(sourceRow.samesite ?? 0))
       const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
+      const partition = partitionBySourceRow.get(sourceRow)!
       // Why: cookie values are raw bytes, not UTF-8; latin1 preserves 0x00–0xFF without lossy replacement.
       const value = decryptedValue.toString('latin1')
 
-      decryptedCookies.push({
-        decryptedValue,
-        value,
-        domain,
-        name,
-        path,
-        secure,
-        httpOnly,
-        sameSite,
-        expirationDate: expiresUtc > 0 ? expiresUtc : undefined
+      // Why (STA-4300 I1): SCAN only. Nothing is emitted here — not decryptedCookies, not
+      // domainSet, not a staging row, not the imported count. bf6dc6fcba pushed the cookie and
+      // THEN applied the unreadable guard, so an unreadable row discovered late could not retract
+      // a sibling already emitted, and the jar-wide clear then removed more than was written back.
+      scanned.push({
+        entry: {
+          decryptedValue,
+          value,
+          domain,
+          name,
+          path,
+          secure,
+          httpOnly,
+          sameSite,
+          expirationDate: expiresUtc > 0 ? expiresUtc : undefined,
+          partition
+        },
+        sourceRow
       })
+    }
 
+    // EMIT: everything downstream derives from the plan, so there is no second place a row can
+    // leak in.
+    for (const { entry, sourceRow } of scanned) {
+      decryptedCookies.push(entry)
+      const cleanDomain = entry.domain.startsWith('.') ? entry.domain.slice(1) : entry.domain
+      domainSet.add(cleanDomain)
       if (insertStmt && targetColumnInfo) {
         try {
           const params = buildChromiumCookieInsertParams(
             targetColumnInfo,
             sourceRow,
-            decryptedValue
+            entry.decryptedValue
           )
           insertStmt.run(...params)
         } catch (err) {
@@ -1702,7 +1948,52 @@ export async function importCookiesFromBrowser(
       // the optional staging DB is unavailable.
       imported++
     }
-    diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
+    diag(
+      `  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC) and ${nonTransplantableSkipped} non-transplantable-domain cookies`
+    )
+    const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
+
+    const undecryptableWarning = buildUndecryptableWarning({
+      decryptFailed,
+      appBoundFailed,
+      keyringUnavailableFailed
+    })
+
+    // Why: an older remote client ignores the new counter and would present this loss as success.
+    // Placed before the early return and before any jar mutation, so a client that cannot render
+    // the skip fails the import outright rather than reporting a partial import as complete.
+    if (partitionSkipped > 0 && options.canReportPartitionSkippedCookies === false) {
+      closeStagingDb()
+      discardStagingFile()
+      return {
+        ok: false,
+        reason:
+          'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
+      }
+    }
+
+    if (decryptedCookies.length === 0) {
+      const zeroPathWarning = undecryptableWarning
+      closeStagingDb()
+      discardStagingFile()
+      return {
+        ok: true,
+        profileId: '',
+        summary: {
+          totalCookies: sourceRows.length,
+          importedCookies: 0,
+          skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+          ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+          // Why: partition skips are a breakdown of skippedCookies, never an addition to it, so
+          // totalCookies === importedCookies + skippedCookies keeps holding on this path too.
+          ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+          domains: [],
+          // Why: a profile whose rows cannot be decrypted returns here, and without this it is
+          // reported as a successful empty import.
+          ...(zeroPathWarning ? { warning: zeroPathWarning } : {})
+        }
+      }
+    }
 
     if (stagingDb) {
       try {
@@ -1716,40 +2007,58 @@ export async function importCookiesFromBrowser(
       diag(`  staging skipped: ${imported} cookies will load in-memory only`)
     }
 
-    // Why: clear stale cookies first; mixing them with the imported set makes sites like Google reject the session.
-    await targetSession.clearStorageData({ storages: ['cookies'] })
-    diag(
-      `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
-    )
+    // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
+    // session. Non-transplantable families are exempt — nothing was imported for them, and their
+    // live session is the only one that works.
+    // Why (STA-4300): one store spans the clear and the writes, so both halves of the import speak
+    // the same CDP identities — cookies.set() cannot express the partition either one reads.
+    const cookieClearStore = openCookieClearStore(targetSession)
+    try {
+      // Why: this lock covers only the live jar; staging and cold-start replay keep their existing
+      // semantics while clear and writes can no longer interleave with another import.
+      await withCookieClearLock(targetSession, () =>
+        removeTransplantableCookies(
+          {
+            cookies: cookieClearStore,
+            clearData: (options) => targetSession.clearData(options),
+            snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
+            restoreClearIdentities: (identities) =>
+              cookieClearStore.restoreClearIdentities(identities)
+          },
+          // Why (STA-4300): the families this import declined to write must not be removed either.
+          // Passing them here keeps their coordinates out of the removal plan AND out of the CDP
+          // snapshot taken from it, so they are never submitted to any mutation.
+          nativePlan.skippedFamilies
+        )
+      )
+      diag(
+        `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
+      )
 
-    // Why: load into memory via cookies.set() so imported cookies work without a restart.
-    for (const cookie of decryptedCookies) {
-      const url = deriveUrl(cookie.domain, cookie.secure)
-      if (!url) {
-        memoryFailed++
-        continue
+      const writable: SourceCookieToWrite[] = []
+      for (const cookie of decryptedCookies) {
+        const url = deriveUrl(cookie.domain, cookie.secure)
+        if (!url) {
+          memoryFailed++
+          continue
+        }
+        writable.push({ ...cookie, url })
       }
-      try {
-        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-        const isHostPrefixed = cookie.name.startsWith('__Host-')
-        await targetSession.cookies.set({
-          url,
-          name: cookie.name,
-          value: cookie.value,
-          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-          path: isHostPrefixed ? '/' : cookie.path,
-          secure: cookie.secure,
-          httpOnly: cookie.httpOnly,
-          sameSite: cookie.sameSite,
-          expirationDate: cookie.expirationDate
-        })
-        memoryLoaded++
-      } catch {
-        memoryFailed++
-      }
+      // Why: a rejected cookie here falls back to the staged cold-start replay rather than
+      // unwinding the import, so one failure must not stop the rest from loading.
+      const phase = await writeImportedCookies(cookieClearStore, writable, {
+        stopOnFailure: false,
+        log: diag
+      })
+      memoryLoaded = phase.importedCount
+      memoryFailed += phase.writeRejected
+    } finally {
+      cookieClearStore.dispose()
     }
 
-    diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
+    diag(
+      `  memory load: ${memoryLoaded} OK, ${memoryFailed} failed, ${partitionSkipped} partition-unreadable`
+    )
 
     let warning: BrowserCookieImportSummary['warning']
     if (memoryFailed > 0 && stagingAvailable) {
@@ -1775,18 +2084,26 @@ export async function importCookiesFromBrowser(
       diag(`  all cookies loaded in-memory — no restart needed`)
     }
 
-    const ua = getUserAgentForBrowser(browser.family)
-    if (ua) {
-      targetSession.setUserAgent(ua)
-      setupClientHintsOverride(targetSession, ua)
-      browserSessionRegistry.persistUserAgent(targetPartition, ua)
-      diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
+    // Why: the session keeps the UA the registry set at startup (clean or native).
+    // Imports must not impersonate the source browser — the synthesized UA read a
+    // fork's marketing version as a Chromium version (STA-3514), and Google binds
+    // sessions to the re-import, not the UA (#12884), so it bought nothing.
+    // Google-bound integrity cookies are already excluded by
+    // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
+
+    // Why: a partial import still drops every undecryptable row, so silence here would report it
+    // as an unqualified success. The restart-fallback warning describes a lossier outcome and
+    // keeps precedence.
+    if (!warning && undecryptableWarning) {
+      warning = undecryptableWarning
     }
 
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,
       importedCookies: imported,
-      skippedCookies: skipped,
+      skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+      ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+      ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
       domains: [...domainSet].sort(),
       ...(warning ? { warning } : {})
     }

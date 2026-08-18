@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
 
@@ -23,7 +24,8 @@ const identityScenarios: [
 ][] = [
   ['live local', { isRemote: false }],
   ['inactive local split', { isRemote: false, siblingHookAgent: 'claude' }],
-  ['inactive SSH/tmux', { isRemote: true, title: 'tmux | OC | Greeting' }]
+  ['inactive SSH/tmux', { isRemote: true, title: 'tmux | OC | Greeting' }],
+  ['multi-token SSH wrapper', { isRemote: true, title: 'ssh build-host | OC | Greeting' }]
 ]
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
@@ -255,7 +257,6 @@ describe('OpenCode native title tab identity', () => {
     for (const title of [
       'OpenCode ready',
       'oc | Greeting',
-      'my session | OC | Greeting',
       '⠋ Fix foo | OC | Greeting',
       '✦ Gemini CLI',
       '⠋ Codex',

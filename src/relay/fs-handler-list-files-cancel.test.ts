@@ -31,6 +31,7 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null
+  Object.defineProperty(p, 'pid', { configurable: true, value: 1 })
   return p
 }
 

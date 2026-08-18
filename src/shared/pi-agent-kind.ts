@@ -11,7 +11,19 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  * (otherwise switching agents in the same workspace silently shadows the
  * other agent's user extensions).
  */
-export type PiAgentKind = 'pi' | 'omp'
+export type PiAgentKind = 'pi' | 'omp' | 'prime-agent'
+
+export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
+  pi: 'PI_CODING_AGENT_DIR',
+  omp: 'PI_CODING_AGENT_DIR',
+  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR'
+}
+
+export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
+  pi: 'ORCA_PI_SOURCE_AGENT_DIR',
+  omp: 'ORCA_OMP_SOURCE_AGENT_DIR',
+  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
+}
 
 /**
  * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
@@ -21,7 +33,7 @@ export type PiAgentKind = 'pi' | 'omp'
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
-  return agentType === 'pi' || agentType === 'omp'
+  return agentType === 'pi' || agentType === 'omp' || agentType === 'prime-agent'
 }
 
 function getLaunchBinary(command: string): string {
@@ -32,6 +44,7 @@ function getLaunchBinary(command: string): string {
 
 const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
 const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
+const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
 
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
@@ -39,6 +52,9 @@ export function detectExplicitPiAgentKindFromCommand(
   const binary = getLaunchBinary(command ?? '')
   if (binary === OMP_LAUNCH_BINARY) {
     return 'omp'
+  }
+  if (binary === PRIME_AGENT_LAUNCH_BINARY) {
+    return 'prime-agent'
   }
   return binary === PI_LAUNCH_BINARY ? 'pi' : null
 }

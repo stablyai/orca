@@ -8,12 +8,12 @@ import React, {
   useState
 } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 import { extractWorkspaceKanbanLaneRange } from './workspace-kanban-lane-range'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
@@ -31,11 +31,10 @@ type WorkspaceKanbanLaneGridProps = {
   laneFullWorktreeIds: ReadonlyMap<WorkspaceStatus, readonly string[]>
   hasQuery: boolean
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   dragOverStatus: WorkspaceStatus | null
-  canCreateWorktree: boolean
   renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
@@ -61,11 +60,10 @@ export default function WorkspaceKanbanLaneGrid({
   laneFullWorktreeIds,
   hasQuery,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   dragOverStatus,
-  canCreateWorktree,
   renderCards,
   selectedWorktreeIds,
   selectedWorktrees,
@@ -206,11 +204,10 @@ export default function WorkspaceKanbanLaneGrid({
               hasQuery={hasQuery}
               fullWorktreeIds={laneFullWorktreeIds.get(status.id) ?? []}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               columnWidth={columnWidth}
               isResizingColumn={isResizingColumn}
               isDragTarget={dragOverStatus === status.id}
-              canCreateWorktree={canCreateWorktree}
               renderCards={renderCards && renderedLaneIds.has(status.id)}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={selectedWorktrees}

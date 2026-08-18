@@ -9,7 +9,9 @@ import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
+import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
@@ -151,6 +153,25 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
+function runtimeEnvironmentCallFailure(
+  environment: ReturnType<typeof resolveEnvironment>,
+  method: string,
+  error: unknown
+): RuntimeRpcFailure | null {
+  if (
+    !(error instanceof RemoteRuntimeClientError) &&
+    !(error instanceof RuntimeRpcCallQueueOverloadError)
+  ) {
+    return null
+  }
+  return {
+    id: method,
+    ok: false,
+    error: { code: error.code, message: error.message },
+    _meta: { runtimeId: environment.runtimeId }
+  }
+}
+
 function registerPassiveCallHandler(getUserDataPath: () => string): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
@@ -168,14 +189,23 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
-      const response = await callRuntimeEnvironment(
-        getUserDataPath(),
-        environment.id,
-        args.method,
-        args.params,
-        args.timeoutMs,
-        args.expectedEnvironmentPairingRevision
-      )
+      let response: RuntimeRpcResponse<unknown>
+      try {
+        response = await callRuntimeEnvironment(
+          getUserDataPath(),
+          environment.id,
+          args.method,
+          args.params,
+          args.timeoutMs,
+          args.expectedEnvironmentPairingRevision
+        )
+      } catch (error) {
+        const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
+        if (failure) {
+          return failure
+        }
+        throw error
+      }
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -209,7 +210,7 @@ export async function parseClaudeSessionFile(
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
   return parseClaudeSessionLines({ file, lines, platform })
@@ -219,11 +220,12 @@ export async function parseClaudeSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   return parseClaudeSessionLines({
     file,
-    lines: content.split(/\r?\n/),
+    lines: remoteSessionContentLines(content, signal),
     platform,
     options
   })

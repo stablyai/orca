@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
@@ -23,7 +24,7 @@ const request: RpcRequest = {
 
 it('replays post-capture output in the provider snapshot sequence domain', async () => {
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-  const cleanups = new Map<string, () => void>()
+  const registry = createSubscriptionRegistryDouble()
   let dataListener:
     | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
     | undefined
@@ -53,13 +54,10 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
     subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
     subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-    registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-      cleanups.set(id, cleanup)
-    }),
-    cleanupSubscription: vi.fn((id: string) => {
-      cleanups.get(id)?.()
-      cleanups.delete(id)
-    }),
+    registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+    registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+    cleanupSubscription: vi.fn(registry.cleanupSubscription),
+    cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
   } as unknown as OrcaRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -95,7 +93,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
 
 it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-  const cleanups = new Map<string, () => void>()
+  const registry = createSubscriptionRegistryDouble()
   let resizeListener:
     | ((event: {
         cols: number
@@ -126,14 +124,10 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
       return vi.fn()
     }),
     subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-    registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-      cleanups.set(id, cleanup)
-    }),
-    cleanupSubscription: vi.fn((id: string) => {
-      const cleanup = cleanups.get(id)
-      cleanups.delete(id)
-      cleanup?.()
-    }),
+    registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+    registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+    cleanupSubscription: vi.fn(registry.cleanupSubscription),
+    cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
     updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })

@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -71,6 +72,7 @@ describe('HeroFlow height', () => {
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         iosChannel="preview"
         onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -118,6 +120,7 @@ describe('HeroFlow height', () => {
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         iosChannel="preview"
         onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -150,6 +153,20 @@ describe('HeroFlow height', () => {
 
     expect(viewport).toHaveStyle({ height: '520px' })
     expect(screen.getByText('Step 1 of 2').closest('.mp-flow-screen')).toHaveAttribute('inert')
+  })
+
+  it('opens the APK install guide without duplicating its troubleshooting steps', async () => {
+    const user = userEvent.setup()
+    const onOpenAndroidInstallGuide = vi.fn()
+    renderFlow(0, {
+      platform: 'android',
+      installCopy: { ctaLabel: 'Download APK', url: 'https://example.com/app-release.apk' },
+      onOpenAndroidInstallGuide
+    })
+
+    expect(screen.queryByText(/full browser, not an in-app browser/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Install guide' }))
+    expect(onOpenAndroidInstallGuide).toHaveBeenCalledOnce()
   })
 
   it('shows Relay mint failure with no QR and the beta note', () => {
@@ -215,6 +232,15 @@ describe('HeroFlow height', () => {
   it('hides the mint-failure notice when a Relay QR is shown', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
     expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
+  })
+
+  it('renders a pairing QR at its natural integer-scaled bitmap size', () => {
+    renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr', pairQrSize: 218 })
+
+    const image = screen.getByRole('img', { name: 'Pairing QR' })
+    const layout = image.closest('.mp-pairing-layout') as HTMLElement
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-image-size')).toBe('218px')
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-frame-size')).toBe('238px')
   })
 
   it('shows an encoder error while keeping the copy fallback enabled', () => {
@@ -312,5 +338,82 @@ describe('HeroFlow height', () => {
     )
 
     expect(refresh).toHaveFocus()
+  })
+
+  it('demotes the network address picker to a disclosure on Orca Relay', async () => {
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: null,
+      pairingUrl: null,
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [],
+      selectedAddress: undefined,
+      selectedAddressIsCustom: false,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    const user = userEvent.setup()
+    const { rerender } = render(<MobileHeroPairingStep {...props} />)
+    expect(screen.queryByText('Network')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Refresh network interfaces' })).toBeNull()
+
+    // Relay still advertises a LAN endpoint, so the picker must stay reachable.
+    await user.click(screen.getByRole('button', { name: /Also use a faster local path/i }))
+    expect(screen.getByText('Network')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Refresh network interfaces' })).toBeVisible()
+    expect(screen.getByText(/Optional\. Pick the Wi‑Fi or Tailscale address/i)).toBeVisible()
+
+    rerender(<MobileHeroPairingStep {...props} connectionMode="local-only" />)
+    expect(screen.getByText('Network')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Refresh network interfaces' })).toBeVisible()
+  })
+
+  it('keeps a custom address visible on Orca Relay', () => {
+    const address = 'host.example:6768'
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: null,
+      pairingUrl: null,
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [address],
+      selectedAddress: address,
+      selectedAddressIsCustom: true,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    render(<MobileHeroPairingStep {...props} />)
+    expect(screen.getByText('Network')).toBeVisible()
+    // Why: a trigger here could not collapse the pinned-open row, so it would be
+    // a dead control advertising aria-expanded it does not own.
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
   })
 })

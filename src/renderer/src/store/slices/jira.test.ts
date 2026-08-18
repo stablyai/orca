@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { JiraConnectionStatus, JiraIssue, JiraViewer } from '../../../../shared/types'
+import type { JiraConnectionStatus, JiraIssue, JiraViewer } from '../../../../shared/jira-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,

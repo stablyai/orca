@@ -286,7 +286,7 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
 function parseTypeperfCounterPath(path: string): { instance: string; counter: string } | null {
   const processStart = path.lastIndexOf('\\Process(')
   const counterStart = path.lastIndexOf(')\\')
-  if (processStart < 0 || counterStart <= processStart + 9) {
+  if (processStart === -1 || counterStart <= processStart + 9) {
     return null
   }
   return {

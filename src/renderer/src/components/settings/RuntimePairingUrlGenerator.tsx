@@ -11,6 +11,7 @@ import {
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
+  runtimePairingReachForIntent,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -187,16 +188,22 @@ export function RuntimePairingUrlGenerator({
     try {
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
-        rotate: true
+        rotate: true,
+        // Why: main gates the one-way network widen on this, so the declared choice must travel with the
+        // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
+        reach: runtimePairingReachForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
+          // Why: STA-2370 — surface the specific network-exposure guidance when the widen failed; fall back
+          // to the generic message for other unavailable cases (e.g. no reachable address).
           toast.error(
-            translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
-              'Runtime pairing is unavailable.'
-            )
+            result.guidance ??
+              translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
+                'Runtime pairing is unavailable.'
+              )
           )
         }
         return

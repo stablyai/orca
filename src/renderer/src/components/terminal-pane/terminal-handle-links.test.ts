@@ -11,6 +11,7 @@ import {
   findTerminalHandleTarget,
   focusRendererTerminalHandle
 } from './terminal-handle-links'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
@@ -84,7 +85,8 @@ function setPlatform(userAgent: string): void {
 async function collectLinks(
   rows: TestBufferLine[],
   bufferLineNumber = 1,
-  runtimeEnvironmentId: string | null = null
+  runtimeEnvironmentId: string | null = null,
+  linkActionContext?: TerminalLinkActionContext
 ): Promise<ILink[]> {
   const terminal = {
     buffer: {
@@ -97,7 +99,8 @@ async function collectLinks(
   const provider = createTerminalHandleLinkProvider({
     getTerminal: () => terminal as never,
     getRuntimeEnvironmentId: () => runtimeEnvironmentId,
-    linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement
+    linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+    getLinkActionContext: () => linkActionContext ?? null
   })
   return await new Promise<ILink[]>((resolve) => {
     provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
@@ -301,6 +304,40 @@ describe('createTerminalHandleLinkProvider', () => {
       method: 'terminal.focus',
       params: { terminal: 'term_worker', navigation: 'host' }
     })
+  })
+
+  it('defers a plain terminal-handle click to the action popover', async () => {
+    const request = vi.fn()
+    const links = await collectLinks([makeBufferLine('Worker: term_worker')], 1, null, {
+      paneId: 4,
+      pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+      claimPtyMouse: vi.fn(() => true),
+      request,
+      focusTerminal: vi.fn()
+    })
+
+    links[0].activate(
+      {
+        button: 0,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+        clientX: 20,
+        clientY: 30,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent,
+      links[0].text
+    )
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: 'term_worker',
+        kind: 'terminal',
+        primary: expect.objectContaining({ label: 'Switch terminal' })
+      })
+    )
+    expect(window.api.runtime.call).not.toHaveBeenCalled()
   })
 
   it('uses the owning runtime for terminal links when a renderer match belongs to another runtime', async () => {

@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
-const { handleMock, removeHandlerMock, getDaemonProviderMock, restartDaemonMock } = vi.hoisted(
-  () => ({
-    handleMock: vi.fn(),
-    removeHandlerMock: vi.fn(),
-    getDaemonProviderMock: vi.fn(),
-    restartDaemonMock: vi.fn()
-  })
-)
+const {
+  handleMock,
+  removeHandlerMock,
+  getDaemonProviderMock,
+  restartDaemonMock,
+  getCurrentDaemonMacTccAttributionHealthMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  getDaemonProviderMock: vi.fn(),
+  restartDaemonMock: vi.fn(),
+  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown')
+}))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
@@ -16,7 +21,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: getDaemonProviderMock,
-  restartDaemon: restartDaemonMock
+  restartDaemon: restartDaemonMock,
+  getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 
 // Why: the handler uses `provider instanceof DaemonPtyRouter` to branch
@@ -44,10 +50,17 @@ vi.mock('../daemon/daemon-pty-router', () => {
 // subscribes to adapter events, so keep only the accessors pty-management uses.
 vi.mock('../daemon/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
-    readonly isDegraded = true
     private allAdapters: unknown[]
+    private routesFreshToFallback = true
     constructor(opts: { current: unknown; legacy: unknown[] }) {
       this.allAdapters = [opts.current, ...opts.legacy]
+    }
+    get routesFreshSpawnsToLocalProvider(): true | undefined {
+      return this.routesFreshToFallback ? true : undefined
+    }
+    async recoverFreshSpawnRouting(): Promise<boolean> {
+      this.routesFreshToFallback = false
+      return true
     }
     getAllAdapters() {
       return this.allAdapters
@@ -133,6 +146,8 @@ describe('pty:management IPC handlers', () => {
   beforeEach(() => {
     getDaemonProviderMock.mockReset()
     restartDaemonMock.mockReset()
+    getCurrentDaemonMacTccAttributionHealthMock.mockReset()
+    getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('unknown')
   })
 
   afterEach(() => {
@@ -175,6 +190,19 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.degraded).toBe(true)
       expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
+    })
+
+    it('clears degraded mode after durable fresh-spawn routing recovers', async () => {
+      const current = makeAdapter(5, [makeSession('preserved-1')])
+      const provider = await makeDegradedProvider(current)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(provider)
+      registerDaemonManagementHandlers()
+      const handler = buildHandlerMap()['pty:management:listSessions']
+
+      await expect(handler({})).resolves.toMatchObject({ degraded: true })
+      await provider.recoverFreshSpawnRouting()
+      await expect(handler({})).resolves.toMatchObject({ degraded: false })
     })
 
     it('returns empty list when no daemon provider is installed', async () => {
@@ -433,6 +461,36 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.success).toBe(false)
       expect(current.listSessions).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('macTccAttribution', () => {
+    it('reports the daemon attribution health', async () => {
+      getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('severed')
+
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = (await handlers['pty:management:macTccAttribution']({})) as {
+        health: string
+      }
+
+      expect(result.health).toBe('severed')
+    })
+
+    it('fails open to unknown when the probe throws', async () => {
+      getCurrentDaemonMacTccAttributionHealthMock.mockRejectedValue(new Error('no pid record'))
+
+      const { registerDaemonManagementHandlers } = await importFresh()
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = (await handlers['pty:management:macTccAttribution']({})) as {
+        health: string
+      }
+
+      expect(result.health).toBe('unknown')
     })
   })
 

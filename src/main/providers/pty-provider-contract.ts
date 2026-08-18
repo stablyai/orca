@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -19,6 +19,8 @@ export type {
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
   cols: number
@@ -30,12 +32,18 @@ export type PtyProviderBufferSnapshot = {
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
   pendingEscapeTailAnsi?: string
+  /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
+   *  boundary. Absent means the source could not prove them; readers must not
+   *  rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
 }
 
 export type PtySpawnOptions = {
   cols: number
   rows: number
   cwd?: string
+  /** Exact per-spawn cwd already proven by main; providers validate any other resolved path. */
+  prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   /** Main-validated home provenance for an automatic Codex session resume. */
@@ -62,6 +70,14 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Host setting forwarded additively to the process owner; old owners ignore it. */
+  historyIsolationEnabled?: boolean
+  /** Attach the named session atomically or fail without creating a process. */
+  attachOnly?: boolean
+  /** Exact persisted owner expected by an attach-only routing decision. */
+  expectedIncarnationId?: PtyIncarnationId
+  /** True when runtime state makes the expected incarnation a hard attach fence. */
+  expectedIncarnationIsAuthoritative?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on
@@ -95,7 +111,18 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  requestHostRpc?: (
+    method: string,
+    params: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<unknown>
+  /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
+  readonly routesFreshSpawnsToLocalProvider?: true
+  /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
+  recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Process-owner cleanup for history stored outside the workspace tree. */
+  deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
@@ -104,11 +131,12 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<void>
+  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): void
+  write(id: string, data: string): boolean | void
+  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a

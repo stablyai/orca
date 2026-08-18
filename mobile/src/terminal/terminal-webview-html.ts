@@ -3,6 +3,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
@@ -287,6 +288,7 @@ window.onerror = function(msg) {
         if (cols < MIN_FIT_COLS) return;
         var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
         term.resize(cols, rows);
+        emitKeyboardAvoidanceMetrics();
       }
       applyFitScale('text-scale');
     });
@@ -750,7 +752,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
-      enqueueWrite(replayData);
+      // Why no trailing reset: the snapshot pen belongs to the live host TUI receiving later output.
+      enqueueWrite(ESC + '[0m' + replayData);
     }
 
     // Why: reset eviction tracking + attach observers for the new term.
@@ -802,6 +805,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     if (!term) return;
     initRows = rows || initRows;
     term.resize(cols || term.cols, rows || term.rows);
+    emitKeyboardAvoidanceMetrics();
     applyFitScale('resize-msg');
     notify({ type: 'ready', cols: cols, rows: rows });
   }
@@ -958,6 +962,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       initialOscLinkEvictionReady = false;
       if (term) { term.clear(); term.reset(); }
       emitModesIfChanged();
+      emitKeyboardAvoidanceMetrics();
       resetEvictionCounter();
       if (selMode === 'select') {
         notify({ type: 'selection-evicted' });
@@ -1100,17 +1105,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     sgrMousePixelsMode: false
   };
 
-  function emitKeyboardAvoidanceMetrics() {
-    if (!term) return;
-    var alt = false;
-    try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
-    notify({
-      type: 'keyboard-avoidance-metrics',
-      cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
-      rows: term.rows || 0,
-      altScreen: alt
-    });
-  }
+  ${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}
 
   function attachTermObservers() {
     if (!term) return;

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   HeadlessPairedRuntimeStartupDiagnosticBuffer,
-  formatHeadlessPairedRuntimeStartupDiagnostics
+  formatHeadlessPairedRuntimeStartupDiagnostics,
+  parseHeadlessPairedRuntimePairingOffer
 } from './headless-paired-runtime-host'
 
 describe('headless paired runtime startup diagnostics', () => {
@@ -41,5 +42,43 @@ describe('headless paired runtime startup diagnostics', () => {
     diagnostic.append(Buffer.from('still-secret\nsafe'))
 
     expect(diagnostic.read()).toBe('safe')
+  })
+})
+
+describe('headless paired runtime readiness', () => {
+  it.each(['null', 'true', '0', '"ready"', '[]'])(
+    'ignores JSON primitives and non-object readiness payloads: %s',
+    (payload) => {
+      expect(parseHeadlessPairedRuntimePairingOffer(payload)).toBeNull()
+    }
+  )
+
+  it('accepts desktop-only pairing readiness', () => {
+    expect(
+      parseHeadlessPairedRuntimePairingOffer(
+        JSON.stringify({
+          type: 'orca_server_ready',
+          pairing: { available: true, url: 'orca://pairing-secret', webClientUrl: null }
+        })
+      )
+    ).toEqual({ pairingUrl: 'orca://pairing-secret' })
+  })
+
+  it('preserves an available web-client URL', () => {
+    expect(
+      parseHeadlessPairedRuntimePairingOffer(
+        JSON.stringify({
+          type: 'orca_server_ready',
+          pairing: {
+            available: true,
+            url: 'orca://pairing-secret',
+            webClientUrl: 'https://example.test/web-index.html#pairing=secret'
+          }
+        })
+      )
+    ).toEqual({
+      pairingUrl: 'orca://pairing-secret',
+      webClientUrl: 'https://example.test/web-index.html#pairing=secret'
+    })
   })
 })

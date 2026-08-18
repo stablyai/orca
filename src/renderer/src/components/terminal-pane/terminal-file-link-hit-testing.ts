@@ -4,7 +4,8 @@ import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
-  openDetectedFilePath
+  openDetectedFilePath,
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -21,6 +22,7 @@ type FileLinkHitTestDeps = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
+  wslDistro?: string | null
   pathExistsCache?: Map<string, boolean>
   openWithSystemDefault?: boolean
 }
@@ -61,7 +63,11 @@ export function openFilePathLinkAtBufferPosition(
         deps.worktreePath,
         deps.runtimeEnvironmentId
       )
-      const mappedPath = mapTerminalFilePath(resolved.absolutePath, deps.worktreePath)
+      const mappedPath = mapTerminalFilePath(
+        resolved.absolutePath,
+        deps.worktreePath,
+        terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
+      )
       const cacheKey = getTerminalPathExistsCacheKey({
         absolutePath: mappedPath,
         connectionId: fileContext.connectionId,

@@ -1,6 +1,7 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
-import type { MRInfo, PRInfo } from '../../shared/types'
+import type { PRInfo } from '../../shared/github/pull-request-types'
+import type { MRInfo } from '../../shared/gitlab-types'
 import type { AzureDevOpsPullRequestInfo } from '../azure-devops/pull-request-mappers'
 import type { BitbucketPullRequestInfo } from '../bitbucket/pull-request-mappers'
 import type { GiteaPullRequestInfo } from '../gitea/pull-request-mappers'
@@ -26,6 +27,7 @@ export function mapGitLabReview(mr: MRInfo): HostedReviewInfo {
     status: mr.pipelineStatus,
     updatedAt: mr.updatedAt,
     mergeable: mr.mergeable,
+    ...(mr.mergeStateStatus !== undefined ? { mergeStateStatus: mr.mergeStateStatus } : {}),
     ...(mr.headSha ? { headSha: mr.headSha } : {}),
     ...(mr.conflictSummary ? { conflictSummary: mr.conflictSummary } : {})
   }

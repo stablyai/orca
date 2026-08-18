@@ -10,7 +10,6 @@ export type WorktreePaletteCreateActionState = {
 export function getWorktreePaletteCreateActionState({
   query
 }: {
-  canCreateWorktree: boolean
   query: string
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
@@ -20,37 +19,65 @@ export function getWorktreePaletteCreateActionState({
       showCreateAction: false
     }
   }
-  const showCreateAction = createWorktreeName.length > 0
+  // Why no project gate: the composer can add the first project inline, so
+  // creation stays offered with zero projects.
   return {
     createWorktreeName,
-    showCreateAction
+    showCreateAction: createWorktreeName.length > 0
   }
 }
+
+/**
+ * cmdk auto-selects the first item once the controlled value is empty, so a
+ * query that matches nothing would leave Create armed for Enter. Creation
+ * therefore needs an explicit gesture — a recognized task URL is the one intent
+ * allowed to arm itself.
+ */
+export function isWorktreePaletteCreateActivationAllowed(args: {
+  hasTaskUrlIntent: boolean
+  selectionMovedByUser: boolean
+}): boolean {
+  return args.hasTaskUrlIntent || args.selectionMovedByUser
+}
+
+export const WORKTREE_PALETTE_SELECTION_MOVE_KEYS: ReadonlySet<string> = new Set([
+  'ArrowDown',
+  'ArrowUp',
+  'Home',
+  'End',
+  'PageDown',
+  'PageUp'
+])
 
 type WorktreePaletteSelectionCandidateEntry = {
   id: string
   type: string
 }
 
-type WorktreePaletteSelectableEntryType =
-  | 'worktree'
-  | 'create-worktree'
-  | 'settings'
-  | 'quick-action'
-  | 'browser-page'
+// Why every rendered CommandItem type belongs here: an id missing from this list fails the
+// `includes` check in getNextWorktreePaletteSelection, so arrowing onto that row snaps the
+// highlight back to the top — making the whole section mouse-only.
+const SELECTABLE_ENTRY_TYPES = [
+  'worktree',
+  'create-worktree',
+  'settings',
+  'quick-action',
+  'browser-page',
+  'workspace-tab',
+  'simulator-tab',
+  'project-target'
+] as const
+
+type WorktreePaletteSelectableEntryType = (typeof SELECTABLE_ENTRY_TYPES)[number]
+
+const SELECTABLE_ENTRY_TYPE_SET = new Set<string>(SELECTABLE_ENTRY_TYPES)
 
 export function isSelectableWorktreePaletteEntry(
   entry: WorktreePaletteSelectionCandidateEntry
 ): entry is WorktreePaletteSelectionCandidateEntry & {
   type: WorktreePaletteSelectableEntryType
 } {
-  return (
-    entry.type === 'worktree' ||
-    entry.type === 'create-worktree' ||
-    entry.type === 'settings' ||
-    entry.type === 'quick-action' ||
-    entry.type === 'browser-page'
-  )
+  return SELECTABLE_ENTRY_TYPE_SET.has(entry.type)
 }
 
 export function getWorktreePaletteSelectionItemIds<
@@ -65,17 +92,29 @@ export function getNextWorktreePaletteSelection({
   currentSelectedItemId,
   queryChanged,
   selectableItemIds,
-  showCreateAction
+  showCreateAction,
+  autoSelectCreateAction = false
 }: {
   currentSelectedItemId: string
   queryChanged: boolean
   selectableItemIds: readonly string[]
   showCreateAction: boolean
+  /**
+   * Only a recognized task URL may land on Create by default. Free text must
+   * never arm Enter to create, no matter how empty the result list is.
+   */
+  autoSelectCreateAction?: boolean
 }): string {
-  const firstSelectableId = selectableItemIds[0] ?? null
+  const defaultSelectableId =
+    (autoSelectCreateAction
+      ? selectableItemIds[0]
+      : selectableItemIds.find((id) => id !== CREATE_WORKTREE_ITEM_ID)) ?? null
+  const fallbackId =
+    defaultSelectableId ??
+    (showCreateAction && autoSelectCreateAction ? CREATE_WORKTREE_ITEM_ID : '')
 
   if (queryChanged) {
-    return firstSelectableId ?? (showCreateAction ? CREATE_WORKTREE_ITEM_ID : '')
+    return fallbackId
   }
 
   if (currentSelectedItemId === CREATE_WORKTREE_ITEM_ID && showCreateAction) {
@@ -86,7 +125,7 @@ export function getNextWorktreePaletteSelection({
     return currentSelectedItemId
   }
 
-  return firstSelectableId ?? (showCreateAction ? CREATE_WORKTREE_ITEM_ID : '')
+  return fallbackId
 }
 
 export type WorktreePaletteRequestGuard = {

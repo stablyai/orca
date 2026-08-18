@@ -1,14 +1,21 @@
 import { useAppStore } from './index'
 import { useShallow } from 'zustand/react/shallow'
-import type { Repo, Worktree, TerminalTab } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 import {
   getIndexedAllWorktrees as getCachedAllWorktrees,
   getIndexedRepoMap as getCachedRepoMap,
-  getIndexedWorktreeMap as getCachedWorktreeMap
+  getIndexedWorktreeMap as getCachedWorktreeMap,
+  getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
@@ -160,6 +167,20 @@ export function getWorktreeMapFromState(
   return getCachedWorktreeMap(state.worktreesByRepo)
 }
 
+/**
+ * The row for one id on one host (STA-4343). Prefer this over the id-keyed map
+ * anywhere the caller already knows which host's row it is acting on — the map
+ * keeps a single row per id and cannot represent a two-host collision.
+ */
+export function getWorktreeOnHostFromState(
+  state: Pick<AppState, 'worktreesByRepo'>,
+  worktreeId: string,
+  hostId: ExecutionHostId | undefined
+): Worktree | undefined {
+  const rows = getCachedWorktreesById(state.worktreesByRepo, worktreeId)
+  return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
+}
+
 export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {
   return getCachedHasAnyWorktrees(state.worktreesByRepo)
 }
@@ -214,14 +235,15 @@ export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
-export const useWorktreeById = (worktreeId: string | null) =>
+export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
   useAppStore((s) =>
     worktreeId
       ? (s.getKnownWorktreeById(
           worktreeId,
-          worktreeId === s.activeWorktreeId
-            ? (s.activeWorkspaceExecutionHostId ?? undefined)
-            : undefined
+          executionHostId ??
+            (worktreeId === s.activeWorktreeId
+              ? (s.activeWorkspaceExecutionHostId ?? undefined)
+              : undefined)
         ) ?? null)
       : null
   )

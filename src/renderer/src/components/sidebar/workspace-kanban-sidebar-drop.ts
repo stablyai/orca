@@ -1,9 +1,9 @@
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
-  Worktree,
-  WorktreeMeta
-} from '../../../../shared/types'
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   parseWorkspaceLaneFullIds,
   resolveFullLaneDropIndex
@@ -55,6 +55,10 @@ function getLaneCardIds(lane: HTMLElement): HTMLElement[] {
   return Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
 }
 
+function getCardWorktreeId(card: HTMLElement): string | undefined {
+  return card.dataset.workspaceBoardWorktreeId ?? card.dataset.workspaceBoardCardId
+}
+
 /**
  * `viewIds` is the lane in the index space `getCardDropTarget` reports, and
  * `fullLaneIds` is the lane's whole membership. Board search hides non-matching
@@ -76,11 +80,10 @@ function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: str
   }
   const cards = getLaneCardIds(lane)
   return {
-    fullLaneIds:
-      publishedFullLaneIds ?? cards.flatMap((card) => card.dataset.workspaceBoardCardId ?? []),
+    fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeId(card) ?? []),
     viewIds: cards
       .filter((card) => card.offsetParent !== null)
-      .flatMap((card) => card.dataset.workspaceBoardCardId ?? [])
+      .flatMap((card) => getCardWorktreeId(card) ?? [])
   }
 }
 

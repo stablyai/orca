@@ -16,10 +16,12 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
+import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
 
 export type HookCommandConfig = {
   type: 'command'
   command: string
+  args?: string[]
   timeout?: number
   async?: boolean
   statusMessage?: string
@@ -119,16 +121,14 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
-function quotePowerShellString(value: string): string {
+export function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-function getWindowsPowerShellExecutablePath(): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-  // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
-  // Forward slashes keep this absolute path shell-friendly for cmd.exe and Git Bash.
-  return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
-}
+export {
+  wrapWindowsPowerShellEncodedCommand,
+  WINDOWS_POWERSHELL_HOOK_SWITCHES
+} from './windows-powershell-hook-launcher'
 
 export function wrapWindowsHookCommand(
   scriptPath: string,
@@ -140,8 +140,7 @@ export function wrapWindowsHookCommand(
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
   const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
-  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
-  return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+  return wrapWindowsPowerShellEncodedCommand(command)
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
@@ -151,17 +150,14 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
-
-export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
-  const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly; unsafe paths stay encoded.
-  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
-    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-    : wrapWindowsHookCommand(scriptPath)
-}
-
-export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
+/**
+ * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
+ * Used by Grok to attach `grokHome` without fragile string replace on the shared template.
+ */
+export function buildWindowsAgentHookPostCommand(
+  source: AgentHookSource,
+  extraFormLines: readonly string[] = []
+): string {
   // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
   // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
@@ -175,6 +171,7 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    ...extraFormLines,
     '  --data-urlencode "payload@-" >nul 2>nul'
   ].join('\r\n')
 }
@@ -207,7 +204,8 @@ export function removeManagedCommands(
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
     const hasManagedNestedHook =
-      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+      hasNestedHooks &&
+      definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
 
     if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
@@ -219,7 +217,9 @@ export function removeManagedCommands(
     }
 
     if (hasManagedNestedHook) {
-      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      const filteredHooks = definition.hooks!.filter(
+        (hook) => !hookHasManagedCommand(hook, isManagedCommand)
+      )
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -238,6 +238,11 @@ export function removeManagedCommands(
   })
 }
 
+function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+  const args = Array.isArray(hook.args) ? hook.args : []
+  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -247,7 +252,7 @@ export function hookDefinitionHasManagedCommand(
     isManagedCommand(definition.bash) ||
     isManagedCommand(definition.powershell) ||
     (Array.isArray(definition.hooks) &&
-      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+      definition.hooks.some((hook) => hookHasManagedCommand(hook, isManagedCommand)))
   )
 }
 
@@ -309,7 +314,9 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 export function writeHooksJson(
   configPath: string,
   config: HooksConfig,
-  options?: { preserveMode?: boolean }
+  // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
+  // atomic write + rolling backup below stay shared instead of being reimplemented.
+  options?: { preserveMode?: boolean; serialized?: string }
 ): void {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
@@ -318,7 +325,7 @@ export function writeHooksJson(
   // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
     options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 

@@ -23,6 +23,11 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
+import {
+  REMOTE_ARTIFACT_INPUT_ENV,
+  sshArtifactSourceKey,
+  type RemoteArtifactInput
+} from '../../shared/artifact-cli-bridge'
 
 export type SshCliRuntimeAuthority = {
   kind: 'ssh'
@@ -36,6 +41,7 @@ export type RemoteOrcaCliRequest = {
   cwd: string
   env: Record<string, string>
   stdin?: string
+  artifactInput?: RemoteArtifactInput
   runtimeAuthority?: SshCliRuntimeAuthority
 }
 
@@ -137,6 +143,7 @@ export function buildHostCliEnv(args: {
   userDataPath: string
   remoteCwd: string
   runtimeAuthority?: SshCliRuntimeAuthority
+  artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
@@ -162,12 +169,19 @@ export function buildHostCliEnv(args: {
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
   delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  delete env[REMOTE_ARTIFACT_INPUT_ENV]
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
     env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] =
       args.runtimeAuthority.connectionIncarnation
     env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV] = args.runtimeAuthority.attachmentId
+  }
+  if (args.artifactInput) {
+    const sourceKey = args.runtimeAuthority
+      ? sshArtifactSourceKey(args.runtimeAuthority.targetId, args.artifactInput.sourceKey)
+      : args.artifactInput.sourceKey
+    env[REMOTE_ARTIFACT_INPUT_ENV] = JSON.stringify({ ...args.artifactInput, sourceKey })
   }
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
@@ -220,7 +234,8 @@ export async function runHostOrcaCliPassthrough(
     remoteEnv: request.env,
     userDataPath,
     remoteCwd: request.cwd,
-    runtimeAuthority: request.runtimeAuthority
+    runtimeAuthority: request.runtimeAuthority,
+    artifactInput: request.artifactInput
   })
 
   return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {

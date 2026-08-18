@@ -191,4 +191,16 @@ describe('gitlab client — combined listWorkItems', () => {
     expect(result.items[0].title).toBe('live issue')
     expect(result.error).toBeDefined()
   })
+
+  it('reports the body instead of ".map is not a function" when the issues fetch returns a non-array', async () => {
+    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: [], total: 0 })
+    })
+
+    const result = await listWorkItems('/repo', 'opened', 1, 20)
+    expect(result.items).toEqual([])
+    expect(result.error?.message).toContain('{"data":[],"total":0}')
+    expect(result.error?.message).not.toContain('is not a function')
+  })
 })

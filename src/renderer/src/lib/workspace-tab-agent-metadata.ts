@@ -169,3 +169,92 @@ export function collectAgentMetadataForTerminal({
 
   return [...metadataByPaneKey.values()]
 }
+
+type IndexedAgentEntry = {
+  paneKey: string
+  worktreeId: string | null | undefined
+  metadata: AgentMetadata
+}
+
+export type AgentMetadataTabIndex = ReadonlyMap<string, readonly IndexedAgentEntry[]>
+
+function pushToIndex(
+  index: Map<string, IndexedAgentEntry[]>,
+  tabId: string,
+  entry: IndexedAgentEntry
+): void {
+  let bucket = index.get(tabId)
+  if (!bucket) {
+    bucket = []
+    index.set(tabId, bucket)
+  }
+  bucket.push(entry)
+}
+
+export function buildAgentMetadataTabIndex(
+  state: WorkspaceTabAgentMetadataState
+): AgentMetadataTabIndex {
+  const index = new Map<string, IndexedAgentEntry[]>()
+  const seenPaneKeys = new Set<string>()
+
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    const tabId = entry.tabId || getPaneKeyTabId(paneKey)
+    if (!tabId) {
+      continue
+    }
+    seenPaneKeys.add(paneKey)
+    pushToIndex(index, tabId, {
+      paneKey,
+      worktreeId: entry.worktreeId,
+      metadata: { paneKey, ...collectLiveMetadata(entry) }
+    })
+  }
+
+  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
+    if (seenPaneKeys.has(paneKey)) {
+      continue
+    }
+    const tabId = retained.entry.tabId ?? retained.tab.id ?? getPaneKeyTabId(paneKey)
+    if (!tabId) {
+      continue
+    }
+    seenPaneKeys.add(paneKey)
+    const meta = collectLiveMetadata(retained.entry)
+    addText(meta.textParts, retained.tab.title)
+    addText(meta.snippetCandidates, retained.tab.title)
+    pushToIndex(index, tabId, {
+      paneKey,
+      worktreeId: retained.worktreeId,
+      metadata: { paneKey, ...meta }
+    })
+  }
+
+  for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+    if (seenPaneKeys.has(paneKey)) {
+      continue
+    }
+    const tabId = record.tabId || getPaneKeyTabId(paneKey)
+    if (!tabId) {
+      continue
+    }
+    pushToIndex(index, tabId, {
+      paneKey,
+      worktreeId: record.worktreeId,
+      metadata: { paneKey, ...collectSleepingMetadata(record) }
+    })
+  }
+
+  return index
+}
+
+export function collectAgentMetadataFromIndex(
+  index: AgentMetadataTabIndex,
+  terminalTabId: string,
+  worktreeId: string
+): AgentMetadata[] {
+  const entries = index.get(terminalTabId)
+  if (!entries) {
+    return []
+  }
+  return entries.filter((e) => !e.worktreeId || e.worktreeId === worktreeId).map((e) => e.metadata)
+}

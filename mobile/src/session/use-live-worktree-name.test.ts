@@ -13,18 +13,6 @@ vi.mock('expo-router', async () => {
   }
 })
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
   let eventListener: ((payload: unknown) => void) | null = null
@@ -54,15 +42,10 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
   }
 
   async function emitEvent(payload: unknown): Promise<void> {
@@ -75,7 +58,6 @@ describe('useLiveWorktreeName request volume', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     eventListener = null
     sendRequest.mockClear().mockResolvedValue({
       id: 'worktree-show',
@@ -175,19 +157,14 @@ describe('useLiveWorktreeName request volume', () => {
         connState: 'connected',
         routeName: undefined,
         worktreeId: 'global-floating-terminal'
-      })
+      }).name
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(FloatingHarness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(FloatingHarness))
+      await Promise.resolve()
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
@@ -202,7 +179,7 @@ describe('useLiveWorktreeName request volume', () => {
     let renderer: ReactTestRenderer | null = null
 
     function RouteHarness(props: { routeName?: string; worktreeId: string }): null {
-      const name = useLiveWorktreeName({
+      const { name } = useLiveWorktreeName({
         client,
         connState: 'connected',
         routeName: props.routeName,
@@ -214,7 +191,6 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(
@@ -241,11 +217,63 @@ describe('useLiveWorktreeName request volume', () => {
         )
       })
     } finally {
-      restoreConsoleError()
       act(() => renderer?.unmount())
     }
 
     expect(firstNameByWorktree.get('global-floating-terminal')).toBe('Floating Workspace')
     expect(firstNameByWorktree.get('repo-2::/worktree')).toBe('Next workspace')
+  })
+
+  // The bounce in use-missing-worktree-bounce.ts rides this poll rather than adding a second
+  // RPC, so the failure branch has to publish a verdict instead of returning early.
+  it('reports the host-proven verdict from the same poll', async () => {
+    let resolution = ''
+    function VerdictHarness(): null {
+      resolution = useLiveWorktreeName({
+        client,
+        connState: 'connected',
+        routeName: 'Route name',
+        worktreeId: 'repo-1::/worktree'
+      }).resolution
+      return null
+    }
+    const mount = async (): Promise<void> => {
+      await act(async () => {
+        renderer = create(createElement(VerdictHarness))
+        await Promise.resolve()
+      })
+    }
+
+    await mount()
+    expect(resolution).toBe('present')
+
+    act(() => renderer?.unmount())
+    renderer = null
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'Selector not found' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await mount()
+    // Why: a transient desktop repo-scan rejection also answers selector_not_found,
+    // so one miss stays unproven; only the confirming poll may say 'missing'.
+    expect(resolution).toBe('unknown')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(resolution).toBe('missing')
+
+    act(() => renderer?.unmount())
+    renderer = null
+    // A dropped socket is not a deletion, so it must leave the verdict unproven.
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: false,
+      error: { code: 'runtime_busy', message: 'Runtime busy' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await mount()
+    expect(resolution).toBe('unknown')
   })
 })

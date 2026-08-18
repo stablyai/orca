@@ -180,8 +180,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'list'],
     summary: 'List live Orca-managed terminals',
-    usage: 'orca terminal list [--worktree <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit']
+    usage:
+      'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
+    notes: [
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+    ]
   },
   {
     path: ['terminal', 'show'],

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   hasUnreadAgentCompletionForTerminalTab,
   resetTerminalTabActivityFlagsCacheForTest,
-  resolveTerminalTabActivityStatus
+  resolveTerminalTabActivityStatus,
+  resolveTerminalTabAttentionBadge,
+  terminalTabActivityToAgentDotState,
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
 const TAB_ID = 'tab-1'
@@ -108,6 +111,39 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('working')
   })
 
+  it('does not revive an unconfirmed restored row from its preserved title', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: { id: TAB_ID, title: 'Codex working' },
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
+  it('keeps an independently live sibling title visible beside an unconfirmed row', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working', 2: 'Claude working' } },
+        ptyIdsByTabId: LIVE_PTY,
+        terminalLayout: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: FIRST_LEAF_ID },
+            second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+          },
+          activeLeafId: FIRST_LEAF_ID,
+          expandedLeafId: null
+        }
+      })
+    ).toBe('working')
+  })
+
   it('de-spins a stale working tab on an epoch bump without a new map reference', () => {
     // Why: the freshness scheduler bumps agentStatusEpoch (not the map ref) at
     // the 30m stale boundary. The flag cache must invalidate on that bump, or an
@@ -194,5 +230,53 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
     expect(
       hasUnreadAgentCompletionForTerminalTab({ [`tab-2:${SECOND_LEAF_ID}`]: true }, TAB_ID)
     ).toBe(false)
+  })
+
+  // Why: the param accepts boolean maps, so a cleared-to-`false` marker must not read as unread.
+  it('ignores a falsy marker left on the owning tab', () => {
+    expect(
+      hasUnreadAgentCompletionForTerminalTab({ [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }, TAB_ID)
+    ).toBe(false)
+  })
+})
+
+describe('resolveTerminalTabAttentionBadge', () => {
+  it('prefers working, then permission, then unread, then done', () => {
+    expect(resolveTerminalTabAttentionBadge({ status: 'working', hasUnread: true })).toBe('working')
+    expect(resolveTerminalTabAttentionBadge({ status: 'permission', hasUnread: true })).toBe(
+      'permission'
+    )
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
+    expect(resolveTerminalTabAttentionBadge({ status: 'active', hasUnread: false })).toBeNull()
+  })
+})
+
+describe('terminalTabHasUnreadActivity', () => {
+  it('is true for a tab bell or completion pane', () => {
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: { [TAB_ID]: true },
+        unreadAgentCompletionPanes: {}
+      })
+    ).toBe(true)
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: {},
+        unreadAgentCompletionPanes: { [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
+      })
+    ).toBe(true)
+  })
+})
+
+describe('terminalTabActivityToAgentDotState', () => {
+  it('maps glyph statuses and drops quiet ones', () => {
+    expect(terminalTabActivityToAgentDotState('working')).toBe('working')
+    expect(terminalTabActivityToAgentDotState('permission')).toBe('permission')
+    expect(terminalTabActivityToAgentDotState('done')).toBe('done')
+    expect(terminalTabActivityToAgentDotState('active')).toBeNull()
+    expect(terminalTabActivityToAgentDotState('inactive')).toBeNull()
   })
 })

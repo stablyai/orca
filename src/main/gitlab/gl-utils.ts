@@ -2,7 +2,13 @@ import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
 import { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 
 export { glabExecFileAsync, gitExecFileAsync }
-export { classifyGlabError, classifyListIssuesError } from './glab-error-classification'
+export {
+  classifyGlabError,
+  classifyJobLogError,
+  classifyListFetchError,
+  classifyListIssuesError,
+  isMissingJobLogError
+} from './glab-error-classification'
 export {
   DEFAULT_GITLAB_HOSTS,
   _getProjectRefCacheSize,
@@ -23,7 +29,7 @@ export type {
   ProjectRef,
   ResolvedIssueSource
 } from './gitlab-project-ref-resolution'
-export { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
+export { parseGlabApiResponse, parseGlabJsonList, type GlabApiResponse } from './glab-api-response'
 
 const MAX_CONCURRENT = 4
 let running = 0

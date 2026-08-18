@@ -18,7 +18,7 @@ const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 720
-const DEFAULT_VIEW = 'kanban'
+const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -138,7 +138,7 @@ function resolveRestoredBounds(store: Store | null): {
  */
 export function createOrFocusDashboardPopout(
   store: Store | null,
-  view: string = DEFAULT_VIEW,
+  view?: string,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
@@ -146,8 +146,13 @@ export function createOrFocusDashboardPopout(
       dashboardPopoutWindow.restore()
     }
     dashboardPopoutWindow.focus()
+    if (view) {
+      dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
+    }
     return dashboardPopoutWindow
   }
+
+  const initialView = view ?? DEFAULT_VIEW
 
   const savedBounds = resolveRestoredBounds(store)
 
@@ -283,7 +288,7 @@ export function createOrFocusDashboardPopout(
     broadcastPopoutOpenChanged(false)
   })
 
-  loadDashboardPopout(window, view)
+  loadDashboardPopout(window, initialView)
   return window
 }
 

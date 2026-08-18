@@ -6,7 +6,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,
@@ -25,6 +25,20 @@ type RuntimeAutomationUpdateInput = Omit<AutomationUpdateInput, 'projectId' | 'w
 export type AutomationHostTarget =
   | { kind: 'local' }
   | { kind: 'environment'; environmentId: string }
+
+export function getAutomationHostTargetKey(target: AutomationHostTarget): string {
+  return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+}
+
+export function getAutomationHostTargetFromKey(key: string | null): AutomationHostTarget | null {
+  if (!key) {
+    return null
+  }
+  if (key.startsWith('environment:')) {
+    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
+  }
+  return { kind: 'local' }
+}
 
 export function getAutomationTargetFromHostId(
   hostId: string | null | undefined

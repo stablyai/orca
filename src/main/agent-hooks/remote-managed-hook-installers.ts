@@ -26,7 +26,8 @@ export type RemoteManagedHookInstallOptions = {
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
-  /** Positively detected and enabled agents allowed to mutate config. */
+  /** Positively detected and enabled agents allowed to mutate config.
+   *  Required for any install: omit/empty fails closed (no config mutation). */
   agents?: readonly AgentHookTarget[]
 }
 
@@ -81,10 +82,15 @@ export async function installRemoteManagedAgentHooks(
   remoteHome: string,
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: omit/empty allowlist must never mean "install every agent" — that
+  // recreates config homes for CLIs the user never installed (issue #11641).
+  const allowedAgents = new Set(options?.agents ?? [])
+  if (allowedAgents.size === 0) {
+    return []
+  }
   const results: AgentHookInstallStatus[] = []
-  const allowedAgents = options?.agents ? new Set(options.agents) : null
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
-    if (allowedAgents && !allowedAgents.has(agent)) {
+    if (!allowedAgents.has(agent)) {
       continue
     }
     // Why: relay requests can disappear during reconnect; do not start more

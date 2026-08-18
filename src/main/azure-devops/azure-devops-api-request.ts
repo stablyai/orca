@@ -3,6 +3,42 @@ import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+const DEFAULT_API_VERSION = '7.1'
+
+// Why (STA-3494): on-prem Azure DevOps Server rejects versioned requests without
+// the -preview suffix; remember which origins need it after the first rejection.
+const previewApiVersionOrigins = new Set<string>()
+
+/** @internal - exposed for tests only */
+export function _resetAzureDevOpsPreviewApiVersionCache(): void {
+  previewApiVersionOrigins.clear()
+}
+
+export function markAzureDevOpsPreviewApiVersionOrigin(origin: string): void {
+  previewApiVersionOrigins.add(origin)
+}
+
+export function azureDevOpsApiVersionForOrigin(
+  origin: string,
+  requested?: string | number
+): string {
+  const version = String(requested ?? DEFAULT_API_VERSION)
+  return previewApiVersionOrigins.has(origin) && !version.endsWith('-preview')
+    ? `${version}-preview`
+    : version
+}
+
+export function isAzureDevOpsPreviewVersionRejection(status: number | null, body: string): boolean {
+  if (status !== 400) {
+    return false
+  }
+  try {
+    const parsed = JSON.parse(body) as { typeKey?: unknown } | null
+    return parsed?.typeKey === 'VssInvalidPreviewVersionException'
+  } catch {
+    return false
+  }
+}
 
 type AzureDevOpsAuthConfig = {
   apiBaseUrl: string | null
@@ -52,9 +88,30 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   return {}
 }
 
-function configuredApiBaseUrl(repo: AzureDevOpsRepoRef): string {
+function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
+  try {
+    const ancestorUrl = new URL(ancestor)
+    const descendantUrl = new URL(descendant)
+    const ancestorPath = ancestorUrl.pathname.replace(/\/+$/, '')
+    const descendantPath = descendantUrl.pathname.replace(/\/+$/, '')
+    return (
+      ancestorUrl.origin === descendantUrl.origin &&
+      (ancestorPath === descendantPath || descendantPath.startsWith(`${ancestorPath}/`))
+    )
+  } catch {
+    return false
+  }
+}
+
+export function resolveAzureDevOpsGitApiBaseUrl(repo: AzureDevOpsRepoRef): string {
   const configured = getAzureDevOpsAuthConfig().apiBaseUrl
-  return configured ? normalizeAzureDevOpsApiBaseUrl(configured) : repo.apiBaseUrl
+  if (!configured) {
+    return repo.apiBaseUrl
+  }
+  const normalized = normalizeAzureDevOpsApiBaseUrl(configured)
+  // Why (STA-3494): a configured collection ancestor is the auth-probe URL;
+  // Git endpoints need the project-level base derived from the remote.
+  return isUrlPathAncestor(normalized, repo.apiBaseUrl) ? repo.apiBaseUrl : normalized
 }
 
 function apiUrl(
@@ -63,11 +120,30 @@ function apiUrl(
   searchParams?: AzureDevOpsRequestOptions['searchParams']
 ): URL {
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  const params = { ...searchParams, 'api-version': searchParams?.['api-version'] ?? '7.1' }
+  const params = {
+    ...searchParams,
+    'api-version': azureDevOpsApiVersionForOrigin(url.origin, searchParams?.['api-version'])
+  }
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value))
   }
   return url
+}
+
+// Reads the body only for a 400 on a non-preview request; consumed either way.
+async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): Promise<boolean> {
+  if (response.ok || response.status !== 400) {
+    return false
+  }
+  if (url.searchParams.get('api-version')?.endsWith('-preview')) {
+    return false
+  }
+  try {
+    const body = (await response.json()) as { typeKey?: string | null } | null
+    return body?.typeKey === 'VssInvalidPreviewVersionException'
+  } catch {
+    return false
+  }
 }
 
 export async function requestAzureDevOpsJsonAtBase<T>(
@@ -80,14 +156,21 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()
-  try {
-    const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
+  const doFetch = (url: URL): Promise<Response> =>
+    fetch(url, {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
+  try {
+    const url = apiUrl(baseUrl, path, options.searchParams)
+    let response = await doFetch(url)
+    if (await shouldRetryWithPreviewApiVersion(url, response)) {
+      markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+      response = await doFetch(apiUrl(baseUrl, path, options.searchParams))
+    }
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
       if (throwOnFailure) {
@@ -110,5 +193,10 @@ export function requestAzureDevOpsJson<T>(
   options: AzureDevOpsRequestOptions = {},
   throwOnFailure = false
 ): Promise<T | null> {
-  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
+  return requestAzureDevOpsJsonAtBase(
+    resolveAzureDevOpsGitApiBaseUrl(repo),
+    path,
+    options,
+    throwOnFailure
+  )
 }

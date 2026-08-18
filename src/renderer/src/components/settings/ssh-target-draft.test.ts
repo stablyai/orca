@@ -3,7 +3,9 @@ import {
   EMPTY_FORM,
   applyParsedSshHostInput,
   getEditingTargetForSshTarget,
+  getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
+  hasAdvancedConnectionValues,
   isSshTargetFormDirty,
   parseRelayGracePeriodSeconds,
   parseSshHostInput,
@@ -247,6 +249,63 @@ describe('getEditingTargetForSshTarget', () => {
   })
 })
 
+describe('getEditingTargetFromSshConfigHost', () => {
+  it('prefills connection fields from a config summary', () => {
+    const draft = getEditingTargetFromSshConfigHost({
+      alias: 'prod-bastion',
+      hostname: 'bastion.prod.example',
+      port: 2222,
+      username: 'ops',
+      identityFiles: ['~/.ssh/prod', '~/.ssh/fallback'],
+      identitiesOnly: true,
+      forwardAgent: false,
+      gssapiAuthentication: true,
+      proxyUseFdpass: false,
+      jumpHost: 'edge'
+    })
+
+    expect(draft).toMatchObject({
+      label: 'prod-bastion',
+      configHost: 'prod-bastion',
+      host: 'bastion.prod.example',
+      port: '2222',
+      username: 'ops',
+      identityFile: '',
+      gssapiAuthentication: true,
+      jumpHost: 'edge'
+    })
+    expect(getSshTargetDraftConnectionFields(draft)).toEqual({
+      host: 'bastion.prod.example',
+      configHost: 'prod-bastion',
+      username: 'ops',
+      port: 2222
+    })
+    expect(hasAdvancedConnectionValues(draft)).toBe(true)
+  })
+
+  it('keeps alias as host when HostName is omitted', () => {
+    const draft = getEditingTargetFromSshConfigHost({
+      alias: 'gpu-lab',
+      hostname: 'gpu-lab',
+      port: 22,
+      username: 'jinjing',
+      identityFiles: [],
+      identitiesOnly: false,
+      forwardAgent: false,
+      proxyUseFdpass: false
+    })
+
+    expect(draft.configHost).toBe('')
+    expect(draft.host).toBe('gpu-lab')
+    expect(getSshTargetDraftConnectionFields(draft)).toEqual({
+      host: 'gpu-lab',
+      configHost: 'gpu-lab',
+      username: 'jinjing',
+      port: 22
+    })
+  })
+})
+
 describe('isSshTargetFormDirty', () => {
   it('is clean when the draft matches the baseline', () => {
     expect(isSshTargetFormDirty(EMPTY_FORM, EMPTY_FORM)).toBe(false)
@@ -261,6 +320,7 @@ describe('isSshTargetFormDirty', () => {
     { port: '2222' },
     { username: 'deploy' },
     { identityFile: '~/.ssh/id_ed25519' },
+    { gssapiAuthentication: true },
     { proxyCommand: 'nc %h %p' },
     { jumpHost: 'bastion' },
     { systemSshConnectionReuse: false },

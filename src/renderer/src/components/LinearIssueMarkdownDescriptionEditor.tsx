@@ -12,6 +12,7 @@ import {
   type RichMarkdownEditorCodec
 } from '@/components/editor/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
+import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -54,6 +55,7 @@ export function LinearIssueMarkdownDescriptionEditor({
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
+  const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
@@ -152,8 +154,13 @@ export function LinearIssueMarkdownDescriptionEditor({
       )}
     >
       <LinearIssueMarkdownToolbar editor={editor} disabled={disabled} />
-      <div className="linear-issue-markdown-scroll scrollbar-sleek">
+      <div ref={editorScrollRef} className="linear-issue-markdown-scroll relative scrollbar-sleek">
         <EditorContent editor={editor} />
+        <RichMarkdownTableControls
+          disabled={disabled}
+          editor={editor}
+          scrollContainerRef={editorScrollRef}
+        />
       </div>
       <div className="linear-issue-markdown-save-hint pointer-events-none absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 text-[10px] text-muted-foreground/75">
         <span className="flex items-center gap-1">
