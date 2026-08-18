@@ -33,15 +33,23 @@ const ALWAYS_READ_SUBCOMMANDS = new Set([
   'var'
 ])
 
-// Subcommands that read or write depending on their flags. Each needs an
-// explicit read flag before it can skip the shell.
-const CONDITIONAL_READ_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
+// Read markers that appear as a flag anywhere after the subcommand.
+const READ_FLAG_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   branch: new Set(['--list', '-l', '--show-current', '--contains', '--points-at']),
-  config: new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l']),
-  remote: new Set(['get-url', '-v', '--verbose']),
+  config: new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l'])
+}
+
+// Read markers that must be the *first non-flag* argument, i.e. the action.
+// Position matters here: matching them anywhere would read `worktree remove list`
+// as a listing, because a worktree may legitimately be named "list".
+const READ_ACTION_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
+  remote: new Set(['get-url']),
   submodule: new Set(['status']),
   worktree: new Set(['list'])
 }
+
+// Subcommands whose action-less form only lists (`git remote`, `git submodule`).
+const BARE_FORM_IS_READ = new Set(['remote', 'submodule'])
 
 /** Leading `-c key=value` / `--git-dir=...` style options precede the subcommand. */
 function findSubcommandIndex(args: readonly string[]): number {
@@ -68,31 +76,30 @@ export function isWslDirectGitReadCommand(args: readonly string[]): boolean {
   if (ALWAYS_READ_SUBCOMMANDS.has(subcommand)) {
     return true
   }
-  if (subcommand === 'remote') {
-    const remoteArgs = args.slice(subcommandIndex + 1)
-    const action = remoteArgs.find((arg) => !arg.startsWith('-'))
-    if (!action) {
-      return true
-    }
-    // `remote show` queries the transport unless `-n` is present. Keep the
-    // queried form on the login shell so profile-provided SSH/credential setup survives.
-    if (action === 'show') {
-      return remoteArgs.includes('-n')
-    }
-    return CONDITIONAL_READ_SUBCOMMANDS.remote.has(action)
-  }
+  const rest = args.slice(subcommandIndex + 1)
+
   if (subcommand === 'symbolic-ref') {
-    const symbolicRefArgs = args.slice(subcommandIndex + 1)
-    if (symbolicRefArgs.some((arg) => arg === '-d' || arg === '--delete' || arg === '-m')) {
+    if (rest.some((arg) => arg === '-d' || arg === '--delete' || arg === '-m')) {
       return false
     }
-    return symbolicRefArgs.filter((arg) => arg !== '--' && !arg.startsWith('-')).length <= 1
+    // Reading takes one ref; a second positional is the value being written.
+    return rest.filter((arg) => arg !== '--' && !arg.startsWith('-')).length <= 1
   }
-  const readFlags = CONDITIONAL_READ_SUBCOMMANDS[subcommand]
-  return Boolean(
-    readFlags &&
-    args
-      .slice(subcommandIndex + 1)
-      .some((arg) => readFlags.has(arg) || readFlags.has(arg.split('=')[0]))
-  )
+
+  const readActions = READ_ACTION_SUBCOMMANDS[subcommand]
+  if (readActions) {
+    const action = rest.find((arg) => !arg.startsWith('-'))
+    if (!action) {
+      return BARE_FORM_IS_READ.has(subcommand)
+    }
+    // `remote show` queries the transport unless -n is given, so the queried
+    // form has to keep the profile's SSH and credential setup.
+    if (subcommand === 'remote' && action === 'show') {
+      return rest.includes('-n')
+    }
+    return readActions.has(action)
+  }
+
+  const readFlags = READ_FLAG_SUBCOMMANDS[subcommand]
+  return Boolean(readFlags && rest.some((arg) => readFlags.has(arg.split('=')[0])))
 }

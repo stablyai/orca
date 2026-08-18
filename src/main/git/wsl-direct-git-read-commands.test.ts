@@ -54,4 +54,21 @@ describe('isWslDirectGitReadCommand', () => {
   ])('keeps %j on the login shell', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(false)
   })
+
+  // Why positional: these read markers are matched as the action, not anywhere in
+  // argv. Matching loosely routed a write shell-free whenever a positional
+  // happened to share a read marker's name.
+  it.each([[['worktree', 'remove', 'list']], [['submodule', 'foreach', 'status']]])(
+    'keeps %j on the login shell despite a read-shaped positional',
+    (args) => {
+      expect(isWslDirectGitReadCommand(args)).toBe(false)
+    }
+  )
+
+  it.each([[['submodule', 'status']], [['submodule']], [['remote']]])(
+    'routes the listing form %j without a shell',
+    (args) => {
+      expect(isWslDirectGitReadCommand(args)).toBe(true)
+    }
+  )
 })
