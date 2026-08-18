@@ -3653,6 +3653,7 @@ export function registerPtyHandlers(
     producerFlowControl.release(payload.id)
     sourceCreditPendingPtys.delete(payload.id)
     pendingOverflowMarkedPtys.delete(payload.id)
+    pendingDataDropWarnedPtys.delete(payload.id)
     rendererDeliveryRestoreNeededPtys.delete(payload.id)
     lastInputAtByPty.delete(payload.id)
     interactiveOutputCharsByPty.delete(payload.id)
