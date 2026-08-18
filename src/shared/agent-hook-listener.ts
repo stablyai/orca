@@ -2508,7 +2508,9 @@ function isGrokIdleNotification(message: string | undefined): boolean {
   )
 }
 
-function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
+/** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
+ *  observation stamp reuses it instead of minting a second list of event-name literals. */
+export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
     case 'claude':
