@@ -118,6 +118,17 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
       }
     }
   })
+  private pairingRejected = false
+  setPairingRejected = vi.fn((rejected: boolean) => {
+    if (this.pairingRejected === rejected) {
+      return
+    }
+    this.pairingRejected = rejected
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isPairingRejected = () => this.pairingRejected
   setRecoveryAttempt = vi.fn((attempt: number) => {
     const previous = this.getReconnectAttempt()
     this.recoveryAttempt = attempt
