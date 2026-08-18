@@ -69,6 +69,15 @@ const RECONCILE_EVENT_KINDS = new Set([
 ])
 
 export type HerdrLivePaneListener = (sessionName: string, paneIds: ReadonlySet<string>) => void
+export type HerdrPaneExitListener = (sessionName: string, paneId: string) => void
+
+function herdrEventKind(event: string): string {
+  return event.includes('.') ? event : event.replaceAll('_', '.')
+}
+
+function herdrEventPaneId(data: Record<string, unknown>): string | null {
+  return typeof data.pane_id === 'string' ? data.pane_id : null
+}
 
 export type HerdrSurfaceSync = {
   persist: (surface: HerdrImportedSurface) => void
@@ -93,7 +102,8 @@ export class HerdrRuntimeManager {
     // Live store-backed shared session name; read per call because settings can change while the manager is cached.
     private readonly sharedName?: () => string | undefined,
     private readonly onLivePaneIds?: HerdrLivePaneListener,
-    private readonly surfaceSync?: HerdrSurfaceSync
+    private readonly surfaceSync?: HerdrSurfaceSync,
+    private readonly onPaneExited?: HerdrPaneExitListener
   ) {}
 
   private paneHintsForRoot(
@@ -181,12 +191,21 @@ export class HerdrRuntimeManager {
       return
     }
     this.eventUnsubscribe = this.transport.onEvent((event) => {
-      if (!RECONCILE_EVENT_KINDS.has(event.event)) {
+      const kind = herdrEventKind(event.event)
+      const sessionNames = event.sessionName
+        ? [event.sessionName]
+        : [...this.graphsByKey.keys()].map((key) => key.slice(0, key.indexOf('\n')))
+      if (kind === 'pane.exited') {
+        const paneId = herdrEventPaneId(event.data)
+        if (paneId) {
+          for (const sessionName of sessionNames) {
+            this.onPaneExited?.(sessionName, paneId)
+          }
+        }
+      }
+      if (!RECONCILE_EVENT_KINDS.has(kind) && !RECONCILE_EVENT_KINDS.has(event.event)) {
         return
       }
-      const sessionNames = new Set(
-        [...this.graphsByKey.keys()].map((key) => key.slice(0, key.indexOf('\n')))
-      )
       for (const sessionName of sessionNames) {
         this.scheduleEventRefresh(sessionName)
       }

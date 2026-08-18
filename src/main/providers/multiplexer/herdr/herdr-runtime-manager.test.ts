@@ -682,7 +682,12 @@ describe('HerdrRuntimeManager event-driven reconcile', () => {
     return {
       ...base,
       transport,
-      emit: (event: string) => listener?.({ event, data: { type: event } }),
+      emit: (event: string, data: Record<string, unknown> = {}, sessionName?: string) =>
+        listener?.({
+          event,
+          data: { type: event, ...data },
+          ...(sessionName ? { sessionName } : {})
+        }),
       isSubscribed: () => listener !== null,
       disconnectSpy: transport.disconnect as ReturnType<typeof vi.fn>
     }
@@ -703,6 +708,26 @@ describe('HerdrRuntimeManager event-driven reconcile', () => {
       ([, method]) => method === 'session.snapshot'
     ).length
     expect(snapshotCallsAfter).toBeGreaterThan(snapshotCallsBefore)
+  })
+
+  it('notifies pane.exited before the pane leaves the snapshot', async () => {
+    const host = eventfulTransport()
+    const onPaneExited = vi.fn()
+    const manager = new HerdrRuntimeManager(
+      host.transport,
+      undefined,
+      undefined,
+      undefined,
+      onPaneExited
+    )
+    await manager.reconcileProjectHost(graph())
+
+    const sessionName = herdrSessionNameForProject(project())
+    host.emit('pane_exited', { pane_id: 'w1:p1' })
+    expect(onPaneExited).toHaveBeenCalledWith(sessionName, 'w1:p1')
+
+    host.emit('pane.exited', { pane_id: 'w1:p2' }, 'other')
+    expect(onPaneExited).toHaveBeenCalledWith('other', 'w1:p2')
   })
 
   it('ignores non-structural events', async () => {

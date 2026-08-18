@@ -8,12 +8,18 @@ import type { PtySpawnOptions } from '../../types'
 import {
   HerdrRuntimeManager,
   type HerdrLivePaneListener,
+  type HerdrPaneExitListener,
   type HerdrSurfaceSync
 } from './herdr-runtime-manager'
 import { Buffer } from 'node:buffer'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { HerdrHostTransport, HerdrTerminalFrame } from './herdr-runtime-contract'
+import {
+  unwrapHerdrResponse,
+  type HerdrHostTransport,
+  type HerdrTerminalFrame
+} from './herdr-runtime-contract'
+import { bytesFromTerminalLogicalKey } from '../../../../shared/terminal-logical-key'
 
 function decodeFrame(frame: HerdrTerminalFrame): string {
   return Buffer.from(frame.bytes, 'base64').toString('utf8')
@@ -193,7 +199,8 @@ export function getRuntime(
   transportForTarget: (target: HerdrPtyTarget) => HerdrHostTransport,
   sharedName: (() => string | undefined) | undefined,
   onLivePaneIds?: HerdrLivePaneListener,
-  surfaceSync?: HerdrSurfaceSync
+  surfaceSync?: HerdrSurfaceSync,
+  onPaneExited?: HerdrPaneExitListener
 ): {
   manager: HerdrRuntimeManager
   transport: HerdrHostTransport
@@ -201,7 +208,13 @@ export function getRuntime(
   const transport = transportForTarget(target)
   let manager = managers.get(target.identity.hostId)
   if (!manager) {
-    manager = new HerdrRuntimeManager(transport, sharedName, onLivePaneIds, surfaceSync)
+    manager = new HerdrRuntimeManager(
+      transport,
+      sharedName,
+      onLivePaneIds,
+      surfaceSync,
+      onPaneExited
+    )
     managers.set(target.identity.hostId, manager)
   }
   return { manager, transport }
@@ -256,6 +269,64 @@ export function retireMissingHerdrPanes(
       continue
     }
     retire(binding)
+  }
+}
+
+export async function sendHerdrNamedKey(binding: HerdrPtyBinding, name: string): Promise<void> {
+  try {
+    unwrapHerdrResponse(
+      await binding.transport.request(binding.sessionName, 'pane.send_keys', {
+        pane_id: binding.paneId,
+        keys: [name]
+      })
+    )
+  } catch (error: unknown) {
+    const bytes = bytesFromTerminalLogicalKey(name)
+    if (bytes !== null) {
+      binding.controller.write(bytes)
+      return
+    }
+    console.warn(`[herdr] pane.send_keys ${name} failed:`, error)
+  }
+}
+
+export async function closeHerdrBindingSurface(binding: HerdrPtyBinding): Promise<void> {
+  const { transport, sessionName, paneId } = binding
+  try {
+    const pane = unwrapHerdrResponse<{ pane: { workspace_id?: string } }>(
+      await transport.request(sessionName, 'pane.get', { pane_id: paneId })
+    ).pane
+    const workspaceId = pane.workspace_id
+    if (workspaceId) {
+      const listed = unwrapHerdrResponse<{ panes: { pane_id: string }[] }>(
+        await transport.request(sessionName, 'pane.list', { workspace_id: workspaceId })
+      ).panes
+      if (listed.length <= 1) {
+        unwrapHerdrResponse(
+          await transport.request(sessionName, 'workspace.close', { workspace_id: workspaceId })
+        )
+        return
+      }
+    }
+  } catch {
+    // Last-pane lookup failed; close the pane directly.
+  }
+  unwrapHerdrResponse(await transport.request(sessionName, 'pane.close', { pane_id: paneId }))
+}
+
+export function retireExitedHerdrPane(
+  bindings: Map<string, HerdrPtyBinding>,
+  sessionName: string,
+  paneId: string,
+  emitExit: (payload: { id: string; code: number }) => void
+): void {
+  for (const binding of bindings.values()) {
+    if (binding.sessionName !== sessionName || binding.paneId !== paneId || binding.detached) {
+      continue
+    }
+    void closeHerdrBindingSurface(binding).catch(() => undefined)
+    releaseBinding(binding, bindings)
+    emitExit({ id: binding.id, code: 0 })
   }
 }
 
@@ -333,7 +404,8 @@ export async function attachHerdrPty(args: {
   await runtime.manager.reconcileProjectHost(target.graph)
   const controller = await runtime.manager.controlProjectPane(target.project, identity.leafId, {
     cols: 80,
-    rows: 24
+    rows: 24,
+    takeover: true
   })
   await target.activateHerdr?.()
   const sessionName = herdrSessionNameForProject(target.project, args.sharedName?.())
@@ -363,9 +435,7 @@ export async function attachHerdrPty(args: {
 
 export function killAllHerdrBindings(bindings: Map<string, HerdrPtyBinding>): void {
   for (const binding of bindings.values()) {
-    binding.transport
-      .request(binding.sessionName, 'pane.close', { pane_id: binding.paneId })
-      .catch(() => {})
+    void closeHerdrBindingSurface(binding).catch(() => undefined)
   }
   bindings.clear()
 }

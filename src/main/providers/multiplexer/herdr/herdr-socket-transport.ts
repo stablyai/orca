@@ -138,8 +138,9 @@ export class HerdrSocketTransport implements HerdrHostTransport {
     })
     this.eventConnectionsBySession.set(sessionName, connection)
     connection.onEvent((event) => {
+      const tagged = { ...event, sessionName }
       for (const listener of this.eventListeners) {
-        listener(event)
+        listener(tagged)
       }
     })
     void connection.connect().catch((error) => {

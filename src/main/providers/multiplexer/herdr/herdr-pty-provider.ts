@@ -34,7 +34,10 @@ import {
   zoomHerdrBinding
 } from './herdr-pty-binding-queries'
 import type { TerminalLogicalInput } from '../../../../shared/terminal-logical-key'
-import { terminalLogicalInputFromBytes } from '../../../../shared/terminal-logical-key'
+import {
+  bytesFromTerminalLogicalKey,
+  terminalLogicalInputFromBytes
+} from '../../../../shared/terminal-logical-key'
 import {
   createBinding,
   getRuntime,
@@ -42,6 +45,9 @@ import {
   awaitFirstFrame,
   disposeAll,
   retireMissingHerdrPanes,
+  retireExitedHerdrPane,
+  closeHerdrBindingSurface,
+  sendHerdrNamedKey,
   emitHerdrPtyData,
   emitHerdrPtyExit,
   emitHerdrPtyReplay,
@@ -114,7 +120,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     const controller = await runtime.manager.controlProjectPane(
       target.project,
       target.identity.leafId,
-      { cols: opts.cols, rows: opts.rows }
+      { cols: opts.cols, rows: opts.rows, takeover: true }
     )
     await target.activateHerdr?.()
     const resolvedPaneId =
@@ -199,14 +205,14 @@ export class HerdrPtyProvider implements IPtyProvider {
       return
     }
     try {
-      unwrapHerdrResponse(
-        await binding.transport.request(binding.sessionName, 'pane.close', {
-          pane_id: binding.paneId
-        })
-      )
+      await closeHerdrBindingSurface(binding)
     } catch {}
     releaseBinding(binding, this.bindings)
     this.emitExit({ id, code: 0 })
+  }
+
+  hasPty(id: string): boolean {
+    return this.bindings.has(id)
   }
 
   write(id: string, data: string): void {
@@ -218,16 +224,19 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!binding) {
       return
     }
-    if (input.kind === 'key') {
-      void binding.transport
-        .request(binding.sessionName, 'pane.send_keys', {
-          pane_id: binding.paneId,
-          keys: [input.name]
-        })
-        .catch(() => undefined)
+    if (input.kind === 'bytes') {
+      binding.controller.write(input.data)
       return
     }
-    binding.controller.write(input.data)
+    const bytes =
+      input.name === 'ctrl+c' || input.name === 'ctrl+\\'
+        ? null
+        : bytesFromTerminalLogicalKey(input.name)
+    if (bytes !== null) {
+      binding.controller.write(bytes)
+      return
+    }
+    void sendHerdrNamedKey(binding, input.name)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -390,12 +399,7 @@ export class HerdrPtyProvider implements IPtyProvider {
     if (!key) {
       throw new Error(`Herdr does not support signal ${signal}`)
     }
-    unwrapHerdrResponse(
-      await binding.transport.request(binding.sessionName, 'pane.send_keys', {
-        pane_id: binding.paneId,
-        keys: [key]
-      })
-    )
+    await sendHerdrNamedKey(binding, key)
   }
 
   onData(callback: (payload: PtyDataEvent) => void): () => void {
@@ -422,16 +426,19 @@ export class HerdrPtyProvider implements IPtyProvider {
       this.transportForTarget,
       this.sharedName,
       this.livePaneListener,
-      this.surfaceSync
+      this.surfaceSync,
+      this.paneExitListener
     )
   }
 
-  private readonly livePaneListener = (sessionName: string, livePaneIds: ReadonlySet<string>) => {
+  private readonly livePaneListener = (sessionName: string, livePaneIds: ReadonlySet<string>) =>
     retireMissingHerdrPanes(this.bindings, sessionName, livePaneIds, (binding) => {
       releaseBinding(binding, this.bindings)
       this.emitExit({ id: binding.id, code: 0 })
     })
-  }
+
+  private readonly paneExitListener = (sessionName: string, paneId: string) =>
+    retireExitedHerdrPane(this.bindings, sessionName, paneId, (payload) => this.emitExit(payload))
 
   private bindController(
     input: Omit<HerdrPtyBinding, 'sequenceChars' | 'snapshot' | 'detached' | 'unsubscribe'>

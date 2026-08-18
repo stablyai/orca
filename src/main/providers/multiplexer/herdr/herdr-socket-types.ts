@@ -13,6 +13,7 @@ export type HerdrSocketResponse = {
 export type HerdrSocketEvent = {
   event: string
   data: { type: string; [key: string]: unknown }
+  sessionName?: string
 }
 
 export type HerdrSocketMessage = HerdrSocketResponse | HerdrSocketEvent

@@ -205,6 +205,28 @@ describeRealHerdr('stock Herdr runtime integration', () => {
     expect(text.split('\n').some((line) => line.trim() === 'SLEEP_DONE')).toBe(false)
   }, 30_000)
 
+  it('interrupts a running command through exclusive session-control input', async () => {
+    await transport.ensureSession(sessionName)
+    const paneId = await createPane(transport, sessionName, configHome, 'Orca sigint stream')
+    const controller = transport.controlTerminal(sessionName, paneId, { cols: 80, rows: 24 })
+    unwrapHerdrResponse(
+      await transport.request(sessionName, 'pane.send_text', {
+        pane_id: paneId,
+        text: 'sleep 30; echo STREAM_SLEEP_DONE'
+      })
+    )
+    controller.write('\r')
+    await waitForPaneText(transport, sessionName, paneId, (text) => text.includes('sleep 30'))
+    await writeProductInput(transport, sessionName, paneId, '\x03')
+
+    const text = await waitForPaneText(transport, sessionName, paneId, (value) =>
+      value.includes('^C')
+    )
+    controller.release()
+    expect(text).toContain('^C')
+    expect(text.split('\n').some((line) => line.trim() === 'STREAM_SLEEP_DONE')).toBe(false)
+  }, 30_000)
+
   it('delivers Esc as a logical key to a raw reader', async () => {
     await transport.ensureSession(sessionName)
     const paneId = await createPane(transport, sessionName, configHome, 'Orca esc')

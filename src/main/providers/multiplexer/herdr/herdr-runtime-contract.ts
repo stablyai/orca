@@ -142,6 +142,7 @@ export type HerdrHostTransport = {
 export type HerdrTransportEvent = {
   event: string
   data: { type: string; [key: string]: unknown }
+  sessionName?: string
 }
 
 export class HerdrRuntimeError extends Error {

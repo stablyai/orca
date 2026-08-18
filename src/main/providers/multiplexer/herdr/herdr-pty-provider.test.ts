@@ -98,7 +98,18 @@ function transport(closeBeforeFrame = false) {
           }
         }
       }
-      if (method === 'pane.close' || method === 'pane.send_keys' || method === 'agent.start') {
+      if (method === 'pane.list') {
+        return {
+          id: 'list',
+          result: { panes: [{ pane_id: 'p1', tab_id: 't1', workspace_id: 'w1' }] }
+        }
+      }
+      if (
+        method === 'pane.close' ||
+        method === 'workspace.close' ||
+        method === 'pane.send_keys' ||
+        method === 'agent.start'
+      ) {
         return { id: method, result: { type: 'ok' } }
       }
       throw new Error(`unexpected method ${method}`)
@@ -229,15 +240,34 @@ describe('HerdrPtyProvider', () => {
     await provider.shutdown(spawned.id, {})
     expect(host.requestMock).toHaveBeenCalledWith(
       herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
-      'pane.close',
-      {
-        pane_id: 'p1'
-      }
+      'workspace.close',
+      { workspace_id: 'w1' }
     )
     expect(host.value.controlTerminal).toHaveBeenCalled()
   })
 
-  it('routes single logical keys through pane.send_keys on the Herdr pane id', async () => {
+  it('reports live bindings to the acknowledged write path', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    expect(provider.hasPty(spawned.id)).toBe(true)
+    expect(provider.hasPty('missing')).toBe(false)
+    await provider.shutdown(spawned.id, {})
+    expect(provider.hasPty(spawned.id)).toBe(false)
+  })
+
+  it('writes live keys on the control stream and interrupts through pane.send_keys', async () => {
     const host = transport()
     const provider = new HerdrPtyProvider(
       () => host.value,
@@ -260,26 +290,37 @@ describe('HerdrPtyProvider', () => {
       throw new Error('expected a stock Herdr terminal controller')
     }
     const write = spawnedController.write as ReturnType<typeof vi.fn>
+    write.mockClear()
     host.requestMock.mockClear()
 
-    provider.writeLogical(spawned.id, { kind: 'key', name: 'ctrl+c' })
+    provider.write(spawned.id, 'hello')
+    provider.write(spawned.id, '\r')
+    provider.write(spawned.id, '\x7f')
     provider.write(spawned.id, '\x1b')
-    provider.write(spawned.id, '\x1b\x7f')
-    await Promise.resolve()
+    provider.write(spawned.id, '\x01')
+    provider.write(spawned.id, '\x1b[A')
+    provider.writeLogical(spawned.id, { kind: 'key', name: 'ctrl+c' })
+    provider.write(spawned.id, '\x03')
+    await vi.waitFor(() => {
+      expect(
+        host.requestMock.mock.calls.filter((call) => call[1] === 'pane.send_keys')
+      ).toHaveLength(2)
+    })
 
-    expect(host.requestMock).toHaveBeenCalledWith(
-      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
-      'pane.send_keys',
-      { pane_id: 'p1', keys: ['ctrl+c'] }
-    )
-    expect(host.requestMock).toHaveBeenCalledWith(
-      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
-      'pane.send_keys',
-      { pane_id: 'p1', keys: ['esc'] }
-    )
-    expect(write).toHaveBeenCalledWith('\x1b\x7f')
-    expect(write).not.toHaveBeenCalledWith('\x03')
-    expect(write).not.toHaveBeenCalledWith('\x1b')
+    expect(write.mock.calls.map((call) => call[0])).toEqual([
+      'hello',
+      '\r',
+      '\x7f',
+      '\x1b',
+      '\x01',
+      '\x1b[A'
+    ])
+    const sendKeys = host.requestMock.mock.calls.filter((call) => call[1] === 'pane.send_keys')
+    expect(sendKeys.map((call) => (call[2] as { keys: string[] }).keys)).toEqual([
+      ['ctrl+c'],
+      ['ctrl+c']
+    ])
+    expect(sendKeys.every((call) => (call[2] as { pane_id: string }).pane_id === 'p1')).toBe(true)
   })
 
   it('reads cwd from pane.get with the Herdr pane id', async () => {
@@ -368,6 +409,15 @@ describe('HerdrPtyProvider', () => {
       paneKey: 'tab-1:leaf-1'
     })
     host.requestMock.mockClear()
+    const controller = host.value.controlTerminal as unknown as ReturnType<typeof vi.fn>
+    const spawnedController = controller.mock.results[0]?.value as
+      | HerdrTerminalController
+      | undefined
+    if (!spawnedController) {
+      throw new Error('expected a stock Herdr terminal controller')
+    }
+    const write = spawnedController.write as ReturnType<typeof vi.fn>
+    write.mockClear()
     await provider.sendSignal(spawned.id, 'SIGINT')
 
     expect(host.requestMock).toHaveBeenCalledWith(
@@ -375,6 +425,7 @@ describe('HerdrPtyProvider', () => {
       'pane.send_keys',
       { pane_id: 'p1', keys: ['ctrl+c'] }
     )
+    expect(write).not.toHaveBeenCalled()
     expect(
       host.requestMock.mock.calls.some((call) => {
         const params = call[2] as { pane_id?: string } | undefined

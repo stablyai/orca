@@ -217,6 +217,41 @@ describe('registerPtyHandlers', () => {
     ).toBe(false)
     expect(mockProc.proc.write).not.toHaveBeenCalled()
   })
+  it('acknowledges Ctrl+C only when the local provider reports the PTY', async () => {
+    const writeLogical = vi.fn()
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'herdr:pane' })),
+      hasPty: (id: string) => id === 'herdr:pane',
+      write: vi.fn(),
+      writeLogical,
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(
+      handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id: 'herdr:pane',
+        data: '\x03',
+        keys: ['ctrl+c']
+      })
+    ).toBe(true)
+    expect(writeLogical).toHaveBeenCalledWith('herdr:pane', { kind: 'key', name: 'ctrl+c' })
+    expect(
+      handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id: 'missing-herdr-pane',
+        data: '\x03',
+        keys: ['ctrl+c']
+      })
+    ).toBe(false)
+  })
+
   it('synchronizes runtime output sequencing from a provider reattach snapshot', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
