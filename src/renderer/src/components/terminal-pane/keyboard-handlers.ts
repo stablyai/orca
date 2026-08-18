@@ -15,9 +15,9 @@ import {
   getTerminalImeModifiedEnterKind,
   isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter,
-  sendTerminalInputAfterComposition
+  isTerminalImeProcessEnter
 } from './terminal-ime-deferred-newline'
+import { createTerminalImeDeferredChordSender } from './terminal-ime-deferred-chord'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   requestCapturedTerminalReconfirmation,
@@ -290,6 +290,7 @@ export function useTerminalKeyboardShortcuts({
     const terminalImeEnterModifierKeydowns = new Set<'shift' | 'ctrl'>()
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
     const deferredNewlineSender = createTerminalImeDeferredNewlineSender()
+    const deferredChordSender = createTerminalImeDeferredChordSender()
     const modifiedEnterChordOwner = createTerminalImeModifiedEnterChordOwner()
     const reconcileHeldImeEnterModifiers = (
       event: KeyboardEvent,
@@ -651,11 +652,10 @@ export function useTerminalKeyboardShortcuts({
         // runs after this keydown. Sending now puts a cursor chord ahead of the text it was typed
         // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
         // fallback timer is right because a newline arriving late still arrives; a chord arriving
-        // mid-preedit is the corruption itself, so this one waits without a deadline.
+        // mid-preedit is the corruption itself, so this one waits on the composition rather than a
+        // deadline. The sender owns the wait so blur and teardown can drop it.
         if (e.isComposing || hasPendingImeComposition) {
-          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput, {
-            fallbackMs: null
-          })
+          deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
           return
         }
         sendResolvedInput()
@@ -986,6 +986,7 @@ export function useTerminalKeyboardShortcuts({
       terminalImeEnterModifierKeydowns.clear()
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
+      deferredChordSender.cancelPending()
       observedEnterKeydownTimeStamps.clear()
     }
 
@@ -1000,6 +1001,7 @@ export function useTerminalKeyboardShortcuts({
       optionKittyReleases.clear()
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
+      deferredChordSender.cancelPending()
       observedEnterKeydownTimeStamps.clear()
       window.removeEventListener('keydown', onModifierDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })

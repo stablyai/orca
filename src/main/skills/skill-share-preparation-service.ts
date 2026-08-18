@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   SkillSharePreview,
@@ -10,6 +10,7 @@ import type {
 import type { SkillCloudVersion } from '../../shared/skill-cloud-contract'
 import { createSkillBundleArchive, type CreatedSkillBundle } from './skill-bundle-creation'
 import type { SkillCloudService } from './skill-cloud-service'
+import { readSkillInstallReceipt } from './skill-install-provenance'
 
 const PREPARATION_TTL_MS = 30 * 60 * 1000
 const MAX_PREPARATIONS = 8
@@ -65,7 +66,12 @@ export class SkillSharePreparationService {
 
   constructor(
     private readonly root: string,
-    private readonly cloud: Pick<SkillCloudService, 'createShare' | 'publishVersion'>
+    private readonly cloud: Pick<SkillCloudService, 'createShare' | 'publishVersion'>,
+    private readonly options: {
+      initializeRoot?: () => Promise<void>
+      installStateDirectory?: string
+      platform?: NodeJS.Platform
+    } = {}
   ) {}
 
   async prepare(input: {
@@ -85,8 +91,39 @@ export class SkillSharePreparationService {
     const directory = join(this.root, preparationId)
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
-      const sources =
+      const requestedSources =
         input.sources ?? (input.sourceDirectory ? [{ sourceDirectory: input.sourceDirectory }] : [])
+      const sources = await Promise.all(
+        requestedSources.map(async (source) => {
+          if (
+            (this.options.platform ?? process.platform) !== 'win32' ||
+            !this.options.installStateDirectory
+          ) {
+            return source
+          }
+          let receipt = await readSkillInstallReceipt(
+            this.options.installStateDirectory,
+            source.sourceDirectory
+          )
+          if (!receipt) {
+            const physicalSource = await realpath(source.sourceDirectory).catch(() => null)
+            if (physicalSource) {
+              receipt = await readSkillInstallReceipt(
+                this.options.installStateDirectory,
+                physicalSource
+              )
+            }
+          }
+          return receipt?.fileModes
+            ? {
+                ...source,
+                executablePaths: new Set(
+                  receipt.fileModes.filter((file) => file.executable).map((file) => file.path)
+                )
+              }
+            : source
+        })
+      )
       const created = await createSkillBundleArchive({
         sources,
         bundleName: input.bundleName ?? 'shared-skill',
@@ -198,10 +235,22 @@ export class SkillSharePreparationService {
   }
 
   private async initialize(): Promise<void> {
-    this.initialized ??= (async () => {
-      await rm(this.root, { recursive: true, force: true })
-      await mkdir(this.root, { recursive: true, mode: 0o700 })
-    })()
+    if (!this.initialized) {
+      const initialization = (async () => {
+        if (this.options.initializeRoot) {
+          await this.options.initializeRoot()
+        } else {
+          await rm(this.root, { recursive: true, force: true })
+          await mkdir(this.root, { recursive: true, mode: 0o700 })
+        }
+      })()
+      this.initialized = initialization
+      void initialization.catch(() => {
+        if (this.initialized === initialization) {
+          this.initialized = null
+        }
+      })
+    }
     await this.initialized
   }
 }

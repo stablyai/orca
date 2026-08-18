@@ -3,6 +3,7 @@ import {
   clientInstances,
   eventHandlers,
   resetSshConnectionMocks,
+  VALID_ED25519_HOST_KEY,
   ssh2Mock
 } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
@@ -60,20 +61,30 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     const firstVerifier = (
-      clientInstances[0].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+      clientInstances[0].lastConnectConfig as {
+        hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
+      }
     ).hostVerifier
 
     const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
     await privateConn.attemptConnect()
     const secondVerifier = (
-      clientInstances[1].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+      clientInstances[1].lastConnectConfig as {
+        hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
+      }
     ).hostVerifier
     expect(firstVerifier).toBeTypeOf('function')
     expect(secondVerifier).toBeTypeOf('function')
 
-    secondVerifier?.(Buffer.from('newer-ssh-host-key'))
+    // Real blobs: the verifier now identifies the key before recording a fingerprint, so a
+    // placeholder string would be refused before it could reach the generation check this covers.
+    const newerKey = Buffer.from(
+      'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7',
+      'base64'
+    )
+    secondVerifier?.(newerKey, () => {})
     const currentFingerprint = conn.getHostKeyFingerprint()
-    firstVerifier?.(Buffer.from('obsolete-ssh-host-key'))
+    firstVerifier?.(VALID_ED25519_HOST_KEY, () => {})
 
     expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })

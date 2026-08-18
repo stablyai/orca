@@ -187,6 +187,36 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_WORKTREE_ID).toBe('child-worktree')
   })
 
+  it.each([
+    // fish EXPORTS fish_history, so a daemon started from a fish pane would hand
+    // every session the launching worktree's history file (STA-4682). Only the
+    // name this spawn asked for — the isolated one, or the user's — may stand.
+    ['drops an inherited Orca fish_history', undefined, undefined],
+    ['keeps the session this spawn injected', 'orca_c0ffee', 'orca_c0ffee'],
+    ['keeps a caller-supplied value', 'mine', 'mine']
+  ])('%s', async (_name, requested, expected) => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const saved = process.env.fish_history
+    process.env.fish_history = 'orca_abc123'
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        ...(requested === undefined ? {} : { env: { fish_history: requested } })
+      })
+    } finally {
+      if (saved === undefined) {
+        delete process.env.fish_history
+      } else {
+        process.env.fish_history = saved
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.fish_history).toBe(expected)
+  })
+
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {
     // Why: the daemon is forked with ELECTRON_RUN_AS_NODE=1. If that flag
     // reaches user shells, nested Electron commands run as plain Node.

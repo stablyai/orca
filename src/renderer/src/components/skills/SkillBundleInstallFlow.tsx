@@ -23,6 +23,7 @@ import { useSkillInstallProgress } from './skill-install-progress-state'
 import { translate } from '@/i18n/i18n'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
+import { retryableSkillIds } from './skill-bundle-retry-selection'
 
 type BundleVersion = SkillCloudVersion & {
   manifest: Extract<SkillCloudVersion['manifest'], { skills: unknown }>
@@ -224,11 +225,7 @@ export function SkillBundleInstallFlow(props: {
     }
   }
 
-  const retryIds = new Set(
-    result?.skills
-      .filter((skill) => skill.status === 'failed' || skill.status === 'cancelled')
-      .map((skill) => skill.skillId) ?? []
-  )
+  const retryIds = retryableSkillIds(result)
 
   return (
     <>

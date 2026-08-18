@@ -16,6 +16,7 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
+import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -120,16 +121,14 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
-function quotePowerShellString(value: string): string {
+export function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-function getWindowsPowerShellExecutablePath(): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-  // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
-  // Forward slashes keep this absolute path shell-friendly for cmd.exe and Git Bash.
-  return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
-}
+export {
+  wrapWindowsPowerShellEncodedCommand,
+  WINDOWS_POWERSHELL_HOOK_SWITCHES
+} from './windows-powershell-hook-launcher'
 
 export function wrapWindowsHookCommand(
   scriptPath: string,
@@ -141,8 +140,7 @@ export function wrapWindowsHookCommand(
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
   const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
-  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
-  return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+  return wrapWindowsPowerShellEncodedCommand(command)
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/

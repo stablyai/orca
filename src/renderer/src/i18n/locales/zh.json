@@ -1440,7 +1440,6 @@
         "c57873d721": "拉取请求已合并",
         "a63b3c159c": "这将更新 GitHub 上的PR。",
         "eec3706a6a": "{{value0}} PR #{{value1}}？",
-        "b8c6cbb8c4": "{{value0}} PR 失败",
         "710e47aa06": "拉取请求已重新打开",
         "7aa3b5f706": "PR已关闭",
         "3d77438c92": "这将在 GitHub 上重新打开PR。",
@@ -1539,7 +1538,13 @@
         "dd5d9a4f17": "{{value0}}更新",
         "71a3c0f9d2": "启动工作区",
         "filesUnavailable": "无法加载变更的文件。",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "77482513f8": "关闭",
+        "2f5195c6a0": "重新开启",
+        "4b8ae7303f": "加载差异失败。",
+        "closePullRequestFailed": "关闭PR失败",
+        "reopenPullRequestFailed": "重新打开PR失败",
+        "diffLoadTimedOut": "加载此差异超时。"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -2653,9 +2658,9 @@
               "346d409ab2": "选择智能体",
               "0adba8fa0c": "智能体",
               "ec8f081919": "操作",
-              "ed04233b3e": "保存终端命令或智能体提示以便快速访问。",
+              "ed04233b3e": "保存的条目会显示在标签栏菜单中，一键即可运行。",
               "ca414324ee": "命令文本",
-              "dc921c17ee": "提示",
+              "dc921c17ee": "提示词",
               "5b3f634a55": "添加快捷命令",
               "f9b184fc16": "编辑快捷命令",
               "6751598542": "编辑"
@@ -3283,7 +3288,9 @@
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
             "grokUsageMenu": "Grok 使用情况",
-            "floatingTerminalNewActivity": "{{label}}，有新活动"
+            "floatingTerminalNewActivity": "{{label}}，有新活动",
+            "codexSignInSuccess": "已登录 Codex",
+            "codexSignInError": "Codex 登录失败，请重试。"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -5330,6 +5337,7 @@
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
           "codexConfigSyncMissingSource": "由于缺少 {{value0}}，Codex 仍在使用上次同步的设置。请恢复该文件以恢复同步。",
           "codexConfigSyncBlankSource": "由于 {{value0}} 为空，Codex 仍在使用上次同步的设置。同步文件夹完成下载前出现这种情况是正常的。",
+          "codexConfigSyncManagedHomeUnavailable": "Orca 暂时无法读取此账户的 Codex 文件，因此设置可能尚未同步。这通常会自行恢复——防病毒软件或备份工具可能只是短暂锁定了这些文件。",
           "codexConfigSyncUnreadableSource": "由于无法读取 {{value0}}，Codex 仍在使用上次同步的设置。请检查该文件的权限。"
         },
         "AdvancedPane": {
@@ -13644,6 +13652,7 @@
           "e46c1aa9ad": "创建",
           "a9d9dccf77": "保存",
           "777548c2d6": "保存更改",
+          "e8c2a14f70": "保存后，将自动运行，直到暂停。",
           "ff5db28639": "现存的"
         },
         "AutomationEditorDialogHeader": {
@@ -13934,6 +13943,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自动化操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "搜索智能体...",
+          "491043ee45": "没有智能体符合您的搜索。",
+          "agent": "智能体",
+          "lastRun": "上次运行",
+          "all": "全部",
+          "failed": "失败",
+          "succeeded": "成功",
+          "neverRan": "从未运行",
+          "filters": "筛选器",
+          "clear": "清除筛选器",
+          "removeFilter": "移除 {{value0}} 筛选器"
         }
       },
       "agent": {
@@ -14277,6 +14299,13 @@
         "pendingChip": "{{value0}} 待处理",
         "needsActionChip": "{{value0}} 个需要操作",
         "unresolvedChip": "{{value0}} 个未解决"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "删除工件？",
+          "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
+          "delete": "删除"
+        }
       }
     },
     "i18n": {

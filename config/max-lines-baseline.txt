@@ -29,7 +29,6 @@ inline src/main/git/repo.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
-inline src/main/github/client.ts
 inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
@@ -65,7 +64,6 @@ inline src/main/runtime/orca-runtime-files.ts
 inline src/main/runtime/orca-runtime-git.ts
 inline src/main/runtime/orca-runtime.test.ts
 inline src/main/runtime/orca-runtime.ts
-inline src/main/runtime/orchestration/db.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/runtime/rpc/methods/terminal.ts
 inline src/main/runtime/runtime-rpc.ts
@@ -93,14 +91,12 @@ inline src/renderer/src/components/JiraIssueWorkspace.tsx
 inline src/renderer/src/components/LinearIssueWorkspace.tsx
 inline src/renderer/src/components/LinearItemDrawer.tsx
 inline src/renderer/src/components/NewWorkspaceComposerCard.tsx
-inline src/renderer/src/components/PullRequestPage.tsx
 inline src/renderer/src/components/TaskPage.tsx
 inline src/renderer/src/components/Terminal.tsx
 inline src/renderer/src/components/UpdateCard.tsx
 inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/browser-pane/BrowserPane.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx

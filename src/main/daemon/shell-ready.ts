@@ -16,7 +16,8 @@ import {
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
-  getZshStartupFileSourceBlock
+  getZshStartupFileSourceBlock,
+  ZSH_HISTFILE_RESTORE_BLOCK
 } from '../shell-templates'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
@@ -121,6 +122,7 @@ __orca_restore_agent_teams_path
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${ZSH_HISTFILE_RESTORE_BLOCK}
 ${getPosixCodexShellLaunchPreflight()}
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER)}
 ${getZshFinalZdotdirRestoreBlock()}

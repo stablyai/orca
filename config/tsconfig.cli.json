@@ -14,6 +14,7 @@
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/agent-hooks/managed-hook-script-refresh.ts",
     "../src/main/agent-hooks/runtime-home-hook-command.ts",
+    "../src/main/agent-hooks/windows-powershell-hook-launcher.ts",
     "../src/main/amp/agent-status-plugin-source.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/amp/managed-plugin-install-status.ts",

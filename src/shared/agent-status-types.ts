@@ -7,7 +7,8 @@ import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
   normalizeOptionalMultilineField,
-  normalizePromptField
+  normalizePromptField,
+  normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
@@ -184,6 +185,10 @@ export type AgentStatusPayload = {
    *  completions (notifications, automation runs, unread badges, finished timestamps)
    *  must ignore it. Only meaningful on `done`. */
   sessionBoundary?: boolean
+  /** Wall-clock ms when the lead turn ended while Claude background inventory kept the pane `working`.
+   *  `stateStartedAt` stays pinned for that whole working run, so this is the per-turn identity.
+   *  Present on the gated `working` row and that turn's later all-clear `done`. Event-only — not stored on AgentStatusEntry. */
+  turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -217,6 +222,7 @@ export function pickParsedAgentStatusPayload(
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
   }
 }
@@ -417,6 +423,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

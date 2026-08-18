@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14",
+  "updatedAt": "2026-08-18",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -943,18 +943,27 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, direct-winner cancellation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca-cloud/pull/96"],
-      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
-      "oracle": "Inject deterministic relay close codes, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, direct-winner cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/pull/96",
+        "https://linear.app/stably/issue/STA-4587",
+        "https://linear.app/stably/issue/STA-4681"
+      ],
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
       "testFiles": [
         "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
         "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
         "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+        "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+        "mobile/src/transport/connection-health.test.ts",
         "src/shared/mobile-relay-close-codes.test.ts"
       ],
       "assertionRefs": [
@@ -975,7 +984,47 @@
         {
           "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
           "assertions": [
-            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal"
+            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal",
+            "a missing or expired credential never presents a Relay connection that cannot start",
+            "backgrounding during credential selection cannot publish a stale Relay recovery path",
+            "a genuine failed Relay dial remains pending through its retry cooldown"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+          "assertions": [
+            "a supervisor-established Relay close plus 11 failed replacements publish reconnect attempt 12",
+            "the existing connection classifier escalates the continuous outage to Can't connect via Relay"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
+          "assertions": [
+            "a persistent E2EE rejection escalates to Pairing invalid — re-pair with your desktop",
+            "the re-pair verdict survives a background/foreground cycle",
+            "rejections inside the transient budget followed by acceptance never latch it",
+            "a plain transport outage still reads Can't connect via Relay"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a rejected pairing outranks a pending Relay recovery",
+            "a rejected pairing never overrides a live connection"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": [
+            "supervisor Relay attempts overlay but never replace a larger active-session retry count",
+            "count-only changes notify connection-path subscribers and clearing recovery restores the physical count"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+          "assertions": [
+            "a fresh credential starts Relay presentation with the controller's current count",
+            "missing or expired credentials never open a Relay socket"
           ]
         },
         {
@@ -985,21 +1034,21 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-25",
+          "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
-          "durationSeconds": 0.89,
-          "summary": "Three focused mobile transport files passed with 39 assertions."
+          "durationSeconds": 1.25,
+          "summary": "Eight focused mobile transport files passed with 109 assertions, including production-lifecycle outage escalation, persistent pairing-rejection escalation, and logical count publication."
         },
         {
-          "date": "2026-07-25",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.19,
+          "durationSeconds": 0.17,
           "summary": "The shared close-code contract passed with five assertions."
         }
       ],
@@ -1013,11 +1062,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The prior external-signal HOST_OFFLINE policy fails the retry oracle, and the prior serial direct probe fails the first-authenticated-endpoint timing oracle. Both pass with the candidate behavior."
+        "evidence": "Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms in the deterministic test, and every losing client is closed. A physical-device radio and battery budget is still required before promotion."
+        "evidence": "The production diff only projects existing supervisor state — the failure count and a consecutive-rejection latch — through local setters and subscribers; it adds no call to a Relay dial, timer, socket, probe, or wire API, and the four screens read both recovery inputs from one host subscription instead of two. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -1049,14 +1098,14 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, and stale-generation outcomes. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
       ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay.",
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts"
       ],
       "testFiles": [
         "mobile/src/transport/client-context.test.ts",
@@ -1068,12 +1117,16 @@
         "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
         "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
         "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/connection-health.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "mobile/src/transport/client-context.test.ts",
-          "assertions": ["a retired close-on-release owner closes an ownerless manual reconnect"]
+          "assertions": [
+            "a retired close-on-release owner closes an ownerless manual reconnect",
+            "a Relay recovery path change rerenders observers without a transport-state change"
+          ]
         },
         {
           "file": "mobile/src/transport/host-open-recovery.test.tsx",
@@ -1124,18 +1177,29 @@
         },
         {
           "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": ["a delivery-unknown mutation is not replayed onto a replacement Relay"]
+          "assertions": [
+            "a delivery-unknown mutation is not replayed onto a replacement Relay",
+            "Relay recovery path changes publish and remain pending between failed dials",
+            "a connected path clears recovery state before any later disconnect"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a Relay fallback pending over five failed Tailscale attempts remains neutral and omits the Tailscale hint",
+            "a prolonged Relay recovery escalates without reviving the Tailscale hint"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-14",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
-          "durationSeconds": 0.74,
-          "summary": "Ten focused files passed 66 deterministic provider lifecycle, direct/Relay liveness, traffic, and delivery-ambiguity tests."
+          "durationSeconds": 0.77,
+          "summary": "Eleven focused files passed 85 deterministic provider lifecycle, path presentation, direct/Relay liveness, traffic, and delivery-ambiguity tests."
         }
       ],
       "runtimeBudget": {
@@ -2622,19 +2686,19 @@
       "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
       "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
           "assertions": [
             "transient failures retry until recovery on counted delays",
             "budget exhaustion stops exactly once",
@@ -2643,7 +2707,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
           "assertions": [
             "dropped, silent, and flapping streams converge on a bounded retry or actionable stop",
             "stale, superseded, missing-page, and permanent-failure work cannot mutate the current pane",
@@ -2665,7 +2729,7 @@
           "date": "2026-08-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
           "result": "passed",
           "durationSeconds": 0.36,
           "summary": "Four focused files passed 61 deterministic error, status, scheduler, lifecycle, in-flight ownership, stale-rejection, liveness, and cleanup tests."
@@ -9074,7 +9138,7 @@
       "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
@@ -9087,7 +9151,7 @@
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
         "src/main/daemon/pty-subprocess.test.ts",
         "src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts",
-        "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "assertionRefs": [
         {
@@ -9157,7 +9221,7 @@
           "assertions": ["selected active-agent note sends retain guarded paste and submit routing"]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "file": "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "assertions": [
             "browser annotation send content routes through review-notes send so existing agent sessions remain selectable",
             "both browser annotation send surfaces wire the shared menu content"
@@ -9178,7 +9242,7 @@
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "result": "passed",
           "durationSeconds": 9.58,
           "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."

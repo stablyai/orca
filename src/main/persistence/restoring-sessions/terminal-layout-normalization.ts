@@ -180,7 +180,11 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     preferredLeafIdsInOrder.length === inputLeafIdsInOrder.length &&
     new Set(preferredLeafIdsInOrder).size === preferredLeafIdsInOrder.length
   const leafIdByInputLeafId = new Map<string, string>()
-  const claimedLeafIds = new Set<string>()
+  // Why pre-seeded: a stable leaf later in the input keeps its own id, so handing that id to an
+  // earlier non-terminal leaf would recreate the duplicate this pass exists to remove.
+  const claimedLeafIds = new Set(
+    inputLeafIdsInOrder.filter((leafId) => counts.get(leafId) === 1 && isTerminalLeafId(leafId))
+  )
   for (const [index, leafId] of inputLeafIdsInOrder.entries()) {
     const count = counts.get(leafId) ?? 0
     if (count !== 1 || leafIdByInputLeafId.has(leafId)) {

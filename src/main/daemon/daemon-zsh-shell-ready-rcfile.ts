@@ -1,6 +1,10 @@
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
-import { getZshFinalZdotdirRestoreBlock, getZshStartupFileSourceBlock } from '../shell-templates'
+import {
+  getZshFinalZdotdirRestoreBlock,
+  getZshStartupFileSourceBlock,
+  ZSH_HISTFILE_RESTORE_BLOCK
+} from '../shell-templates'
 
 export function getDaemonZshShellReadyRcfileContent(): string {
   return `# Orca daemon zsh shell-ready wrapper
@@ -23,6 +27,7 @@ if [[ ! -o login ]]; then
   [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${ZSH_HISTFILE_RESTORE_BLOCK}
   ${getPosixCodexShellLaunchPreflight()}
 fi
 __orca_osc133_precmd() {

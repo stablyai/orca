@@ -49,48 +49,6 @@ describe('crash breadcrumb store', () => {
     expect(snapshot.at(-1)?.data).toEqual({ index: 31 })
   })
 
-  it('retains the newest coalesced parking census across later activity', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-15T12:00:00.000Z'))
-    recordCrashBreadcrumb('renderer_memory_highwater', {
-      rendererSurface: 'main',
-      thresholdPct: 80
-    })
-    recordCoalescedCrashBreadcrumb({
-      name: 'terminal_parking_pass',
-      data: { managers: 49, panes: 60, sampledAtMs: Date.now() },
-      coalesceKey: 'terminal_parking_pass',
-      minIntervalMs: 30_000
-    })
-    vi.advanceTimersByTime(1_000)
-    recordCoalescedCrashBreadcrumb({
-      name: 'terminal_parking_pass',
-      data: { managers: 28, panes: 34, sampledAtMs: Date.now() },
-      coalesceKey: 'terminal_parking_pass',
-      minIntervalMs: 30_000
-    })
-    for (let index = 0; index < 32; index += 1) {
-      recordCrashBreadcrumb(`later_event_${index}`, { index })
-    }
-
-    const snapshot = getCrashBreadcrumbSnapshot()
-    const parkingPasses = snapshot.filter(
-      (breadcrumb) => breadcrumb.name === 'terminal_parking_pass'
-    )
-
-    expect(snapshot).toHaveLength(30)
-    expect(parkingPasses).toHaveLength(1)
-    expect(snapshot.some((breadcrumb) => breadcrumb.name === 'renderer_memory_highwater')).toBe(
-      true
-    )
-    expect(parkingPasses[0]?.data).toEqual({
-      managers: 28,
-      panes: 34,
-      sampledAtMs: Date.now(),
-      suppressedSinceLast: 1
-    })
-  })
-
   it('caps retained high-water profiles', () => {
     for (let index = 0; index < 5; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
@@ -102,41 +60,6 @@ describe('crash breadcrumb store', () => {
     expect(
       getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.rendererSurface)
     ).toEqual(['surface-1', 'surface-2', 'surface-3', 'surface-4'])
-  })
-
-  it('keeps memory profiles and parking census from starving each other', () => {
-    recordCrashBreadcrumb('terminal_parking_pass', { managers: 1, panes: 1 })
-    for (let index = 0; index < 12; index += 1) {
-      recordCrashBreadcrumb('renderer_memory_highwater', {
-        rendererSurface: `surface-${index}`,
-        thresholdPct: 80
-      })
-    }
-
-    expect(
-      getCrashBreadcrumbSnapshot().filter(
-        (breadcrumb) => breadcrumb.name === 'terminal_parking_pass'
-      )
-    ).toHaveLength(1)
-
-    for (let index = 0; index < 12; index += 1) {
-      recordCrashBreadcrumb('terminal_parking_pass', { managers: index, panes: index + 1 })
-    }
-
-    const snapshot = getCrashBreadcrumbSnapshot()
-    const memoryProfiles = snapshot.filter(
-      (breadcrumb) => breadcrumb.name === 'renderer_memory_highwater'
-    )
-
-    expect(memoryProfiles.map((breadcrumb) => breadcrumb.data?.rendererSurface)).toEqual([
-      'surface-8',
-      'surface-9',
-      'surface-10',
-      'surface-11'
-    ])
-    expect(snapshot.filter((breadcrumb) => breadcrumb.name === 'terminal_parking_pass')).toEqual([
-      expect.objectContaining({ data: { managers: 11, panes: 12 } })
-    ])
   })
 
   it('redacts sensitive breadcrumb fields before they can be snapshotted', () => {

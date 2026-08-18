@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
@@ -13,31 +12,13 @@ import {
 } from '../schemas'
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
-
-const OptionalTuiAgent = z
-  .unknown()
-  .superRefine((value, ctx) => {
-    if (value !== undefined && !isTuiAgent(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unknown TUI agent' })
-    }
-  })
-  .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
-  .optional()
-
-const AutomationWorkspaceProvenanceRequest = z.object({
-  automationId: z.string(),
-  automationRunId: z.string(),
-  dispatchToken: z.string(),
-  createRequestId: z.string()
-})
-
-// Why no dispatch token (unlike automation provenance): this is a descriptive
-// origin marker for sidebar filtering, not an authority grant. The host stamps
-// createdAt itself so a client clock can't skew sort order.
-const CliWorkspaceProvenanceRequest = z.object({
-  callerTerminalHandle: OptionalString
-})
+import {
+  AutomationWorkspaceProvenanceRequest,
+  CliWorkspaceProvenanceRequest,
+  OptionalExecutionHostId,
+  OptionalTuiAgent,
+  assertLinkedWorkItemSourceContextMatch
+} from './worktree-schema-helpers'
 
 export const WorktreeListParams = z.object({
   repo: OptionalString,
@@ -77,26 +58,6 @@ export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
-
-/** Shared by WorktreeCreate and WorktreeSet so the two error messages cannot drift. */
-function assertLinkedWorkItemSourceContextMatch(
-  params: {
-    linkedWorkItem?: z.infer<typeof WorkspaceLinkedItemSchema> | null
-    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
-  },
-  ctx: z.RefinementCtx
-): void {
-  if (
-    params.linkedWorkItem &&
-    params.linkedTaskSourceContext &&
-    !isWorkspaceLinkedItemSourceContextMatch(params.linkedWorkItem, params.linkedTaskSourceContext)
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Linked work item and source context identities must match'
-    })
-  }
-}
 
 export const WorktreeCreate = z
   .object({
@@ -280,7 +241,7 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
-  hostId: OptionalString,
+  hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
   // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop

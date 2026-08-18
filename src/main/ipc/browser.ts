@@ -15,6 +15,11 @@ import {
 } from './browser-grab-ipc'
 import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
 import type { BrowserCertificateProceedResult } from '../../shared/browser-workspace-types'
+import {
+  cancelBrowserWebAuthnAccountRequests,
+  respondToBrowserWebAuthnAccountRequest
+} from '../browser/browser-webauthn-account-picker'
+import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -38,6 +43,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
+  ipcMain.removeHandler('browser:respondWebAuthnAccount')
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,
@@ -124,10 +130,21 @@ export function registerBrowserHandlers(): void {
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
+    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
     browserManager.unregisterGuest(args.browserPageId)
     disposeGrabModeStateForPage(args.browserPageId)
     return true
   })
+
+  ipcMain.handle(
+    'browser:respondWebAuthnAccount',
+    (event, response: BrowserWebAuthnAccountResponse): boolean => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return respondToBrowserWebAuthnAccountRequest(event.sender, response)
+    }
+  )
 
   ipcMain.handle(
     'browser:proceedCertificate',
