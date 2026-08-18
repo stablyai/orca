@@ -467,7 +467,6 @@ import {
   type RuntimeMarkdownSaveTabResult,
   type RuntimeMobileSessionCreateTerminalResult,
   type RuntimeMobileSessionClientTab,
-  type RuntimeMobileSessionTabCloseResult,
   type RuntimeMobileSessionMarkdownTab,
   type RuntimeMobileSessionTabMove,
   type RuntimeMobileSessionTabMoveResult,
@@ -695,6 +694,12 @@ import {
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
 } from './client-session-tab-selection'
+import {
+  committedMobileSessionTabClose,
+  delegatedMobileSessionTabClose,
+  refusedMobileSessionTabClose,
+  type MobileSessionTabCloseOutcome
+} from './mobile-session-tab-close-outcome'
 import type {
   PtyProviderBufferSnapshot,
   IFilesystemProvider,
@@ -8995,7 +9000,7 @@ export class OrcaRuntimeService {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
     tabId: string
-  ): Promise<RuntimeMobileSessionTabCloseResult> {
+  ): Promise<MobileSessionTabCloseOutcome> {
     const snapshot = await this.listMobileSessionTabs(worktreeSelector)
     const tabExists = snapshot.tabs.some(
       (candidate) =>
@@ -9009,12 +9014,9 @@ export class OrcaRuntimeService {
     // Why: a legacy client may already have hidden its mirror; a new snapshot
     // restores it without granting an unattributed request destructive authority.
     this.republishMobileSessionTabsSnapshot(snapshot.worktree)
-    return {
-      closed: true,
-      refused: true,
-      refusalReason: 'missing-intent',
+    return refusedMobileSessionTabClose('missing-intent', {
       snapshotRepublished: true
-    }
+    })
   }
 
   async closeMobileSessionTab(
@@ -9027,7 +9029,7 @@ export class OrcaRuntimeService {
       clientNavigationId?: string
       localPtyTeardownOwnedExternally?: boolean
     } = {}
-  ): Promise<RuntimeMobileSessionTabCloseResult> {
+  ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
@@ -9042,24 +9044,18 @@ export class OrcaRuntimeService {
     if (options.reason !== undefined && options.reason !== 'user' && observedPtyIds === null) {
       // Why: keep-on-unknown must also restore the mirror the caller already pruned.
       this.republishMobileSessionTabsSnapshot(worktreeId)
-      return {
-        closed: true,
-        refused: true,
-        refusalReason: 'unknown-liveness',
-        ...(snapshot ? { snapshotRepublished: true as const } : {})
-      }
+      return refusedMobileSessionTabClose('unknown-liveness', {
+        snapshotRepublished: Boolean(snapshot)
+      })
     }
     if (
       options.expectedPublicationEpoch !== undefined &&
       snapshot?.publicationEpoch !== options.expectedPublicationEpoch
     ) {
       this.republishMobileSessionTabsSnapshot(worktreeId)
-      return {
-        closed: true,
-        refused: true,
-        refusalReason: 'stale-publication',
-        ...(snapshot ? { snapshotRepublished: true as const } : {})
-      }
+      return refusedMobileSessionTabClose('stale-publication', {
+        snapshotRepublished: Boolean(snapshot)
+      })
     }
     const tab =
       snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
@@ -9084,19 +9080,18 @@ export class OrcaRuntimeService {
         )
       if (!terminalIncarnationMatches) {
         this.republishMobileSessionTabsSnapshot(worktreeId)
-        return {
-          closed: true,
-          refused: true,
-          refusalReason: 'stale-terminal',
+        return refusedMobileSessionTabClose('stale-terminal', {
           snapshotRepublished: true
-        }
+        })
       }
     }
     let closedSelectionTabIds = [tab.id]
-    const finishCommittedClose = (): RuntimeMobileSessionTabCloseResult => {
-      this.clientSessionTabSelections.forgetTabs(worktreeId, closedSelectionTabIds)
-      return { closed: true }
-    }
+    const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
+      committedMobileSessionTabClose(
+        this.clientSessionTabSelections,
+        worktreeId,
+        closedSelectionTabIds
+      )
     if (tab.type === 'terminal') {
       const parentLeafCount = snapshot.tabs.filter(
         (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
@@ -9148,21 +9143,14 @@ export class OrcaRuntimeService {
           }
           // Why: both markers are skew-safe; clients must restore a mirror only
           // when the host actually republished it, not for a dead leaf.
-          return {
-            closed: true,
-            refused: true,
-            refusalReason: 'live-host-pty',
-            ...(!addressedDeadLeaf ? { snapshotRepublished: true as const } : {})
-          }
+          return refusedMobileSessionTabClose('live-host-pty', {
+            snapshotRepublished: !addressedDeadLeaf
+          })
         }
         if (!closingWholeParent || this.tabs.has(tab.parentTabId)) {
           // Why: only the renderer may retire its own tab or split leaf; a
           // remote lifecycle echo must never cross that boundary into a kill.
-          return {
-            closed: true,
-            refused: true,
-            refusalReason: 'retirement-owner'
-          }
+          return refusedMobileSessionTabClose('retirement-owner')
         }
       }
       // Why: a runtime-owned headless tab is absent from renderer state, so the
@@ -9241,14 +9229,14 @@ export class OrcaRuntimeService {
           return finishCommittedClose()
         }
         this.notifier.closeTerminal(tab.parentTabId)
-        return { closed: true }
+        return delegatedMobileSessionTabClose()
       }
       // Why: paired web tab bars represent a split terminal with one local
       // parent tab id. Closing that parent should close the desktop tab, not
       // just whichever leaf happened to be first in the session snapshot.
       this.notifier.closeTerminal(tab.parentTabId)
       this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
-      return { closed: true }
+      return delegatedMobileSessionTabClose()
     } else if (tab.type === 'browser' && this.offscreenBrowserBackend) {
       // Why: headless browser tabs are offscreen WebContents with no renderer to
       // route closeSessionTab to. Close the page directly and drop it from the
