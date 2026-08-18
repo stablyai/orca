@@ -15,6 +15,12 @@ type DatabaseConstructor = new (
   options?: { readOnly?: boolean; fileMustExist?: boolean; timeout?: number }
 ) => SqliteDatabase
 
+type HermesDbPage = {
+  messages: NativeChatMessage[]
+  hasMore: boolean
+  beforeOffset: number
+}
+
 function getDatabase(path: string): SqliteDatabase | null {
   if (!existsSync(path)) {
     return null
@@ -28,29 +34,56 @@ function getDatabase(path: string): SqliteDatabase | null {
   }
 }
 
-export function readHermesStateDb(dbPath: string, sessionId: string): NativeChatMessage[] | null {
+function messageColumns(db: SqliteDatabase): Set<string> {
+  return new Set(
+    db
+      .prepare('PRAGMA table_info(messages)')
+      .all()
+      .map((column) => String(column.name))
+  )
+}
+
+function optionalColumn(columns: Set<string>, name: string): string {
+  return columns.has(name) ? name : 'NULL'
+}
+
+export function readHermesStateDbPage(
+  dbPath: string,
+  sessionId: string,
+  limit: number,
+  beforeOffset?: number
+): HermesDbPage | null {
   const db = getDatabase(dbPath)
   if (!db) {
     return null
   }
   try {
-    const columns = db.prepare('PRAGMA table_info(messages)').all()
-    const names = new Set(columns.map((column) => String(column.name)))
-    const optional = (name: string) => (names.has(name) ? name : 'NULL')
-    const sessionColumn = names.has('session_id') ? 'session_id' : 'NULL'
+    const columns = messageColumns(db)
+    if (!columns.has('session_id')) {
+      return { messages: [], hasMore: false, beforeOffset: 0 }
+    }
+    const timestamp = optionalColumn(columns, 'timestamp')
+    const id = columns.has('id') ? 'id' : 'rowid'
+    const cursor = beforeOffset === undefined ? null : beforeOffset
     const rows = db
       .prepare(`
-      SELECT id, role, content, ${optional('tool_call_id')} AS tool_call_id,
-             ${optional('tool_calls')} AS tool_calls, ${optional('tool_name')} AS tool_name,
-             ${optional('timestamp')} AS timestamp, ${optional('reasoning')} AS reasoning,
-             ${optional('reasoning_content')} AS reasoning_content,
-             ${optional('reasoning_details')} AS reasoning_details
-        FROM messages
-       WHERE ${sessionColumn} = ?
-       ORDER BY ${optional('timestamp')} ASC, id ASC
-    `)
-      .all(sessionId)
-    return rows.flatMap((row, index) => {
+        SELECT ${id} AS id, role, content,
+               ${optionalColumn(columns, 'tool_call_id')} AS tool_call_id,
+               ${optionalColumn(columns, 'tool_calls')} AS tool_calls,
+               ${optionalColumn(columns, 'tool_name')} AS tool_name,
+               ${timestamp} AS timestamp,
+               ${optionalColumn(columns, 'reasoning')} AS reasoning,
+               ${optionalColumn(columns, 'reasoning_content')} AS reasoning_content,
+               ${optionalColumn(columns, 'reasoning_details')} AS reasoning_details
+          FROM messages
+         WHERE session_id = ? AND (? IS NULL OR ${id} < ?)
+         ORDER BY ${timestamp} DESC, ${id} DESC
+         LIMIT ?
+      `)
+      .all(sessionId, cursor, cursor, Math.max(0, limit) + 1)
+    const hasMore = rows.length > limit
+    const pageRows = rows.slice(0, Math.max(0, limit)).toReversed()
+    const messages = pageRows.flatMap((row, index) => {
       const message = decodeHermesDatabaseMessage(row, `${sessionId}:${index}`)
       return message
         ? [
@@ -61,9 +94,19 @@ export function readHermesStateDb(dbPath: string, sessionId: string): NativeChat
           ]
         : []
     })
+    return {
+      messages,
+      hasMore,
+      beforeOffset: messages[0] ? Number(messages[0].id) : 0
+    }
   } finally {
     db.close()
   }
+}
+
+export function readHermesStateDb(dbPath: string, sessionId: string): NativeChatMessage[] | null {
+  const page = readHermesStateDbPage(dbPath, sessionId, Number.MAX_SAFE_INTEGER)
+  return page?.messages ?? null
 }
 
 export function hasHermesSession(dbPath: string, sessionId: string): boolean {
@@ -79,3 +122,5 @@ export function hasHermesSession(dbPath: string, sessionId: string): boolean {
     db.close()
   }
 }
+
+export type { HermesDbPage }

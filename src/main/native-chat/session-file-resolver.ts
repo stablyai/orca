@@ -59,7 +59,8 @@ function ompSessionsDir(): string {
 }
 
 const hermesHome = (): string => process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
-const hermesStateDb = (): string => join(hermesHome(), 'state.db')
+const hermesStateDb = (sessionsDir?: string): string =>
+  join(sessionsDir ? join(sessionsDir, '..') : hermesHome(), 'state.db')
 
 function hermesSessionsDir(): string {
   return join(hermesHome(), 'sessions')
@@ -77,6 +78,8 @@ export type ResolveSessionFileOptions = {
   ompSessionsDir?: string
   /** Override the Hermes sessions root (tests / isolated scans). */
   hermesSessionsDir?: string
+  /** Override the Hermes SQLite state database path. */
+  hermesStateDbPath?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -172,6 +175,7 @@ async function resolveSessionFileById(
     return resolveHermesSessionFile(
       trimmedId,
       options.hermesSessionsDir ?? hermesSessionsDir(),
+      options.hermesStateDbPath,
       signal
     )
   }
@@ -306,17 +310,14 @@ async function resolveOmpSessionFile(
   return files[0] ?? null
 }
 
-/**
- * Hermes stores current sessions in state.db, not a transcript directory. The
- * resolver returns the database path because the transcript reader opens it
- * read-only and selects messages by session_id.
- */
+/** Resolve the Hermes state database containing the requested session. */
 async function resolveHermesSessionFile(
   sessionId: string,
-  _sessionsDir: string,
+  sessionsDir: string,
+  stateDbPath?: string,
   signal?: AbortSignal
 ): Promise<string | null> {
   signal?.throwIfAborted()
-  const path = hermesStateDb()
+  const path = stateDbPath ?? hermesStateDb(sessionsDir)
   return existsSync(path) && hasHermesSession(path, sessionId) ? path : null
 }

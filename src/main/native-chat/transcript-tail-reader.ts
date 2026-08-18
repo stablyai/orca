@@ -27,7 +27,7 @@ import {
   wslGatedStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import { readHermesStateDb } from './hermes-state-db-reader'
+import { readHermesStateDbPage } from './hermes-state-db-reader'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
@@ -265,21 +265,11 @@ async function readHermesTranscript(
   if (!dbPath) {
     return { error: 'Transcript unavailable', notFound: true }
   }
-  const messages = readHermesStateDb(dbPath, args.sessionId)
-  if (!messages) {
+  const page = readHermesStateDbPage(dbPath, args.sessionId, args.limit, args.beforeOffset)
+  if (!page) {
     return { error: 'Transcript unavailable', notFound: true }
   }
-  const selected =
-    args.beforeOffset === undefined
-      ? messages.slice(-Math.max(0, args.limit))
-      : messages
-          .filter((message) => Number(message.id) < args.beforeOffset)
-          .slice(-Math.max(0, args.limit))
-  return {
-    messages: selected,
-    hasMore: selected.length < messages.length,
-    beforeOffset: selected[0] ? Number(selected[0].id) : 0
-  }
+  return page
 }
 
 export async function readNativeChatTranscriptTail(
