@@ -191,6 +191,7 @@ import {
   logStartupMilestone
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import {
@@ -1375,6 +1376,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         }
       }
     })
+    // Why here: read-only, and the install DACL is the one thing a 0x80000003
+    // child death cannot tell us about itself. See electron/electron#51761.
+    probeWindowsInstallDirAcl({ isServeMode })
   }
 
   const window = createMainWindow(store, {
