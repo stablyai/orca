@@ -13,10 +13,31 @@ function containsWholeLineRun(accumulated: string, message: string): boolean {
   )
 }
 
-/** Appends an error to the aggregated surface, keeping the first occurrence of an already-present message. */
+// Why (#15241): a recurring error that differs slightly each time (embedded timestamp, port,
+// attempt count) never matches containsWholeLineRun's exact-content check, so it kept
+// appending forever — a real ~3.4GB renderer leak from one flaky/reconnecting transport.
+// Bound the surface to the most recent lines so both the string size and the cost of each
+// `${accumulated}\n${message}` copy stay O(MAX_ACCUMULATED_LINES) instead of O(n)/O(n²).
+const MAX_ACCUMULATED_LINES = 20
+
+function truncateToMostRecentLines(value: string): string {
+  const lines = value.split('\n')
+  return lines.length > MAX_ACCUMULATED_LINES
+    ? lines.slice(lines.length - MAX_ACCUMULATED_LINES).join('\n')
+    : value
+}
+
+/**
+ * Appends an error to the aggregated surface, keeping the first occurrence of an
+ * already-present message. Bounded to the most recent MAX_ACCUMULATED_LINES lines so a
+ * recurring near-duplicate error (see #15241) can't grow the surface without bound.
+ */
 export function appendTerminalErrorMessage(accumulated: string | null, message: string): string {
   if (!accumulated) {
     return message
   }
-  return containsWholeLineRun(accumulated, message) ? accumulated : `${accumulated}\n${message}`
+  if (containsWholeLineRun(accumulated, message)) {
+    return accumulated
+  }
+  return truncateToMostRecentLines(`${accumulated}\n${message}`)
 }
