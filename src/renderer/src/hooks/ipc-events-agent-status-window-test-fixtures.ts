@@ -54,6 +54,8 @@ export function buildWindowApi(args: {
         onFocusTerminal: () => () => {},
         onFocusEditorTab: () => () => {},
         onCloseSessionTab: () => () => {},
+        onSessionTabCloseRequest: () => () => {},
+        respondSessionTabClose: () => {},
         onMoveSessionTab: () => () => {},
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},

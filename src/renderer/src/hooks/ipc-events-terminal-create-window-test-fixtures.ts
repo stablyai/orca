@@ -114,6 +114,8 @@ export function buildTerminalCreateWindow(args: {
         },
         onFocusEditorTab: () => () => {},
         onCloseSessionTab: () => () => {},
+        onSessionTabCloseRequest: () => () => {},
+        respondSessionTabClose: () => {},
         onMoveSessionTab: () => () => {},
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},

@@ -4175,6 +4175,17 @@ const api = {
       ipcRenderer.on('ui:closeSessionTab', listener)
       return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
     },
+    onSessionTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
+    },
+    respondSessionTabClose: (response) => {
+      ipcRenderer.send('ui:sessionTabCloseResponse', response)
+    },
     onMoveSessionTab: (
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ): (() => void) => {

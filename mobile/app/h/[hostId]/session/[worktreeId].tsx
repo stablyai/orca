@@ -208,6 +208,7 @@ import {
   confirmsMirroredTabSelection,
   type AppliedSnapshotMarker
 } from '../../../../src/session/session-tab-snapshot-gate'
+import { resolveActiveSessionTab } from '../../../../src/session/active-session-tab'
 import {
   createInitialSessionAutoCreateState,
   useInitialSessionTerminalAutoCreate,
@@ -933,6 +934,8 @@ export default function SessionScreen() {
   const activeHandleRef = useRef<string | null>(null)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
+  // Why: survive transient snapshot gaps so the device's own tab pick can re-bind.
+  const selectedSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
   // Why: remember the page id to activate its session tab once it syncs (bridge auto-activate flags only webContents, not the app-level active tab).
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
@@ -1740,26 +1743,28 @@ export default function SessionScreen() {
 
       const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
       const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
-      const pendingActiveTerminalHandle = pendingActiveTerminalHandleRef.current
-      let active = snapshotActive
-      let selectionSource = 'snapshot'
-      if (pendingActiveSessionTabId) {
-        if (snapshotActive?.id === pendingActiveSessionTabId) {
-          if (confirmsMirroredTabSelection(result.publicationEpoch)) {
-            pendingActiveSessionTabIdRef.current = null
-          } else {
-            selectionSource = 'pending-tab-local-ack'
-          }
-        } else {
-          const pendingTab = nextTabs.find((tab) => tab.id === pendingActiveSessionTabId)
-          if (pendingTab) {
-            // Why: desktop tab snapshots can lag a mobile tap mid-activate-RPC; keep the local selection to avoid snapping back.
-            active = pendingTab
-            selectionSource = 'pending-tab'
-          } else {
-            pendingActiveSessionTabIdRef.current = null
-          }
-        }
+      const followsHost = result.navigationIntent === 'follow'
+      const pendingActiveTerminalHandle = followsHost
+        ? null
+        : pendingActiveTerminalHandleRef.current
+      if (followsHost) {
+        pendingActiveTerminalHandleRef.current = null
+        pendingBrowserFocusPageIdRef.current = null
+      }
+      const resolved = resolveActiveSessionTab(nextTabs, {
+        pendingActiveSessionTabId,
+        selectedSessionTabId: selectedSessionTabIdRef.current,
+        navigationIntent: result.navigationIntent
+      })
+      let active = resolved.activeTab
+      let selectionSource: string = resolved.selectionSource
+      if (resolved.clearPendingActiveSessionTabId) {
+        const localAck =
+          !followsHost &&
+          snapshotActive?.id === pendingActiveSessionTabId &&
+          !confirmsMirroredTabSelection(result.publicationEpoch)
+        selectionSource = localAck ? 'pending-tab-local-ack' : selectionSource
+        pendingActiveSessionTabIdRef.current = localAck ? pendingActiveSessionTabId : null
       }
       if (pendingActiveTerminalHandle) {
         const pendingTerminalTab = nextTabs.find(
@@ -1769,14 +1774,15 @@ export default function SessionScreen() {
         const pendingTerminalExists = mergedTerminalsForActive.some(
           (terminal) => terminal.handle === pendingActiveTerminalHandle
         )
-        if (
-          snapshotActive?.type === 'terminal' &&
-          snapshotActive.terminal === pendingActiveTerminalHandle
-        ) {
-          if (confirmsMirroredTabSelection(result.publicationEpoch)) {
-            pendingActiveTerminalHandleRef.current = null
-          } else {
+        if (active?.type === 'terminal' && active.terminal === pendingActiveTerminalHandle) {
+          if (
+            snapshotActive?.type === 'terminal' &&
+            snapshotActive.terminal === pendingActiveTerminalHandle &&
+            !confirmsMirroredTabSelection(result.publicationEpoch)
+          ) {
             selectionSource = 'pending-handle-local-ack'
+          } else {
+            pendingActiveTerminalHandleRef.current = null
           }
         } else if (pendingTerminalTab) {
           // Why: desktop active flags lag a mobile tap; key by handle too, as fallback PTY tabs lack a stable tab id at startup.
@@ -1799,6 +1805,9 @@ export default function SessionScreen() {
         }
       }
       diagnostics.tabsApplied(result, nextTabs, active, selectionSource)
+      if (!resolved.retainSelectedSessionTabId || active !== resolved.activeTab) {
+        selectedSessionTabIdRef.current = active?.id ?? null
+      }
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
@@ -2590,6 +2599,7 @@ export default function SessionScreen() {
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
+    selectedSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
@@ -4068,6 +4078,8 @@ export default function SessionScreen() {
         // so comparing against the ref keeps the anchor from being nulled out.
         if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
+          // Why: an explicit close is not a transient gap; drop the sticky pick so the snapshot picks the next tab.
+          selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
