@@ -30,9 +30,20 @@ const hostRegistry = {
 
 describe('hostFromRemoteUrl', () => {
   it('parses https, ssh, and scp-like remote urls', () => {
-    expect(hostFromRemoteUrl('https://Git.Corp.Example:8443/acme/app.git')).toBe('git.corp.example')
+    expect(hostFromRemoteUrl('https://Git.Corp.Example:8443/acme/app.git')).toBe(
+      'git.corp.example:8443'
+    )
     expect(hostFromRemoteUrl('ssh://git@git.corp.example/acme/app.git')).toBe('git.corp.example')
     expect(hostFromRemoteUrl('git@git.corp.example:acme/app.git')).toBe('git.corp.example')
+  })
+
+  it('preserves explicit ports in scp-like remotes', () => {
+    expect(hostFromRemoteUrl('ssh://git@git.corp.example:2222/acme/app.git')).toBe(
+      'git.corp.example:2222'
+    )
+    expect(hostFromRemoteUrl('git@git.corp.example:2222:acme/app.git')).toBe(
+      'git.corp.example:2222'
+    )
   })
 
   it('returns null for unparseable inputs', () => {

@@ -3,20 +3,29 @@ import { readRemoteUrl } from '../git/remote-url-probe'
 
 // A minimal host parser for plugin provider remote matching.
 /**
- * Extract the host (hostname, lowercased) from any git remote URL form:
+ * Extract the host (hostname[:port], lowercased) from any git remote URL form:
  * https://host[:port]/path, ssh://git@host[:port]/path, git@host:path.
+ * Ports are preserved so a manifest host like `git.example:8443` matches
+ * exactly instead of colliding with the same hostname on the default port.
  */
 export function hostFromRemoteUrl(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim().replace(/^git\+/, '')
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     try {
-      return new URL(trimmed).hostname.toLowerCase()
+      const url = new URL(trimmed)
+      const host = url.hostname.toLowerCase()
+      const port = url.port ? `:${url.port}` : ''
+      return `${host}${port}`
     } catch {
       return null
     }
   }
-  const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):/)
-  return scpLike ? scpLike[1]!.toLowerCase() : null
+  const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+)(?::(\d+))?:/)
+  if (!scpLike) {
+    return null
+  }
+  const host = scpLike[1]!.toLowerCase()
+  return scpLike[2] ? `${host}:${scpLike[2]}` : host
 }
 
 export type PluginForgeProviderRegistryHandle = {

@@ -59,7 +59,9 @@ export function linkedReviewHintKey(options?: LinkedReviewHints): string {
     ['bitbucket', options?.linkedBitbucketPR ?? null],
     ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
     ['gitea', options?.linkedGiteaPR ?? null],
-    ...Object.entries(options?.linkedPluginReview ?? {})
+    ...Object.entries(options?.linkedPluginReview ?? {}).sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0
+    )
   ] as const
   return hints
     .filter(([, number]) => number !== null)

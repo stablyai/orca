@@ -26,6 +26,7 @@ type LinkedReviewNumbers = {
   linkedBitbucketPR: number | null
   linkedAzureDevOpsPR: number | null
   linkedGiteaPR: number | null
+  linkedPluginReview?: Record<string, number> | null
 }
 
 export type WorktreeCardPrDisplay =
@@ -61,7 +62,7 @@ function getLinkedReviewNumber(
     case 'gitea':
       return links.linkedGiteaPR
     default:
-      return null
+      return links.linkedPluginReview?.[provider] ?? null
   }
 }
 
@@ -87,14 +88,16 @@ export function getWorktreeCardPrDisplay(
   linkedBitbucketPR: number | null = null,
   linkedAzureDevOpsPR: number | null = null,
   linkedGiteaPR: number | null = null,
-  options: WorktreeCardPrDisplayOptions = {}
+  options: WorktreeCardPrDisplayOptions = {},
+  linkedPluginReview: Record<string, number> | null = null
 ): WorktreeCardPrDisplay | null {
   const links = {
     linkedPR,
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
-    linkedGiteaPR
+    linkedGiteaPR,
+    linkedPluginReview
   }
   const hasLinkedReview =
     linkedPR !== null ||

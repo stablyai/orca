@@ -45,6 +45,9 @@ export function resolveCreatedHostedReviewLink(
     case 'unsupported':
       return { worktree: {}, lookup: {} }
     default:
-      return { worktree: { linkedPluginReview: { [provider]: number } }, lookup: {} }
+      return {
+        worktree: { linkedPluginReview: { [provider]: number } },
+        lookup: { linkedPluginReview: { [provider]: number } }
+      }
   }
 }

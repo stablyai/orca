@@ -36,11 +36,12 @@ export function getSelectedReviewBranch(
   if (typeof args.linkedGiteaPR === 'number') {
     return { provider: 'gitea', number: args.linkedGiteaPR }
   }
-  // Plugin provider: return the first entry from linkedPluginReview.
+  // Plugin provider: deterministic by sorted provider id, not insertion order.
   if (args.linkedPluginReview) {
-    const entries = Object.entries(args.linkedPluginReview)
-    if (entries.length > 0) {
-      return { provider: entries[0][0], number: entries[0][1] }
+    const sorted = Object.keys(args.linkedPluginReview).sort()
+    const providerId = sorted[0]
+    if (providerId) {
+      return { provider: providerId, number: args.linkedPluginReview[providerId]! }
     }
   }
   return null

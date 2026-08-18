@@ -342,10 +342,14 @@ async function isProviderAuthenticated(
     // anyone with Bitbucket connected but no `gh auth login`.
     return isBitbucketReviewCreationAuthenticated()
   }
-  // Plugin forge provider auth check (fallback for unknown providers)
+  // Plugin forge provider auth check (fallback for unknown providers). A
+  // plugin without an auth hook opts out of the preflight — its own credentials
+  // (or none) are the contract, so never fall through to GitHub auth.
   const pluginProvider = getPluginProviderById(provider)
-  if (pluginProvider?.isAuthenticated) {
-    return pluginProvider.isAuthenticated({ repoPath, connectionId })
+  if (pluginProvider) {
+    return pluginProvider.isAuthenticated
+      ? pluginProvider.isAuthenticated({ repoPath, connectionId })
+      : true
   }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }

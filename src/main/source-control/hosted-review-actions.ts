@@ -11,7 +11,10 @@ import type {
   MergeHostedReviewInput,
   MergeHostedReviewResult
 } from '../../shared/hosted-review-actions'
+import { getForgeProviderForRepository, type ForgeProvider } from './forge-provider'
 import { getPluginProviderById } from './plugin-forge-provider-bridge'
+
+const NO_ACTIONS: Partial<ForgeProvider> = {}
 
 /**
  * Generic hosted-review action dispatch for forge providers.
@@ -19,22 +22,23 @@ import { getPluginProviderById } from './plugin-forge-provider-bridge'
  * built-in providers keep their CLI/REST-specific paths elsewhere.
  */
 
-function resolveActionProvider(provider: string): {
-  mergeReview?: (input: MergeHostedReviewInput) => Promise<MergeHostedReviewResult>
-  commentReview?: (input: CommentHostedReviewInput) => Promise<CommentHostedReviewResult>
-  approveReview?: (input: ApproveHostedReviewInput) => Promise<ApproveHostedReviewResult>
-  listReviewComments?: (
-    input: ListHostedReviewCommentsInput
-  ) => Promise<ListHostedReviewCommentsResult>
-  listIssues?: (input: ListHostedReviewIssuesInput) => Promise<ListHostedReviewIssuesResult>
-} {
-  return getPluginProviderById(provider) ?? {}
+/**
+ * Resolve the plugin provider that owns a repo before dispatching an action,
+ * so a stale or crafted provider id cannot invoke a plugin on another forge.
+ */
+async function resolveActionProvider(
+  provider: string,
+  repoPath: string,
+  connectionId?: string | null
+): Promise<Partial<ForgeProvider>> {
+  const resolved = await getForgeProviderForRepository({ repoPath, connectionId })
+  return resolved && resolved.id === provider ? resolved : NO_ACTIONS
 }
 
 export function getHostedReviewActionCapabilities(
   provider: string
 ): HostedReviewActionCapabilities {
-  const actions = resolveActionProvider(provider)
+  const actions: Partial<ForgeProvider> = getPluginProviderById(provider) ?? NO_ACTIONS
   return {
     canMerge: typeof actions.mergeReview === 'function',
     canComment: typeof actions.commentReview === 'function',
@@ -46,7 +50,8 @@ export function getHostedReviewActionCapabilities(
 export async function mergeHostedReview(
   input: MergeHostedReviewInput
 ): Promise<MergeHostedReviewResult> {
-  const action = resolveActionProvider(input.provider).mergeReview
+  const actions = await resolveActionProvider(input.provider, input.repoPath, input.connectionId)
+  const action = actions.mergeReview
   if (!action) {
     return {
       ok: false,
@@ -60,7 +65,8 @@ export async function mergeHostedReview(
 export async function commentOnHostedReview(
   input: CommentHostedReviewInput
 ): Promise<CommentHostedReviewResult> {
-  const action = resolveActionProvider(input.provider).commentReview
+  const actions = await resolveActionProvider(input.provider, input.repoPath, input.connectionId)
+  const action = actions.commentReview
   if (!action) {
     return { ok: false, code: 'unknown', error: 'Comments are not supported for this provider.' }
   }
@@ -70,7 +76,8 @@ export async function commentOnHostedReview(
 export async function approveHostedReview(
   input: ApproveHostedReviewInput
 ): Promise<ApproveHostedReviewResult> {
-  const action = resolveActionProvider(input.provider).approveReview
+  const actions = await resolveActionProvider(input.provider, input.repoPath, input.connectionId)
+  const action = actions.approveReview
   if (!action) {
     return { ok: false, code: 'unknown', error: 'Approval is not supported for this provider.' }
   }
@@ -80,7 +87,8 @@ export async function approveHostedReview(
 export async function listHostedReviewComments(
   input: ListHostedReviewCommentsInput
 ): Promise<ListHostedReviewCommentsResult> {
-  const action = resolveActionProvider(input.provider).listReviewComments
+  const actions = await resolveActionProvider(input.provider, input.repoPath, input.connectionId)
+  const action = actions.listReviewComments
   if (!action) {
     return { ok: false, code: 'unknown', error: 'Comments are not supported for this provider.' }
   }
@@ -90,7 +98,8 @@ export async function listHostedReviewComments(
 export async function listHostedReviewIssues(
   input: ListHostedReviewIssuesInput
 ): Promise<ListHostedReviewIssuesResult> {
-  const action = resolveActionProvider(input.provider).listIssues
+  const actions = await resolveActionProvider(input.provider, input.repoPath, input.connectionId)
+  const action = actions.listIssues
   if (!action) {
     return { ok: false, code: 'unknown', error: 'Issues are not supported for this provider.' }
   }

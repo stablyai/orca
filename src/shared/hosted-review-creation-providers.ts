@@ -22,9 +22,7 @@ export function supportsHostedReviewCreation(
 export function resolveHostedReviewCreationProvider(
   provider: HostedReviewProvider | null | undefined
 ): HostedReviewProvider {
-  // Why: plugin forge providers pass their own id through — the main process
-  // dispatches their ForgeProvider.createReview. Only absent providers fall
-  // back to GitHub so creation UI stays enabled for unknown remotes.
+  // Why: plugin ids pass through; only absent providers fall back to GitHub.
   return supportsHostedReviewCreation(provider) ? provider : (provider ?? 'github')
 }
 

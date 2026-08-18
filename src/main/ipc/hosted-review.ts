@@ -102,6 +102,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
+      linkedPluginReview: args.linkedPluginReview ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
       ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})

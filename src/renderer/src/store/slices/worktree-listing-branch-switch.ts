@@ -14,6 +14,22 @@ function indexUnambiguousWorktrees(
   return byId
 }
 
+/** Compare two linkedPluginReview maps by sorted keys so insertion order does not affect equality. */
+function pluginReviewMapEquals(
+  left: Record<string, number> | null | undefined,
+  right: Record<string, number> | null | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  const lKeys = Object.keys(left).sort()
+  const rKeys = Object.keys(right).sort()
+  return lKeys.length === rKeys.length && lKeys.every((k) => left[k] === right[k])
+}
+
 function branchScopedReviewContextMatches(left: Worktree, right: Worktree): boolean {
   return (
     left.linkedPR === right.linkedPR &&
@@ -21,8 +37,7 @@ function branchScopedReviewContextMatches(left: Worktree, right: Worktree): bool
     left.linkedBitbucketPR === right.linkedBitbucketPR &&
     left.linkedAzureDevOpsPR === right.linkedAzureDevOpsPR &&
     left.linkedGiteaPR === right.linkedGiteaPR &&
-    JSON.stringify(left.linkedPluginReview ?? null) ===
-      JSON.stringify(right.linkedPluginReview ?? null) &&
+    pluginReviewMapEquals(left.linkedPluginReview, right.linkedPluginReview) &&
     left.pushTarget?.remoteName === right.pushTarget?.remoteName &&
     left.pushTarget?.branchName === right.pushTarget?.branchName
   )

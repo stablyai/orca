@@ -13,6 +13,17 @@ const KNOWN_NON_GITEA_HOSTS = [
   'ssh.dev.azure.com'
 ]
 
+// Why: ids served by built-in providers must stay unambiguous in provider
+// routing; a plugin declaring one would shadow or collide with built-ins.
+const BUILTIN_FORGE_PROVIDER_IDS = new Set([
+  'github',
+  'gitlab',
+  'bitbucket',
+  'azure-devops',
+  'gitea',
+  'unsupported'
+])
+
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
 
@@ -90,6 +101,13 @@ export function validatePluginManifestContributions(
   )
   for (const [index, provider] of manifest.contributes.forgeProviders.entries()) {
     // modulePath is already guaranteed required by the zod schema.
+    if (BUILTIN_FORGE_PROVIDER_IDS.has(provider.id)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'forgeProviders', index, 'id'],
+        message: `reserved built-in forge provider id: ${provider.id}`
+      })
+    }
     const reservedHosts = provider.hosts.filter((host) => KNOWN_NON_GITEA_HOSTS.includes(host))
     if (reservedHosts.length > 0) {
       ctx.addIssue({

@@ -29,7 +29,8 @@ export function canUseParentPrChecksHostedReviewCacheEntry(
     worktree.linkedBitbucketPR ?? null,
     worktree.linkedAzureDevOpsPR ?? null,
     worktree.linkedGiteaPR ?? null,
-    { reviewHintKey: entry.linkedReviewHintKey }
+    { reviewHintKey: entry.linkedReviewHintKey },
+    worktree.linkedPluginReview ?? null
   )
   return display?.provider === review.provider && display.number === review.number
 }
@@ -71,7 +72,7 @@ function getLinkedReviewNumberForProvider(
     case 'unsupported':
       return null
     default:
-      return null
+      return worktree.linkedPluginReview?.[provider] ?? null
   }
 }
 

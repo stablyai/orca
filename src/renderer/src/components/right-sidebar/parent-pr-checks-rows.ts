@@ -120,7 +120,9 @@ function buildParentPrChecksRow(
     args.worktree.linkedGitLabMR ?? null,
     args.worktree.linkedBitbucketPR ?? null,
     args.worktree.linkedAzureDevOpsPR ?? null,
-    args.worktree.linkedGiteaPR ?? null
+    args.worktree.linkedGiteaPR ?? null,
+    undefined,
+    args.worktree.linkedPluginReview ?? null
   )
   const review = reviewSnapshot.review
   const status = classifyParentPrChecksRowStatus({
@@ -303,6 +305,7 @@ function hasLinkedReview(worktree: Worktree): boolean {
     worktree.linkedBitbucketPR ??
     worktree.linkedAzureDevOpsPR ??
     worktree.linkedGiteaPR ??
+    worktree.linkedPluginReview ??
     null
   )
 }
@@ -313,6 +316,7 @@ function getLinkedReviewHints(worktree: Worktree): Parameters<typeof linkedRevie
     linkedGitLabMR: worktree.linkedGitLabMR ?? null,
     linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: worktree.linkedGiteaPR ?? null
+    linkedGiteaPR: worktree.linkedGiteaPR ?? null,
+    linkedPluginReview: worktree.linkedPluginReview ?? null
   }
 }

@@ -259,4 +259,33 @@ describe('PluginForgeProviderRegistry', () => {
 
     expect(registry.getByProviderId('copyforge')?.copy?.providerName).toBe('Corp')
   })
+
+  it('loads action exports (mergeReview, commentReview, listIssues) when the module provides them', async () => {
+    const registry = new PluginForgeProviderRegistry()
+    const dir = pluginDirWithModule(
+      `${VALID_MODULE}\nexport async function mergeReview() { return { ok: true } }\nexport async function commentReview() { return { ok: true } }\nexport async function listIssues() { return { ok: true, issues: [] } }\n`
+    )
+    const plugin = pluginWith(
+      'acme.actions',
+      {
+        forgeProviders: [
+          {
+            id: 'actionsforge',
+            displayName: 'Actions',
+            hosts: ['git.example'],
+            modulePath: 'provider.mjs',
+            supportsReviewCreation: true
+          }
+        ]
+      },
+      dir
+    )
+
+    await registry.reconcile([plugin], () => true)
+
+    const provider = registry.getByProviderId('actionsforge')
+    expect(typeof provider?.mergeReview).toBe('function')
+    expect(typeof provider?.commentReview).toBe('function')
+    expect(typeof provider?.listIssues).toBe('function')
+  })
 })

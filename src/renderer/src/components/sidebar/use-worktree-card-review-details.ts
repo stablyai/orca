@@ -169,7 +169,8 @@ export function useWorktreeCardReviewDetails({
           ? ''
           : hostedReviewEntry?.linkedReviewHintKey,
       branchLookupGitHubPRNumber
-    }
+    },
+    worktree.linkedPluginReview ?? null
   )
 
   return {

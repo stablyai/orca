@@ -48,7 +48,9 @@ export class PluginForgeProviderRegistry {
   ): Promise<void> {
     const candidates = discovered.filter(
       (plugin): plugin is ValidDiscoveredPlugin =>
-        !isInvalidDiscoveredPlugin(plugin) && plugin.manifest.contributes.forgeProviders.length > 0
+        !isInvalidDiscoveredPlugin(plugin) &&
+        plugin.manifest.contributes.vmRecipes.length === 0 &&
+        plugin.manifest.contributes.forgeProviders.length > 0
     )
     const resolved: ResolvedPluginForgeProvider[] = []
     this.loadErrors.clear()
@@ -84,7 +86,6 @@ export class PluginForgeProviderRegistry {
             id: providerId,
             displayName: contrib.displayName,
             supportsReviewCreation: contrib.supportsReviewCreation,
-            // copy is optional; plugin can provide it
             ...(module.copy !== undefined ? { copy: module.copy } : {}),
             resolveRepository: module.resolveRepository,
             ...(module.isAuthenticated !== undefined
@@ -92,7 +93,14 @@ export class PluginForgeProviderRegistry {
               : {}),
             getReviewForBranch: module.getReviewForBranch,
             getReviewByNumber: module.getReviewByNumber,
-            ...(module.createReview !== undefined ? { createReview: module.createReview } : {})
+            ...(module.createReview !== undefined ? { createReview: module.createReview } : {}),
+            ...(module.mergeReview !== undefined ? { mergeReview: module.mergeReview } : {}),
+            ...(module.commentReview !== undefined ? { commentReview: module.commentReview } : {}),
+            ...(module.approveReview !== undefined ? { approveReview: module.approveReview } : {}),
+            ...(module.listReviewComments !== undefined
+              ? { listReviewComments: module.listReviewComments }
+              : {}),
+            ...(module.listIssues !== undefined ? { listIssues: module.listIssues } : {})
           }
           resolved.push({
             pluginKey: plugin.pluginKey,
@@ -183,6 +191,11 @@ type LoadedForgeProviderModule = {
   copy?: ForgeProvider['copy']
   isAuthenticated?: ForgeProvider['isAuthenticated']
   createReview?: ForgeProvider['createReview']
+  mergeReview?: ForgeProvider['mergeReview']
+  commentReview?: ForgeProvider['commentReview']
+  approveReview?: ForgeProvider['approveReview']
+  listReviewComments?: ForgeProvider['listReviewComments']
+  listIssues?: ForgeProvider['listIssues']
 }
 
 /**
