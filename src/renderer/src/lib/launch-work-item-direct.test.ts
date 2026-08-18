@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   openModalFallback: vi.fn(),
   resolvePrBase: vi.fn(),
   getConnectionId: vi.fn(),
+  ensureSetupHookConfirmed: vi.fn(),
   store: {} as Record<string, unknown> & {
     ensureDetectedAgents: ReturnType<typeof vi.fn>
     ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
@@ -52,7 +53,8 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 vi.mock('@/lib/ensure-hooks-confirmed', () => ({
-  ensureHooksConfirmed: vi.fn().mockResolvedValue('run')
+  ensureHooksConfirmed: vi.fn().mockResolvedValue('run'),
+  ensureSetupHookConfirmed: mocks.ensureSetupHookConfirmed
 }))
 
 vi.mock('@/lib/connection-context', () => ({
@@ -153,6 +155,10 @@ describe('launchWorkItemDirect', () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.getConnectionId.mockReturnValue(null)
+    mocks.ensureSetupHookConfirmed.mockResolvedValue({
+      decision: 'run',
+      approvalRequired: false
+    })
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
       setup: undefined
@@ -226,6 +232,53 @@ describe('launchWorkItemDirect', () => {
     )
   })
 
+  it('forwards the host-issued setup approval from the direct launch path', async () => {
+    const approval = { kind: 'setup' as const, token: 'tok-1', contentHash: 'a'.repeat(64) }
+    mocks.ensureSetupHookConfirmed.mockResolvedValue({
+      decision: 'run',
+      approvalRequired: true,
+      approval
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      item: {
+        type: 'issue',
+        number: 42,
+        title: 'Forward approval',
+        url: 'https://github.com/acme/repo/issues/42'
+      }
+    })
+
+    const call = mocks.createWorktree.mock.calls[0]
+    expect(call[3]).toBe('inherit')
+    expect(call[25]).toEqual({ setupHookApproval: approval })
+  })
+
+  it('skips the setup hook and sends no approval when the trust check is declined', async () => {
+    mocks.ensureSetupHookConfirmed.mockResolvedValue({ decision: 'skip', approvalRequired: true })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      item: {
+        type: 'issue',
+        number: 42,
+        title: 'Declined approval',
+        url: 'https://github.com/acme/repo/issues/42'
+      }
+    })
+
+    const call = mocks.createWorktree.mock.calls[0]
+    expect(call[3]).toBe('skip')
+    expect(call[25]).toBeUndefined()
+  })
+
   it('passes a resolved PR branch override while using a short PR identity for workspace names', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue([])
     mocks.store.settings = {}
@@ -279,7 +332,8 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      undefined
     )
   })
 
@@ -348,6 +402,7 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       'ENG-42',
+      undefined,
       undefined,
       undefined,
       undefined,

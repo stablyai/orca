@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
+import type { SetupHookTrust } from '../../../shared/setup-hook-approval'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 function getHookInspectionTarget(
@@ -20,6 +21,7 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
+  setupTrust?: SetupHookTrust
 }
 
 export type IssueCommandReadResult = {

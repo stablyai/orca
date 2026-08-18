@@ -26,6 +26,7 @@ import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
   persistSetupHookTrustApproval,
+  setupHookApprovalFromTrust,
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
@@ -225,8 +226,12 @@ function NewWorktreeModalContent({
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
-  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
-    useNewWorktreeRuntimeCapabilities(client, visible)
+  const {
+    tasksSupported,
+    hostPlatform,
+    getWorktreeCreateCutoverSupport,
+    getSetupHookApprovalSupport
+  } = useNewWorktreeRuntimeCapabilities(client, visible)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -508,13 +513,14 @@ function NewWorktreeModalContent({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as RepoHooksResponse
-          const cmd = result.hooks?.scripts?.setup?.trim() || null
+          const trust = normalizeSetupHookTrust(result.setupTrust)
+          const cmd = trust?.scriptContent ?? result.hooks?.scripts?.setup?.trim() ?? null
           const policy = result.setupRunPolicy ?? 'run-by-default'
           setSetupHookDetails({
             repoId: selectedRepo.id,
             command: cmd,
             source: result.source,
-            trust: normalizeSetupHookTrust(result.setupTrust),
+            trust,
             runPolicy: policy
           })
           setSetupDecisionChoice(null)
@@ -642,6 +648,11 @@ function NewWorktreeModalContent({
           setupDecision = runSetup ? 'run' : 'skip'
         }
       }
+      const setupApprovalSupported =
+        setupDecision === 'skip' ? true : await getSetupHookApprovalSupport()
+      if (!setupApprovalSupported) {
+        setupDecision = 'skip'
+      }
       if (
         setupDecision === 'run' &&
         setupTrust &&
@@ -661,6 +672,12 @@ function NewWorktreeModalContent({
         return
       }
 
+      const setupHookApproval =
+        setupDecision === 'run' ? setupHookApprovalFromTrust(setupTrust) : undefined
+      if (setupDecision === 'run' && setupCommand && !setupHookApproval) {
+        setupDecision = 'skip'
+      }
+
       const createdWithAgentId = selectedAgent.id !== '__blank__' ? selectedAgent.id : undefined
       const trimmedNote = note.trim() || undefined
       const createSelection = composer.createSelection
@@ -670,6 +687,7 @@ function NewWorktreeModalContent({
             selection: createSelection,
             targetRepoId: selectedRepo.id,
             setupDecision,
+            ...(setupHookApproval ? { setupHookApproval } : {}),
             agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
@@ -686,6 +704,7 @@ function NewWorktreeModalContent({
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
+            ...(setupHookApproval ? { setupHookApproval } : {}),
             supportsIdempotentCutoverRetry: getWorktreeCreateCutoverSupport()
           })
       if ('error' in result) {

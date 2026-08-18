@@ -208,7 +208,7 @@ export type WorktreeSlice = {
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
-    options?: {
+    options?: Pick<CreateWorktreeArgs, 'setupHookApproval'> & {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null

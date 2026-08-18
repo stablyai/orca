@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { SetupHookApproval } from '../../../src/shared/setup-hook-approval'
 import type {
   CreateSparseCheckoutRequest,
   SetupDecision
@@ -87,6 +88,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   sparseCheckout?: WorkspaceCreateSparseCheckout
   hostedStartPoint?: WorkspaceCreateHostedStartPoint
   nameIsAutoManaged?: boolean
+  setupHookApproval?: SetupHookApproval
 }): WorkspaceCreateParams {
   const {
     item,
@@ -132,7 +134,8 @@ export function buildTaskWorkspaceCreateParams(args: {
     ...(branchNameOverride ? { branchNameOverride } : {}),
     ...(selectedPushTarget ? { pushTarget: selectedPushTarget } : {}),
     ...(sparseCheckout ? { sparseCheckout } : {}),
-    ...(comment ? { comment } : {})
+    ...(comment ? { comment } : {}),
+    ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {})
   }
 
   if (item.provider === 'github') {

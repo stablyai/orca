@@ -5,6 +5,7 @@ import type {
   SetupDecision
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
+import type { SetupHookApproval } from '../../../shared/setup-hook-approval'
 import type {
   GitPushTarget,
   WorkspaceLinkedItem,
@@ -69,6 +70,7 @@ export type WorktreeCreationRequest = {
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  setupHookApproval?: SetupHookApproval
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
   linkedIssue?: number

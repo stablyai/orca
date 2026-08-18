@@ -182,6 +182,7 @@ import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/c
 import {
   confirmRuntimeIssueCommandRead,
   ensureHooksConfirmed,
+  ensureSetupHookConfirmed,
   readAndConfirmRuntimeIssueCommand
 } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
@@ -3740,21 +3741,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
       const setupTrustSettlement = await settleComposerSubmit(
         selectedRepoIsGit
-          ? ensureHooksConfirmed(
+          ? ensureSetupHookConfirmed(
               useAppStore.getState(),
               repoId,
-              'setup',
               selectedRepoExecutionHostId ?? undefined,
               undefined,
               isSubmissionCancelled
             )
-          : Promise.resolve<'skip'>('skip'),
+          : Promise.resolve({ decision: 'skip' as const, approvalRequired: false }),
         isSubmissionCancelled
       )
       if (setupTrustSettlement.status === 'cancelled') {
         return
       }
-      const setupTrustDecision = setupTrustSettlement.value
+      const setupTrust = setupTrustSettlement.value
+      const setupTrustDecision = setupTrust.decision
       const effectiveSetupDecision: SetupDecision =
         setupTrustDecision === 'skip'
           ? 'skip'
@@ -3923,6 +3924,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
+          ...(setupTrust.approval ? { setupHookApproval: setupTrust.approval } : {}),
           ...(!backendStartup && startupPlan?.draftPrompt
             ? { startupDraft: startupPlan.draftPrompt }
             : {})
@@ -4275,21 +4277,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
         const setupTrustSettlement = await settleComposerSubmit(
           selectedRepoIsGit
-            ? ensureHooksConfirmed(
+            ? ensureSetupHookConfirmed(
                 useAppStore.getState(),
                 repoId,
-                'setup',
                 selectedRepoExecutionHostId ?? undefined,
                 undefined,
                 isSubmissionCancelled
               )
-            : Promise.resolve<'skip'>('skip'),
+            : Promise.resolve({ decision: 'skip' as const, approvalRequired: false }),
           isSubmissionCancelled
         )
         if (setupTrustSettlement.status === 'cancelled') {
           return
         }
-        const trustDecision = setupTrustSettlement.value
+        const setupTrust = setupTrustSettlement.value
+        const trustDecision = setupTrust.decision
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
             ? 'skip'
@@ -4549,6 +4551,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? { compareBaseRef: submitCompareBaseRef }
             : {}),
           setupDecision: effectiveSetupDecision,
+          ...(setupTrust.approval ? { setupHookApproval: setupTrust.approval } : {}),
           ...(selectedRepoIsGit && sparseEnabled
             ? {
                 sparseCheckout: {

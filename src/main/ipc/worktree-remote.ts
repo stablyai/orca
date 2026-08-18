@@ -15,6 +15,7 @@ import type {
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
+  SetupDecision,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -55,6 +56,7 @@ import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig,
+  getSetupHookTrustContent,
   shouldRunSetupForCreate
 } from '../effective-hook-config'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -1494,7 +1496,8 @@ export async function createRemoteWorktree(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  options?: { resolveSetupDecision?: (trustContent: string) => SetupDecision }
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
@@ -1890,8 +1893,11 @@ export async function createRemoteWorktree(
     await timing.time('prepare_setup', async () => {
       const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
       const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
+      const setupDecision =
+        options?.resolveSetupDecision?.(getSetupHookTrustContent(repo, yamlHooks)) ??
+        args.setupDecision
       try {
-        defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, args.setupDecision)
+        defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, setupDecision)
       } catch (error) {
         // Why: default tab commands share setup's run policy; without a renderer decision, create the tabs but don't run them.
         console.warn(`[hooks] default tab commands skipped for ${created.path}:`, error)
@@ -1903,7 +1909,7 @@ export async function createRemoteWorktree(
       let shouldLaunchSetup = false
       if (setupScript) {
         try {
-          shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+          shouldLaunchSetup = shouldRunSetupForCreate(repo, setupDecision)
         } catch (error) {
           // Why: worktree already exists; skip setup rather than fail a successful git create when the branch adds a hook without a renderer decision.
           console.warn(`[hooks] setup hook skipped for ${created.path}:`, error)

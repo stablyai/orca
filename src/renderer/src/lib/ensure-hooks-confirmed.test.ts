@@ -4,6 +4,7 @@ import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-t
 import {
   __resetTrustPromptChainForTests,
   ensureHooksConfirmed,
+  ensureSetupHookConfirmed,
   readAndConfirmRuntimeIssueCommand
 } from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
@@ -578,5 +579,122 @@ describe('ensureHooksConfirmed', () => {
 
     expect(decision).toBe('skip')
     expect(pending).toHaveLength(0)
+  })
+
+  it('echoes a fresh host challenge even when the runtime repo is always trusted', async () => {
+    const scriptContent = 'pnpm install --frozen-lockfile'
+    const contentHash = await hashOrcaHookScript(scriptContent)
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [{ id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' }]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: { setup: 'different client serialization' } },
+        mayNeedUpdate: false,
+        setupTrust: { contentHash, scriptContent, approvalToken: 'fresh-token' }
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    await expect(ensureSetupHookConfirmed(state, 'repo-1', 'runtime:env-1')).resolves.toEqual({
+      decision: 'run',
+      approvalRequired: true,
+      approval: { kind: 'setup', token: 'fresh-token', contentHash }
+    })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('requires a host challenge for paired local-only setup content', async () => {
+    const scriptContent = 'echo host-local'
+    const contentHash = await hashOrcaHookScript(scriptContent)
+    const { state, pending } = createTestState({
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Runtime',
+          executionHostId: 'runtime:env-1',
+          hookSettings: {
+            mode: 'auto',
+            commandSourcePolicy: 'local-only',
+            scripts: { setup: scriptContent, archive: '' }
+          }
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: { setup: scriptContent } },
+        mayNeedUpdate: false,
+        setupTrust: { contentHash, scriptContent, approvalToken: 'local-token' }
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    const confirmation = ensureSetupHookConfirmed(state, 'repo-1', 'runtime:env-1')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('run')
+
+    await expect(confirmation).resolves.toEqual({
+      decision: 'run',
+      approvalRequired: true,
+      approval: { kind: 'setup', token: 'local-token', contentHash }
+    })
+  })
+
+  it('prompts with host-canonical bytes and rejects an inconsistent host hash', async () => {
+    const scriptContent = 'host-canonical bytes'
+    const contentHash = await hashOrcaHookScript(scriptContent)
+    const { state, pending } = createTestState({
+      repos: [{ id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' }]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValueOnce({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: { setup: 'client-derived bytes' } },
+        mayNeedUpdate: false,
+        setupTrust: { contentHash, scriptContent, approvalToken: 'token' }
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    const confirmation = ensureSetupHookConfirmed(state, 'repo-1', 'runtime:env-1')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe(scriptContent)
+    pending[0].resolve('run')
+    await expect(confirmation).resolves.toMatchObject({
+      decision: 'run',
+      approval: { token: 'token', contentHash }
+    })
+
+    runtimeEnvironmentCallMock.mockResolvedValueOnce({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: { setup: 'client-derived bytes' } },
+        mayNeedUpdate: false,
+        setupTrust: {
+          contentHash: 'a'.repeat(64),
+          scriptContent,
+          approvalToken: 'token'
+        }
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    await expect(ensureSetupHookConfirmed(state, 'repo-1', 'runtime:env-1')).resolves.toEqual({
+      decision: 'skip',
+      approvalRequired: true
+    })
+    expect(pending).toHaveLength(1)
   })
 })

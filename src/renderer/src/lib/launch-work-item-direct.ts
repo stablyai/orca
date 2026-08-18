@@ -12,7 +12,7 @@ import {
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { ensureSetupHookConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -38,6 +38,7 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -117,9 +118,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
 
-  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+  const setupTrust = await ensureSetupHookConfirmed(
+    useAppStore.getState(),
+    repoId,
+    getRepoExecutionHostId(repo),
+    repoOwnerSettings?.activeRuntimeEnvironmentId
+  )
   const finalSetupDecision: SetupDecision =
-    trustDecision === 'skip' ? 'skip' : setupResolution.decision
+    setupTrust.decision === 'skip' ? 'skip' : setupResolution.decision
 
   const workspaceIntentName =
     itemNumber !== null
@@ -189,7 +195,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef
+      resolvedCompareBaseRef,
+      setupTrust.approval ? { setupHookApproval: setupTrust.approval } : undefined
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path

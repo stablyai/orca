@@ -88,6 +88,9 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // replay ambiguous cutovers when the host advertises idempotent create support.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why: hosts without this strip setupHookApproval and may execute content the paired client did not approve.
+export const WORKTREE_SETUP_HOOK_APPROVAL_RUNTIME_CAPABILITY =
+  'worktree.setup-hook-approval.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
 export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
@@ -138,6 +141,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  WORKTREE_SETUP_HOOK_APPROVAL_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,

@@ -45,6 +45,7 @@ export function buildManagedWorktreeCreateArgs(
     runHooks: params.runHooks === true,
     activate: params.activate === true,
     setupDecision: params.setupDecision,
+    setupHookApproval: params.setupHookApproval,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
     startup: params.startupCommand

@@ -3,6 +3,7 @@ import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
 import type { WorkspaceKey } from '../folder-workspace-types'
 import type { TuiAgent } from '../tui-agent'
+import type { SetupHookApproval } from '../setup-hook-approval'
 import type {
   AutomationWorkspaceProvenanceRequest,
   GitPushTarget,
@@ -76,6 +77,7 @@ export type CreateWorktreeArgs = {
    *  legitimately contains `/` while the worktree directory must not. */
   branchNameOverride?: string
   setupDecision?: SetupDecision
+  setupHookApproval?: SetupHookApproval
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
@@ -146,6 +148,8 @@ export type CreateWorktreeResult = {
     terminalHandle?: string
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
+  /** Host refused the setup hook because the paired-client approval did not verify. */
+  setupApprovalRejected?: boolean
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent

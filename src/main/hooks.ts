@@ -118,10 +118,11 @@ export function runHook(
   cwd: string,
   repo: Repo,
   hooksPath?: string,
-  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
+  /** Bytes an approval was already verified against; skips a re-read that could differ. */
+  verifiedScript?: string
 ): Promise<{ success: boolean; output: string }> {
-  const hooks = getEffectiveHooks(repo, hooksPath)
-  const script = hooks?.scripts[hookName]
+  const script = verifiedScript ?? getEffectiveHooks(repo, hooksPath)?.scripts[hookName]
 
   if (!script) {
     return Promise.resolve({ success: true, output: '' })

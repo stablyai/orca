@@ -338,7 +338,8 @@ import type {
 import type {
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
-  RemoveWorktreeResult
+  RemoveWorktreeResult,
+  SetupDecision
 } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
@@ -1022,11 +1023,17 @@ import {
 } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import {
-  getDefaultTabCommandTrustContent,
   getDefaultTabsLaunch,
+  getEffectiveHooksFromConfig,
   getEffectiveSetupRunPolicy,
+  getSetupHookTrustContent,
   shouldRunSetupForCreate
 } from '../effective-hook-config'
+import type { SetupHookApproval, SetupHookTrust } from '../../shared/setup-hook-approval'
+import {
+  SetupHookApprovalChallenges,
+  withSetupApprovalRejectedWarning
+} from './setup-hook-approval-challenges'
 import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
   DEFAULT_REPO_BADGE_COLOR,
@@ -2970,6 +2977,7 @@ export type RuntimeRendererReloadFence = Readonly<{
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
+  private readonly setupHookApprovalChallenges = new SetupHookApprovalChallenges()
   private readonly store: RuntimeStore | null
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
@@ -22487,30 +22495,72 @@ export class OrcaRuntimeService {
 
   private getSetupHookTrustPayload(
     repo: Repo,
-    scriptContentValue: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
+    scriptContentValue: string | undefined,
+    approvalOwnerDeviceId?: string
+  ): SetupHookTrust | undefined {
     const scriptContent = scriptContentValue?.trim()
-    if (!scriptContent || repo.hookSettings?.commandSourcePolicy === 'local-only') {
+    if (!scriptContent) {
       return undefined
     }
+    const contentHash = createHash('sha256').update(scriptContent).digest('hex')
     return {
-      contentHash: createHash('sha256').update(scriptContent).digest('hex'),
-      scriptContent
+      contentHash,
+      scriptContent,
+      ...(approvalOwnerDeviceId
+        ? {
+            approvalToken: this.setupHookApprovalChallenges.issue({
+              repoId: repo.id,
+              deviceId: approvalOwnerDeviceId,
+              contentHash
+            })
+          }
+        : {})
     }
   }
 
-  private getSharedSetupHookTrustPayload(
-    repo: Repo,
-    sharedSetupScript: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
-    if (repo.hookSettings?.commandSourcePolicy === 'local-only') {
-      return undefined
+  private resolvePairedSetupHookDecision(args: {
+    repo: Repo
+    requestedDecision: SetupDecision
+    approval?: SetupHookApproval
+    creatorProvenance?: Worktree['creatorProvenance']
+    trustContent: string
+  }): { decision: SetupDecision; approvalRejected: boolean } {
+    const deviceId =
+      args.creatorProvenance?.kind === 'paired-device' ? args.creatorProvenance.deviceId : undefined
+    if (!deviceId || !args.trustContent) {
+      return { decision: args.requestedDecision, approvalRejected: false }
     }
-    return this.getSetupHookTrustPayload(repo, sharedSetupScript)
+    const contentHash = createHash('sha256').update(args.trustContent.trim()).digest('hex')
+    const consumeApproval = (): boolean =>
+      this.setupHookApprovalChallenges.consume(args.approval, {
+        repoId: args.repo.id,
+        deviceId,
+        contentHash
+      })
+    if (args.requestedDecision === 'skip') {
+      consumeApproval()
+      return { decision: args.requestedDecision, approvalRejected: false }
+    }
+    try {
+      if (!shouldRunSetupForCreate(args.repo, args.requestedDecision)) {
+        consumeApproval()
+        return { decision: args.requestedDecision, approvalRejected: false }
+      }
+    } catch {
+      consumeApproval()
+      return { decision: 'skip', approvalRejected: true }
+    }
+    const approved = consumeApproval()
+    return approved
+      ? { decision: args.requestedDecision, approvalRejected: false }
+      : { decision: 'skip', approvalRejected: true }
   }
 
-  async getRepoHooks(repoSelector: string) {
+  async getRepoHooks(repoSelector: string, requestedApprovalOwnerDeviceId?: string) {
     const repo = await this.resolveRepoSelector(repoSelector)
+    // Why: folder workspaces never run setup hooks, so they must never mint an approval
+    // token a client could present as proof (mirrors the guard in checkRepoHooks).
+    const approvalOwnerDeviceId = isFolderRepo(repo) ? undefined : requestedApprovalOwnerDeviceId
     if (repo.connectionId) {
       const fsProvider = getSshFilesystemProvider(repo.connectionId)
       if (!fsProvider) {
@@ -22529,9 +22579,10 @@ export class OrcaRuntimeService {
           hooks,
           setupRunPolicy: getEffectiveSetupRunPolicy(repo),
           source: hooks ? 'orca.yaml' : null,
-          setupTrust: this.getSharedSetupHookTrustPayload(
+          setupTrust: this.getSetupHookTrustPayload(
             repo,
-            getDefaultTabCommandTrustContent(hooks)
+            getSetupHookTrustContent(repo, hooks),
+            approvalOwnerDeviceId
           )
         }
       } catch {
@@ -22552,14 +22603,15 @@ export class OrcaRuntimeService {
       hooks,
       setupRunPolicy,
       source: hasFile ? 'orca.yaml' : hooks ? 'legacy' : null,
-      setupTrust: this.getSharedSetupHookTrustPayload(
+      setupTrust: this.getSetupHookTrustPayload(
         repo,
-        getDefaultTabCommandTrustContent(sharedHooks)
+        getSetupHookTrustContent(repo, sharedHooks),
+        approvalOwnerDeviceId
       )
     }
   }
 
-  async checkRepoHooks(repoSelector: string) {
+  async checkRepoHooks(repoSelector: string, approvalOwnerDeviceId?: string) {
     const repo = await this.resolveRepoSelector(repoSelector)
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
@@ -22578,11 +22630,17 @@ export class OrcaRuntimeService {
         if (result.isBinary) {
           return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
+        const hooks = parseOrcaYaml(result.content)
         return {
           status: 'ok' as const,
           hasHooks: true,
-          hooks: parseOrcaYaml(result.content),
-          mayNeedUpdate: false
+          hooks,
+          mayNeedUpdate: false,
+          setupTrust: this.getSetupHookTrustPayload(
+            repo,
+            getSetupHookTrustContent(repo, hooks),
+            approvalOwnerDeviceId
+          )
         }
       } catch (error) {
         return {
@@ -22600,7 +22658,12 @@ export class OrcaRuntimeService {
       status: 'ok' as const,
       hasHooks: has,
       hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path),
+      setupTrust: this.getSetupHookTrustPayload(
+        repo,
+        getSetupHookTrustContent(repo, hooks),
+        approvalOwnerDeviceId
+      )
     }
   }
 
@@ -23765,6 +23828,7 @@ export class OrcaRuntimeService {
     runHooks?: boolean
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
+    setupHookApproval?: SetupHookApproval
     awaitTerminalProvisioning?: boolean
     observeSetupCompletion?: boolean
     createdWithAgent?: TuiAgent
@@ -24556,16 +24620,24 @@ export class OrcaRuntimeService {
 
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined = includeCopyWarning
-    // Why: CLI-created worktrees do not have a renderer preview to mismatch
-    // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
-    // so loading the setup hook from the created worktree is intentional here.
     const yamlHooks = loadHooks(worktreePath)
-    const hooks = getEffectiveHooks(repo, worktreePath)
+    const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
     // Why: setupDecision lets mobile/CLI callers control whether the setup
     // script runs. 'skip' suppresses it, 'run' forces it, 'inherit' (default)
     // defers to the repo's orca.yaml setupRunPolicy. runHooks === true maps
     // to 'run' for backwards compatibility with the desktop create flow.
-    const effectiveDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
+    const requestedDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
+    const approvalResolution = this.resolvePairedSetupHookDecision({
+      repo,
+      requestedDecision,
+      approval: args.setupHookApproval,
+      creatorProvenance: args.creatorProvenance,
+      trustContent: getSetupHookTrustContent(repo, yamlHooks)
+    })
+    const effectiveDecision = approvalResolution.decision
+    if (approvalResolution.approvalRejected) {
+      warning = withSetupApprovalRejectedWarning(warning)
+    }
     let defaultTabs: CreateWorktreeResult['defaultTabs']
     try {
       defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, effectiveDecision)
@@ -24611,7 +24683,9 @@ export class OrcaRuntimeService {
           worktreePath,
           repo,
           worktreePath,
-          this.getLocalGitExecutionOptionArgs(repo)[0]
+          this.getLocalGitExecutionOptionArgs(repo)[0],
+          // Why: run the bytes the approval was verified against, not a fresh disk read.
+          hooks.scripts.setup
         ).then((result) => {
           if (!result.success) {
             console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
@@ -24840,7 +24914,7 @@ export class OrcaRuntimeService {
       ...(args.awaitTerminalProvisioning
         ? {
             setupReceipt: {
-              requested: effectiveDecision,
+              requested: requestedDecision,
               hookFound: Boolean(hooks?.scripts.setup),
               startupPolicy: setup?.waitForAgentStartup
                 ? ('wait-for-setup' as const)
@@ -24860,6 +24934,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
+      // Why: setupReceipt only exists for awaitTerminalProvisioning callers, so paired
+      // clients need this flag to warn that an approved hook was refused.
+      ...(approvalResolution.approvalRejected ? { setupApprovalRejected: true } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
         : {}),
@@ -24910,12 +24987,14 @@ export class OrcaRuntimeService {
       runHooks?: boolean
       activate?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
+      setupHookApproval?: SetupHookApproval
       awaitTerminalProvisioning?: boolean
       observeSetupCompletion?: boolean
       createdWithAgent?: TuiAgent
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
       cliProvenance?: CliWorkspaceProvenance
+      creatorProvenance?: Worktree['creatorProvenance']
       startup?: WorktreeStartupLaunch
       startupFollowup?: WorktreeStartupFollowup
       startupDraftPaste?: WorktreeStartupDraftPaste
@@ -24933,6 +25012,8 @@ export class OrcaRuntimeService {
       webContents: { send: () => undefined }
     } as unknown as BrowserWindow
 
+    const requestedSetupDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
+    let setupApprovalRejected = false
     const result = await createRemoteWorktree(
       {
         repoId: repo.id,
@@ -24944,6 +25025,7 @@ export class OrcaRuntimeService {
         ...(args.branchNameOverride ? { branchNameOverride: args.branchNameOverride } : {}),
         ...(args.runHooks ? { setupDecision: 'run' as const } : {}),
         ...(!args.runHooks && args.setupDecision ? { setupDecision: args.setupDecision } : {}),
+        ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {}),
         ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
         ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
@@ -24977,7 +25059,20 @@ export class OrcaRuntimeService {
       },
       repo,
       this.store as unknown as Store,
-      headlessWindow
+      headlessWindow,
+      {
+        resolveSetupDecision: (trustContent) => {
+          const resolution = this.resolvePairedSetupHookDecision({
+            repo,
+            requestedDecision: requestedSetupDecision,
+            approval: args.setupHookApproval,
+            creatorProvenance: args.creatorProvenance,
+            trustContent
+          })
+          setupApprovalRejected = resolution.approvalRejected
+          return resolution.decision
+        }
+      }
     )
 
     if (args.comment !== undefined) {
@@ -24991,6 +25086,9 @@ export class OrcaRuntimeService {
 
     const shouldActivate = args.activate === true || args.runHooks === true
     let warning = result.warning
+    if (setupApprovalRejected) {
+      warning = withSetupApprovalRejectedWarning(warning)
+    }
     let didSpawnStartup = false
     // Why: same no-double-spawn contract as the local path — once runtime
     // provisions setup, omit it from activation and the RPC result.
@@ -25192,15 +25290,16 @@ export class OrcaRuntimeService {
           }
         : resultForRenderer
 
-    const requestedSetupDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
     const setupReceipt = {
       requested: requestedSetupDecision,
-      hookFound: Boolean(result.setup),
+      // Why: a refused approval forces `skip`, so `result.setup` is empty even though a hook
+      // exists — report it as found-but-skipped rather than 'not_configured'.
+      hookFound: Boolean(result.setup) || setupApprovalRejected,
       startupPolicy: result.setup?.waitForAgentStartup
         ? ('wait-for-setup' as const)
         : ('start-immediately' as const),
       state:
-        requestedSetupDecision === 'skip'
+        requestedSetupDecision === 'skip' || setupApprovalRejected
           ? ('skipped' as const)
           : !result.setup
             ? ('not_configured' as const)
@@ -25212,7 +25311,12 @@ export class OrcaRuntimeService {
     const resultWithSetupReceipt = args.awaitTerminalProvisioning
       ? { ...resultWithStartupTerminal, setupReceipt }
       : resultWithStartupTerminal
-    return warning ? { ...resultWithSetupReceipt, warning } : resultWithSetupReceipt
+    // Why: setupReceipt only exists for awaitTerminalProvisioning callers, so paired
+    // clients need this flag to warn that an approved hook was refused.
+    const resultWithApproval = setupApprovalRejected
+      ? { ...resultWithSetupReceipt, setupApprovalRejected: true }
+      : resultWithSetupReceipt
+    return warning ? { ...resultWithApproval, warning } : resultWithApproval
   }
 
   /**

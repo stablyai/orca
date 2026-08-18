@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { createAgentSessionForkWorkspace } from './terminal-agent-session-fork-workspace'
 import { translate } from '@/i18n/i18n'
 
 type ForkAgentSessionFromPaneArgs = {
@@ -237,19 +238,15 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
   let created: Awaited<ReturnType<typeof store.createWorktree>>
   try {
-    created = await store.createWorktree(
-      sourceWorktree.repoId,
+    created = await createAgentSessionForkWorkspace({
+      store,
+      repoId: sourceWorktree.repoId,
+      repo: sourceRepo,
       forkName,
       sourceBranch,
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      `Fork of ${sourceWorktree.displayName || forkName}`,
-      undefined,
-      undefined,
-      undefined,
-      fork.agent ?? undefined
-    )
+      displayName: `Fork of ${sourceWorktree.displayName || forkName}`,
+      agent: fork.agent
+    })
   } catch (error) {
     toast.error(
       error instanceof Error

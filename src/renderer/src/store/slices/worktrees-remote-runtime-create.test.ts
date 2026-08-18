@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -434,5 +435,167 @@ describe('worktree remote runtime mutations', () => {
         })
       })
     )
+  })
+
+  it('forwards the setup approval commitment to a capable runtime', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/approved', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'approved', undefined, 'run']
+    const approval = {
+      kind: 'setup' as const,
+      token: 'operation-token',
+      contentHash: 'a'.repeat(64)
+    }
+    args[25] = { setupHookApproval: approval }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ setupDecision: 'run', setupHookApproval: approval })
+      })
+    )
+  })
+
+  // Why: desktop creates omit awaitTerminalProvisioning, so the host sends no
+  // setupReceipt; only the explicit flag can surface a refused approval.
+  it('warns when the host rejects a setup approval without a setup receipt', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/rejected', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        worktree: wt,
+        warning: 'orca.yaml setup hook skipped because approval could not be verified.',
+        setupApprovalRejected: true
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store.getState().createWorktree('repo1', 'rejected', undefined, 'run')
+
+    expect(toast.warning).toHaveBeenCalledWith('Setup hook skipped', {
+      description:
+        'The remote Orca server could not verify your approval, so the setup hook did not run.'
+    })
+  })
+
+  it('does not warn when a capable host runs the approved setup hook', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/ran', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt, setup: { command: 'echo hi' } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store.getState().createWorktree('repo1', 'ran', undefined, 'run')
+
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('forces setup to skip when the runtime lacks approval binding', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.setup-hook-approval.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((request: RuntimeEnvironmentCallRequest) =>
+      request.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(request)
+    )
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/legacy', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-old' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'legacy', undefined, 'run']
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ setupDecision: 'skip' })
+      })
+    )
+    expect(toast.warning).toHaveBeenCalledWith('Setup hook skipped', {
+      description: 'Update the remote Orca server to run approved setup hooks.'
+    })
+  })
+
+  // Why: paths like the session fork send 'inherit', so an approved hook must not be
+  // downgraded silently just because the verb is not the literal 'run'.
+  it('warns when an old runtime downgrades an approved inherit decision', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.setup-hook-approval.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((request: RuntimeEnvironmentCallRequest) =>
+      request.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(request)
+    )
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/inherited', repoId: 'repo1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-old' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args = ['repo1', 'inherited', undefined, 'inherit'] as unknown as Parameters<
+      typeof createWorktree
+    >
+    args[25] = {
+      setupHookApproval: { kind: 'setup', token: 'tok', contentHash: 'a'.repeat(64) }
+    }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ setupDecision: 'skip' })
+      })
+    )
+    expect(toast.warning).toHaveBeenCalledWith('Setup hook skipped', {
+      description: 'Update the remote Orca server to run approved setup hooks.'
+    })
   })
 })

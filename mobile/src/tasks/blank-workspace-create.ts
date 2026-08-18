@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { SetupHookApproval } from '../../../src/shared/setup-hook-approval'
 import type { RpcClient } from '../transport/rpc-client'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 import {
@@ -16,6 +17,7 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
+  setupHookApproval?: SetupHookApproval
   /** True when `baseName` is a generated creature name rather than one the user typed; only then
    *  may the host retire it. */
   nameWasGenerated: boolean
@@ -30,6 +32,7 @@ export async function createBlankWorkspace(args: {
       const params: Record<string, unknown> = {
         repo: `id:${args.repoId}`,
         setupDecision: args.setupDecision,
+        ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {}),
         name,
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...agentLaunchCreateFields(args.createdWithAgentId)

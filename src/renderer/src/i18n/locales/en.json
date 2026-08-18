@@ -338,6 +338,11 @@
           "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
           "a17f4d2e93": "Could not update this workspace.",
           "preservedBranchCleanupHostAmbiguous": "Multiple preserved branch cleanups are pending for \"{{value0}}\"; specify the host.",
+          "create": {
+            "setupHookSkipped": "Setup hook skipped",
+            "setupApprovalUnverified": "The remote Orca server could not verify your approval, so the setup hook did not run.",
+            "updateRemoteForSetupHooks": "Update the remote Orca server to run approved setup hooks."
+          },
           "metadata": {
             "worktree": {
               "meta": {

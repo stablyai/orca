@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseSetupHookApproval } from '../../../../shared/setup-hook-approval'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
@@ -182,6 +183,10 @@ export const WorktreeCreate = z
         typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
+      .optional(),
+    setupHookApproval: z
+      .unknown()
+      .transform((value) => parseSetupHookApproval(value))
       .optional(),
     // Why: some clients (e.g. desktop) pass a pre-built launch command so the
     // first terminal pane launches the selected agent instead of an idle shell.

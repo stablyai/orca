@@ -77,8 +77,8 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
-  const commands = (hooks?.defaultTabs ?? [])
+function getDefaultTabsTrustContent(hooks: OrcaHooks | null): string {
+  return (hooks?.defaultTabs ?? [])
     .map((tab, index) => {
       const command = tab.command?.trim()
       if (!command) {
@@ -88,7 +88,17 @@ export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): strin
       return `# defaultTabs[${index + 1}]${label}\n${command}`
     })
     .filter((entry): entry is string => entry !== null)
-  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
+    .join('\n\n')
+}
+
+export function getSetupHookTrustContent(repo: Repo, yamlHooks: OrcaHooks | null): string {
+  const effectiveSetup = getEffectiveHooksFromConfig(repo, yamlHooks)?.scripts.setup?.trim()
+  const sourcePolicy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
+  })
+  const defaultTabCommands =
+    sourcePolicy === 'local-only' ? '' : getDefaultTabsTrustContent(yamlHooks)
+  return [effectiveSetup, defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
 export function getDefaultTabsLaunch(

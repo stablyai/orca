@@ -1,10 +1,13 @@
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import { sha256 } from '@noble/hashes/sha256'
+import {
+  parseSetupHookTrust,
+  setupHookApprovalFromTrust,
+  type SetupHookApproval,
+  type SetupHookTrust
+} from '../../../src/shared/setup-hook-approval'
 import type { RpcClient } from '../transport/rpc-client'
-
-export type SetupHookTrust = {
-  contentHash: string
-  scriptContent: string
-}
+export type { SetupHookApproval, SetupHookTrust }
 
 export function isSetupHookTrusted(
   trust: PersistedTrustedOrcaHooks,
@@ -55,8 +58,16 @@ export async function persistSetupHookTrustApproval(args: {
 export function normalizeSetupHookTrust(
   setupTrust: SetupHookTrust | null | undefined
 ): SetupHookTrust | null {
-  if (!setupTrust?.contentHash || !setupTrust.scriptContent) {
+  const parsed = parseSetupHookTrust(setupTrust)
+  if (!parsed || hashSetupHookTrustContent(parsed.scriptContent) !== parsed.contentHash) {
     return null
   }
-  return setupTrust
+  return parsed
+}
+
+export { setupHookApprovalFromTrust }
+
+export function hashSetupHookTrustContent(content: string): string {
+  const bytes = new TextEncoder().encode(content.trim())
+  return Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

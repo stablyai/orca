@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultTabsLaunch } from './effective-hook-config'
+import { getDefaultTabsLaunch, getSetupHookTrustContent } from './effective-hook-config'
 import {
   makeHookTestRepo,
   TEST_REPO_ORCA_YAML_PATH,
@@ -398,5 +398,35 @@ describe('getDefaultTabsLaunch', () => {
       tabs: hooks.defaultTabs,
       runCommands: false
     })
+  })
+})
+
+describe('getSetupHookTrustContent', () => {
+  it('binds run-both approval to shared and host-local setup content', () => {
+    const repo = makeHookTestRepo({
+      commandSourcePolicy: 'run-both',
+      scripts: { setup: 'echo local', archive: '' }
+    })
+    const hooks = {
+      scripts: { setup: 'echo shared' },
+      defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    }
+
+    expect(getSetupHookTrustContent(repo, hooks)).toBe(
+      'echo shared\necho local\n\n# defaultTabs[1] Server\npnpm dev'
+    )
+  })
+
+  it('binds local-only approval to the host-local command and excludes shared tab commands', () => {
+    const repo = makeHookTestRepo({
+      commandSourcePolicy: 'local-only',
+      scripts: { setup: 'echo local', archive: '' }
+    })
+    const hooks = {
+      scripts: { setup: 'echo shared' },
+      defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    }
+
+    expect(getSetupHookTrustContent(repo, hooks)).toBe('echo local')
   })
 })

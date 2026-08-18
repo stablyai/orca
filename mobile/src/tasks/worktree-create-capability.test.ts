@@ -29,11 +29,14 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
   it('reads task and idempotent-create support from status.get', async () => {
     await expect(
       readNewWorktreeRuntimeCapabilities(
-        statusClient([['mobile.tasks.v1', 'worktree.create-idempotency.v1']])
+        statusClient([
+          ['mobile.tasks.v1', 'worktree.create-idempotency.v1', 'worktree.setup-hook-approval.v1']
+        ])
       )
     ).resolves.toEqual({
       tasksSupported: true,
       idempotentWorktreeCreateSupported: true,
+      setupHookApprovalSupported: true,
       hostPlatform: 'darwin'
     })
   })
@@ -46,6 +49,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     ).resolves.toEqual({
       tasksSupported: false,
       idempotentWorktreeCreateSupported: true,
+      setupHookApprovalSupported: false,
       hostPlatform: 'darwin'
     })
   })
@@ -54,6 +58,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toEqual({
       tasksSupported: false,
       idempotentWorktreeCreateSupported: false,
+      setupHookApprovalSupported: false,
       hostPlatform: null
     })
   })

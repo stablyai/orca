@@ -135,6 +135,9 @@ async function executeWorktreeCreation(
         preparedRequest.compareBaseRef,
         {
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
+          ...(preparedRequest.setupHookApproval
+            ? { setupHookApproval: preparedRequest.setupHookApproval }
+            : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),

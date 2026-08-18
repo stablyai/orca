@@ -12,6 +12,10 @@ const mockToast = {
 }
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const mockMarkTrusted = vi.fn(async () => undefined)
+const mockEnsureSetupHookConfirmed = vi.fn(async () => ({
+  decision: 'run' as const,
+  approvalRequired: false
+}))
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
@@ -52,6 +56,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('sonner', () => ({
   toast: mockToast
+}))
+
+vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+  ensureSetupHookConfirmed: mockEnsureSetupHookConfirmed
 }))
 
 function makePane(capturedText: string): ManagedPane {
@@ -130,7 +138,7 @@ describe('forkAgentSessionFromPane', () => {
       groupId: 'group-1'
     })
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
+    expect(mockCreateWorktree.mock.calls[0].slice(0, 11)).toEqual([
       'repo-1',
       'auth-feature-fork',
       'feature/auth',
@@ -142,7 +150,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       'codex'
-    )
+    ])
+    // Nothing to approve here, so no approval rides along.
+    expect(mockCreateWorktree.mock.calls[0].at(-1)).toBeUndefined()
 
     expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -159,6 +169,46 @@ describe('forkAgentSessionFromPane', () => {
     expect(mockToast.success).toHaveBeenCalledWith(
       'Top-level session fork opened in a new workspace'
     )
+  })
+
+  it('forwards the host-issued setup approval so the fork can run its setup hook', async () => {
+    const approval = { kind: 'setup' as const, token: 'tok-fork', contentHash: 'f'.repeat(64) }
+    mockEnsureSetupHookConfirmed.mockResolvedValueOnce({
+      decision: 'run',
+      approvalRequired: true,
+      approval
+    } as never)
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('User: compare OAuth options'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null
+    })
+
+    const call = mockCreateWorktree.mock.calls[0]
+    expect(call[3]).toBe('inherit')
+    expect(call.at(-1)).toEqual({ setupHookApproval: approval })
+  })
+
+  it('skips the fork setup hook when the trust check is declined', async () => {
+    mockEnsureSetupHookConfirmed.mockResolvedValueOnce({
+      decision: 'skip',
+      approvalRequired: true
+    } as never)
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('User: compare OAuth options'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null
+    })
+
+    const call = mockCreateWorktree.mock.calls[0]
+    expect(call[3]).toBe('skip')
+    expect(call.at(-1)).toBeUndefined()
   })
 
   it('pre-marks trust for the created fork workspace before launching a trusted agent', async () => {
@@ -332,7 +382,7 @@ describe('forkAgentSessionFromPane', () => {
       groupId: null
     })
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
+    expect(mockCreateWorktree.mock.calls[0].slice(0, 11)).toEqual([
       'repo-1',
       'auth-feature-fork',
       'feature/auth',
@@ -344,7 +394,7 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       undefined
-    )
+    ])
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
       sidebarRevealBehavior: 'auto'

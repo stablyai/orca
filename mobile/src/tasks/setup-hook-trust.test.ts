@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isSetupHookTrusted,
+  hashSetupHookTrustContent,
   normalizeSetupHookTrust,
   persistSetupHookTrustApproval,
   trustedOrcaHooksWithSetupApproval,
@@ -10,6 +11,8 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RpcClient } from '../transport/rpc-client'
 
 describe('setup hook trust', () => {
+  const validHash = hashSetupHookTrustContent('pnpm install')
+
   it('trusts a setup script only when the approved hash matches', () => {
     const trust: PersistedTrustedOrcaHooks = {
       'repo-1': { setup: { contentHash: 'hash-1', approvedAt: 1000 } }
@@ -101,12 +104,20 @@ describe('setup hook trust', () => {
         'repo-1'
       )
     ).toBe(true)
-    expect(normalizeSetupHookTrust({ contentHash: 'hash-1', scriptContent: '' })).toBe(null)
+    expect(normalizeSetupHookTrust({ contentHash: validHash, scriptContent: '' })).toBe(null)
     expect(
-      normalizeSetupHookTrust({ contentHash: 'hash-1', scriptContent: 'pnpm install' })
+      normalizeSetupHookTrust({
+        contentHash: validHash,
+        scriptContent: 'pnpm install',
+        approvalToken: 'operation-token'
+      })
     ).toEqual({
-      contentHash: 'hash-1',
-      scriptContent: 'pnpm install'
+      contentHash: validHash,
+      scriptContent: 'pnpm install',
+      approvalToken: 'operation-token'
     })
+    expect(normalizeSetupHookTrust({ contentHash: 'not-a-hash', scriptContent: 'pnpm i' })).toBe(
+      null
+    )
   })
 })

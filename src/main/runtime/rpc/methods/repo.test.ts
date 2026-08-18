@@ -10,6 +10,24 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('binds hook trust challenges to the authenticated paired device', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRepoHooks: vi.fn().mockResolvedValue({ hasHooksFile: false, hooks: null })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.hooks', { repo: 'repo-1' }),
+      (reply) => replies.push(reply),
+      { clientKind: 'runtime', pairedDeviceId: 'device-a' }
+    )
+
+    expect(replies).toHaveLength(1)
+    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1', 'device-a')
+  })
+
   it('projects inherited visibility for old clients but preserves inheritance for capable clients', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -300,12 +318,12 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1', undefined)
     expect(hooksResponse).toMatchObject({
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1', undefined)
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
     expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
     expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')

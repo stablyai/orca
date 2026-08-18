@@ -9,18 +9,21 @@ import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 // replay an ambiguous create unless the host advertises idempotency support.
 // Mirrors WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY in the shared protocol.
 export const MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY = 'worktree.create-idempotency.v1'
+export const MOBILE_WORKTREE_SETUP_HOOK_APPROVAL_CAPABILITY = 'worktree.setup-hook-approval.v1'
 
 const STATUS_CUTOVER_MAX_RETRIES = 5
 
 export type NewWorktreeRuntimeCapabilities = {
   tasksSupported: boolean
   idempotentWorktreeCreateSupported: boolean
+  setupHookApprovalSupported: boolean
   hostPlatform: NodeJS.Platform | null
 }
 
 const UNSUPPORTED_CAPABILITIES: NewWorktreeRuntimeCapabilities = {
   tasksSupported: false,
   idempotentWorktreeCreateSupported: false,
+  setupHookApprovalSupported: false,
   hostPlatform: null
 }
 
@@ -42,6 +45,9 @@ export async function readNewWorktreeRuntimeCapabilities(
         idempotentWorktreeCreateSupported: capabilities.includes(
           MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY
         ),
+        setupHookApprovalSupported: capabilities.includes(
+          MOBILE_WORKTREE_SETUP_HOOK_APPROVAL_CAPABILITY
+        ),
         hostPlatform: readMobileRuntimeHostPlatform(result)
       }
     } catch (error) {
@@ -59,6 +65,7 @@ export function useNewWorktreeRuntimeCapabilities(
   tasksSupported: boolean
   hostPlatform: NodeJS.Platform | null
   getWorktreeCreateCutoverSupport: () => Promise<boolean>
+  getSetupHookApprovalSupport: () => Promise<boolean>
 } {
   const [tasksSupported, setTasksSupported] = useState(false)
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
@@ -100,5 +107,14 @@ export function useNewWorktreeRuntimeCapabilities(
     () => getCapabilities().then((capabilities) => capabilities.idempotentWorktreeCreateSupported),
     [getCapabilities]
   )
-  return { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport }
+  const getSetupHookApprovalSupport = useCallback(
+    () => getCapabilities().then((capabilities) => capabilities.setupHookApprovalSupported),
+    [getCapabilities]
+  )
+  return {
+    tasksSupported,
+    hostPlatform,
+    getWorktreeCreateCutoverSupport,
+    getSetupHookApprovalSupport
+  }
 }

@@ -503,8 +503,23 @@ vi.mock('../setup-hook-env-vars', () => ({
 
 vi.mock('../effective-hook-config', () => ({
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
-  getDefaultTabCommandTrustContent: vi.fn(
-    (hooks: { scripts?: { setup?: string } } | null) => hooks?.scripts?.setup?.trim() ?? ''
+  getSetupHookTrustContent: vi.fn(
+    (
+      repo: { hookSettings?: { commandSourcePolicy?: string; scripts?: { setup?: string } } },
+      hooks: { scripts?: { setup?: string }; defaultTabs?: { command?: string }[] } | null
+    ) => {
+      const shared = hooks?.scripts?.setup?.trim()
+      const local = repo.hookSettings?.scripts?.setup?.trim()
+      const policy =
+        repo.hookSettings?.commandSourcePolicy ?? (local ? 'local-only' : 'shared-only')
+      if (policy === 'local-only') {
+        return local ?? ''
+      }
+      if (policy === 'run-both') {
+        return [shared, local].filter(Boolean).join('\n')
+      }
+      return shared ?? ''
+    }
   ),
   getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
   shouldRunSetupForCreate: vi
@@ -751,7 +766,9 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(shouldRunSetupForCreate).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
-  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
+  vi.mocked(getEffectiveHooksFromConfig).mockImplementation((repo) =>
+    getEffectiveHooks(repo, repo.path)
+  )
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
   vi.mocked(loadHooks).mockReturnValue(null)
   vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)
@@ -6702,6 +6719,32 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 
+  // Why: folder workspaces never run setup hooks, so a token they could present as
+  // proof must never exist (checkRepoHooks already refuses them outright).
+  it('never mints a setup approval token for a folder workspace', async () => {
+    vi.mocked(hasHooksFile).mockReturnValue(true)
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    const folderStore = {
+      ...store,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: '/tmp/folder',
+          displayName: 'folder',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'folder'
+        }
+      ]
+    }
+    const runtime = new OrcaRuntimeService(folderStore as never)
+
+    const hooks = await runtime.getRepoHooks('id:repo-1', 'device-a')
+
+    expect(hooks.setupTrust?.approvalToken).toBeUndefined()
+  })
+
   it('reads SSH repo hooks through the SSH filesystem provider', async () => {
     const remoteStore = {
       ...store,
@@ -6745,7 +6788,7 @@ describe('OrcaRuntimeService', () => {
     expect(getEffectiveHooks).not.toHaveBeenCalled()
   })
 
-  it('hashes only the shared orca.yaml setup script for local run-both hooks', async () => {
+  it('hashes the exact effective setup script for local run-both hooks', async () => {
     vi.mocked(hasHooksFile).mockReturnValue(true)
     vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: 'echo yaml setup' } })
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -6772,10 +6815,239 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.getRepoHooks('id:repo-1')).resolves.toMatchObject({
       hooks: { scripts: { setup: 'echo yaml setup\necho local setup' } },
       setupTrust: {
-        contentHash: '9bc9f57699fe0390d263cca1aec01235cccc8fa5fc87cd87fd51ba1c8483ec84',
-        scriptContent: 'echo yaml setup'
+        contentHash: '7fc980d77b3bfc14ade5c691be25a397d505569f99c17e4e0d217186e86da159',
+        scriptContent: 'echo yaml setup\necho local setup'
       }
     })
+  })
+
+  it('runs exact paired approval and skips an old client without one', async () => {
+    const script = 'node approved.js'
+    const worktreePath = '/tmp/workspaces/paired-approved'
+    vi.mocked(hasHooksFile).mockReturnValue(true)
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    computeWorktreePathMock.mockReturnValue(worktreePath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(worktreePath)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: worktreePath,
+        head: 'def',
+        branch: 'paired-approved',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(store)
+    const trust = (await runtime.getRepoHooks('id:repo-1', 'device-a')).setupTrust
+    if (!trust?.approvalToken) {
+      throw new Error('missing setup approval challenge')
+    }
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'paired-approved',
+      setupDecision: 'run',
+      setupHookApproval: {
+        kind: 'setup',
+        token: trust.approvalToken,
+        contentHash: trust.contentHash
+      },
+      creatorProvenance: { kind: 'paired-device', deviceId: 'device-a' },
+      awaitTerminalProvisioning: true
+    })
+
+    expect(runHook).toHaveBeenCalledWith(
+      'setup',
+      worktreePath,
+      expect.objectContaining({ id: 'repo-1' }),
+      worktreePath,
+      undefined,
+      // The verified bytes travel with the call so execution cannot re-read a changed file.
+      'node approved.js'
+    )
+    expect(result.setupReceipt).toMatchObject({ requested: 'run', state: 'running' })
+
+    const legacyPath = '/tmp/workspaces/paired-old-client'
+    vi.mocked(runHook).mockClear()
+    vi.mocked(createSetupRunnerScript).mockClear()
+    computeWorktreePathMock.mockReturnValue(legacyPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(legacyPath)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: legacyPath,
+        head: 'ghi',
+        branch: 'paired-old-client',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const legacyResult = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'paired-old-client',
+      setupDecision: 'run',
+      creatorProvenance: { kind: 'paired-device', deviceId: 'device-a' },
+      awaitTerminalProvisioning: true
+    })
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(legacyResult.warning).toContain('approval could not be verified')
+    expect(legacyResult.setupReceipt).toMatchObject({ requested: 'run', state: 'skipped' })
+    expect(legacyResult.setupApprovalRejected).toBe(true)
+    expect(result.setupApprovalRejected).toBeUndefined()
+  })
+
+  // Why: one approval must authorize exactly one operation, so a second create from the
+  // same device cannot ride an already-spent token even when the content still matches.
+  it('refuses a replayed setup approval on a second create from the same device', async () => {
+    const script = 'node approved.js'
+    vi.mocked(hasHooksFile).mockReturnValue(true)
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({ scripts: { setup: script } })
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    const runtime = new OrcaRuntimeService(store)
+    const trust = (await runtime.getRepoHooks('id:repo-1', 'device-a')).setupTrust
+    if (!trust?.approvalToken) {
+      throw new Error('missing setup approval challenge')
+    }
+    const approval = {
+      kind: 'setup' as const,
+      token: trust.approvalToken,
+      contentHash: trust.contentHash
+    }
+    const createWithApproval = async (name: string, head: string) => {
+      const worktreePath = `/tmp/workspaces/${name}`
+      computeWorktreePathMock.mockReturnValue(worktreePath)
+      ensurePathWithinWorkspaceMock.mockReturnValue(worktreePath)
+      vi.mocked(listWorktrees).mockResolvedValue([
+        { path: worktreePath, head, branch: name, isBare: false, isMainWorktree: false }
+      ])
+      return runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name,
+        setupDecision: 'run',
+        setupHookApproval: approval,
+        creatorProvenance: { kind: 'paired-device', deviceId: 'device-a' },
+        awaitTerminalProvisioning: true
+      })
+    }
+
+    const first = await createWithApproval('replay-first', 'aa1')
+    expect(first.setupApprovalRejected).toBeUndefined()
+    expect(runHook).toHaveBeenCalled()
+
+    vi.mocked(runHook).mockClear()
+    vi.mocked(createSetupRunnerScript).mockClear()
+    const replay = await createWithApproval('replay-second', 'aa2')
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(replay.setupApprovalRejected).toBe(true)
+    expect(replay.setupReceipt).toMatchObject({ requested: 'run', state: 'skipped' })
+    // The second worktree is still created — only the hook is withheld.
+    expect(replay.worktree.path).toBe('/tmp/workspaces/replay-second')
+  })
+
+  // Why: desktop creates omit awaitTerminalProvisioning, so setupReceipt is absent and
+  // the explicit flag is the only refusal signal the paired client can see.
+  it('reports a rejected setup approval without awaitTerminalProvisioning', async () => {
+    const approvedScript = 'node approved-a.js'
+    const hostScript = 'node host-b.js'
+    const worktreePath = '/tmp/workspaces/paired-no-receipt'
+    vi.mocked(hasHooksFile).mockReturnValue(true)
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: approvedScript } })
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: approvedScript } })
+    computeWorktreePathMock.mockReturnValue(worktreePath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(worktreePath)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: worktreePath,
+        head: 'def',
+        branch: 'paired-no-receipt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(store)
+    const trust = (await runtime.getRepoHooks('id:repo-1', 'device-a')).setupTrust
+    if (!trust?.approvalToken) {
+      throw new Error('missing setup approval challenge')
+    }
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: hostScript } })
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({ scripts: { setup: hostScript } })
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'paired-no-receipt',
+      setupDecision: 'run',
+      setupHookApproval: {
+        kind: 'setup',
+        token: trust.approvalToken,
+        contentHash: trust.contentHash
+      },
+      creatorProvenance: { kind: 'paired-device', deviceId: 'device-a' }
+    })
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(result.setupReceipt).toBeUndefined()
+    expect(result.setupApprovalRejected).toBe(true)
+    expect(result.warning).toContain('approval could not be verified')
+  })
+
+  it('skips paired setup when host content changes after approval', async () => {
+    const approvedScript = 'node approved-a.js'
+    const hostScript = 'node host-b.js'
+    const worktreePath = '/tmp/workspaces/paired-mutated'
+    vi.mocked(hasHooksFile).mockReturnValue(true)
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: approvedScript } })
+    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: approvedScript } })
+    computeWorktreePathMock.mockReturnValue(worktreePath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(worktreePath)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: worktreePath,
+        head: 'def',
+        branch: 'paired-mutated',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(store)
+    const trust = (await runtime.getRepoHooks('id:repo-1', 'device-a')).setupTrust
+    if (!trust?.approvalToken) {
+      throw new Error('missing setup approval challenge')
+    }
+    vi.mocked(loadHooks).mockReturnValue({ scripts: { setup: hostScript } })
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({ scripts: { setup: hostScript } })
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'paired-mutated',
+      setupDecision: 'run',
+      setupHookApproval: {
+        kind: 'setup',
+        token: trust.approvalToken,
+        contentHash: trust.contentHash
+      },
+      creatorProvenance: { kind: 'paired-device', deviceId: 'device-a' },
+      awaitTerminalProvisioning: true
+    })
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(result.warning).toContain('approval could not be verified')
+    expect(result.setupReceipt).toMatchObject({ requested: 'run', state: 'skipped' })
+    expect(result.setupApprovalRejected).toBe(true)
   })
 
   it('uses remote path joins for SSH hook checks and issue-command files', async () => {
@@ -44056,7 +44328,8 @@ describe('OrcaRuntimeService', () => {
       '/tmp/workspaces/runtime-hook-no-pty',
       expect.objectContaining({ id: 'repo-1' }),
       '/tmp/workspaces/runtime-hook-no-pty',
-      undefined
+      undefined,
+      'pnpm worktree:setup'
     )
     expect(result.setupReceipt).toMatchObject({ state: 'running' })
   })

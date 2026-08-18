@@ -273,12 +273,14 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.hooks',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    handler: async (params, { runtime, pairedDeviceId }) =>
+      runtime.getRepoHooks(params.repo, pairedDeviceId)
   }),
   defineMethod({
     name: 'repo.hooksCheck',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+    handler: async (params, { runtime, pairedDeviceId }) =>
+      runtime.checkRepoHooks(params.repo, pairedDeviceId)
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import type { SetupHookApproval } from '../../../src/shared/setup-hook-approval'
 import { resolveComposerMrBase, resolveComposerPrBase } from './composer-source-base-resolve'
 import type {
   MobileComposerCreateSelection,
@@ -25,6 +26,7 @@ export type CreateWorkspaceFromComposerArgs = {
   selection: MobileComposerCreateSelection
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  setupHookApproval?: SetupHookApproval
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
@@ -88,6 +90,7 @@ async function createWorkItemWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  setupHookApproval?: SetupHookApproval
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
@@ -129,7 +132,8 @@ async function createWorkItemWorkspace(args: {
     compareBaseRef,
     branchNameOverride,
     pushTarget,
-    nameIsAutoManaged: args.nameIsAutoManaged
+    nameIsAutoManaged: args.nameIsAutoManaged,
+    setupHookApproval: args.setupHookApproval
   })
   // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base
   // so collisions still append -2, -3, ... like the blank path does.
@@ -147,6 +151,7 @@ async function createBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  setupHookApproval?: SetupHookApproval
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
@@ -181,6 +186,7 @@ async function createBranchWorkspace(args: {
           repo: `id:${targetRepoId}`,
           name,
           setupDecision,
+          ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {}),
           baseBranch: selection.refName,
           branchNameOverride: selection.localBranchName
         })
@@ -202,6 +208,7 @@ async function createBranchWorkspace(args: {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
+        ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {}),
         baseBranch: selection.baseBranch
       }
       if (selection.branchNameOverride) {
@@ -217,6 +224,7 @@ async function createNewBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'new-branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  setupHookApproval?: SetupHookApproval
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
@@ -238,6 +246,7 @@ async function createNewBranchWorkspace(args: {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
+        ...(args.setupHookApproval ? { setupHookApproval: args.setupHookApproval } : {}),
         branchNameOverride: candidate,
         ...agentLaunchCreateFields(createdWithAgentId)
       }

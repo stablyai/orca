@@ -70,6 +70,7 @@ import {
 } from '../../../src/tasks/mobile-hosted-check-status'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import { MOBILE_TASKS_CAPABILITY } from '../../../src/tasks/mobile-tasks-capability'
+import { MOBILE_WORKTREE_SETUP_HOOK_APPROVAL_CAPABILITY } from '../../../src/tasks/worktree-create-capability'
 import {
   filterWorkspaceAgents,
   isWorkspaceAgentEnabled,
@@ -108,8 +109,12 @@ import {
 } from '../../../src/tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../../../src/tasks/workspace-create-timeout'
 import {
+  bindSetupHookCreate,
+  resolveSetupHookCreate,
+  type SetupHookCreateResolution
+} from '../../../src/tasks/setup-hook-create-binding'
+import {
   isSetupHookTrusted,
-  normalizeSetupHookTrust,
   trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from '../../../src/tasks/setup-hook-trust'
@@ -232,7 +237,7 @@ type TaskRuntimeStatus = {
 
 type TasksSupportState =
   | { kind: 'unknown'; client: RpcClient | null }
-  | { kind: 'supported'; client: RpcClient }
+  | { kind: 'supported'; client: RpcClient; setupHookApprovalSupported: boolean }
   | { kind: 'unsupported'; client: RpcClient }
 type GitLabWorkItem = {
   id: string
@@ -276,17 +281,6 @@ type GitPushTarget = {
 }
 
 type SetupDecision = 'inherit' | 'run' | 'skip'
-type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
-
-type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
 
 type LinearProject = {
   id: string
@@ -2357,6 +2351,8 @@ export default function MobileTasksScreen() {
     client != null &&
     tasksSupportState.kind === 'unsupported' &&
     tasksSupportState.client === client
+  const setupHookApprovalSupported =
+    tasksSupportState.kind === 'supported' && tasksSupportState.setupHookApprovalSupported
   const taskUiReady = tasksSupported && taskStateHydrated
   const activeGitHubProject = githubProjectSettings.activeProject
   const activeGitHubProjectHost = githubProjectHost(
@@ -2947,7 +2943,13 @@ export default function MobileTasksScreen() {
         setTaskStateHydrated(false)
         return
       }
-      setTasksSupportState({ kind: 'supported', client })
+      setTasksSupportState({
+        kind: 'supported',
+        client,
+        setupHookApprovalSupported: Boolean(
+          status.capabilities?.includes(MOBILE_WORKTREE_SETUP_HOOK_APPROVAL_CAPABILITY)
+        )
+      })
       setError('')
       const [settingsResponse, uiResponse, preflightResponse, linearStatusResponse] =
         await Promise.all([
@@ -5346,43 +5348,14 @@ export default function MobileTasksScreen() {
     workspaceDetectedAgentIds === null
 
   const resolveCreateSetupDecision = useCallback(
-    async (
+    (
       repo: RepoSummary,
       override?: Exclude<SetupDecision, 'inherit'>
-    ): Promise<
-      | { kind: 'decision'; decision: SetupDecision; setupTrust?: RepoHooksResponse['setupTrust'] }
-      | {
-          kind: 'prompt'
-          command: string
-          source: string | null
-          setupTrust?: RepoHooksResponse['setupTrust']
-        }
-    > => {
+    ): Promise<SetupHookCreateResolution> => {
       if (!client || !tasksSupported) {
-        return { kind: 'decision', decision: override ?? 'inherit' }
+        return Promise.resolve({ kind: 'decision' as const, decision: override ?? 'inherit' })
       }
-      const response = await client.sendRequest('repo.hooks', { repo: `id:${repo.id}` })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as RepoHooksResponse
-      const setupCommand = result.hooks?.scripts?.setup?.trim()
-      const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
-      if (!setupCommand) {
-        return { kind: 'decision', decision: 'inherit' }
-      }
-      if (override) {
-        return { kind: 'decision', decision: override, setupTrust }
-      }
-      const setupRunPolicy = result.setupRunPolicy ?? 'run-by-default'
-      if (setupRunPolicy === 'ask') {
-        return { kind: 'prompt', command: setupCommand, source: result.source, setupTrust }
-      }
-      return {
-        kind: 'decision',
-        decision: setupRunPolicy === 'run-by-default' ? 'run' : 'skip',
-        setupTrust
-      }
+      return resolveSetupHookCreate({ client, repoId: repo.id, override })
     },
     [client, tasksSupported]
   )
@@ -5462,7 +5435,12 @@ export default function MobileTasksScreen() {
           })
           return
         }
-        const setupDecision = setupResolution.decision
+        const setupBinding = bindSetupHookCreate({
+          decision: setupResolution.decision,
+          setupTrust: setupResolution.setupTrust,
+          approvalSupported: setupHookApprovalSupported
+        })
+        const setupDecision = setupBinding.decision
         if (
           setupDecision === 'run' &&
           setupResolution.setupTrust &&
@@ -5495,6 +5473,7 @@ export default function MobileTasksScreen() {
           })
           return
         }
+        const setupHookApproval = setupBinding.approval
         let params: Record<string, unknown>
         if (item.provider === 'github') {
           const source = item.source
@@ -5597,6 +5576,9 @@ export default function MobileTasksScreen() {
             sparseCheckout: sparseCheckoutOverride
           })
         }
+        if (setupHookApproval) {
+          params.setupHookApproval = setupHookApproval
+        }
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
@@ -5612,8 +5594,11 @@ export default function MobileTasksScreen() {
         setSetupPrompt(null)
         const name = result.worktree.displayName ?? item.title
         const queryParams = new URLSearchParams({ name, created: '1' })
-        if (result.warning) {
-          queryParams.set('warning', result.warning)
+        // Why: an old host returns no warning for a client-side downgrade, so a locally
+        // suppressed setup hook would otherwise be invisible.
+        const warning = result.warning ?? setupBinding.suppressedWarning
+        if (warning) {
+          queryParams.set('warning', warning)
         }
         router.push(
           `/h/${hostId}/session/${encodeURIComponent(result.worktree.id)}?${queryParams.toString()}`
@@ -5632,6 +5617,7 @@ export default function MobileTasksScreen() {
       resolveCreateSetupDecision,
       router,
       runtimeTaskSettings,
+      setupHookApprovalSupported,
       taskStateHydrated,
       tasksSupported,
       trustedOrcaHooks,

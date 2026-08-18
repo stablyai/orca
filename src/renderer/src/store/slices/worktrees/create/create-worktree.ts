@@ -13,6 +13,10 @@ import {
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  notifyRejectedSetupApproval,
+  resolveRemoteSetupDecision
+} from './setup-hook-approval-notice'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -61,6 +65,12 @@ export function createCreateWorktree(
     const startupDraft = options?.startupDraft
     const provisionedRoot = options?.provisionedRoot
     try {
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+      const remoteSetupDecision = await resolveRemoteSetupDecision(
+        target,
+        setupDecision,
+        Boolean(options?.setupHookApproval)
+      )
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = options?.nameWasGenerated
           ? getGeneratedWorktreeCreateRetryCandidate(name, attempt)
@@ -116,7 +126,6 @@ export function createCreateWorktree(
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           if (
             target.kind === 'environment' &&
             (linkedWorkItem?.provider === 'jira' || linkedTaskSourceContext?.provider === 'jira')
@@ -149,7 +158,10 @@ export function createCreateWorktree(
                     ...(candidateBranchNameOverride
                       ? { branchNameOverride: candidateBranchNameOverride }
                       : {}),
-                    setupDecision,
+                    setupDecision: remoteSetupDecision,
+                    ...(options?.setupHookApproval
+                      ? { setupHookApproval: options.setupHookApproval }
+                      : {}),
                     sparseCheckout,
                     ...(displayName ? { displayName } : {}),
                     ...(telemetrySource ? { telemetrySource } : {}),
@@ -236,6 +248,11 @@ export function createCreateWorktree(
                 : {}),
               sortEpoch: s.sortEpoch + 1
             }
+          })
+          notifyRejectedSetupApproval({
+            target,
+            remoteSetupDecision,
+            setupApprovalRejected: result.setupApprovalRejected
           })
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
           if (result.baseFallback) {

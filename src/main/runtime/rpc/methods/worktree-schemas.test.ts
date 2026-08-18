@@ -32,6 +32,26 @@ describe('worktree RPC schemas', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('accepts exact setup approvals and normalizes malformed legacy values to absent', () => {
+    const approval = {
+      kind: 'setup' as const,
+      token: 'operation-token',
+      contentHash: 'a'.repeat(64)
+    }
+
+    expect(
+      WorktreeCreate.parse({ repo: 'repo-1', name: 'approved', setupHookApproval: approval })
+        .setupHookApproval
+    ).toEqual(approval)
+    expect(
+      WorktreeCreate.parse({
+        repo: 'repo-1',
+        name: 'malformed',
+        setupHookApproval: { ...approval, contentHash: 'not-a-hash' }
+      }).setupHookApproval
+    ).toBeUndefined()
+  })
+
   it('normalizes durable Jira linked-item metadata and rejects provider mismatches', () => {
     const linkedWorkItem = {
       provider: 'jira',
