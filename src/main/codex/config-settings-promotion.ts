@@ -19,7 +19,7 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
-import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { tuiStructuredKey } from './codex-config-settings-upsert'
 import {
   readCodexSettingsBaseline,
   writeCodexSettingsBaseline,
@@ -27,7 +27,7 @@ import {
   type CodexSettingsConflict
 } from './config-settings-baseline'
 import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
-import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
+import { prepareSystemConfigForPromotion } from './config-marketplace-refresh-promotion'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
@@ -234,6 +234,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
   const systemValues = readPromotedSettingValues(systemTomlPath)
+  const runtimeConfig = readAgentStateFileSync(runtimeTomlPath)
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
@@ -245,26 +246,17 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     conflicts,
     runtimeValuesToPreserve
   })
-  if (updates.size === 0) {
+  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
+  const targetExists = existsSync(writeTarget.path)
+  const systemContent = targetExists ? readAgentStateFileSync(writeTarget.path) : null
+  const nextContent = prepareSystemConfigForPromotion(systemContent, runtimeConfig, updates)
+  if (nextContent === null || (targetExists && nextContent === systemContent)) {
     return { conflicts, runtimeValuesToPreserve }
   }
   // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
-  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
-  const targetExists = existsSync(writeTarget.path)
-  // Why: seeding a brand-new ~/.codex/config.toml from the promoted keys alone
-  // would leave a skeleton the next mirror treats as authoritative, deleting
-  // every other runtime setting (mcp_servers, features). With no system config
-  // the runtime IS the user's config, so carry its ordinary settings across.
-  const systemContent = targetExists
-    ? readAgentStateFileSync(writeTarget.path)
-    : extractOrdinaryCodexSettings(readAgentStateFileSync(runtimeTomlPath))
-  const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
-  if (nextContent === systemContent) {
-    return { conflicts, runtimeValuesToPreserve }
-  }
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
