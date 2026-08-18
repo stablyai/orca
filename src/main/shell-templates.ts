@@ -111,8 +111,14 @@ export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-com
  * answer. OR, not AND, so the only way past it is to enter emulation and then
  * unset all three; every real `emulate sh`/`emulate ksh` sets them. A false
  * positive costs exactly the fork this saves.
+ *
+ * Why `2>/dev/null`: `[[ -o <unknown> ]]` prints `no such option` to stderr and
+ * returns false rather than aborting, so on a zsh too old for one of these
+ * names the only symptom would be that text in the user's pane. All three
+ * predate every zsh Orca supports, so this is belt and braces, not a fallback.
  */
-export const ZSH_BOURNE_EMULATION_OPTION_HINT = '[[ -o ksharrays || -o shwordsplit || -o shglob ]]'
+export const ZSH_BOURNE_EMULATION_OPTION_HINT =
+  '[[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null'
 
 /**
  * Hands the pane back to the user unwrapped when zsh has entered sh/ksh

@@ -318,6 +318,18 @@ function resolvePtyShellOverride(shellOverride: string): string {
 }
 
 /**
+ * Longest WSL distro name revive will carry into `wsl.exe -d <name>`.
+ *
+ * Why bounded here and not at spawn: spawn's value is a live RPC parameter,
+ * while this one is replayed from state the relay hands a client and takes back
+ * unvalidated. It reaches an argv, not a shell, so an over-long name costs a
+ * failed spawn rather than anything worse -- but revive's whole job here is to
+ * re-apply fresh-spawn bounds, and an unbounded value had no business in it.
+ * Real distro names are registry keys, far below this.
+ */
+const MAX_REVIVED_WSL_DISTRO_LENGTH = 256
+
+/**
  * Same bounds as a fresh spawn, but one unusable entry may not fail the whole
  * revive batch — an override this host no longer allows degrades that single
  * pane to the default shell instead of throwing away every other pane's state.
@@ -2201,7 +2213,10 @@ export class PtyHandler {
     const resolvedShellOverride = resolveRevivedShellOverride(shellOverride)
     const shell = resolvedShellOverride || resolveDefaultShell()
     const terminalWindowsWslDistro =
-      typeof entry.terminalWindowsWslDistro === 'string' ? entry.terminalWindowsWslDistro : null
+      typeof entry.terminalWindowsWslDistro === 'string' &&
+      entry.terminalWindowsWslDistro.length <= MAX_REVIVED_WSL_DISTRO_LENGTH
+        ? entry.terminalWindowsWslDistro
+        : null
     const historyIsolationEnabled = entry.historyIsolationEnabled === true
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
@@ -2234,18 +2249,34 @@ export class PtyHandler {
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro
     })
-    const term = ptyMod.spawn(shell, shellLaunch.args, {
-      name: spawnEnv.TERM ?? 'xterm-256color',
-      cols: entry.cols,
-      rows: entry.rows,
-      cwd: entry.cwd,
-      // Why: no provider-delivered command is waiting for a ready marker.
-      env: {
-        ...spawnEnv,
-        [SHELL_STARTUP_FEATURE_ENV]: '',
-        ...shellLaunch.env
+    let term: IPty
+    try {
+      term = ptyMod.spawn(shell, shellLaunch.args, {
+        name: spawnEnv.TERM ?? 'xterm-256color',
+        cols: entry.cols,
+        rows: entry.rows,
+        cwd: entry.cwd,
+        // Why: no provider-delivered command is waiting for a ready marker.
+        env: {
+          ...spawnEnv,
+          [SHELL_STARTUP_FEATURE_ENV]: '',
+          ...shellLaunch.env
+        }
+      })
+    } catch (error) {
+      // Why skip rather than retry the host default shell: the stored override
+      // names a shell that existed at serialize time and may not now (an
+      // uninstalled WSL takes wsl.exe with it), and substituting a different
+      // shell is the defect this override exists to fix -- its args and its
+      // history env are built for the shell that is gone. Dropping one pane is
+      // the honest outcome; letting the throw escape the revive loop would cost
+      // every later entry its state too. The worktree-removal fence throws
+      // before this, outside reviveEntry, so it stays a hard failure.
+      if (!resolvedShellOverride) {
+        throw error
       }
-    })
+      return
+    }
     this.wireAndStore({
       id: entry.id,
       incarnationId: randomUUID(),
