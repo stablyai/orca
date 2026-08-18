@@ -18319,14 +18319,16 @@ export class OrcaRuntimeService {
 
   async readTerminal(
     handle: string,
-    opts: { cursor?: number; limit?: number } = {}
+    opts: { cursor?: number; limit?: number; screen?: boolean } = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
-      const visibleRead = await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
+      const visibleRead = opts.screen
+        ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
+        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return visibleRead
+      return labelTerminalReadSource(visibleRead, read)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -18342,11 +18344,33 @@ export class OrcaRuntimeService {
       limit: opts.limit
     })
     if (!leaf.ptyId) {
-      return read
+      return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
-    const visibleRead = await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
+    const visibleRead = opts.screen
+      ? await this.readRenderedScreen(leaf.ptyId, read, opts)
+      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return visibleRead
+    return labelTerminalReadSource(visibleRead, read)
+  }
+
+  // Why: the default read is the accumulated pty stream, which stacks every repaint of a line
+  // ("cclclecleaclear" for one `clear`) and drops spaces a prompt draws with cursor-forward.
+  // That is the right answer for "what happened over time" and the wrong one for "what is on
+  // screen", so an explicit screen read goes to the emulator state instead. When no rendered
+  // state exists the stream is still returned, but labelled `stream` rather than passed off as
+  // a screen — silently answering the other question is the defect this exists to stop.
+  private async readRenderedScreen(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    opts: { limit?: number } = {}
+  ): Promise<RuntimeTerminalRead> {
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    const lines =
+      visibleState?.lines ?? (await this.readProviderTerminalTailLines(ptyId, opts.limit))
+    if (lines.length === 0) {
+      return { ...read, source: 'screen-unavailable' }
+    }
+    return { ...buildVisibleSnapshotReadFallback(read, lines, opts.limit), source: 'screen' }
   }
 
   // Why a cache: leaf-branch sends may arrive per keystroke; one proven-absent
@@ -39542,6 +39566,20 @@ function shouldFallbackToVisibleTerminalSnapshot(
 
 function visibleNonBlankTerminalLines(lines: string[]): string[] {
   return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
+}
+
+// Why: every read carries its source, so a caller that asked for a screen and got a response
+// with no source at all knows it reached a host that predates screen reads — rather than
+// mistaking the stream for the screen. This also surfaces the pre-existing visible-snapshot
+// fallback, which until now silently swapped rendered lines into an ordinary read.
+function labelTerminalReadSource(
+  resolved: RuntimeTerminalRead,
+  streamRead: RuntimeTerminalRead
+): RuntimeTerminalRead {
+  if (resolved.source) {
+    return resolved
+  }
+  return { ...resolved, source: resolved.tail === streamRead.tail ? 'stream' : 'screen' }
 }
 
 function buildVisibleSnapshotReadFallback(

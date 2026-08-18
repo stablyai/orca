@@ -197,17 +197,23 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
+    usage:
+      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
+      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
+      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
+      'The result reports source: stream or screen, so a caller can tell which question was answered. A --screen read falls back to source: stream when no rendered state exists rather than passing the stream off as a screen.',
+      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
       'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json'
+      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
+      'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
   {

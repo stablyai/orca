@@ -882,7 +882,10 @@ const TerminalRead = TerminalHandle.extend({
         })
     )
     .optional(),
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  // Why: optional so an older host that does not understand it simply drops the key and answers
+  // with its usual stream read; the response's `source` is what tells the caller which it got.
+  screen: z.literal(true).optional()
 })
 
 // Why: preserve the legacy contract — `title: string | null` only, `undefined` rejected, so the CLI's "reset" signal stays distinct.
@@ -1184,7 +1187,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.readTerminal(params.terminal, {
         cursor: params.cursor,
-        limit: params.limit
+        limit: params.limit,
+        screen: params.screen
       })
     })
   }),
