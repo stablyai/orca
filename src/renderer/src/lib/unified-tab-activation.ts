@@ -5,6 +5,7 @@ import {
   activateWebRuntimeSessionTab,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import type { Tab } from '../../../shared/tab-types'
 
 /** One activation path for a unified tab, routed to the per-kind selection the
@@ -30,7 +31,10 @@ export function activateUnifiedTab(store: AppState, target: Tab): void {
   }
 
   if (target.contentType === 'browser') {
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (
+      isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+      browserWorkspaceHasRemoteOwner(store, target.entityId, runtimeEnvironmentId)
+    ) {
       void activateWebRuntimeSessionTab({
         worktreeId,
         tabId: target.id,
