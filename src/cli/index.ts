@@ -92,11 +92,20 @@ export async function main(
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
+    // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
+    // retargeting a mutation to another server is the bug this flag already had.
+    // An ambient pairing code cannot be resolved to an id to compare, so the
+    // explicit flag simply wins there.
     const hostEnvironmentId = ignoreRemoteSelection
       ? null
       : await resolveHostFlagEnvironmentId(parsed.flags, {
           pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
-          environmentSelector: typeof environmentSelector === 'string' ? environmentSelector : null
+          environmentSelector:
+            typeof environmentSelector === 'string'
+              ? { value: environmentSelector, label: '--environment' }
+              : process.env.ORCA_ENVIRONMENT
+                ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
+                : null
         })
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the

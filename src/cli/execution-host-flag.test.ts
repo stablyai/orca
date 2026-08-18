@@ -121,9 +121,32 @@ describe('resolveHostFlagEnvironmentId', () => {
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
         pairingCode: null,
-        environmentSelector: 'other'
+        environmentSelector: { value: 'other', label: '--environment' }
       })
     ).rejects.toThrow('name different Orca servers')
+  })
+
+  it('names the ambient variable when ORCA_ENVIRONMENT is the conflicting selector', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1')])
+    resolveEnvironmentMock.mockReturnValue(environment('env-2'))
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        pairingCode: null,
+        environmentSelector: { value: 'staging', label: 'ORCA_ENVIRONMENT' }
+      })
+    ).rejects.toThrow('ORCA_ENVIRONMENT staging name different Orca servers')
+  })
+
+  it('hands an agent the known environment ids to retry with', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:gpu' }), NO_SELECTION)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      data: { knownEnvironments: [{ id: 'env-1', name: 'gpu' }] }
+    })
   })
 
   it('accepts --environment naming the same server as the runtime host', async () => {
@@ -133,7 +156,7 @@ describe('resolveHostFlagEnvironmentId', () => {
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
         pairingCode: null,
-        environmentSelector: 'gpu'
+        environmentSelector: { value: 'gpu', label: '--environment' }
       })
     ).resolves.toBe('env-1')
   })

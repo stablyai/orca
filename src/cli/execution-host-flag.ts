@@ -8,7 +8,9 @@ import { RuntimeClientError } from './runtime/types'
 
 export type HostFlagRoutingSelection = {
   pairingCode: string | null
-  environmentSelector: string | null
+  // Why: an ambient ORCA_ENVIRONMENT counts as a selection too, so carry the label to
+  // name the real source in the conflict message.
+  environmentSelector: { value: string; label: string } | null
 }
 
 export function parseHostFlag(
@@ -48,13 +50,23 @@ export async function resolveHostFlagEnvironmentId(
     import('./runtime-client.js')
   ])
   const userDataPath = getDefaultUserDataPath()
-  const environment = listEnvironments(userDataPath).find(
-    (candidate) => candidate.id === host.environmentId
-  )
+  const known = listEnvironments(userDataPath)
+  const environment = known.find((candidate) => candidate.id === host.environmentId)
   if (!environment) {
+    // Why: `runtime:<id>` is a host id that also appears in stored rows, so it resolves by id
+    // only — unlike --environment, which also accepts a name. Say so, and hand back the ids an
+    // agent can retry with instead of making it scrape the sentence.
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown Orca server in --host ${host.id}: no paired environment has id ${host.environmentId}. Run \`orca environment list\` to see paired servers, or pass --host local.`
+      `Unknown Orca server in --host ${host.id}: no paired environment has id ${host.environmentId}. --host runtime:<id> matches environment ids only, never names. Run \`orca environment list\` to see paired servers, or pass --host local.`,
+      {
+        knownEnvironments: known.map((candidate) => ({ id: candidate.id, name: candidate.name })),
+        nextSteps: [
+          'Run `orca environment list` to see paired Orca servers.',
+          'Use the environment id, not its name: --host runtime:<environment-id>.',
+          'Use --host local to target this machine.'
+        ]
+      }
     )
   }
   if (selection.pairingCode) {
@@ -64,11 +76,11 @@ export async function resolveHostFlagEnvironmentId(
     )
   }
   if (selection.environmentSelector) {
-    const selected = resolveEnvironment(userDataPath, selection.environmentSelector)
+    const selected = resolveEnvironment(userDataPath, selection.environmentSelector.value)
     if (selected.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `--host ${host.id} and --environment ${selection.environmentSelector} name different Orca servers.`
+        `--host ${host.id} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`
       )
     }
   }

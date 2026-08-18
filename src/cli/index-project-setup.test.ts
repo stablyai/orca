@@ -149,6 +149,48 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).toContain('setup-local')
   })
 
+  it('keeps --host local a filter on the selected environment rather than a second selector', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'prod')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-on-box',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-on-box',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-by-client',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:prod',
+            repoId: 'repo-by-client',
+            path: '/srv/orca-2',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['project', 'setups', '--environment', 'prod', '--host', 'local'], '/tmp/repo')
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'prod')
+    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-on-box')
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-by-client')
+  })
+
   it('rejects a runtime host id that no paired server owns instead of answering empty', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -157,9 +199,11 @@ describe('orca cli worktree awareness', () => {
     await main(['project', 'setups', '--host', 'runtime:not-a-real-env', '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'no paired environment has id not-a-real-env'
-    )
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('no paired environment has id not-a-real-env')
+    // An agent reads the code and the retry candidates, not the prose.
+    expect(JSON.parse(printed).error.code).toBe('invalid_argument')
+    expect(JSON.parse(printed).error.data.knownEnvironments).toEqual([])
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
