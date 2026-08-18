@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCdpKeyEvent } from './cdp-keyboard-us-layout'
+import { imeFallbackKeyEvent, parseCdpKeyEvent } from './cdp-keyboard-us-layout'
 
 describe('parseCdpKeyEvent', () => {
   it('maps every printable ASCII character to a key event that types that character', () => {
@@ -76,4 +76,30 @@ describe('parseCdpKeyEvent', () => {
       expect(parseCdpKeyEvent(raw)).toBeNull()
     }
   )
+})
+
+describe('imeFallbackKeyEvent', () => {
+  it.each([['é'], ['ß'], ['ñ'], ['ü'], ['漢'], ['한']])(
+    'gives %s the IME key event form with keyCode 229 and its text',
+    (ch: string) => {
+      expect(imeFallbackKeyEvent(ch)).toEqual({
+        keyCode: 229,
+        key: ch,
+        code: '',
+        modifiers: 0,
+        text: ch
+      })
+    }
+  )
+
+  it.each([
+    ['a table-covered ASCII character', 'a'],
+    ['a surrogate-pair emoji', '👍'],
+    ['a combining sequence', 'e\u0301'],
+    ['a multi-character name', 'MediaPlayPause'],
+    ['a chord with a non-US character', 'Ctrl+é'],
+    ['an empty string', '']
+  ])('returns null for %s so the helper keeps its behavior', (_name: string, raw: string) => {
+    expect(imeFallbackKeyEvent(raw)).toBeNull()
+  })
 })

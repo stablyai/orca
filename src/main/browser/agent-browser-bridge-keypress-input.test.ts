@@ -159,6 +159,29 @@ describe('AgentBrowserBridge keypress input', () => {
     })
   })
 
+  it('dispatches a non-US printable character as an IME-style event in process', async () => {
+    await expect(bridge.keypress('é', undefined, 'tab-1')).resolves.toEqual({ pressed: 'é' })
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(keyEventCalls(wc)[0]?.[1]).toMatchObject({
+      type: 'keyDown',
+      windowsVirtualKeyCode: 229,
+      key: 'é',
+      code: '',
+      text: 'é',
+      unmodifiedText: 'é'
+    })
+    expect(keyEventCalls(wc)[1]?.[1]).toMatchObject({ type: 'keyUp', windowsVirtualKeyCode: 229 })
+  })
+
+  it('keeps the helper for a surrogate-pair character', async () => {
+    succeedWith({ pressed: '👍' })
+
+    await expect(bridge.keypress('👍', undefined, 'tab-1')).resolves.toEqual({ pressed: '👍' })
+
+    expect(keyEventCalls(wc)).toHaveLength(0)
+  })
+
   it('falls back to agent-browser for a key name the table cannot express', async () => {
     succeedWith({ pressed: 'MediaPlayPause' })
 

@@ -7,7 +7,7 @@ import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
-import { parseCdpKeyEvent } from './cdp-keyboard-us-layout'
+import { imeFallbackKeyEvent, parseCdpKeyEvent } from './cdp-keyboard-us-layout'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
 import type {
@@ -1773,7 +1773,7 @@ export class AgentBrowserBridge {
       worktreeId,
       browserPageId,
       async (sessionName, target) => {
-        const parsed = parseCdpKeyEvent(key)
+        const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
         if (!parsed) {
           // Why: a key name the table cannot express must not dispatch keyCode 0 and
           // report success — route it to the helper, creating its session only now so

@@ -144,6 +144,21 @@ export type CdpKeyEvent = {
   text: string | null
 }
 
+// Why: printable characters outside the table (accented letters, non-latin scripts)
+// still have an in-process form -- the IME convention, keyCode 229 with the text,
+// which is how composed input already reaches pages. One BMP code point only:
+// surrogate pairs and combining sequences keep the helper's behavior.
+export function imeFallbackKeyEvent(raw: string): CdpKeyEvent | null {
+  if (raw.length !== 1) {
+    return null
+  }
+  const codePoint = raw.charCodeAt(0)
+  if (codePoint < 0xa0 || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+    return null
+  }
+  return { keyCode: 229, key: raw, code: '', modifiers: 0, text: raw }
+}
+
 export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
   if (raw.length === 0) {
     return null
