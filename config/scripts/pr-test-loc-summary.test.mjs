@@ -50,6 +50,17 @@ describe('PR test LoC summary', () => {
     expect(isTestPath('src/main/foo.ts')).toBe(false)
   })
 
+  it('classifies __fixtures__ and __snapshots__ data of any extension', () => {
+    expect(isTestPath('src/main/__fixtures__/shell-wrapper-snapshots/local-zsh-zshrc.txt')).toBe(
+      true
+    )
+    expect(isTestPath('src/shared/__fixtures__/trace.json')).toBe(true)
+    expect(isTestPath('src/main/runtime/orchestration/__snapshots__/run.test.ts.snap')).toBe(true)
+    // Why: only the __-wrapped names count; a bare `fixtures` dir stays prod.
+    expect(isTestPath('src/main/daemon/fixtures/ratatui-tui.py')).toBe(false)
+    expect(isTestPath('src/main/my__fixtures__helper.ts')).toBe(false)
+  })
+
   it('sums GitHub pull-file additions and deletions', () => {
     const totals = sumChangedFiles([
       { filename: 'src/app.ts', additions: 4, deletions: 1 },

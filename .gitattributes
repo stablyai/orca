@@ -21,4 +21,4 @@
 # Generated wrapper fixtures: collapse them in the PR diff so they stop drowning
 # the reviewable change, and pin LF because they are compared byte-for-byte.
 # Not -diff: the shell diff is the review surface when a wrapper does change.
-/src/main/__tests__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+/src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf

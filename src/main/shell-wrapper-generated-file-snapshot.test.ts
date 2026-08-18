@@ -5,7 +5,7 @@
  * Why: the zsh generators were unified behind one builder; these fixtures were
  * captured from the pre-unification code so any drift shows up as a diff.
  *
- * Fixtures live in ./__tests__/shell-wrapper-snapshots/ — see the README there
+ * Fixtures live in ./__fixtures__/shell-wrapper-snapshots/ — see the README there
  * before accepting a rewrite; a local run updates them silently.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -36,7 +36,7 @@ const WRAPPER_FILES = [
   ['bash-rcfile', join('bash', 'rcfile')]
 ] as const
 
-const SNAPSHOT_DIR = join(__dirname, '__tests__', 'shell-wrapper-snapshots')
+const SNAPSHOT_DIR = join(__dirname, '__fixtures__', 'shell-wrapper-snapshots')
 
 // Why: the wrapper root is a temp dir per run, and the baked ZDOTDIR literal is
 // the only path-dependent byte in the output; pin it to a stable placeholder.
