@@ -6,13 +6,19 @@ import type {
   PRReviewDecision
 } from './github/pull-request-types'
 
-export type HostedReviewProvider =
+export type BuiltinHostedReviewProvider =
   | 'github'
   | 'gitlab'
   | 'bitbucket'
   | 'azure-devops'
   | 'gitea'
   | 'unsupported'
+
+// Why: plugin forge providers extend the closed built-in set with arbitrary
+// ids. Consumers must narrow via BuiltinHostedReviewProvider before switching.
+export type HostedReviewProvider = BuiltinHostedReviewProvider | (string & {})
+
+export type PluginLinkedReview = Record<string, number> // providerId → reviewNumber
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 

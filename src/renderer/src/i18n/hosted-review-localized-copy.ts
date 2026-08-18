@@ -1,11 +1,8 @@
 import type { HostedReviewProvider } from '../../../shared/hosted-review'
-import {
-  resolveHostedReviewCreationProvider,
-  type HostedReviewCreationProvider
-} from '../../../shared/hosted-review-creation-providers'
+import { resolveHostedReviewCreationProvider } from '../../../shared/hosted-review-creation-providers'
 import { translate } from '@/i18n/i18n'
 
-export type SupportedHostedReviewCopyProvider = HostedReviewCreationProvider
+export type SupportedHostedReviewCopyProvider = HostedReviewProvider
 
 export type LocalizedHostedReviewCopy = {
   shortLabel: string

@@ -6,6 +6,11 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
+import type {
+  ApproveHostedReviewInput,
+  CommentHostedReviewInput,
+  MergeHostedReviewInput
+} from '../../shared/hosted-review-actions'
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -15,6 +20,11 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import {
+  commentOnHostedReview,
+  mergeHostedReview,
+  approveHostedReview
+} from '../source-control/hosted-review-actions'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -202,4 +212,31 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       return result
     }
   )
+
+  ipcMain.handle('hostedReview:merge', async (_event, args: MergeHostedReviewInput) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return mergeHostedReview({
+      ...args,
+      repoPath: repo.path,
+      connectionId: repo.connectionId ?? null
+    })
+  })
+
+  ipcMain.handle('hostedReview:comment', async (_event, args: CommentHostedReviewInput) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return commentOnHostedReview({
+      ...args,
+      repoPath: repo.path,
+      connectionId: repo.connectionId ?? null
+    })
+  })
+
+  ipcMain.handle('hostedReview:approve', async (_event, args: ApproveHostedReviewInput) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return approveHostedReview({
+      ...args,
+      repoPath: repo.path,
+      connectionId: repo.connectionId ?? null
+    })
+  })
 }

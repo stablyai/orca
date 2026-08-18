@@ -7,6 +7,7 @@ import {
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from './plugin-command-registry'
+import { PluginForgeProviderRegistry } from './plugin-forge-provider-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
@@ -14,6 +15,7 @@ export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
+  readonly forgeProviders: PluginForgeProviderRegistry
   private readonly activationErrors = new Map<string, string>()
 
   constructor(
@@ -25,6 +27,7 @@ export class PluginContentPackRegistry {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
+    this.forgeProviders = new PluginForgeProviderRegistry()
   }
 
   async reconcile(
@@ -72,8 +75,9 @@ export class PluginContentPackRegistry {
         !this.isKilled(plugin.pluginKey)
       const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
       const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
+      const forgeProviders = this.forgeProviders.reconcile(discovered, approveAtomically)
       this.commands.reconcile(discovered, approveAtomically, keybindings)
-      await Promise.all([languagePacks, vmRecipes])
+      await Promise.all([languagePacks, vmRecipes, forgeProviders])
 
       let foundNewError = false
       for (const pluginKey of approvedKeys) {
@@ -96,6 +100,7 @@ export class PluginContentPackRegistry {
 
   private registryError(pluginKey: string): string | null {
     return (
+      this.forgeProviders.error(pluginKey) ??
       this.languagePacks.error(pluginKey) ??
       this.vmRecipes.error(pluginKey) ??
       this.commands.error(pluginKey)

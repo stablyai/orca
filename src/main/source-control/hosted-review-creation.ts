@@ -12,10 +12,7 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import {
-  supportsHostedReviewCreation,
-  type HostedReviewCreationProvider
-} from '../../shared/hosted-review-creation-providers'
+import { supportsHostedReviewCreation } from '../../shared/hosted-review-creation-providers'
 import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
@@ -38,7 +35,11 @@ import {
   release as releaseGlab
 } from '../gitlab/gl-utils'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
+import {
+  detectHostedReviewProvider,
+  getForgeProviderForRepository,
+  getPluginProviderById
+} from './forge-provider'
 import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
 import {
@@ -270,6 +271,17 @@ function reviewCopy(provider: HostedReviewProvider): {
   providerName: string
   authInstruction: string
 } {
+  // Plugin provider metadata lookup (unknown provider id strings)
+  const pluginProvider = getPluginProviderById(provider)
+  if (pluginProvider?.copy) {
+    return {
+      shortLabel: pluginProvider.copy.shortLabel as 'PR' | 'MR',
+      reviewLabel: pluginProvider.copy.reviewLabel as 'pull request' | 'merge request',
+      providerName: pluginProvider.copy.providerName,
+      authInstruction: pluginProvider.copy.authInstruction
+    }
+  }
+
   if (provider === 'gitlab') {
     return {
       shortLabel: 'MR',
@@ -311,7 +323,7 @@ function reviewCopy(provider: HostedReviewProvider): {
 }
 
 async function isProviderAuthenticated(
-  provider: HostedReviewCreationProvider,
+  provider: HostedReviewProvider,
   repoPath: string,
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
@@ -329,6 +341,11 @@ async function isProviderAuthenticated(
     // Why: falling through to the GitHub check made Create PR unusable for
     // anyone with Bitbucket connected but no `gh auth login`.
     return isBitbucketReviewCreationAuthenticated()
+  }
+  // Plugin forge provider auth check (fallback for unknown providers)
+  const pluginProvider = getPluginProviderById(provider)
+  if (pluginProvider?.isAuthenticated) {
+    return pluginProvider.isAuthenticated({ repoPath, connectionId })
   }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }
@@ -563,7 +580,10 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'open_existing_review'
     }
   }
-  if (!supportsHostedReviewCreation(provider)) {
+  if (
+    !supportsHostedReviewCreation(provider) &&
+    !getPluginProviderById(provider as string)?.createReview
+  ) {
     return {
       ...baseResult,
       canCreate: false,
@@ -627,7 +647,10 @@ export async function createHostedReview(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
-  if (!supportsHostedReviewCreation(input.provider)) {
+  if (
+    !supportsHostedReviewCreation(input.provider) &&
+    !getPluginProviderById(input.provider)?.createReview
+  ) {
     return {
       ok: false,
       code: 'unsupported_provider',

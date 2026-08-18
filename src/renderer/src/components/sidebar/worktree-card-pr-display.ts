@@ -60,6 +60,8 @@ function getLinkedReviewNumber(
       return links.linkedAzureDevOpsPR
     case 'gitea':
       return links.linkedGiteaPR
+    default:
+      return null
   }
 }
 

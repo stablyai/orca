@@ -71,6 +71,7 @@ export type PluginListEntry = {
     description?: string
     commands: { phase: 'create' | 'suspend' | 'resume' | 'destroy'; command: string }[]
   }[]
+  forgeProviders: { id: string; displayName: string; hosts: string[] }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
   source?: {
@@ -115,6 +116,7 @@ export async function buildPluginList(
           commands: [],
           hasWorker: false,
           vmRecipes: [],
+          forgeProviders: [],
           restarts: 0
         }
       }
@@ -152,6 +154,10 @@ export async function buildPluginList(
           isOfficialPluginIdentity(plugin.pluginKey) &&
           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
           isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
+      const forgeProviders = service.contentPacks.forgeProviders
+        .preview()
+        .filter((fp) => fp.pluginKey === plugin.pluginKey)
+        .map((fp) => ({ id: fp.id, displayName: fp.displayName, hosts: fp.hosts }))
       return {
         pluginKey: plugin.pluginKey,
         consentFingerprint: plugin.consentFingerprint,
@@ -191,6 +197,7 @@ export async function buildPluginList(
           ...(recipe.description ? { description: recipe.description } : {}),
           commands: listPluginVmRecipeCommands(recipe)
         })),
+        forgeProviders,
         restarts: worker.restarts,
         ...(killListEntry
           ? {

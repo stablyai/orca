@@ -110,9 +110,10 @@ export function getWorkspaceCleanupReviewProviderLabel(provider: HostedReviewPro
       return 'Gitea'
     case 'unsupported':
       return translate('components.workspace.cleanup.browse.review.otherProvider', 'Other')
+    default:
+      return provider
   }
 }
-
 export function getWorkspaceCleanupTicketSourceLabel(source: WorkspaceCleanupTicketSource): string {
   switch (source) {
     case 'work-item':

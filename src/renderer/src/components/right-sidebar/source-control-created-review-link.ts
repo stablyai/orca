@@ -6,6 +6,8 @@ type WorktreeReviewLink = Partial<{
   linkedBitbucketPR: number
   linkedAzureDevOpsPR: number
   linkedGiteaPR: number
+  /** Plugin forge providers store their linked number per provider id. */
+  linkedPluginReview?: Record<string, number>
 }>
 
 type HostedReviewLookupLink = Partial<{
@@ -14,6 +16,7 @@ type HostedReviewLookupLink = Partial<{
   linkedBitbucketPR: number
   linkedAzureDevOpsPR: number
   linkedGiteaPR: number
+  linkedPluginReview?: Record<string, number>
 }>
 
 export type CreatedHostedReviewLink = {
@@ -41,5 +44,7 @@ export function resolveCreatedHostedReviewLink(
       return { worktree: { linkedBitbucketPR: number }, lookup: { linkedBitbucketPR: number } }
     case 'unsupported':
       return { worktree: {}, lookup: {} }
+    default:
+      return { worktree: { linkedPluginReview: { [provider]: number } }, lookup: {} }
   }
 }

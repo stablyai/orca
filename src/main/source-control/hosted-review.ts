@@ -25,6 +25,9 @@ function reviewLinkForProvider(
       return { linkedReviewNumber: input.linkedAzureDevOpsPR ?? null }
     case 'gitea':
       return { linkedReviewNumber: input.linkedGiteaPR ?? null }
+    default:
+      // Plugin providers keep their own linked number outside the builtin fields.
+      return {}
   }
 }
 

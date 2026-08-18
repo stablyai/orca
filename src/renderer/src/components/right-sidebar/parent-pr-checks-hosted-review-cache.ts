@@ -70,6 +70,8 @@ function getLinkedReviewNumberForProvider(
       return worktree.linkedGiteaPR ?? null
     case 'unsupported':
       return null
+    default:
+      return null
   }
 }
 

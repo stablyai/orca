@@ -12,6 +12,7 @@ export type LinkedReviewHints = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedPluginReview?: Record<string, number> | null
 }
 
 export function getHostedReviewCacheKey(
@@ -57,7 +58,8 @@ export function linkedReviewHintKey(options?: LinkedReviewHints): string {
     ['gitlab', options?.linkedGitLabMR ?? null],
     ['bitbucket', options?.linkedBitbucketPR ?? null],
     ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
-    ['gitea', options?.linkedGiteaPR ?? null]
+    ['gitea', options?.linkedGiteaPR ?? null],
+    ...Object.entries(options?.linkedPluginReview ?? {})
   ] as const
   return hints
     .filter(([, number]) => number !== null)

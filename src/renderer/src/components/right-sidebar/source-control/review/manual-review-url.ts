@@ -188,6 +188,8 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
         sourceRef: `refs/heads/${headBranch}`,
         targetRef: `refs/heads/${baseBranch}`
       })
+    default:
+      return null
     case 'gitea':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(headBranch)}`
   }

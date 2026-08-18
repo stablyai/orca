@@ -114,7 +114,9 @@ export function createUpdateWorktreeMeta(
       (normalizedUpdates.linkedAzureDevOpsPR === null &&
         (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
       (normalizedUpdates.linkedGiteaPR === null &&
-        (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
+        (worktreeForUpdate?.linkedGiteaPR ?? null) !== null) ||
+      (normalizedUpdates.linkedPluginReview === null &&
+        (worktreeForUpdate?.linkedPluginReview ?? null) !== null)
     const reviewRepo = shouldRefreshHostedReview
       ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
@@ -266,6 +268,9 @@ export function createUpdateWorktreeMeta(
             worktreeForUpdate,
             'linkedGiteaPR'
           ),
+          linkedPluginReview: Object.hasOwn(targetEnriched, 'linkedPluginReview')
+            ? (targetEnriched.linkedPluginReview ?? null)
+            : (worktreeForUpdate?.linkedPluginReview ?? null),
           force: true
         })
       }

@@ -9,6 +9,7 @@ export type SelectedReviewBranchInput = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedPluginReview?: Record<string, number> | null
   pushTarget?: GitPushTarget
 }
 
@@ -34,6 +35,13 @@ export function getSelectedReviewBranch(
   }
   if (typeof args.linkedGiteaPR === 'number') {
     return { provider: 'gitea', number: args.linkedGiteaPR }
+  }
+  // Plugin provider: return the first entry from linkedPluginReview.
+  if (args.linkedPluginReview) {
+    const entries = Object.entries(args.linkedPluginReview)
+    if (entries.length > 0) {
+      return { provider: entries[0][0], number: entries[0][1] }
+    }
   }
   return null
 }
@@ -82,12 +90,14 @@ export function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedPluginReview?: Record<string, number> | null
 } {
   return {
     linkedGitHubPR: args.linkedPR ?? null,
     linkedGitLabMR: args.linkedGitLabMR ?? null,
     linkedBitbucketPR: args.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null
+    linkedGiteaPR: args.linkedGiteaPR ?? null,
+    linkedPluginReview: args.linkedPluginReview ?? null
   }
 }

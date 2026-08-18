@@ -198,6 +198,9 @@ function buildProvisionedRootMeta(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    ...(args.linkedPluginReview !== undefined
+      ? { linkedPluginReview: args.linkedPluginReview }
+      : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
