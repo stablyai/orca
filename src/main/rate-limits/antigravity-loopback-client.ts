@@ -147,6 +147,13 @@ export function requestAntigravityLoopbackPage(
   return new Promise((resolve, reject) => {
     let responseStarted = false
     let responseCompleted = false
+    let requestDeadline: ReturnType<typeof setTimeout> | null = null
+    const clearRequestDeadline = (): void => {
+      if (requestDeadline) {
+        clearTimeout(requestDeadline)
+        requestDeadline = null
+      }
+    }
     const body = options?.body
     const headers: Record<string, string | number> = { Connection: 'close' }
     if (body !== undefined) {
@@ -189,6 +196,7 @@ export function requestAntigravityLoopbackPage(
         })
         response.on('end', () => {
           responseCompleted = true
+          clearRequestDeadline()
           if (response.statusCode !== 200) {
             reject(
               new AntigravityLoopbackResponseError(
@@ -200,6 +208,7 @@ export function requestAntigravityLoopbackPage(
           resolve(Buffer.concat(chunks).toString('utf8'))
         })
         response.on('error', (error) => {
+          clearRequestDeadline()
           reject(
             new AntigravityLoopbackResponseError(
               `Antigravity quota response ended unexpectedly: ${error.message}`
@@ -208,6 +217,18 @@ export function requestAntigravityLoopbackPage(
         })
       }
     )
+    // Why: ClientRequest.timeout resets on socket activity, so a trickling
+    // loopback service also needs a fixed wall-clock deadline.
+    requestDeadline = setTimeout(
+      () =>
+        req.destroy(
+          responseStarted
+            ? new AntigravityLoopbackResponseError('Antigravity quota response timed out')
+            : new Error('Antigravity quota request timed out')
+        ),
+      REQUEST_TIMEOUT_MS
+    )
+    requestDeadline.unref()
     req.on('timeout', () =>
       req.destroy(
         responseStarted
@@ -216,6 +237,7 @@ export function requestAntigravityLoopbackPage(
       )
     )
     req.on('error', (error) => {
+      clearRequestDeadline()
       if (
         responseStarted &&
         !signal.aborted &&
@@ -231,6 +253,7 @@ export function requestAntigravityLoopbackPage(
       reject(error)
     })
     req.on('close', () => {
+      clearRequestDeadline()
       if (!responseCompleted) {
         // Why: some supported Node runtimes can close a request without
         // forwarding a separate response error.

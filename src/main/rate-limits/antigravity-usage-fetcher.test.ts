@@ -235,24 +235,31 @@ describe('Antigravity language-server discovery', () => {
     const started = new Promise<void>((resolve) => {
       markStarted = resolve
     })
-    const server = createServer((_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' })
-      response.write('{')
-      const keepAlive = setInterval(() => response.write(' '), 100)
-      response.on('close', () => clearInterval(keepAlive))
-      markStarted?.()
+    // Why: enough distinct silent endpoints let the outer discovery deadline
+    // win while each request remains independently wall-clock bounded.
+    const servers = Array.from({ length: 6 }, () => createServer(() => markStarted?.()))
+    await Promise.all(
+      servers.map(
+        (server) => new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      )
+    )
+    const ports = servers.map((server) => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected a TCP listener')
+      }
+      return address.port
     })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const address = server.address()
-    if (!address || typeof address === 'string') {
-      throw new Error('Expected a TCP listener')
-    }
 
     try {
       await mkdir(logDirectory, { recursive: true })
-      await writeFile(
-        join(logDirectory, 'cli-20260714_123131.log'),
-        `Language server listening on random port at ${address.port} for HTTP`
+      await Promise.all(
+        ports.map((port, index) =>
+          writeFile(
+            join(logDirectory, `cli-20260714_12313${index}.log`),
+            `Language server listening on random port at ${port} for HTTP`
+          )
+        )
       )
       const resultPromise = fetchAntigravityRateLimits({
         homePath,
@@ -266,7 +273,9 @@ describe('Antigravity language-server discovery', () => {
         usageMetadata: { failureKind: 'usage-unavailable' }
       })
     } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await Promise.all(
+        servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve())))
+      )
       await rm(homePath, { recursive: true, force: true })
     }
   }, 10_000)
