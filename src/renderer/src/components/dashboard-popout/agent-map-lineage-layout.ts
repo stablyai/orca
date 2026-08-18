@@ -1,18 +1,24 @@
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import {
+  AGENT_MAP_AGENT_LABEL_NODE_GAP,
+  agentMapAgentLabelMetrics
+} from './agent-map-agent-label-metrics'
+import {
+  AGENT_MAP_LINEAGE_HORIZONTAL_GAP,
+  AGENT_MAP_LINEAGE_VERTICAL_GAP,
+  agentMapLineageCellWidth,
+  agentMapLineageGridPositions,
+  positionAgentMapLineageRows,
+  type AgentMapLineagePosition
+} from './agent-map-lineage-grid'
 import { packAgentMapWorktrees } from './agent-map-worktree-packing'
 
-const HORIZONTAL_GAP = 54
-const VERTICAL_GAP = 58
 const FAMILY_PADDING = 8
 const WORKTREE_PADDING = 6
 const COMPACT_FANOUT_THRESHOLD = 12
 const MAX_EXACT_LINEAGE_AGENTS = 256
 
-export type AgentMapLineagePosition = {
-  card: DashboardCard
-  x: number
-  y: number
-}
+export type { AgentMapLineagePosition } from './agent-map-lineage-grid'
 
 type AgentMapAgentFamily = {
   id: string
@@ -22,6 +28,11 @@ type AgentMapAgentFamily = {
   agents: AgentMapLineagePosition[]
 }
 
+type AgentMapSubtree = {
+  width: number
+  agents: { card: DashboardCard; x: number; depth: number }[]
+}
+
 function compareStable(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
@@ -29,17 +40,21 @@ function compareStable(a: string, b: string): number {
 function encloseFamily(
   id: string,
   agents: AgentMapLineagePosition[],
-  nodeRadius: number
+  nodeRadius: number,
+  labelScale: number
 ): AgentMapAgentFamily {
   let left = Number.POSITIVE_INFINITY
   let right = Number.NEGATIVE_INFINITY
   let top = Number.POSITIVE_INFINITY
   let bottom = Number.NEGATIVE_INFINITY
   for (const agent of agents) {
-    left = Math.min(left, agent.x - nodeRadius)
-    right = Math.max(right, agent.x + nodeRadius)
+    left = Math.min(left, agent.x - Math.max(nodeRadius, agent.labelWidth / 2))
+    right = Math.max(right, agent.x + Math.max(nodeRadius, agent.labelWidth / 2))
     top = Math.min(top, agent.y - nodeRadius)
-    bottom = Math.max(bottom, agent.y + nodeRadius)
+    bottom = Math.max(
+      bottom,
+      agent.y + nodeRadius + AGENT_MAP_AGENT_LABEL_NODE_GAP * labelScale + agent.labelHeight
+    )
   }
   const centerX = (left + right) / 2
   const centerY = (top + bottom) / 2
@@ -47,40 +62,53 @@ function encloseFamily(
   for (const agent of agents) {
     agent.x -= centerX
     agent.y -= centerY
-    radius = Math.max(radius, Math.hypot(agent.x, agent.y) + nodeRadius + FAMILY_PADDING)
+    const halfWidth = Math.max(nodeRadius, agent.labelWidth / 2)
+    const agentBottom = nodeRadius + AGENT_MAP_AGENT_LABEL_NODE_GAP * labelScale + agent.labelHeight
+    const farthestX = Math.max(Math.abs(agent.x - halfWidth), Math.abs(agent.x + halfWidth))
+    const farthestY = Math.max(Math.abs(agent.y - nodeRadius), Math.abs(agent.y + agentBottom))
+    radius = Math.max(radius, Math.hypot(farthestX, farthestY))
   }
-  return { id, x: 0, y: 0, radius, agents }
+  return { id, x: 0, y: 0, radius: radius + FAMILY_PADDING, agents }
 }
 
 function buildCompactFanoutFamily(
   root: DashboardCard,
   children: DashboardCard[],
   nodeRadius: number,
+  labelScale: number,
   emitted: Set<string>
 ): AgentMapAgentFamily {
-  const columns = Math.ceil(Math.sqrt(children.length))
-  const width = (Math.min(columns, children.length) - 1) * HORIZONTAL_GAP
-  const agents: AgentMapLineagePosition[] = [{ card: root, x: 0, y: 0 }]
   emitted.add(root.paneKey)
-  for (const [index, child] of children.entries()) {
-    emitted.add(child.paneKey)
-    agents.push({
-      card: child,
-      x: (index % columns) * HORIZONTAL_GAP - width / 2,
-      y: (Math.floor(index / columns) + 1) * VERTICAL_GAP
-    })
-  }
-  return encloseFamily(root.paneKey, agents, nodeRadius)
+  children.forEach((child) => emitted.add(child.paneKey))
+  const rootMetrics = agentMapAgentLabelMetrics(root)
+  const childPositions = agentMapLineageGridPositions(children, nodeRadius, labelScale, 1)
+  return encloseFamily(
+    root.paneKey,
+    [
+      {
+        card: root,
+        x: 0,
+        y: 0,
+        labelWidth: rootMetrics.width * labelScale,
+        labelHeight: rootMetrics.height * labelScale
+      },
+      ...childPositions.map((agent) => ({
+        ...agent,
+        y: agent.y + rootMetrics.height * labelScale
+      }))
+    ],
+    nodeRadius,
+    labelScale
+  )
 }
 
 function buildFamily(
   root: DashboardCard,
   childrenByParent: ReadonlyMap<string, DashboardCard[]>,
   nodeRadius: number,
+  labelScale: number,
   emitted: Set<string>
 ): AgentMapAgentFamily {
-  const agents: AgentMapLineagePosition[] = []
-  let leafIndex = 0
   const rootChildren = (childrenByParent.get(root.paneKey) ?? []).filter(
     (child) => !emitted.has(child.paneKey)
   )
@@ -88,16 +116,16 @@ function buildFamily(
     rootChildren.length >= COMPACT_FANOUT_THRESHOLD &&
     rootChildren.every((child) => (childrenByParent.get(child.paneKey) ?? []).length === 0)
   ) {
-    return buildCompactFanoutFamily(root, rootChildren, nodeRadius, emitted)
+    return buildCompactFanoutFamily(root, rootChildren, nodeRadius, labelScale, emitted)
   }
 
-  const placeSubtree = (
+  const buildSubtree = (
     card: DashboardCard,
     depth: number,
     ancestors: ReadonlySet<string>
-  ): number => {
+  ): AgentMapSubtree => {
     if (ancestors.has(card.paneKey) || emitted.has(card.paneKey)) {
-      return leafIndex++ * HORIZONTAL_GAP
+      return { width: agentMapLineageCellWidth(card, nodeRadius, labelScale), agents: [] }
     }
     emitted.add(card.paneKey)
     const nextAncestors = new Set(ancestors)
@@ -105,24 +133,36 @@ function buildFamily(
     const children = (childrenByParent.get(card.paneKey) ?? []).filter(
       (child) => !nextAncestors.has(child.paneKey) && !emitted.has(child.paneKey)
     )
-    const childXs = children.map((child) => placeSubtree(child, depth + 1, nextAncestors))
-    const x =
-      childXs.length > 0
-        ? (Math.min(...childXs) + Math.max(...childXs)) / 2
-        : leafIndex++ * HORIZONTAL_GAP
-    agents.push({ card, x, y: depth * VERTICAL_GAP })
-    return x
+    const childTrees = children.map((child) => buildSubtree(child, depth + 1, nextAncestors))
+    const childrenWidth =
+      childTrees.reduce((total, child) => total + child.width, 0) +
+      Math.max(0, childTrees.length - 1) * AGENT_MAP_LINEAGE_HORIZONTAL_GAP
+    const width = Math.max(agentMapLineageCellWidth(card, nodeRadius, labelScale), childrenWidth)
+    const agents: AgentMapSubtree['agents'] = [{ card, x: 0, depth }]
+    let cursor = -childrenWidth / 2
+    for (const child of childTrees) {
+      const center = cursor + child.width / 2
+      agents.push(...child.agents.map((agent) => ({ ...agent, x: agent.x + center })))
+      cursor += child.width + AGENT_MAP_LINEAGE_HORIZONTAL_GAP
+    }
+    return { width, agents }
   }
 
-  placeSubtree(root, 0, new Set())
-  return encloseFamily(root.paneKey, agents, nodeRadius)
+  const subtree = buildSubtree(root, 0, new Set())
+  return encloseFamily(
+    root.paneKey,
+    positionAgentMapLineageRows(subtree.agents, nodeRadius, labelScale),
+    nodeRadius,
+    labelScale
+  )
 }
 
 function layoutBoundedLineage(
   sorted: DashboardCard[],
   childrenByParent: ReadonlyMap<string, DashboardCard[]>,
   childPaneKeys: ReadonlySet<string>,
-  nodeRadius: number
+  nodeRadius: number,
+  labelScale: number
 ): { agents: AgentMapLineagePosition[]; radius: number } {
   const levels: DashboardCard[][] = []
   const emitted = new Set<string>()
@@ -138,9 +178,7 @@ function layoutBoundedLineage(
         continue
       }
       emitted.add(entry.card.paneKey)
-      const level = levels[entry.depth] ?? []
-      levels[entry.depth] = level
-      level.push(entry.card)
+      ;(levels[entry.depth] ??= []).push(entry.card)
       const children = childrenByParent.get(entry.card.paneKey) ?? []
       for (let index = children.length - 1; index >= 0; index -= 1) {
         if (!emitted.has(children[index].paneKey)) {
@@ -149,30 +187,37 @@ function layoutBoundedLineage(
       }
     }
   }
-
-  const agents: AgentMapLineagePosition[] = []
-  let rowIndex = 0
+  const positioned: AgentMapLineagePosition[] = []
+  let previousBottom = Number.NEGATIVE_INFINITY
   for (const level of levels) {
-    const columns = Math.ceil(Math.sqrt(level.length))
-    for (let rowStart = 0; rowStart < level.length; rowStart += columns) {
-      const row = level.slice(rowStart, rowStart + columns)
-      const width = (row.length - 1) * HORIZONTAL_GAP
-      for (const [index, card] of row.entries()) {
-        agents.push({ card, x: index * HORIZONTAL_GAP - width / 2, y: rowIndex * VERTICAL_GAP })
-      }
-      rowIndex += 1
-    }
+    const grid = agentMapLineageGridPositions(level, nodeRadius, labelScale)
+    const top = Math.min(...grid.map((agent) => agent.y - nodeRadius))
+    const bottom = Math.max(
+      ...grid.map(
+        (agent) =>
+          agent.y + nodeRadius + AGENT_MAP_AGENT_LABEL_NODE_GAP * labelScale + agent.labelHeight
+      )
+    )
+    const offsetY = Number.isFinite(previousBottom)
+      ? previousBottom + AGENT_MAP_LINEAGE_VERTICAL_GAP - top
+      : 0
+    positioned.push(...grid.map((agent) => ({ ...agent, y: agent.y + offsetY })))
+    previousBottom = bottom + offsetY
   }
-  const family = encloseFamily(sorted[0].paneKey, agents, nodeRadius)
+  const family = encloseFamily(sorted[0].paneKey, positioned, nodeRadius, labelScale)
   family.agents.sort((a, b) => compareStable(a.card.paneKey, b.card.paneKey))
   return { agents: family.agents, radius: Math.max(52, family.radius + WORKTREE_PADDING) }
 }
 
 export function layoutAgentMapLineage(
   cards: DashboardCard[],
-  nodeRadius: number
+  nodeRadius: number,
+  labelScale = 1
 ): { agents: AgentMapLineagePosition[]; radius: number } | null {
   const sorted = [...cards].sort((a, b) => compareStable(a.paneKey, b.paneKey))
+  if (sorted.length === 0) {
+    return null
+  }
   const cardsByPaneKey = new Map(sorted.map((card) => [card.paneKey, card]))
   const childrenByParent = new Map<string, DashboardCard[]>()
   const childPaneKeys = new Set<string>()
@@ -186,10 +231,16 @@ export function layoutAgentMapLineage(
     childrenByParent.set(parentPaneKey, [...(childrenByParent.get(parentPaneKey) ?? []), card])
   }
   if (childPaneKeys.size === 0) {
-    return null
+    const family = encloseFamily(
+      sorted[0].paneKey,
+      agentMapLineageGridPositions(sorted, nodeRadius, labelScale),
+      nodeRadius,
+      labelScale
+    )
+    return { agents: family.agents, radius: Math.max(52, family.radius + WORKTREE_PADDING) }
   }
   if (sorted.length > MAX_EXACT_LINEAGE_AGENTS) {
-    return layoutBoundedLineage(sorted, childrenByParent, childPaneKeys, nodeRadius)
+    return layoutBoundedLineage(sorted, childrenByParent, childPaneKeys, nodeRadius, labelScale)
   }
 
   const emitted = new Set<string>()
@@ -197,23 +248,19 @@ export function layoutAgentMapLineage(
   const families: AgentMapAgentFamily[] = []
   for (const root of roots) {
     if (!emitted.has(root.paneKey)) {
-      families.push(buildFamily(root, childrenByParent, nodeRadius, emitted))
+      families.push(buildFamily(root, childrenByParent, nodeRadius, labelScale, emitted))
     }
   }
   for (const card of sorted) {
     if (!emitted.has(card.paneKey)) {
-      families.push(buildFamily(card, childrenByParent, nodeRadius, emitted))
+      families.push(buildFamily(card, childrenByParent, nodeRadius, labelScale, emitted))
     }
   }
   const packed = packAgentMapWorktrees(families)
   return {
     agents: packed
       .flatMap((family) =>
-        family.agents.map((agent) => ({
-          ...agent,
-          x: family.x + agent.x,
-          y: family.y + agent.y
-        }))
+        family.agents.map((agent) => ({ ...agent, x: family.x + agent.x, y: family.y + agent.y }))
       )
       .sort((a, b) => compareStable(a.card.paneKey, b.card.paneKey)),
     radius: Math.max(

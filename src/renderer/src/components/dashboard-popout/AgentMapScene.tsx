@@ -1,9 +1,11 @@
 import { memo, useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type { DashboardCard, DashboardSpawnAgentArgs } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { agentMapAgentLabelPlacements } from './agent-map-agent-label-layout'
 import type {
   AgentMapAgentNode,
   AgentMapLayout,
@@ -11,9 +13,17 @@ import type {
   AgentMapWorktreeRing
 } from './agent-map-layout'
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
-import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
+import {
+  agentMapProjectLabelBoxes,
+  agentMapProjectLabelFrameWidth,
+  agentMapPriorityWorktreeLabelIds,
+  agentMapUniqueProjectHosts,
+  agentMapVisibleWorktreeLabelBoxes,
+  selectVisibleAgentMapLabels
+} from './agent-map-label-declutter'
 import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
 import type { AgentMapFlareStatus } from './agent-map-node-metadata'
+import { agentName } from './agent-map-node-presentation'
 import { AgentMapWorktreeLabel } from './AgentMapWorktreeLabel'
 import { AgentMapWorktreeRingNode } from './AgentMapWorktreeRingNode'
 import { DashboardHostBadge } from './DashboardHostBadge'
@@ -23,6 +33,7 @@ type AgentMapSceneProps = {
   repoIconsByRepoId?: Record<string, RepoIcon | null>
   zoom: number
   labelScale: number
+  agentLabelScale: number
   mapScale: number
   /** Rings the pointer was pressed in; they stay lit for the whole pan drag. */
   heldProjectId: string | null
@@ -56,6 +67,7 @@ function worktreeLineagePath(parent: AgentMapWorktreeRing, child: AgentMapWorktr
 type VisibleAgentLocation = {
   agent: AgentMapAgentNode
   worktreeId: string
+  exiting: boolean
 }
 
 function agentLineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
@@ -68,6 +80,7 @@ export const AgentMapScene = memo(function AgentMapScene({
   repoIconsByRepoId,
   zoom,
   labelScale,
+  agentLabelScale,
   mapScale,
   heldProjectId,
   heldWorktreeId,
@@ -85,6 +98,8 @@ export const AgentMapScene = memo(function AgentMapScene({
 }: AgentMapSceneProps): React.JSX.Element {
   const [hoveredWorktreeId, setHoveredWorktreeId] = useState<string | null>(null)
   const [focusedWorktreeId, setFocusedWorktreeId] = useState<string | null>(null)
+  const [hoveredAgentPaneKey, setHoveredAgentPaneKey] = useState<string | null>(null)
+  const [focusedAgentPaneKey, setFocusedAgentPaneKey] = useState<string | null>(null)
   const activeWorktreeId = heldWorktreeId ?? hoveredWorktreeId ?? focusedWorktreeId
   const handleLabelHoverChange = useCallback((worktreeId: string, active: boolean): void => {
     setHoveredWorktreeId((current) =>
@@ -96,10 +111,12 @@ export const AgentMapScene = memo(function AgentMapScene({
       active ? worktreeId : current === worktreeId ? null : current
     )
   }, [])
-  const visibleLabels = useMemo(
-    () => selectVisibleAgentMapLabels(layout, labelScale, mapScale),
-    [labelScale, layout, mapScale]
-  )
+  const handleAgentHoverChange = useCallback((paneKey: string, active: boolean): void => {
+    setHoveredAgentPaneKey((current) => (active ? paneKey : current === paneKey ? null : current))
+  }, [])
+  const handleAgentFocusChange = useCallback((paneKey: string, active: boolean): void => {
+    setFocusedAgentPaneKey((current) => (active ? paneKey : current === paneKey ? null : current))
+  }, [])
   const activeWorktree = useMemo(() => {
     if (!activeWorktreeId) {
       return null
@@ -122,24 +139,68 @@ export const AgentMapScene = memo(function AgentMapScene({
           continue
         }
         for (const agent of worktree.agents) {
-          agents.set(agent.card.paneKey, { agent, worktreeId: worktree.id })
+          agents.set(agent.card.paneKey, {
+            agent,
+            worktreeId: worktree.id,
+            exiting:
+              project.motionState === 'exiting' ||
+              worktree.motionState === 'exiting' ||
+              agent.motionState === 'exiting'
+          })
         }
       }
     }
     return agents
   }, [allowAggregation, layout, selectedPaneKey, zoom])
+  const focusedAgentLocation = focusedAgentPaneKey
+    ? visibleAgentsByPaneKey.get(focusedAgentPaneKey)
+    : undefined
+  const hoveredAgentLocation = hoveredAgentPaneKey
+    ? visibleAgentsByPaneKey.get(hoveredAgentPaneKey)
+    : undefined
+  const activeAgentTooltip = [hoveredAgentLocation, focusedAgentLocation].find(
+    (location) => location && !location.exiting
+  )
+  const activeAgentName = activeAgentTooltip ? agentName(activeAgentTooltip.agent.card) : ''
+  const activeAgentTask = activeAgentTooltip?.agent.card.task.trim() ?? ''
+  const projectLabelBoxes = useMemo(
+    () => agentMapProjectLabelBoxes(layout, labelScale, mapScale),
+    [labelScale, layout, mapScale]
+  )
+  const priorityWorktreeIds = useMemo(
+    () => agentMapPriorityWorktreeLabelIds(layout, labelScale, mapScale),
+    [labelScale, layout, mapScale]
+  )
+  const agentLabelObstacles = useMemo(
+    () => [
+      ...projectLabelBoxes,
+      ...agentMapVisibleWorktreeLabelBoxes(layout, labelScale, mapScale, priorityWorktreeIds)
+    ],
+    [labelScale, layout, mapScale, priorityWorktreeIds, projectLabelBoxes]
+  )
+  const agentLabelPlacements = useMemo(
+    () =>
+      agentMapAgentLabelPlacements(
+        [...visibleAgentsByPaneKey.values()].map(({ agent }) => agent),
+        agentLabelScale,
+        agentLabelObstacles
+      ),
+    [agentLabelScale, agentLabelObstacles, visibleAgentsByPaneKey]
+  )
+  const agentLabelBoxes = useMemo(
+    () => [...agentLabelPlacements.values()].map((placement) => placement.bounds),
+    [agentLabelPlacements]
+  )
+  const visibleLabels = useMemo(
+    () => selectVisibleAgentMapLabels(layout, labelScale, mapScale, agentLabelBoxes),
+    [agentLabelBoxes, labelScale, layout, mapScale]
+  )
   return (
     <>
       {layout.projects.map((project) => {
         const worktreesById = new Map(project.worktrees.map((worktree) => [worktree.id, worktree]))
-        const projectLabelHalfWidth = project.radius * mapScale
-        const projectHostsById = new Map<string, AgentMapWorktreeRing>()
-        for (const worktree of project.worktrees) {
-          if (worktree.hostKind === 'ssh' || worktree.hostKind === 'remote') {
-            projectHostsById.set(`${worktree.hostKind}:${worktree.executionHostId ?? ''}`, worktree)
-          }
-        }
-        const projectHosts = [...projectHostsById.values()]
+        const projectLabelWidth = agentMapProjectLabelFrameWidth(project.radius, mapScale)
+        const projectHosts = agentMapUniqueProjectHosts(project)
         const projectCountText = translate(
           'dashboardPopout.map.projectCount',
           '{{agents}} agents · {{workspaces}} workspaces',
@@ -222,6 +283,7 @@ export const AgentMapScene = memo(function AgentMapScene({
                 allowAggregation={allowAggregation}
                 showOrchestrationLinks={showOrchestrationLinks}
                 recentFlareStatuses={recentFlareStatuses}
+                agentLabelPlacements={agentLabelPlacements}
                 launchableAgents={launchableAgentsByWorktreeId?.[worktree.worktreeId]}
                 nodeRefs={nodeRefs}
                 onSelectAgent={onSelectAgent}
@@ -229,6 +291,8 @@ export const AgentMapScene = memo(function AgentMapScene({
                 onOpenWorkspaceContextMenu={onOpenWorkspaceContextMenu}
                 onLabelHoverChange={handleLabelHoverChange}
                 onLabelFocusChange={handleLabelFocusChange}
+                onAgentHoverChange={handleAgentHoverChange}
+                onAgentFocusChange={handleAgentFocusChange}
                 onAgentKeyDown={onAgentKeyDown}
               />
             ))}
@@ -251,9 +315,9 @@ export const AgentMapScene = memo(function AgentMapScene({
             >
               <foreignObject
                 className="agent-map-project-label-frame"
-                x={-projectLabelHalfWidth}
+                x={-projectLabelWidth / 2}
                 y={3}
-                width={projectLabelHalfWidth * 2}
+                width={projectLabelWidth}
                 height={18}
               >
                 <div className="agent-map-project-label">
@@ -299,6 +363,34 @@ export const AgentMapScene = memo(function AgentMapScene({
           />
         </g>
       ) : null}
+      <Tooltip open={Boolean(activeAgentTooltip)}>
+        <TooltipTrigger asChild>
+          <circle
+            data-agent-map-agent-tooltip-anchor=""
+            cx={activeAgentTooltip?.agent.x ?? 0}
+            cy={activeAgentTooltip?.agent.y ?? 0}
+            r={activeAgentTooltip?.agent.radius ?? 0}
+            fill="transparent"
+            pointerEvents="none"
+            focusable="false"
+            aria-hidden="true"
+          />
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="max-w-80 min-w-0 [overflow-wrap:anywhere]"
+        >
+          {activeAgentTooltip ? (
+            <div className="grid min-w-0 gap-1">
+              <span className="font-medium">{activeAgentName}</span>
+              {activeAgentTask && activeAgentTask !== activeAgentName ? (
+                <span className="text-background/70">{activeAgentTask}</span>
+              ) : null}
+            </div>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
     </>
   )
 })

@@ -1,4 +1,5 @@
 import type { DashboardAgentRow } from './useDashboardData'
+import { isCurrentOrchestrationPaneLineage } from '@/lib/agent-row-primary-text'
 import { buildAgentRowLineageTree } from './agent-row-lineage-model'
 
 export type AgentRowLineagePresentation = {
@@ -73,6 +74,9 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
 }
 
 export function dashboardCardParentPaneKey(row: DashboardAgentRowWithLineage): string | undefined {
+  if (!isCurrentOrchestrationPaneLineage(row.entry)) {
+    return undefined
+  }
   const directParentPaneKey = row.entry.orchestration?.parentPaneKey
   return (
     row.lineage.parentPaneKey ??

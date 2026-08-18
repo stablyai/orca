@@ -87,6 +87,7 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
     leafId: 'l1',
     repoName: 'Repo',
     worktreeName: 'wt',
+    conversationNameExplicit: true,
     startedAt: 0,
     finishedAt: null,
     stateChangedAt: 0,

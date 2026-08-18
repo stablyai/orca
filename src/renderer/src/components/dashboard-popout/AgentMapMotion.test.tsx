@@ -5,7 +5,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { Profiler } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
-import { AgentMap } from './AgentMap'
+import { AgentMapTestRoot } from './agent-map-render-test-harness'
 import { AGENT_MAP_ENTER_DURATION_MS, AGENT_MAP_EXIT_DURATION_MS } from './useAgentMapMotionLayout'
 
 const NOW = 2_000_000_000
@@ -25,6 +25,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     repoName: 'Orca',
     worktreeName: 'Agent map',
     conversationName: 'Agent alpha',
+    conversationNameExplicit: true,
     startedAt: NOW - 60_000,
     finishedAt: null,
     stateChangedAt: NOW - 1_000,
@@ -62,7 +63,7 @@ describe('Agent Map motion lifecycle', () => {
   })
 
   it('keeps agent positioning separate from the animated hover visual', () => {
-    render(<AgentMap cards={[card()]} now={NOW} onOpenTerminal={vi.fn()} />)
+    render(<AgentMapTestRoot cards={[card()]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     const agent = screen.getByRole('button', { name: /Agent alpha/ })
     expect(agent).toHaveAttribute('transform', expect.stringMatching(/^translate\(/))
@@ -78,17 +79,17 @@ describe('Agent Map motion lifecycle', () => {
       leafId: 'leaf-2',
       conversationName: 'Agent beta'
     })
-    const view = render(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const view = render(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     vi.useFakeTimers()
-    view.rerender(<AgentMap cards={[first, added]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first, added]} now={NOW} onOpenTerminal={vi.fn()} />)
     const entering = screen.getByRole('button', { name: /Agent beta/ })
     const position = entering.getAttribute('transform')
     expect(entering).toHaveClass('is-entering')
     act(() => vi.advanceTimersByTime(AGENT_MAP_ENTER_DURATION_MS))
     expect(entering).not.toHaveClass('is-entering')
 
-    view.rerender(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
     const exiting = view.container.querySelector<SVGGElement>('[aria-label^="Agent beta,"]')
     expect(exiting).toHaveClass('is-exiting')
     expect(exiting).toHaveAttribute('transform', position)
@@ -108,10 +109,10 @@ describe('Agent Map motion lifecycle', () => {
       worktreeName: 'Motion branch',
       conversationName: 'Agent beta'
     })
-    const view = render(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const view = render(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     vi.useFakeTimers()
-    view.rerender(<AgentMap cards={[first, second]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first, second]} now={NOW} onOpenTerminal={vi.fn()} />)
     const enteringGroup = view.container
       .querySelector('[aria-label="Open Motion branch worktree details"]')
       ?.closest('.agent-map-worktree-group')
@@ -119,7 +120,7 @@ describe('Agent Map motion lifecycle', () => {
     act(() => vi.advanceTimersByTime(AGENT_MAP_ENTER_DURATION_MS))
     expect(enteringGroup).not.toHaveClass('is-entering')
 
-    view.rerender(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
     const ring = view.container.querySelector<SVGCircleElement>(
       '[aria-label="Open Motion branch worktree details"]'
     )
@@ -139,14 +140,16 @@ describe('Agent Map motion lifecycle', () => {
   it('does not restart an exit deadline for metadata-only layout updates', async () => {
     const first = card()
     const removed = card({ paneKey: 'pane-2', conversationName: 'Agent beta' })
-    const view = render(<AgentMap cards={[first, removed]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const view = render(
+      <AgentMapTestRoot cards={[first, removed]} now={NOW} onOpenTerminal={vi.fn()} />
+    )
 
     vi.useFakeTimers()
-    view.rerender(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
     await act(async () => {
       vi.advanceTimersByTime(AGENT_MAP_EXIT_DURATION_MS - 10)
     })
-    view.rerender(<AgentMap cards={[first]} now={NOW + 30_000} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first]} now={NOW + 30_000} onOpenTerminal={vi.fn()} />)
     await act(async () => {
       vi.advanceTimersByTime(10)
     })
@@ -158,14 +161,14 @@ describe('Agent Map motion lifecycle', () => {
     let commitCount = 0
     const view = render(
       <Profiler id="agent-map" onRender={() => (commitCount += 1)}>
-        <AgentMap cards={[card()]} now={NOW} onOpenTerminal={vi.fn()} />
+        <AgentMapTestRoot cards={[card()]} now={NOW} onOpenTerminal={vi.fn()} />
       </Profiler>
     )
     commitCount = 0
 
     view.rerender(
       <Profiler id="agent-map" onRender={() => (commitCount += 1)}>
-        <AgentMap cards={[card()]} now={NOW + 30_000} onOpenTerminal={vi.fn()} />
+        <AgentMapTestRoot cards={[card()]} now={NOW + 30_000} onOpenTerminal={vi.fn()} />
       </Profiler>
     )
 
@@ -182,10 +185,12 @@ describe('Agent Map motion lifecycle', () => {
       worktreeName: 'Removed branch',
       conversationName: 'Agent beta'
     })
-    const view = render(<AgentMap cards={[first, removed]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const view = render(
+      <AgentMapTestRoot cards={[first, removed]} now={NOW} onOpenTerminal={vi.fn()} />
+    )
 
     vi.useFakeTimers()
-    view.rerender(<AgentMap cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[first]} now={NOW} onOpenTerminal={vi.fn()} />)
     const exitingProject = view.container.querySelector('.agent-map-project-node.is-exiting')
     const exitingAgent = exitingProject?.querySelector('[data-agent-map-agent]')
 

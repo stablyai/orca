@@ -7,6 +7,10 @@ import {
 
 const GOLDEN_ANGLE = 2.399963229728653
 
+export function fallbackAgentMapWorktreeRadius(agentCount: number, agentRadius: number): number {
+  return Math.max(52, 24 + Math.ceil(Math.sqrt(Math.max(1, agentCount))) * (agentRadius + 8))
+}
+
 function stableHash(value: string): number {
   let hash = 2166136261
   for (let index = 0; index < value.length; index += 1) {

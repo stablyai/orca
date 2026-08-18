@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_DISPATCH_PREAMBLE_PREFIX } from '@/lib/agent-row-primary-text'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -51,6 +52,10 @@ const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
 const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
+
+function dispatchPrompt(taskId: string): string {
+  return `${ORCA_DISPATCH_PREAMBLE_PREFIX}\nYour task ID is: ${taskId}\n=== TASK ===\nCurrent task`
+}
 
 function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
   return {
@@ -205,18 +210,26 @@ describe('buildDashboardSnapshot', () => {
       baseState({
         agentStatusByPaneKey: {
           [PANE_KEY]: entry({ paneKey: PANE_KEY }),
-          [CHILD_PANE_KEY]: entry({ paneKey: CHILD_PANE_KEY }),
-          [GRANDCHILD_PANE_KEY]: entry({ paneKey: GRANDCHILD_PANE_KEY })
+          [CHILD_PANE_KEY]: entry({
+            paneKey: CHILD_PANE_KEY,
+            prompt: dispatchPrompt('worker-task')
+          }),
+          [GRANDCHILD_PANE_KEY]: entry({
+            paneKey: GRANDCHILD_PANE_KEY,
+            prompt: dispatchPrompt('nested-worker-task')
+          })
         },
         runtimeAgentOrchestrationByPaneKey: {
           [CHILD_PANE_KEY]: {
             taskId: 'worker-task',
             dispatchId: 'worker-dispatch',
+            dispatchStatus: 'dispatched',
             parentPaneKey: PANE_KEY
           },
           [GRANDCHILD_PANE_KEY]: {
             taskId: 'nested-worker-task',
             dispatchId: 'nested-worker-dispatch',
+            dispatchStatus: 'dispatched',
             parentPaneKey: CHILD_PANE_KEY
           }
         },
@@ -267,9 +280,11 @@ describe('buildDashboardSnapshot', () => {
             paneKey: childPaneKey,
             tabId: childTabId,
             worktreeId: 'w2',
+            prompt: dispatchPrompt('child-task'),
             orchestration: {
               taskId: 'child-task',
               dispatchId: 'child-dispatch',
+              dispatchStatus: 'dispatched',
               parentPaneKey: PANE_KEY
             }
           })
@@ -304,9 +319,11 @@ describe('buildDashboardSnapshot', () => {
       baseState({
         agentStatusByPaneKey: {
           [PANE_KEY]: entry({
+            prompt: dispatchPrompt('self-task'),
             orchestration: {
               taskId: 'self-task',
               dispatchId: 'self-dispatch',
+              dispatchStatus: 'dispatched',
               parentPaneKey: PANE_KEY
             }
           })
@@ -326,7 +343,10 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
-    expect(named.cards[0].conversationName).toBe('Sparse-checkout parser')
+    expect(named.cards[0]).toMatchObject({
+      conversationName: 'Sparse-checkout parser',
+      conversationNameExplicit: true
+    })
 
     // The fixture tab's title is the 'agent' placeholder — not a name.
     const unnamed = buildDashboardSnapshot(
@@ -334,6 +354,7 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     expect(unnamed.cards[0].conversationName).toBeUndefined()
+    expect(unnamed.cards[0].conversationNameExplicit).toBe(false)
   })
 
   // Why: `orca terminal rename --title` is unbounded, and the main-process
@@ -381,7 +402,10 @@ describe('buildDashboardSnapshot', () => {
       } as unknown as Partial<DashboardSnapshotState>),
       NOW
     )
-    expect(on.cards[0].conversationName).toBe('Fix the flaky pty test')
+    expect(on.cards[0]).toMatchObject({
+      conversationName: 'Fix the flaky pty test',
+      conversationNameExplicit: false
+    })
   })
 
   it('ships one icon per card-bearing repo, and none for repos without cards', () => {
@@ -678,13 +702,16 @@ describe('buildDashboardSnapshot', () => {
           w2: [tab('tab2', 'w2')]
         },
         agentStatusByPaneKey: {
-          [PANE_KEY]: entry({})
+          [PANE_KEY]: entry({
+            prompt: `${ORCA_DISPATCH_PREAMBLE_PREFIX}\nYour task ID is: task-1\n=== TASK ===\ndo the thing`
+          })
         },
         runtimeAgentOrchestrationByPaneKey: {
           [PANE_KEY]: {
             taskId: 'task-1',
             dispatchId: 'dispatch-1',
-            taskTitle: 'Batched orchestration task'
+            taskTitle: 'Batched orchestration task',
+            displayName: 'Readable worker identity'
           }
         }
       }),
@@ -692,7 +719,10 @@ describe('buildDashboardSnapshot', () => {
     )
 
     expect(snapshot.cards).toHaveLength(1)
-    expect(snapshot.cards[0].task).toBe('Batched orchestration task')
+    expect(snapshot.cards[0]).toMatchObject({
+      task: 'Batched orchestration task',
+      orchestrationDisplayName: 'Readable worker identity'
+    })
   })
 
   it('releases stale batch references when production moves from multi to singleton to zero', () => {

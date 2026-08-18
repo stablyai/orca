@@ -10,13 +10,23 @@ type ProjectCircle = {
   clusterParentId?: string
 }
 
-function placeUnlinkedProjects<T extends ProjectCircle>(projects: T[]): T[] {
-  let cursorX = 0
-  return projects.map((project) => {
-    const positioned = { ...project, x: cursorX + project.radius, y: 0 }
-    cursorX += project.radius * 2 + PROJECT_GAP
-    return positioned
-  })
+function placeUnlinkedProjects<T extends ProjectCircle>(projects: T[], aspect: number): T[] {
+  if (projects.length <= 2) {
+    let cursorX = 0
+    return projects.map((project) => {
+      const positioned = { ...project, x: cursorX + project.radius, y: 0 }
+      cursorX += project.radius * 2 + PROJECT_GAP
+      return positioned
+    })
+  }
+  const radius = Math.max(...projects.map((project) => project.radius))
+  const cellSize = radius * 2 + PROJECT_GAP
+  const columns = Math.ceil(Math.sqrt(projects.length * aspect))
+  return projects.map((project, index) => ({
+    ...project,
+    x: (index % columns) * cellSize + radius,
+    y: Math.floor(index / columns) * cellSize + radius
+  }))
 }
 
 export function placeAgentMapProjects<T extends ProjectCircle>(
@@ -27,7 +37,7 @@ export function placeAgentMapProjects<T extends ProjectCircle>(
 ): { projects: T[]; width: number; height: number } {
   const positioned = projects.some((project) => project.clusterParentId)
     ? layoutAgentMapWorktreeLineage(projects)
-    : placeUnlinkedProjects(projects)
+    : placeUnlinkedProjects(projects, minimumWidth / minimumHeight)
   const left = Math.min(...positioned.map((project) => project.x - project.radius))
   const right = Math.max(...positioned.map((project) => project.x + project.radius))
   const top = Math.min(...positioned.map((project) => project.y - project.radius))

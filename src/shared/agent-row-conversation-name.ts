@@ -106,6 +106,44 @@ function conversationNameFromLiveTitle(
   return stripped
 }
 
+export type AgentRowConversationNameResolution = {
+  name: string
+  explicit: boolean
+}
+
+export function resolveAgentRowConversationName(
+  tab: ConversationNameTab,
+  agentType: AgentType | null | undefined,
+  generatedTitlesEnabled: boolean
+): AgentRowConversationNameResolution | null {
+  const customTitle = tab.customTitle?.trim()
+  if (customTitle) {
+    return { name: customTitle, explicit: true }
+  }
+  const quickCommandLabel = tab.quickCommandLabel?.trim()
+  if (quickCommandLabel) {
+    return { name: quickCommandLabel, explicit: false }
+  }
+  const liveTitle = tab.title?.trim() ?? ''
+  if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
+    return { name: liveTitle, explicit: false }
+  }
+  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
+  if (generatedTitle) {
+    return { name: generatedTitle, explicit: false }
+  }
+  if (!liveTitle) {
+    return null
+  }
+  const name = conversationNameFromLiveTitle(
+    liveTitle,
+    agentType,
+    formatAgentTypeLabel(agentType).toLowerCase(),
+    tab.defaultTitle
+  )
+  return name ? { name, explicit: false } : null
+}
+
 /**
  * The conversation name for an agent row, or null when no usable name exists
  * and the caller should keep its last-message label.
@@ -115,29 +153,5 @@ export function getAgentRowConversationName(
   agentType: AgentType | null | undefined,
   generatedTitlesEnabled: boolean
 ): string | null {
-  const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
-    return customTitle
-  }
-  const quickCommandLabel = tab.quickCommandLabel?.trim()
-  if (quickCommandLabel) {
-    return quickCommandLabel
-  }
-  const liveTitle = tab.title?.trim() ?? ''
-  if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
-    return liveTitle
-  }
-  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
-  if (generatedTitle) {
-    return generatedTitle
-  }
-  if (!liveTitle) {
-    return null
-  }
-  return conversationNameFromLiveTitle(
-    liveTitle,
-    agentType,
-    formatAgentTypeLabel(agentType).toLowerCase(),
-    tab.defaultTitle
-  )
+  return resolveAgentRowConversationName(tab, agentType, generatedTitlesEnabled)?.name ?? null
 }

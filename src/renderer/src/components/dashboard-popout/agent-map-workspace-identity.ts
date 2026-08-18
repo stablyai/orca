@@ -1,10 +1,12 @@
 import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
+import { agentName } from './agent-map-agent-name'
 
 export function agentMapCardTopologyIdentity(card: DashboardCard): string {
   const parentPaneKey = card.parentPaneKey ?? ''
   const parentWorktreeId = card.parentWorktreeId ?? ''
   const executionHostId = card.executionHostId ?? ''
-  return `${card.repoId.length}:${card.repoId}${card.worktreeId.length}:${card.worktreeId}${executionHostId.length}:${executionHostId}${card.paneKey.length}:${card.paneKey}${parentPaneKey.length}:${parentPaneKey}${parentWorktreeId.length}:${parentWorktreeId}`
+  const name = agentName(card)
+  return `${card.repoId.length}:${card.repoId}${card.worktreeId.length}:${card.worktreeId}${executionHostId.length}:${executionHostId}${card.paneKey.length}:${card.paneKey}${parentPaneKey.length}:${parentPaneKey}${parentWorktreeId.length}:${parentWorktreeId}${name.length}:${name}`
 }
 
 export function agentMapWorkspaceTopologyIdentity(workspace: DashboardWorkspace): string {

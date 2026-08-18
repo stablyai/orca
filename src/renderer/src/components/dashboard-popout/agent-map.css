@@ -400,6 +400,46 @@
   color: var(--foreground);
 }
 
+.agent-map-agent-label-group,
+.agent-map-agent-label-frame {
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.agent-map-agent-label {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 5px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--radius-sm);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.agent-map-agent-name {
+  display: -webkit-box;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+}
+
+.agent-map-agent-node:hover .agent-map-agent-label,
+.agent-map-agent-node:focus-visible .agent-map-agent-label,
+.agent-map-agent-node.is-selected .agent-map-agent-label {
+  border-color: var(--ring);
+}
+
 .agent-map-agent-node:hover .agent-map-agent-hit,
 .agent-map-agent-node:focus-visible .agent-map-agent-hit {
   fill: color-mix(in srgb, var(--ring) 10%, transparent);

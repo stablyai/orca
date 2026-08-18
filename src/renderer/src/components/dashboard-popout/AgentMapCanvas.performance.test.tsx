@@ -13,7 +13,7 @@ vi.mock('./AgentMapWorktreeRingNode', () => ({
   }
 }))
 
-import { AgentMap } from './AgentMap'
+import { AgentMapTestRoot } from './agent-map-render-test-harness'
 
 const NOW = 2_000_000_000
 const CARD: DashboardCard = {
@@ -66,14 +66,18 @@ describe('AgentMapCanvas pointer performance', () => {
   })
 
   it('presents the map as a non-selectable panning surface', () => {
-    const { container } = render(<AgentMap cards={[CARD]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const { container } = render(
+      <AgentMapTestRoot cards={[CARD]} now={NOW} onOpenTerminal={vi.fn()} />
+    )
     const svg = container.querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
 
     expect(svg).toHaveClass('cursor-grab', 'touch-none', 'select-none', 'active:cursor-grabbing')
   })
 
   it('coalesces drag frames without rerendering worktree nodes', () => {
-    const { container } = render(<AgentMap cards={[CARD]} now={NOW} onOpenTerminal={vi.fn()} />)
+    const { container } = render(
+      <AgentMapTestRoot cards={[CARD]} now={NOW} onOpenTerminal={vi.fn()} />
+    )
     const svg = container.querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
     Object.assign(svg, {
       setPointerCapture: vi.fn(),

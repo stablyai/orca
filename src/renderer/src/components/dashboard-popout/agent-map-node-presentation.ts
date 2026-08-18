@@ -1,9 +1,11 @@
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
-import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import { agentName } from './agent-map-agent-name'
 import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
 import type { AgentMapAgentNode } from './agent-map-layout'
 import type { AgentMapNodeStatus } from './agent-map-node-metadata'
+
+export { agentName }
 
 /** Lives here, not in `agent-map-node-metadata`: `agentStateLabel` drags in React and
  *  lucide-react, and that module is on the layout and filter paths, which must stay
@@ -30,12 +32,25 @@ export function formatDuration(minutes: number): string {
   })
 }
 
-export function lineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
-  return agentMapDirectLineageChevronPath(parent, child)
+export function agentMapAgentAriaLabel(
+  agent: AgentMapAgentNode,
+  worktreeName: string,
+  projectName: string
+): string {
+  const name = agentName(agent.card)
+  const task = agent.card.task.trim()
+  const unread = agent.card.unseen
+    ? translate('dashboardPopout.map.agentUnreadDetail', ', unread')
+    : ''
+  const taskDetail =
+    task && task !== name
+      ? translate('dashboardPopout.map.agentTaskDetail', ', task: {{task}}', { task })
+      : ''
+  return `${name}, ${agentMapStatusLabel(agent.status)}${unread}, ${formatDuration(agent.durationMinutes)}${taskDetail}, ${worktreeName}, ${projectName}`
 }
 
-export function agentName(card: DashboardCard): string {
-  return card.conversationName ?? (card.task.trim() || card.agentType)
+export function lineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
+  return agentMapDirectLineageChevronPath(parent, child)
 }
 
 export function agentMapAttentionMarkerScale(mapScale: number): number {

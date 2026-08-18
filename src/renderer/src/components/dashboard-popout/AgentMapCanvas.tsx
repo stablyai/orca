@@ -19,7 +19,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentMapAgentNode, AgentMapProjectRing, AgentMapLayout } from './agent-map-layout'
 import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import { AgentMapScene } from './AgentMapScene'
-import { agentFocusZoom, clamp, MAX_ZOOM, MIN_ZOOM } from './agent-map-canvas-zoom'
+import * as mapZoom from './agent-map-canvas-zoom'
 import { AgentMapViewportControls } from './AgentMapViewportControls'
 import {
   agentMapAgents,
@@ -29,6 +29,7 @@ import {
 import type { AgentMapViewport } from './agent-map-viewport-transition'
 import { useAgentMapContextMenus } from './useAgentMapContextMenus'
 import { useAgentMapCanvasSize } from './useAgentMapCanvasSize'
+import { useAgentMapFitGeometry } from './useAgentMapFitGeometry'
 import { useAgentMapPointerHold } from './useAgentMapPointerHold'
 import { useAgentMapMotionLayout } from './useAgentMapMotionLayout'
 import { useAgentMapSelectedFocus } from './useAgentMapSelectedFocus'
@@ -114,22 +115,19 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       () => navigableAgentMapAgents(layout, zoom, allowAggregation, selectedPaneKey),
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
-    const hasProjects = layout.projects.length > 0
-    const aspect = size.width / Math.max(1, size.height)
-    const baseWidth = Math.max(layout.width, layout.height * aspect)
+    const aspect = Math.max(1, size.width) / Math.max(1, size.height)
+    const { baseWidth, resolveFocusViewport } = useAgentMapFitGeometry(
+      layout,
+      size.width,
+      size.height,
+      allowAggregation,
+      selectedPaneKey
+    )
     const baseHeight = baseWidth / aspect
     const viewWidth = baseWidth / zoom
     const viewHeight = baseHeight / zoom
     const mapScale = size.width / viewWidth
-    const labelScale = Math.max(1, 1 / mapScale)
     const viewBox = `${center.x - viewWidth / 2} ${center.y - viewHeight / 2} ${viewWidth} ${viewHeight}`
-    const focusZoom = agentFocusZoom(layout, size.width, size.height)
-    const resolveFocusZoom = useCallback((): number => {
-      const bounds = containerRef.current?.getBoundingClientRect()
-      return bounds && bounds.width > 0 && bounds.height > 0
-        ? agentFocusZoom(layout, bounds.width, bounds.height)
-        : focusZoom
-    }, [focusZoom, layout])
 
     const commitViewport = useCallback((next: AgentMapViewport): void => {
       viewportRef.current = next
@@ -147,7 +145,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       agents,
       selectedPaneKey,
       viewportRef,
-      resolveFocusZoom,
+      resolveFocusViewport,
       animateViewport,
       stopViewportTransition
     })
@@ -187,10 +185,10 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
         const projectHeight = project.radius * 2.5
         applyViewport({
           center: { x: project.x, y: project.y },
-          zoom: clamp(
+          zoom: mapZoom.clamp(
             Math.min(baseWidth / projectWidth, baseHeight / projectHeight),
-            MIN_ZOOM,
-            MAX_ZOOM
+            mapZoom.MIN_ZOOM,
+            mapZoom.MAX_ZOOM
           )
         })
       },
@@ -199,11 +197,11 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     useImperativeHandle(forwardedRef, () => ({ fit, focusProject }), [fit, focusProject])
 
     useEffect(() => {
-      if (hasProjects && !hasShownProjectsRef.current) {
+      if (layout.projects.length > 0 && !hasShownProjectsRef.current) {
         hasShownProjectsRef.current = true
         fit()
       }
-    }, [fit, hasProjects])
+    }, [fit, layout.projects.length])
 
     useEffect(
       () => () => {
@@ -243,7 +241,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
 
     const zoomAt = useCallback(
       (nextZoom: number, clientX?: number, clientY?: number): void => {
-        const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+        const clampedZoom = mapZoom.clamp(nextZoom, mapZoom.MIN_ZOOM, mapZoom.MAX_ZOOM)
         if (clientX === undefined || clientY === undefined) {
           applyViewport({ ...viewportRef.current, zoom: clampedZoom })
           return
@@ -282,7 +280,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     )
 
     useEffect(() => {
-      if (!hasProjects) {
+      if (layout.projects.length === 0) {
         return
       }
       const svg = svgRef.current
@@ -299,7 +297,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       }
       svg.addEventListener('wheel', handleWheel, { passive: false })
       return () => svg.removeEventListener('wheel', handleWheel)
-    }, [hasProjects, zoomAt])
+    }, [layout.projects.length, zoomAt])
 
     return (
       <div ref={containerRef} className="agent-map-canvas relative min-h-0 flex-1 overflow-hidden">
@@ -380,7 +378,8 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               layout={motionLayout}
               repoIconsByRepoId={repoIconsByRepoId}
               zoom={zoom}
-              labelScale={labelScale}
+              labelScale={Math.max(1, 1 / mapScale)}
+              agentLabelScale={mapZoom.agentMapAgentLabelScale(mapScale)}
               mapScale={mapScale}
               heldProjectId={held?.projectId ?? null}
               heldWorktreeId={held?.worktreeId ?? null}

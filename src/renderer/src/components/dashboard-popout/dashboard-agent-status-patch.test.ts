@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import { ORCA_DISPATCH_PREAMBLE_PREFIX } from '@/lib/agent-row-primary-text'
+import { deriveAgentMapLayout } from './agent-map-layout'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -43,6 +45,10 @@ function snapshot(cards: DashboardCard[] = [card()]): DashboardSnapshot {
   return { generatedAt: 200, cards }
 }
 
+function dispatchPrompt(taskId: string, task: string): string {
+  return `${ORCA_DISPATCH_PREAMBLE_PREFIX}\nYour task ID is: ${taskId}\n=== TASK ===\n${task}`
+}
+
 describe('patchDashboardSnapshotFromAgentStatus', () => {
   it('patches one known card without rebuilding the dashboard topology', () => {
     const original = snapshot([card(), card({ paneKey: 'tab-2:leaf-2' })])
@@ -60,6 +66,215 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
       unseen: true
     })
     expect(result.snapshot.cards[1]).toBe(original.cards[1])
+  })
+
+  it('patches matching orchestration identity separately from task text', () => {
+    const prompt = dispatchPrompt('task-1', 'Raw dispatched task')
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({
+        prompt,
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          displayName: 'Readable worker name',
+          taskTitle: 'Readable task title',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0]).toMatchObject({
+      task: 'Readable task title',
+      orchestrationDisplayName: 'Readable worker name',
+      lastUserMessage: prompt,
+      parentPaneKey: 'tab-parent:leaf-parent'
+    })
+  })
+
+  it('keeps active pane lineage on hook pings that omit the cached prompt', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: dispatchPrompt('task-1', 'Current task') })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('keeps a fresh active direct parent before the prompt cache arrives', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('clears active lineage when an empty ping follows a standalone cached turn', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: 'Standalone task' })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          dispatchStatus: 'dispatched',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBeUndefined()
+  })
+
+  it('keeps mixed-version lineage from the matching cached dispatch prompt', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ lastUserMessage: dispatchPrompt('task-1', 'Current task') })]),
+      event({
+        prompt: '',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('accepts matching mixed-version lineage when dispatch status is omitted', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({
+        prompt: dispatchPrompt('task-1', 'Current task'),
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBe('tab-parent:leaf-parent')
+  })
+
+  it('clears stale task and identity when a legacy dispatch has no task body', () => {
+    const prompt = `${ORCA_DISPATCH_PREAMBLE_PREFIX}\nYour task ID is: legacy-task`
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ orchestrationDisplayName: 'old identity' })]),
+      event({ prompt })
+    )
+
+    expect(result.snapshot.cards[0]).toMatchObject({
+      task: '',
+      lastUserMessage: prompt
+    })
+    expect(result.snapshot.cards[0].orchestrationDisplayName).toBeUndefined()
+  })
+
+  it.each([
+    ['working', 'Standalone task'],
+    ['done', 'Standalone task'],
+    ['working', dispatchPrompt('task-new', 'New dispatched task')],
+    ['done', dispatchPrompt('task-old', 'Settled dispatched task')]
+  ] as const)('clears stale settled pane lineage from a reused %s turn', (state, prompt) => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([
+        card({
+          parentPaneKey: 'tab-parent:leaf-parent',
+          parentWorktreeId: 'parent-worktree'
+        })
+      ]),
+      event({
+        state,
+        prompt,
+        orchestration: {
+          taskId: 'task-old',
+          dispatchId: 'dispatch-old',
+          dispatchStatus: 'completed',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.cards[0].parentPaneKey).toBeUndefined()
+    expect(result.snapshot.cards[0].parentWorktreeId).toBe('parent-worktree')
+  })
+
+  it('keeps card-only workspace lineage after clearing stale pane lineage', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([
+        card({
+          paneKey: 'tab-parent:leaf-parent',
+          worktreeId: 'parent-worktree',
+          worktreeName: 'Parent worktree'
+        }),
+        card({
+          paneKey: 'tab-child:leaf-child',
+          worktreeId: 'child-worktree',
+          worktreeName: 'Child worktree',
+          parentPaneKey: 'tab-parent:leaf-parent',
+          parentWorktreeId: 'parent-worktree'
+        })
+      ]),
+      event({
+        paneKey: 'tab-child:leaf-child',
+        state: 'working',
+        prompt: 'Standalone task',
+        orchestration: {
+          taskId: 'task-old',
+          dispatchId: 'dispatch-old',
+          dispatchStatus: 'completed',
+          parentPaneKey: 'tab-parent:leaf-parent'
+        }
+      })
+    )
+
+    expect(result.snapshot.workspaces).toBeUndefined()
+    const project = deriveAgentMapLayout(result.snapshot.cards, 400).projects[0]
+    const parent = project.worktrees.find((worktree) => worktree.worktreeId === 'parent-worktree')!
+    const child = project.worktrees.find((worktree) => worktree.worktreeId === 'child-worktree')!
+    expect(child.parentId).toBe(parent.id)
+    expect(child.y).toBeGreaterThan(parent.y)
+  })
+
+  it('clears standalone completed pane grouping but preserves workspace lineage', () => {
+    const completed = patchDashboardSnapshotFromAgentStatus(
+      snapshot([
+        card({
+          parentPaneKey: 'tab-parent:leaf-parent',
+          parentWorktreeId: 'parent-worktree'
+        })
+      ]),
+      event({ state: 'done', orchestration: undefined })
+    ).snapshot.cards[0]
+    const working = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({ state: 'working', orchestration: undefined })
+    ).snapshot.cards[0]
+
+    expect(completed.parentPaneKey).toBeUndefined()
+    expect(completed.parentWorktreeId).toBe('parent-worktree')
+    expect(working.parentPaneKey).toBeUndefined()
+    expect(working.parentWorktreeId).toBeUndefined()
   })
 
   it('preserves cached fields omitted from same-state hook pings', () => {

@@ -1,15 +1,19 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentMap } from './AgentMap'
 import { agentMapAttentionMarkerScale } from './agent-map-node-presentation'
 import type { AgentMapState } from './agent-map-filter'
 import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
 import { AGENT_MAP_AGENT_RADIUS } from './agent-map-layout'
-import { card, installAgentMapEnvironment, NOW, renderMap } from './agent-map-render-test-harness'
+import {
+  AgentMapTestRoot,
+  card,
+  installAgentMapEnvironment,
+  NOW,
+  renderMap
+} from './agent-map-render-test-harness'
 
 describe('AgentMap', () => {
   const environment = installAgentMapEnvironment()
@@ -43,6 +47,104 @@ describe('AgentMap', () => {
     )
     expect(unreadMarker).toHaveAttribute('vector-effect', 'none')
     expect(doneNode).toHaveAccessibleName(/unread/)
+  })
+
+  it('shows agent names below icons without task sentences or generic role labels', async () => {
+    const task = 'Run final adversarial regression review'
+    const parent = card({ paneKey: 'parent', orchestrationDisplayName: 'Coordinator', task })
+    const child = card({
+      paneKey: 'child',
+      parentPaneKey: 'parent',
+      orchestrationDisplayName: 'Reviewer',
+      task
+    })
+    const { container } = renderMap([parent, child])
+
+    const labels = container.querySelectorAll('[data-agent-map-agent-label]')
+    const parentLabel = container.querySelector(
+      '[data-agent-map-agent][aria-label^="Coordinator"] [data-agent-map-agent-label]'
+    )
+    const childLabel = container.querySelector(
+      '[data-agent-map-agent][aria-label^="Reviewer"] [data-agent-map-agent-label]'
+    )
+
+    expect(labels).toHaveLength(2)
+    expect(parentLabel).toHaveTextContent('Coordinator')
+    expect(childLabel).toHaveTextContent('Reviewer')
+    expect(childLabel).not.toHaveTextContent('Subagent')
+    expect(childLabel).not.toHaveTextContent(task)
+
+    const childNode = screen.getByRole('button', { name: /^Reviewer,/ })
+    expect(childNode).toHaveAccessibleName(new RegExp(task))
+    fireEvent.focus(childNode)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent('Reviewer')
+    expect(tooltip).toHaveTextContent(task)
+  })
+
+  it('contains maximum-length unbroken tooltip text', async () => {
+    const conversationName = 'n'.repeat(1024)
+    const task = 't'.repeat(1024)
+    const { container } = renderMap([card({ conversationName, task })])
+
+    fireEvent.focus(container.querySelector('[data-agent-map-agent]')!)
+    const tooltip = await screen.findByRole('tooltip')
+    const content = tooltip.closest('[data-slot="tooltip-content"]')
+
+    expect(content).toHaveClass('max-w-80', 'min-w-0', '[overflow-wrap:anywhere]')
+    expect(content?.querySelector('.grid')).toHaveClass('min-w-0')
+    expect(tooltip).toHaveTextContent(conversationName)
+    expect(tooltip).toHaveTextContent(task)
+  })
+
+  it('shows the shared agent tooltip on pointer hover', async () => {
+    renderMap([card()])
+    const node = screen.getByRole('button', { name: /Agent alpha/ })
+
+    fireEvent.pointerEnter(node)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Agent alpha')
+    expect(node).toHaveAccessibleName(/Agent alpha, Working/)
+
+    fireEvent.pointerLeave(node)
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+  })
+
+  it('lets pointer hover temporarily override the focused agent tooltip', async () => {
+    const { container } = renderMap([
+      card({ paneKey: 'agent-a', conversationName: 'Agent A' }),
+      card({ paneKey: 'agent-b', conversationName: 'Agent B' })
+    ])
+    const agentA = screen.getByRole('button', { name: /^Agent A,/ })
+    const agentB = screen.getByRole('button', { name: /^Agent B,/ })
+
+    fireEvent.focus(agentA)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Agent A')
+    fireEvent.pointerEnter(agentB)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Agent B')
+    fireEvent.pointerLeave(agentB)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Agent A')
+    fireEvent.blur(agentA)
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    expect(container.querySelectorAll('[data-agent-map-agent-tooltip-anchor]')).toHaveLength(1)
+  })
+
+  it('closes the shared tooltip when its active agent starts exiting', async () => {
+    const remaining = card({ paneKey: 'agent-a', conversationName: 'Agent A' })
+    const removed = card({ paneKey: 'agent-b', conversationName: 'Agent B' })
+    const view = renderMap([remaining, removed])
+
+    fireEvent.focus(screen.getByRole('button', { name: /^Agent B,/ }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Agent B')
+    view.rerender(
+      <AgentMapTestRoot
+        cards={[remaining]}
+        now={NOW}
+        onOpenTerminal={vi.fn()}
+        selectedPaneKey={null}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
   })
 
   it('lets attention override working on the worktree glow', () => {
@@ -158,7 +260,7 @@ describe('AgentMap', () => {
     // The popover names the project; the map itself draws it uppercased.
     expect(screen.getByText('Orca')).toBeInTheDocument()
     expect(screen.getByText('1 agent · 1 active · 0 done')).toBeInTheDocument()
-    expect(screen.getByText('Agent alpha')).toBeInTheDocument()
+    expect(screen.getAllByText('Agent alpha')).toHaveLength(2)
     fireEvent.click(screen.getAllByRole('button', { name: /Agent alpha/ })[1])
     expect(onOpenTerminal).toHaveBeenCalledWith(running)
     expect(ring).not.toHaveClass('is-open')
@@ -430,22 +532,20 @@ describe('AgentMap', () => {
 
   it('narrows the map to the enabled hosts', () => {
     render(
-      <TooltipProvider>
-        <AgentMap
-          cards={[
-            card({ paneKey: 'pane-local' }),
-            card({
-              paneKey: 'pane-ssh',
-              worktreeId: 'worktree-2',
-              worktreeName: 'Remote map',
-              hostKind: 'ssh'
-            })
-          ]}
-          now={NOW}
-          enabledHosts={new Set<DashboardCardHostKind>(['ssh'])}
-          onOpenTerminal={vi.fn()}
-        />
-      </TooltipProvider>
+      <AgentMapTestRoot
+        cards={[
+          card({ paneKey: 'pane-local' }),
+          card({
+            paneKey: 'pane-ssh',
+            worktreeId: 'worktree-2',
+            worktreeName: 'Remote map',
+            hostKind: 'ssh'
+          })
+        ]}
+        now={NOW}
+        enabledHosts={new Set<DashboardCardHostKind>(['ssh'])}
+        onOpenTerminal={vi.fn()}
+      />
     )
 
     expect(
@@ -474,7 +574,7 @@ describe('AgentMap', () => {
     const view = renderMap([agent])
 
     view.rerender(
-      <AgentMap
+      <AgentMapTestRoot
         cards={[agent]}
         now={NOW}
         onOpenTerminal={vi.fn()}
@@ -489,7 +589,7 @@ describe('AgentMap', () => {
     expect(screen.getByText('270%')).toBeInTheDocument()
   })
 
-  it('keeps the selected node centered when topology changes around it', () => {
+  it('keeps the selected node and label centered when topology changes around it', () => {
     const selected = card()
     const view = renderMap([selected], { selectedPaneKey: selected.paneKey })
     const svg = view.container.querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
@@ -501,6 +601,21 @@ describe('AgentMap', () => {
         ?.match(/translate\(([^ ]+) ([^)]+)\)/)
       return [Number(match?.[1]), Number(match?.[2])]
     }
+    const focusCenter = (): [number, number] => {
+      const [nodeX, nodeY] = nodeCenter()
+      const group = selectedNode().querySelector<SVGGElement>('.agent-map-agent-label-group')!
+      const scale = Number(group.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1])
+      const label = group.querySelector<SVGForeignObjectElement>('.agent-map-agent-label-frame')!
+      const x = Number(label.getAttribute('x'))
+      const y = Number(label.getAttribute('y'))
+      const width = Number(label.getAttribute('width'))
+      const height = Number(label.getAttribute('height'))
+      const left = Math.min(nodeX - 20, nodeX + x * scale)
+      const right = Math.max(nodeX + 20, nodeX + (x + width) * scale)
+      const top = Math.min(nodeY - 20, nodeY + y * scale)
+      const bottom = Math.max(nodeY + 20, nodeY + (y + height) * scale)
+      return [(left + right) / 2, (top + bottom) / 2]
+    }
     const viewportCenter = (): [number, number] => {
       const [x, y, width, height] = svg.getAttribute('viewBox')!.split(' ').map(Number)
       return [x + width / 2, y + height / 2]
@@ -508,7 +623,7 @@ describe('AgentMap', () => {
 
     const originalNodeCenter = nodeCenter()
     view.rerender(
-      <AgentMap
+      <AgentMapTestRoot
         cards={[
           card({
             paneKey: 'earlier-project',
@@ -525,8 +640,8 @@ describe('AgentMap', () => {
     )
 
     expect(nodeCenter()).not.toEqual(originalNodeCenter)
-    expect(viewportCenter()[0]).toBeCloseTo(nodeCenter()[0])
-    expect(viewportCenter()[1]).toBeCloseTo(nodeCenter()[1])
+    expect(viewportCenter()[0]).toBeCloseTo(focusCenter()[0])
+    expect(viewportCenter()[1]).toBeCloseTo(focusCenter()[1])
   })
 
   it('increases map label scale when users zoom out', () => {
@@ -673,7 +788,7 @@ describe('AgentMap', () => {
 
     const onOpenTerminal = vi.fn()
     view.rerender(
-      <AgentMap
+      <AgentMapTestRoot
         cards={[agent]}
         now={NOW}
         onOpenTerminal={onOpenTerminal}
@@ -682,7 +797,12 @@ describe('AgentMap', () => {
     )
     expect(view.container.querySelector('.agent-map-canvas > svg')).not.toBeInTheDocument()
     view.rerender(
-      <AgentMap cards={[agent]} now={NOW} onOpenTerminal={onOpenTerminal} enabledStates={all} />
+      <AgentMapTestRoot
+        cards={[agent]}
+        now={NOW}
+        onOpenTerminal={onOpenTerminal}
+        enabledStates={all}
+      />
     )
 
     expect(view.container.querySelector('.agent-map-canvas > svg')).toHaveAttribute(
@@ -699,9 +819,9 @@ describe('AgentMap', () => {
       .querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
       .getAttribute('viewBox')
 
-    view.rerender(<AgentMap cards={[]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[]} now={NOW} onOpenTerminal={vi.fn()} />)
     expect(view.container.querySelector('.agent-map-canvas > svg')).not.toBeInTheDocument()
-    view.rerender(<AgentMap cards={[agent]} now={NOW} onOpenTerminal={vi.fn()} />)
+    view.rerender(<AgentMapTestRoot cards={[agent]} now={NOW} onOpenTerminal={vi.fn()} />)
 
     expect(view.container.querySelector('.agent-map-canvas > svg')).toHaveAttribute(
       'viewBox',
@@ -726,7 +846,7 @@ describe('AgentMap', () => {
     expect(container.querySelectorAll('[data-agent-map-agent]')).toHaveLength(5)
     expect(container.querySelectorAll('.agent-map-aggregate-node')).toHaveLength(0)
     view.rerender(
-      <AgentMap
+      <AgentMapTestRoot
         cards={results.map((result) => ({ ...result, unseen: false }))}
         now={NOW}
         onOpenTerminal={vi.fn()}
@@ -736,7 +856,7 @@ describe('AgentMap', () => {
     expect(container.querySelectorAll('.agent-map-aggregate-node')).toHaveLength(1)
 
     view.rerender(
-      <AgentMap
+      <AgentMapTestRoot
         cards={results.map((result) => ({ ...result, unseen: false }))}
         now={NOW}
         selectedPaneKey="done-0"
