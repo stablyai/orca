@@ -34,13 +34,20 @@ export function readHermesStateDb(dbPath: string, sessionId: string): NativeChat
     return null
   }
   try {
+    const columns = db.prepare('PRAGMA table_info(messages)').all()
+    const names = new Set(columns.map((column) => String(column.name)))
+    const optional = (name: string) => (names.has(name) ? name : 'NULL')
+    const sessionColumn = names.has('session_id') ? 'session_id' : 'NULL'
     const rows = db
       .prepare(`
-      SELECT id, role, content, tool_call_id, tool_calls, tool_name,
-             timestamp, reasoning, reasoning_content, reasoning_details
+      SELECT id, role, content, ${optional('tool_call_id')} AS tool_call_id,
+             ${optional('tool_calls')} AS tool_calls, ${optional('tool_name')} AS tool_name,
+             ${optional('timestamp')} AS timestamp, ${optional('reasoning')} AS reasoning,
+             ${optional('reasoning_content')} AS reasoning_content,
+             ${optional('reasoning_details')} AS reasoning_details
         FROM messages
-       WHERE session_id = ? AND active = 1
-       ORDER BY timestamp ASC, id ASC
+       WHERE ${sessionColumn} = ?
+       ORDER BY ${optional('timestamp')} ASC, id ASC
     `)
       .all(sessionId)
     return rows.flatMap((row, index) => {

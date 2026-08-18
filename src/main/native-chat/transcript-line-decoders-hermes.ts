@@ -81,11 +81,15 @@ function decodeFlatToolCall(message: HermesMessageRecord): NativeChatBlock[] {
   if (extractString(message.tool_name) === null || extractString(message.tool_call_id) !== null) {
     return []
   }
+  const calls = parseJsonValue(message.tool_calls)
+  if (Array.isArray(calls)) {
+    return []
+  }
   return [
     {
       type: 'tool-call',
       name: extractString(message.tool_name) ?? 'tool',
-      input: parseJsonValue(message.tool_calls) ?? {}
+      input: calls ?? {}
     }
   ]
 }

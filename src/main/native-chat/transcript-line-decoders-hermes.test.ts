@@ -64,7 +64,6 @@ describe('decodeHermesTranscriptLine', () => {
   })
 
   it('decodes Hermes state.db message columns, including tool calls and results', async () => {
-    const { decodeHermesDatabaseMessage } = await import('./transcript-line-decoders-hermes')
     const message = decodeHermesDatabaseMessage(
       {
         id: 42,
