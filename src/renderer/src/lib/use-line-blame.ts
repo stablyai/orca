@@ -1,4 +1,5 @@
 import React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { resolveBlameTarget } from '@/lib/blame-target'
 import {
@@ -51,16 +52,19 @@ export function useLineBlame(enabled: boolean): {
   // each cursor move. Resolving the owning repo is not free — for a folder
   // workspace it walks project groups and every candidate repo — so a read-only
   // editor or a disabled setting must not pay for it at all.
+  //
+  // Why `useShallow` rather than one selector per field: two selectors each ran
+  // the same resolve, paying that walk twice per store write, per surface.
+  // Shallow-comparing the two strings keeps the render behaviour identical.
   const wanted = enabled && !isDirty && Boolean(filePath && workspaceRelativePath && cursorLine)
-  const rootPath = useAppStore((s) =>
-    wanted && filePath && workspaceRelativePath
-      ? (resolveBlameTarget(s, worktreeId, filePath, workspaceRelativePath)?.rootPath ?? null)
-      : null
-  )
-  const relativePath = useAppStore((s) =>
-    wanted && filePath && workspaceRelativePath
-      ? (resolveBlameTarget(s, worktreeId, filePath, workspaceRelativePath)?.relativePath ?? null)
-      : null
+  const { rootPath, relativePath } = useAppStore(
+    useShallow((s) => {
+      const resolved =
+        wanted && filePath && workspaceRelativePath
+          ? resolveBlameTarget(s, worktreeId, filePath, workspaceRelativePath)
+          : null
+      return { rootPath: resolved?.rootPath ?? null, relativePath: resolved?.relativePath ?? null }
+    })
   )
 
   const target: BlameTarget | null =
@@ -76,12 +80,23 @@ export function useLineBlame(enabled: boolean): {
       : null
   const currentKey = target ? blameKey(target) : null
 
-  // Why: cached authorship is only valid for the file it was read from, and an
-  // edit re-maps every line, so drop it when either changes.
+  // Why only the dirty transition, and why not on mount: an edit re-maps every
+  // line, so authorship read before it is wrong for the same key and has to go.
+  // A *file* change needs no invalidation — `blameKey` already namespaces by
+  // worktree, path, and runtime owner, so another file can never read this one's
+  // entries. Clearing on file change was actively harmful: MonacoEditor is keyed
+  // per pane+path, so it remounts on every tab switch, and this effect then wiped
+  // the whole cross-file cache — measured at a ~2s re-walk each way when alt-
+  // tabbing between two large files, which is the cost the cache exists to avoid.
+  const lastIsDirty = React.useRef(isDirty)
   React.useEffect(() => {
+    if (lastIsDirty.current === isDirty) {
+      return
+    }
+    lastIsDirty.current = isDirty
     clearLineBlameCache()
     setAnswer(null)
-  }, [worktreeId, workspaceRelativePath, isDirty])
+  }, [isDirty])
 
   React.useEffect(() => subscribeToLineBlame(setAnswer), [])
 
@@ -92,8 +107,10 @@ export function useLineBlame(enabled: boolean): {
     const cached = cachedLineBlame(currentKey)
     if (cached) {
       // Why: a line already read this session paints immediately, so revisiting
-      // it doesn't blink through empty and doesn't respawn git.
-      setAnswer({ key: currentKey, result: cached, readAt: Date.now() })
+      // it doesn't blink through empty and doesn't respawn git. Carry the entry's
+      // own `readAt` so the expiry timer below runs on the age of the git read,
+      // not on when this line happened to be revisited.
+      setAnswer({ key: currentKey, result: cached.result, readAt: cached.readAt })
       return
     }
     const timer = setTimeout(() => requestLineBlame(target), BLAME_DEBOUNCE_MS)

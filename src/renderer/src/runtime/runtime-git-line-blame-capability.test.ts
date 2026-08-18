@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GIT_LINE_BLAME_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { GIT_BLAME_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -38,10 +38,7 @@ describe('getRuntimeGitLineBlame capability gate', () => {
       getRuntimeGitLineBlame(REMOTE_CONTEXT, { filePath: 'src/index.ts', line: 5 })
     ).resolves.toBeNull()
 
-    expect(mocks.supportsCapability).toHaveBeenCalledWith(
-      'env-1',
-      GIT_LINE_BLAME_RUNTIME_CAPABILITY
-    )
+    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', GIT_BLAME_RUNTIME_CAPABILITY)
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 

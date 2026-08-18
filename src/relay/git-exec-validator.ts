@@ -113,17 +113,22 @@ function validateInitArgs(args: string[]): void {
 }
 
 // Why: blame is read-only, but `--contents <file>` and `-S <revs-file>` turn it
-// into an arbitrary file reader, so permit only the exact single-line shape the
-// Line Author status-bar segment sends. The range must be one line — a wide
-// `-L 1,999999` would stream whole-file authorship over the relay.
+// into an arbitrary file reader, so permit only the two exact shapes the blame
+// surfaces send — whole-file `blame --porcelain -- <path>` and single-line
+// `blame --porcelain -L <n>,<n> -- <path>` — and nothing else, so an option value
+// cannot smuggle a path.
+//
+// Why the single-line range must be exactly one line even though the whole-file
+// shape is allowed: the two are separate grants. `-L 1,999999` would deliver
+// whole-file authorship through a path whose callers, argument budget, and
+// timeout are all sized for one line.
+const BLAME_SHAPE_ERROR =
+  'git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>'
+
 function validateBlameArgs(args: string[]): void {
-  // Whole-file shape: `blame --porcelain -- <path>`. Same allow-nothing-else
-  // rule as the single-line form, so an option value can't smuggle a path.
   if (args.length === 4) {
     if (args[1] !== '--porcelain' || args[2] !== '--' || !args[3] || args[3].includes('\0')) {
-      throw new Error(
-        'git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>'
-      )
+      throw new Error(BLAME_SHAPE_ERROR)
     }
     return
   }
@@ -138,7 +143,7 @@ function validateBlameArgs(args: string[]): void {
     !args[5] ||
     args[5].includes('\0')
   ) {
-    throw new Error('git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>')
+    throw new Error(BLAME_SHAPE_ERROR)
   }
 }
 

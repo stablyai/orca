@@ -103,12 +103,16 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
-// Why: older hosts answer git.lineBlame with method_not_found, so clients must
-// hide the line-blame segment for remote runtimes unless advertised.
-export const GIT_LINE_BLAME_RUNTIME_CAPABILITY = 'git.line-blame.v1' as const
-// Why separate from line blame: a host may answer per-line blame but not know
-// the whole-file method, so the client must ask before relying on it.
-export const GIT_FILE_BLAME_RUNTIME_CAPABILITY = 'git.file-blame.v1' as const
+// Why: older hosts answer git.lineBlame and git.fileBlame with method_not_found,
+// so clients must hide authorship for remote runtimes unless advertised.
+//
+// Why one capability for both methods: they are registered together and
+// unconditionally, so no host can ever answer one and not the other — two names
+// could never disagree, and gating them separately made a client probe twice.
+// That is not free: a negative capability answer clears its own cache entry to
+// force a re-probe, so against an older host each resting cursor line would burn
+// two `status.get` round trips instead of one, indefinitely.
+export const GIT_BLAME_RUNTIME_CAPABILITY = 'git.blame.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
@@ -163,8 +167,7 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_UPLOAD_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
-  GIT_LINE_BLAME_RUNTIME_CAPABILITY,
-  GIT_FILE_BLAME_RUNTIME_CAPABILITY
+  GIT_BLAME_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

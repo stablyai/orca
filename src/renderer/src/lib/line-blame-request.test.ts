@@ -65,7 +65,7 @@ describe('whole-file blame', () => {
 
     expect(mocks.getRuntimeGitFileBlame).toHaveBeenCalledTimes(1)
     expect(mocks.getRuntimeGitLineBlame).not.toHaveBeenCalled()
-    expect(cachedLineBlame(blameKey(target(40)))?.author).toBe('Ada')
+    expect(cachedLineBlame(blameKey(target(40)))?.result.author).toBe('Ada')
   })
 
   it('reads the file once when both surfaces ask before it resolves', async () => {
@@ -111,7 +111,7 @@ describe('whole-file blame', () => {
     requestLineBlame(target(5))
     await settle()
     const key = blameKey(target(5))
-    expect(cachedLineBlame(key)?.author).toBe('Before')
+    expect(cachedLineBlame(key)?.result.author).toBe('Before')
 
     expect(cachedLineBlame(key, Date.now() + 61_000)).toBeNull()
   })
@@ -175,7 +175,7 @@ describe('whole-file blame', () => {
     await settle()
 
     expect(mocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(2)
-    expect(cachedLineBlame(blameKey(target(5)))?.author).toBe('Fresh')
+    expect(cachedLineBlame(blameKey(target(5)))?.result.author).toBe('Fresh')
   })
 
   it('repairs an expired file with one whole-file walk, not one per line', async () => {
@@ -210,7 +210,7 @@ describe('whole-file blame', () => {
     await settle()
 
     expect(mocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(1)
-    expect(cachedLineBlame(blameKey(target(5)))?.author).toBe('Neil')
+    expect(cachedLineBlame(blameKey(target(5)))?.result.author).toBe('Neil')
   })
 
   it('asks per-line for a line the file read could not attribute', async () => {
@@ -282,7 +282,7 @@ describe('requestLineBlame', () => {
 
     requestLineBlame(target(5))
     await settle()
-    expect(cachedLineBlame(blameKey(target(5)))?.author).toBe('Neil')
+    expect(cachedLineBlame(blameKey(target(5)))?.result.author).toBe('Neil')
 
     requestLineBlame(target(5))
 

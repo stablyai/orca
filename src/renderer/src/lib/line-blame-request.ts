@@ -57,7 +57,7 @@ export type BlameAnswer = {
  * Identity of the FILE a blame belongs to — everything in the request key except
  * the line, so one whole-file read can answer every line of it.
  */
-export function blameFileKey(target: BlameTarget): string {
+function blameFileKey(target: BlameTarget): string {
   return [
     target.worktreeId,
     target.worktreePath,
@@ -70,15 +70,12 @@ export function blameFileKey(target: BlameTarget): string {
  * Identity of a blame request: every field that routes it, not just the visible
  * file and line. Switching runtime owner keeps the same worktree id, path, and
  * line, so a narrower key would let a previous host's answer paint.
+ *
+ * Built from the file key so the two cannot disagree — the line cache has to
+ * address the same file the file cache does.
  */
 export function blameKey(target: BlameTarget): string {
-  return [
-    target.worktreeId,
-    target.worktreePath,
-    target.relativePath,
-    target.runtimeEnvironmentId ?? '',
-    String(target.line)
-  ].join(SEPARATOR)
+  return blameFileKey(target) + SEPARATOR + target.line
 }
 
 // Why module scope: the status-bar segment and the inline annotation both track
@@ -105,7 +102,14 @@ let inFlightGeneration = 0
 // neither cache nor publish authorship for a revision the editor has left.
 let generation = 0
 
-export function cachedLineBlame(key: string, now = Date.now()): GitLineBlameResult | null {
+/**
+ * Why the whole entry and not just the result: `readAt` is when git actually ran,
+ * which is what a consumer needs to expire what it is showing. Returning only the
+ * result forced call sites to invent a fresh `Date.now()` for a value that could
+ * be up to a full TTL old, so a cache hit silently restarted the expiry clock and
+ * a displayed annotation could outlive the window it was cached under.
+ */
+export function cachedLineBlame(key: string, now = Date.now()): CachedBlame | null {
   const entry = settled.get(key)
   if (!entry) {
     return null
@@ -114,7 +118,7 @@ export function cachedLineBlame(key: string, now = Date.now()): GitLineBlameResu
     settled.delete(key)
     return null
   }
-  return entry.result
+  return entry
 }
 
 function cacheBlame(key: string, result: GitLineBlameResult, readAt: number): void {
@@ -187,15 +191,18 @@ async function loadFileBlame(target: BlameTarget): Promise<void> {
     return
   }
   const readAt = Date.now()
+  // Hoisted: every line of this file shares the file key, so building it once and
+  // appending the line beats rebuilding a spread object and re-joining per line.
+  const keyPrefix = blameFileKey(target) + SEPARATOR
   for (const [line, result] of Object.entries(byLine)) {
     if (result && !result.isUncommitted) {
-      cacheBlame(blameKey({ ...target, line: Number(line) }), result, readAt)
+      cacheBlame(keyPrefix + line, result, readAt)
     }
   }
   // Answer the line that triggered the read, so the waiting surface paints
   // without a second round trip.
   const key = blameKey(target)
-  publish({ key, result: cachedLineBlame(key), readAt })
+  publish({ key, result: cachedLineBlame(key)?.result ?? null, readAt })
 }
 
 /**
@@ -209,7 +216,9 @@ export function requestLineBlame(target: BlameTarget): void {
   const key = blameKey(target)
   const cached = cachedLineBlame(key, now)
   if (cached) {
-    publish({ key, result: cached, readAt: now })
+    // Forward the entry's own read time, not `now` — this answer is as old as the
+    // git read that produced it, and the consumer expires it on that clock.
+    publish({ key, result: cached.result, readAt: cached.readAt })
     return
   }
   // Why the generation test: both surfaces debounce the same cursor line and ask
@@ -226,7 +235,7 @@ export function requestLineBlame(target: BlameTarget): void {
       // Why publish rather than return: this consumer may have asked for a
       // different line than the one that triggered the read, so it still needs
       // its own answer delivered.
-      publish({ key, result: fresh, readAt: Date.now() })
+      publish({ key, result: fresh.result, readAt: fresh.readAt })
       return
     }
     queued = target

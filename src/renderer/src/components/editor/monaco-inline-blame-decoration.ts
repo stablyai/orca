@@ -110,6 +110,7 @@ export class InlineBlameWidget {
   private readonly domNode: HTMLElement
   private position: { lineNumber: number; column: number } | null = null
   private attached = false
+  private appliedMetrics: { lineHeight: number; fontFamily: string; fontSize: number } | null = null
 
   constructor(private readonly host: editor.IStandaloneCodeEditor) {
     this.domNode = document.createElement('div')
@@ -153,6 +154,11 @@ export class InlineBlameWidget {
    * own content, so with the editor's line height left unapplied the text sat
    * centred in a box of a different height and drifted off the code's baseline.
    * Re-read on every show so font zoom and theme changes stay matched.
+   *
+   * Why the early return: `show()` runs on every cursor line change that has
+   * authorship, but font zoom and theme changes are rare, so the four style
+   * writes (and the family's split/join) would invalidate style on every cursor
+   * move to produce the same values. Comparing first keeps the re-read intent.
    */
   private matchEditorTextMetrics(): void {
     const fontInfo = this.host.getOption?.(monaco.editor.EditorOption.fontInfo)
@@ -160,6 +166,14 @@ export class InlineBlameWidget {
       return
     }
     const { lineHeight, fontFamily, fontSize } = fontInfo
+    if (
+      this.appliedMetrics?.lineHeight === lineHeight &&
+      this.appliedMetrics.fontFamily === fontFamily &&
+      this.appliedMetrics.fontSize === fontSize
+    ) {
+      return
+    }
+    this.appliedMetrics = { lineHeight, fontFamily, fontSize }
     // Why: the box keeps the full line height even though the text is smaller,
     // so the annotation still occupies exactly one row and stays on the line.
     this.domNode.style.height = `${lineHeight}px`

@@ -4,7 +4,7 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
-import { STATUS_BAR_ITEMS } from '../../../../shared/status-bar-defaults'
+import { STATUS_BAR_ITEMS } from '../../../../shared/ui-chrome-types'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord

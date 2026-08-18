@@ -76,6 +76,15 @@ function openFile(
   } as unknown as Parameters<typeof useAppStore.setState>[0])
 }
 
+function setDirty(isDirty: boolean): void {
+  const openFiles = (useAppStore.getState() as unknown as { openFiles: { id: string }[] }).openFiles
+  act(() => {
+    useAppStore.setState({
+      openFiles: openFiles.map((file) => (file.id === 'file-1' ? { ...file, isDirty } : file))
+    } as unknown as Parameters<typeof useAppStore.setState>[0])
+  })
+}
+
 function setCursorLine(line: number): void {
   act(() => {
     useAppStore.setState({ editorCursorLine: { 'file-1': line } } as unknown as Parameters<
@@ -236,5 +245,41 @@ describe('LineBlameStatusSegment', () => {
 
     expect(blameMocks.getRuntimeGitLineBlame).not.toHaveBeenCalled()
     expect(screen.queryByText(/Neil/)).toBeNull()
+  })
+
+  it('keeps cached authorship across a remount, so a tab switch costs no new blame', async () => {
+    // Why this matters: the editor is keyed per pane+path, so it remounts on every
+    // tab switch. An invalidation that ran on mount wiped the whole cross-file
+    // cache and made alt-tabbing pay a fresh full-history walk each way.
+    blameMocks.getRuntimeGitLineBlame.mockResolvedValue(blame('Neil'))
+    openFile()
+    const first = render(<LineBlameStatusSegment compact={false} iconOnly={false} />)
+    await flushDebounce()
+    expect(blameMocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(1)
+
+    first.unmount()
+    render(<LineBlameStatusSegment compact={false} iconOnly={false} />)
+    await flushDebounce()
+
+    // Same line, same file: answered from cache, so git is not consulted again.
+    expect(blameMocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText(/Neil/)).toBeInTheDocument()
+  })
+
+  it('drops cached authorship when the buffer becomes dirty and is saved again', async () => {
+    // The one invalidation the design does need: an edit re-maps every line, so
+    // authorship read before it is wrong for the same key.
+    blameMocks.getRuntimeGitLineBlame.mockResolvedValue(blame('Neil'))
+    openFile()
+    render(<LineBlameStatusSegment compact={false} iconOnly={false} />)
+    await flushDebounce()
+    expect(blameMocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(1)
+
+    setDirty(true)
+    await flushDebounce()
+    setDirty(false)
+    await flushDebounce()
+
+    expect(blameMocks.getRuntimeGitLineBlame).toHaveBeenCalledTimes(2)
   })
 })

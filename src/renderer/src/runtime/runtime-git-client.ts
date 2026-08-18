@@ -24,10 +24,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/so
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import type { GitLineBlameResult } from '../../../shared/git-line-blame-types'
-import {
-  GIT_FILE_BLAME_RUNTIME_CAPABILITY,
-  GIT_LINE_BLAME_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import { GIT_BLAME_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   callRuntimeRpc,
@@ -399,7 +396,7 @@ export async function getRuntimeGitLineBlame(
   // "capability not advertised" as "no authorship" instead of surfacing errors.
   const supported = await runtimeEnvironmentSupportsCapability(
     target.environmentId,
-    GIT_LINE_BLAME_RUNTIME_CAPABILITY
+    GIT_BLAME_RUNTIME_CAPABILITY
   )
   if (!supported) {
     return null
@@ -428,7 +425,7 @@ export async function getRuntimeGitFileBlame(
   // caller falls back to per-line rather than surfacing an error.
   const supported = await runtimeEnvironmentSupportsCapability(
     target.environmentId,
-    GIT_FILE_BLAME_RUNTIME_CAPABILITY
+    GIT_BLAME_RUNTIME_CAPABILITY
   )
   if (!supported) {
     return null

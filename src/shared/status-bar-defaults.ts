@@ -1,22 +1,8 @@
 import type { StatusBarItem } from './ui-chrome-types'
 
-// Why: client schemas derive their accepted value domain from this, so a new
-// status-bar item cannot drift out of them.
-export const STATUS_BAR_ITEMS = [
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'ssh',
-  'resource-usage',
-  'ports',
-  'line-blame'
-] as const satisfies readonly StatusBarItem[]
-
+// Kept as its own list rather than derived from STATUS_BAR_ITEMS: an item may
+// exist and ship off by default, so "known items" and "on by default" are
+// separate facts.
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'claude',
   'codex',

@@ -49,19 +49,28 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
-export type StatusBarItem =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'opencode-go'
-  | 'kimi'
-  | 'minimax'
-  | 'grok'
-  | 'ssh'
-  | 'resource-usage'
-  | 'ports'
-  | 'line-blame'
+// Why the array is the source and the type derives from it: the client wire schema
+// builds its accepted value domain from this same array (client-ui-schemas.ts), so
+// an item cannot reach the type without also reaching the schema. A separately
+// declared union let the two drift — `satisfies` proves each entry is valid but
+// cannot prove coverage, so a missing entry silently narrowed the schema.
+export const STATUS_BAR_ITEMS = [
+  'claude',
+  'codex',
+  'gemini',
+  'antigravity',
+  'opencode-go',
+  'kimi',
+  'minimax',
+  'grok',
+  'ssh',
+  'resource-usage',
+  'ports',
+  'line-blame'
+] as const
+
+export type StatusBarItem = (typeof STATUS_BAR_ITEMS)[number]
+
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {

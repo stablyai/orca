@@ -3,7 +3,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
-  GIT_LINE_BLAME_RUNTIME_CAPABILITY,
+  GIT_BLAME_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -224,7 +224,7 @@ describe('git RPC methods', () => {
   it('advertises line blame without moving the mixed-version protocol fence', () => {
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
     expect(MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION).toBe(2)
-    expect(RUNTIME_CAPABILITIES).toContain(GIT_LINE_BLAME_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(GIT_BLAME_RUNTIME_CAPABILITY)
   })
 
   it('returns bounded git history for a selected worktree', async () => {

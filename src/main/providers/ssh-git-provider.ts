@@ -471,6 +471,10 @@ export class SshGitProvider implements IGitProvider {
   ): Promise<Record<number, GitLineBlameResult> | null> {
     // Why whole-file over the relay too: `-L` doesn't make blame cheaper, so one
     // walk per file beats one round trip per cursor line on a remote host.
+    //
+    // Why no size cap here where the local path passes maxBuffer: `exec` takes
+    // only a timeout, so the relay's own stream framing bounds the payload. The
+    // timeout is the backstop, and an oversized read fails to null like any other.
     try {
       const { stdout } = await this.exec(buildFileBlameArgs(repoRelativeFilePath), worktreePath, {
         timeoutMs: FILE_BLAME_TIMEOUT_MS

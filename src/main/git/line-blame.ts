@@ -10,10 +10,12 @@ const UNCOMMITTED_SHA = '0'.repeat(40)
 // cursor-driven updates or leave a child process hanging.
 export const BLAME_TIMEOUT_MS = 5000
 
-// Why a ceiling: porcelain output runs ~2.5-3x the source size, and the git
-// runner caps stdout at 10MB. Files past this fall back to per-line blame
-// rather than failing.
-export const MAX_FILE_BLAME_BYTES = 2 * 1024 * 1024
+// Why a ceiling: porcelain output runs ~2.5-3x the source size, so this is the
+// source size whose porcelain still fits the buffer below. A file past it
+// overflows maxBuffer, `getFileBlame` returns null, and the caller falls back to
+// per-line blame. Not a pre-flight size gate — nothing stats the file first, so
+// an oversized file pays the walk before the buffer rejects it.
+const MAX_FILE_BLAME_BYTES = 2 * 1024 * 1024
 
 // Why longer than the per-line cap: one whole-file walk replaces every later
 // per-line request for that file, so it is worth waiting a little longer for.
@@ -61,12 +63,11 @@ export function parseFileBlamePorcelain(stdout: string): Record<number, GitLineB
     }
     // A tab-prefixed line is the source text, which closes this line's entry.
     if (raw.startsWith('\t')) {
-      const meta = commits.get(current.sha)
       byLine[current.line] = {
         sha: current.sha,
-        author: meta?.author ?? '',
-        authorTimeMs: meta?.authorTimeMs ?? Number.NaN,
-        summary: meta?.summary ?? '',
+        author: commit?.author ?? '',
+        authorTimeMs: commit?.authorTimeMs ?? Number.NaN,
+        summary: commit?.summary ?? '',
         isUncommitted: current.sha === UNCOMMITTED_SHA
       }
       current = null
