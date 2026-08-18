@@ -43,7 +43,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -103,7 +103,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('project.list')
   })
 
-  it('filters project host setups locally after fetching setup compatibility state', async () => {
+  it('routes a runtime host filter to that paired server and keeps its own local rows', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -142,9 +143,106 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
     expect(callMock).toHaveBeenCalledWith('projectHostSetup.list')
     expect(logSpy.mock.calls[0]?.[0]).toContain('setup-remote')
-    expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-local')
+    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-local')
+  })
+
+  it('keeps --host local a filter on the selected environment rather than a second selector', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'prod')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-on-box',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-on-box',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-by-client',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:prod',
+            repoId: 'repo-by-client',
+            path: '/srv/orca-2',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['project', 'setups', '--environment', 'prod', '--host', 'local'], '/tmp/repo')
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'prod')
+    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-on-box')
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-by-client')
+  })
+
+  it('rejects a runtime host id that no paired server owns instead of answering empty', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'runtime:not-a-real-env', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('no paired environment has id not-a-real-env')
+    // An agent reads the code and the retry candidates, not the prose.
+    expect(JSON.parse(printed).error.code).toBe('invalid_argument')
+    expect(JSON.parse(printed).error.data.knownEnvironments).toEqual([])
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects a malformed --host value before contacting any runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'runtime:', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Invalid --host value: runtime:'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('refuses a runtime host id alongside an unrelated --pairing-code connection', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['project', 'setups', '--host', 'runtime:gpu', '--pairing-code', 'remote-runtime', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'use either --host runtime:<id> or --pairing-code, not both'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('sets up an existing project folder with a path resolved against the local cli cwd', async () => {
@@ -213,6 +311,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('rejects remote project setup relative paths instead of resolving against client cwd', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
@@ -227,8 +326,6 @@ describe('orca cli worktree awareness', () => {
         'runtime:gpu',
         '--path',
         './orca',
-        '--pairing-code',
-        'remote-runtime',
         '--json'
       ],
       '/tmp/repo'
@@ -377,6 +474,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('creates independent project host setup metadata through the project-first runtime API', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(
       callMock,
       okFixture('req_project_setup_create', {
