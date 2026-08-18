@@ -203,6 +203,27 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontWeightBold).toBe(800)
   })
 
+  it('requires Alt for mouse reports only when click/drag reporting is switched off', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalReportMouseClicksAndDrags: false })
+    expect(pane.terminal.options.mouseEventsRequireAlt).toBe(true)
+
+    apply(pane, { ...settings, terminalReportMouseClicksAndDrags: true })
+    expect(pane.terminal.options.mouseEventsRequireAlt).toBe(false)
+  })
+
+  it('reports mouse clicks when the setting is absent (existing users see no change)', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+    delete settings.terminalReportMouseClicksAndDrags
+
+    apply(pane, settings)
+
+    expect(pane.terminal.options.mouseEventsRequireAlt).toBe(false)
+  })
+
   it('still assigns a fresh theme when composed values actually change', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')

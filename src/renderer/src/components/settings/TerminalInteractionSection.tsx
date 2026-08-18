@@ -244,6 +244,47 @@ export function TerminalInteractionSection({
           </div>
         </SearchableSetting>
 
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalInteractionSection.reportMouseClicks.title',
+            'Report mouse clicks & drags'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalInteractionSection.reportMouseClicks.description',
+            'Send clicks and drags to mouse-aware terminal apps. Turn off to always select text with the mouse; the scroll wheel still reports, and Alt-click forces a report.'
+          )}
+          keywords={[
+            'mouse',
+            'click',
+            'drag',
+            'report',
+            'reporting',
+            'selection',
+            'select',
+            'tui',
+            'iterm',
+            'tracking'
+          ]}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalInteractionSection.reportMouseClicks.title',
+              'Report mouse clicks & drags'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalInteractionSection.reportMouseClicks.switch',
+              'Off keeps clicks and drags local for selection; the scroll wheel still reports, and Alt-click forces a report.'
+            )}
+            checked={settings.terminalReportMouseClicksAndDrags !== false}
+            onChange={() =>
+              updateSettings({
+                terminalReportMouseClicksAndDrags:
+                  settings.terminalReportMouseClicksAndDrags === false
+              })
+            }
+          />
+        </SearchableSetting>
+
         {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
           <SearchableSetting
             title={translate(

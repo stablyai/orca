@@ -145,6 +145,10 @@ export type GlobalSettings = {
   terminalPaddingX?: number
   terminalPaddingY?: number
   terminalMouseHideWhileTyping?: boolean
+  /** When false, click/drag reports are withheld from mouse-aware TUIs so the
+   *  mouse always drives local selection; the scroll wheel still reports. Maps
+   *  to xterm's mouseEventsRequireAlt, so Alt still forces a report. */
+  terminalReportMouseClicksAndDrags?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]

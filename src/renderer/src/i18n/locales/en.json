@@ -10557,7 +10557,12 @@
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
-          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu.",
+          "reportMouseClicks": {
+            "title": "Report mouse clicks & drags",
+            "description": "Send clicks and drags to mouse-aware terminal apps. Turn off to always select text with the mouse; the scroll wheel still reports, and Alt-click forces a report.",
+            "switch": "Off keeps clicks and drags local for selection; the scroll wheel still reports, and Alt-click forces a report."
+          }
         },
         "MobileRelayStatusSection": {
           "registered": "Registered",

@@ -209,6 +209,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,
     terminalTuiScrollSensitivityDefaultedToOne: true,
+    terminalReportMouseClicksAndDrags: true,
     // Why: "auto" uses WebGL when supported, falling back to DOM on renderer failure or software/unknown GPU.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.

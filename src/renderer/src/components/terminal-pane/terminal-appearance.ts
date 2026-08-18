@@ -205,6 +205,9 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
+    // Why default true: withholding click/drag reports is opt-in; xterm exempts the wheel, so scroll still reports.
+    pane.terminal.options.mouseEventsRequireAlt =
+      settings.terminalReportMouseClicksAndDrags === false
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     const transport = paneTransports.get(pane.id)
