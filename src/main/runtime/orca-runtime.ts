@@ -13577,6 +13577,7 @@ export class OrcaRuntimeService {
       return null
     }
     let terminal = this.getOrchestrationDispatchAuthority(terminalHandle)
+    // Why: reminting keeps the claimed pane identity, while launch-token attestation below binds the resolved terminal.
     if (
       options?.allowTerminalHandleRemint &&
       claimedPaneKey &&
