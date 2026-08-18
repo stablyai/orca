@@ -20047,15 +20047,19 @@ export class OrcaRuntimeService {
     return this.store?.getRepos() ?? []
   }
 
+  // Why a stable field and not a per-call closure: enrichment dedupes coalesced callers by callback
+  // identity, so a fresh closure per call would stack up for the length of a slow sweep.
+  private readonly onRepoGitRemoteIdentitiesChanged = (): void => {
+    this.invalidateResolvedWorktreeCache()
+    this.notifyReposChanged()
+  }
+
   enrichMissingRepoGitRemoteIdentities(): void {
     if (!this.store) {
       return
     }
     enrichMissingRepoGitRemoteIdentities(this.store, {
-      onChanged: () => {
-        this.invalidateResolvedWorktreeCache()
-        this.notifyReposChanged()
-      }
+      onChanged: this.onRepoGitRemoteIdentitiesChanged
     })
   }
 
