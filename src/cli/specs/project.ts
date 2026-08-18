@@ -14,11 +14,16 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     summary: 'List project host setups',
     usage: 'orca project setups [--project <id>] [--host <host-id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
-    notes: ['A setup means a project is available on a host at a concrete filesystem path.'],
+    notes: [
+      'A setup means a project is available on a host at a concrete filesystem path.',
+      '--host runtime:<environment-id> runs the command on that paired Orca server instead of filtering this runtime; unknown environment ids are rejected rather than answered with an empty list.',
+      'Run `orca environment list` to see the environment ids that runtime:<environment-id> accepts.'
+    ],
     examples: [
       'orca project setups',
       'orca project setups --project github:stablyai/orca',
-      'orca project setups --host local'
+      'orca project setups --host local',
+      'orca project setups --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3'
     ]
   },
   {
@@ -29,6 +34,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
+      '--host runtime:<environment-id> targets that paired Orca server; the id must appear in `orca environment list`.',
       'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -44,6 +50,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
+      '--host runtime:<environment-id> targets that paired Orca server; the id must appear in `orca environment list`.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -71,6 +78,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Creates setup metadata without registering a repo compatibility record.',
+      '--host runtime:<environment-id> targets that paired Orca server; the id must appear in `orca environment list`.',
       'Use setup-existing-folder when Orca should import and manage an actual checkout path now.'
     ],
     examples: [

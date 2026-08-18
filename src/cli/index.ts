@@ -9,6 +9,7 @@ import {
   validateCommandAndFlags
 } from './args'
 import { dispatch } from './dispatch'
+import { resolveHostFlagEnvironmentId } from './execution-host-flag'
 import { reportCliError } from './format'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
@@ -89,10 +90,25 @@ export async function main(
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // Why: --host runtime:<id> names a paired server, not a filter over this
+    // runtime's rows, so it has to pick the connection before the client exists.
+    const hostEnvironmentId = ignoreRemoteSelection
+      ? null
+      : await resolveHostFlagEnvironmentId(parsed.flags, {
+          pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
+          environmentSelector: typeof environmentSelector === 'string' ? environmentSelector : null
+        })
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the
     // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
     // that must run locally (environment / serve).
+    const suppressed = ignoreRemoteSelection ? null : undefined
+    // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
+    const remotePairingCode =
+      hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
+    const remoteEnvironment =
+      hostEnvironmentId ??
+      (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
@@ -101,12 +117,8 @@ export async function main(
         client ??= new RuntimeClientClass(
           undefined,
           undefined,
-          typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
-          typeof environmentSelector === 'string'
-            ? environmentSelector
-            : ignoreRemoteSelection
-              ? null
-              : undefined
+          remotePairingCode,
+          remoteEnvironment
         )
         return client
       },
