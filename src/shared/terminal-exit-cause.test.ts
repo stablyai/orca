@@ -49,11 +49,16 @@ describe('resolveProcessExitCause', () => {
 })
 
 describe('resolveUnreportedExitCause', () => {
-  it('refuses to turn a bare code into a clean finish', () => {
+  it('refuses to turn a bare zero into a clean finish', () => {
     // An older daemon, or the SSH relay, forwards a code and no cause. Its 0 may
     // be a clean finish or a SIGKILL; nothing downstream can tell them apart.
     expect(resolveUnreportedExitCause(0)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
-    expect(resolveUnreportedExitCause(7)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
+  })
+
+  it('keeps a bare nonzero status, which nothing fabricates', () => {
+    // node-pty only ever pairs a signal with 0, and a wrapper only ever returns
+    // 0, so a nonzero code really is the child's wait status.
+    expect(resolveUnreportedExitCause(137)).toEqual({ kind: 'exited', exitCode: 137 })
   })
 
   it('keeps the more specific reason for the stop sentinel', () => {

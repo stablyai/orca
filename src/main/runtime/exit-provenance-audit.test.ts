@@ -61,14 +61,22 @@ function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
   return runtime
 }
 
-function dispatchOnHandle(db: OrchestrationDb, spec: string): DispatchContextRow {
+function dispatchOnHandle(
+  db: OrchestrationDb,
+  spec: string
+): DispatchContextRow & { runId: string } {
   const run = db.createRun({
     objective: spec,
     coordinatorHandle: 'term_coordinator',
     coordinatorPaneKey: '99999999-9999-4999-8999-999999999999:88888888-8888-4888-8888-888888888888'
   })
   const task = db.createTask({ spec, runId: run.id })
-  return db.createDispatchContext(task.id, HANDLE, PANE_KEY)
+  return { ...db.createDispatchContext(task.id, HANDLE, PANE_KEY), runId: run.id }
+}
+
+/** Where a lightweight Run's coordinator actually reads its mail (STA-4604). */
+function escalations(db: OrchestrationDb, runId: string) {
+  return db.getUnreadMessages(`run:${runId}`, ['escalation'])
 }
 
 function observe(db: OrchestrationDb, ctxId: string) {
@@ -162,21 +170,19 @@ describe('STA-4603/STA-4536 exit provenance', () => {
   it('does not escalate a deliberate close, but still escalates a crash', () => {
     const closedDb = createDb()
     const closed = createRuntime(closedDb)
-    closedDb.createCoordinatorRun({ spec: 'watch', coordinatorHandle: 'term_coordinator' })
     const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
     closed.markPtyStopRequested(PTY_ID)
     closed.onPtyExit(PTY_ID, 0)
     // Assert the dispatch actually settled first: an empty inbox also happens
     // when nothing was settled at all, which would make this vacuous.
     expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
-    expect(closedDb.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(0)
+    expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
 
     const crashDb = createDb()
     const crashed = createRuntime(crashDb)
-    crashDb.createCoordinatorRun({ spec: 'watch', coordinatorHandle: 'term_coordinator' })
-    dispatchOnHandle(crashDb, 'escalate on crash')
+    const crashCtx = dispatchOnHandle(crashDb, 'escalate on crash')
     crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-    expect(crashDb.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(1)
+    expect(escalations(crashDb, crashCtx.runId)).toHaveLength(1)
   })
 
   it('does not carry an unconsumed stop intent across a same-id respawn', () => {
@@ -201,7 +207,6 @@ describe('STA-4603/STA-4536 exit provenance', () => {
   it('does not file an unconfirmed stop as a completed operator close', () => {
     const db = createDb()
     const runtime = createRuntime(db)
-    db.createCoordinatorRun({ spec: 'watch', coordinatorHandle: 'term_coordinator' })
     const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
     runtime.markPtyStopRequested(PTY_ID)
     // The stop paths pass -1 when they asked a process to die and never saw it.
@@ -213,7 +218,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       termination_reason: 'unknown'
     })
     // ...and it must still wake the coordinator, unlike a clean close.
-    expect(db.getUnreadMessages('term_coordinator', ['escalation'])).toHaveLength(1)
+    expect(escalations(db, ctx.runId)).toHaveLength(1)
   })
 
   it('treats a reported completion as authoritative and makes the later exit a no-op', () => {

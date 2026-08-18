@@ -15251,7 +15251,7 @@ export class OrcaRuntimeService {
     }
     if (!preservesAbnormalSshSurface) {
       for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause)
+        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
       }
     }
     this.pruneDisconnectedPtyRecords()
@@ -16866,6 +16866,7 @@ export class OrcaRuntimeService {
   private failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
+    exitCode: number,
     cause: TerminalExitCause
   ): void {
     if (!this._orchestrationDb) {
@@ -16918,6 +16919,10 @@ export class OrcaRuntimeService {
         payload: JSON.stringify({
           taskId: dispatch.task_id,
           dispatchId: dispatch.id,
+          // Why both: `exitCode` stays for readers that already parse it, but it
+          // is the raw number the host handed over, not a verdict — `exitCause`
+          // is what says whether the agent was killed, finished, or was closed.
+          exitCode,
           exitCause: cause,
           handle
         }),

@@ -185,15 +185,19 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       runId: graded.runId,
       type: 'escalation',
       priority: 'high',
-      subject: 'Agent exited unexpectedly (code 137)',
+      subject: 'Agent exited unexpectedly (Agent process exited with code 137)',
       body:
-        `Worker ${graded.workerHandle} exited with code 137 while running task ` +
-        `"do the work" (${graded.taskId}). The task is ready to be dispatched again.`,
+        `Worker ${graded.workerHandle} stopped while running task ` +
+        `"do the work" (${graded.taskId}). Agent process exited with code 137. ` +
+        `The task is ready to be dispatched again.`,
       deliveryContract: 'current_delivery',
       payload: {
         taskId: expect.any(String),
         dispatchId: expect.any(String),
         exitCode: 137,
+        // Why: the code alone cannot say whether the agent was killed, finished,
+        // or was closed on purpose (STA-4603/STA-4536).
+        exitCause: { kind: 'exited', exitCode: 137 },
         handle: graded.workerHandle
       }
     })
@@ -211,7 +215,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       to: expect.stringMatching(/^term_/),
       runId: LEGACY_RUN_ID,
       type: 'escalation',
-      subject: 'Agent exited unexpectedly (code 137)'
+      subject: 'Agent exited unexpectedly (Agent process exited with code 137)'
     })
   })
 
@@ -363,8 +367,9 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       // Why: a tripped breaker means nobody will retry it, so the body must not
       // tell the coordinator the task is ready to go again.
       expect(escalations.at(-1)?.body).toBe(
-        `Worker ${workerHandle} exited with code 137 while running task ` +
-          `"repeatedly failing work" (${task.id}). This task has now failed too many ` +
+        `Worker ${workerHandle} stopped while running task ` +
+          `"repeatedly failing work" (${task.id}). Agent process exited with code 137. ` +
+          `This task has now failed too many ` +
           `times, so it will not be retried automatically.`
       )
     } finally {
@@ -467,8 +472,9 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     // Why: onPtyExit walks leaves synchronously — a throwing mailbox would abandon the
     // rest of the exit, so the worker death must stay durable and the exit must complete.
     expect(() => runtime.onPtyExit(WORKER_PTY_ID, 137)).not.toThrow()
-    expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent exited with code 137', {
-      workerProcessExited: true
+    expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent process exited with code 137', {
+      workerProcessExited: true,
+      terminationReason: 'exited'
     })
     expect(warn).toHaveBeenCalledWith(
       '[orchestration] failed to escalate worker exit',

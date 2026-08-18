@@ -60,16 +60,20 @@ export function resolveProcessExitCause(observation: {
 }
 
 /**
- * The cause for an exit delivered without one.
+ * The cause for an exit delivered without one — an older daemon, or the SSH
+ * relay, which forwards a code and nothing else.
  *
- * Why not `exited(code)`: a bare code is not evidence. node-pty pairs `0` with a
- * signal, and the reporter may itself sit behind a wrapper. Only the process
- * that watched the child can vouch for a status, and it did not.
+ * Zero is the ambiguous one, and the only one worth refusing: node-pty pairs it
+ * with every signalled death, and a wrapper spawn returns it for any outcome at
+ * all. A nonzero status is never fabricated that way, so it is still reported.
  */
 export function resolveUnreportedExitCause(exitCode: number): TerminalExitCause {
-  return exitCode < 0
-    ? { kind: 'unknown', reason: 'stop_unverified' }
-    : { kind: 'unknown', reason: 'cause_unreported' }
+  if (exitCode < 0) {
+    return { kind: 'unknown', reason: 'stop_unverified' }
+  }
+  return exitCode === 0
+    ? { kind: 'unknown', reason: 'cause_unreported' }
+    : { kind: 'exited', exitCode }
 }
 
 /** One line an operator or a coordinating agent can read without decoding a number. */
