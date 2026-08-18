@@ -8,9 +8,18 @@ import {
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
 
+const BRANCH_ENV_KEYS = [
+  'ORCA_DEV_DOCK_TITLE',
+  'ORCA_DEV_BRANCH',
+  'ORCA_DEV_INSTANCE_LABEL',
+  'ORCA_DEV_WORKTREE_NAME'
+] as const
+
 /** Collect the patch set as it would be computed on a given branch. */
 function patchesUnder(dockTitle: string, branch: string) {
-  const saved = { ...process.env }
+  // Restores individual keys rather than reassigning process.env: that would swap Node's special
+  // env object for a plain one, losing child-process propagation for every later test in this worker.
+  const saved = BRANCH_ENV_KEYS.map((key) => [key, process.env[key]] as const)
   Object.assign(process.env, {
     ORCA_DEV_DOCK_TITLE: dockTitle,
     ORCA_DEV_BRANCH: branch,
@@ -20,11 +29,25 @@ function patchesUnder(dockTitle: string, branch: string) {
   try {
     return [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
   } finally {
-    process.env = saved
+    for (const [key, value] of saved) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
   }
 }
 
 describe('dev-electron-bundle-identity', () => {
+  it('leaves process.env untouched, including its object identity', () => {
+    const envBefore = process.env
+    const snapshot = { ...process.env }
+    patchesUnder('Orca: some-branch', 'some-branch')
+    expect(process.env).toBe(envBefore)
+    expect({ ...process.env }).toEqual(snapshot)
+  })
+
   it('patches a stable bundle id for the app and its helper', () => {
     expect(getDevHelperPlistPatches()).toEqual([
       { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
