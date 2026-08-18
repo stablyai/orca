@@ -155,8 +155,10 @@ export function AppWorkspaceShell(props: {
               )
             ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Why: automations owns its page header; the stacked titlebar would be an empty 36px stripe. */}
-              {layout.stackedSidebarOpen && layout.activeView !== 'automations' ? (
+              {/* Why: automations/artifacts own their page headers; the stacked titlebar would be an empty 36px stripe. */}
+              {layout.stackedSidebarOpen &&
+              layout.activeView !== 'automations' &&
+              layout.activeView !== 'artifacts' ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">

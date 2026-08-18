@@ -13,6 +13,19 @@ function shellBasename(shellPath: string): string {
   return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
 }
 
+/** The outer exe of a WSL launch; the shell the user actually types into lives
+ *  inside the distro, so history/env handling must look past this name. */
+export function isRelayWslShell(
+  shellPath: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform !== 'win32') {
+    return false
+  }
+  const name = shellBasename(shellPath)
+  return name === 'wsl.exe' || name === 'wsl'
+}
+
 function windowsShellArgs(
   shellName: string,
   options: { terminalWindowsWslDistro?: string | null } = {}

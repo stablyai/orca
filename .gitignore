@@ -107,8 +107,11 @@ docs/**
 !docs/solutions/**
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
+!docs/reference/ssh-host-key-verification.md
+!docs/reference/ssh-reconnect-source-recovery.md
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
+!docs/reference/xterm-patch-regeneration.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

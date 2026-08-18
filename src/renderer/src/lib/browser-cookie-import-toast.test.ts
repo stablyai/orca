@@ -90,6 +90,32 @@ describe('emitBrowserCookieImportToast', () => {
     )
   })
 
+  // Why (STA-4300): these cookies were skipped rather than written unpartitioned, so the success
+  // count alone would report a lossy import as clean.
+  it('warns separately about cookies skipped for an unreadable partition', () => {
+    emitBrowserCookieImportToast(
+      { ...summary, importedCookies: 2, skippedCookies: 1, partitionSkippedCookies: 1 },
+      'Imported 2 cookies.',
+      'Local Mac'
+    )
+
+    expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
+    expect(warningToastMock).toHaveBeenCalledWith(
+      '1 cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      { duration: 12000 }
+    )
+  })
+
+  it('does not infer a partition warning from generic skipped cookies', () => {
+    emitBrowserCookieImportToast(
+      { ...summary, importedCookies: 2, skippedCookies: 1 },
+      'Imported 2 cookies.',
+      'Local Mac'
+    )
+
+    expect(warningToastMock).not.toHaveBeenCalled()
+  })
+
   it('does not infer a Google warning from generic skipped cookies', () => {
     emitBrowserCookieImportToast(
       { ...summary, importedCookies: 2, skippedCookies: 1 },

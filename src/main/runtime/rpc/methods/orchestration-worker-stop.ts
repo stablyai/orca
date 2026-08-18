@@ -27,7 +27,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           )
         }
         const server = resolvePinnedFederatedServer(runtime, federated)
-        const begun = db.beginWorkerStop(params.dispatch)
+        const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
         if (begun.disposition === 'already_settled') {
           return settledReceipt(params.dispatch, begun.worker.state)
         }
@@ -97,7 +97,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         }
       }
 
-      const begun = db.beginWorkerStop(params.dispatch)
+      const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
       if (begun.disposition === 'already_settled') {
         return settledReceipt(params.dispatch, begun.worker.state)
       }
@@ -133,6 +133,18 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           db.markWorkerStopUnknown(
             params.dispatch,
             `The recorded worker process is ${observation.status}; no terminal was closed.`
+          ),
+          'none'
+        )
+      }
+      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+      if (!resource || resource.ownership_state !== 'owned') {
+        const ownership = resource?.ownership_state ?? 'unproven'
+        return unknownReceipt(
+          params.dispatch,
+          db.markWorkerStopUnknown(
+            params.dispatch,
+            `The worker terminal is ${ownership}; no terminal was closed.`
           ),
           'none'
         )

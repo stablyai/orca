@@ -84,11 +84,16 @@ describe('Store', () => {
     store.addRepo(makeRepo())
     expect(store.getRepo('r1')!.gitUsername).toBe('')
 
-    expect(store.setResolvedRepoGitUsername('r1', 'testuser')).toBe(true)
+    expect(store.setResolvedRepoGitUsername(makeRepo(), 'testuser')).toBe(true)
     expect(store.getRepo('r1')!.gitUsername).toBe('testuser')
     // Unchanged value reports no change so callers can skip renderer notify.
-    expect(store.setResolvedRepoGitUsername('r1', 'testuser')).toBe(false)
-    expect(store.setResolvedRepoGitUsername('missing', 'x')).toBe(false)
+    expect(store.setResolvedRepoGitUsername(makeRepo(), 'testuser')).toBe(false)
+    expect(store.setResolvedRepoGitUsername(makeRepo({ id: 'missing' }), 'x')).toBe(false)
+    // A repo id that exists only on another host must not fall back to the local row.
+    expect(store.setResolvedRepoGitUsername(makeRepo({ connectionId: 'ssh-1' }), 'ssh-user')).toBe(
+      false
+    )
+    expect(store.getRepo('r1')!.gitUsername).toBe('testuser')
 
     store.flush()
     const persisted = readDataFile() as PersistedState

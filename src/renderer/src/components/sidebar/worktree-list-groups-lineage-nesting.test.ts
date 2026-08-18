@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows'
-import { getLineageGroupKey } from './worktree-list/grouping/group-keys'
+import { getLineageGroupKey, getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
 import { getLineageRenderInfo, getWorktreeLineageAncestors } from './worktree-lineage-projection'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -101,6 +101,53 @@ describe('buildRows workspace lineage nesting', () => {
       worktree: { id: child.id },
       depth: 1
     })
+  })
+
+  it('keeps same-id parent and child lineages partitioned by host', () => {
+    const parentA = { ...parent, hostId: 'local' as const }
+    const childA = { ...child, hostId: 'local' as const, lineage }
+    const parentB = {
+      ...parent,
+      hostId: 'ssh:host-b' as const,
+      instanceId: 'parent-instance-b'
+    }
+    const lineageB = {
+      ...lineage,
+      worktreeInstanceId: 'child-instance-b',
+      parentWorktreeInstanceId: 'parent-instance-b'
+    }
+    const childB = {
+      ...child,
+      hostId: 'ssh:host-b' as const,
+      instanceId: 'child-instance-b',
+      lineage: lineageB
+    }
+    const rows = buildRows(
+      'none',
+      [childA, parentA, childB, parentB],
+      repoMap,
+      null,
+      new Set([getWorktreeLineageGroupKey(parentA)]),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [parent.id, parentA],
+        [child.id, childA]
+      ]),
+      true
+    )
+
+    expect(
+      rows
+        .filter((row) => row.type === 'item')
+        .map((row) => [row.worktree.hostId, row.worktree.id, row.depth, row.lineageCollapsed])
+    ).toEqual([
+      ['local', parent.id, 0, true],
+      ['ssh:host-b', parent.id, 0, false],
+      ['ssh:host-b', child.id, 1, undefined]
+    ])
   })
 
   it('nests stable-update resolved legacy lineage when generalized lineage is absent', () => {

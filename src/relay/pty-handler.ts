@@ -16,7 +16,8 @@ import {
   isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
-import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import { addWslEnvKeys } from '../shared/wsl-env'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
@@ -48,6 +49,7 @@ import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -627,6 +629,12 @@ export class PtyHandler {
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
     // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
     stripLegacyTerminalShimEnv(result, process.platform)
+    // Why unconditionally here, not in injectRelayFishHistoryEnv: that runs only for a
+    // fish pane with isolation on, yet an Orca-minted `fish_history` (fish EXPORTS it,
+    // so the relay inherits one when launched from an Orca fish pane) must never scope
+    // any pane to someone else's worktree. Matches the desktop, which drops it on both
+    // branches (STA-4682).
+    dropInheritedOrcaFishHistory(result)
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -1547,11 +1555,18 @@ export class PtyHandler {
     const worktreeId =
       typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const historyIsolationEnabled = params.historyIsolationEnabled === true
+    // Deliberately not reached by wsl.exe: a guest fish writes its history file
+    // inside the distro, where relay deletion cannot reach it (STA-4682).
     if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
       injectRelayFishHistoryEnv(spawnEnv, worktreeId)
     }
+    const wslShell = isRelayWslShell(shell)
     if (historyIsolationEnabled && worktreeId) {
-      injectRelayHistoryEnv(spawnEnv, worktreeId, shell)
+      const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
+      if (wslShell && historyRoot) {
+        // WSLENV is the only channel that carries a host env var into the guest.
+        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+      }
     }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
@@ -1760,7 +1775,23 @@ export class PtyHandler {
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
-    if (activation === 'existing' && this.sourcePublication?.accepts(id)) {
+    // `existing` means a delivery is already open for this client, so it is already receiving live
+    // output and does not need its screen re-sent. That is true for a duplicate attach — and false
+    // for the case this skipped: an SSH reconnect. The client keeps its id there (the dispatcher
+    // refuses to detach the primary, and setWrite revives that same id), so the delivery outlives
+    // the dead transport, while the renderer has thrown its terminal away — a reconnect bumps
+    // tab.generation, which is the React key, so the pane remounts with a brand-new empty xterm and
+    // nothing captures the old buffer. Answering "you already have it" leaves the pane blank
+    // forever, until new output happens to arrive.
+    //
+    // So the client says which it is. Falling through rather than returning the replay inline is
+    // deliberate: the path below already drops the pending batched bytes that are also in the
+    // buffer, which is what stops the live delivery double-rendering them.
+    if (
+      activation === 'existing' &&
+      this.sourcePublication?.accepts(id) &&
+      params.requireReplay !== true
+    ) {
       return {
         incarnationId: managed.incarnationId,
         ...(sourceActivation ? { sourceActivation } : {})
@@ -2139,6 +2170,8 @@ export class PtyHandler {
     ) {
       injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
     }
+    // No WSL branch on purpose: revive re-spawns the host default shell rather
+    // than the entry's stored override, so this env matches the shell it launches.
     if (historyIsolationEnabled && entry.worktreeId) {
       injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell)
     }

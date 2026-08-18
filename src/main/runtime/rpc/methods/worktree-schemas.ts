@@ -14,6 +14,19 @@ import {
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+
+const OptionalExecutionHostId = z
+  .string()
+  .transform((value, ctx) => {
+    const hostId = normalizeExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
+      return z.NEVER
+    }
+    return hostId
+  })
+  .optional()
 
 const OptionalTuiAgent = z
   .unknown()
@@ -279,7 +292,7 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
-  hostId: OptionalString,
+  hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
   // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop

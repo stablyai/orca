@@ -68,10 +68,12 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let subprocesses: ReturnType<typeof createMockSubprocess>[]
+  let releaseStall: (() => void) | undefined
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'orca-final-checkpoint-deadline-'))
     subprocesses = []
+    releaseStall = undefined
     const log: DaemonFileLog = { log: () => {}, close: () => {} }
     server = new DaemonServer({
       socketPath: getDaemonSocketPath(dir),
@@ -92,7 +94,21 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
   })
 
   afterEach(async () => {
-    adapter?.dispose()
+    // Why before rmSync: a keep-history stop abandons the exclusive checkpoint, and
+    // that write's tmp/rename will recreate files under the temp tree if we delete it first.
+    releaseStall?.()
+    releaseStall = undefined
+    if (adapter) {
+      const internals = adapter as unknown as {
+        checkpointInFlight: Promise<void> | null
+        stopCheckpointTimer: () => void
+      }
+      await internals.checkpointInFlight
+      internals.stopCheckpointTimer()
+      await internals.checkpointInFlight
+      await adapter.getHistoryManager()?.dispose()
+      adapter.dispose()
+    }
     await server?.shutdown()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -106,6 +122,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     const stalled = new Promise<void>((resolve) => {
       release = resolve
     })
+    releaseStall = release
     vi.spyOn(manager!, 'checkpoint').mockImplementation(
       async (
         sessionId: string,

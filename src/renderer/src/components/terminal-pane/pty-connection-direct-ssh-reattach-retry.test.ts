@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -273,6 +274,11 @@ describe('connectPanePty', () => {
       restoredPtyId,
       undefined,
       pendingRetry.attemptId
+    )
+    // Why: binding a reattached PTY is what lifts the pane's retirement fence, so a
+    // pane re-attached mid-turn or idle is not suppressed forever (STA-4114).
+    expect(mockStoreState.restoreAgentPaneAuthority).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1)
     )
   })
 

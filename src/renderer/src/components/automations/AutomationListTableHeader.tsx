@@ -1,10 +1,8 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_HEADER_CLASS
-} from './automations-table-layout'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_HEADER_CLASS } from '@/lib/list-table-layout'
 import { AutomationListSortHeader } from './AutomationListSortHeader'
 import type { AutomationListSort, AutomationListSortField } from './automation-list-view'
 
@@ -16,7 +14,7 @@ export function AutomationListTableHeader({
   onSort: (field: AutomationListSortField) => void
 }): React.JSX.Element {
   return (
-    <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, AUTOMATIONS_TABLE_HEADER_CLASS)}>
+    <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, LIST_TABLE_HEADER_CLASS)}>
       <AutomationListSortHeader
         field="name"
         label={translate('auto.components.automations.AutomationsPage.tableName', 'Name')}

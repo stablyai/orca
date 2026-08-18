@@ -13,7 +13,7 @@ describe('packaged skills CLI PR gates', () => {
     const smokeStep = job.steps.find((step) => step.name === 'Smoke packaged CLI')
 
     expect(job['runs-on']).toBe('windows-2022')
-    expect(buildStep.run).toBe('pnpm run build:release')
+    expect(buildStep.run).toBe('pnpm run build:release:parallel')
     expect(prepareStep.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
     expect(packageStep.run).toContain('electron-builder')
     expect(packageStep.run).toContain('--dir')

@@ -30,42 +30,6 @@
   width: 100%;
 }
 
-.xterm-container .xterm {
-  box-sizing: border-box;
-  height: 100%;
-  width: 100%;
-  /* Why on .xterm, not the container: FitAddon subtracts this element's
-     padding when proposing cols/rows, and the themed background (including
-     opacity) fills the inset. Container margins only framed the start edges
-     and stacked a darker gutter at fractional opacity. */
-  padding-top: var(--pane-padding-y, 4px);
-  padding-right: var(--pane-padding-x, 4px);
-  padding-bottom: var(--pane-padding-y, 4px);
-  padding-left: var(--pane-padding-x, 4px);
-}
-
-/* xterm paints the live viewport background again under the grid. Mirror that
-   layer in the padding bands, including runtime OSC 11 color changes. */
-.xterm-container .xterm::before,
-.xterm-container[data-terminal-renderer='webgl'] .xterm::after {
-  box-sizing: border-box;
-  position: absolute;
-  inset: 0;
-  content: '';
-  pointer-events: none;
-  border-style: solid;
-  border-width: var(--pane-padding-y, 4px) var(--pane-padding-x, 4px);
-}
-
-.xterm-container .xterm::before {
-  border-color: var(--orca-terminal-live-background, transparent);
-}
-
-/* WebGL adds one source-over background layer beyond the DOM renderer. */
-.xterm-container[data-terminal-renderer='webgl'] .xterm::after {
-  border-color: var(--orca-terminal-live-background, transparent);
-}
-
 .pane-manager-root .xterm-viewport {
   /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
      DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
@@ -213,7 +177,7 @@
 .pane[data-terminal-attention] .xterm-container::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 0 4px 4px 0;
   z-index: 5;
   pointer-events: none;
   border-radius: 2px;
@@ -534,14 +498,16 @@
   border-color: var(--ring);
 }
 
-/* Container fills the pane so the .xterm background (and its padding) is the
-   terminal surface. Title offset stays here because the title overlay is a
-   sibling of the container, not of .xterm. */
+/* Baseline xterm-container layout — padding is driven by CSS custom properties
+   so Ghostty-imported window-padding-x/y can be applied without inline styles.
+   The fallback 4px preserves the legacy default. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: calc(100% - var(--pane-padding-x, 4px));
+  height: calc(100% - var(--pane-padding-y, 4px));
+  margin-top: var(--pane-padding-y, 4px);
+  margin-left: var(--pane-padding-x, 4px);
 }
 
 /* When a pane has a title, shift the terminal content down to make room.

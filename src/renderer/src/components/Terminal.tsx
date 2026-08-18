@@ -42,13 +42,13 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
-import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
+import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import {
   isBrowserAutomationVisible,
   onBrowserAutomationVisibilityChange,
   useBrowserAutomationVisibilityForAny
-} from './browser-pane/browser-automation-visibility'
+} from './browser-pane/host-guest/browser-automation-visibility'
 import {
   isBrowserPageMobileDriven,
   onBrowserDriverChange,
@@ -57,7 +57,7 @@ import {
 import {
   useAnyBrowserGuestNeedsPaint,
   useWorktreeBrowserPageIds
-} from './browser-pane/browser-guest-paint-retention'
+} from './browser-pane/host-guest/browser-guest-paint-retention'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -70,12 +70,12 @@ import {
   selectBrowserGuestEvictionWorktreeIds,
   touchBrowserGuestWorktreeRecency,
   worktreeHoldsLiveBrowserGuests
-} from './browser-pane/browser-guest-worktree-retention'
+} from './browser-pane/host-guest/browser-guest-worktree-retention'
 import {
   hasActiveBrowserPageDownload,
   installBrowserPageDownloadActivityTracking
-} from './browser-pane/browser-page-download-activity'
-import { hasLiveBrowserGuest } from './browser-pane/webview-registry'
+} from './browser-pane/navigate/browser-page-download-activity'
+import { hasLiveBrowserGuest } from './browser-pane/host-guest/webview-registry'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,

@@ -118,6 +118,7 @@ import {
   type RetiredNameRegistry
 } from '../../../shared/worktree/retired-name-registry'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
@@ -227,6 +228,7 @@ import {
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
+  persistedNotificationSettingsRepaired,
   readDeprecatedExperimentFlag,
   readLegacySidekickFlag,
   resolveSetupGuideSidebarDismissedOnLoad
@@ -1152,6 +1154,19 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const normalizedNotifications = normalizeNotificationSettings(
+          parsed.settings?.notifications
+        )
+        // Why: a type-flipped notification field is repaired in memory only; without a dirty mark the
+        // bad value stays on disk and the repair reruns on every launch.
+        if (
+          persistedNotificationSettingsRepaired(
+            parsed.settings?.notifications,
+            normalizedNotifications
+          )
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
           parsed.settings?.sourceControlGroupOrder
         )
@@ -1259,7 +1274,7 @@ export class Store {
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
             }),
-            notifications: normalizeNotificationSettings(parsed.settings?.notifications),
+            notifications: normalizedNotifications,
             sourceControlAi: migratedSourceControlAi,
             sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
@@ -1376,6 +1391,20 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
+            const rawExplorerView = parsed.ui?.rightSidebarExplorerView
+            const rightSidebarExplorerView = normalizeRightSidebarExplorerView(
+              rawExplorerView,
+              parsed.ui?.rightSidebarTab
+            )
+            // Why: without a dirty mark the legacy "Search tab, no explorer view" repair stays
+            // in memory only, so a profile that never writes again redoes it on every launch.
+            if (
+              rawExplorerView === undefined
+                ? rightSidebarExplorerView !== defaults.ui.rightSidebarExplorerView
+                : rawExplorerView !== rightSidebarExplorerView
+            ) {
+              this.loadNeedsSave = true
+            }
             const setupGuideSidebarDismissed = resolveSetupGuideSidebarDismissedOnLoad(
               parsed.ui?.setupGuideSidebarDismissed,
               normalizedOnboarding
@@ -1415,10 +1444,7 @@ export class Store {
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               // Why here and not in getPersistedUI: only the raw payload still shows the legacy
               // "Search tab, no explorer view" shape — the defaults spread above fills in 'files'.
-              rightSidebarExplorerView: normalizeRightSidebarExplorerView(
-                parsed.ui?.rightSidebarExplorerView,
-                parsed.ui?.rightSidebarTab
-              ),
+              rightSidebarExplorerView,
               setupGuideSidebarDismissed,
               usagePercentageDisplayChangeNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
@@ -2068,8 +2094,11 @@ export class Store {
     return this.getProjectHostOperations().getRepo(id)
   }
 
-  setResolvedRepoGitUsername(id: string, username: string): boolean {
-    return this.getProjectHostOperations().setResolvedRepoGitUsername(id, username)
+  setResolvedRepoGitUsername(
+    target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+    username: string
+  ): boolean {
+    return this.getProjectHostOperations().setResolvedRepoGitUsername(target, username)
   }
 
   private projectGroupOperations: ProjectGroupPersistenceOperations | null = null
@@ -2486,17 +2515,34 @@ export class Store {
   }
 
   removeWorktreeMeta(worktreeId: string, hostId?: ExecutionHostId | null): void {
-    // Persisted ownership beats stale live routing; hostId is only an ownerless fallback.
-    const owner = this.state.worktreeMeta[worktreeId]?.hostId ?? hostId
+    // A host-qualified removal names the owner; the persisted host is the fallback.
+    const persistedOwner = this.state.worktreeMeta[worktreeId]?.hostId
+    const owner = hostId ?? persistedOwner
+    const preservesDifferentPersistedOwner = Boolean(
+      hostId && persistedOwner && persistedOwner !== hostId
+    )
+    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
+    const preservesSameIdSessionOwner = Boolean(
+      preservesDifferentPersistedOwner ||
+      (owner &&
+        hasWorktreeRemovalRepoOwnerOnOtherHost(
+          this,
+          getRepoIdFromWorktreeId(worktreeId),
+          ownerPartition
+        ))
+    )
     // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
     const partitions = new Set<ExecutionHostId>(
-      workspaceSessionPartitionIdsForHost(owner).filter((partition) =>
-        this.hasPersistedWorkspaceSession(partition)
+      workspaceSessionPartitionIdsForHost(owner).filter(
+        (partition) =>
+          this.hasPersistedWorkspaceSession(partition) &&
+          // The local partition can be a remote spill surface or a same-id owner.
+          // Preserve it whenever another owner may still use the bare id.
+          (!preservesSameIdSessionOwner || partition === ownerPartition)
       )
     )
     // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
     // partition that never held this worktree has no claim on the repo at all.
-    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
     const fencedPartitions = new Set(
       [...partitions].filter(
         (partition) =>
@@ -2505,9 +2551,11 @@ export class Store {
             !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
       )
     )
-    delete this.state.worktreeMeta[worktreeId]
-    delete this.state.worktreeLineageById[worktreeId]
-    delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    if (!preservesDifferentPersistedOwner) {
+      delete this.state.worktreeMeta[worktreeId]
+      delete this.state.worktreeLineageById[worktreeId]
+      delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    }
     for (const partition of partitions) {
       this.removeWorkspaceSessionOwnerInPartition(worktreeId, partition, {
         advanceTerminalTopologyRevision: fencedPartitions.has(partition)
