@@ -9,6 +9,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import { toLinuxPath } from '../shared/wsl-paths'
 import { hashWorktreeId } from '../main/terminal-history-id'
 import {
   deleteFishHistoryFile,
@@ -33,7 +34,8 @@ function historyFilename(shell: string): string | null {
 export function injectRelayHistoryEnv(
   env: Record<string, string>,
   worktreeId: string,
-  shell: string
+  shell: string,
+  options: { wsl?: boolean } = {}
 ): string | null {
   // Why first: same reason as the desktop path — an inherited ORCA_HISTFILE
   // would otherwise survive every early return below and let the remote wrapper
@@ -42,7 +44,9 @@ export function injectRelayHistoryEnv(
   if (env.HISTFILE) {
     return null
   }
-  const filename = historyFilename(shell)
+  // WSL's outer exe is wsl.exe, which matches no shell name; the guest login
+  // shell reads HISTFILE regardless, so pick the file the desktop path picks.
+  const filename = historyFilename(options.wsl ? 'bash' : shell)
   if (!filename) {
     return null
   }
@@ -81,12 +85,15 @@ export function injectRelayHistoryEnv(
       return null
     }
     closeSync(fd)
-    env.HISTFILE = path
+    // Why the same host file rather than a distro-scoped one: the guest reaches
+    // it over drvfs, so `deleteRelayHistory` still reclaims it by host path.
+    env.HISTFILE = options.wsl ? toLinuxPath(path) : path
     // Why a second variable: a remote macOS `/etc/zshrc` assigns HISTFILE
     // unconditionally before the wrapper runs, so the injected value is gone by
     // the first prompt. The wrapper restores it from here (#11044) — the same
-    // contract the desktop PTY path uses.
-    env.ORCA_HISTFILE = path
+    // contract the desktop PTY path uses. Under WSL it holds the guest-visible
+    // path and stays out of WSLENV, matching the desktop; no wrapper reads it there.
+    env.ORCA_HISTFILE = env.HISTFILE
     return HISTORY_ROOT
   } catch {
     return null

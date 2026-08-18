@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -68,6 +68,24 @@ function expectFinalZdotdirRestoreContext(content: string) {
   expect(content).toContain("after Orca's last wrapper file has loaded")
   expect(content).toContain('export ZDOTDIR="$_orca_home"')
 }
+
+describe('isRelayWslShell', () => {
+  it.each(['wsl.exe', 'WSL.EXE', 'C:\\Windows\\System32\\wsl.exe', 'wsl'])(
+    'recognizes %s on a Windows relay',
+    (shell) => {
+      expect(isRelayWslShell(shell, 'win32')).toBe(true)
+    }
+  )
+
+  it.each([
+    ['C:\\Program Files\\Git\\bin\\bash.exe', 'win32' as const],
+    ['/bin/bash', 'win32' as const],
+    // A POSIX remote reaches no distro, so a like-named binary is an ordinary shell.
+    ['wsl.exe', 'linux' as const]
+  ])('does not treat %s on %s as a WSL launch', (shell, platform) => {
+    expect(isRelayWslShell(shell, platform)).toBe(false)
+  })
+})
 
 describe('getRelayShellLaunchConfig', () => {
   let homeDir: string

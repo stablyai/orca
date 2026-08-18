@@ -16,7 +16,8 @@ import {
   isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
-import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import { addWslEnvKeys } from '../shared/wsl-env'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
@@ -1554,11 +1555,18 @@ export class PtyHandler {
     const worktreeId =
       typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const historyIsolationEnabled = params.historyIsolationEnabled === true
+    // Deliberately not reached by wsl.exe: a guest fish writes its history file
+    // inside the distro, where relay deletion cannot reach it (STA-4682).
     if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
       injectRelayFishHistoryEnv(spawnEnv, worktreeId)
     }
+    const wslShell = isRelayWslShell(shell)
     if (historyIsolationEnabled && worktreeId) {
-      injectRelayHistoryEnv(spawnEnv, worktreeId, shell)
+      const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
+      if (wslShell && historyRoot) {
+        // WSLENV is the only channel that carries a host env var into the guest.
+        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+      }
     }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
@@ -2162,6 +2170,8 @@ export class PtyHandler {
     ) {
       injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
     }
+    // No WSL branch on purpose: revive re-spawns the host default shell rather
+    // than the entry's stored override, so this env matches the shell it launches.
     if (historyIsolationEnabled && entry.worktreeId) {
       injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell)
     }

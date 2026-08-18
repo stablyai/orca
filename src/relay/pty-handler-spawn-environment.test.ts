@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   resolveSetupAgentSequenceLaunchCommand,
@@ -194,6 +194,69 @@ describe('PtyHandler', () => {
         rows: 24,
         env: { fish_history: fishHistorySessionName(hashWorktreeId('r::/other')) }
       })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBeUndefined()
+    })
+  })
+
+  describe('history isolation for a Windows relay launching WSL', () => {
+    const wslWorktreeId = 'r::/remote/wsl-worktree'
+    const wslHistoryFile = join(
+      homedir(),
+      '.orca-remote',
+      'terminal-history',
+      `${hashWorktreeId(wslWorktreeId)}-bash_history`
+    )
+    let previousPlatform: PropertyDescriptor | undefined
+
+    beforeEach(() => {
+      previousPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    })
+
+    afterEach(() => {
+      if (previousPlatform) {
+        Object.defineProperty(process, 'platform', previousPlatform)
+      }
+      rmSync(wslHistoryFile, { force: true })
+    })
+
+    const spawnWslPane = (): Promise<unknown> =>
+      dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        worktreeId: wslWorktreeId,
+        historyIsolationEnabled: true
+      })
+
+    it('scopes HISTFILE past the wsl.exe wrapper and carries it over WSLENV', async () => {
+      await spawnWslPane()
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.HISTFILE?.endsWith(`${hashWorktreeId(wslWorktreeId)}-bash_history`)).toBe(
+        true
+      )
+      expect(spawnEnv.WSLENV?.split(':')).toContain('HISTFILE')
+    })
+
+    // The injected file lives on the relay host, so the existing host-side
+    // unlink is the deletion counterpart — no distro-scoped root is involved.
+    it('deletes the injected file through the ordinary relay history deletion', async () => {
+      await spawnWslPane()
+      expect(existsSync(wslHistoryFile)).toBe(true)
+
+      await dispatcher.callRequest('pty.deleteWorktreeHistory', { worktreeId: wslWorktreeId })
+
+      expect(existsSync(wslHistoryFile)).toBe(false)
+    })
+
+    // Guest fish keeps its history inside the distro, where relay deletion cannot
+    // reach it, so wsl.exe panes intentionally stay on shared fish history.
+    it('does not mint a fish session for a WSL pane', async () => {
+      await spawnWslPane()
 
       const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
       expect(spawnEnv.fish_history).toBeUndefined()
