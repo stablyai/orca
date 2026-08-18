@@ -17,6 +17,11 @@ import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import {
+  DEV_BUNDLE_ID,
+  getDevBundlePlistPatches,
+  getDevHelperPlistPatches
+} from './dev-electron-bundle-identity.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -128,9 +133,9 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  // v10: add the keyboard-layout helper. A stale copy only emits extra fields
-  // the parser ignores, so narrowing its schema needs no bump.
-  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v10'
+  // v11: stop patching the branch title into Info.plist so every dev bundle signs to one cdhash.
+  // A stale copy only emits extra fields the parser ignores, so narrowing its schema needs no bump.
+  const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -138,8 +143,9 @@ function prepareMacDevElectronApp() {
     .digest('hex')
     .slice(0, 12)
   const distDir = path.join(repoRoot, 'out', 'electron-dev', hash)
-  // Why: macOS Dock hover uses the bundle's filesystem display name for
-  // electron-vite's direct binary launch path, even when Info.plist is patched.
+  // Why: macOS Dock hover uses the bundle's filesystem display name for electron-vite's direct
+  // binary launch path. This is what carries the per-branch name now that Info.plist no longer does,
+  // and it sits outside the code signature, so varying it does not disturb the cdhash.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
@@ -153,11 +159,20 @@ function prepareMacDevElectronApp() {
   // once, macOS may route a notification click to the other instance —
   // Electron drops clicks for notification ids it didn't create, so the
   // click is lost, not misdirected.
-  const bundleId = 'com.stablyai.orca.dev'
-  const helperBundleId = `${bundleId}.helper`
+  const bundleId = DEV_BUNDLE_ID
   process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
+  // Why the patches are in the marker: bundleLayoutVersion alone does not cover them, so a cache
+  // built before a patch value changed would be reused and keep presenting the old identity.
   const expectedMarker = JSON.stringify(
-    { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
+    {
+      title,
+      appBundleName,
+      bundleId,
+      sourceAppPath,
+      electronVersion,
+      bundleLayoutVersion,
+      plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
+    },
     null,
     2
   )
@@ -214,10 +229,17 @@ function prepareMacDevElectronApp() {
     'Contents',
     'Info.plist'
   )
-  setPlistValue(plistPath, 'CFBundleName', title)
-  setPlistValue(plistPath, 'CFBundleDisplayName', title)
-  setPlistValue(plistPath, 'CFBundleIdentifier', bundleId)
-  setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)
+  // Why every value here is constant: Info.plist is inside the signature seal, so a branch-varying
+  // value (these keys used to carry the branch title) changed the ad-hoc cdhash per branch, and
+  // macOS Keychain ACLs match on that cdhash — every branch read as a different app and re-prompted.
+  // Patching these keys is fine; varying them is not. The Dock takes its label from the .app
+  // directory name (see appBundleName), which is outside the signature, so per-branch names survive.
+  for (const { key, value } of getDevBundlePlistPatches()) {
+    setPlistValue(plistPath, key, value)
+  }
+  for (const { key, value } of getDevHelperPlistPatches()) {
+    setPlistValue(helperPlistPath, key, value)
+  }
 
   // Why: the notification-status helper reads the app's real macOS
   // notification authorization (UNUserNotificationCenter has no Electron
