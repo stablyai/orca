@@ -125,16 +125,15 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.getRepos.mockReturnValue([existing])
     const safeDirectory = await import('../git/git-safe-directory')
+    const blocker = [
+      'Git refuses to use this repository because of dubious ownership.',
+      'Repository path:',
+      'D:/workspace/example',
+      'git config --global --add safe.directory <path>'
+    ].join('\n')
     const accessSpy = vi
       .spyOn(safeDirectory, 'getLocalGitRepoAccessBlocker')
-      .mockResolvedValue(
-        [
-          'Git refuses to use this repository because of dubious ownership.',
-          'Repository path:',
-          'D:/workspace/example',
-          'git config --global --add safe.directory <path>'
-        ].join('\n')
-      )
+      .mockResolvedValue(blocker)
 
     try {
       const result = await handlers.get('repos:add')!(null, {
@@ -144,7 +143,9 @@ describe('repos:add + repos:clone', () => {
       expect(result).toMatchObject({
         error: expect.stringContaining('dubious ownership')
       })
+      expect(result).toEqual({ error: blocker })
       expect(mockStore.addRepo).not.toHaveBeenCalled()
+      expect(prepareLocalWorktreeRootForRepoMock).not.toHaveBeenCalled()
     } finally {
       accessSpy.mockRestore()
     }
