@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps .vcl files to the custom vcl language id', () => {
+    expect(detectLanguage('fastly/main.vcl')).toBe('vcl')
+    expect(detectLanguage('C:\\repo\\varnish\\default.VCL')).toBe('vcl')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')

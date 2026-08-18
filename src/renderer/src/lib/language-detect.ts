@@ -95,6 +95,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nim': 'nim',
   '.nims': 'nim',
   '.nimble': 'nim',
+  '.vcl': 'vcl',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.prisma': 'graphql',
