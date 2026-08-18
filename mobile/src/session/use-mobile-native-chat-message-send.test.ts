@@ -45,13 +45,16 @@ describe('useMobileNativeChatMessageSend', () => {
   const onCommandSend = vi.fn()
   const commandSendRef = { current: onCommandSend }
   const agentRef = { current: null as string | null }
+  const agentWorkingRef = { current: false }
   let onSendError = vi.fn()
 
   const mount = (
     readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null,
-    agent: string | null = 'claude'
+    agent: string | null = 'claude',
+    agentWorking = false
   ): void => {
     agentRef.current = agent
+    agentWorkingRef.current = agentWorking
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
         client: { sendRequest: vi.fn() } as never,
@@ -60,6 +63,7 @@ describe('useMobileNativeChatMessageSend', () => {
         deviceTokenRef: { current: 'device' },
         agentRef,
         commandSendRef,
+        agentWorkingRef,
         captureSendOrigin,
         readSeededLaunchDraftSeed,
         clearDraftForSend,
@@ -215,6 +219,36 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     expect(acceptSend).toHaveBeenCalledTimes(1)
     expect(onCommandSend).not.toHaveBeenCalled()
+  })
+
+  it('tags an echo sent while the agent was idle as not queued', async () => {
+    mount(() => null, 'claude', false)
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(acceptSend.mock.calls[0]?.[3]).toBe(false)
+  })
+
+  // The tier is snapshotted before the RPC on purpose: this send is what flips the
+  // agent to working, so reading the flag after it settles would tag every idle
+  // send as queued and push the reply above the prompt that caused it.
+  it('tags an echo queued while the agent was already replying', async () => {
+    mount(() => null, 'claude', true)
+    await act(async () => {
+      await api!.send('and this too')
+    })
+    expect(acceptSend.mock.calls[0]?.[3]).toBe(true)
+  })
+
+  it('reads the tier at send time, not after the send settles', async () => {
+    mount(() => null, 'claude', false)
+    await act(async () => {
+      const inFlight = api!.send('hello')
+      // The agent starts working *because of* this send, before acceptSend runs.
+      agentWorkingRef.current = true
+      await inFlight
+    })
+    expect(acceptSend.mock.calls[0]?.[3]).toBe(false)
   })
 
   // The STA-3332 "Queued forever" regression: command sends dispatch into the

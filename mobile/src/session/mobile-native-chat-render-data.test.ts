@@ -73,6 +73,31 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(last.blocks).toEqual([{ type: 'text', text: 'queued' }])
   })
 
+  // The streaming reply answers a prompt that was sent while the agent was idle,
+  // so it must render BELOW that prompt's echo. Emitting all echoes after the
+  // bubble put the reply above the message that caused it.
+  it('puts the streaming bubble after an echo sent while the agent was idle', () => {
+    const data = build([assistant('a1', 'hello')], 'Sure, working on it', [
+      { id: 'p1', text: 'do the thing' }
+    ])
+    expect(data.map((message) => message.id)).toEqual(['a1', 'p1', 'streaming'])
+  })
+
+  it('keeps an echo queued mid-reply after the streaming bubble', () => {
+    const data = build([assistant('a1', 'hello')], 'Sure, working on it', [
+      { id: 'p1', text: 'and this too', queuedWhileWorking: true }
+    ])
+    expect(data.map((message) => message.id)).toEqual(['a1', 'streaming', 'p1'])
+  })
+
+  it('splits idle and queued echoes around the streaming bubble', () => {
+    const data = build([assistant('a1', 'hello')], 'Sure, working on it', [
+      { id: 'p1', text: 'first' },
+      { id: 'p2', text: 'second', queuedWhileWorking: true }
+    ])
+    expect(data.map((message) => message.id)).toEqual(['a1', 'p1', 'streaming', 'p2'])
+  })
+
   it('renders a pending send with images as text followed by image-ref thumbnails', () => {
     const data = build([], null, [
       { id: 'p1', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }
@@ -163,7 +188,11 @@ describe('buildMobileNativeChatTransientData', () => {
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {
     // Whether text streams at all is the gate's call
     // (`mobile-native-chat-streaming-gate.test.ts`); this only places it.
-    const data = build([user('u1', 'hi')], 'thinking out loud', [{ id: 'p1', text: 'queued' }])
+    // The echo is flagged queued because that is what puts it after the bubble —
+    // an unflagged (idle) send is the prompt the reply answers and sorts above it.
+    const data = build([user('u1', 'hi')], 'thinking out loud', [
+      { id: 'p1', text: 'queued', queuedWhileWorking: true }
+    ])
     expect(data.map((message) => message.id)).toEqual(['u1', 'streaming', 'p1'])
     expect(data[1].blocks).toEqual([{ type: 'text', text: 'thinking out loud' }])
   })

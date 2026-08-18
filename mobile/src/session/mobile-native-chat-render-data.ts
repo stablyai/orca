@@ -41,6 +41,9 @@ export type MobileNativeChatPendingItem = {
   id: string
   text: string
   images?: string[]
+  /** True when the agent was already replying at send time, so this prompt is
+   *  queued behind the in-flight turn and belongs after the streaming bubble. */
+  queuedWhileWorking?: boolean
 }
 
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
@@ -84,8 +87,26 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
+  const echoMessage = (p: MobileNativeChatPendingItem): NativeChatMessage => ({
+    id: p.id,
+    role: 'user' as const,
+    // Text first (when present), then a thumbnail per ridden-along image so the
+    // sent photo shows immediately, before the transcript echo lands.
+    blocks: [
+      ...(p.text ? [{ type: 'text' as const, text: p.text }] : []),
+      ...(p.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
+    ],
+    timestamp: null,
+    source: 'transcript' as const
+  })
+  // The streaming bubble splits the echoes rather than preceding all of them: a
+  // prompt sent while the agent was idle is what this reply is answering, so the
+  // reply belongs BELOW it. Only a prompt queued mid-reply sits after the bubble.
+  // Emitting every echo last put the reply above the message that caused it, which
+  // read as the sent message being stuck at the bottom of the transcript.
   const data: NativeChatMessage[] = [
     ...renderedFolded,
+    ...pending.filter((p) => !p.queuedWhileWorking).map(echoMessage),
     ...(streaming
       ? [
           {
@@ -97,18 +118,7 @@ export function buildMobileNativeChatTransientData({
           }
         ]
       : []),
-    ...pending.map((p) => ({
-      id: p.id,
-      role: 'user' as const,
-      // Text first (when present), then a thumbnail per ridden-along image so the
-      // sent photo shows immediately, before the transcript echo lands.
-      blocks: [
-        ...(p.text ? [{ type: 'text' as const, text: p.text }] : []),
-        ...(p.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
-      ],
-      timestamp: null,
-      source: 'transcript' as const
-    }))
+    ...pending.filter((p) => p.queuedWhileWorking).map(echoMessage)
   ]
   return { folded: renderedFolded, streaming, data }
 }

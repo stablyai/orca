@@ -10,6 +10,11 @@ export type MobileNativeChatPendingMessage = {
    *  and rebased onto the first authoritative read instead of reconciling
    *  against rows that may belong to another tab. */
   baselineResolved: boolean
+  /** True when the agent was already replying at send time, so this prompt is
+   *  queued behind the in-flight turn and belongs after the streaming bubble.
+   *  Absent (idle send) means the streaming reply is the answer TO this echo and
+   *  must render below it. */
+  queuedWhileWorking?: boolean
 }
 
 export type MobileNativeChatSendOrigin = {
@@ -40,7 +45,8 @@ export function appendMobileNativeChatPending(
   id: string,
   origin: MobileNativeChatSendOrigin,
   text: string,
-  images?: string[]
+  images?: string[],
+  queuedWhileWorking?: boolean
 ): PendingByKey {
   const current = previous[key] ?? []
   const earlierOutstanding = current.filter(
@@ -63,7 +69,8 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
-        ...(images?.length ? { images } : {})
+        ...(images?.length ? { images } : {}),
+        ...(queuedWhileWorking ? { queuedWhileWorking: true } : {})
       }
     ]
   }
