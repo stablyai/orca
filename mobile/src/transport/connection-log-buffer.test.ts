@@ -53,4 +53,23 @@ describe('connection log buffer', () => {
     store.append('host-a', entry(2))
     expect(onA).toHaveBeenCalledTimes(1)
   })
+
+  it('forgetHost drops the entries and notifies subscribers of the emptied host', () => {
+    const store = createConnectionLogStore()
+    const onA = vi.fn()
+    const onB = vi.fn()
+    store.subscribe('host-a', onA)
+    store.subscribe('host-b', onB)
+    store.append('host-a', entry(1))
+    store.append('host-b', entry(2))
+    onA.mockClear()
+
+    store.forgetHost('host-a')
+
+    expect(store.get('host-a')).toEqual([])
+    expect(onA).toHaveBeenCalledTimes(1)
+    // The other host keeps its log untouched, unnotified.
+    expect(store.get('host-b').map((e) => e.id)).toEqual(['log-2'])
+    expect(onB).toHaveBeenCalledTimes(1)
+  })
 })

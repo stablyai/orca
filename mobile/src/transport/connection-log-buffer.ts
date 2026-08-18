@@ -13,6 +13,7 @@ export type ConnectionLogStore = {
   append: (hostId: string, entry: ConnectionLogEntry) => void
   get: (hostId: string) => readonly ConnectionLogEntry[]
   subscribe: (hostId: string, listener: () => void) => () => void
+  forgetHost: (hostId: string) => void
 }
 
 export function createConnectionLogStore(
@@ -58,6 +59,20 @@ export function createConnectionLogStore(
       const snapshot = Object.freeze([...entries])
       snapshotByHost.set(hostId, snapshot)
       return snapshot
+    },
+
+    // Why: host removal is the only retirement event; without it every
+    // unpaired host strands its capped log array until app restart.
+    forgetHost(hostId) {
+      entriesByHost.delete(hostId)
+      snapshotByHost.delete(hostId)
+      const listeners = listenersByHost.get(hostId)
+      if (listeners) {
+        // Why: a mounted log screen must re-render to empty, not show stale rows.
+        for (const listener of listeners) {
+          listener()
+        }
+      }
     },
 
     subscribe(hostId, listener) {
