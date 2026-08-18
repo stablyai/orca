@@ -192,7 +192,7 @@ describe('orchestration federated worker output', () => {
       ok: true,
       result: {
         server: { environmentId: 'environment_windows', name: 'windows' },
-        observation: { status: 'running', exactWorker: true },
+        observation: { status: 'live', exactWorker: true },
         terminal: { handle: 'term_windows_worker' }
       }
     })

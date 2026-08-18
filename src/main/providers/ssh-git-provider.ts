@@ -34,6 +34,7 @@ import {
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 import { GitStatusReadLeaseOwner } from '../git/git-status-read-lease-owner'
+import { GitUpstreamStatusReadOwner } from '../git/git-upstream-status-read-owner'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -90,6 +91,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
   private readonly statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
+  private readonly upstreamStatusReadOwner = new GitUpstreamStatusReadOwner()
 
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -107,6 +109,7 @@ export class SshGitProvider implements IGitProvider {
   private invalidateGitReads(): void {
     this.gitDiffReadDedupe.clear()
     this.statusReadLeaseOwner.invalidate()
+    this.upstreamStatusReadOwner.invalidate()
   }
 
   private loggedWorktreeIsCleanFallback = false
@@ -529,10 +532,16 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     pushTarget?: GitPushTarget
   ): Promise<GitUpstreamStatus> {
-    return (await this.mux.request('git.upstreamStatus', {
+    return this.upstreamStatusReadOwner.read(
+      { kind: 'ssh-provider' },
       worktreePath,
-      ...(pushTarget ? { pushTarget } : {})
-    })) as GitUpstreamStatus
+      pushTarget,
+      async () =>
+        (await this.mux.request('git.upstreamStatus', {
+          worktreePath,
+          ...(pushTarget ? { pushTarget } : {})
+        })) as GitUpstreamStatus
+    )
   }
 
   async pushBranch(

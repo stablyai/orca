@@ -64,8 +64,14 @@ describe('CodexRuntimeHomeService', () => {
       const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
       const expectedHome = join(wslHome, '.codex')
 
-      expect(service.prepareForRateLimitFetch(target)).toBe(expectedHome)
-      expect(service.prepareForRateLimitFetch(target)).toBe(expectedHome)
+      expect(service.prepareForRateLimitFetch(target)).toEqual({
+        kind: 'ready',
+        codexHomePath: expectedHome
+      })
+      expect(service.prepareForRateLimitFetch(target)).toEqual({
+        kind: 'ready',
+        codexHomePath: expectedHome
+      })
       expect(syncWslRuntime).not.toHaveBeenCalled()
     } finally {
       if (originalPlatform) {
@@ -138,9 +144,10 @@ describe('CodexRuntimeHomeService', () => {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
 
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: null })).toBe(
-        join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
-      )
+      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: null })).toEqual({
+        kind: 'ready',
+        codexHomePath: join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
+      })
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(ubuntuAuth)
     } finally {
       if (originalPlatform) {
@@ -194,9 +201,10 @@ describe('CodexRuntimeHomeService', () => {
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        systemCodexHomePath
-      )
+      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
+        kind: 'ready',
+        codexHomePath: systemCodexHomePath
+      })
       expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
       const externallyRefreshedAuth = createCodexAuthJson(
         'wsl@example.com',
@@ -205,9 +213,10 @@ describe('CodexRuntimeHomeService', () => {
         3_000
       )
       writeFileSync(join(systemCodexHomePath, 'auth.json'), externallyRefreshedAuth, 'utf-8')
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        systemCodexHomePath
-      )
+      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
+        kind: 'ready',
+        codexHomePath: systemCodexHomePath
+      })
       expect(readFileSync(join(systemCodexHomePath, 'auth.json'), 'utf-8')).toBe(
         externallyRefreshedAuth
       )

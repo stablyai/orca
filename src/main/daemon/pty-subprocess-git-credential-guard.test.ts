@@ -51,7 +51,8 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
-    validateWorkingDirectory: validateWorkingDirectoryMock
+    validateWorkingDirectory: validateWorkingDirectoryMock,
+    validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
 })
 
@@ -85,7 +86,7 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('appends Git prompt guards after the detached daemon inherited config', () => {
+  it('appends Git prompt guards after the detached daemon inherited config', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -107,7 +108,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'guarded-git-config',
         cols: 80,
         rows: 24,
@@ -145,7 +146,7 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('does not infer a guard from caller-set prompt scalars', () => {
+  it('does not infer a guard from caller-set prompt scalars', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const savedGitConfigEnv = Object.fromEntries(
@@ -167,7 +168,7 @@ describe('createPtySubprocess', () => {
     process.env.GIT_CONFIG_VALUE_2 = 'two'
 
     try {
-      createPtySubprocess({
+      await createPtySubprocess({
         sessionId: 'explicit-guarded-git-config',
         cols: 80,
         rows: 24,
@@ -201,11 +202,11 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('guards a trusted daemon agent whose launch command is wrapped', () => {
+  it('guards a trusted daemon agent whose launch command is wrapped', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
 
-    createPtySubprocess({
+    await createPtySubprocess({
       sessionId: 'trusted-wrapped-agent',
       cols: 80,
       rows: 24,

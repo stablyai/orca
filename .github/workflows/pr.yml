@@ -24,7 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -122,7 +126,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Reject new root-level files and folders
@@ -142,7 +150,19 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - run: pnpm typecheck
+      # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
+      # the next run skip unchanged files. CI threw it away each time. The key is per-SHA
+      # so each run saves its own; restore-keys inherit the newest prior graph to diff against.
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: config/*.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+            tsbuildinfo-${{ runner.os }}-
+
+      - run: pnpm run typecheck
 
   git_compatibility:
     name: Git compatibility
@@ -156,19 +176,34 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
+      # same binary on every PR for minutes of runner time. The key carries the version
+      # because that is the only input; the sha256 assertion below still guards the
+      # tarball on the miss path that actually builds.
+      - name: Cache baseline Git build
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/orca-git-compat/git-2.25.5
+          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
+
       - name: Verify Git binary compatibility matrix
         run: |
           pids=()
           (
             archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-            source="$RUNNER_TEMP/git-2.25.5"
-            curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-            echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-              | sha256sum --check
-            mkdir -p "$source"
-            tar -xzf "$archive" -C "$source" --strip-components=1
-            make -C "$source" -j"$(nproc)" \
-              NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+            source="$HOME/.cache/orca-git-compat/git-2.25.5"
+            if [ ! -x "$source/git" ]; then
+              curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+              echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+                | sha256sum --check
+              mkdir -p "$source"
+              tar -xzf "$archive" -C "$source" --strip-components=1
+              make -C "$source" -j"$(nproc)" \
+                NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+              # Why: the linked binaries are what the next run needs; the objects that
+              # produced them are most of the tree and would bloat the cache entry.
+              find "$source" -name '*.o' -delete
+            fi
             ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
               pnpm exec vitest run --config config/vitest.config.ts \
               src/shared/git-binary-compatibility.test.ts
@@ -193,6 +228,34 @@ jobs:
             wait "$pid" || status=1
           done
           exit "$status"
+
+  xterm_patch_sync:
+    name: xterm patch sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
+      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
+      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
+      - name: Restore upstream xterm build inputs
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.npm
+            ${{ runner.temp }}/xterm-patch-build/upstream/.git
+          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+
+      - name: Verify xterm patches match the pinned upstream build
+        env:
+          WORK_DIR: ${{ runner.temp }}/xterm-patch-build
+        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
 
   shell_contracts:
     name: shell contracts
@@ -224,14 +287,17 @@ jobs:
           # non-zero and would red this required check over something unrelated to the
           # PR. Every fish outcome is judged by the version gate below instead, so only
           # the zsh install (which has no such gate) stays fatal here.
-          sudo apt-get update || true
           # Why retry only here: adding the PPA is the network-flaky step, and the
           # version gate below is fatal, so a transient Launchpad blip would
           # otherwise red a required check on PRs unrelated to shells.
+          # Why -n: add-apt-repository refreshes every configured repo on its own. With
+          # an update on each side of it this step refreshed them three times over, and
+          # the Azure archive mirror alone costs ~15-30s a pass. The PPA index is the
+          # only thing the repo list gains here, and the single update below fetches it.
           for attempt in 1 2 3; do
-            sudo add-apt-repository -y ppa:fish-shell/release-4 && break
+            sudo add-apt-repository -y -n ppa:fish-shell/release-4 && break
             echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
-            sudo add-apt-repository -y -r ppa:fish-shell/release-4 || true
+            sudo add-apt-repository -y -n -r ppa:fish-shell/release-4 || true
             sleep 5
           done
           sudo apt-get update || true
@@ -270,7 +336,12 @@ jobs:
             src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/main/shell-startup-feature-channel.test.ts \
+            src/main/terminal-history-fish-session.node-pty.test.ts \
+            src/main/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
@@ -309,7 +380,12 @@ jobs:
             --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/shell-startup-feature-channel.test.ts \
+            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
@@ -325,7 +401,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -465,8 +545,11 @@ jobs:
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
 
+      # Why the :parallel variant: identical to build:release except the three
+      # electron-vite targets overlap instead of running back to back. The Linux package
+      # job already packages and smoke-tests an AppImage built that way.
       - name: Build package inputs
-        run: pnpm run build:release
+        run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
@@ -495,7 +578,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Filter changed E2E specs
@@ -508,6 +595,33 @@ jobs:
           TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
           if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
             TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
+          fi
+          # Why: the Docker-SSH specs only ever ran when someone edited a spec, so four
+          # pane-restore regressions shipped from SSH source edits that touched no test.
+          # Unit tests are excluded because they prove the same source without Docker.
+          # ssh-startup-exec-readiness.spec.ts is listed to route e2e.yml's dedicated
+          # ssh-docker-watcher-isolation lane, which filters it out of changed-e2e.
+          if printf '%s\n' "$CHANGED" | grep -Ev '\.test\.tsx?$' | grep -Eq '^(src/main/ssh/|src/main/providers/ssh-|src/main/ipc/(ssh-|pty)|src/relay/|src/renderer/src/components/terminal-pane/(pty-|ssh-|remote-runtime-|terminal-parked-pty))'; then
+            TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
+              'tests/e2e/pty-input-write-queue-ssh.spec.ts' \
+              'tests/e2e/ssh-cold-activation-restore.spec.ts' \
+              'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts' \
+              'tests/e2e/ssh-startup-exec-readiness.spec.ts' \
+              'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts' | sort -u)"
+          fi
+          # Why: same lesson as the SSH specs above. The IME e2e suite asserts real pty bytes and
+          # real overlay geometry, but only ran when someone edited a spec, so every IME fix in the
+          # 1.4.18x window shipped without it - including one whose diagnosis hardware later refuted.
+          # config/patches is listed because the terminal's input handling lives in the xterm patch.
+          if printf '%s\n' "$CHANGED" | grep -Ev '\.test\.tsx?$' | grep -Eq '^(config/patches/|src/renderer/src/components/terminal-pane/(terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy))'; then
+            TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
+              'tests/e2e/terminal-cjk-ime-committed-text.spec.ts' \
+              'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts' \
+              'tests/e2e/terminal-ime-exact-byte.spec.ts' \
+              'tests/e2e/terminal-korean-composing-chord-order.spec.ts' \
+              'tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts' \
+              'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts' \
+              'tests/e2e/terminal-korean-preedit-visibility.spec.ts' | sort -u)"
           fi
           TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
@@ -537,6 +651,7 @@ jobs:
       - root_directory_guard
       - typecheck
       - git_compatibility
+      - xterm_patch_sync
       - shell_contracts
       - test
       - managed_hook_node18
@@ -559,6 +674,7 @@ jobs:
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
@@ -570,6 +686,7 @@ jobs:
             "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
+            "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
             "$MANAGED_HOOK_NODE18" \

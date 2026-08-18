@@ -2,10 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  buildWslInteractiveLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
+import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
@@ -15,7 +12,10 @@ const CMD_CODEX_LAUNCH_PREFLIGHT =
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
-  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(command)]
+  // Why spelled out rather than calling buildWslExecArgs: deriving the
+  // expectation from the helper under test would still pass if it regressed
+  // to the `--` separator.
+  const shellArgs = ['--exec', 'sh', '-c', command]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
@@ -384,8 +384,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // Why: typed OMP keeps its existing shell integration, while typed Prime
     // commands must reach the user's binary without Orca rewriting argv.
     const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
-    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    for (const wrapperFile of [bashRcfile, zshLogin]) {
+    // Why .zshenv: the omp wrapper is part of the epilogue defined there.
+    const zshEnv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
       expect(wrapperFile).not.toContain('prime-agent()')
@@ -425,14 +426,12 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // The injected sh cmd must not break out of the surrounding single quotes
     // when the path contains a ' character.
     expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
-    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -l')
+    expect(result.shellArgs[3]).toContain('exec "$_orca_wsl_shell" -l')
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', '\\\\server\\share', 'C:\\Users\\alice')
-    expect(result.shellArgs[3]).toContain(
-      'cd \'/mnt/c\' && export PATH="\\$HOME/.local/bin:\\$PATH"'
-    )
+    expect(result.shellArgs[3]).toContain('cd \'/mnt/c\' && export PATH="$HOME/.local/bin:$PATH"')
   })
 
   it('keeps WSL UNC worktree cwd inside the matching distro', () => {

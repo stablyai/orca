@@ -1,29 +1,24 @@
 // Why: the middle band and the project band scored queries with byte-identical copies of
 // this logic, so ranking fixes only ever landed in one of the two.
 
+import { normalizePaletteText } from '@/lib/palette-match/normalized-text'
+import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+
+// Why: normalizePaletteText already folds every Unicode space to U+0020, so only ASCII
+// control whitespace can still reach the collapsing pass below.
 function isCmdJPaletteWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
+  return code === 32 || (code >= 9 && code <= 13)
 }
 
-// Why: iterating code units would lowercase surrogate halves separately, leaving
-// supplementary-plane characters uncased and unmatchable.
+// Why: one Cmd+J query must fold identically in every section, so case/Unicode folding comes
+// from the shared matcher and only run collapsing (which entity tokens skip) stays local.
+// The collapse avoids a regex over untrusted pasted text.
 export function normalizeCmdJPaletteQuery(value: string): string {
+  const folded = normalizePaletteText(value).normalized
   let normalized = ''
   let pendingWhitespace = false
-  for (const character of value) {
-    if (isCmdJPaletteWhitespace(character.codePointAt(0) ?? 0)) {
+  for (let index = 0; index < folded.length; index += 1) {
+    if (isCmdJPaletteWhitespace(folded.charCodeAt(index))) {
       pendingWhitespace = normalized.length > 0
       continue
     }
@@ -31,9 +26,26 @@ export function normalizeCmdJPaletteQuery(value: string): string {
       normalized += ' '
       pendingWhitespace = false
     }
-    normalized += character.toLowerCase()
+    normalized += folded[index]
   }
   return normalized
+}
+
+// Why: the token ceiling is a query rule, not a section rule, so it counts whitespace-split
+// unique tokens exactly like the shared preparer instead of this file's punctuation-stripping
+// tokenizer, which would reject `08-13 1.4.182` far earlier than the entity sections do.
+export function isCmdJPaletteQueryOverTokenLimit(normalizedQuery: string): boolean {
+  const seen = new Set<string>()
+  for (const token of normalizedQuery.split(' ')) {
+    if (!token) {
+      continue
+    }
+    seen.add(token)
+    if (seen.size > PALETTE_QUERY_MAX_TOKENS) {
+      return true
+    }
+  }
+  return false
 }
 
 export function uniqueNormalizedCmdJPaletteKeywords(values: readonly string[]): string[] {

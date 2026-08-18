@@ -1,26 +1,31 @@
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, win32 as pathWin32 } from 'node:path'
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { basename, join, win32 as pathWin32 } from 'node:path'
+import { statSync } from 'node:fs'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import {
-  getFishCodexShellLaunchPreflight,
-  getPosixCodexShellLaunchPreflight
-} from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
 import {
   getFishShellReadyInitCommand,
-  getZshEnvTemplate,
-  getZshFinalZdotdirRestoreBlock,
-  getZshShellReadyMarkerRegistrationBlock,
-  getZshStartupFileSourceBlock
+  ZSH_WRAPPER_DIR_MARKER_CONTENT,
+  ZSH_WRAPPER_DIR_MARKER_FILE
 } from '../shell-templates'
+import {
+  encodeShellStartupFeatures,
+  SHELL_STARTUP_FEATURE_ENV,
+  type ShellStartupFeature
+} from '../shell-startup-features'
+import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
+import {
+  resolveInheritedZdotdir,
+  resolveInheritedZshenvSourceDir
+} from '../zsh-wrapper-dir-ownership'
+import { buildZshStartupWrapperFiles } from '../zsh-startup-wrapper-builder'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
-import { getDaemonZshShellReadyRcfileContent } from './daemon-zsh-shell-ready-rcfile'
+import { getDaemonZshWrapperSpec } from './daemon-zsh-shell-ready-wrapper-spec'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
@@ -33,128 +38,60 @@ function getShellReadyWrapperRoot(): string {
   return join(userDataPath || tmpdir(), userDataPath ? 'shell-ready' : 'orca-shell-ready')
 }
 
-// Why: if our own process inherited ZDOTDIR from a parent shell that was
-// itself an Orca PTY (e.g. the user launched Orca from a terminal inside a
-// running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
-// Propagating it as the new PTY's ORCA_ORIG_ZDOTDIR makes the wrapper's
-// `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` line source itself recursively —
-// zsh gives "job table full or recursion limit exceeded" and the shell
-// never reaches a usable prompt.
-//
-// Any path component ending in `/shell-ready/zsh` is an Orca wrapper dir
-// (regardless of whether it came from this daemon's userData, a packaged
-// Orca, or a different dev build). Treat it as if ZDOTDIR were unset so the
-// caller falls back to HOME for the user's real config root.
-function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
-  if (!value) {
-    return null
-  }
-  // Why: tolerate trailing slashes — some shell startup scripts export
-  // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
-  // miss the self-loop path and restore the recursion bug. Also collapses
-  // a pathological `ZDOTDIR=/` to empty so we fall back to HOME rather than
-  // sourcing `/.zshenv` (which is never the user's real config).
-  const normalized = value.replace(/\/+$/, '')
-  if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
-    return null
-  }
-  return value
-}
-
-function resolveOriginalZdotdir(): string {
-  return (
-    normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) ||
-    normalizeOriginalZdotdirCandidate(process.env.ORCA_ORIG_ZDOTDIR) ||
-    process.env.HOME ||
-    ''
-  )
-}
-
-function resolveOriginalZshenvSourceDir(): string {
-  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
-}
-
 function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
   return [
     join(root, 'zsh', '.zshenv'),
     join(root, 'zsh', '.zprofile'),
     join(root, 'zsh', '.zshrc'),
     join(root, 'zsh', '.zlogin'),
+    join(root, 'zsh', ZSH_WRAPPER_DIR_MARKER_FILE),
     join(root, 'bash', 'rcfile')
   ]
 }
 
+// Why non-empty and not just present: a partial write leaves a zero-byte
+// .zshenv, and pointing ZDOTDIR at that dir makes zsh skip the user's config.
 function shellReadyWrappersExist(): boolean {
-  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+  return getRequiredShellReadyWrapperPaths().every((path) => {
+    try {
+      return statSync(path).size > 0
+    } catch {
+      return false
+    }
+  })
 }
 
-function ensureShellReadyWrappers(): void {
+/** True when every wrapper file is present and non-empty afterwards. */
+function ensureShellReadyWrappers(): boolean {
   if (process.platform === 'win32') {
-    return
+    return false
   }
   if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
-    return
+    return true
   }
   didEnsureShellReadyWrappers = true
 
   const root = getShellReadyWrapperRoot()
   const zshDir = join(root, 'zsh')
-  const bashDir = join(root, 'bash')
+  const zsh = buildZshStartupWrapperFiles(getDaemonZshWrapperSpec(zshDir))
 
-  const zshEnv = getZshEnvTemplate(zshDir, 'daemon')
-  const zshProfile = `# Orca daemon zsh shell-ready wrapper
-${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
-`
-  const zshRc = getDaemonZshShellReadyRcfileContent()
-  const zshLogin = `# Orca daemon zsh shell-ready wrapper
-${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
-__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}
-__orca_restore_agent_teams_path
-# Why: .zlogin is the final login startup file before the prompt is shown.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-${getPosixOmpShellWrapper()}
-[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-${getPosixCodexShellLaunchPreflight()}
-${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER)}
-${getZshFinalZdotdirRestoreBlock()}
-`
-  const bashRc = getDaemonBashShellReadyRcfileContent()
-
-  const files = [
-    [join(zshDir, '.zshenv'), zshEnv],
-    [join(zshDir, '.zprofile'), zshProfile],
-    [join(zshDir, '.zshrc'), zshRc],
-    [join(zshDir, '.zlogin'), zshLogin],
-    [join(bashDir, 'rcfile'), bashRc]
-  ] as const
-
-  try {
-    for (const [path, content] of files) {
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, content, 'utf8')
-      chmodSync(path, 0o644)
-    }
-  } catch (error) {
-    // Why: wrapper file creation can fail due to read-only filesystems, permission
-    // issues, or disk space. Rather than crashing, log the error and continue.
-    // The shell will launch without the wrapper, which means no shell-ready marker
-    // but at least the PTY is usable.
-    const errorMessage =
-      error instanceof Error
-        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
-        : String(error)
-    console.error(`[daemon/shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
-    console.error('[daemon/shell-ready] Shell will launch without wrapper (no shell-ready marker)')
-    // Reset the flag so next attempt will try again
+  const written = writeShellWrapperFiles(
+    [
+      [join(zshDir, '.zshenv'), zsh.zshenv],
+      [join(zshDir, '.zprofile'), zsh.zprofile],
+      [join(zshDir, '.zshrc'), zsh.zshrc],
+      [join(zshDir, '.zlogin'), zsh.zlogin],
+      [join(zshDir, ZSH_WRAPPER_DIR_MARKER_FILE), ZSH_WRAPPER_DIR_MARKER_CONTENT],
+      [join(root, 'bash', 'rcfile'), getDaemonBashShellReadyRcfileContent()]
+    ],
+    '[daemon/shell-ready]'
+  )
+  if (!written || !shellReadyWrappersExist()) {
+    // Why reset: the next launch retries instead of trusting a half-written tree.
     didEnsureShellReadyWrappers = false
+    return false
   }
+  return true
 }
 
 export function resolvePtyShellPath(env: Record<string, string>): string {
@@ -178,44 +115,59 @@ export function supportsPtyStartupBarrier(env: Record<string, string>): boolean 
   return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
 }
 
-type ShellLaunchConfig = {
+export type ShellLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
 }
 
-function getWrappedShellLaunchConfig(
+const UNWRAPPED: ShellLaunchConfig = {
+  args: null,
+  env: {},
+  supportsReadyMarker: false
+}
+
+/**
+ * The one launch-config entry point: args + env for a shell that should start
+ * with exactly `features` enabled. An empty selection is never wrapped.
+ */
+export function getShellLaunchConfig(
   shellPath: string,
-  options: { emitReadyMarker: boolean }
+  features: readonly ShellStartupFeature[]
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
   if (shellName === 'zsh') {
-    ensureShellReadyWrappers()
-    const root = getShellReadyWrapperRoot()
+    if (features.length === 0) {
+      return UNWRAPPED
+    }
+    if (!ensureShellReadyWrappers()) {
+      // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
+      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      return { args: ['-l'], env: {}, supportsReadyMarker: false }
+    }
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
-        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
-        ZDOTDIR: join(root, 'zsh'),
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
-        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
+        ORCA_ORIG_ZDOTDIR: resolveInheritedZdotdir(process.env),
+        ORCA_ZSHENV_SOURCE_DIR: resolveInheritedZshenvSourceDir(process.env),
+        ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh'),
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },
-      supportsReadyMarker: options.emitReadyMarker
+      supportsReadyMarker: features.includes('ready')
     }
   }
 
   if (shellName === 'bash') {
-    ensureShellReadyWrappers()
-    const root = getShellReadyWrapperRoot()
+    if (features.length === 0 || !ensureShellReadyWrappers()) {
+      return UNWRAPPED
+    }
     return {
-      args: ['--rcfile', join(root, 'bash', 'rcfile')],
+      args: ['--rcfile', join(getShellReadyWrapperRoot(), 'bash', 'rcfile')],
       env: {
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
-        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },
-      supportsReadyMarker: options.emitReadyMarker
+      supportsReadyMarker: features.includes('ready')
     }
   }
 
@@ -232,30 +184,19 @@ function getWrappedShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped.
-  if (shellName === 'fish' && options.emitReadyMarker) {
+  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped. The
+  // selection is baked into the init command, so fish needs no feature env var.
+  if (shellName === 'fish' && features.includes('ready')) {
     return {
       args: [
         '-l',
         '-C',
         `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
       ],
-      env: { ORCA_SHELL_READY_MARKER: '1' },
+      env: {},
       supportsReadyMarker: true
     }
   }
 
-  return {
-    args: null,
-    env: {},
-    supportsReadyMarker: false
-  }
-}
-
-export function getShellReadyLaunchConfig(shellPath: string): ShellLaunchConfig {
-  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: true })
-}
-
-export function getMarkerlessShellLaunchConfig(shellPath: string): ShellLaunchConfig {
-  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: false })
+  return UNWRAPPED
 }

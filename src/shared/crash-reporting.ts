@@ -2,6 +2,8 @@ import {
   appendDiagnosticBundleLines,
   type CrashReportDiagnosticBundle
 } from './crash-reporting-diagnostic-bundle'
+import { appendMinidumpSignatureLines } from './crash-report-signature-lines'
+import { formatCrashReportExitCode } from './crash-report-exit-code'
 
 export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-bundle'
 
@@ -184,7 +186,7 @@ export function sanitizeCrashReportString(
 
 function maxDetailStringLengthForKey(key: string): number {
   const normalizedKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-  return /(?:^|_)(?:stack|component_stack|error_stack)$/i.test(normalizedKey)
+  return /(?:^|_)(?:stack|component_stack|error_stack|minidump_check_message)$/i.test(normalizedKey)
     ? MAX_STACK_DETAIL_LENGTH
     : MAX_STRING_DETAIL_LENGTH
 }
@@ -244,13 +246,14 @@ export function formatCrashReportText(
     `Source: ${report.source}`,
     `Process: ${report.processType}`,
     `Reason: ${report.reason}`,
-    `Exit code: ${report.exitCode ?? 'unknown'}`,
+    `Exit code: ${formatCrashReportExitCode(report)}`,
     `App version: ${report.appVersion}`,
     `Platform: ${report.platform} ${report.osRelease} ${report.arch}`,
     `Electron: ${report.electronVersion}`,
     `Chrome: ${report.chromeVersion}`
   ]
 
+  appendMinidumpSignatureLines(lines, report.details)
   appendDiagnosticBundleLines(lines, diagnosticBundle, sanitizeCrashReportString)
 
   const details = Object.entries(report.details)

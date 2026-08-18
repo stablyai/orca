@@ -63,6 +63,10 @@ import type {
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
 import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
+import type {
+  BrowserWebAuthnAccountRequest,
+  BrowserWebAuthnAccountResponse
+} from '../shared/browser-webauthn-account'
 import type { SearchResult } from '../shared/code-search-types'
 import type {
   FilesystemPathFlavor,
@@ -132,6 +136,33 @@ import type {
   ShellOpenLocalPathResult
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type {
+  SkillCloudOwnedShare,
+  SkillCloudOperation,
+  SkillCloudPackageDetails
+} from '../shared/skill-cloud-contract'
+import type {
+  SkillBundleInstallPreviewInput,
+  SkillBundleInstallPreviewOperation,
+  SkillBundlePackageVersionInstallInput,
+  SkillBundleShareInstallInput,
+  SkillBundleShareInstallOperation,
+  SkillInstallPreviewInput,
+  SkillInstallPreviewOperation,
+  ManagedSkillInstallListOperation,
+  SkillPackageVersionInstallInput,
+  SkillRemoveInput,
+  SkillRemoveOperation,
+  SkillShareInstallInput,
+  SkillShareInstallOperation,
+  SkillInstallCancelInput,
+  SkillInstallProgress,
+  SkillSharePreview,
+  SkillShareProgress,
+  SkillSharePublishInput,
+  SkillSharePublishOperation,
+  SkillShareResolvedOperation
+} from '../shared/skill-sharing-contract'
 import type {
   SkillFreshnessInventory,
   SkillUpdateRun,
@@ -230,6 +261,10 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import {
+  KEYBOARD_LAYOUT_CHANGED_CHANNEL,
+  type KeyboardLayoutChangeEvent
+} from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -540,6 +575,17 @@ const api = {
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
     getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
       ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
+    getKeyboardLayoutSnapshot: () => ipcRenderer.invoke('app:getKeyboardLayoutSnapshot'),
+    onKeyboardLayoutChanged: (
+      callback: (event: KeyboardLayoutChangeEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: KeyboardLayoutChangeEvent
+      ): void => callback(event)
+      ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+    },
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
@@ -2139,8 +2185,10 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:add', args),
-    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+    reauthenticate: (args: {
+      accountId: string
+      activateIfSelectionWasEmpty?: boolean
+    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:remove', args),
     select: (args: {
@@ -2543,6 +2591,73 @@ const api = {
     cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
     acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
     getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
+    prepareShare: (input: {
+      skillIds: string[]
+      bundleName: string
+      target?: SkillDiscoveryTarget
+      packageId?: string
+    }): Promise<SkillSharePreview> => ipcRenderer.invoke('skills:prepareShare', input),
+    publishShare: (input: SkillSharePublishInput): Promise<SkillSharePublishOperation> =>
+      ipcRenderer.invoke('skills:publishShare', input),
+    cancelShare: (preparationId: string): Promise<void> =>
+      ipcRenderer.invoke('skills:cancelShare', preparationId),
+    releaseShare: (preparationId: string): Promise<void> =>
+      ipcRenderer.invoke('skills:releaseShare', preparationId),
+    resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
+      ipcRenderer.invoke('skills:resolveShare', shareId),
+    installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installShare', input),
+    installBundleShare: (
+      input: SkillBundleShareInstallInput
+    ): Promise<SkillBundleShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installBundleShare', input),
+    installBundlePackageVersion: (
+      input: SkillBundlePackageVersionInstallInput
+    ): Promise<SkillBundleShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installBundlePackageVersion', input),
+    installPackageVersion: (
+      input: SkillPackageVersionInstallInput
+    ): Promise<SkillShareInstallOperation> =>
+      ipcRenderer.invoke('skills:installPackageVersion', input),
+    cancelInstall: (input: SkillInstallCancelInput): Promise<{ cancelled: boolean }> =>
+      ipcRenderer.invoke('skills:cancelInstall', input),
+    previewInstall: (input: SkillInstallPreviewInput): Promise<SkillInstallPreviewOperation> =>
+      ipcRenderer.invoke('skills:previewInstall', input),
+    previewBundleInstall: (
+      input: SkillBundleInstallPreviewInput
+    ): Promise<SkillBundleInstallPreviewOperation> =>
+      ipcRenderer.invoke('skills:previewBundleInstall', input),
+    removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
+      ipcRenderer.invoke('skills:removeInstall', input),
+    listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
+      ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
+    getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
+      ipcRenderer.invoke('skills:getPackage', packageId),
+    listOwnedShares: (): Promise<SkillCloudOperation<SkillCloudOwnedShare[]>> =>
+      ipcRenderer.invoke('skills:listOwnedShares'),
+    revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:revokeShare', shareId),
+    deletePackageVersion: (input: {
+      packageId: string
+      versionId: string
+    }): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:deletePackageVersion', input),
+    deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
+      ipcRenderer.invoke('skills:deletePackage', packageId),
+    listWslDistros: (environmentId?: string): Promise<string[]> =>
+      ipcRenderer.invoke('skills:listWslDistros', environmentId),
+    onInstallProgress: (callback: (progress: SkillInstallProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: SkillInstallProgress): void =>
+        callback(progress)
+      ipcRenderer.on('skills:installProgress', listener)
+      return () => ipcRenderer.removeListener('skills:installProgress', listener)
+    },
+    onShareProgress: (callback: (progress: SkillShareProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: SkillShareProgress): void =>
+        callback(progress)
+      ipcRenderer.on('skills:shareProgress', listener)
+      return () => ipcRenderer.removeListener('skills:shareProgress', listener)
+    },
     onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void =>
         callback(run)
@@ -2582,6 +2697,29 @@ const api = {
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
+
+    onWebAuthnAccountRequest: (
+      callback: (request: BrowserWebAuthnAccountRequest) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: BrowserWebAuthnAccountRequest
+      ): void => callback(request)
+      ipcRenderer.on('browser:webauthn-account-requested', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-requested', listener)
+    },
+
+    onWebAuthnAccountRequestClosed: (
+      callback: (event: { requestId: string }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
+        callback(data)
+      ipcRenderer.on('browser:webauthn-account-request-closed', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-request-closed', listener)
+    },
+
+    respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
+      ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),
@@ -3562,6 +3700,14 @@ const api = {
     },
     consumePendingOpenSettings: (): Promise<boolean> =>
       ipcRenderer.invoke('ui:consumePendingOpenSettings'),
+    onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, shareId: string): void =>
+        callback(shareId)
+      ipcRenderer.on('ui:openSkillShare', listener)
+      return () => ipcRenderer.removeListener('ui:openSkillShare', listener)
+    },
+    consumePendingSkillShare: (): Promise<string | null> =>
+      ipcRenderer.invoke('ui:consumePendingSkillShare'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)
@@ -4034,6 +4180,17 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:closeSessionTab', listener)
       return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
+    },
+    onSessionTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
+    },
+    respondSessionTabClose: (response) => {
+      ipcRenderer.send('ui:sessionTabCloseResponse', response)
     },
     onMoveSessionTab: (
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
@@ -4744,6 +4901,8 @@ const api = {
       | {
           available: true
           qrDataUrl: string | null
+          /** Natural bitmap width and height in pixels. */
+          qrSize: number | null
           qrError?: 'encoding_failed'
           pairingUrl: string
           /** Null when no direct address was advertised — the QR pairs over Relay alone. */
@@ -4878,6 +5037,9 @@ const api = {
     },
     retirePaneAuthority: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+    },
+    restorePaneAuthority: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)
     },
     transferPaneAuthority: (args: {
       fromPaneKey: string

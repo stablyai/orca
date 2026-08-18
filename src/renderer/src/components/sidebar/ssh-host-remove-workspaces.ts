@@ -28,12 +28,16 @@ export async function clearSshHostWorkspaces(
   const store = useAppStore.getState()
   const forgetLocalOnly = mode === 'forget-local'
   const failedIds: string[] = []
+  // Every workspace in this resolution is pinned to the SSH target being
+  // removed, so that target is the host each removal is confirmed against
+  // (STA-4343) — a bare id could land on a local checkout at the same path.
+  const hostId = toSshExecutionHostId(resolution.targetId)
 
   for (const worktreeId of resolution.workspaceWorktreeIds) {
     // Why: sequential, not parallel — deletes on the same repo contend on git
     // ref locks, and forget is cheap enough that ordering keeps failures legible.
     const result = await store.removeWorktree(
-      worktreeId,
+      { id: worktreeId, executionHostId: hostId },
       false,
       forgetLocalOnly ? { mode: 'forget-local' } : undefined
     )
@@ -48,7 +52,6 @@ export async function clearSshHostWorkspaces(
   // wrong (local) project could be removed and the SSH ghost left behind. For an
   // offline/ghost host this hits the local backend path (no live runtime target),
   // clearing Orca's records without a successful remote call.
-  const hostId = toSshExecutionHostId(resolution.targetId)
   for (const repoId of resolution.hostRepoIds) {
     try {
       await store.removeProject(repoId, { hostId })

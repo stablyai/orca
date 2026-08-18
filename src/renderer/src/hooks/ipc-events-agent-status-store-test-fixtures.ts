@@ -31,6 +31,7 @@ export type AgentStatusSetData = {
   lastAssistantMessage?: string
   interrupted?: boolean
   sessionBoundary?: boolean
+  turnCompletedAt?: number
   terminalHandle?: string
   launchToken?: string
   providerSession?: { key: 'session_id'; id: string }

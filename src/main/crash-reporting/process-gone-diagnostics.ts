@@ -1,16 +1,18 @@
 import { app } from 'electron'
 import {
   sanitizeCrashReportDetails,
-  type CrashReportBreadcrumbData,
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
-import type { ExpectedTeardownScope } from './process-gone-classification'
+import { getSystemMemoryAtGoneDetails, memoryKBFieldMB } from './gone-time-system-memory'
 
 type ProcessMetricLike = {
   pid?: unknown
+  creationTime?: unknown
   type?: unknown
   memory?: {
     workingSetSize?: unknown
+    peakWorkingSetSize?: unknown
+    privateBytes?: unknown
   } | null
 }
 type CrashReportDetails = Record<string, CrashReportDetailValue>
@@ -71,12 +73,28 @@ function titleCaseBucket(bucket: ProcessMetricBucketName): string {
 export function collectProcessGoneMetricDetails(metrics: ProcessMetricLike[]): CrashReportDetails {
   const buckets = emptyBuckets()
   let largest: { pid: number; type: string; workingSetMB: number } | null = null
+  // Why peak/private only for renderers: a spike between interval samples still
+  // shows in the lifetime peak, and private-vs-shared separates real commit
+  // from mapped memory — both matter for OOM triage, not for other buckets.
+  let rendererPeakWorkingSetMB: number | null = null
+  let rendererPrivateMB: number | null = null
 
   for (const metric of metrics) {
-    const bucket = buckets[metricTypeBucket(metric.type)]
+    const bucketName = metricTypeBucket(metric.type)
+    const bucket = buckets[bucketName]
     const metricWorkingSetMB = workingSetMB(metric)
     bucket.count += 1
     bucket.workingSetMB += metricWorkingSetMB
+    if (bucketName === 'renderer') {
+      const peakMB = memoryKBFieldMB(metric.memory?.peakWorkingSetSize)
+      if (peakMB !== undefined) {
+        rendererPeakWorkingSetMB = Math.max(rendererPeakWorkingSetMB ?? 0, peakMB)
+      }
+      const privateMB = memoryKBFieldMB(metric.memory?.privateBytes)
+      if (privateMB !== undefined) {
+        rendererPrivateMB = Math.max(rendererPrivateMB ?? 0, privateMB)
+      }
+    }
     const pid = safeFiniteNumber(metric.pid) ?? 0
     if (!largest || metricWorkingSetMB > largest.workingSetMB) {
       largest = {
@@ -93,6 +111,12 @@ export function collectProcessGoneMetricDetails(metrics: ProcessMetricLike[]): C
     details[`processMetrics${label}Count`] = buckets[bucketName].count
     details[`processMetrics${label}WorkingSetMB`] = buckets[bucketName].workingSetMB
   }
+  if (rendererPeakWorkingSetMB !== null) {
+    details.processMetricsRendererPeakWorkingSetMB = rendererPeakWorkingSetMB
+  }
+  if (rendererPrivateMB !== null) {
+    details.processMetricsRendererPrivateMB = rendererPrivateMB
+  }
   if (largest) {
     details.processMetricsLargestPid = largest.pid
     details.processMetricsLargestType = largest.type
@@ -101,58 +125,173 @@ export function collectProcessGoneMetricDetails(metrics: ProcessMetricLike[]): C
   return details
 }
 
-function getProcessGoneMetricDetails(): CrashReportDetails {
-  try {
-    return collectProcessGoneMetricDetails(app.getAppMetrics())
-  } catch (error) {
-    const errorName = error instanceof Error ? error.name : typeof error
-    return { processMetricsError: errorName }
+type LiveProcessGoneMetrics = {
+  details: CrashReportDetails
+  identitiesByPid: Map<number, ProcessMetricIdentity> | null
+}
+
+type ProcessMetricIdentity = {
+  bucket: ProcessMetricBucketName
+  creationTime?: number
+}
+
+function processMetricIdentity(metric: ProcessMetricLike): ProcessMetricIdentity {
+  return {
+    bucket: metricTypeBucket(metric.type),
+    creationTime: safeFiniteNumber(metric.creationTime)
   }
 }
 
-export function buildProcessGoneCrashDetails(details: Record<string, unknown>): CrashReportDetails {
+function getLiveProcessGoneMetrics(): LiveProcessGoneMetrics {
+  try {
+    const metrics = app.getAppMetrics()
+    const identitiesByPid = new Map<number, ProcessMetricIdentity>()
+    for (const metric of metrics) {
+      const pid = safeFiniteNumber(metric.pid)
+      if (pid !== undefined) {
+        identitiesByPid.set(pid, processMetricIdentity(metric))
+      }
+    }
+    return { details: collectProcessGoneMetricDetails(metrics), identitiesByPid }
+  } catch (error) {
+    const errorName = error instanceof Error ? error.name : typeof error
+    return { details: { processMetricsError: errorName }, identitiesByPid: null }
+  }
+}
+
+// ─── Pre-gone metric sampling ───────────────────────────────────────
+// Why: process-gone metrics see survivors only, so retain a recent whole-app
+// snapshot for comparison without pretending it identifies the crasher.
+
+export const PROCESS_METRICS_PRE_GONE_SAMPLE_INTERVAL_MS = 60_000
+
+type PreGoneSampledProcess = {
+  pid: number
+  identity: ProcessMetricIdentity
+}
+
+type PreGoneProcessMetricsSample = {
+  details: CrashReportDetails
+  processes: PreGoneSampledProcess[]
+  sampledAtMs: number
+}
+
+let preGoneSample: PreGoneProcessMetricsSample | null = null
+let preGoneSampleTimer: ReturnType<typeof setInterval> | null = null
+
+function sampledProcessIdentities(metrics: ProcessMetricLike[]): PreGoneSampledProcess[] {
+  const processes: PreGoneSampledProcess[] = []
+  for (const metric of metrics) {
+    const pid = safeFiniteNumber(metric.pid)
+    if (pid === undefined) {
+      continue
+    }
+    processes.push({ pid, identity: processMetricIdentity(metric) })
+  }
+  return processes
+}
+
+export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
+  try {
+    const metrics = app.getAppMetrics()
+    preGoneSample = {
+      details: collectProcessGoneMetricDetails(metrics),
+      processes: sampledProcessIdentities(metrics),
+      sampledAtMs: nowMs
+    }
+  } catch {
+    // Why: a failed sweep must not erase the previous good sample.
+  }
+}
+
+export function startPreGoneProcessMetricsSampling(
+  intervalMs: number = PROCESS_METRICS_PRE_GONE_SAMPLE_INTERVAL_MS
+): void {
+  if (preGoneSampleTimer) {
+    return
+  }
+  samplePreGoneProcessMetrics()
+  preGoneSampleTimer = setInterval(() => samplePreGoneProcessMetrics(), intervalMs)
+  preGoneSampleTimer.unref?.()
+}
+
+export function resetPreGoneProcessMetricsSamplingForTest(): void {
+  if (preGoneSampleTimer) {
+    clearInterval(preGoneSampleTimer)
+  }
+  preGoneSampleTimer = null
+  preGoneSample = null
+}
+
+const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'
+
+function preGoneSampleDetails(
+  sample: PreGoneProcessMetricsSample,
+  nowMs: number
+): CrashReportDetails {
+  const details: CrashReportDetails = {
+    processMetricsPreGoneSampleAgeMs: Math.max(0, nowMs - sample.sampledAtMs),
+    // Why: Electron's gone events omit pid, so no snapshot row is attributable
+    // to the crasher even when only one same-type process was sampled.
+    processMetricsPreGoneCrashedProcessAttributionAmbiguous: true
+  }
+  for (const [key, value] of Object.entries(sample.details)) {
+    details[`${PROCESS_METRICS_KEY_PREFIX}PreGone${key.slice(PROCESS_METRICS_KEY_PREFIX.length)}`] =
+      value
+  }
+  return details
+}
+
+function sampledProcessIsGone(
+  sampled: PreGoneSampledProcess,
+  liveIdentitiesByPid: Map<number, ProcessMetricIdentity>
+): boolean {
+  const live = liveIdentitiesByPid.get(sampled.pid)
+  if (!live || live.bucket !== sampled.identity.bucket) {
+    return true
+  }
+  const sampledCreationTime = sampled.identity.creationTime
+  const liveCreationTime = live.creationTime
+  return (
+    sampledCreationTime !== undefined &&
+    liveCreationTime !== undefined &&
+    sampledCreationTime !== liveCreationTime
+  )
+}
+
+export function buildProcessGoneCrashDetails(
+  details: Record<string, unknown>,
+  crashedProcessType: string
+): CrashReportDetails {
   const sanitizedDetails = sanitizeCrashReportDetails(details)
   // Why: low-JS-heap renderer kills can still be native/process memory pressure.
   // Capture Electron process buckets at process-gone time before recovery reloads.
-  return {
+  const { details: liveMetricDetails, identitiesByPid: liveIdentitiesByPid } =
+    getLiveProcessGoneMetrics()
+  const crashDetails: CrashReportDetails = {
     ...sanitizedDetails,
-    ...getProcessGoneMetricDetails()
+    ...liveMetricDetails,
+    ...getSystemMemoryAtGoneDetails()
   }
-}
-
-export function buildSuppressedProcessGoneBreadcrumbData({
-  source,
-  processType,
-  reason,
-  exitCode,
-  expectedTeardown,
-  details
-}: {
-  source: 'renderer' | 'child'
-  processType: string
-  reason: string
-  exitCode: number | null
-  expectedTeardown: ExpectedTeardownScope
-  details: Record<string, unknown>
-}): CrashReportBreadcrumbData {
-  const breadcrumb: CrashReportBreadcrumbData = {
-    source,
-    processType,
-    reason,
-    exitCode,
-    expectedTeardown
+  // Why: with the crasher gone, Largest names a survivor — flag that so the
+  // live buckets are read as "everyone else", not as the crashed process.
+  // Same-bucket survivors are common, so use Electron's (pid, creationTime)
+  // identity to distinguish a missing sampled process from a recycled pid.
+  const crashedBucket = metricTypeBucket(crashedProcessType)
+  const crashedBucketCountKey = `${PROCESS_METRICS_KEY_PREFIX}${titleCaseBucket(crashedBucket)}Count`
+  const sampledSameBucketProcessVanished = Boolean(
+    liveIdentitiesByPid &&
+    preGoneSample?.processes.some(
+      (process) =>
+        process.identity.bucket === crashedBucket &&
+        sampledProcessIsGone(process, liveIdentitiesByPid)
+    )
+  )
+  if (liveMetricDetails[crashedBucketCountKey] === 0 || sampledSameBucketProcessVanished) {
+    crashDetails.processMetricsCrashedProcessAbsent = true
   }
-  const name = safeString(details.name)
-  if (name) {
-    breadcrumb.name = name
+  if (preGoneSample) {
+    Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, Date.now()))
   }
-  const serviceName = safeString(details.serviceName)
-  if (serviceName) {
-    breadcrumb.serviceName = serviceName
-  }
-  const type = safeString(details.type)
-  if (type) {
-    breadcrumb.type = type
-  }
-  return breadcrumb
+  return crashDetails
 }

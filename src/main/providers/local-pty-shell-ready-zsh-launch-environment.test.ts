@@ -86,7 +86,11 @@ describePosix('live zsh subprocess tests', () => {
     })
 
     it('handles sudo -E where HOME and ZDOTDIR mismatch', async () => {
-      const userZdotdir = join('/home', 'alice', '.config', 'zsh')
+      // Why a real dir: an inherited ZDOTDIR only counts as the user's config
+      // root when it actually holds a zsh startup file.
+      const userZdotdir = join(testHome, '.config', 'zsh')
+      mkdirSync(userZdotdir, { recursive: true })
+      writeFileSync(join(userZdotdir, '.zshrc'), '')
 
       const previousZdotdir = process.env.ZDOTDIR
       const previousHome = process.env.HOME

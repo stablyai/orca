@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  buildWslCapturedLoginShellCommand,
+  buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from './wsl-login-shell-command'
 
@@ -21,7 +22,7 @@ function canRunWslSh(): boolean {
     return wslShAvailable
   }
   try {
-    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'true'], {
+    execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
     })
     wslShAvailable = true
@@ -46,7 +47,7 @@ function expectValidShSyntax(command: string): void {
   if (!canRunWslSh()) {
     return
   }
-  execFileSync('wsl.exe', ['--', 'sh', '-n'], {
+  execFileSync('wsl.exe', ['--exec', 'sh', '-n'], {
     input: command,
     timeout: WSL_TEST_COMMAND_TIMEOUT_MS
   })
@@ -122,53 +123,175 @@ describe('wsl login shell command helpers', () => {
     }
   )
 
-  it('preserves command-scoped environment variables through the outer WSL shell', () => {
+  it('keeps command-scoped environment variables in the quoted payload', () => {
     const command = buildWslLoginShellCommand('HISTFILE=/tmp/orca-history printf "$HISTFILE"')
-    const escaped = escapeWslShCommandForWindows(command)
 
     expect(command).toContain('\'HISTFILE=/tmp/orca-history printf "$HISTFILE"\'')
-    expect(escaped).toContain('\\$_orca_wsl_shell')
-    expect(escaped).toContain('\\${SHELL:-/bin/bash}')
-    expect(escaped).toContain('\\$(getent passwd "\\$(id -un)"')
-    expect(escaped).toContain('\\$HISTFILE')
     expectValidShSyntax(command)
   }, 30_000)
 
-  it('does not double-escape wrapper shell variables', () => {
-    const command = 'echo \\$_orca_wsl_shell "$_orca_wsl_shell"'
-
-    expect(escapeWslShCommandForWindows(command)).toBe(
-      'echo \\$_orca_wsl_shell "\\$_orca_wsl_shell"'
-    )
+  it('routes through --exec so wsl.exe cannot preprocess argv', () => {
+    expect(buildWslExecArgs('Ubuntu', ['sh', '-lc', 'printf "$HOME"'])).toEqual([
+      '-d',
+      'Ubuntu',
+      '--exec',
+      'sh',
+      '-lc',
+      'printf "$HOME"'
+    ])
+    // A distro-less target still has to bypass the `--` preprocessor.
+    expect(buildWslExecArgs(undefined, ['sh', '-c', 'true'])).toEqual([
+      '--exec',
+      'sh',
+      '-c',
+      'true'
+    ])
   })
-
-  it('escapes user command dollars inside POSIX-quoted payloads for WSL argv', () => {
-    const command = buildWslLoginShellCommand(
-      'HISTFILE=/tmp/orca-history printf "$HISTFILE"; printf \'%s\' "$SHELL"'
-    )
-    const escaped = escapeWslShCommandForWindows(command)
-
-    expect(escaped).toContain(
-      "'HISTFILE=/tmp/orca-history printf \"\\$HISTFILE\"; printf '\\''%s'\\'' \"\\$SHELL\"'"
-    )
-    expectValidShSyntax(command)
-  }, 30_000)
 
   it('preserves user command variables across the Windows-to-WSL argv boundary', () => {
     if (!canRunWslSh()) {
       return
     }
 
-    const command = buildWslLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
-    const escaped = escapeWslShCommandForWindows(command)
+    // Why the captured form: an interactive login shell also prints the distro's
+    // rc/motd to stdout (stock Ubuntu ships a sudo hint), so a raw login-shell
+    // read cannot be compared byte-for-byte on a real distro.
+    const captured = buildWslCapturedLoginShellCommand(
+      'orca_value=ok; printf "<%s>" "$orca_value"'
+    )
 
     expect(
-      execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], {
-        encoding: 'utf8',
-        timeout: WSL_TEST_COMMAND_TIMEOUT_MS
-      })
+      captured.readStdout(
+        execFileSync('wsl.exe', buildWslExecArgs(undefined, ['sh', '-lc', captured.command]), {
+          encoding: 'utf8',
+          timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+        })
+      )
     ).toBe('<ok>')
   }, 30_000)
+
+  // Why: `--` expands $name in argv against the guest env before the guest runs,
+  // so these scripts reached the shell already rewritten. Each case below was
+  // measured to return DIFFERENT bytes under `--` than under `--exec`; cases
+  // that merely look risky but are unaffected (a sed backreference has no `$`)
+  // are deliberately not here, because they would pass either way.
+  it.each([
+    ['awk field reference', ['sh', '-c', `echo 'a b' | awk '{print $2}'`], 'b\n'],
+    ['literal escaped dollar', ['sh', '-c', `printf '[%s]' "\\$HOME"`], '[$HOME]'],
+    ['single-quoted dollar', ['sh', '-c', `printf '[%s]' '$PATH'`], '[$PATH]'],
+    // The shape wslUncDirectoryExists uses: `--` blanked $1, so every existing
+    // directory probed as missing.
+    ['positional argument', ['sh', '-c', 'printf "[%s]" "$1"', 'sh', 'ARG'], '[ARG]'],
+    ['shell local', ['sh', '-c', 'x=hi; printf "[%s]" "$x"'], '[hi]']
+  ])(
+    'passes %s to the guest byte-for-byte',
+    (_name, shellArgs, expected) => {
+      if (!canRunWslSh()) {
+        return
+      }
+
+      expect(
+        execFileSync('wsl.exe', buildWslExecArgs(undefined, shellArgs), {
+          encoding: 'utf8',
+          timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+        })
+      ).toBe(expected)
+    },
+    30_000
+  )
+
+  describe('captured login shell', () => {
+    it('returns only the fenced payload, dropping rc banner noise', () => {
+      const captured = buildWslCapturedLoginShellCommand('printf directory', 'nonce1')
+
+      expect(
+        captured.readStdout(
+          'To run a command as administrator (user "root"), use "sudo <command>".\n\n' +
+            '__ORCA_WSL_CAPTURE_BEGIN_nonce1__directory__ORCA_WSL_CAPTURE_END_nonce1__'
+        )
+      ).toBe('directory')
+    })
+
+    it.skipIf(!canRunWslSh())(
+      'propagates the payload exit status to the caller',
+      () => {
+        // Why a real shell: asserting the script merely *contains* `exit $?` passes
+        // for any input. statPath maps this exit 2 to ENOENT, so it has to survive
+        // the fence for real.
+        const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2')
+
+        let status: number | undefined
+        try {
+          execFileSync('wsl.exe', buildWslExecArgs(undefined, ['sh', '-lc', captured.command]), {
+            encoding: 'utf8',
+            timeout: WSL_TEST_COMMAND_TIMEOUT_MS,
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+        } catch (error) {
+          status = (error as { status?: number }).status
+        }
+
+        expect(status).toBe(2)
+      },
+      30_000
+    )
+
+    it('emits the status plumbing the payload needs', () => {
+      const captured = buildWslCapturedLoginShellCommand('exit 2', 'nonce1')
+
+      expect(captured.command).toContain('_orca_capture_status=$?')
+      expect(captured.command).toContain('exit $_orca_capture_status')
+    })
+
+    it('keeps payload bytes that themselves contain a fence', () => {
+      // Why a per-call nonce: `cat` of a file quoting a fixed marker would
+      // otherwise be truncated at the quote.
+      const captured = buildWslCapturedLoginShellCommand('cat -- /f', 'nonce2')
+      const payload = 'see __ORCA_WSL_CAPTURE_BEGIN_nonce1__ and __ORCA_WSL_CAPTURE_END_nonce1__\n'
+
+      expect(
+        captured.readStdout(
+          `banner\n__ORCA_WSL_CAPTURE_BEGIN_nonce2__${payload}__ORCA_WSL_CAPTURE_END_nonce2__`
+        )
+      ).toBe(payload)
+    })
+
+    it('returns null when the fence never appeared', () => {
+      const captured = buildWslCapturedLoginShellCommand('printf hi', 'nonce1')
+
+      expect(captured.readStdout('bash: line 1: command not found\n')).toBeNull()
+    })
+
+    it('returns the tail when a payload exits before the closing fence', () => {
+      const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2', 'nonce1')
+
+      expect(captured.readStdout('banner\n__ORCA_WSL_CAPTURE_BEGIN_nonce1__partial')).toBe(
+        'partial'
+      )
+    })
+
+    it('gives each invocation a distinct fence', () => {
+      const first = buildWslCapturedLoginShellCommand('printf hi')
+      const second = buildWslCapturedLoginShellCommand('printf hi')
+
+      expect(first.command).not.toBe(second.command)
+    })
+
+    it.skipIf(!canRunWslSh())(
+      'reads a clean payload back from a real distro login shell',
+      () => {
+        const captured = buildWslCapturedLoginShellCommand('printf directory')
+        const stdout = execFileSync(
+          'wsl.exe',
+          buildWslExecArgs(undefined, ['sh', '-lc', captured.command]),
+          { encoding: 'utf8', timeout: WSL_TEST_COMMAND_TIMEOUT_MS }
+        )
+
+        expect(captured.readStdout(stdout)).toBe('directory')
+      },
+      30_000
+    )
+  })
 
   it('starts an interactive login shell without assuming bash', () => {
     const command = buildWslInteractiveLoginShellCommand()
