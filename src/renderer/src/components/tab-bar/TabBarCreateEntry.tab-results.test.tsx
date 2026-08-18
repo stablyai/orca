@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
@@ -70,6 +71,15 @@ const tabSearchMock = vi.hoisted(() => {
             secondaryText: row.relativePath ?? '',
             titleSearchText: row.title,
             secondarySearchTexts: row.relativePath ? [row.relativePath] : [],
+            // Retention matches with the real engine, which reads the prebuilt index.
+            document: buildPaletteTabDocument({
+              id: row.tabId ?? '',
+              title: row.title,
+              secondaryTexts: row.relativePath ? [row.relativePath] : [],
+              worktreeName: worktree.displayName,
+              branch: '',
+              repoName: 'octo/rocket'
+            }),
             agentMetadata: [],
             isCurrentTab: false,
             isCurrentWorktree: true
