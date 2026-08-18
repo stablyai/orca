@@ -180,6 +180,29 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('clears an automation linked task on edit with null', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'Task review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'edit', 'auto-1', '--linked-task', 'null', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'automation.update',
+      expect.objectContaining({
+        id: 'auto-1',
+        updates: expect.objectContaining({
+          linkedTask: null
+        })
+      })
+    )
+  })
+
   it('rejects invalid automation source context JSON before calling the runtime', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
