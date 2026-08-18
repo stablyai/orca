@@ -17,6 +17,7 @@ import {
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
 import { recordSubprocessSpawn } from '../diagnostics/main-thread-churn-probe'
+import { withGitExecSlot } from './git-exec-concurrency'
 import {
   classifyGhRateLimitBucket,
   createGhRateLimitBlockedError,
@@ -600,7 +601,20 @@ function isExecFileResultObject(
   )
 }
 
+// Why: cap concurrent buffered spawns at this one chokepoint (every git-async /
+// gh / glab read funnels through here; streaming gitSpawn and sync spawns do
+// not) so a per-worktree poll burst can't fan out 60+ processes at once (#7576).
+// The slot is held only around the child's lifetime — gh/glab retry sleeps run
+// between calls, outside it.
 function execFileCapture(
+  command: string,
+  args: string[],
+  options: ExecFileCaptureOptions
+): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
+  return withGitExecSlot(() => execFileCaptureUnlimited(command, args, options))
+}
+
+function execFileCaptureUnlimited(
   command: string,
   args: string[],
   options: ExecFileCaptureOptions

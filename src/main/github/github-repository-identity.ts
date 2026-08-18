@@ -59,8 +59,11 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
       }
 }
 
-const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
-const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+// Why: without a `.git/config` signature to revalidate against we can only
+// time-bound staleness, so hold briefly; with a signature we hold far longer and
+// let the signature drive invalidation.
+const OWNER_REPO_UNSIGNED_CACHE_TTL_MS = 30_000
+const OWNER_REPO_SIGNATURE_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
@@ -105,11 +108,12 @@ export async function getRemoteUrlForRepo(
   return readRemoteUrl(context, remoteName)
 }
 
-function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
-  if (value) {
-    return OWNER_REPO_POSITIVE_CACHE_TTL_MS
-  }
-  return configSignature ? OWNER_REPO_NEGATIVE_CACHE_TTL_MS : OWNER_REPO_POSITIVE_CACHE_TTL_MS
+function getOwnerRepoCacheTtl(configSignature?: string): number {
+  // Why: a resolved owner/repo and a missing remote are both stable until
+  // `.git/config` changes, so when we have a signature to revalidate against,
+  // hold either far longer than the 30s fallback — this stops per-worktree PR
+  // polling from re-spawning `git remote get-url` every tick (#7576).
+  return configSignature ? OWNER_REPO_SIGNATURE_CACHE_TTL_MS : OWNER_REPO_UNSIGNED_CACHE_TTL_MS
 }
 
 export async function getOwnerRepoForRemote(
@@ -135,7 +139,10 @@ export async function getOwnerRepoForRemote(
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    if (cached.value === null && cached.configSignature !== undefined) {
+    if (cached.configSignature !== undefined) {
+      // Why: revalidating against the config signature (a cheap re-stat) lets us
+      // hold resolved AND missing remotes until `.git/config` actually moves,
+      // instead of re-spawning `git remote get-url` on the next poll.
       const currentSignature = await readLocalGitConfigSignature(context)
       if (currentSignature !== cached.configSignature) {
         ownerRepoCache.delete(cacheKey)
@@ -194,7 +201,7 @@ async function resolveOwnerRepoForRemote(
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {
         value: null,
-        expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+        expiresAt: now + getOwnerRepoCacheTtl(configSignature),
         ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
@@ -205,7 +212,8 @@ async function resolveOwnerRepoForRemote(
     if (classification.kind === 'github') {
       ownerRepoCache.set(cacheKey, {
         value: classification.ownerRepo,
-        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature)
+        expiresAt: now + getOwnerRepoCacheTtl(configSignature),
+        ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
       return classification.ownerRepo
@@ -222,7 +230,7 @@ async function resolveOwnerRepoForRemote(
       : undefined
     ownerRepoCache.set(cacheKey, {
       value: null,
-      expiresAt: now + getOwnerRepoCacheTtl(null, stableConfigSignature),
+      expiresAt: now + getOwnerRepoCacheTtl(stableConfigSignature),
       ...(stableConfigSignature ? { configSignature: stableConfigSignature } : {})
     })
     pruneOwnerRepoCache(now)
@@ -241,7 +249,7 @@ async function resolveOwnerRepoForRemote(
   // Holding that negative longer avoids Git process churn across PR polling.
   ownerRepoCache.set(cacheKey, {
     value: null,
-    expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+    expiresAt: now + getOwnerRepoCacheTtl(configSignature),
     ...(configSignature ? { configSignature } : {})
   })
   pruneOwnerRepoCache(now)

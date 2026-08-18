@@ -10,6 +10,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 import { getLocalGitCapabilityCache } from './git-capability-state'
+import { getRemoteListRaw } from './git-remote-metadata'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -594,8 +595,8 @@ export function parseRemoteCount(stdout: string): number {
 /** Count configured remotes via `git remote`; returns 0 on error (callers read 0 as "unknown / no hint"). */
 export async function getRemoteCount(path: string): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
-    return parseRemoteCount(stdout)
+    // Why: remotes are near-static; the cache spares base-ref resolution a spawn on every poll (#7576).
+    return parseRemoteCount(await getRemoteListRaw(path))
   } catch (err) {
     // Why: log so a missing multi-remote hint is debuggable; callers still treat 0 as "unknown".
     console.warn('[getRemoteCount] git remote failed', { path, err })
