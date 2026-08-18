@@ -9,6 +9,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const request: RpcRequest = {
   id: 'req-output-race',
@@ -24,7 +25,7 @@ const request: RpcRequest = {
 describe('terminal subscribe renderer recovery output ordering', () => {
   it('replays bytes absent from the renderer snapshot using its exact sequence boundary', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let outputSequence = 0
     let rendererSerializeCalls = 0
     let onData:
@@ -67,13 +68,9 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

@@ -1,6 +1,7 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getProjectGroupHeaderKey } from '../grouping/group-keys'
@@ -19,9 +20,15 @@ function findFolderWorkspaceByKey(
 export function getKnownSidebarWorktreeById(
   worktreeId: string,
   worktreeMap: ReadonlyMap<string, Worktree>,
-  folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[],
+  worktrees?: readonly Worktree[],
+  executionHostId?: ExecutionHostId | null
 ): Worktree | null {
-  const worktree = worktreeMap.get(worktreeId)
+  const worktree = executionHostId
+    ? (worktrees?.find(
+        (candidate) => candidate.id === worktreeId && candidate.hostId === executionHostId
+      ) ?? null)
+    : worktreeMap.get(worktreeId)
   if (worktree) {
     return worktree
   }
@@ -32,9 +39,16 @@ export function getKnownSidebarWorktreeById(
 export function sidebarWorkspaceStillExists(
   worktreeId: string,
   worktrees: readonly Worktree[],
-  folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[],
+  executionHostId?: ExecutionHostId
 ): boolean {
-  if (worktrees.some((worktree) => worktree.id === worktreeId)) {
+  if (
+    worktrees.some(
+      (worktree) =>
+        worktree.id === worktreeId &&
+        (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
+    )
+  ) {
     return true
   }
   return findFolderWorkspaceByKey(worktreeId, folderWorkspaces) !== null

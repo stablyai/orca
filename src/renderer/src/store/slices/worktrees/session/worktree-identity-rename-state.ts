@@ -48,7 +48,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
 
 /**
  * Re-key every worktree-id-keyed map from `oldWorktreeId` to `newWorktreeId` after a folder
- * rename. Tab-id/file-id-keyed maps and active/renaming pointers stay put since tabs/files keep their ids.
+ * rename. Tab-id/file-id-keyed maps stay put since tabs/files keep their ids; the
+ * active/renaming pointers are worktree-id-valued, so they're re-pointed too.
  * Main-process counterpart: `Store.migrateWorktreeIdentity` in persistence.ts.
  */
 export function buildWorktreeRenameState(

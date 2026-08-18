@@ -2,10 +2,22 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
-import { resolveWorktreeDisplayName } from './worktree-default-display-name'
-import type { MatchRange } from './worktree-palette-search'
+import {
+  comparePaletteTabResults,
+  matchPaletteTabDocument,
+  preparePaletteTabQuery
+} from './palette-match/tab-match'
+import { buildPaletteTabDocument } from './palette-match/tab-document'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
+import type { MatchRange } from './palette-match/normalized-text'
+import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
+import type { PaletteResultQualityClass } from './palette-match/match-quality'
+
+const NO_RANGES: readonly MatchRange[] = []
 
 export type SearchableSimulatorTab = {
   tab: Tab
@@ -14,6 +26,8 @@ export type SearchableSimulatorTab = {
   worktreeSortIndex: number
   isCurrentTab: boolean
   isCurrentWorktree: boolean
+  /** Normalized field index, built once per entry rather than per keystroke. */
+  document: PaletteDocument
 }
 
 export type SimulatorPaletteSearchResult = {
@@ -26,14 +40,18 @@ export type SimulatorPaletteSearchResult = {
   secondaryText: string
   repoName: string
   worktreeName: string
-  titleRange: MatchRange | null
-  secondaryRange: MatchRange | null
-  repoRange: MatchRange | null
-  worktreeRange: MatchRange | null
-  typeAliasMatch?: { text: string; range: MatchRange } | null
+  branchName: string
+  titleRanges: readonly MatchRange[]
+  secondaryRanges: readonly MatchRange[]
+  repoRanges: readonly MatchRange[]
+  worktreeRanges: readonly MatchRange[]
+  branchRanges: readonly MatchRange[]
+  typeAliasMatch?: { text: string; ranges: readonly MatchRange[] } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
+  qualityClass: PaletteResultQualityClass | null
+  rank: PaletteDocumentRank | null
 }
 
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
@@ -43,7 +61,7 @@ export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 // Why search-only: the row icon already says "emulator"; a fixed secondary label
 // crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
 // typing "mobile" / "simulator" still finds emulator tabs.
-const SIMULATOR_TYPE_SEARCH_ALIASES = [
+export const SIMULATOR_TYPE_SEARCH_ALIASES = [
   'mobile emulator tab',
   'mobile emulator',
   'ios simulator',
@@ -72,17 +90,6 @@ function compareText(a: string, b: string): number {
   return compareBaseSensitivityLocaleText(a, b)
 }
 
-function findRange(text: string, query: string): MatchRange | null {
-  if (!query) {
-    return null
-  }
-  const start = text.toLowerCase().indexOf(query)
-  if (start === -1) {
-    return null
-  }
-  return { start, end: start + query.length }
-}
-
 function compareEmptyQueryResults(
   a: SimulatorPaletteSearchResult,
   b: SimulatorPaletteSearchResult
@@ -103,22 +110,43 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-function scoreSimulatorTabMatch({
-  fieldWeight,
-  matchIndex,
-  entry
-}: {
-  fieldWeight: number
-  matchIndex: number
-  entry: SearchableSimulatorTab
-}): number {
-  let score = fieldWeight + matchIndex + entry.worktreeSortIndex * 100
+// Why: simulator tabs follow browser-tab Cmd+J ordering — deterministic and
+// context-first until Orca tracks per-tab recency for this surface.
+function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
-    score -= 40
-  } else if (entry.isCurrentWorktree) {
-    score -= 10
+    return entry.worktreeSortIndex * 100 - 4000
   }
-  return score
+  return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
+}
+
+export function simulatorPaletteTabTitle(tab: Tab): string {
+  return tab.label || 'Mobile Emulator'
+}
+
+function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult {
+  return {
+    executionHostId: entry.worktree.hostId,
+    tabId: entry.tab.id,
+    worktreeId: entry.worktree.id,
+    groupId: entry.tab.groupId,
+    title: simulatorPaletteTabTitle(entry.tab),
+    // Why empty: the smartphone icon already says the type; a fixed label crowds the row.
+    secondaryText: '',
+    repoName: entry.repoName,
+    // Why resolve: a cleared display name leaves the raw field undefined at runtime.
+    worktreeName: resolveWorktreeDisplayName(entry.worktree),
+    branchName: resolveWorktreeBranchLabel(entry.worktree),
+    titleRanges: NO_RANGES,
+    secondaryRanges: NO_RANGES,
+    repoRanges: NO_RANGES,
+    worktreeRanges: NO_RANGES,
+    branchRanges: NO_RANGES,
+    isCurrentTab: entry.isCurrentTab,
+    isCurrentWorktree: entry.isCurrentWorktree,
+    score: positionScore(entry),
+    qualityClass: null,
+    rank: null
+  }
 }
 
 function getActiveUnifiedTabId({
@@ -177,7 +205,16 @@ export function buildSearchableSimulatorTabs({
         // Why: simulator tabs are unified tabs; terminal activeTabId does not
         // identify the visible emulator tab after split-group activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
-        isCurrentWorktree: activeWorktreeId === worktree.id
+        isCurrentWorktree: activeWorktreeId === worktree.id,
+        document: buildPaletteTabDocument({
+          id: tab.id,
+          title: simulatorPaletteTabTitle(tab),
+          secondaryTexts: [],
+          worktreeName: resolveWorktreeDisplayName(worktree),
+          branch: resolveWorktreeBranchLabel(worktree),
+          repoName,
+          typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
+        })
       })
     }
   }
@@ -185,123 +222,47 @@ export function buildSearchableSimulatorTabs({
 }
 
 export function searchSimulatorTabs(
-  entries: SearchableSimulatorTab[],
+  entries: readonly SearchableSimulatorTab[],
   query: string
 ): SimulatorPaletteSearchResult[] {
   if (isSimulatorPaletteQueryTooLarge(query)) {
     return []
   }
-  const trimmed = query.trim()
-  const trimmedQuery = trimmed.toLowerCase()
-  const results: SimulatorPaletteSearchResult[] = []
-
-  for (const entry of entries) {
-    const title = entry.tab.label || 'Mobile Emulator'
-    // Why: type is already clear from the smartphone icon; a fixed label only
-    // crowds the row (and used to leave a bare "· ·" under width pressure).
-    const secondaryText = ''
-    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
-    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
-    const baseResult = {
-      executionHostId: entry.worktree.hostId,
-      tabId: entry.tab.id,
-      worktreeId: entry.worktree.id,
-      groupId: entry.tab.groupId,
-      title,
-      secondaryText,
-      repoName: entry.repoName,
-      worktreeName,
-      isCurrentTab: entry.isCurrentTab,
-      isCurrentWorktree: entry.isCurrentWorktree
-    }
-
-    if (!trimmedQuery) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        // Why: simulator tabs follow browser-tab Cmd+J ordering: deterministic
-        // and context-first until Orca tracks per-tab recency for this surface.
-        score: entry.isCurrentTab
-          ? -2
-          : entry.isCurrentWorktree
-            ? -1
-            : entry.worktreeSortIndex * 100
-      })
-      continue
-    }
-
-    const titleRange = findRange(title, trimmedQuery)
-    if (titleRange) {
-      results.push({
-        ...baseResult,
-        titleRange,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 0, matchIndex: titleRange.start, entry })
-      })
-      continue
-    }
-
-    const typeAliasHit = selectPaletteTypeAliasMatch(SIMULATOR_TYPE_SEARCH_ALIASES, trimmedQuery)
-    if (typeAliasHit) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        // Why null: aliases are search keys only — nothing to highlight in the row.
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        typeAliasMatch: typeAliasHit,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 20,
-          matchIndex: typeAliasHit.range.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const worktreeRange = findRange(worktreeName, trimmedQuery)
-    if (worktreeRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 40,
-          matchIndex: worktreeRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const repoRange = findRange(entry.repoName, trimmedQuery)
-    if (repoRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 60, matchIndex: repoRange.start, entry })
-      })
-    }
+  const prepared = preparePaletteTabQuery(query)
+  if (!prepared) {
+    return query.trim()
+      ? []
+      : entries.map((entry) => baseResult(entry)).sort(compareEmptyQueryResults)
   }
 
-  return results.sort((a, b) => {
-    if (!trimmedQuery) {
-      return compareEmptyQueryResults(a, b)
+  const results: SimulatorPaletteSearchResult[] = []
+  for (const entry of entries) {
+    const match = matchPaletteTabDocument(entry.document, prepared)
+    if (!match) {
+      continue
     }
-    if (a.score !== b.score) {
-      return a.score - b.score
-    }
-    return compareEmptyQueryResults(a, b)
-  })
+    const alias =
+      match.typeAlias !== null ? SIMULATOR_TYPE_SEARCH_ALIASES[match.typeAlias.index] : undefined
+    results.push({
+      ...baseResult(entry),
+      titleRanges: match.titleRanges,
+      repoRanges: match.repoRanges,
+      worktreeRanges: match.worktreeRanges,
+      branchRanges: match.branchRanges,
+      // Ranges are into the alias string, not the row: the icon explains the hit,
+      // so nothing on the row is highlighted from them.
+      typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
+      qualityClass: match.qualityClass,
+      rank: match.rank
+    })
+  }
+
+  return results.sort((a, b) =>
+    a.rank && b.rank
+      ? comparePaletteTabResults(
+          { rank: a.rank, positionScore: a.score, id: a.tabId },
+          { rank: b.rank, positionScore: b.score, id: b.tabId }
+        )
+      : compareEmptyQueryResults(a, b)
+  )
 }

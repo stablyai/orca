@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
+import { Session } from './session'
+import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'

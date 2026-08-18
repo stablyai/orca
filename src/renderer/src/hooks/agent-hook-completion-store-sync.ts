@@ -24,7 +24,9 @@ export type AgentHookCompletionStoreSnapshot = {
 
 type TabVisit = () => void
 
-function isTrackingEnabled(state: AgentHookCompletionStoreSnapshot): boolean {
+export function isAgentHookCompletionTrackingEnabled(
+  state: AgentHookCompletionStoreSnapshot
+): boolean {
   const notifications = state.settings?.notifications
   const notificationEnabled =
     notifications?.enabled !== false && notifications?.agentTaskComplete !== false
@@ -80,7 +82,9 @@ function shouldSync(
   previous: AgentHookCompletionStoreSnapshot,
   visitTab?: TabVisit
 ): boolean {
-  if (isTrackingEnabled(current) !== isTrackingEnabled(previous)) {
+  if (
+    isAgentHookCompletionTrackingEnabled(current) !== isAgentHookCompletionTrackingEnabled(previous)
+  ) {
     return true
   }
   if (

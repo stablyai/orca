@@ -17,6 +17,7 @@ import {
   saveSessionCommitDrafts
 } from '@/lib/source-control-commit-draft-session'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
@@ -120,7 +121,7 @@ describe('removeWorktree cascade', () => {
       'repo1::/path/wt2': 'fix: keep draft'
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
     const s = store.getState()
 
     expect(result).toEqual({ ok: true })
@@ -163,7 +164,7 @@ describe('removeWorktree cascade', () => {
       }
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({
       ok: true,
@@ -199,7 +200,9 @@ describe('removeWorktree cascade', () => {
 
     const result = await store
       .getState()
-      .removeWorktree(worktreeId, false, { suppressPreservedBranchToast: true })
+      .removeWorktree({ id: worktreeId, executionHostId: null }, false, {
+        suppressPreservedBranchToast: true
+      })
 
     expect(result).toEqual({
       ok: true,
@@ -226,7 +229,7 @@ describe('removeWorktree cascade', () => {
       activeTabId: 'tab1'
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
     const s = store.getState()
 
     expect(result).toEqual({ ok: false, error })
@@ -265,6 +268,63 @@ describe('removeWorktree cascade', () => {
     expect(store.getState().deleteStateByWorktreeId).toMatchObject({
       [first]: { isDeleting: true, error: null, canForceDelete: false },
       [second]: { isDeleting: true, error: null, canForceDelete: false }
+    })
+  })
+
+  it('tracks and clears same-id deletion state independently by host', () => {
+    const store = createTestStore()
+    const local = { id: 'repo1::/path/shared', hostId: 'local' as const }
+    const remote = { id: local.id, hostId: 'ssh:box' as const }
+
+    store.getState().markWorktreesDeleting([local, remote])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      [getWorktreeHostIdentity(local)]: { isDeleting: true, executionHostId: 'local' },
+      [getWorktreeHostIdentity(remote)]: { isDeleting: true, executionHostId: 'ssh:box' }
+    })
+
+    store.getState().clearWorktreeDeleteState(local.id, local.hostId)
+
+    expect(store.getState().deleteStateByWorktreeId[getWorktreeHostIdentity(local)]).toBeUndefined()
+    expect(store.getState().deleteStateByWorktreeId[getWorktreeHostIdentity(remote)]).toMatchObject(
+      {
+        isDeleting: true,
+        executionHostId: 'ssh:box'
+      }
+    )
+  })
+
+  it('promotes a queued row to deleting when a real delete starts (phase-aware skip guard)', () => {
+    const store = createTestStore()
+    const queued = 'repo1::/path/queued'
+    const inProgress = 'repo1::/path/in-progress'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [queued]: {
+          isDeleting: true,
+          phase: 'queued',
+          error: null,
+          canForceDelete: false,
+          forceDeleteReason: null
+        },
+        [inProgress]: {
+          isDeleting: true,
+          phase: 'deleting',
+          error: null,
+          canForceDelete: false,
+          forceDeleteReason: null
+        }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([queued, inProgress])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      // A queued row is promoted so the sidebar shows real deletion progress.
+      [queued]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false },
+      // A row already in the deleting phase is left untouched.
+      [inProgress]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false }
     })
   })
 
@@ -334,7 +394,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -362,7 +422,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -390,7 +450,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -419,7 +479,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -445,7 +505,9 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId, true)
+    const result = await store
+      .getState()
+      .removeWorktree({ id: worktreeId, executionHostId: null }, true)
     const s = store.getState()
 
     expect(result).toEqual({ ok: false, error: 'fatal error' })
@@ -476,7 +538,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({
       ok: false,
@@ -511,7 +573,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result.ok).toBe(false)
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
@@ -534,7 +596,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -582,7 +644,9 @@ describe('removeWorktree cascade', () => {
         terminalLayoutsByTabId: {}
       })
 
-      const result = await store.getState().removeWorktree(worktreeId)
+      const result = await store
+        .getState()
+        .removeWorktree({ id: worktreeId, executionHostId: null })
 
       expect(result).toEqual({ ok: false, error })
       expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
@@ -614,7 +678,7 @@ describe('removeWorktree cascade', () => {
       terminalLayoutsByTabId: {}
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result.ok).toBe(false)
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(true)
@@ -674,7 +738,7 @@ describe('removeWorktree cascade', () => {
       activeTabId: 'tab2'
     })
 
-    await store.getState().removeWorktree(wt1)
+    await store.getState().removeWorktree({ id: wt1, executionHostId: null })
     const s = store.getState()
 
     // wt2 is untouched
@@ -721,7 +785,7 @@ describe('removeWorktree cascade', () => {
       }
     })
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     expect(callOrder).toEqual(['remove', 'kill'])

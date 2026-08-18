@@ -8,6 +8,7 @@ import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspac
 import type { AppState } from '../../../../store/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getCyclicProjectedWorktreeLineageIds } from '../../worktree-lineage-projection'
 import { ALL_GROUP_KEY, ALL_GROUP_META } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
@@ -20,7 +21,9 @@ import {
 import { buildProjectGroupingIndex } from './project-grouping'
 import type { ProjectGroupingModel } from './project-grouping'
 import { appendProjectGroupSections } from './project-group-sections'
-import { appendWorktreeRows, buildPendingCreationRow, emitPinnedGroup } from './row-builders'
+import { getPinnedSectionWorktrees } from '../../pinned-section-worktrees'
+import { emitPinnedGroup } from './pinned-group-rows'
+import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
 import { getPinnedWorktreeDisplayPolicy } from './row-types'
 import type {
   ImportedWorktreesCardCandidate,
@@ -82,10 +85,14 @@ export function buildRows(
     }
   }
 
+  const pinnedSectionWorktrees = nestLineage
+    ? getPinnedSectionWorktrees(worktrees, lineageById, worktreeMap)
+    : worktrees.filter((worktree) => worktree.isPinned)
+  const pinnedSectionIds = new Set(pinnedSectionWorktrees.map(getWorktreeHostIdentity))
   const naturalWorktrees =
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
-      : worktrees.filter((worktree) => !worktree.isPinned)
+      : worktrees.filter((worktree) => !pinnedSectionIds.has(getWorktreeHostIdentity(worktree)))
   const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
     naturalWorktrees,
     repoMap,
@@ -103,14 +110,18 @@ export function buildRows(
     projectGrouping
   })
   emitPinnedGroup(
-    worktrees,
+    pinnedSectionWorktrees,
     repoMap,
     defaultHostId,
     collapsedGroups,
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
-    result
+    result,
+    lineageById,
+    worktreeMap,
+    nestLineage,
+    cyclicLineageIds
   )
   if (groupBy === 'none') {
     if (naturalWorktrees.length > 0) {
@@ -131,7 +142,7 @@ export function buildRows(
           collapsedGroups,
           groupDepth: 0,
           sectionKey: ALL_GROUP_KEY,
-          hostContextLabelByWorktreeId: mixedWorktreeHostContextLabels,
+          hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
           cyclicLineageIds
         })
       }

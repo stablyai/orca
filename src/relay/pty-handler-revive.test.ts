@@ -79,15 +79,17 @@ describe('PtyHandler', () => {
       ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    const oldStartupIdentity = process.env.ORCA_SHELL_STARTUP_IDENTITY
-    process.env.ORCA_SHELL_STARTUP_IDENTITY = '1'
+    // Why seeded: a revived pane must not inherit a feature selection from the
+    // relay process's own environment.
+    const oldShellFeatures = process.env.ORCA_SHELL_FEATURES
+    process.env.ORCA_SHELL_FEATURES = 'ready,identity,markers,overlay'
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
-      if (oldStartupIdentity === undefined) {
-        delete process.env.ORCA_SHELL_STARTUP_IDENTITY
+      if (oldShellFeatures === undefined) {
+        delete process.env.ORCA_SHELL_FEATURES
       } else {
-        process.env.ORCA_SHELL_STARTUP_IDENTITY = oldStartupIdentity
+        process.env.ORCA_SHELL_FEATURES = oldShellFeatures
       }
       killSpy.mockRestore()
     }
@@ -101,8 +103,8 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     expect(callArgs.env.TERM).toBe('xterm-256color')
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
-    expect(callArgs.env.ORCA_SHELL_READY_MARKER).toBe('0')
-    expect(callArgs.env.ORCA_SHELL_STARTUP_IDENTITY).toBe('0')
+    expect(callArgs.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+    expect(callArgs.env.ORCA_SHELL_FEATURES).not.toContain('identity')
   })
 
   it('fences both revived worktree identity and cwd with rollback', async () => {

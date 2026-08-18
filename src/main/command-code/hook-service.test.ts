@@ -21,7 +21,7 @@ vi.mock('os', async () => {
 import { CommandCodeHookService } from './hook-service'
 
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
 
 describe('CommandCodeHookService', () => {
   let homeDir: string
@@ -136,7 +136,10 @@ describe('CommandCodeHookService', () => {
         body += chunk
       })
       req.on('end', () => {
-        requests.push({ body, token: req.headers['x-orca-agent-hook-token'] })
+        requests.push({
+          body,
+          token: req.headers['x-orca-agent-hook-token']
+        })
         res.statusCode = 204
         res.end()
       })

@@ -1334,6 +1334,17 @@ export class BrowserManager {
     return this.worktreeIdByTabId.get(browserTabId)
   }
 
+  getRendererContextForGuest(
+    guestWebContentsId: number
+  ): { browserPageId: string; renderer: Electron.WebContents } | null {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return null
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    return renderer ? { browserPageId, renderer } : null
+  }
+
   getSessionProfileIdForTab(browserTabId: string): string | null {
     return this.sessionProfileIdByPageId.get(browserTabId) ?? null
   }

@@ -33,15 +33,23 @@ export function sumChangedFiles(files) {
   return totals
 }
 
-function signed(count) {
+const COLOR_ADDED = '#1a7f37'
+const COLOR_DELETED = '#cf222e'
+
+function diffCell(count) {
   if (count === 0) {
     return '0'
   }
-  return count > 0 ? `+${count}` : `−${Math.abs(count)}`
+  if (count > 0) {
+    return `$\\color{${COLOR_ADDED}}{\\Huge{\\mathbf{+}}}$\u200b${count}`
+  }
+  return `$\\color{${COLOR_DELETED}}{\\Huge{\\mathbf{−}}}$\u200b${Math.abs(count)}`
 }
 
 function locTableRow(label, bucket) {
-  return `| ${label} | ${bucket.files ?? 0} | ${signed(bucket.added)} | ${signed(-(bucket.deleted ?? 0))} | ${signed((bucket.added ?? 0) - (bucket.deleted ?? 0))} |`
+  const added = bucket.added ?? 0
+  const deleted = bucket.deleted ?? 0
+  return `| ${label} | ${bucket.files ?? 0} | ${diffCell(added)} | ${diffCell(-deleted)} | ${diffCell(added - deleted)} |`
 }
 
 export function formatLocTable({ test, nonTest }) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { performance } from 'node:perf_hooks'
-import { Session, type SubprocessHandle } from './session'
+import { Session } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 // Benchmark harness for the terminal performance initiative: measures the
 // daemon-side ingest rate (Session.handleSubprocessData -> HeadlessEmulator

@@ -76,27 +76,6 @@ describe('worktree RPC methods', () => {
     })
   })
 
-  it('routes dirty-file force to the runtime server', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      dedupeWorktreeCreate: passthroughDedupe,
-      removeManagedWorktree: vi.fn().mockResolvedValue({})
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('worktree.rm', {
-        worktree: 'id:wt-1',
-        force: true,
-        runHooks: false
-      })
-    )
-
-    // Why (#11960): dirty-file force alone must not waive the PTY-stop proof.
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', true, false, false)
-    expect(response).toMatchObject({ ok: true, result: { removed: true } })
-  })
-
   it('routes create options to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -25,7 +25,7 @@ Use this skill for desktop UI through `orca computer`. When the requested target
   name a specific shell. Replace it with that chosen executable before running the command;
   do not create a shell variable or run `ORCA` literally. Blocks that name no shell are
   intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe.
-- Prefer `--json`. Screenshot bytes are omitted from JSON and written to `screenshot.path`.
+- Prefer `--json`; see Screenshots below for image output.
 - Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
 - If an app contains sensitive content, read only what the user requested.
 
@@ -105,7 +105,12 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Screenshots
 
-`get-app-state` returns tree+screenshot. Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
+`get-app-state` and actions request screenshots by default unless `--no-screenshot` is
+passed. A successful `--json` capture is normally saved at `result.screenshot.path`; if that
+path is absent, use the inline base64 `result.screenshot.data`. Pretty output does not save
+images.
+
+Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 

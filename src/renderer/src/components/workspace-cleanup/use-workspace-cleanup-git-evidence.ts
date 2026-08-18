@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import {
   selectWorkspaceCleanupGitEvidenceTargets,
   WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
 } from './workspace-cleanup-git-evidence'
 
 export type WorkspaceCleanupGitEvidenceState = {
-  /** Focused re-scan results, keyed by worktree id. */
-  evidenceByWorktreeId: ReadonlyMap<string, WorkspaceCleanupCandidate>
+  /** Focused re-scan results, keyed by host-qualified identity. */
+  evidenceByIdentity: ReadonlyMap<string, WorkspaceCleanupCandidate>
   pendingWorktreeIds: ReadonlySet<string>
   checkedCount: number
   totalCount: number
 }
 
 const EMPTY_EVIDENCE: WorkspaceCleanupGitEvidenceState = {
-  evidenceByWorktreeId: new Map(),
+  evidenceByIdentity: new Map(),
   pendingWorktreeIds: new Set(),
   checkedCount: 0,
   totalCount: 0
@@ -61,7 +62,7 @@ export function useWorkspaceCleanupGitEvidence({
     }
     publishDirtyRef.current = false
     setState({
-      evidenceByWorktreeId: new Map(evidenceRef.current),
+      evidenceByIdentity: new Map(evidenceRef.current),
       pendingWorktreeIds: new Set([...queuedRef.current, ...inFlightRef.current]),
       checkedCount: totalRef.current - queuedRef.current.size - inFlightRef.current.size,
       totalCount: totalRef.current
@@ -95,7 +96,7 @@ export function useWorkspaceCleanupGitEvidence({
         if (!activeRequestWorktreeIdsRef.current.has(candidate.worktreeId)) {
           continue
         }
-        evidenceRef.current.set(candidate.worktreeId, candidate)
+        evidenceRef.current.set(getWorkspaceCleanupCandidateIdentity(candidate), candidate)
         inFlightRef.current.delete(candidate.worktreeId)
         publishDirtyRef.current = true
       }

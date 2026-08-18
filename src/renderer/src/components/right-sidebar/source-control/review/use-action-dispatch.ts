@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useCallback } from 'react'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../../../shared/git-upstream-status'
-import type { DropdownActionKind } from '../../source-control-dropdown-items'
+import type { DropdownActionKind } from '../../source-control-dropdown-item-types'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import { handleSourceControlCommitShortcut } from '../commit/commit-shortcut'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
