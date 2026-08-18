@@ -2220,6 +2220,12 @@ export function matchKeybindingDigitIndex(
 /**
  * Returns whether the input matches any active application keybinding (global, tabs, plugins),
  * allowing low-level terminal interceptors to yield to higher-level application actions.
+ *
+ * @param input - The keyboard event or keybinding input to evaluate.
+ * @param platform - The current host/client platform ('darwin', 'linux', 'win32').
+ * @param overrides - Optional user-configured keybinding overrides.
+ * @param options - Contextual matching options including context and terminalShortcutPolicy.
+ * @returns True if the input matches an active non-terminal keybinding, false otherwise.
  */
 export function matchesActiveNonTerminalKeybinding(
   input: KeybindingInput,

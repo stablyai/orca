@@ -4,6 +4,12 @@ import {
   type TerminalShortcutEvent
 } from './terminal-shortcut-policy'
 
+/**
+ * Builds a partial terminal shortcut event for testing.
+ *
+ * @param partial - Partial keyboard event properties with required key.
+ * @returns Complete TerminalShortcutEvent object.
+ */
 function event(
   partial: Partial<TerminalShortcutEvent> & Pick<TerminalShortcutEvent, 'key'>
 ): TerminalShortcutEvent {
