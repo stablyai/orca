@@ -3,9 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { rimForAgentState } from '@/lib/agent-rim'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-// Drives the per-pane agent-state rim (see terminal.css `.pane[data-agent-rim]`),
-// mirroring terminal-pane-attention-subscriptions.ts but keyed off agent status.
-// Rim precedence lives in the shared rimForAgentState helper.
+// Mirrors terminal-pane-attention-subscriptions.ts, keyed off agent status; terminal.css paints `.pane[data-agent-rim]`.
 
 type Listener = () => void
 type StoreState = ReturnType<typeof useAppStore.getState>

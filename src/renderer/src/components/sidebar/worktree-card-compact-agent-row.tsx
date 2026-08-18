@@ -267,7 +267,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
         isFocusedPane && 'bg-worktree-sidebar-accent',
-        rim === 'waiting' && 'ring-1 ring-inset ring-agent-rim-attention/60',
+        rim === 'waiting' && 'ring-1 ring-inset ring-agent-question/60',
         rim === 'done' && 'ring-1 ring-inset ring-agent-rim-done/60',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'

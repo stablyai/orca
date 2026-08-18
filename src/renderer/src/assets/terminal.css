@@ -186,8 +186,8 @@
     inset 0 0 0 3px color-mix(in srgb, var(--terminal-pane-locate) 18%, transparent);
 }
 
-/* Agent-state rim: waiting/blocked = amber (needs you, persists until resolved),
-   unviewed completion = green (clears when the pane is viewed).
+/* Agent-state rim: waiting/blocked paints --agent-question (needs you, persists
+   until resolved), unviewed completion = green (clears when the pane is viewed).
    Drawn on .pane::after (not .xterm-container::after) so it never collides with
    the terminal-attention ring above. z-index sits above that ring, below the
    focus-locate flash. */
@@ -202,8 +202,8 @@
 
 .pane[data-agent-rim='waiting']::after {
   box-shadow:
-    inset 0 0 0 1.5px color-mix(in srgb, var(--agent-rim-attention) 70%, transparent),
-    inset 0 0 0 3px color-mix(in srgb, var(--agent-rim-attention) 20%, transparent);
+    inset 0 0 0 1.5px color-mix(in srgb, var(--agent-question) 70%, transparent),
+    inset 0 0 0 3px color-mix(in srgb, var(--agent-question) 20%, transparent);
 }
 
 .pane[data-agent-rim='done']::after {
