@@ -69,13 +69,35 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
  * value unambiguous — translate it to its UNC form. Non-WSL repos and
  * non-POSIX values (UNC, drive, relative) pass through untouched, so native
  * Windows, macOS/Linux, and SSH base paths keep their meaning.
+ *
+ * Why not toWindowsWslPath: its /mnt/<drive> branch emits a drive-letter path,
+ * which the workspace-mirroring heuristic reads as desktop-local and discards —
+ * the very bug this resolves. drvfs bases stay on the distro UNC view instead.
+ * Dot segments collapse here because ownership layouts compare paths without
+ * resolving them, so creation and classification must see the same spelling.
  */
 export function resolveWslRepoWorktreeBasePath(repoPath: string, basePath: string): string {
   const repoWsl = parseWslUncPath(repoPath)
   if (!repoWsl || !/^\/(?!\/)/.test(basePath)) {
     return basePath
   }
-  return toWindowsWslPath(basePath, repoWsl.distro)
+  const collapsed = collapsePosixDotSegments(basePath)
+  return `\\\\wsl.localhost\\${repoWsl.distro}${collapsed === '/' ? '\\' : collapsed.replace(/\//g, '\\')}`
+}
+
+function collapsePosixDotSegments(absolutePosixPath: string): string {
+  const segments: string[] = []
+  for (const segment of absolutePosixPath.split('/')) {
+    if (!segment || segment === '.') {
+      continue
+    }
+    if (segment === '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return `/${segments.join('/')}`
 }
 
 // Why: Windows folds the share (\\wsl$ aliases \\wsl.localhost), the distro, and

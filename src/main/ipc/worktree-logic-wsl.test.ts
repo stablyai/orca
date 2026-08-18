@@ -1,21 +1,28 @@
 import { win32 } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getWslHomeMock, parseWslPathMock } = vi.hoisted(() => ({
+const { getWslHomeMock, getWslHomeAsyncMock, parseWslPathMock } = vi.hoisted(() => ({
   getWslHomeMock: vi.fn(),
+  getWslHomeAsyncMock: vi.fn(),
   parseWslPathMock: vi.fn()
 }))
 
 vi.mock('../wsl', () => ({
   getWslHome: getWslHomeMock,
+  getWslHomeAsync: getWslHomeAsyncMock,
   parseWslPath: parseWslPathMock
 }))
 
-import { computeWorktreePath, getWorktreePathSettings } from './worktree-logic'
+import {
+  computeWorktreePath,
+  computeWorktreePathAsync,
+  getWorktreePathSettings
+} from './worktree-logic'
 
 describe('computeWorktreePath WSL layout', () => {
   beforeEach(() => {
     getWslHomeMock.mockReset()
+    getWslHomeAsyncMock.mockReset()
     parseWslPathMock.mockReset()
   })
 
@@ -69,6 +76,47 @@ describe('computeWorktreePath WSL layout', () => {
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
     )
     expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('honors a drvfs /mnt repo base path instead of mirroring it away', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '/mnt/d/trees'
+    }
+
+    expect(
+      computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\mnt\\d\\trees\\feature')
+  })
+
+  it('resolves the Linux repo base path identically through the async twin', async () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    getWslHomeAsyncMock.mockResolvedValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+    }
+    const pathSettings = getWorktreePathSettings(repo, {
+      nestWorkspaces: false,
+      workspaceDir: 'C:\\workspaces'
+    })
+
+    await expect(computeWorktreePathAsync('feature', repo.path, pathSettings)).resolves.toBe(
+      computeWorktreePath('feature', repo.path, pathSettings)
+    )
   })
 
   it('honors a Linux repo base path even when the distro home lookup fails', () => {

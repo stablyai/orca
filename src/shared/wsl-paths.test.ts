@@ -47,8 +47,22 @@ describe('resolveWslRepoWorktreeBasePath', () => {
     )
   })
 
-  it('maps drvfs base paths to their drive form', () => {
-    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/mnt/d/trees')).toBe('D:\\trees')
+  it('keeps drvfs base paths on the distro UNC view so mirroring cannot discard them', () => {
+    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/mnt/d/trees')).toBe(
+      '\\\\wsl.localhost\\Ubuntu-24.04\\mnt\\d\\trees'
+    )
+  })
+
+  it('collapses dot segments and trailing slashes so ownership layouts match creation', () => {
+    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/home/jin/src/../trees')).toBe(
+      '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\trees'
+    )
+    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/home/jin/./trees/')).toBe(
+      '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\trees'
+    )
+    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/../..')).toBe(
+      '\\\\wsl.localhost\\Ubuntu-24.04\\'
+    )
   })
 
   it('keeps UNC, drive, and relative base paths untouched for WSL repos', () => {
