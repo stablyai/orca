@@ -7,6 +7,7 @@ import { lstat, mkdir, readdir, rename, rmdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { removeHostTree } from './host-tree-removal'
 import { isFolderRepo } from '../shared/repo-kind'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
@@ -160,7 +161,14 @@ export function collectWorktreeTrashSweepRoots(
 ): string[] {
   const roots = new Set<string>()
   for (const repo of repos) {
-    if (repo.connectionId || isFolderRepo(repo) || parseWslPath(repo.path)) {
+    // Why the execution host and not `connectionId`: a runtime-owned repo carries
+    // `executionHostId` with no `connectionId`, so a connectionId check calls it local
+    // and sweeps a path that belongs to another machine.
+    if (
+      getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
+      isFolderRepo(repo) ||
+      parseWslPath(repo.path)
+    ) {
       continue
     }
     try {

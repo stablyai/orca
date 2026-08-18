@@ -15,6 +15,11 @@ import {
 const FIRST = MARINE_CREATURES[0].toLowerCase()
 const SECOND = MARINE_CREATURES[1].toLowerCase()
 
+type RetirementSettings = Pick<
+  GlobalSettings,
+  'workspaceDir' | 'nestWorkspaces' | 'hostSettingOverrides'
+>
+
 const makeRepo = (id: string, path: string): Repo =>
   ({ id, path, displayName: id, badgeColor: '', addedAt: 0 }) as Repo
 
@@ -105,6 +110,37 @@ describe('getRetiredNameRegistryForRepo', () => {
       }
     )
     expect(pathReads.filter((id) => id.startsWith('peer-'))).toEqual([])
+  })
+
+  it('re-derives the namespace when only the host default moves the workspace root', async () => {
+    // Why SSH repos: the on-disk backfill returns null for non-local hosts, so both the
+    // subject and the peer resolve their namespace through the memoized collision key —
+    // the path a stale cache key actually corrupts.
+    const store = storeOf({ 'repo-a': [FIRST], 'repo-b': [SECOND] })
+    const repos = [
+      { ...makeRepo('repo-a', '/repos/a/repo'), connectionId: 'ssh-1' } as Repo,
+      { ...makeRepo('repo-b', '/repos/b/repo'), connectionId: 'ssh-1' } as Repo
+    ]
+    const clientDefaultOnly: RetirementSettings = {
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false
+    }
+    const sharedHostRoot: RetirementSettings = {
+      ...clientDefaultOnly,
+      hostSettingOverrides: { 'ssh:ssh-1': { defaultWorktreeLocation: '/shared/worktrees' } }
+    }
+
+    // An absolute client default is dropped on SSH, so each repo gets its own sibling root.
+    expect(await getRetiredNameRegistryForRepo(store, repos[1], repos, clientDefaultOnly)).toEqual({
+      exhaustedTiers: 0,
+      names: [SECOND]
+    })
+
+    // Only the host default changed, and it collapses both repos into one root. A key blind
+    // to it would serve the previous per-repo namespaces from cache and miss the sharing.
+    expect(
+      [...(await getRetiredNameRegistryForRepo(store, repos[1], repos, sharedHostRoot)).names].sort()
+    ).toEqual([FIRST, SECOND].sort())
   })
 
   it('reports nothing for a folder workspace, which has no generated worktree names', async () => {

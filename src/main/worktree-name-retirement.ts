@@ -110,8 +110,10 @@ async function getRetirementCollisionKey(
   const cacheKey = [
     hostIdentity,
     repo.path,
-    repo.worktreeBasePath ?? '',
-    settings.workspaceDir,
+    // Why the effective base and not `repo.worktreeBasePath`: a host-scoped default
+    // feeds the probe path too, so a key blind to it hands the repo the namespace of
+    // whatever root the host pointed at before.
+    getWorktreePathSettings(repo, settings).workspaceDir,
     settings.nestWorkspaces ? 'nested' : 'flat'
   ].join('\u0000')
   const cached = collisionKeyCache.get(cacheKey)

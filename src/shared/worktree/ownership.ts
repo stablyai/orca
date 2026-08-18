@@ -16,7 +16,7 @@ import {
   type WorktreeVisibilitySourceMatcher
 } from './visibility-sources'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../external-worktree-visibility'
-import { getRepoExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import { getHostSettingOverride } from '../host-setting-overrides'
 import { shouldShowWorktree } from '../worktree-visibility-resolution'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../global-settings-types'
@@ -102,10 +102,19 @@ function appendWorkspaceLayouts(
 }
 
 function shouldIncludeWorkspaceLayout(
-  repo: Pick<Repo, 'path' | 'connectionId'> | undefined,
+  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'> | undefined,
   layoutPath: string
 ): boolean {
-  return !repo?.connectionId || !isRuntimePathAbsoluteForRepo(repo.path, layoutPath)
+  if (!repo) {
+    return true
+  }
+  // Why the execution host and not `connectionId`: a runtime-owned repo carries
+  // `executionHostId` with no `connectionId`, so a connectionId check calls it local
+  // and hands it the desktop's absolute workspace root as a known Orca layout.
+  return (
+    getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID ||
+    !isRuntimePathAbsoluteForRepo(repo.path, layoutPath)
+  )
 }
 
 function buildWslWorkspaceLayouts(

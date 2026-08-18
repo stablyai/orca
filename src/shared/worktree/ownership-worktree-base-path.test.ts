@@ -200,6 +200,22 @@ describe('repo-specific worktree ownership layouts', () => {
     ).toEqual({ path: '/remote/custom', nestWorkspaces: true })
   })
 
+  it('keeps the absolute client layout away from runtime-owned repos', () => {
+    // Why this repo shape: a runtime-owned repo carries `executionHostId` and no
+    // `connectionId`, so a connectionId-only locality check calls it local.
+    const settings = makeSettings({
+      workspaceDir: '/local/worktrees',
+      hostSettingOverrides: {
+        'runtime:env-1': { defaultWorktreeLocation: '/remote/home/.orca/workspaces' }
+      }
+    })
+    const repo = makeRepo({ path: '/remote/repo', executionHostId: 'runtime:env-1' })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)).toEqual([
+      { path: '/remote/home/.orca/workspaces', nestWorkspaces: true }
+    ])
+  })
+
   it('includes relative global layouts for SSH repos without applying absolute desktop paths', () => {
     const repo = makeRepo({ path: '/remote/repo', connectionId: 'ssh-1' })
     const relativeSettings = makeSettings({ workspaceDir: '../worktrees' })

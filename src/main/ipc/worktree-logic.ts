@@ -212,7 +212,7 @@ export function getWorktreeCreationLayout(
  *  of falling back to a repo-qualified sibling. */
 export function hasConfiguredWorktreeBasePath(
   repo: WorktreeBasePathRepo,
-  settings: Pick<GlobalSettings, 'hostSettingOverrides'>
+  settings: WorktreeBasePathSettings
 ): boolean {
   return (
     getRepoWorktreeBasePath(repo) !== undefined ||
