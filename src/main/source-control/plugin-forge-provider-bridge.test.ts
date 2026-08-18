@@ -46,6 +46,11 @@ describe('hostFromRemoteUrl', () => {
     )
   })
 
+  it('normalizes default ports (443, 80) away via URL.host convention', () => {
+    expect(hostFromRemoteUrl('https://git.corp.example:443/acme/app.git')).toBe('git.corp.example')
+    expect(hostFromRemoteUrl('http://git.corp.example:80/acme/app.git')).toBe('git.corp.example')
+  })
+
   it('returns null for unparseable inputs', () => {
     expect(hostFromRemoteUrl('not a url')).toBeNull()
     expect(hostFromRemoteUrl('')).toBeNull()

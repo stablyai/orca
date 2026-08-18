@@ -104,7 +104,8 @@ export function getWorktreeCardPrDisplay(
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
+    linkedGiteaPR !== null ||
+    (linkedPluginReview !== null && Object.keys(linkedPluginReview).length > 0)
   if (review) {
     if (review.provider === 'unsupported') {
       return review

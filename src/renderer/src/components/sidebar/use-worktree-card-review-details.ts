@@ -106,13 +106,15 @@ export function useWorktreeCardReviewDetails({
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
+    linkedGiteaPR !== null ||
+    (worktree.linkedPluginReview != null && Object.keys(worktree.linkedPluginReview).length > 0)
   const hasLinkedReview =
     linkedGitHubPR !== null ||
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
+    linkedGiteaPR !== null ||
+    (worktree.linkedPluginReview != null && Object.keys(worktree.linkedPluginReview).length > 0)
   // Why: a newer hosted-review miss trusts the merged-PR cache only when the stored head proves it still describes the current commit.
   const cachedBranchPR = prCacheEntry?.data
   const cachedBranchPRFetchedAt = prCacheEntry?.fetchedAt

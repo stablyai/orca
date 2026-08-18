@@ -61,7 +61,8 @@ export async function getHostedReviewForBranch(
     input.linkedGitLabMR == null &&
     input.linkedBitbucketPR == null &&
     input.linkedAzureDevOpsPR == null &&
-    input.linkedGiteaPR == null
+    input.linkedGiteaPR == null &&
+    (input.linkedPluginReview == null || Object.keys(input.linkedPluginReview).length === 0)
   ) {
     return null
   }

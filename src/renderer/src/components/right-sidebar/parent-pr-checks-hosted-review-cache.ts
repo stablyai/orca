@@ -82,6 +82,7 @@ function hasLinkedReview(worktree: Worktree): boolean {
     worktree.linkedGitLabMR != null ||
     worktree.linkedBitbucketPR != null ||
     worktree.linkedAzureDevOpsPR != null ||
-    worktree.linkedGiteaPR != null
+    worktree.linkedGiteaPR != null ||
+    (worktree.linkedPluginReview != null && Object.keys(worktree.linkedPluginReview).length > 0)
   )
 }

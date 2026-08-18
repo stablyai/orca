@@ -223,7 +223,6 @@ export class PluginService {
       !this.options.getPluginKillListEntry?.(plugin.pluginKey)
     )
   }
-
   workerState(pluginKey: string): { state: PluginRunState; restarts: number } {
     return this.workerController.state(pluginKey)
   }
@@ -296,8 +295,8 @@ export class PluginService {
       plugins: this.discovered,
       eventBus: this.eventBus,
       workerController: this.workerController,
-      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin),
-      logWarning: (pluginKey, line) => this.logBuffer.append(pluginKey, 'warn', line)
+      isRuntimeApproved: (p) => this.isRuntimeApproved(p),
+      logWarning: (key, line) => this.logBuffer.append(key, 'warn', line)
     })
   }
 
@@ -323,9 +322,7 @@ export class PluginService {
     )
     bindPluginForgeProviderResolvers(this.contentPacks.forgeProviders)
     this.contentPacksReady = true
-    const nextSpecs = collectApprovedWorkerSpecs(this.discovered, (plugin) =>
-      this.isRuntimeApproved(plugin)
-    )
+    const nextSpecs = collectApprovedWorkerSpecs(this.discovered, this.isRuntimeApproved.bind(this))
     await this.workerController.reconcile(nextSpecs)
     this.notifyChanged(true)
   }

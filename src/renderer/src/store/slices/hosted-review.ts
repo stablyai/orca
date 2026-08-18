@@ -505,7 +505,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   options?.linkedGitLabMR == null &&
                   options?.linkedBitbucketPR == null &&
                   options?.linkedAzureDevOpsPR == null &&
-                  options?.linkedGiteaPR == null
+                  options?.linkedGiteaPR == null &&
+                  (options?.linkedPluginReview == null ||
+                    Object.keys(options.linkedPluginReview).length === 0)
                     ? { branchLookupGitHubPRNumber: review.number }
                     : {})
                 })
