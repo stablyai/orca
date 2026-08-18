@@ -48,6 +48,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const CHILD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const GRANDCHILD_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
 const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
@@ -334,6 +335,46 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     expect(unnamed.cards[0].conversationName).toBeUndefined()
+  })
+
+  // STA-2811: both panes of a split tab carried the focused pane's title.
+  it('names each pane of a split tab from its own title', () => {
+    const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({}),
+          [siblingPaneKey]: entry({ paneKey: siblingPaneKey })
+        },
+        // The tab title is whichever pane has focus, so it must not name both.
+        tabsByWorktree: { w1: [{ ...tab(), title: '\u2733 Linear work log' }] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SPLIT_SIBLING_LEAF_ID }
+            },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1', [SPLIT_SIBLING_LEAF_ID]: 'pty2' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty2'] },
+        // Pane ids are replay-creation-ordered: 1 -> first leaf, 2 -> second.
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
+        }
+      }),
+      NOW
+    )
+
+    const nameByPaneKey = new Map(
+      snapshot.cards.map((card) => [card.paneKey, card.conversationName])
+    )
+    expect(nameByPaneKey.get(PANE_KEY)).toBe('Linear work log')
+    expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
   })
 
   // Why: `orca terminal rename --title` is unbounded, and the main-process
