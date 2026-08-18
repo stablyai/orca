@@ -509,6 +509,39 @@ export function openNewWorkspaceFromShortcut(
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
 }
 
+export function toggleAgentDashboardFromShortcut(
+  state: Pick<
+    AppState,
+    | 'activeView'
+    | 'settings'
+    | 'agentDashboardDrawerOpen'
+    | 'setSidebarOpen'
+    | 'setAgentDashboardDrawerOpen'
+  >,
+  openPopout: () => void
+): void {
+  // Why: mirror the sidebar entry's gate — the chord must stay inert while the
+  // experiment is off, so a stale binding cannot open a hidden surface.
+  if (
+    state.activeView === 'settings' ||
+    state.settings?.experimentalAgentDashboardPopout !== true
+  ) {
+    return
+  }
+  if (state.settings.experimentalAgentDashboardMode === 'popout') {
+    openPopout()
+    return
+  }
+  const nextOpen = !state.agentDashboardDrawerOpen
+  // Why: the drawer lives beside the sidebar and self-closes when the sidebar
+  // collapses, so opening it has to reveal the sidebar first. Closing must not,
+  // or dismissing the drawer would force the sidebar back open.
+  if (nextOpen) {
+    state.setSidebarOpen(true)
+  }
+  state.setAgentDashboardDrawerOpen(nextOpen)
+}
+
 export function resolveBrowserSessionTabTarget(
   state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
@@ -1426,26 +1459,9 @@ export function useIpcEvents(): void {
     if (window.api.ui.onToggleAgentDashboard) {
       unsubs.push(
         window.api.ui.onToggleAgentDashboard(() => {
-          const store = useAppStore.getState()
-          // Why: mirror the sidebar entry's gate — the chord must stay inert while
-          // the experiment is off, so a stale binding cannot open a hidden surface.
-          if (
-            store.activeView === 'settings' ||
-            store.settings?.experimentalAgentDashboardPopout !== true
-          ) {
-            return
-          }
-          if (store.settings.experimentalAgentDashboardMode === 'popout') {
+          toggleAgentDashboardFromShortcut(useAppStore.getState(), () => {
             void window.api.dashboard.openPopout()
-            return
-          }
-          const nextOpen = !store.agentDashboardDrawerOpen
-          // Why: the drawer lives beside the sidebar and self-closes when the
-          // sidebar collapses, so opening it has to reveal the sidebar first.
-          if (nextOpen) {
-            store.setSidebarOpen(true)
-          }
-          store.setAgentDashboardDrawerOpen(nextOpen)
+          })
         })
       )
     }

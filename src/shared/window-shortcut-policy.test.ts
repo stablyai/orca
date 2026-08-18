@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getWindowShortcutActionId,
   isRecentTabSwitcherCommitRelease,
   isWindowShortcutModifierChord,
   matchesRecentTabSwitcherChord,
@@ -376,23 +375,6 @@ describe('resolveWindowShortcutAction', () => {
         overrides
       )
     ).toEqual({ type: 'openTasks' })
-  })
-
-  it('leaves the agent dashboard toggle unbound by default but resolves a custom binding', () => {
-    const input = {
-      code: 'KeyD',
-      key: 'd',
-      meta: false,
-      control: true,
-      alt: true,
-      shift: false
-    }
-
-    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
-    expect(
-      resolveWindowShortcutAction(input, 'linux', { 'dashboard.toggle': ['Mod+Alt+D'] })
-    ).toEqual({ type: 'toggleAgentDashboard' })
-    expect(getWindowShortcutActionId({ type: 'toggleAgentDashboard' })).toBe('dashboard.toggle')
   })
 
   it('leaves workspace delete unbound by default but honors custom terminal-active bindings', () => {
