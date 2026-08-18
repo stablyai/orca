@@ -7,16 +7,20 @@ import {
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
 
-// Stand-ins for values that used to be interpolated per branch.
-const BRANCH_SPECIFIC_SAMPLES = [
-  'Orca: nwparker-some-branch',
-  'Orca: totally-different-branch',
-  'feature/framework-symlinks',
-  'Orca: dev'
-]
-
-function allPatches() {
-  return [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
+/** Collect the patch set as it would be computed on a given branch. */
+function patchesUnder(dockTitle: string, branch: string) {
+  const saved = { ...process.env }
+  Object.assign(process.env, {
+    ORCA_DEV_DOCK_TITLE: dockTitle,
+    ORCA_DEV_BRANCH: branch,
+    ORCA_DEV_INSTANCE_LABEL: branch,
+    ORCA_DEV_WORKTREE_NAME: branch
+  })
+  try {
+    return [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
+  } finally {
+    process.env = saved
+  }
 }
 
 describe('dev-electron-bundle-identity', () => {
@@ -28,28 +32,37 @@ describe('dev-electron-bundle-identity', () => {
   })
 
   it('gives the dev app a legible display name so notifications are not just "Electron"', () => {
-    const byKey = Object.fromEntries(allPatches().map((patch) => [patch.key, patch.value]))
+    const byKey = Object.fromEntries(
+      getDevBundlePlistPatches().map((patch) => [patch.key, patch.value])
+    )
     expect(byKey.CFBundleName).toBe(DEV_BUNDLE_DISPLAY_NAME)
     expect(byKey.CFBundleDisplayName).toBe(DEV_BUNDLE_DISPLAY_NAME)
     expect(DEV_BUNDLE_DISPLAY_NAME).not.toBe('Electron')
   })
 
-  it('never patches a value that varies by branch, so all dev bundles share one cdhash', () => {
-    // The real invariant. Patching a key is fine; varying its value per branch is not — Info.plist
-    // is inside the signature seal, so branch-varying values changed the ad-hoc cdhash, and macOS
-    // Keychain ACLs match on that cdhash. Per-branch Dock names come from the .app directory name.
-    for (const patch of allPatches()) {
-      for (const branch of BRANCH_SPECIFIC_SAMPLES) {
-        expect(patch.value).not.toContain(branch)
-      }
-      expect(patch.value).not.toMatch(/branch|nwparker|feature\/|@/i)
-    }
+  it('produces byte-identical patches on two different branches', () => {
+    // The invariant the whole fix rests on. Info.plist is inside the signature seal, so any
+    // branch-derived value moves the ad-hoc cdhash — and macOS Keychain ACLs match on that cdhash,
+    // which is what made every branch re-prompt for a password.
+    //
+    // Compared across two simulated branch environments rather than pattern-matched against
+    // suspicious substrings: a denylist only catches branches whose names happen to contain the
+    // banned words, and would miss the likeliest regression of all — re-adding
+    // `{ key: 'CFBundleName', value: title }` for an ordinary branch like "fix-login-crash".
+    expect(patchesUnder('Orca: fix-login-crash', 'fix-login-crash')).toEqual(
+      patchesUnder('Orca: perf-2', 'perf-2')
+    )
+    expect(patchesUnder('Orca: dev', 'main')).toEqual(
+      patchesUnder('Orca: some-worktree @ feature/x', 'feature/x')
+    )
   })
 
-  it('is deterministic — the patch set takes no input', () => {
-    expect(getDevBundlePlistPatches()).toEqual(getDevBundlePlistPatches())
-    expect(getDevHelperPlistPatches()).toEqual(getDevHelperPlistPatches())
-    for (const patch of allPatches()) {
+  it('leaks no branch, worktree, or title text into any patched value', () => {
+    const branch = 'fix-login-crash'
+    const worktree = 'Orca-safe-storage-lock'
+    for (const patch of patchesUnder(`Orca: ${branch}`, branch)) {
+      expect(patch.value).not.toContain(branch)
+      expect(patch.value).not.toContain(worktree)
       expect(typeof patch.value).toBe('string')
       expect(patch.value.length).toBeGreaterThan(0)
     }

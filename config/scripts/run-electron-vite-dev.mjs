@@ -219,10 +219,11 @@ function prepareMacDevElectronApp() {
     'Contents',
     'Info.plist'
   )
-  // Why not CFBundleName/CFBundleDisplayName: those carried the branch title, which changed the
-  // ad-hoc cdhash per branch and made macOS treat every branch as a different app for Keychain
-  // ACL purposes. The Dock takes its label from the .app directory name (see appBundleName), which
-  // is outside the signature, so per-branch names survive while the code identity stays fixed.
+  // Why every value here is constant: Info.plist is inside the signature seal, so a branch-varying
+  // value (these keys used to carry the branch title) changed the ad-hoc cdhash per branch, and
+  // macOS Keychain ACLs match on that cdhash — every branch read as a different app and re-prompted.
+  // Patching these keys is fine; varying them is not. The Dock takes its label from the .app
+  // directory name (see appBundleName), which is outside the signature, so per-branch names survive.
   for (const { key, value } of getDevBundlePlistPatches()) {
     setPlistValue(plistPath, key, value)
   }
