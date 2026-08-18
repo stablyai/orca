@@ -6,22 +6,12 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import {
-  getFishCodexShellLaunchPreflight,
-  getPosixCodexShellLaunchPreflight
-} from '../pty/codex-shell-launch-preflight'
-import {
-  getFishShellReadyInitCommand,
-  getZshEnvTemplate,
-  getZshFinalZdotdirRestoreBlock,
-  getZshShellReadyMarkerRegistrationBlock,
-  getZshStartupFileSourceBlock,
-  ZSH_HISTFILE_RESTORE_BLOCK
-} from '../shell-templates'
+import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishShellReadyInitCommand } from '../shell-templates'
+import { buildZshStartupWrapperFiles } from '../zsh-startup-wrapper-builder'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
-import { getDaemonZshShellReadyRcfileContent } from './daemon-zsh-shell-ready-rcfile'
+import { getDaemonZshWrapperSpec } from './daemon-zsh-shell-ready-wrapper-spec'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
@@ -102,38 +92,14 @@ function ensureShellReadyWrappers(): void {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zshEnv = getZshEnvTemplate(zshDir, 'daemon')
-  const zshProfile = `# Orca daemon zsh shell-ready wrapper
-${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
-`
-  const zshRc = getDaemonZshShellReadyRcfileContent()
-  const zshLogin = `# Orca daemon zsh shell-ready wrapper
-${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
-__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}
-__orca_restore_agent_teams_path
-# Why: .zlogin is the final login startup file before the prompt is shown.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-${getPosixOmpShellWrapper()}
-[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-${ZSH_HISTFILE_RESTORE_BLOCK}
-${getPosixCodexShellLaunchPreflight()}
-${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER)}
-${getZshFinalZdotdirRestoreBlock()}
-`
+  const zsh = buildZshStartupWrapperFiles(getDaemonZshWrapperSpec(zshDir))
   const bashRc = getDaemonBashShellReadyRcfileContent()
 
   const files = [
-    [join(zshDir, '.zshenv'), zshEnv],
-    [join(zshDir, '.zprofile'), zshProfile],
-    [join(zshDir, '.zshrc'), zshRc],
-    [join(zshDir, '.zlogin'), zshLogin],
+    [join(zshDir, '.zshenv'), zsh.zshenv],
+    [join(zshDir, '.zprofile'), zsh.zprofile],
+    [join(zshDir, '.zshrc'), zsh.zshrc],
+    [join(zshDir, '.zlogin'), zsh.zlogin],
     [join(bashDir, 'rcfile'), bashRc]
   ] as const
 

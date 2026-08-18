@@ -96,6 +96,37 @@ describe('PR workflow parallelism', () => {
     }
   })
 
+  it('refreshes the apt index once while adding the fish PPA', () => {
+    const installStep = workflow.jobs.shell_contracts.steps.find(
+      (step) => step.name === 'Install zsh and fish'
+    )
+    // Comment lines mention both commands by name, so count the executed ones only.
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+    const updates = commands.match(/apt-get update/g) ?? []
+    // Anchored to the start of a line so the retry message that names the command in
+    // prose is not mistaken for an invocation of it.
+    const addRepoCalls = commands
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^(sudo\s+)?add-apt-repository\b/.test(line))
+
+    // add-apt-repository refreshes every configured repo unless told not to, so an
+    // update on each side of it made this step pay for three full passes.
+    expect(updates).toHaveLength(1)
+    expect(addRepoCalls.length).toBeGreaterThan(0)
+    for (const call of addRepoCalls) {
+      expect(call.split(/\s+/)).toContain('-n')
+    }
+    // The one remaining update has to come after the PPA is on the list, or the fish
+    // index it exists to fetch would not be there yet.
+    expect(commands.lastIndexOf('add-apt-repository')).toBeLessThan(
+      commands.indexOf('apt-get update')
+    )
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
@@ -171,7 +202,12 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
+    for (const jobName of [
+      'static_analysis',
+      'typecheck',
+      'git_compatibility',
+      'xterm_patch_sync'
+    ]) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -184,7 +220,12 @@ describe('PR workflow parallelism', () => {
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
-    expect(dependencyInstall.run).toContain('--no-frozen-lockfile')
+    // Why frozen: re-resolving the graph costs a minute per job and the `git diff`
+    // guard below already fails the run when the lockfile is stale, so the slow
+    // resolution can never legitimately change anything.
+    expect(dependencyInstall.run).toContain('--frozen-lockfile')
+    expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
+    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
@@ -211,12 +252,63 @@ describe('PR workflow parallelism', () => {
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
   })
 
+  it('restores compiled native modules after the install that strips them', () => {
+    const steps = dependencyAction.runs.steps
+    const installIndex = steps.findIndex((step) => step.name === 'Install dependencies')
+    const cacheIndex = steps.findIndex((step) => step.name === 'Restore compiled native modules')
+    const prepareIndex = steps.findIndex((step) => step.name === 'Prepare native runtime')
+
+    // `--ignore-scripts` leaves no build/, so a restore before the install would be
+    // overwritten and one after the rebuild would never save a hit.
+    expect(installIndex).toBeLessThan(cacheIndex)
+    expect(cacheIndex).toBeLessThan(prepareIndex)
+    expect(steps[cacheIndex].if).toBe("inputs.native-runtime != 'none'")
+    // Native artifacts are ABI-bound: a key missing either dimension serves a build
+    // that cannot load, and ensure-native-runtime would recompile it anyway.
+    expect(steps[cacheIndex].with.key).toContain('${{ inputs.native-runtime }}')
+    expect(steps[cacheIndex].with.key).toContain('steps.requested-node.outputs.node-version')
+    expect(steps[cacheIndex].with.key).toContain('config/patches/node-pty@1.1.0.patch')
+    // No restore-keys: a partial-match key is exactly the ABI-mismatched build above.
+    expect(steps[cacheIndex].with['restore-keys']).toBeUndefined()
+  })
+
+  it('reuses TypeScript incremental state across typecheck runs', () => {
+    const steps = workflow.jobs.typecheck.steps
+    const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
+    const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
+
+    expect(cacheIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheIndex).toBeLessThan(checkIndex)
+    expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
+    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
+    // per-SHA), so without them the cache would never once be read.
+    expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
+    // The buildinfo is only reusable while the compiler options that produced it hold.
+    expect(steps[cacheIndex].with.key).toContain(
+      "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
+    )
+  })
+
+  it('checks out full history without historical blobs', () => {
+    const fullHistoryCheckouts = Object.values(workflow.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .filter(
+        (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0
+      )
+
+    expect(fullHistoryCheckouts.length).toBeGreaterThan(0)
+    for (const checkout of fullHistoryCheckouts) {
+      expect(checkout.with.filter).toBe('blob:none')
+    }
+  })
+
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'static_analysis',
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'xterm_patch_sync',
       'shell_contracts',
       'test',
       'managed_hook_node18',

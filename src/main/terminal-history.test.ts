@@ -88,11 +88,12 @@ import {
   resolveShellKind,
   ensureHistoryDir,
   injectHistoryEnv,
+  injectWslFishHistoryEnv,
   MAX_HISTORY_META_BYTES,
   updateHistoryEnvForFallback,
   type HistoryInjectionResult
 } from './terminal-history'
-import { fishHistorySessionName } from './fish-history-session'
+import { fishHistorySessionName, relayFishHistorySessionName } from './fish-history-session'
 import { hashWorktreeId } from './terminal-history-paths'
 import {
   cancelPendingHistoryTreeRemovalRetries,
@@ -378,6 +379,32 @@ describe('terminal-history', () => {
       expect(result.fishSession).toBeNull()
     })
 
+    it.each([
+      ['desktop', fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))],
+      ['relay', relayFishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))]
+    ])('replaces a %s fish_history inherited from a parent Orca', (_kind, inherited) => {
+      // fish EXPORTS fish_history, so an Orca launched from a fish pane hands the
+      // LAUNCHING worktree's session to every pane here — panes in every other
+      // worktree included, which would all then write one worktree's history file.
+      const env: Record<string, string> = { fish_history: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
+      expect(result.fishSession).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(result.fishSession)
+    })
+
+    it('drops an inherited fish_history even when the shell is not fish', () => {
+      // A fish started by hand inside this zsh pane must not adopt the parent's session.
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.fish_history).toBeUndefined()
+    })
+
     it('degrades gracefully when directory creation fails', () => {
       mkdirSyncMock.mockImplementation(() => {
         throw new Error('disk full')
@@ -388,6 +415,31 @@ describe('terminal-history', () => {
 
       expect(env.HISTFILE).toBeUndefined()
       expect(result.histFile).toBeNull()
+    })
+  })
+
+  describe('injectWslFishHistoryEnv', () => {
+    // clearAllMocks keeps implementations: drop the throwing mkdir left by the degrade test.
+    beforeEach(() => {
+      mkdirSyncMock.mockReset()
+    })
+
+    it('replaces an inherited Orca fish_history with this worktree session', () => {
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      const session = injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')
+
+      expect(session).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(session)
+    })
+
+    it('preserves a caller-supplied fish_history', () => {
+      const env: Record<string, string> = { fish_history: 'mine' }
+
+      expect(injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')).toBeNull()
+      expect(env.fish_history).toBe('mine')
     })
   })
 

@@ -1,0 +1,15 @@
+# Orca relay zsh overlay wrapper
+_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+case "${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
+if [[ -f "$_orca_home/.zprofile" ]]; then
+  _orca_wrapper_zdotdir="$ZDOTDIR"
+  # Why: user startup files resolve plugin/config paths from their own ZDOTDIR;
+  # Orca restores its wrapper dir afterward so zsh still loads wrapper files.
+  export ZDOTDIR="$_orca_home"
+  source "$_orca_home/.zprofile"
+  export ZDOTDIR="$_orca_wrapper_zdotdir"
+  unset _orca_wrapper_zdotdir
+fi
+

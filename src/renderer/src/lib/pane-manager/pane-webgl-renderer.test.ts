@@ -4,7 +4,6 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
-  disposeWebgl,
   resetTerminalWebglSuggestion,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
@@ -12,7 +11,7 @@ import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
 
-function createPane(options: { loadAddon?: (addon: unknown) => void } = {}): ManagedPaneInternal {
+function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
   return {
     id: 1,
@@ -25,7 +24,7 @@ function createPane(options: { loadAddon?: (addon: unknown) => void } = {}): Man
       loadAddon: vi.fn(options.loadAddon)
     } as never,
     container: {} as never,
-    xtermContainer: { dataset: {} } as never,
+    xtermContainer: {} as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'on',
     gpuRenderingEnabled: true,
@@ -94,69 +93,6 @@ describe('terminal WebGL addon lifecycle', () => {
 
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(pane.webglAddon).toBeNull()
-  })
-
-  it('tracks the active renderer for WebGL padding compositing', () => {
-    const pane = createPane()
-
-    attachWebgl(pane)
-    expect(pane.xtermContainer.dataset.terminalRenderer).toBe('webgl')
-
-    disposeWebgl(pane)
-    expect(pane.xtermContainer.dataset.terminalRenderer).toBe('dom')
-  })
-
-  it('uses source-over alpha blending for colored translucent backgrounds', () => {
-    const blendFuncSeparate = vi.fn()
-    const gl = {
-      SRC_ALPHA: 1,
-      ONE_MINUS_SRC_ALPHA: 2,
-      ONE: 3,
-      blendFuncSeparate
-    }
-    const pane = createPane({
-      loadAddon: (addon) => {
-        ;(addon as { _renderer: { _gl: typeof gl } })._renderer = { _gl: gl }
-      }
-    })
-
-    attachWebgl(pane)
-
-    expect(blendFuncSeparate).toHaveBeenCalledWith(1, 2, 3, 2)
-  })
-
-  it('restores source-over alpha blending after WebGL context restoration', () => {
-    const blendFuncSeparate = vi.fn()
-    const canvas = new EventTarget()
-    const gl = {
-      SRC_ALPHA: 1,
-      ONE_MINUS_SRC_ALPHA: 2,
-      ONE: 3,
-      blendFuncSeparate
-    }
-    const pane = createPane({
-      loadAddon: (addon) => {
-        canvas.addEventListener('webglcontextrestored', () => blendFuncSeparate(4, 5, 6, 7))
-        ;(addon as { _renderer: { _canvas: EventTarget; _gl: typeof gl } })._renderer = {
-          _canvas: canvas,
-          _gl: gl
-        }
-      }
-    })
-
-    attachWebgl(pane)
-    blendFuncSeparate.mockClear()
-    canvas.dispatchEvent(new Event('webglcontextrestored'))
-
-    expect(blendFuncSeparate).toHaveBeenCalledTimes(2)
-    expect(blendFuncSeparate).toHaveBeenNthCalledWith(1, 4, 5, 6, 7)
-    expect(blendFuncSeparate).toHaveBeenLastCalledWith(1, 2, 3, 2)
-
-    disposeWebgl(pane)
-    blendFuncSeparate.mockClear()
-    canvas.dispatchEvent(new Event('webglcontextrestored'))
-    expect(blendFuncSeparate).toHaveBeenCalledOnce()
-    expect(blendFuncSeparate).toHaveBeenCalledWith(4, 5, 6, 7)
   })
 
   it('disposes the previous addon before attaching a replacement', () => {

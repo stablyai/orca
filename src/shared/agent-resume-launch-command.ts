@@ -1,6 +1,7 @@
 import type { ResumableTuiAgent } from './agent-session-resume'
+import { findClaudeExecutableIndex } from './claude-launch-executable-token'
 import {
-  isPosixStartupShell,
+  isFullyModelableStartupCommand,
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -18,40 +19,6 @@ function isClaudeResumeSelector(token: string): boolean {
   // and no arity table can keep up with the CLI. Only exact selector shapes
   // are stripped; a persisted joined form degrades to pre-guard behavior.
   return token === '-r' || token.startsWith('-r=') || token === '-c' || token.startsWith('-c=')
-}
-
-function isClaudeExecutableToken(token: string): boolean {
-  const base = token.split(/[\\/]/).pop() ?? ''
-  return /^claude(\.(exe|cmd|bat|ps1))?$/i.test(base)
-}
-
-/** Accepts a claude token only in command position — index 0, right after a
- * wrapper's `--`, behind PowerShell's `&` call operator, or preceded solely by
- * NAME=value assignments — so an argument that merely ends in /claude (an ssh
- * key, a project dir) can never be mistaken for the executable. */
-function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartupShell): number {
-  let commandPosition = true
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i]
-    if (commandPosition) {
-      if (isClaudeExecutableToken(token)) {
-        return i
-      }
-      if (
-        // Why: `NAME=value cmd` is sh-family syntax (fish included, 3.1+); on
-        // cmd/PowerShell such a token is a bogus executable name, not a prefix.
-        (isPosixStartupShell(shell) && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) ||
-        (shell === 'powershell' && token === '&' && i === 0)
-      ) {
-        continue
-      }
-      commandPosition = false
-    }
-    if (token === '--') {
-      commandPosition = true
-    }
-  }
-  return -1
 }
 
 /** Joins the resolved base command with the agent's resume argv. Claude goes
@@ -100,33 +67,8 @@ export function buildClaudeResumeLaunchCommand(
   if (claudeIndex === -1) {
     return appended
   }
-  // Why: any token the tokenizer cannot model for this shell — an operator,
-  // comment, expansion, or cmd single-quoted region — means the splice could
-  // cut live syntax or misread a literal as a selector. The whole base must
-  // be modelable, including the executable itself; only PowerShell's leading
-  // call operator is a known-safe divergent token.
-  for (let i = 0; i <= tokens.length; i += 1) {
-    const gapStart = i === 0 ? 0 : spans[i - 1].end
-    const gapEnd = i === tokens.length ? baseCommand.length : spans[i].start
-    if (!/^[ \t]*$/.test(baseCommand.slice(gapStart, gapEnd))) {
-      return appended
-    }
-    if (i === tokens.length) {
-      break
-    }
-    // Why: a bare `--%` makes PowerShell pass the rest of the line to the
-    // child literally, so appended quoting would arrive as literal bytes. A
-    // quoted `--%` can also stop parsing, but only before a parameter token,
-    // where the base is already mangled with or without the guard.
-    if (shell === 'powershell' && baseCommand.slice(spans[i].start, spans[i].end) === '--%') {
-      return appended
-    }
-    if (spans[i].divergesFromShell) {
-      const isCallOperator = shell === 'powershell' && i === 0 && tokens[i] === '&'
-      if (!isCallOperator) {
-        return appended
-      }
-    }
+  if (!isFullyModelableStartupCommand(baseCommand, tokens, spans, shell)) {
+    return appended
   }
   const cuts: { start: number; end: number }[] = []
   let terminatorStart: number | null = null

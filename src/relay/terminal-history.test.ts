@@ -3,7 +3,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hashWorktreeId } from '../main/terminal-history-id'
-import { deleteRelayHistory, injectRelayHistoryEnv } from './terminal-history'
+import { fishHistorySessionName, relayFishHistorySessionName } from '../main/fish-history-session'
+import {
+  deleteRelayHistory,
+  injectRelayFishHistoryEnv,
+  injectRelayHistoryEnv
+} from './terminal-history'
 
 const worktreeId = 'relay-test::/remote/worktree'
 const historyDir = join(homedir(), '.orca-remote', 'terminal-history')
@@ -38,6 +43,27 @@ describe('relay shell history', () => {
     deleteRelayHistory(worktreeId)
     deleteRelayHistory(worktreeId)
     expect(existsSync(join(historyDir, `${historyPrefix}-bash_history`))).toBe(false)
+  })
+
+  it.each([
+    ['relay', relayFishHistorySessionName(hashWorktreeId('relay-test::/remote/other'))],
+    ['desktop', fishHistorySessionName(hashWorktreeId('relay-test::/remote/other'))]
+  ])('replaces an inherited %s fish_history', (_kind, inherited) => {
+    // fish EXPORTS fish_history, so a relay started from a fish pane would give
+    // every remote pane the launching worktree's session file.
+    const env: Record<string, string> = { fish_history: inherited }
+
+    injectRelayFishHistoryEnv(env, worktreeId)
+
+    expect(env.fish_history).toBe(relayFishHistorySessionName(historyPrefix))
+  })
+
+  it('preserves a caller-supplied fish_history', () => {
+    const env: Record<string, string> = { fish_history: 'mine' }
+
+    injectRelayFishHistoryEnv(env, worktreeId)
+
+    expect(env.fish_history).toBe('mine')
   })
 
   it.skipIf(process.platform === 'win32')('refuses a pre-existing final symlink', () => {

@@ -24,6 +24,7 @@ import {
   logHistoryInjection,
   type HistoryInjectionResult
 } from '../terminal-history'
+import { dropInheritedOrcaFishHistory } from '../fish-history-session'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
@@ -883,6 +884,9 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: injectHistoryEnv is what normally clears it, so when history is off
       // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
       delete finalEnv.ORCA_HISTFILE
+      // Same for an exported `fish_history` from the fish pane that launched this
+      // Orca: history off means fish's own default, not another worktree's file.
+      dropInheritedOrcaFishHistory(finalEnv)
     }
 
     await prepareLocalPtySpawn(id)

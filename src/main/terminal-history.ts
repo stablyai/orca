@@ -1,6 +1,7 @@
 import { join, basename } from 'node:path'
 import { mkdirSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import {
+  dropInheritedOrcaFishHistory,
   fishHistorySessionName,
   isSafeFishHistorySession,
   resolveFishHistoryDir
@@ -188,6 +189,10 @@ export function injectHistoryEnv(
   // also override a caller-supplied HISTFILE on the early return below.
   // Credit: caught by @innocarpe in #11146.
   delete spawnEnv.ORCA_HISTFILE
+  // Why here too: fish EXPORTS `fish_history`, so the same nesting hands this
+  // process the LAUNCHING worktree's session name — and the check-before-set
+  // below would honour it, writing every pane's history into that worktree.
+  dropInheritedOrcaFishHistory(spawnEnv)
 
   const shell = resolveShellKind(shellPath)
   const result: HistoryInjectionResult = {
@@ -258,6 +263,11 @@ export function injectWslFishHistoryEnv(
   worktreeId: string,
   wslDistro: string
 ): string | null {
+  // Same precondition as `injectHistoryEnv`'s: the early return below may only honour
+  // a genuine user value. Redundant with today's two callers, which both run
+  // `injectHistoryEnv` on this same env first — kept so the contract holds per call,
+  // since nothing but ordering enforces it.
+  dropInheritedOrcaFishHistory(spawnEnv)
   if (spawnEnv.fish_history) {
     return null
   }
