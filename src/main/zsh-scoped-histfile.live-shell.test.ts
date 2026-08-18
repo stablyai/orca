@@ -17,7 +17,7 @@
  * Orca would not wrap cannot pass here by construction.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -278,11 +278,11 @@ describe('worktree-scoped HISTFILE survives zsh startup', () => {
   })
 })
 
-describe('the wrapper survives a hostile user zsh config', () => {
-  const PROBE =
-    'echo "RESULT=$HISTFILE"; print -r -- "ZDOTDIR=[$ZDOTDIR]"; ' +
-    'print -r -- "ORCA_HISTFILE=[${ORCA_HISTFILE:-unset}]"'
+const PROBE =
+  'echo "RESULT=$HISTFILE"; print -r -- "ZDOTDIR=[$ZDOTDIR]"; ' +
+  'print -r -- "ORCA_HISTFILE=[${ORCA_HISTFILE:-unset}]"'
 
+describe('the wrapper survives a hostile user zsh config', () => {
   // Why both forms: `REPLY` is zsh's shared scratch global, and the two ways a
   // user config constrains it fail differently. `typeset -r` makes the
   // wrapper's first assignment fatal and prints into the pane; `typeset -i`
@@ -340,6 +340,65 @@ describe('the wrapper survives a hostile user zsh config', () => {
       // Nothing this pane spawns may inherit a history path no wrapper file
       // will ever consume.
       expect(wrapped).toContain('ORCA_HISTFILE=[unset]')
+    })
+  })
+})
+
+/**
+ * Records every argument-less `emulate` — i.e. exactly the wrapper's emulation
+ * probe, and not the epilogue's `emulate -L zsh` — into a file the test reads.
+ *
+ * Why a shadowing function and not a timing assertion: the cost being removed
+ * is a fork, and a fork is countable where milliseconds are flaky. Placed in
+ * the user .zshenv so it is defined before all three probe sites.
+ */
+function probeCounterConfig(logPath: string): string {
+  return [
+    'emulate() {',
+    `  (( $# == 0 )) && print -r -- probe >> ${JSON.stringify(logPath)}`,
+    '  builtin emulate "$@"',
+    '}'
+  ].join('\n')
+}
+
+const probeCount = (logPath: string): number =>
+  existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean).length : 0
+
+describe('the emulation probe forks only when it can change the answer', () => {
+  itWithZsh('never forks for a pane whose config stays in zsh emulation', () => {
+    withTempHome((home) => {
+      const scoped = join(home, 'orca-history', 'zsh_history')
+      const log = join(home, 'probe.log')
+      const { launch, env } = launchPlainHistoryPane(home, scoped)
+      // All three probe sites are gated on having sourced the matching user
+      // file, so every one of them has to exist for this to mean anything.
+      writeFileSync(join(home, '.zshenv'), probeCounterConfig(log))
+      writeFileSync(join(home, '.zprofile'), '')
+      writeFileSync(join(home, '.zshrc'), '')
+
+      const output = runZshCapturingStderr(launch.args ?? ['-l'], env, PROBE)
+
+      expect(probeCount(log)).toBe(0)
+      // The pane still has to work: the saving is a fork, not a feature.
+      expect(histfileOf(output)).toBe(scoped)
+      expect(output).toContain(`ZDOTDIR=[${home}]`)
+    })
+  })
+
+  // Why kept exact rather than replaced by the option test: those options say
+  // nothing about `emulation`, which is what zsh's sourcehome() branches on.
+  itWithZsh('still forks to get the exact answer once a Bourne option is set', () => {
+    withTempHome((home) => {
+      const scoped = join(home, 'orca-history', 'zsh_history')
+      const log = join(home, 'probe.log')
+      const { launch, env } = launchPlainHistoryPane(home, scoped)
+      writeFileSync(join(home, '.zshenv'), `${probeCounterConfig(log)}\nsetopt shwordsplit\n`)
+
+      const output = runZshCapturingStderr(launch.args ?? ['-l'], env, PROBE)
+
+      expect(probeCount(log)).toBeGreaterThan(0)
+      // shwordsplit alone is not emulation, so the pane stays wrapped.
+      expect(histfileOf(output)).toBe(scoped)
     })
   })
 })

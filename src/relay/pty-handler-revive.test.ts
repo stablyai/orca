@@ -1,4 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync, rmSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { hashWorktreeId } from '../main/terminal-history-id'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -479,5 +483,111 @@ describe('PtyHandler', () => {
         expectedTabId: 'tab-other'
       })
     ).rejects.toThrow('PTY "pty-1" not found')
+  })
+
+  describe('a Windows relay reviving a WSL pane', () => {
+    const worktreeId = 'r::/remote/wsl-worktree'
+    const historyFile = join(
+      homedir(),
+      '.orca-remote',
+      'terminal-history',
+      `${hashWorktreeId(worktreeId)}-bash_history`
+    )
+    let previousPlatform: PropertyDescriptor | undefined
+
+    beforeEach(() => {
+      previousPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    })
+
+    afterEach(() => {
+      if (previousPlatform) {
+        Object.defineProperty(process, 'platform', previousPlatform)
+      }
+      rmSync(historyFile, { force: true })
+    })
+
+    /** Spawn a WSL pane, serialize it, then revive it into a fresh handler. */
+    async function reviveWslPane(): Promise<void> {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        worktreeId,
+        historyIsolationEnabled: true
+      })
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+      await handler.dispose({ waitForPhysicalExit: false })
+      mockPtySpawn.mockClear()
+      rmSync(historyFile, { force: true })
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+    }
+
+    // The #15236 gap: revive called resolveDefaultShell() and ignored the
+    // entry's override, so a restarted relay silently handed the user a
+    // PowerShell pane where a WSL one had been.
+    it('relaunches wsl.exe in the pane\u2019s own distro instead of the host default shell', async () => {
+      await reviveWslPane()
+
+      const [shell, args] = mockPtySpawn.mock.calls[0] as [string, string[]]
+      expect(shell).toBe('wsl.exe')
+      expect(args).toEqual(['-d', 'Ubuntu'])
+    })
+
+    it('scopes HISTFILE past the wsl.exe wrapper and carries it over WSLENV', async () => {
+      await reviveWslPane()
+
+      const spawnEnv = mockPtySpawn.mock.calls[0][2]?.env as Record<string, string>
+      expect(spawnEnv.HISTFILE?.endsWith(`${hashWorktreeId(worktreeId)}-bash_history`)).toBe(true)
+      expect(spawnEnv.WSLENV?.split(':')).toContain('HISTFILE')
+      // Deletion is unchanged because the file still lives on the relay host.
+      expect(existsSync(historyFile)).toBe(true)
+    })
+
+    // Why: a revived pane is serialized again on the next restart, so dropping
+    // the override there is the same defect one reconnect later.
+    it('keeps the override across a second serialize/revive round trip', async () => {
+      await reviveWslPane()
+
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+      expect(JSON.parse(state)[0]).toMatchObject({
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+    })
+
+    it('degrades one entry with an unsupported override without failing the batch', async () => {
+      const state = JSON.stringify([
+        {
+          id: 'pty-9',
+          pid: process.pid,
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo',
+          shellOverride: 'nc.exe'
+        },
+        { id: 'pty-10', pid: process.pid, cols: 80, rows: 24, cwd: 'C:\\repo' }
+      ])
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      expect(mockPtySpawn).toHaveBeenCalledTimes(2)
+      expect(mockPtySpawn.mock.calls.map(([shell]) => shell)).not.toContain('nc.exe')
+    })
   })
 })
