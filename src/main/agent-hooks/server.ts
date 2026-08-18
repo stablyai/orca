@@ -33,7 +33,6 @@ import {
   resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
-  readHookBodyProviderSessionId,
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots,
   seedCodexStateFromSnapshot,
@@ -99,10 +98,6 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
-import {
-  AgentSessionPaneBindings,
-  type AgentSessionPaneBinding
-} from './agent-session-pane-bindings'
 
 export type { AgentHookSource }
 
@@ -724,9 +719,6 @@ export class AgentHookServer {
   })
   // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
-  // Why: a daemon-hosted session's hooks post the daemon's inherited pane key.
-  // Spawn-time session pins are the only evidence of the true pane.
-  private agentSessionPaneBindings = new AgentSessionPaneBindings()
   private hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
   private hydratedLaunchTokenHashByPaneKey = new Map<string, string>()
   private persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
@@ -2021,66 +2013,6 @@ export class AgentHookServer {
     return changed
   }
 
-  /** Records the pane a freshly spawned agent session belongs to. Called from
-   * the spawn path, which is the last place both halves are known: the session
-   * id Orca minted into the launch command, and the pane it launched into. */
-  bindAgentSessionPane(
-    source: AgentHookSource,
-    sessionId: string,
-    binding: AgentSessionPaneBinding
-  ): void {
-    if (!isValidPaneKey(binding.paneKey)) {
-      return
-    }
-    this.agentSessionPaneBindings.bind(source, sessionId, binding)
-  }
-
-  clearAgentSessionPaneBindingsForPty(ptyId: string): void {
-    this.agentSessionPaneBindings.clearForPty(ptyId)
-  }
-
-  /** The pane a session was spawned into, when it differs from the key the
-   * event posted. Null means "no correction" — an unpinned session (a
-   * hand-typed `claude`, an agent Orca never launched) keeps today's behavior,
-   * so this can only ever move status ONTO a pane Orca itself started. */
-  private resolveBoundPaneOverride(
-    source: AgentHookSource,
-    sessionId: string | null,
-    postedPaneKey: unknown
-  ): AgentSessionPaneBinding | null {
-    const bound = this.agentSessionPaneBindings.resolve(source, sessionId)
-    if (!bound || bound.paneKey === postedPaneKey) {
-      return null
-    }
-    return bound
-  }
-
-  private normalizeHookBodyAgentSessionPane(source: AgentHookSource, body: unknown): unknown {
-    if (typeof body !== 'object' || body === null) {
-      return body
-    }
-    const record = body as Record<string, unknown>
-    const bound = this.resolveBoundPaneOverride(
-      source,
-      readHookBodyProviderSessionId(source, body),
-      typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-    )
-    if (!bound) {
-      return body
-    }
-    // Why: the posted key came from the worker's inherited env; the spawn-time
-    // binding names the pane that actually owns this session. Rewrite tabId
-    // with it too, or normalizeHookPayload's tabId/paneKey agreement check
-    // rejects the event outright — and the worktree, since the same inherited
-    // env named the daemon's workspace.
-    return {
-      ...record,
-      paneKey: bound.paneKey,
-      tabId: parsePaneKey(bound.paneKey)?.tabId,
-      ...(bound.worktreeId ? { worktreeId: bound.worktreeId } : {})
-    }
-  }
-
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
@@ -2273,18 +2205,7 @@ export class AgentHookServer {
     }
     // Why: trim paneKey to match the HTTP path, else remote-vs-local events for one pane diverge.
     const physicalPaneKey = envelope.paneKey.trim()
-    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
-    // Why: a remote host's shared agent daemon inherits a stale ORCA_PANE_KEY
-    // exactly like a local one, so SSH/WSL panes need the same spawn-time
-    // session binding, resolved before pane-migration aliasing applies on top.
-    const boundPane = source
-      ? this.resolveBoundPaneOverride(
-          source,
-          normalizeAgentProviderSession(envelope.providerSession)?.id ?? null,
-          physicalPaneKey
-        )
-      : null
-    const paneKey = this.resolvePaneKeyAlias(boundPane?.paneKey ?? physicalPaneKey)
+    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
@@ -2319,6 +2240,7 @@ export class AgentHookServer {
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
         : undefined
+    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
     const providerPromptId =
       source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
     const compactTrigger =
@@ -2335,17 +2257,14 @@ export class AgentHookServer {
     }
     if (statusDisposition === 'restart') {
       // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
-      // Why paneKey, not envelope.paneKey: it is already corrected to the session's
-      // true pane, so the rebind cannot land on the daemon's inherited key.
+      // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
+      // stable pane, so the rebind cannot land on a legacy key.
       this.observations.rebind(paneKey)
     }
-    // Why: a corrected pane brings its own workspace — the envelope's came from
-    // the same inherited env that named the wrong pane.
     const worktreeId =
-      boundPane?.worktreeId ??
-      (envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
+      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
-        : undefined)
+        : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
       envelope.promptInteractionKey.trim().length > 0
@@ -2544,10 +2463,7 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        // Why: session attribution runs first — it corrects an inherited key to
-        // the real pane, and pane-migration aliasing then applies on top of it.
-        const attributedBody = this.normalizeHookBodyAgentSessionPane(source, body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(attributedBody)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {

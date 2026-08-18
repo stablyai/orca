@@ -39,8 +39,6 @@ export const unregisterPtyMock: Mock = vi.fn()
 export const setMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtysForPaneKeyMock: Mock = vi.fn()
-export const bindAgentSessionPaneMock: Mock = vi.fn()
-export const clearAgentSessionPaneBindingsForPtyMock: Mock = vi.fn()
 export const clearPaneKeyAliasesForPtyMock: Mock = vi.fn()
 export const recordCodexPaneAccountMock: Mock = vi.fn()
 export const forgetCodexPaneAccountMock: Mock = vi.fn()
@@ -123,9 +121,7 @@ export const agentHookServerModuleMock = () => ({
     buildPtyEnv: buildAgentHookEnvMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
-    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock,
-    bindAgentSessionPane: bindAgentSessionPaneMock,
-    clearAgentSessionPaneBindingsForPty: clearAgentSessionPaneBindingsForPtyMock
+    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }
 })
 
