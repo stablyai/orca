@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { ClipboardList, Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { hasWorkspaceLinkedTask } from './workspace-linked-task'
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
   collectInstalledPluginTabKeys,
@@ -45,6 +46,9 @@ export function useRightSidebarActivityItems({
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  // Why: the workspace's own link decides this, not the Tasks page selection, so
+  // a workspace linked to a Jira issue never shows another provider's item.
+  const hasLinkedTask = hasWorkspaceLinkedTask(activeWorktree)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -105,6 +109,13 @@ export function useRightSidebarActivityItems({
         gitOnly: true
       },
       {
+        id: 'task',
+        icon: ClipboardList,
+        title: translate('auto.components.right.sidebar.index.linkedTask', 'Task'),
+        shortcut: '',
+        linkedTaskOnly: true
+      },
+      {
         id: 'ports',
         icon: Plug,
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
@@ -130,9 +141,10 @@ export function useRightSidebarActivityItems({
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        isSshRepo,
+        hasLinkedTask
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, hasLinkedTask, isFolder, isFolderWorkspace, isSshRepo]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
