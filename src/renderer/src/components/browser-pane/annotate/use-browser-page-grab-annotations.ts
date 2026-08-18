@@ -92,6 +92,10 @@ export function useBrowserPageGrabAnnotations({
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
   const grabRef = useRef(grab)
   const grabPayloadRef = useRef(grab.payload)
+  // Why: callers build the recorder object inline (new reference per render);
+  // the confirming effect must not re-fire on identity churn.
+  const recorderRef = useRef(recorder)
+  recorderRef.current = recorder
   const toast = useBrowserPageGrabToast({
     containerRef,
     webviewRef,
@@ -129,16 +133,16 @@ export function useBrowserPageGrabAnnotations({
     if (grabIntent === 'annotate') {
       // Why: the annotate flow skips the copy path below, but the pick itself
       // is still a user action — log it so pick → comment reads as one story.
-      logGrabElementSelected(recorder, grab.payload)
+      logGrabElementSelected(recorderRef.current, grab.payload)
       setPendingAnnotationPayload(grab.payload)
       return
     }
     // Why: log every picked element while recording — the requirement is "where
     // did the user click", so right-click picks are logged too, before the
     // context-menu action (copy/screenshot) runs.
-    logGrabElementSelected(recorder, grab.payload)
+    logGrabElementSelected(recorderRef.current, grab.payload)
     if (!grab.contextMenu) {
-      if (recorder?.recordingRef.current) {
+      if (recorderRef.current?.recordingRef.current) {
         // Why: while recording the pick is logged (above) but not copied.
         showGrabToast('Added to recording log', 'success', grab.payload)
       } else {
@@ -154,7 +158,6 @@ export function useBrowserPageGrabAnnotations({
     grab.contextMenu,
     grabIntent,
     recordFeatureInteraction,
-    recorder,
     showGrabToast
   ])
 
