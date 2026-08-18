@@ -3,11 +3,24 @@ import { getDevInstanceIdentity } from '../../src/main/startup/dev-instance-iden
 import {
   DEV_SAFE_STORAGE_APP_NAME,
   ensureDevSafeStorageKeychainItem,
-  getDevSafeStorageKeychainNames
+  getDevSafeStorageKeychainNames,
+  getDevSafeStorageRepairCommand
 } from './dev-safe-storage-keychain.mjs'
 
-function duplicateItemError(): Error & { status: number } {
-  return Object.assign(new Error('already exists'), { status: 45 })
+const GENERATED_PASSWORD = 'generated-password-should-never-leak'
+
+function securityError(status: number | null, extra: Record<string, unknown> = {}) {
+  // Node embeds the full argv in the message, which is exactly the leak this guards against.
+  return Object.assign(
+    new Error(
+      `Command failed: /usr/bin/security add-generic-password -a A -s B -w ${GENERATED_PASSWORD} -A`
+    ),
+    { status, ...extra }
+  )
+}
+
+function isAddCall(args: string[]) {
+  return args[0] === 'add-generic-password'
 }
 
 describe('dev-safe-storage-keychain', () => {
@@ -46,41 +59,74 @@ describe('dev-safe-storage-keychain', () => {
     ])
   })
 
-  it('treats a concurrent creation as success without overwriting the existing key', () => {
+  it('accepts a concurrently created item that is readable, without overwriting it', () => {
     // Two parallel `pnpm dev` runs race here; the loser must not clobber the winner's key.
-    const run = vi.fn(() => {
-      throw duplicateItemError()
+    const run = vi.fn((args: string[]) => {
+      if (isAddCall(args)) {
+        throw securityError(45)
+      }
     })
 
     expect(ensureDevSafeStorageKeychainItem({ platform: 'darwin', run })).toMatchObject({
       outcome: 'exists'
     })
     expect(run.mock.calls[0]?.[0]).not.toContain('-U')
+    // The probe must not capture the password into this process.
+    expect(run.mock.calls[1]?.[0]).toEqual([
+      'find-generic-password',
+      '-s',
+      'Orca Dev Safe Storage',
+      '-w'
+    ])
   })
 
-  it('reports other failures without throwing', () => {
-    const run = vi.fn(() => {
-      throw Object.assign(new Error('keychain locked'), { status: 51 })
+  it('flags an existing item whose ACL still blocks other processes', () => {
+    // Regression: a run where provisioning failed lets Electron create the item bound to one
+    // branch's cdhash. Reporting `exists` here would let the prompt return silently forever.
+    const run = vi.fn((args: string[]) => {
+      throw isAddCall(args) ? securityError(45) : securityError(null, { signal: 'SIGTERM' })
     })
 
     expect(ensureDevSafeStorageKeychainItem({ platform: 'darwin', run })).toMatchObject({
-      outcome: 'failed',
-      error: 'keychain locked'
+      outcome: 'restricted',
+      service: 'Orca Dev Safe Storage'
     })
+  })
+
+  it('offers a repair that preserves the existing password', () => {
+    const command = getDevSafeStorageRepairCommand()
+    expect(command).toContain('find-generic-password -s "Orca Dev Safe Storage" -w')
+    expect(command).toContain('delete-generic-password')
+    expect(command).toContain('-w "$PW" -A')
+  })
+
+  it('never returns the underlying error, which embeds the generated password', () => {
+    const run = vi.fn(() => {
+      throw securityError(51)
+    })
+
+    const result = ensureDevSafeStorageKeychainItem({
+      platform: 'darwin',
+      run,
+      generatePassword: () => GENERATED_PASSWORD
+    })
+
+    expect(result).toEqual({ outcome: 'failed', service: 'Orca Dev Safe Storage', status: 51 })
+    expect(JSON.stringify(result)).not.toContain(GENERATED_PASSWORD)
+    expect(JSON.stringify(result)).not.toContain('Command failed')
   })
 
   it('degrades instead of hanging when security is killed by the timeout', () => {
     // A locked keychain makes `security` block on an unlock dialog; the timeout kills it,
     // leaving status null rather than an exit code.
     const run = vi.fn(() => {
-      throw Object.assign(new Error('spawnSync /usr/bin/security ETIMEDOUT'), {
-        status: null,
-        signal: 'SIGTERM'
-      })
+      throw securityError(null, { signal: 'SIGTERM' })
     })
 
-    expect(ensureDevSafeStorageKeychainItem({ platform: 'darwin', run })).toMatchObject({
-      outcome: 'failed'
+    expect(ensureDevSafeStorageKeychainItem({ platform: 'darwin', run })).toEqual({
+      outcome: 'failed',
+      service: 'Orca Dev Safe Storage',
+      status: null
     })
   })
 

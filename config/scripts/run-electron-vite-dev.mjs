@@ -17,7 +17,10 @@ import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
-import { ensureDevSafeStorageKeychainItem } from './dev-safe-storage-keychain.mjs'
+import {
+  ensureDevSafeStorageKeychainItem,
+  getDevSafeStorageRepairCommand
+} from './dev-safe-storage-keychain.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -541,9 +544,16 @@ if (!isHelpOrVersion) {
   const keychain = ensureDevSafeStorageKeychainItem()
   if (keychain.outcome === 'created') {
     console.error(`[orca-dev] Provisioned Keychain key "${keychain.service}" (open ACL).`)
-  } else if (keychain.outcome === 'failed') {
+  } else if (keychain.outcome === 'restricted') {
+    // Why: without this the prompt silently returns forever — the item exists, so provisioning
+    // keeps reporting success while macOS keeps blocking every branch that did not create it.
     console.warn(
-      `[orca-dev] Could not provision Keychain key "${keychain.service}" (macOS may prompt for a password on launch): ${keychain.error}`
+      `[orca-dev] Keychain key "${keychain.service}" exists but is not readable by other processes, so macOS will keep prompting. Repair it (keeps the existing password):\n  ${getDevSafeStorageRepairCommand()}`
+    )
+  } else if (keychain.outcome === 'failed') {
+    // Never log the underlying error: its message embeds the argv, including the generated password.
+    console.warn(
+      `[orca-dev] Could not provision Keychain key "${keychain.service}" (security exited with ${keychain.status ?? 'no status'}); macOS may prompt for a password on launch.`
     )
   }
 }
