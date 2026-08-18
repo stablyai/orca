@@ -24,7 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -122,7 +126,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Reject new root-level files and folders
@@ -142,7 +150,19 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - run: pnpm typecheck
+      # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
+      # the next run skip unchanged files. CI threw it away each time. The key is per-SHA
+      # so each run saves its own; restore-keys inherit the newest prior graph to diff against.
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: config/*.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+            tsbuildinfo-${{ runner.os }}-
+
+      - run: pnpm run typecheck
 
   git_compatibility:
     name: Git compatibility
@@ -156,19 +176,34 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
+      # same binary on every PR for minutes of runner time. The key carries the version
+      # because that is the only input; the sha256 assertion below still guards the
+      # tarball on the miss path that actually builds.
+      - name: Cache baseline Git build
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/orca-git-compat/git-2.25.5
+          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
+
       - name: Verify Git binary compatibility matrix
         run: |
           pids=()
           (
             archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-            source="$RUNNER_TEMP/git-2.25.5"
-            curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-            echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-              | sha256sum --check
-            mkdir -p "$source"
-            tar -xzf "$archive" -C "$source" --strip-components=1
-            make -C "$source" -j"$(nproc)" \
-              NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+            source="$HOME/.cache/orca-git-compat/git-2.25.5"
+            if [ ! -x "$source/git" ]; then
+              curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+              echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+                | sha256sum --check
+              mkdir -p "$source"
+              tar -xzf "$archive" -C "$source" --strip-components=1
+              make -C "$source" -j"$(nproc)" \
+                NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+              # Why: the linked binaries are what the next run needs; the objects that
+              # produced them are most of the tree and would bloat the cache entry.
+              find "$source" -name '*.o' -delete
+            fi
             ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
               pnpm exec vitest run --config config/vitest.config.ts \
               src/shared/git-binary-compatibility.test.ts
@@ -331,7 +366,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -471,8 +510,11 @@ jobs:
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
 
+      # Why the :parallel variant: identical to build:release except the three
+      # electron-vite targets overlap instead of running back to back. The Linux package
+      # job already packages and smoke-tests an AppImage built that way.
       - name: Build package inputs
-        run: pnpm run build:release
+        run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
@@ -501,7 +543,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Filter changed E2E specs

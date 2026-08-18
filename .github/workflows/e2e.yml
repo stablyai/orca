@@ -46,15 +46,18 @@ jobs:
       - name: Install native build tools
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
+      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
+      # Without that cache every E2E job re-downloaded the whole dependency set.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       # Why: this job runs the same pnpm install path as pr.yml's verify
       # job, so it needs the same pinned node-gyp override to avoid pnpm's
@@ -134,15 +137,18 @@ jobs:
       - name: Install xvfb
         run: sudo apt-get install -y xvfb
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
+      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
+      # Without that cache every E2E job re-downloaded the whole dependency set.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       # Why: this job runs the same pnpm install path as pr.yml's verify
       # job, so it needs the same pinned node-gyp override to avoid pnpm's
@@ -208,15 +214,18 @@ jobs:
         # lane now receives those specs from pr.yml's SSH source mapping.
         run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
+      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
+      # Without that cache every E2E job re-downloaded the whole dependency set.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Use external node-gyp to avoid pnpm's bundled copy
         run: |
@@ -289,15 +298,18 @@ jobs:
       - name: Install native build and headless UI tools
         run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
+      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
+      # Without that cache every E2E job re-downloaded the whole dependency set.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       # Why: same Linux-only node-gyp pin as build/e2e jobs so the workaround
       # stays consistent across workflows even while this job is ubuntu-latest.

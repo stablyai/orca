@@ -184,7 +184,12 @@ describe('PR workflow parallelism', () => {
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
-    expect(dependencyInstall.run).toContain('--no-frozen-lockfile')
+    // Why frozen: re-resolving the graph costs a minute per job and the `git diff`
+    // guard below already fails the run when the lockfile is stale, so the slow
+    // resolution can never legitimately change anything.
+    expect(dependencyInstall.run).toContain('--frozen-lockfile')
+    expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
+    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
@@ -209,6 +214,56 @@ describe('PR workflow parallelism', () => {
 
     expect(buildStep.run).not.toContain('ensure:electron-runtime')
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
+  })
+
+  it('restores compiled native modules after the install that strips them', () => {
+    const steps = dependencyAction.runs.steps
+    const installIndex = steps.findIndex((step) => step.name === 'Install dependencies')
+    const cacheIndex = steps.findIndex((step) => step.name === 'Restore compiled native modules')
+    const prepareIndex = steps.findIndex((step) => step.name === 'Prepare native runtime')
+
+    // `--ignore-scripts` leaves no build/, so a restore before the install would be
+    // overwritten and one after the rebuild would never save a hit.
+    expect(installIndex).toBeLessThan(cacheIndex)
+    expect(cacheIndex).toBeLessThan(prepareIndex)
+    expect(steps[cacheIndex].if).toBe("inputs.native-runtime != 'none'")
+    // Native artifacts are ABI-bound: a key missing either dimension serves a build
+    // that cannot load, and ensure-native-runtime would recompile it anyway.
+    expect(steps[cacheIndex].with.key).toContain('${{ inputs.native-runtime }}')
+    expect(steps[cacheIndex].with.key).toContain('steps.requested-node.outputs.node-version')
+    expect(steps[cacheIndex].with.key).toContain('config/patches/node-pty@1.1.0.patch')
+    // No restore-keys: a partial-match key is exactly the ABI-mismatched build above.
+    expect(steps[cacheIndex].with['restore-keys']).toBeUndefined()
+  })
+
+  it('reuses TypeScript incremental state across typecheck runs', () => {
+    const steps = workflow.jobs.typecheck.steps
+    const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
+    const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
+
+    expect(cacheIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheIndex).toBeLessThan(checkIndex)
+    expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
+    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
+    // per-SHA), so without them the cache would never once be read.
+    expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
+    // The buildinfo is only reusable while the compiler options that produced it hold.
+    expect(steps[cacheIndex].with.key).toContain(
+      "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
+    )
+  })
+
+  it('checks out full history without historical blobs', () => {
+    const fullHistoryCheckouts = Object.values(workflow.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .filter(
+        (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0
+      )
+
+    expect(fullHistoryCheckouts.length).toBeGreaterThan(0)
+    for (const checkout of fullHistoryCheckouts) {
+      expect(checkout.with.filter).toBe('blob:none')
+    }
   })
 
   it('keeps verify as the aggregate required check', () => {
