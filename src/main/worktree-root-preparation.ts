@@ -5,7 +5,10 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execu
 import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 
-type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
+type WorktreeRootPreparationSettings = Pick<
+  GlobalSettings,
+  'workspaceDir' | 'nestWorkspaces' | 'hostSettingOverrides'
+>
 type WorktreeRootPreparationStore = {
   getSettings: () => WorktreeRootPreparationSettings
   getRepos: () => Repo[]

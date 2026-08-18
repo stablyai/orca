@@ -173,6 +173,33 @@ describe('repo-specific worktree ownership layouts', () => {
     ).toBe('external')
   })
 
+  it('includes the host-scoped layout so SSH worktrees under it stay Orca-owned', () => {
+    const settings = makeSettings({
+      workspaceDir: '/local/worktrees',
+      hostSettingOverrides: {
+        'ssh:ssh-1': { defaultWorktreeLocation: '/remote/home/.orca/workspaces' }
+      }
+    })
+    const repo = makeRepo({ path: '/remote/repo', connectionId: 'ssh-1' })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)).toContainEqual({
+      path: '/remote/home/.orca/workspaces',
+      nestWorkspaces: true
+    })
+    expect(
+      buildKnownOrcaWorkspaceLayouts(
+        settings,
+        makeRepo({ path: '/other/repo', connectionId: 'ssh-2' })
+      ).some((layout) => layout.path === '/remote/home/.orca/workspaces')
+    ).toBe(false)
+    expect(
+      buildKnownOrcaWorkspaceLayouts(
+        settings,
+        makeRepo({ path: '/remote/repo', connectionId: 'ssh-1', worktreeBasePath: '../custom' })
+      )[0]
+    ).toEqual({ path: '/remote/custom', nestWorkspaces: true })
+  })
+
   it('includes relative global layouts for SSH repos without applying absolute desktop paths', () => {
     const repo = makeRepo({ path: '/remote/repo', connectionId: 'ssh-1' })
     const relativeSettings = makeSettings({ workspaceDir: '../worktrees' })

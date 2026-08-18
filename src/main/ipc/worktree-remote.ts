@@ -83,7 +83,7 @@ import {
   ensurePathWithinWorkspace,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath,
+  hasConfiguredWorktreeBasePath,
   shouldSetDisplayName,
   mergeWorktree
 } from './worktree-logic'
@@ -1653,7 +1653,7 @@ export async function createRemoteWorktree(
       repo.path,
       worktreePathSettings,
       {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+        useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(repo, settings)
       }
     )
     if (!(await remotePathExists(fsProvider, remotePath))) {

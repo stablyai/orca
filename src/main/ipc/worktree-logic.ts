@@ -3,12 +3,20 @@ import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-se
 import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getHostSettingOverride } from '../../shared/host-setting-overrides'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
-type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+/** Resolving a base path also consults the repo's execution host, so callers pass
+ *  the host overrides alongside the client defaults. */
+type WorktreeBasePathSettings = WorktreePathSettings & Pick<GlobalSettings, 'hostSettingOverrides'>
+type WorktreeBasePathRepo = Pick<
+  Repo,
+  'path' | 'worktreeBasePath' | 'connectionId' | 'executionHostId'
+>
 
 export {
   computeBranchName,
@@ -180,7 +188,7 @@ export function computeRemoteWorktreePath(
 
 export function getWorktreePathSettings(
   repo: WorktreeBasePathRepo,
-  settings: WorktreePathSettings
+  settings: WorktreeBasePathSettings
 ): WorktreePathSettings {
   return {
     nestWorkspaces: settings.nestWorkspaces,
@@ -190,7 +198,7 @@ export function getWorktreePathSettings(
 
 export function getWorktreeCreationLayout(
   repo: WorktreeBasePathRepo,
-  settings: WorktreePathSettings
+  settings: WorktreeBasePathSettings
 ): OrcaWorkspaceLayout {
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
@@ -198,8 +206,18 @@ export function getWorktreeCreationLayout(
   }
 }
 
-export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): boolean {
-  return getRepoWorktreeBasePath(repo) !== undefined
+/** True when the effective base path was configured for the repo's own filesystem —
+ *  per repo, or scoped to its execution host. An absolute value is then a path on
+ *  that host rather than the desktop client's default, so SSH can honor it instead
+ *  of falling back to a repo-qualified sibling. */
+export function hasConfiguredWorktreeBasePath(
+  repo: WorktreeBasePathRepo,
+  settings: Pick<GlobalSettings, 'hostSettingOverrides'>
+): boolean {
+  return (
+    getRepoWorktreeBasePath(repo) !== undefined ||
+    getHostWorktreeBasePath(repo, settings) !== undefined
+  )
 }
 
 function getRuntimePathOps(
@@ -224,9 +242,11 @@ function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): b
 
 function getEffectiveWorktreeBasePath(
   repo: WorktreeBasePathRepo,
-  settings: WorktreePathSettings
+  settings: WorktreeBasePathSettings
 ): string {
-  const basePath = getRepoWorktreeBasePath(repo)
+  // Why the host default gets the same WSL resolution: it is a configured path just
+  // like the repo one, so a POSIX-absolute value must land inside the distro too.
+  const basePath = getRepoWorktreeBasePath(repo) ?? getHostWorktreeBasePath(repo, settings)
   if (basePath === undefined) {
     return settings.workspaceDir
   }
@@ -236,6 +256,14 @@ function getEffectiveWorktreeBasePath(
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
   const trimmed = repo.worktreeBasePath?.trim()
   return trimmed || undefined
+}
+
+/** The host-scoped default for every repo on the repo's execution host. */
+function getHostWorktreeBasePath(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  settings: Pick<GlobalSettings, 'hostSettingOverrides'>
+): string | undefined {
+  return getHostSettingOverride(settings, getRepoExecutionHostId(repo), 'defaultWorktreeLocation')
 }
 
 function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: string): boolean {

@@ -19,7 +19,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath
+  hasConfiguredWorktreeBasePath
 } from './worktree-logic'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
@@ -102,12 +102,13 @@ function isRuntimePathAbsoluteForRepo(repoPath: string, pathValue: string): bool
 
 function getBaseWatchLayout(
   repo: Repo,
-  pathSettings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>,
+  settings: GlobalSettings,
   connectionId: string | undefined
 ): { workspaceRoot: string; nestWorkspaces: boolean } {
+  const pathSettings = getWorktreePathSettings(repo, settings)
   if (
     connectionId &&
-    !hasRepoWorktreeBasePath(repo) &&
+    !hasConfiguredWorktreeBasePath(repo, settings) &&
     isRuntimePathAbsoluteForRepo(repo.path, pathSettings.workspaceDir)
   ) {
     // Why: SSH creates default worktrees beside the remote repo when the
@@ -127,8 +128,7 @@ async function maybeAddBaseTarget(
   settings: GlobalSettings,
   connectionId?: string
 ): Promise<void> {
-  const pathSettings = getWorktreePathSettings(repo, settings)
-  const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
+  const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, settings, connectionId)
   // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
   if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
     const key = `${repo.id}:${workspaceRoot}`

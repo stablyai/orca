@@ -8,6 +8,7 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getEffectiveHostSetting } from '../../../../shared/host-setting-overrides'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -19,7 +20,10 @@ type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktre
 
 type RepositoryWorktreeDefaultsSectionProps = {
   repo: Repo
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
+  settings: Pick<
+    GlobalSettings,
+    'workspaceDir' | 'worktreeVisibilityDefaults' | 'hostSettingOverrides'
+  > | null
   updateRepo: (
     repoId: string,
     updates: Partial<RepositoryWorktreeDefaultsUpdate>
@@ -182,7 +186,12 @@ export function RepositoryWorktreeDefaultsSection({
         <RepoSettingsDraftInput
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
-          placeholder={settings?.workspaceDir ?? ''}
+          placeholder={getEffectiveHostSetting(
+            settings,
+            getRepoExecutionHostId(repo),
+            'defaultWorktreeLocation',
+            settings?.workspaceDir ?? ''
+          )}
           onTextChange={() => {}}
           onBlur={(e) => {
             const worktreeBasePath = e.currentTarget.value.trim() || undefined

@@ -18,7 +18,7 @@ import {
   computeRemoteWorktreePath,
   computeWorktreePathAsync,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath
+  hasConfiguredWorktreeBasePath
 } from './ipc/worktree-logic'
 import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
 import {
@@ -46,7 +46,10 @@ type RetirementWriteStore = {
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
 }
-type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+type RetirementPathSettings = Pick<
+  GlobalSettings,
+  'nestWorkspaces' | 'workspaceDir' | 'hostSettingOverrides'
+>
 
 /** Only canonical generator output is persisted. Collision retries advance canonical tiers, so a
  *  repeat-suffixed path can never be generated again and needs no permanent registry entry. */
@@ -68,7 +71,7 @@ async function getRetirementProbePath(
   const pathSettings = getWorktreePathSettings(repo, settings)
   return repo.connectionId
     ? computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+        useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(repo, settings)
       })
     : computeWorktreePathAsync(RETIREMENT_PROBE_NAME, repo.path, pathSettings)
 }
@@ -83,7 +86,7 @@ export function getRemoteRetirementNamespaceKey(
   }
   const pathSettings = getWorktreePathSettings(repo, settings)
   const probePath = computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+    useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(repo, settings)
   })
   return retirementNamespaceKey(retirementHostIdentity(repo, lookupSshTarget), probePath)
 }
