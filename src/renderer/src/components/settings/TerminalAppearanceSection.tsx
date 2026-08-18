@@ -241,6 +241,8 @@ export function TerminalAppearanceSection({
                 <TerminalAdvancedTypographyControls
                   settings={settings}
                   updateSettings={updateSettings}
+                  fontSuggestions={terminalFontSuggestions}
+                  onRequestFontSuggestions={onRequestFontSuggestions}
                 />
               </AppearanceAdvancedDisclosure>
             </div>

@@ -7194,6 +7194,9 @@
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
           "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
         },
+        "TerminalAdvancedTypographyControls": {
+          "5ad7218c03": "내장 기본 글꼴"
+        },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
           "f27a99978d": "구분선 두께",
@@ -7236,7 +7239,8 @@
           "e90afcc44f": "끔",
           "16c471ee03": "켜짐",
           "typographyAdvanced": "타이포그래피",
-          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다.",
+          "9d8a37e2ae": "CJK 글꼴군"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9062,7 +9066,12 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "90f1cfbd2f": "CJK 글꼴군",
+            "aa68dda11b": "중국어·일본어·한국어 글자에 쓰는 글꼴입니다. 코딩용 글꼴 대부분은 이 글자들을 담고 있지 않습니다. 비워두면 기본 목록을 씁니다.",
+            "d48d686fe5": "cjk",
+            "3e652f1627": "한국어",
+            "8511986b75": "중국어"
           },
           "windows": {
             "search": {

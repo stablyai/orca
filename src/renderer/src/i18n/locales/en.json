@@ -8149,11 +8149,13 @@
           "e90afcc44f": "off",
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "9d8a37e2ae": "CJK Font Family"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
-          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged."
+          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged.",
+          "5ad7218c03": "Built-in fallback"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9989,7 +9991,12 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "90f1cfbd2f": "CJK Font Family",
+            "aa68dda11b": "Font for Chinese, Japanese and Korean text, which most coding fonts lack. Empty uses the built-in fallback chain.",
+            "d48d686fe5": "cjk",
+            "3e652f1627": "korean",
+            "8511986b75": "chinese"
           },
           "windows": {
             "search": {

@@ -7207,6 +7207,9 @@
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
           "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas."
         },
+        "TerminalAdvancedTypographyControls": {
+          "5ad7218c03": "Alternativa integrada"
+        },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
           "f27a99978d": "Grosor del divisor",

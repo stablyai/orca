@@ -51,6 +51,8 @@ import {
   collectLeafIdsInOrder,
   collectLeafIdsInReplayCreationOrder
 } from './layout-serialization'
+import { DEFAULT_TERMINAL_FONT_FAMILY } from '@/lib/terminal-font-family'
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 
 // ---------------------------------------------------------------------------
 // Helper to create mock elements
@@ -74,7 +76,7 @@ const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 // buildFontFamily
 // ---------------------------------------------------------------------------
 const FULL_FALLBACK =
-  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
 
 describe('buildFontFamily', () => {
   it('puts custom font first with full cross-platform fallback chain', () => {
@@ -85,7 +87,7 @@ describe('buildFontFamily', () => {
   it('does not duplicate SF Mono when it is the input', () => {
     const result = buildFontFamily('SF Mono')
     expect(result).toBe(
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
@@ -99,32 +101,114 @@ describe('buildFontFamily', () => {
     expect(result).toBe(FULL_FALLBACK)
   })
 
-  it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
+  it('keeps a fallback whose name is merely contained in the chosen font', () => {
+    // "My SF Mono Custom" is a distinct CSS family, so "SF Mono" must survive.
     const result = buildFontFamily('My SF Mono Custom')
+    expect(result).toBe(`"My SF Mono Custom", ${FULL_FALLBACK}`)
+  })
+
+  it('deduplicates case-insensitively', () => {
+    const result = buildFontFamily('sf mono')
     expect(result).toBe(
-      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"sf mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate Consolas when it is the input', () => {
     const result = buildFontFamily('Consolas')
     expect(result).toBe(
-      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate MesloLGS Nerd Font when it is the input', () => {
     const result = buildFontFamily('MesloLGS Nerd Font')
     expect(result).toBe(
-      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
   })
 
   it('does not duplicate the bundled Nerd Font symbol fallback', () => {
     const result = buildFontFamily('Orca Nerd Font Symbols')
     expect(result).toBe(
-      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Sarasa Mono SC", "Sarasa Mono TC", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", "PingFang SC", "苹方-简", "PingFang TC", "苹方-繁", "Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", monospace'
     )
+  })
+
+  // Without one of these the browser substitutes a proportional face for Hangul,
+  // whose advance is not two cells wide, and CJK output drifts out of the grid.
+  // The setting is offered for Chinese and Japanese too, so each language needs a
+  // platform default here or its speakers get the proportional face by default.
+  it.each([
+    'D2Coding',
+    'Noto Sans Mono CJK KR',
+    'Malgun Gothic',
+    'Apple SD Gothic Neo',
+    'Hiragino Sans',
+    'MS Gothic',
+    'Noto Sans Mono CJK SC',
+    'Noto Sans Mono CJK TC',
+    'PingFang SC',
+    'PingFang TC',
+    'Microsoft YaHei',
+    'Microsoft JhengHei'
+  ])('carries the CJK-capable fallback %s', (font) => {
+    expect(buildFontFamily('')).toContain(`"${font}"`)
+  })
+
+  it('keeps every CJK fallback behind the Latin monospace fonts', () => {
+    const chain = buildFontFamily('')
+    expect(chain.indexOf('"Hack Nerd Font"')).toBeLessThan(chain.indexOf('"D2Coding"'))
+  })
+
+  it('puts a chosen CJK font ahead of the built-in CJK fallbacks', () => {
+    const chain = buildFontFamily('JetBrains Mono', 'D2Coding Nerd Font')
+    expect(chain.indexOf('"D2Coding Nerd Font"')).toBeLessThan(
+      chain.indexOf('"Apple SD Gothic Neo"')
+    )
+  })
+
+  it('keeps a chosen CJK font behind the Nerd Fonts so it cannot claim PUA glyphs', () => {
+    const chain = buildFontFamily('JetBrains Mono', 'Apple SD Gothic Neo')
+    expect(chain.indexOf('"Symbols Nerd Font Mono"')).toBeLessThan(
+      chain.indexOf('"Apple SD Gothic Neo"')
+    )
+  })
+
+  it('does not list a chosen CJK font twice when it is already a fallback', () => {
+    const chain = buildFontFamily('', 'Apple SD Gothic Neo')
+    expect(chain.split('"Apple SD Gothic Neo"').length - 1).toBe(1)
+  })
+
+  it('ignores a whitespace-only CJK font', () => {
+    expect(buildFontFamily('SF Mono', '   ')).toBe(buildFontFamily('SF Mono'))
+  })
+
+  it('prefers the macOS Korean default over a Windows font that happens to be installed', () => {
+    const chain = buildFontFamily('')
+    expect(chain.indexOf('"Apple SD Gothic Neo"')).toBeLessThan(chain.indexOf('"Malgun Gothic"'))
+  })
+
+  // A CJK-locale OS registers these under the localized family name only, so the
+  // English name alone can silently match nothing.
+  it.each([
+    ['Apple SD Gothic Neo', 'Apple SD 산돌고딕 Neo'],
+    ['Malgun Gothic', '맑은 고딕'],
+    ['Hiragino Sans', 'ヒラギノ角ゴシック'],
+    ['PingFang SC', '苹方-简'],
+    ['PingFang TC', '苹方-繁'],
+    ['Microsoft YaHei', '微软雅黑'],
+    ['Microsoft JhengHei', '微軟正黑體']
+  ])('lists %s under its localized name too', (english, localized) => {
+    const chain = buildFontFamily('')
+    expect(chain).toContain(`"${english}"`)
+    expect(chain).toContain(`"${localized}"`)
+    expect(chain.indexOf(`"${english}"`)).toBeLessThan(chain.indexOf(`"${localized}"`))
+  })
+
+  it('is the same chain the default pane options use', () => {
+    expect(DEFAULT_TERMINAL_FONT_FAMILY).toBe(buildFontFamily(''))
+    expect(buildDefaultTerminalOptions().fontFamily).toBe(buildFontFamily(''))
   })
 })
 
