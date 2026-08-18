@@ -115,7 +115,9 @@ describe('updater', () => {
     const holdRevalidation = (): {
       settle: (verdict: RevalidationVerdict) => void
       fail: (error: Error) => void
+      invocationCount: () => number
     } => {
+      let invocationCount = 0
       let pending: {
         resolve: (verdict: RevalidationVerdict) => void
         reject: (error: Error) => void
@@ -126,12 +128,12 @@ describe('updater', () => {
         )
         return {
           ...actual,
-          revalidateLinuxPackageForInstall: vi.fn(
-            () =>
-              new Promise<RevalidationVerdict>((resolve, reject) => {
-                pending = { resolve, reject }
-              })
-          )
+          revalidateLinuxPackageForInstall: vi.fn(() => {
+            invocationCount += 1
+            return new Promise<RevalidationVerdict>((resolve, reject) => {
+              pending = { resolve, reject }
+            })
+          })
         }
       })
       return {
@@ -142,7 +144,8 @@ describe('updater', () => {
         fail: (error) => {
           pending?.reject(error)
           pending = null
-        }
+        },
+        invocationCount: () => invocationCount
       }
     }
 
@@ -589,13 +592,19 @@ describe('updater', () => {
 
     // Why: a second click during the multi-second hash must not schedule a parallel install.
     it('ignores a second install request while the digest re-proof runs', async () => {
+      const revalidation = holdRevalidation()
       const { updater } = await startUpdater('deb')
       await reachDownloaded(updater, downloadedEvent())
 
       updater.quitAndInstall()
-      // Fires the quit timer, which starts the hash; the read itself is still outstanding.
+      // Fires the quit timer, which starts the re-proof; its verdict is still outstanding.
       await vi.advanceTimersByTimeAsync(100)
+      expect(revalidation.invocationCount()).toBe(1)
       updater.quitAndInstall()
+      // Advancing here proves the second request never scheduled its own quit timer.
+      await vi.advanceTimersByTimeAsync(100)
+      expect(revalidation.invocationCount()).toBe(1)
+      revalidation.settle({ ok: true })
       await settleQuitAndInstall()
 
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
