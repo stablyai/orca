@@ -29,7 +29,7 @@ export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"
 __orca_resolve_user_config_dir "${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
 export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"
 
-if [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]]; then
+if [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
   case "$(emulate 2>/dev/null)" in
     sh|ksh)
       export ZDOTDIR="$ORCA_USER_ZDOTDIR"

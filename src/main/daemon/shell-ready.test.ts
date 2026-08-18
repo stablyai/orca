@@ -508,7 +508,12 @@ describePosix('daemon shell-ready launch config', () => {
     expectFinalZdotdirRestoreContext(zshenv)
     // Why the emulation probe: sh/ksh emulation makes zsh read $HOME/.zlogin
     // rather than the wrapper's, so the epilogue has to run from here instead.
-    expect(zshrc).toContain('if [[ ! -o login || "$(emulate 2>/dev/null)" != zsh ]]; then')
+    // Why the option test in front of it: the probe forks, and all-off proves
+    // zsh emulation without one.
+    expect(zshrc).toContain(
+      'if [[ ! -o login ]] || { [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null && ' +
+        '[[ "$(emulate 2>/dev/null)" != zsh ]]; }; then'
+    )
     expect(zshrc).toContain('(( ${+functions[__orca_shell_epilogue]} )) && __orca_shell_epilogue')
   })
 

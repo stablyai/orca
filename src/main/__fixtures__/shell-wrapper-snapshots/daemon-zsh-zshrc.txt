@@ -18,6 +18,6 @@ if [[ "$_orca_home" != "$ZDOTDIR" && -o interactive && -f "$_orca_home/.zshrc" ]
   unset _orca_wrapper_zdotdir
 fi
 
-if [[ ! -o login || "$(emulate 2>/dev/null)" != zsh ]]; then
+if [[ ! -o login ]] || { [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null && [[ "$(emulate 2>/dev/null)" != zsh ]]; }; then
   (( ${+functions[__orca_shell_epilogue]} )) && __orca_shell_epilogue
 fi

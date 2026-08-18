@@ -28,6 +28,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+  ZSH_BOURNE_EMULATION_OPTION_HINT,
   ZSH_FEATURE_CHANNEL_BLOCK,
   ZSH_HISTFILE_RESTORE_BLOCK,
   ZSH_INHERITED_CONFIG_DIR_RESOLVER_BLOCK,
@@ -216,8 +217,13 @@ const EPILOGUE_CALL = '(( ${+functions[__orca_shell_epilogue]} )) && __orca_shel
  * beats not running it at all. An older zsh whose `emulate` has no query form
  * prints nothing, fails the comparison, and runs it here too; the epilogue's
  * once-flag makes the later .zlogin call a no-op.
+ *
+ * Of the wrapper's three emulation probes this is the costliest — it forks a
+ * zsh that has just finished loading the user's whole .zshrc — so
+ * ZSH_BOURNE_EMULATION_OPTION_HINT skips it for any shell not in Bourne
+ * emulation. Braces because `A || B && C` groups as `(A || B) && C` in a shell.
  */
-const ZSHRC_EPILOGUE_INVOCATION = `if [[ ! -o login || "$(emulate 2>/dev/null)" != zsh ]]; then
+const ZSHRC_EPILOGUE_INVOCATION = `if [[ ! -o login ]] || { ${ZSH_BOURNE_EMULATION_OPTION_HINT} && [[ "$(emulate 2>/dev/null)" != zsh ]]; }; then
   ${EPILOGUE_CALL}
 fi`
 

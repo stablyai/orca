@@ -82,7 +82,7 @@ __orca_resolve_user_config_dir "${_orca_discovered_zdotdir:-${_orca_user_zdotdir
 export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"
 unset _orca_user_zdotdir _orca_zshenv_source_dir _orca_discovered_zdotdir
 
-if [[ -n "${_orca_zshenv_path:-}" ]]; then
+if [[ -n "${_orca_zshenv_path:-}" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
   case "$(emulate 2>/dev/null)" in
     sh|ksh)
       export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"

@@ -18,7 +18,7 @@ if [[ -f "$_orca_home/.zprofile" ]]; then
   unset _orca_wrapper_zdotdir
 fi
 
-if [[ -f "$_orca_home/.zprofile" ]]; then
+if [[ -f "$_orca_home/.zprofile" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
   case "$(emulate 2>/dev/null)" in
     sh|ksh)
       export ZDOTDIR="$_orca_home"

@@ -94,6 +94,33 @@ __orca_resolve_inherited_config_dir() {
 export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-composition'
 
 /**
+ * Fork-free precondition for the `$(emulate)` probe: options that both
+ * `emulate sh` and `emulate ksh` turn on, so all-off proves zsh emulation.
+ *
+ * Why: the probe is a command substitution, which forks a zsh carrying every
+ * function, alias and completion the user's config has loaded by that point —
+ * the most expensive line in the wrapper, and one every zsh pane pays now that
+ * wrapping widened to all of them. Measured on zsh 5.9 / macOS, 150 login
+ * startups per arm, with a user .zshenv + .zprofile + .zshrc present: 9.97
+ * ms/run unwrapped, 14.20 ms/run wrapped, 12.27 ms/run wrapped once these three
+ * probes are skipped — about half of what wrapping costs.
+ *
+ * Why a hint in front of the real probe and not a replacement for it: these
+ * options say nothing about `emulation`, which is what zsh's `sourcehome()`
+ * branches on, so a config that sets one by hand must still get the exact
+ * answer. OR, not AND, so the only way past it is to enter emulation and then
+ * unset all three; every real `emulate sh`/`emulate ksh` sets them. A false
+ * positive costs exactly the fork this saves.
+ *
+ * Why `2>/dev/null`: `[[ -o <unknown> ]]` prints `no such option` to stderr and
+ * returns false rather than aborting, so on a zsh too old for one of these
+ * names the only symptom would be that text in the user's pane. All three
+ * predate every zsh Orca supports, so this is belt and braces, not a fallback.
+ */
+export const ZSH_BOURNE_EMULATION_OPTION_HINT =
+  '[[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null'
+
+/**
  * Hands the pane back to the user unwrapped when zsh has entered sh/ksh
  * emulation, and stops reading the rest of the current wrapper file.
  *
@@ -118,12 +145,14 @@ export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-com
  * anything that had already entered emulation (a system /etc/zshenv or
  * /etc/zprofile) would have hidden this very file too. The only thing that can
  * have entered emulation by this line is the user file this file just sourced.
+ *
+ * Why ZSH_BOURNE_EMULATION_OPTION_HINT gates it further: see that constant.
  */
 export function getZshEmulationDegradeBlock(options: {
   userZdotdirExpression: string
   sourcedUserFileTest: string
 }): string {
-  return `if [[ ${options.sourcedUserFileTest} ]]; then
+  return `if [[ ${options.sourcedUserFileTest} ]] && ${ZSH_BOURNE_EMULATION_OPTION_HINT}; then
   case "$(emulate 2>/dev/null)" in
     sh|ksh)
       export ZDOTDIR=${options.userZdotdirExpression}
