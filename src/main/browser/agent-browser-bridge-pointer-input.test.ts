@@ -198,6 +198,62 @@ describe('AgentBrowserBridge pointer input', () => {
     })
   })
 
+  it('keeps the remaining held button active after a chorded release', async () => {
+    await bridge.mouseDown('left', undefined, 'tab-1')
+    await bridge.mouseDown('right', undefined, 'tab-1')
+    await bridge.mouseUp('left', undefined, 'tab-1')
+    await bridge.mouseUp(undefined, undefined, 'tab-1')
+
+    const releases = mouseEventCalls(wc).filter((call) => call[1].type === 'mouseReleased')
+    expect(releases[0]?.[1]).toMatchObject({ button: 'left', buttons: 2 })
+    expect(releases[1]?.[1]).toMatchObject({ button: 'right', buttons: 0 })
+  })
+
+  it('restores pointer state after an un-awaited press failure', async () => {
+    wc.debugger.sendCommand.mockRejectedValueOnce(new Error('target crashed'))
+
+    await bridge.mouseDown('left', undefined, 'tab-1')
+    await flushPendingDispatch()
+    await expect(bridge.mouseDown('left', undefined, 'tab-1')).rejects.toMatchObject({
+      code: 'browser_error'
+    })
+    await bridge.mouseMove(10, 20, undefined, 'tab-1')
+
+    expect(mouseEventCalls(wc).at(-1)?.[1]).toMatchObject({
+      type: 'mouseMoved',
+      button: 'none',
+      buttons: 0
+    })
+  })
+
+  it('lets a release retry succeed after an un-awaited release failure', async () => {
+    await bridge.mouseDown('left', undefined, 'tab-1')
+    wc.debugger.sendCommand.mockRejectedValueOnce(new Error('target crashed'))
+    await bridge.mouseUp(undefined, undefined, 'tab-1')
+    await flushPendingDispatch()
+    await expect(bridge.mouseUp(undefined, undefined, 'tab-1')).rejects.toMatchObject({
+      code: 'browser_error'
+    })
+    await bridge.mouseUp(undefined, undefined, 'tab-1')
+
+    const releases = mouseEventCalls(wc).filter((call) => call[1].type === 'mouseReleased')
+    expect(releases.at(-1)?.[1]).toMatchObject({ button: 'left', buttons: 0 })
+  })
+
+  it('restores pointer state when an awaited dispatch rejects', async () => {
+    vi.stubEnv('ORCA_BROWSER_INPUT_AWAIT_ACK', '1')
+    wc.debugger.sendCommand.mockRejectedValueOnce(new Error('target crashed'))
+
+    await expect(bridge.mouseDown('left', undefined, 'tab-1')).rejects.toThrow('target crashed')
+    await bridge.mouseMove(10, 20, undefined, 'tab-1')
+
+    expect(mouseEventCalls(wc).at(-1)?.[1]).toMatchObject({
+      type: 'mouseMoved',
+      button: 'none',
+      buttons: 0
+    })
+  })
+
   it('rejects non-finite coordinates and deltas instead of dispatching them', async () => {
     await expect(bridge.mouseMove(Number.NaN, 20, undefined, 'tab-1')).rejects.toMatchObject({
       code: 'browser_error'

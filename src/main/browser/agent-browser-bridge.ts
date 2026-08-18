@@ -9,11 +9,13 @@ import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import {
   assertFinitePointerValues,
+  cdpPointerButtonFromMask,
   cdpPointerButtonMask,
   cdpPointerStateFor,
   dispatchCdpPointerEvent,
   normalizeCdpPointerButton,
   releaseLeaseAfterPointerDispatch,
+  snapshotCdpPointerState,
   trackCdpClickCount,
   type CdpPointerState
 } from './cdp-pointer-input'
@@ -1119,15 +1121,21 @@ export class AgentBrowserBridge {
         assertFinitePointerValues({ x, y })
         const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
         try {
+          const revert = snapshotCdpPointerState(state)
           state.x = x
           state.y = y
-          await dispatchCdpPointerEvent(state, wc, {
-            type: 'mouseMoved',
-            x,
-            y,
-            button: state.button,
-            buttons: state.buttons
-          })
+          await dispatchCdpPointerEvent(
+            state,
+            wc,
+            {
+              type: 'mouseMoved',
+              x,
+              y,
+              button: state.button,
+              buttons: state.buttons
+            },
+            revert
+          )
           return { moved: true }
         } finally {
           releaseLeaseAfterPointerDispatch(state, lease)
@@ -1145,18 +1153,24 @@ export class AgentBrowserBridge {
         const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
         try {
           wc.focus()
+          const revert = snapshotCdpPointerState(state)
           const cdpButton = normalizeCdpPointerButton(button)
           state.button = cdpButton
           state.buttons |= cdpPointerButtonMask(cdpButton)
           state.clickCount = trackCdpClickCount(state, cdpButton)
-          await dispatchCdpPointerEvent(state, wc, {
-            type: 'mousePressed',
-            x: state.x,
-            y: state.y,
-            button: cdpButton,
-            buttons: state.buttons,
-            clickCount: state.clickCount
-          })
+          await dispatchCdpPointerEvent(
+            state,
+            wc,
+            {
+              type: 'mousePressed',
+              x: state.x,
+              y: state.y,
+              button: cdpButton,
+              buttons: state.buttons,
+              clickCount: state.clickCount
+            },
+            revert
+          )
           return { pressed: true }
         } finally {
           releaseLeaseAfterPointerDispatch(state, lease)
@@ -1243,19 +1257,27 @@ export class AgentBrowserBridge {
       async (_sessionName, target) => {
         const { webContents: wc, state, lease } = this.resolvePointerDispatchTarget(target)
         try {
+          const revert = snapshotCdpPointerState(state)
           const cdpButton = normalizeCdpPointerButton(
             button ?? (state.button === 'none' ? undefined : state.button)
           )
           state.buttons &= ~cdpPointerButtonMask(cdpButton)
-          state.button = 'none'
-          await dispatchCdpPointerEvent(state, wc, {
-            type: 'mouseReleased',
-            x: state.x,
-            y: state.y,
-            button: cdpButton,
-            buttons: state.buttons,
-            clickCount: state.clickCount
-          })
+          // Why: a chorded release keeps the remaining held button addressable by a
+          // later unqualified mouseUp instead of defaulting back to left.
+          state.button = cdpPointerButtonFromMask(state.buttons)
+          await dispatchCdpPointerEvent(
+            state,
+            wc,
+            {
+              type: 'mouseReleased',
+              x: state.x,
+              y: state.y,
+              button: cdpButton,
+              buttons: state.buttons,
+              clickCount: state.clickCount
+            },
+            revert
+          )
           return { released: true }
         } finally {
           releaseLeaseAfterPointerDispatch(state, lease)
@@ -1281,14 +1303,19 @@ export class AgentBrowserBridge {
           const deltaX = dx ?? 0
           // Why: dispatch at the tracked pointer position so the scrollable under the
           // cursor scrolls; the subprocess path always dispatched wheel at (0,0).
-          await dispatchCdpPointerEvent(state, wc, {
-            type: 'mouseWheel',
-            x: state.x,
-            y: state.y,
-            deltaX,
-            deltaY: dy,
-            buttons: state.buttons
-          })
+          await dispatchCdpPointerEvent(
+            state,
+            wc,
+            {
+              type: 'mouseWheel',
+              x: state.x,
+              y: state.y,
+              deltaX,
+              deltaY: dy,
+              buttons: state.buttons
+            },
+            snapshotCdpPointerState(state)
+          )
           return { scrolled: true, deltaX, deltaY: dy }
         } finally {
           releaseLeaseAfterPointerDispatch(state, lease)

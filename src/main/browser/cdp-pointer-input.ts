@@ -37,6 +37,27 @@ export function cdpPointerButtonMask(button: CdpPointerButton): number {
   return 1
 }
 
+// Why: after releasing one of several held buttons, an unqualified mouseUp must keep
+// referring to a button that is actually still down instead of defaulting to left.
+export function cdpPointerButtonFromMask(buttons: number): 'none' | CdpPointerButton {
+  if ((buttons & 1) !== 0) {
+    return 'left'
+  }
+  if ((buttons & 2) !== 0) {
+    return 'right'
+  }
+  if ((buttons & 4) !== 0) {
+    return 'middle'
+  }
+  if ((buttons & 8) !== 0) {
+    return 'back'
+  }
+  if ((buttons & 16) !== 0) {
+    return 'forward'
+  }
+  return 'none'
+}
+
 type LastPointerClick = {
   button: CdpPointerButton
   x: number
@@ -76,6 +97,18 @@ export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
     pointerStates.set(webContents, state)
   }
   return state
+}
+
+export type CdpPointerSnapshot = Pick<
+  CdpPointerState,
+  'x' | 'y' | 'button' | 'buttons' | 'clickCount' | 'lastClick'
+>
+
+// Why: callers mutate pointer state before dispatching; a failed dispatch must put the
+// pre-dispatch state back or later events carry buttons that were never pressed.
+export function snapshotCdpPointerState(state: CdpPointerState): CdpPointerSnapshot {
+  const { x, y, button, buttons, clickCount, lastClick } = state
+  return { x, y, button, buttons, clickCount, lastClick }
 }
 
 // Why: a second press at the same spot inside the double-click interval must report the
@@ -122,21 +155,33 @@ export type CdpPointerEventParams = {
 export function dispatchCdpPointerEvent(
   state: CdpPointerState,
   webContents: WebContents,
-  params: CdpPointerEventParams
+  params: CdpPointerEventParams,
+  revert: CdpPointerSnapshot
 ): Promise<void> {
   const failure = state.lastError
   if (failure !== null) {
     state.lastError = null
+    // Why: this command's own mutations never dispatch either -- rewind them before
+    // surfacing the previous failure so a retry starts from reality.
+    Object.assign(state, revert)
     throw new BrowserError('browser_error', `The previous pointer event failed: ${failure}`)
   }
   const sent = webContents.debugger.sendCommand('Input.dispatchMouseEvent', params)
   if (awaitPointerAck()) {
-    return sent.then(() => undefined)
+    return sent.then(
+      () => undefined,
+      (error: unknown) => {
+        Object.assign(state, revert)
+        throw error
+      }
+    )
   }
   state.pending = sent.then(
     () => undefined,
     (error: unknown) => {
       state.lastError = error instanceof Error ? error.message : String(error)
+      // Why: the rejected command dispatched nothing, so the pre-dispatch state is reality.
+      Object.assign(state, revert)
     }
   )
   return Promise.resolve()
