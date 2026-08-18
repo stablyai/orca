@@ -10501,8 +10501,6 @@
             "901140f47d": "Revisa el prompt antes de iniciar un agente.",
             "19652ddd76": "Resolver conflictos con IA",
             "c9ad22888e": "Elige el destino de comparación de ramas para este repositorio.",
-            "574d2f4413": "Borrar notas",
-            "05bb8f4a48": "Cancelar",
             "48db37cca9": "Ver todo",
             "78ce2d37ac": "Push al fork",
             "c05fe04839": "Hace push al fork en {{value0}} (no a origin)",
@@ -11101,6 +11099,16 @@
                   "323bb614aa": "Commit y sincronizar",
                   "2b8e6595fd": "Commit",
                   "04d709801d": "Fetch del remoto sin hacer merge"
+                }
+              },
+              "panel": {
+                "notes": {
+                  "clear": {
+                    "dialog": {
+                      "cc676e6af8": "Borrar notas",
+                      "43f996cfae": "Cancelar"
+                    }
+                  }
                 }
               },
               "primary": {

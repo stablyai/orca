@@ -11629,8 +11629,6 @@
             "901140f47d": "Review the prompt before starting an agent.",
             "19652ddd76": "Resolve Conflicts With AI",
             "c9ad22888e": "Pick the branch compare target for this repository.",
-            "574d2f4413": "Clear Notes",
-            "05bb8f4a48": "Cancel",
             "48db37cca9": "View all",
             "78ce2d37ac": "Pushes to fork",
             "c05fe04839": "Pushes to the fork at {{value0}} (not origin)",
@@ -12249,6 +12247,16 @@
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
                   "04d709801d": "Fetch from remote without merging"
+                }
+              },
+              "panel": {
+                "notes": {
+                  "clear": {
+                    "dialog": {
+                      "cc676e6af8": "Clear Notes",
+                      "43f996cfae": "Cancel"
+                    }
+                  }
                 }
               },
               "primary": {

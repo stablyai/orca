@@ -37,7 +37,10 @@ export function SourceControlPanelNotesClearDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
+            {translate(
+              'auto.components.right.sidebar.source.control.panel.notes.clear.dialog.cc676e6af8',
+              'Clear Notes'
+            )}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {pendingDiffCommentsClearDescription}
@@ -50,7 +53,10 @@ export function SourceControlPanelNotesClearDialog({
             onClick={() => setPendingDiffCommentsClear(null)}
             disabled={isClearingDiffComments}
           >
-            {translate('auto.components.right.sidebar.SourceControl.05bb8f4a48', 'Cancel')}
+            {translate(
+              'auto.components.right.sidebar.source.control.panel.notes.clear.dialog.43f996cfae',
+              'Cancel'
+            )}
           </Button>
           <Button
             type="button"
@@ -59,7 +65,10 @@ export function SourceControlPanelNotesClearDialog({
             disabled={isClearingDiffComments || pendingDiffCommentsClearCount === 0}
           >
             <Trash2 className="size-4" />
-            {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
+            {translate(
+              'auto.components.right.sidebar.source.control.panel.notes.clear.dialog.cc676e6af8',
+              'Clear Notes'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
