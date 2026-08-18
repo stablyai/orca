@@ -18,9 +18,7 @@ describe('mobile session last-tab close', () => {
     const end = sessionRouteSource.indexOf('const bulkCloseActions', start)
     const block = sessionRouteSource.slice(start, end)
 
-    expect(block).toContain(
-      'activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0'
-    )
+    expect(block).toContain('remainingTabs.length === 0')
     expect(block).toContain('activeSessionTabIdRef.current = null')
     expect(block).toContain('activeHandleRef.current = null')
     expect(block).toContain(
@@ -39,5 +37,14 @@ describe('mobile session last-tab close', () => {
     expect(followsHost).toBeGreaterThanOrEqual(0)
     expect(pendingHandle).toBeGreaterThan(followsHost)
     expect(block.slice(pendingHandle, pendingHandle + 150)).toContain('? null')
+  })
+
+  it('activates the previous viewed tab after closing the current one', () => {
+    const start = sessionRouteSource.indexOf('async function handleCloseSessionTab')
+    const end = sessionRouteSource.indexOf('const bulkCloseActions', start)
+    const block = sessionRouteSource.slice(start, end)
+
+    expect(block).toContain('pickNextTabAfterClose')
+    expect(block).toContain('switchSessionTab(nextTab)')
   })
 })
