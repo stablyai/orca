@@ -73,12 +73,13 @@ jobs:
 
       # Why: building here avoids parallel builds inside Playwright globalSetup;
       # paired-browser specs also need the standalone web bundle.
-      - name: Build Electron app for E2E
+      - name: Build E2E outputs
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
           npx electron-vite build --mode e2e
           pnpm run build:web-from-renderer
+          pnpm run build:relay
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
@@ -180,7 +181,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -253,7 +254,7 @@ jobs:
             echo "Changed startup-readiness specs are owned by the dedicated live lane."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
           # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.

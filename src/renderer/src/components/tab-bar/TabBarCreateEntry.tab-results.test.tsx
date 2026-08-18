@@ -5,7 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { OpenTabSearchResult } from './open-tab-search'
+import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
@@ -38,22 +40,19 @@ const tabSearchMock = vi.hoisted(() => {
   }
   return {
     hold: null as string | null,
-    resultsByQuery: {} as Record<string, unknown[]>,
+    resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
     // Retention re-checks each row against the live query with the real engines,
     // so every registered row needs the searchable entry it came from.
-    entries(): unknown {
-      const rows = Object.values(tabSearchMock.resultsByQuery).flat() as {
-        source: string
-        tabId?: string
-        title: string
-        contentType: string
-        relativePath?: string | null
-      }[]
+    entries(): OpenTabSearchEntries {
+      const rows = Object.values(tabSearchMock.resultsByQuery).flat()
       return {
         browserPages: [],
         simulatorTabs: [],
         workspaceTabs: rows
-          .filter((row) => row.source === 'workspace')
+          .filter(
+            (row): row is Extract<OpenTabSearchResult, { source: 'workspace' }> =>
+              row.source === 'workspace'
+          )
           .map((row) => ({
             tab: {
               id: row.tabId,
@@ -61,8 +60,8 @@ const tabSearchMock = vi.hoisted(() => {
               groupId: 'g',
               worktreeId: worktree.id,
               contentType: row.contentType
-            },
-            worktree,
+            } as SearchableWorkspaceTab['tab'],
+            worktree: worktree as SearchableWorkspaceTab['worktree'],
             repoName: 'octo/rocket',
             worktreeSortIndex: 0,
             groupSortIndex: 0,

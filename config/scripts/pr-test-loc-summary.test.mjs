@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { listPullFiles, nextLink } from '../../.github/scripts/pr-test-loc-summary.mjs'
+import {
+  listPullFiles,
+  nextLink,
+  updatePullRequest
+} from '../../.github/scripts/pr-test-loc-summary.mjs'
 import {
   LOC_HANDS_OFF_COMMENT,
   isTestPath,
@@ -104,6 +108,41 @@ describe('PR test LoC summary', () => {
       test: { files: 1, added: 5, deleted: 1 },
       nonTest: { files: 1, added: 2, deleted: 0 }
     })
+  })
+
+  it('retries transient GitHub errors when updating the PR body', async () => {
+    const responses = [
+      { ok: false, status: 503, statusText: 'Service Unavailable' },
+      { ok: true, status: 200, statusText: 'OK' }
+    ]
+    const requests = []
+    const result = await updatePullRequest({
+      owner: 'stablyai',
+      repo: 'orca',
+      pullNumber: 14656,
+      token: 'test-token',
+      totals: {
+        test: { files: 1, added: 2, deleted: 0 },
+        nonTest: { files: 0, added: 0, deleted: 0 }
+      },
+      fetchImpl: async (url, options) => {
+        requests.push({ url, options })
+        if (requests.length === 1) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ body: '## Description\n' })
+          }
+        }
+        return responses.shift()
+      },
+      sleepImpl: async () => {}
+    })
+
+    expect(result).toBe(0)
+    expect(requests).toHaveLength(3)
+    expect(requests[1].options.method).toBe('PATCH')
+    expect(requests[2].options.method).toBe('PATCH')
   })
 
   it('colors added cells green and deleted or negative-net cells red', () => {
