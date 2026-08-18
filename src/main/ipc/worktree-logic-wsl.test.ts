@@ -11,7 +11,7 @@ vi.mock('../wsl', () => ({
   parseWslPath: parseWslPathMock
 }))
 
-import { computeWorktreePath } from './worktree-logic'
+import { computeWorktreePath, getWorktreePathSettings } from './worktree-logic'
 
 describe('computeWorktreePath WSL layout', () => {
   beforeEach(() => {
@@ -47,6 +47,68 @@ describe('computeWorktreePath WSL layout', () => {
         workspaceDir: 'C:\\workspaces'
       })
     ).toBe(win32.join('C:\\workspaces', 'feature'))
+  })
+
+  it('honors an absolute Linux repo worktree base path inside the repo distro (STA-4772)', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+    }
+    const settings = { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' }
+
+    expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
+    )
+    // Why repeat: cached follow-up calls must resolve identically to the first.
+    expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
+    )
+    expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('honors a Linux repo base path even when the distro home lookup fails', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue(null)
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/trees'
+    }
+
+    expect(
+      computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\trees\\feature')
+  })
+
+  it('keeps relative repo base paths anchored to the WSL repo', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '../worktrees'
+    }
+
+    expect(
+      computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\worktrees\\feature')
   })
 
   it('uses an explicit WSL UNC workspace root without remapping it', () => {

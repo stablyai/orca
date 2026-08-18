@@ -58,6 +58,26 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
 }
 
+/**
+ * Resolve a repo-scoped worktree base path against the repo's own WSL distro.
+ *
+ * Why: project setup stores the value verbatim, and for a WSL-backed repo an
+ * absolute Linux path like /home/user/trees is the natural spelling of a
+ * location inside that distro. Windows path code reads it as drive-relative,
+ * so the WSL workspace-mirroring heuristic silently replaced it with
+ * ~/orca/workspaces (STA-4772). The repo path pins the distro, making the
+ * value unambiguous — translate it to its UNC form. Non-WSL repos and
+ * non-POSIX values (UNC, drive, relative) pass through untouched, so native
+ * Windows, macOS/Linux, and SSH base paths keep their meaning.
+ */
+export function resolveWslRepoWorktreeBasePath(repoPath: string, basePath: string): string {
+  const repoWsl = parseWslUncPath(repoPath)
+  if (!repoWsl || !/^\/(?!\/)/.test(basePath)) {
+    return basePath
+  }
+  return toWindowsWslPath(basePath, repoWsl.distro)
+}
+
 // Why: Windows folds the share (\\wsl$ aliases \\wsl.localhost), the distro, and
 // drvfs /mnt/<drive> tails case-insensitively; the rest of the Linux path is not.
 export function foldWslUncPathCaseInsensitiveParts(path: string): string | null {
