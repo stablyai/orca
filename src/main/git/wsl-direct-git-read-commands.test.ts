@@ -13,7 +13,11 @@ describe('isWslDirectGitReadCommand', () => {
     [['config', '--get', 'core.sshCommand']],
     [['config', '--get-regexp', String.raw`^remote\.`]],
     [['remote', 'get-url', 'origin']],
+    [['remote']],
     [['remote', '-v']],
+    [['remote', 'show', '-n', 'origin']],
+    [['symbolic-ref', '--quiet', '--short', 'HEAD']],
+    [['worktree', 'list', '--porcelain']],
     [['branch', '--list']],
     [['branch', '--show-current']],
     // Global options precede the subcommand.
@@ -41,6 +45,9 @@ describe('isWslDirectGitReadCommand', () => {
     [['config', '--unset', 'core.sshCommand']],
     [['remote', 'add', 'origin', 'https://example.com/r.git']],
     [['remote', 'remove', 'origin']],
+    [['remote', 'show', 'origin']],
+    [['symbolic-ref', 'HEAD', 'refs/heads/main']],
+    [['worktree', 'add', '/tmp/wt']],
     [['branch', '-D', 'feature']],
     [['branch', 'newbranch']],
     [[]]

@@ -296,7 +296,10 @@ describe('runner execFile timeout handling', () => {
       return child
     })
 
-    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], { cwd: '/home5/Brian' })
+    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: '/home5/Brian',
+      env: { ...process.env, GIT_ASKPASS: undefined, SSH_ASKPASS: undefined }
+    })
 
     expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
     expect(capturedEnv?.GIT_ASKPASS).toBe('')

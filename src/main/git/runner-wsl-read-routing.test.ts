@@ -66,6 +66,10 @@ describe('WSL git read routing', () => {
   // general git options that never opted into the shell-free route.
   it.each([
     ['remote get-url', ['remote', 'get-url', 'origin']],
+    ['remote list', ['remote']],
+    ['remote show without query', ['remote', 'show', '-n', 'origin']],
+    ['symbolic-ref', ['symbolic-ref', '--quiet', '--short', 'HEAD']],
+    ['worktree list', ['worktree', 'list', '--porcelain']],
     ['config --get', ['config', '--get', 'remote.origin.url']],
     ['log', ['log', '--oneline', '-n', '1']],
     ['show blob', ['show', ':src/file.ts']]
@@ -85,7 +89,8 @@ describe('WSL git read routing', () => {
   it.each([
     ['commit', ['commit', '-m', 'msg']],
     ['config set', ['config', 'user.email', 'me@example.com']],
-    ['remote add', ['remote', 'add', 'upstream', 'https://example.com/r.git']]
+    ['remote add', ['remote', 'add', 'upstream', 'https://example.com/r.git']],
+    ['remote show with query', ['remote', 'show', 'origin']]
   ])('keeps %s on the login shell', async (_name, args) => {
     await gitExecFileAsync(args, { cwd: WSL_CWD, wslDistro: DISTRO })
 

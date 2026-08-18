@@ -38,8 +38,9 @@ const ALWAYS_READ_SUBCOMMANDS = new Set([
 const CONDITIONAL_READ_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   branch: new Set(['--list', '-l', '--show-current', '--contains', '--points-at']),
   config: new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l']),
-  remote: new Set(['get-url', '-v', '--verbose', 'show']),
-  submodule: new Set(['status'])
+  remote: new Set(['get-url', '-v', '--verbose']),
+  submodule: new Set(['status']),
+  worktree: new Set(['list'])
 }
 
 /** Leading `-c key=value` / `--git-dir=...` style options precede the subcommand. */
@@ -67,11 +68,31 @@ export function isWslDirectGitReadCommand(args: readonly string[]): boolean {
   if (ALWAYS_READ_SUBCOMMANDS.has(subcommand)) {
     return true
   }
+  if (subcommand === 'remote') {
+    const remoteArgs = args.slice(subcommandIndex + 1)
+    const action = remoteArgs.find((arg) => !arg.startsWith('-'))
+    if (!action) {
+      return true
+    }
+    // `remote show` queries the transport unless `-n` is present. Keep the
+    // queried form on the login shell so profile-provided SSH/credential setup survives.
+    if (action === 'show') {
+      return remoteArgs.includes('-n')
+    }
+    return CONDITIONAL_READ_SUBCOMMANDS.remote.has(action)
+  }
+  if (subcommand === 'symbolic-ref') {
+    const symbolicRefArgs = args.slice(subcommandIndex + 1)
+    if (symbolicRefArgs.some((arg) => arg === '-d' || arg === '--delete' || arg === '-m')) {
+      return false
+    }
+    return symbolicRefArgs.filter((arg) => arg !== '--' && !arg.startsWith('-')).length <= 1
+  }
   const readFlags = CONDITIONAL_READ_SUBCOMMANDS[subcommand]
   return Boolean(
     readFlags &&
-      args
-        .slice(subcommandIndex + 1)
-        .some((arg) => readFlags.has(arg) || readFlags.has(arg.split('=')[0]))
+    args
+      .slice(subcommandIndex + 1)
+      .some((arg) => readFlags.has(arg) || readFlags.has(arg.split('=')[0]))
   )
 }
